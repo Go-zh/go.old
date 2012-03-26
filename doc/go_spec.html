@@ -4,6 +4,12 @@
 	"Path": "/ref/spec"
 }-->
 
+<!--{
+	"标题": "Go编程语言规范",
+	"副标题": "版本：2012年3月17日",
+	"路径": "/ref/spec"
+}-->
+
 <!--
 TODO
 [ ] need language about function/method calls and parameter passing rules
@@ -18,14 +24,40 @@ TODO
 [ ] review language on implicit dereferencing
 -->
 
+<!--
+TODO
+[ ] 需要语言中关于函数/方法调用和参数传递的规则
+[ ] #分配（常量推广）的最后一段应在别处
+    且应在空接口中提及分配。
+[ ] 需要说一些关于选择器“作用域”的事？
+[ ] 阐明在结构声明中什么是字段名
+    (struct{T} 与 struct {T T} 与 struct {t T})
+[ ] 关于操作符的结果类型需要详尽的语言描述
+[ ] 或许应当写一些关于语句求值顺序的东西，
+    尽管它很明显
+[ ] 复审语言的隐式间接引用
+-->
 
+
+<div class="english">
 <h2 id="Introduction">Introduction</h2>
+</div>
 
+<h2 id="Introduction">前言</h2>
+
+<div class="english">
 <p>
 This is a reference manual for the Go programming language. For
 more information and other documents, see <a href="http://golang.org/">http://golang.org</a>.
 </p>
+</div>
 
+<p>
+这是一份关于Go语言的参考手册。欲获取更多信息与文档，
+请访问<a href="http://golang.org/">http://golang.org</a>。
+</p>
+
+<div class="english">
 <p>
 Go is a general-purpose language designed with systems programming
 in mind. It is strongly typed and garbage-collected and has explicit
@@ -34,17 +66,42 @@ support for concurrent programming.  Programs are constructed from
 dependencies. The existing implementations use a traditional
 compile/link model to generate executable binaries.
 </p>
+</div>
 
+<p>
+Go是为系统编程而设计的通用型语言。它是强类型的编程语言，自动垃圾回收并显式支持并发编程。
+程序由<i>包构造</i>，由此提供高效的依赖管理功能。当前Go的实现使用传统的编译/链接模型生成可执行二进制文件。
+</p>
+
+<div class="english">
 <p>
 The grammar is compact and regular, allowing for easy analysis by
 automatic tools such as integrated development environments.
 </p>
+</div>
 
+<p>
+Go的语法结构紧凑而严谨，便于IDE等自动化工具分析。
+</p>
+
+<div class="english">
 <h2 id="Notation">Notation</h2>
+</div>
+
+<h2 id="Notation">表示法</h2>
+
+<div class="english">
 <p>
 The syntax is specified using Extended Backus-Naur Form (EBNF):
 </p>
+</div>
 
+<p>
+其语法使用扩展巴克斯-诺尔范式（EBNF）实现：
+</p>
+
+
+<div class="english">
 <pre class="grammar">
 Production  = production_name "=" [ Expression ] "." .
 Expression  = Alternative { "|" Alternative } .
@@ -54,7 +111,19 @@ Group       = "(" Expression ")" .
 Option      = "[" Expression "]" .
 Repetition  = "{" Expression "}" .
 </pre>
+</div>
 
+<pre class="grammar">
+生成式 = 生成式名 "=" [ 表达式 ] "." .
+表达式 = 选择项 { "|" 选择项 } .
+选择项 = 条目 { 条目 } .
+条目   = 生成式名 | 标记 [ "…" 标记 ] | 组 | 可选项 | 重复项 .
+组     = "(" 表达式 ")" .
+可选项 = "[" 表达式 "]" .
+重复项 = "{" 表达式 "}" .
+</pre>
+
+<div class="english">
 <p>
 Productions are expressions constructed from terms and the following
 operators, in increasing precedence:
@@ -65,24 +134,55 @@ operators, in increasing precedence:
 []  option (0 or 1 times)
 {}  repetition (0 to n times)
 </pre>
+</div>
 
+<p>
+生成式和表达式由以下术语和运算符构造，自上而下优先级递增（低=>高）：
+</p>
+<pre class="grammar">
+|   选择
+()  分组
+[]  可选 （0 或 1 次）
+{}  重复 （0 到 n 次）
+</pre>
+
+<div class="english">
 <p>
 Lower-case production names are used to identify lexical tokens.
 Non-terminals are in CamelCase. Lexical tokens are enclosed in
 double quotes <code>""</code> or back quotes <code>``</code>.
 </p>
+</div>
 
+<p>
+小写生成式名用于识别词法标记。非终止符使用驼峰记法。
+词法符号由双引号 <code>""</code> 或反引号 <code>``</code> 围绕。
+</p>
+
+<div class="english">
 <p>
 The form <code>a … b</code> represents the set of characters from
 <code>a</code> through <code>b</code> as alternatives. The horizontal
-ellipis <code>…</code> is also used elsewhere in the spec to informally denote various
+ellipsis <code>…</code> is also used elsewhere in the spec to informally denote various
 enumerations or code snippets that are not further specified. The character <code>…</code>
 (as opposed to the three characters <code>...</code>) is not a token of the Go
 language.
 </p>
+</div>
 
+<p>
+形式 <code>a … b</code> 表示把从 <code>a</code> 到 <code>b</code>的字符集作为选择项。
+横向的省略号 <code>…</code> 也在本文档的其他地方非正式地表示各种列举或简略的代码片断。
+单个字符 <code>…</code>（不同于三个字符 <code>...</code>）并非Go语言本身的标记。
+</p>
+
+<div class="english">
 <h2 id="Source_code_representation">Source code representation</h2>
+</div>
 
+<h2 id="Source_code_representation">源代码表示</h2>
+
+<div class="english">
 <p>
 Source code is Unicode text encoded in
 <a href="http://en.wikipedia.org/wiki/UTF-8">UTF-8</a>. The text is not
@@ -99,9 +199,28 @@ are different characters.
 Implementation restriction: For compatibility with other tools, a
 compiler may disallow the NUL character (U+0000) in the source text.
 </p>
+</div>
 
+<p>
+源代码是采用
+<a href="http://en.wikipedia.org/wiki/UTF-8">UTF-8</a>编码的Unicode文本。
+该文本是非商业化的，因此单一的着重号码点不同于结合字母与着重号的字符结构；
+那些应当视为两个代码点。 为简单起见，本文档将使用术语<i>字符</i>替代Unicode码点。
+</p>
+<p>
+每个码点都是不同的；例如，大写与小写的字母就是不同的字符。
+</p>
+<p>
+实现限制：为兼容其他工具，编译器会阻止字符NUL（U+0000）出现在源代码文本中。
+</p>
+
+<div class="english">
 <h3 id="Characters">Characters</h3>
+</div>
 
+<h3 id="Characters">字符</h3>
+
+<div class="english">
 <p>
 The following terms are used to denote specific Unicode character classes:
 </p>
@@ -111,7 +230,19 @@ unicode_char   = /* an arbitrary Unicode code point except newline */ .
 unicode_letter = /* a Unicode code point classified as "Letter" */ .
 unicode_digit  = /* a Unicode code point classified as "Decimal Digit" */ .
 </pre>
+</div>
 
+<p>
+具体的Unicode字符类别由以下术语表示：
+</p>
+<pre class="ebnf">
+换行符      = /* Unicode码点 U+000A */ .
+Unicode字符 = /* 除newline以外的任意Unicode码点 */ .
+Unicode字母 = /* 类型为“字母”的Unicode码点 */ .
+Unicode数字 = /* 类型为“10进制数字”的Unicode码点 */ .
+</pre>
+
+<div class="english">
 <p>
 In <a href="http://www.unicode.org/versions/Unicode6.0.0/">The Unicode Standard 6.0</a>,
 Section 4.5 "General Category"
@@ -119,9 +250,21 @@ defines a set of character categories.  Go treats
 those characters in category Lu, Ll, Lt, Lm, or Lo as Unicode letters,
 and those in category Nd as Unicode digits.
 </p>
+</div>
 
+<p>
+在<a href="http://www.unicode.org/versions/Unicode6.0.0/">Unicode标准6.0</a>,
+章节4.5 “一般类别” 中定义了字符集类别。
+其中类别Lu，Ll，Lt，Lm及Lo被视为Unicode字母，类别Nd被视为Unicode数字。
+</p>
+
+<div class="english">
 <h3 id="Letters_and_digits">Letters and digits</h3>
+</div>
 
+<h3 id="Letters_and_digits">字母和数字</h3>
+
+<div class="english">
 <p>
 The underscore character <code>_</code> (U+005F) is considered a letter.
 </p>
@@ -131,15 +274,41 @@ decimal_digit = "0" … "9" .
 octal_digit   = "0" … "7" .
 hex_digit     = "0" … "9" | "A" … "F" | "a" … "f" .
 </pre>
+</div>
 
+<p>
+下划线字符<code>_</code>（U+005F）被视为一个字母。
+</p>
+<pre class="ebnf">
+字母       = Unicode字母 | "_" .
+10进制数字 = "0" … "9" .
+ 8进制数字 = "0" … "7" .
+16进制数字 = "0" … "9" | "A" … "F" | "a" … "f" .
+</pre>
+
+<div class="english">
 <h2 id="Lexical_elements">Lexical elements</h2>
+</div>
 
+<h2 id="Lexical_elements">词法元素</h2>
+
+<div class="english">
 <h3 id="Comments">Comments</h3>
+</div>
 
+<h3 id="Comments">注释</h3>
+
+<div class="english">
 <p>
 There are two forms of comments:
 </p>
+</div>
 
+<p>
+注释有两种形式：
+</p>
+
+<div class="english">
 <ol>
 <li>
 <i>Line comments</i> start with the character sequence <code>//</code>
@@ -152,14 +321,35 @@ comment containing one or more newlines acts like a newline, otherwise it acts
 like a space.
 </li>
 </ol>
+</div>
 
+<ol>
+<li>
+<i>行注释</i>以<code>//</code>开始，至行尾结束。一条行注释视为一个换行符。
+</li>
+<li>
+<i>块注释</i>以<code>/*</code>开始，至<code>*/</code>结束。
+块注释在包含多行时视为一个换行符，否则视为一个空格。
+</li>
+</ol>
+
+<div class="english">
 <p>
 Comments do not nest.
 </p>
+</div>
 
+<p>
+注释不可嵌套。
+</p>
 
+<div class="english">
 <h3 id="Tokens">Tokens</h3>
+</div>
 
+<h3 id="Tokens">标记</h3>
+
+<div class="english">
 <p>
 Tokens form the vocabulary of the Go language.
 There are four classes: <i>identifiers</i>, <i>keywords</i>, <i>operators
@@ -173,15 +363,35 @@ While breaking the input into tokens,
 the next token is the longest sequence of characters that form a
 valid token.
 </p>
+</div>
 
+<p>
+标记形成Go语言的词汇。它有4种类型：<i>标识符</i>，<i>关键字</i>，
+<i>运算符与分隔符</i>以及<i>文字</i>。<i>空白部分</i>由空格（U+0020），
+横向制表符（U+0009），回车符（U+000D）和换行符（U+000A）组成，除非其间有分隔标记，
+否则将合并为单个标记。此外，换行符或EOF（文件结束符）会触发<a href="#Semicolons">分号</a>的插入。
+当中断输入标记时，可形成有效标记的最长字符序列将作为下一个标记。
+</p>
+
+<div class="english">
 <h3 id="Semicolons">Semicolons</h3>
+</div>
 
+<h3 id="Semicolons">分号</h3>
+
+<div class="english">
 <p>
 The formal grammar uses semicolons <code>";"</code> as terminators in
 a number of productions. Go programs may omit most of these semicolons
 using the following two rules:
 </p>
+</div>
 
+<p>
+正式语法使用分号<code>";"</code>作为一些生成式的结尾。Go程序会使用以下两条规则来省略大多数分号：
+</p>
+
+<div class="english">
 <ol>
 <li>
 <p>
@@ -224,15 +434,67 @@ To allow complex statements to occupy a single line, a semicolon
 may be omitted before a closing <code>")"</code> or <code>"}"</code>.
 </li>
 </ol>
+</div>
 
+<ol>
+<li>
+<p>
+当输入标记被中断后，若此行的行尾标记为以下标记流之一，一个分号就会被自动插入在非空行之后：
+</p>
+<ul>
+	<li>
+	    <a href="#Identifiers">标识符</a>
+	</li>
+
+	<li>
+	    <a href="#Integer_literals">整数</a>,
+	    <a href="#Floating-point_literals">浮点数</a>,
+	    <a href="#Imaginary_literals">虚数</a>,
+	    <a href="#Character_literals">字符</a>或
+	    <a href="#String_literals">字符串</a>文字
+	</li>
+
+	<li><a href="#Keywords">关键字</a>
+	    <code>break</code>,
+	    <code>continue</code>,
+	    <code>fallthrough</code>或
+	    <code>return</code>之一
+	</li>
+
+	<li><a href="#Operators_and_Delimiters">运算符与分隔符</a>
+	    <code>++</code>,
+	    <code>--</code>,
+	    <code>)</code>,
+	    <code>]</code>或
+	    <code>}</code>之一
+	</li>
+</ul>
+</li>
+
+<li>
+为允许复合语句占据单行，分号会在终止符<code>")"</code>或<code>"}"</code>之后被省略。
+</li>
+</ol>
+
+<div class="english">
 <p>
 To reflect idiomatic use, code examples in this document elide semicolons
 using these rules.
 </p>
+</div>
+
+<p>
+为了符合习惯用法，代码示例将使用这些规则在本文档中省略分号。
+</p>
 
 
+<div class="english">
 <h3 id="Identifiers">Identifiers</h3>
+</div>
 
+<h3 id="Identifiers">标识符</h3>
+
+<div class="english">
 <p>
 Identifiers name program entities such as variables and types.
 An identifier is a sequence of one or more letters and digits.
@@ -247,9 +509,30 @@ _x9
 ThisVariableIsExported
 αβ
 </pre>
+</div>
 
 <p>
+标识符被用来命名程序实体，例如变量和类型。一个标识符由一个或多个字母和数字组成。
+标识符的第一个字符必须是字母。
+</p>
+<pre class="ebnf">
+标识符 = 字母 { 字母 | Unicode数字 } .
+</pre>
+<pre>
+a
+_x9
+ThisVariableIsExported
+αβ
+</pre>
+
+<div class="english">
+<p>
 Some identifiers are <a href="#Predeclared_identifiers">predeclared</a>.
+</p>
+</div>
+
+<p>
+一些标识符是<a href="#Predeclared_identifiers">预声明</a>的。
 </p>
 
 
