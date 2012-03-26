@@ -2358,6 +2358,12 @@ append(Node *n, NodeList **init)
 
 	walkexprlistsafe(n->list, init);
 
+	// walkexprlistsafe will leave OINDEX (s[n]) alone if both s
+	// and n are name or literal, but those may index the slice we're
+	// modifying here.  Fix explicitly.
+	for(l=n->list; l; l=l->next)
+		l->n = cheapexpr(l->n, init);
+
 	nsrc = n->list->n;
 	argc = count(n->list) - 1;
 	if (argc < 1) {
@@ -2514,6 +2520,7 @@ walkcompare(Node **np, NodeList **init)
 			expr = nodbool(n->op == OEQ);
 		typecheck(&expr, Erv);
 		walkexpr(&expr, init);
+		expr->type = n->type;
 		*np = expr;
 		return;
 	}
@@ -2534,6 +2541,7 @@ walkcompare(Node **np, NodeList **init)
 			expr = nodbool(n->op == OEQ);
 		typecheck(&expr, Erv);
 		walkexpr(&expr, init);
+		expr->type = n->type;
 		*np = expr;
 		return;
 	}

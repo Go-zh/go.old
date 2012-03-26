@@ -12,6 +12,10 @@ setlocal
 
 set GOBUILDFAIL=0
 
+:: we disallow local import for non-local packages, if %GOROOT% happens
+:: to be under %GOPATH%, then some tests below will fail
+set GOPATH=
+
 rem TODO avoid rebuild if possible
 
 if x%1==x--no-rebuild goto norebuild
@@ -36,6 +40,17 @@ go test sync -short -timeout=120s -cpu=10
 if errorlevel 1 goto fail
 echo.
 
+echo # ..\misc\dashboard\builder ..\misc\goplay
+go build ..\misc\dashboard\builder ..\misc\goplay
+if errorlevel 1 goto fail
+echo.
+
+:: TODO(brainman): disabled, because it fails with: mkdir C:\Users\ADMINI~1\AppData\Local\Temp\2.....\test\bench\: The filename or extension is too long.
+::echo # ..\test\bench\go1
+::go test ..\test\bench\go1
+::if errorlevel 1 goto fail
+::echo.
+
 :: TODO: The other tests in run.bash.
 
 echo # test
@@ -46,6 +61,11 @@ if errorlevel 1 set FAIL=1
 cd ..\src
 echo.
 if %FAIL%==1 goto fail
+
+echo # Checking API compatibility.
+go tool api -c ..\api\go1.txt
+if errorlevel 1 goto fail
+echo.
 
 echo ALL TESTS PASSED
 goto end

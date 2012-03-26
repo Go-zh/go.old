@@ -210,7 +210,6 @@ func (ctxt *Context) SrcDirs() []string {
 // if set, or else the compiled code's GOARCH, GOOS, and GOROOT.
 var Default Context = defaultContext()
 
-// This list is also known to ../../../cmd/dist/build.c.
 var cgoEnabled = map[string]bool{
 	"darwin/386":    true,
 	"darwin/amd64":  true,
@@ -337,7 +336,7 @@ func (e *NoGoError) Error() string {
 // considered part of the package except for:
 //
 //	- .go files in package documentation
-//	- files starting with _ or .
+//	- files starting with _ or . (likely editor temporary files)
 //	- files with build constraints not satisfied by the context
 //
 // If an error occurs, Import returns a non-nil error also returns a non-nil

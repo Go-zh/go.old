@@ -8,6 +8,8 @@ set -e
 eval $(go env)
 
 unset CDPATH	# in case user has it set
+unset GOPATH    # we disallow local import for non-local packages, if $GOROOT happens
+                # to be under $GOPATH, then some tests below will fail
 
 # no core files, please
 ulimit -c 0
@@ -27,7 +29,7 @@ time go test std -short -timeout=120s
 echo
 
 echo '# GOMAXPROCS=2 runtime -cpu=1,2,4'
-GOMAXPROCS=2 go test runtime -short -timeout=120s -cpu=1,2,4
+GOMAXPROCS=2 go test runtime -short -timeout=240s -cpu=1,2,4
 echo
 
 echo '# sync -cpu=10'
@@ -70,6 +72,14 @@ time ./run
 (xcd ../doc/articles/wiki
 make clean
 ./test.bash
+) || exit $?
+
+(xcd ../doc/codewalk
+# TODO: test these too.
+set -e
+go build pig.go
+go build urlpoll.go
+rm -f pig urlpoll
 ) || exit $?
 
 echo
