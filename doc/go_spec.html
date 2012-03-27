@@ -5,9 +5,9 @@
 }-->
 
 <!--{
-	"标题": "Go编程语言规范",
-	"副标题": "版本：2012年3月17日",
-	"路径": "/ref/spec"
+	"Title": "Go编程语言规范",
+	"Subtitle": "版本：2012年3月17日",
+	"Path": "/ref/spec"
 }-->
 
 <!--
@@ -239,7 +239,7 @@ unicode_digit  = /* a Unicode code point classified as "Decimal Digit" */ .
 换行符      = /* Unicode码点 U+000A */ .
 Unicode字符 = /* 除newline以外的任意Unicode码点 */ .
 Unicode字母 = /* 类型为“字母”的Unicode码点 */ .
-Unicode数字 = /* 类型为“10进制数字”的Unicode码点 */ .
+Unicode数字 = /* 类型为“十进制数字”的Unicode码点 */ .
 </pre>
 
 <div class="english">
@@ -280,10 +280,10 @@ hex_digit     = "0" … "9" | "A" … "F" | "a" … "f" .
 下划线字符<code>_</code>（U+005F）被视为一个字母。
 </p>
 <pre class="ebnf">
-字母       = Unicode字母 | "_" .
-10进制数字 = "0" … "9" .
- 8进制数字 = "0" … "7" .
-16进制数字 = "0" … "9" | "A" … "F" | "a" … "f" .
+字母         = Unicode字母 | "_" .
+十进制数字   = "0" … "9" .
+八进制数字   = "0" … "7" .
+十六进制数字 = "0" … "9" | "A" … "F" | "a" … "f" .
 </pre>
 
 <div class="english">
@@ -458,7 +458,7 @@ may be omitted before a closing <code>")"</code> or <code>"}"</code>.
 	    <code>break</code>,
 	    <code>continue</code>,
 	    <code>fallthrough</code>或
-	    <code>return</code>之一
+	    <code>return</code>
 	</li>
 
 	<li><a href="#Operators_and_Delimiters">运算符与分隔符</a>
@@ -466,7 +466,7 @@ may be omitted before a closing <code>")"</code> or <code>"}"</code>.
 	    <code>--</code>,
 	    <code>)</code>,
 	    <code>]</code>或
-	    <code>}</code>之一
+	    <code>}</code>
 	</li>
 </ul>
 </li>

@@ -219,6 +219,10 @@ div.right {
 	width: 415px;
 }
 
+div.english {
+	display: none;
+}
+
 div#learn,
 div#about {
 	padding-top: 20px;
