@@ -11,6 +11,7 @@ import (
 	"go/build"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -251,7 +252,9 @@ func downloadPackage(p *Package) error {
 
 	if p.build.SrcRoot == "" {
 		// Package not found.  Put in first directory of $GOPATH or else $GOROOT.
-		if list := filepath.SplitList(buildContext.GOPATH); len(list) > 0 {
+		// Guard against people setting GOPATH=$GOROOT.  We have to use
+		// $GOROOT's directory hierarchy (src/pkg, not just src) in that case.
+		if list := filepath.SplitList(buildContext.GOPATH); len(list) > 0 && list[0] != goroot {
 			p.build.SrcRoot = filepath.Join(list[0], "src")
 			p.build.PkgRoot = filepath.Join(list[0], "pkg")
 		} else {
@@ -323,9 +326,18 @@ func downloadPackage(p *Package) error {
 	return nil
 }
 
+// goTag matches go release tags such as go1 and go1.2.3.
+// The numbers involved must be small (at most 4 digits),
+// have no unnecessary leading zeros, and the version cannot
+// end in .0 - it is go1, not go1.0 or go1.0.0.
+var goTag = regexp.MustCompile(
+	`^go((0|[1-9][0-9]{0,3})\.)*([1-9][0-9]{0,3})$`,
+)
+
 // selectTag returns the closest matching tag for a given version.
 // Closest means the latest one that is not after the current release.
-// Version "release.rN" matches tags of the form "go.rN" (N being a decimal).
+// Version "goX" (or "goX.Y" or "goX.Y.Z") matches tags of the same form.
+// Version "release.rN" matches tags of the form "go.rN" (N being a floating-point number).
 // Version "weekly.YYYY-MM-DD" matches tags like "go.weekly.YYYY-MM-DD".
 func selectTag(goVersion string, tags []string) (match string) {
 	const rPrefix = "release.r"
@@ -349,6 +361,7 @@ func selectTag(goVersion string, tags []string) (match string) {
 			}
 		}
 	}
+
 	const wPrefix = "weekly."
 	if strings.HasPrefix(goVersion, wPrefix) {
 		p := "go.weekly."
@@ -362,5 +375,54 @@ func selectTag(goVersion string, tags []string) (match string) {
 			}
 		}
 	}
+
+	if goTag.MatchString(goVersion) {
+		v := goVersion
+		for _, t := range tags {
+			if !goTag.MatchString(t) {
+				continue
+			}
+			if cmpGoVersion(match, t) < 0 && cmpGoVersion(t, v) <= 0 {
+				match = t
+			}
+		}
+	}
+
 	return match
+}
+
+// cmpGoVersion returns -1, 0, +1 reporting whether
+// x < y, x == y, or x > y.
+func cmpGoVersion(x, y string) int {
+	// Malformed strings compare less than well-formed strings.
+	if !goTag.MatchString(x) {
+		return -1
+	}
+	if !goTag.MatchString(y) {
+		return +1
+	}
+
+	// Compare numbers in sequence.
+	xx := strings.Split(x[len("go"):], ".")
+	yy := strings.Split(y[len("go"):], ".")
+
+	for i := 0; i < len(xx) && i < len(yy); i++ {
+		// The Atoi are guaranteed to succeed
+		// because the versions match goTag.
+		xi, _ := strconv.Atoi(xx[i])
+		yi, _ := strconv.Atoi(yy[i])
+		if xi < yi {
+			return -1
+		} else if xi > yi {
+			return +1
+		}
+	}
+
+	if len(xx) < len(yy) {
+		return -1
+	}
+	if len(xx) > len(yy) {
+		return +1
+	}
+	return 0
 }

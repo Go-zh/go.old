@@ -217,8 +217,14 @@ func loadImport(path string, srcDir string, stk *importStack, importPos []token.
 	// Load package.
 	// Import always returns bp != nil, even if an error occurs,
 	// in order to return partial information.
-	bp, err := buildContext.Import(path, srcDir, build.AllowBinary)
+	//
+	// TODO: After Go 1, decide when to pass build.AllowBinary here.
+	// See issue 3268 for mistakes to avoid.
+	bp, err := buildContext.Import(path, srcDir, 0)
 	bp.ImportPath = importPath
+	if gobin != "" {
+		bp.BinDir = gobin
+	}
 	p.load(stk, bp, err)
 	if p.Error != nil && len(importPos) > 0 {
 		pos := importPos[0]
@@ -549,7 +555,10 @@ func loadPackage(arg string, stk *importStack) *Package {
 		bp, err := build.ImportDir(filepath.Join(gorootSrc, arg), 0)
 		bp.ImportPath = arg
 		bp.Goroot = true
-		bp.BinDir = gobin
+		bp.BinDir = gorootBin
+		if gobin != "" {
+			bp.BinDir = gobin
+		}
 		bp.Root = goroot
 		bp.SrcRoot = gorootSrc
 		p := new(Package)
