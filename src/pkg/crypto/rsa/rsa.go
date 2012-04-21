@@ -63,7 +63,7 @@ func (priv *PrivateKey) Validate() error {
 	// easy for an attack to generate composites that pass this test.
 	for _, prime := range priv.Primes {
 		if !prime.ProbablyPrime(20) {
-			return errors.New("prime factor is composite")
+			return errors.New("crypto/rsa: prime factor is composite")
 		}
 	}
 
@@ -73,27 +73,23 @@ func (priv *PrivateKey) Validate() error {
 		modulus.Mul(modulus, prime)
 	}
 	if modulus.Cmp(priv.N) != 0 {
-		return errors.New("invalid modulus")
+		return errors.New("crypto/rsa: invalid modulus")
 	}
-	// Check that e and totient(Πprimes) are coprime.
-	totient := new(big.Int).Set(bigOne)
+
+	// Check that de ≡ 1 mod p-1, for each prime.
+	// This implies that e is coprime to each p-1 as e has a multiplicative
+	// inverse. Therefore e is coprime to lcm(p-1,q-1,r-1,...) =
+	// exponent(ℤ/nℤ). It also implies that a^de ≡ a mod p as a^(p-1) ≡ 1
+	// mod p. Thus a^de ≡ a mod n for all a coprime to n, as required.
+	congruence := new(big.Int)
+	de := new(big.Int).SetInt64(int64(priv.E))
+	de.Mul(de, priv.D)
 	for _, prime := range priv.Primes {
 		pminus1 := new(big.Int).Sub(prime, bigOne)
-		totient.Mul(totient, pminus1)
-	}
-	e := big.NewInt(int64(priv.E))
-	gcd := new(big.Int)
-	x := new(big.Int)
-	y := new(big.Int)
-	gcd.GCD(x, y, totient, e)
-	if gcd.Cmp(bigOne) != 0 {
-		return errors.New("invalid public exponent E")
-	}
-	// Check that de ≡ 1 (mod totient(Πprimes))
-	de := new(big.Int).Mul(priv.D, e)
-	de.Mod(de, totient)
-	if de.Cmp(bigOne) != 0 {
-		return errors.New("invalid private exponent D")
+		congruence.Mod(de, pminus1)
+		if congruence.Cmp(bigOne) != 0 {
+			return errors.New("crypto/rsa: invalid exponents")
+		}
 	}
 	return nil
 }
@@ -118,7 +114,7 @@ func GenerateMultiPrimeKey(random io.Reader, nprimes int, bits int) (priv *Priva
 	priv.E = 65537
 
 	if nprimes < 2 {
-		return nil, errors.New("rsa.GenerateMultiPrimeKey: nprimes must be >= 2")
+		return nil, errors.New("crypto/rsa: GenerateMultiPrimeKey: nprimes must be >= 2")
 	}
 
 	primes := make([]*big.Int, nprimes)

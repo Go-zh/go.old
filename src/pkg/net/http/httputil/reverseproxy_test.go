@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 )
 
 func TestReverseProxy(t *testing.T) {
@@ -105,5 +106,46 @@ func TestReverseProxyQuery(t *testing.T) {
 		}
 		res.Body.Close()
 		frontend.Close()
+	}
+}
+
+func TestReverseProxyFlushInterval(t *testing.T) {
+	const expected = "hi"
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(expected))
+	}))
+	defer backend.Close()
+
+	backendURL, err := url.Parse(backend.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	proxyHandler := NewSingleHostReverseProxy(backendURL)
+	proxyHandler.FlushInterval = time.Microsecond
+
+	done := make(chan bool)
+	onExitFlushLoop = func() { done <- true }
+	defer func() { onExitFlushLoop = nil }()
+
+	frontend := httptest.NewServer(proxyHandler)
+	defer frontend.Close()
+
+	req, _ := http.NewRequest("GET", frontend.URL, nil)
+	req.Close = true
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	defer res.Body.Close()
+	if bodyBytes, _ := ioutil.ReadAll(res.Body); string(bodyBytes) != expected {
+		t.Errorf("got body %q; expected %q", bodyBytes, expected)
+	}
+
+	select {
+	case <-done:
+		// OK
+	case <-time.After(5 * time.Second):
+		t.Error("maxLatencyWriter flushLoop() never exited")
 	}
 }

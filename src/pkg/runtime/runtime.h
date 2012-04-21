@@ -71,6 +71,8 @@ typedef	struct	Complex128	Complex128;
 typedef	struct	WinCall		WinCall;
 typedef	struct	Timers		Timers;
 typedef	struct	Timer		Timer;
+typedef struct	GCStats		GCStats;
+typedef struct	LFNode		LFNode;
 
 /*
  * per-cpu declaration.
@@ -166,6 +168,16 @@ struct	Gobuf
 	byte*	pc;
 	G*	g;
 };
+struct	GCStats
+{
+	// the struct must consist of only uint64's,
+	// because it is casted to uint64[].
+	uint64	nhandoff;
+	uint64	nhandoffcnt;
+	uint64	nprocyield;
+	uint64	nosyield;
+	uint64	nsleep;
+};
 struct	G
 {
 	byte*	stackguard;	// cannot move - also known to linker, libmach, runtime/cgo
@@ -243,6 +255,7 @@ struct	M
 	uintptr	waitsema;	// semaphore for parking on locks
 	uint32	waitsemacount;
 	uint32	waitsemalock;
+	GCStats	gcstats;
 
 #ifdef GOOS_windows
 	void*	thread;		// thread handle
@@ -337,6 +350,13 @@ struct	Timer
 	int64	period;
 	void	(*f)(int64, Eface);
 	Eface	arg;
+};
+
+// Lock-free stack node.
+struct LFNode
+{
+	LFNode	*next;
+	uintptr	pushcnt;
 };
 
 /*
@@ -512,13 +532,17 @@ void	runtime·tracebackothers(G*);
 int32	runtime·write(int32, void*, int32);
 int32	runtime·mincore(void*, uintptr, byte*);
 bool	runtime·cas(uint32*, uint32, uint32);
+bool	runtime·cas64(uint64*, uint64*, uint64);
 bool	runtime·casp(void**, void*, void*);
 // Don't confuse with XADD x86 instruction,
 // this one is actually 'addx', that is, add-and-fetch.
 uint32	runtime·xadd(uint32 volatile*, int32);
+uint64	runtime·xadd64(uint64 volatile*, int64);
 uint32	runtime·xchg(uint32 volatile*, uint32);
 uint32	runtime·atomicload(uint32 volatile*);
 void	runtime·atomicstore(uint32 volatile*, uint32);
+void	runtime·atomicstore64(uint64 volatile*, uint64);
+uint64	runtime·atomicload64(uint64 volatile*);
 void*	runtime·atomicloadp(void* volatile*);
 void	runtime·atomicstorep(void* volatile*, void*);
 void	runtime·jmpdefer(byte*, void*);
@@ -634,6 +658,15 @@ void	runtime·semawakeup(M*);
 // or
 void	runtime·futexsleep(uint32*, uint32, int64);
 void	runtime·futexwakeup(uint32*, uint32);
+
+/*
+ * Lock-free stack.
+ * Initialize uint64 head to 0, compare with 0 to test for emptiness.
+ * The stack does not keep pointers to nodes,
+ * so they can be garbage collected if there are no other pointers to nodes.
+ */
+void	runtime·lfstackpush(uint64 *head, LFNode *node);
+LFNode*	runtime·lfstackpop(uint64 *head);
 
 /*
  * This is consistent across Linux and BSD.

@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strconv"
 	"unicode"
+	"unicode/utf8"
 )
 
 // Tree is the representation of a single parsed template.
@@ -100,7 +101,7 @@ func (t *Tree) expect(expected itemType, context string) item {
 	return token
 }
 
-// expectEither consumes the next token and guarantees it has one of the required types.
+// expectOneOf consumes the next token and guarantees it has one of the required types.
 func (t *Tree) expectOneOf(expected1, expected2 itemType, context string) item {
 	token := t.next()
 	if token.typ != expected1 && token.typ != expected2 {
@@ -473,6 +474,9 @@ Loop:
 		case itemVariable:
 			cmd.append(t.useVar(token.val))
 		case itemField:
+			if !isExported(token.val) {
+				t.errorf("field %q not exported; cannot be evaluated", token.val)
+			}
 			cmd.append(newField(token.val))
 		case itemBool:
 			cmd.append(newBool(token.val == "true"))
@@ -496,6 +500,12 @@ Loop:
 		t.errorf("empty command")
 	}
 	return cmd
+}
+
+// isExported reports whether the field name (which starts with a period) can be accessed.
+func isExported(fieldName string) bool {
+	r, _ := utf8.DecodeRuneInString(fieldName[1:]) // drop the period
+	return unicode.IsUpper(r)
 }
 
 // hasFunction reports if a function name exists in the Tree's maps.

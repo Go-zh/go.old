@@ -125,7 +125,7 @@ enum
 	// 2, 3, and 4 are all plausible maximums depending
 	// on the hardware details of the machine.  The garbage
 	// collector scales well to 4 cpus.
-	MaxGcproc = 4,
+	MaxGcproc = 16,
 };
 
 // A generic linked list of blocks.  (Typically the block is bigger than sizeof(MLink).)
@@ -306,7 +306,6 @@ struct MSpan
 {
 	MSpan	*next;		// in a span linked list
 	MSpan	*prev;		// in a span linked list
-	MSpan	*allnext;	// in the list of all spans
 	PageID	start;		// starting page number
 	uintptr	npages;		// number of pages in span
 	MLink	*freelist;	// list of free objects
@@ -342,6 +341,7 @@ struct MCentral
 void	runtime·MCentral_Init(MCentral *c, int32 sizeclass);
 int32	runtime·MCentral_AllocList(MCentral *c, int32 n, MLink **first);
 void	runtime·MCentral_FreeList(MCentral *c, int32 n, MLink *first);
+void	runtime·MCentral_FreeSpan(MCentral *c, MSpan *s, int32 n, MLink *start, MLink *end);
 
 // Main malloc heap.
 // The heap itself is the "free[]" and "large" arrays,
@@ -351,7 +351,9 @@ struct MHeap
 	Lock;
 	MSpan free[MaxMHeapList];	// free lists of given length
 	MSpan large;			// free lists length >= MaxMHeapList
-	MSpan *allspans;
+	MSpan **allspans;
+	uint32	nspan;
+	uint32	nspancap;
 
 	// span lookup
 	MSpan *map[1<<MHeapMap_Bits];

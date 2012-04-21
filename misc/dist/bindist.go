@@ -394,9 +394,9 @@ func (b *Build) Upload(version string, filename string) error {
 	os_, arch := b.OS, b.Arch
 	switch b.Arch {
 	case "386":
-		arch = "32-bit"
+		arch = "x86 32-bit"
 	case "amd64":
-		arch = "64-bit"
+		arch = "x86 64-bit"
 	}
 	if arch != "" {
 		labels = append(labels, "Arch-"+b.Arch)
@@ -556,7 +556,7 @@ func makeTar(targ, workdir string) error {
 	zout := gzip.NewWriter(f)
 	tw := tar.NewWriter(zout)
 
-	filepath.Walk(workdir, filepath.WalkFunc(func(path string, fi os.FileInfo, err error) error {
+	err = filepath.Walk(workdir, func(path string, fi os.FileInfo, err error) error {
 		if !strings.HasPrefix(path, workdir) {
 			log.Panicf("walked filename %q doesn't begin with workdir %q", path, workdir)
 		}
@@ -573,9 +573,6 @@ func makeTar(targ, workdir string) error {
 		}
 		if *verbose {
 			log.Printf("adding to tar: %s", name)
-		}
-		if fi.IsDir() {
-			return nil
 		}
 		hdr, err := tarFileInfoHeader(fi, path)
 		if err != nil {
@@ -598,6 +595,9 @@ func makeTar(targ, workdir string) error {
 		if err != nil {
 			return fmt.Errorf("Error writing file %q: %v", name, err)
 		}
+		if fi.IsDir() {
+			return nil
+		}
 		r, err := os.Open(path)
 		if err != nil {
 			return err
@@ -605,8 +605,10 @@ func makeTar(targ, workdir string) error {
 		defer r.Close()
 		_, err = io.Copy(tw, r)
 		return err
-	}))
-
+	})
+	if err != nil {
+		return err
+	}
 	if err := tw.Close(); err != nil {
 		return err
 	}
@@ -623,10 +625,7 @@ func makeZip(targ, workdir string) error {
 	}
 	zw := zip.NewWriter(f)
 
-	filepath.Walk(workdir, filepath.WalkFunc(func(path string, fi os.FileInfo, err error) error {
-		if fi.IsDir() {
-			return nil
-		}
+	err = filepath.Walk(workdir, func(path string, fi os.FileInfo, err error) error {
 		if !strings.HasPrefix(path, workdir) {
 			log.Panicf("walked filename %q doesn't begin with workdir %q", path, workdir)
 		}
@@ -653,9 +652,16 @@ func makeZip(targ, workdir string) error {
 		}
 		fh.Name = name
 		fh.Method = zip.Deflate
+		if fi.IsDir() {
+			fh.Name += "/"        // append trailing slash
+			fh.Method = zip.Store // no need to deflate 0 byte files
+		}
 		w, err := zw.CreateHeader(fh)
 		if err != nil {
 			return err
+		}
+		if fi.IsDir() {
+			return nil
 		}
 		r, err := os.Open(path)
 		if err != nil {
@@ -664,8 +670,10 @@ func makeZip(targ, workdir string) error {
 		defer r.Close()
 		_, err = io.Copy(w, r)
 		return err
-	}))
-
+	})
+	if err != nil {
+		return err
+	}
 	if err := zw.Close(); err != nil {
 		return err
 	}

@@ -166,6 +166,31 @@ func (p *parser) clearStackToContext(s scope) {
 	}
 }
 
+// generateImpliedEndTags pops nodes off the stack of open elements as long as
+// the top node has a tag name of dd, dt, li, option, optgroup, p, rp, or rt.
+// If exceptions are specified, nodes with that name will not be popped off.
+func (p *parser) generateImpliedEndTags(exceptions ...string) {
+	var i int
+loop:
+	for i = len(p.oe) - 1; i >= 0; i-- {
+		n := p.oe[i]
+		if n.Type == ElementNode {
+			switch n.Data {
+			case "dd", "dt", "li", "option", "optgroup", "p", "rp", "rt":
+				for _, except := range exceptions {
+					if n.Data == except {
+						break loop
+					}
+				}
+				continue
+			}
+		}
+		break
+	}
+
+	p.oe = p.oe[:i+1]
+}
+
 // addChild adds a child node n to the top element, and pushes n onto the stack
 // of open elements if it is an element node.
 func (p *parser) addChild(n *Node) {
@@ -295,23 +320,12 @@ func (p *parser) reconstructActiveFormattingElements() {
 	}
 }
 
-// read reads the next token. This is usually from the tokenizer, but it may
-// be the synthesized end tag implied by a self-closing tag.
+// read reads the next token from the tokenizer.
 func (p *parser) read() error {
-	if p.hasSelfClosingToken {
-		p.hasSelfClosingToken = false
-		p.tok.Type = EndTagToken
-		p.tok.Attr = nil
-		return nil
-	}
 	p.tokenizer.Next()
 	p.tok = p.tokenizer.Token()
-	switch p.tok.Type {
-	case ErrorToken:
+	if p.tok.Type == ErrorToken {
 		return p.tokenizer.Err()
-	case SelfClosingTagToken:
-		p.hasSelfClosingToken = true
-		p.tok.Type = StartTagToken
 	}
 	return nil
 }
@@ -408,6 +422,9 @@ func initialIM(p *parser) bool {
 // Section 12.2.5.4.2.
 func beforeHTMLIM(p *parser) bool {
 	switch p.tok.Type {
+	case DoctypeToken:
+		// Ignore the token.
+		return true
 	case TextToken:
 		p.tok.Data = strings.TrimLeft(p.tok.Data, whitespace)
 		if len(p.tok.Data) == 0 {
@@ -423,7 +440,8 @@ func beforeHTMLIM(p *parser) bool {
 	case EndTagToken:
 		switch p.tok.Data {
 		case "head", "body", "html", "br":
-			// Drop down to creating an implied <html> tag.
+			p.parseImpliedToken(StartTagToken, "html", nil)
+			return false
 		default:
 			// Ignore the token.
 			return true
@@ -435,45 +453,37 @@ func beforeHTMLIM(p *parser) bool {
 		})
 		return true
 	}
-	// Create an implied <html> tag.
-	p.addElement("html", nil)
-	p.im = beforeHeadIM
+	p.parseImpliedToken(StartTagToken, "html", nil)
 	return false
 }
 
 // Section 12.2.5.4.3.
 func beforeHeadIM(p *parser) bool {
-	var (
-		add     bool
-		attr    []Attribute
-		implied bool
-	)
 	switch p.tok.Type {
-	case ErrorToken:
-		implied = true
 	case TextToken:
 		p.tok.Data = strings.TrimLeft(p.tok.Data, whitespace)
 		if len(p.tok.Data) == 0 {
 			// It was all whitespace, so ignore it.
 			return true
 		}
-		implied = true
 	case StartTagToken:
 		switch p.tok.Data {
 		case "head":
-			add = true
-			attr = p.tok.Attr
+			p.addElement(p.tok.Data, p.tok.Attr)
+			p.head = p.top()
+			p.im = inHeadIM
+			return true
 		case "html":
 			return inBodyIM(p)
-		default:
-			implied = true
 		}
 	case EndTagToken:
 		switch p.tok.Data {
 		case "head", "body", "html", "br":
-			implied = true
+			p.parseImpliedToken(StartTagToken, "head", nil)
+			return false
 		default:
 			// Ignore the token.
+			return true
 		}
 	case CommentToken:
 		p.addChild(&Node{
@@ -481,24 +491,18 @@ func beforeHeadIM(p *parser) bool {
 			Data: p.tok.Data,
 		})
 		return true
+	case DoctypeToken:
+		// Ignore the token.
+		return true
 	}
-	if add || implied {
-		p.addElement("head", attr)
-		p.head = p.top()
-	}
-	p.im = inHeadIM
-	return !implied
+
+	p.parseImpliedToken(StartTagToken, "head", nil)
+	return false
 }
 
 // Section 12.2.5.4.4.
 func inHeadIM(p *parser) bool {
-	var (
-		pop     bool
-		implied bool
-	)
 	switch p.tok.Type {
-	case ErrorToken:
-		implied = true
 	case TextToken:
 		s := strings.TrimLeft(p.tok.Data, whitespace)
 		if len(s) < len(p.tok.Data) {
@@ -509,7 +513,6 @@ func inHeadIM(p *parser) bool {
 			}
 			p.tok.Data = s
 		}
-		implied = true
 	case StartTagToken:
 		switch p.tok.Data {
 		case "html":
@@ -518,6 +521,7 @@ func inHeadIM(p *parser) bool {
 			p.addElement(p.tok.Data, p.tok.Attr)
 			p.oe.pop()
 			p.acknowledgeSelfClosingTag()
+			return true
 		case "script", "title", "noscript", "noframes", "style":
 			p.addElement(p.tok.Data, p.tok.Attr)
 			p.setOriginalIM()
@@ -526,15 +530,19 @@ func inHeadIM(p *parser) bool {
 		case "head":
 			// Ignore the token.
 			return true
-		default:
-			implied = true
 		}
 	case EndTagToken:
 		switch p.tok.Data {
 		case "head":
-			pop = true
+			n := p.oe.pop()
+			if n.Data != "head" {
+				panic("html: bad parser state: <head> element not found, in the in-head insertion mode")
+			}
+			p.im = afterHeadIM
+			return true
 		case "body", "html", "br":
-			implied = true
+			p.parseImpliedToken(EndTagToken, "head", nil)
+			return false
 		default:
 			// Ignore the token.
 			return true
@@ -545,30 +553,18 @@ func inHeadIM(p *parser) bool {
 			Data: p.tok.Data,
 		})
 		return true
+	case DoctypeToken:
+		// Ignore the token.
+		return true
 	}
-	if pop || implied {
-		n := p.oe.pop()
-		if n.Data != "head" {
-			panic("html: bad parser state: <head> element not found, in the in-head insertion mode")
-		}
-		p.im = afterHeadIM
-		return !implied
-	}
-	return true
+
+	p.parseImpliedToken(EndTagToken, "head", nil)
+	return false
 }
 
 // Section 12.2.5.4.6.
 func afterHeadIM(p *parser) bool {
-	var (
-		add        bool
-		attr       []Attribute
-		framesetOK bool
-		implied    bool
-	)
 	switch p.tok.Type {
-	case ErrorToken:
-		implied = true
-		framesetOK = true
 	case TextToken:
 		s := strings.TrimLeft(p.tok.Data, whitespace)
 		if len(s) < len(p.tok.Data) {
@@ -579,16 +575,15 @@ func afterHeadIM(p *parser) bool {
 			}
 			p.tok.Data = s
 		}
-		implied = true
-		framesetOK = true
 	case StartTagToken:
 		switch p.tok.Data {
 		case "html":
-			// TODO.
+			return inBodyIM(p)
 		case "body":
-			add = true
-			attr = p.tok.Attr
-			framesetOK = false
+			p.addElement(p.tok.Data, p.tok.Attr)
+			p.framesetOK = false
+			p.im = inBodyIM
+			return true
 		case "frameset":
 			p.addElement(p.tok.Data, p.tok.Attr)
 			p.im = inFramesetIM
@@ -600,15 +595,11 @@ func afterHeadIM(p *parser) bool {
 		case "head":
 			// Ignore the token.
 			return true
-		default:
-			implied = true
-			framesetOK = true
 		}
 	case EndTagToken:
 		switch p.tok.Data {
 		case "body", "html", "br":
-			implied = true
-			framesetOK = true
+			// Drop down to creating an implied <body> tag.
 		default:
 			// Ignore the token.
 			return true
@@ -619,13 +610,14 @@ func afterHeadIM(p *parser) bool {
 			Data: p.tok.Data,
 		})
 		return true
+	case DoctypeToken:
+		// Ignore the token.
+		return true
 	}
-	if add || implied {
-		p.addElement("body", attr)
-		p.framesetOK = framesetOK
-	}
-	p.im = inBodyIM
-	return !implied
+
+	p.parseImpliedToken(StartTagToken, "body", nil)
+	p.framesetOK = true
+	return false
 }
 
 // copyAttributes copies attributes of src not found on dst to dst.
@@ -649,30 +641,53 @@ func copyAttributes(dst *Node, src Token) {
 func inBodyIM(p *parser) bool {
 	switch p.tok.Type {
 	case TextToken:
+		d := p.tok.Data
 		switch n := p.oe.top(); n.Data {
 		case "pre", "listing", "textarea":
 			if len(n.Child) == 0 {
 				// Ignore a newline at the start of a <pre> block.
-				d := p.tok.Data
 				if d != "" && d[0] == '\r' {
 					d = d[1:]
 				}
 				if d != "" && d[0] == '\n' {
 					d = d[1:]
 				}
-				if d == "" {
-					return true
-				}
-				p.tok.Data = d
 			}
 		}
+		d = strings.Replace(d, "\x00", "", -1)
+		if d == "" {
+			return true
+		}
 		p.reconstructActiveFormattingElements()
-		p.addText(p.tok.Data)
+		p.addText(d)
 		p.framesetOK = false
 	case StartTagToken:
 		switch p.tok.Data {
 		case "html":
 			copyAttributes(p.oe[0], p.tok)
+		case "base", "basefont", "bgsound", "command", "link", "meta", "noframes", "script", "style", "title":
+			return inHeadIM(p)
+		case "body":
+			if len(p.oe) >= 2 {
+				body := p.oe[1]
+				if body.Type == ElementNode && body.Data == "body" {
+					p.framesetOK = false
+					copyAttributes(body, p.tok)
+				}
+			}
+		case "frameset":
+			if !p.framesetOK || len(p.oe) < 2 || p.oe[1].Data != "body" {
+				// Ignore the token.
+				return true
+			}
+			body := p.oe[1]
+			if body.Parent != nil {
+				body.Parent.Remove(body)
+			}
+			p.oe = p.oe[:1]
+			p.addElement(p.tok.Data, p.tok.Attr)
+			p.im = inFramesetIM
+			return true
 		case "address", "article", "aside", "blockquote", "center", "details", "dir", "div", "dl", "fieldset", "figcaption", "figure", "footer", "header", "hgroup", "menu", "nav", "ol", "p", "section", "summary", "ul":
 			p.popUntil(buttonScope, "p")
 			p.addElement(p.tok.Data, p.tok.Attr)
@@ -683,6 +698,61 @@ func inBodyIM(p *parser) bool {
 				p.oe.pop()
 			}
 			p.addElement(p.tok.Data, p.tok.Attr)
+		case "pre", "listing":
+			p.popUntil(buttonScope, "p")
+			p.addElement(p.tok.Data, p.tok.Attr)
+			// The newline, if any, will be dealt with by the TextToken case.
+			p.framesetOK = false
+		case "form":
+			if p.form == nil {
+				p.popUntil(buttonScope, "p")
+				p.addElement(p.tok.Data, p.tok.Attr)
+				p.form = p.top()
+			}
+		case "li":
+			p.framesetOK = false
+			for i := len(p.oe) - 1; i >= 0; i-- {
+				node := p.oe[i]
+				switch node.Data {
+				case "li":
+					p.oe = p.oe[:i]
+				case "address", "div", "p":
+					continue
+				default:
+					if !isSpecialElement(node) {
+						continue
+					}
+				}
+				break
+			}
+			p.popUntil(buttonScope, "p")
+			p.addElement(p.tok.Data, p.tok.Attr)
+		case "dd", "dt":
+			p.framesetOK = false
+			for i := len(p.oe) - 1; i >= 0; i-- {
+				node := p.oe[i]
+				switch node.Data {
+				case "dd", "dt":
+					p.oe = p.oe[:i]
+				case "address", "div", "p":
+					continue
+				default:
+					if !isSpecialElement(node) {
+						continue
+					}
+				}
+				break
+			}
+			p.popUntil(buttonScope, "p")
+			p.addElement(p.tok.Data, p.tok.Attr)
+		case "plaintext":
+			p.popUntil(buttonScope, "p")
+			p.addElement(p.tok.Data, p.tok.Attr)
+		case "button":
+			p.popUntil(defaultScope, "button")
+			p.reconstructActiveFormattingElements()
+			p.addElement(p.tok.Data, p.tok.Attr)
+			p.framesetOK = false
 		case "a":
 			for i := len(p.afe) - 1; i >= 0 && p.afe[i].Type != scopeMarkerNode; i-- {
 				if n := p.afe[i]; n.Type == ElementNode && n.Data == "a" {
@@ -735,85 +805,12 @@ func inBodyIM(p *parser) bool {
 			p.framesetOK = false
 			p.im = inSelectIM
 			return true
-		case "form":
-			if p.form == nil {
-				p.popUntil(buttonScope, "p")
-				p.addElement(p.tok.Data, p.tok.Attr)
-				p.form = p.top()
-			}
-		case "li":
-			p.framesetOK = false
-			for i := len(p.oe) - 1; i >= 0; i-- {
-				node := p.oe[i]
-				switch node.Data {
-				case "li":
-					p.popUntil(listItemScope, "li")
-				case "address", "div", "p":
-					continue
-				default:
-					if !isSpecialElement(node) {
-						continue
-					}
-				}
-				break
-			}
-			p.popUntil(buttonScope, "p")
-			p.addElement(p.tok.Data, p.tok.Attr)
-		case "dd", "dt":
-			p.framesetOK = false
-			for i := len(p.oe) - 1; i >= 0; i-- {
-				node := p.oe[i]
-				switch node.Data {
-				case "dd", "dt":
-					p.oe = p.oe[:i]
-				case "address", "div", "p":
-					continue
-				default:
-					if !isSpecialElement(node) {
-						continue
-					}
-				}
-				break
-			}
-			p.popUntil(buttonScope, "p")
-			p.addElement(p.tok.Data, p.tok.Attr)
-		case "plaintext":
-			p.popUntil(buttonScope, "p")
-			p.addElement(p.tok.Data, p.tok.Attr)
-		case "button":
-			p.popUntil(defaultScope, "button")
-			p.reconstructActiveFormattingElements()
-			p.addElement(p.tok.Data, p.tok.Attr)
-			p.framesetOK = false
 		case "optgroup", "option":
 			if p.top().Data == "option" {
 				p.oe.pop()
 			}
 			p.reconstructActiveFormattingElements()
 			p.addElement(p.tok.Data, p.tok.Attr)
-		case "body":
-			if len(p.oe) >= 2 {
-				body := p.oe[1]
-				if body.Type == ElementNode && body.Data == "body" {
-					p.framesetOK = false
-					copyAttributes(body, p.tok)
-				}
-			}
-		case "frameset":
-			if !p.framesetOK || len(p.oe) < 2 || p.oe[1].Data != "body" {
-				// Ignore the token.
-				return true
-			}
-			body := p.oe[1]
-			if body.Parent != nil {
-				body.Parent.Remove(body)
-			}
-			p.oe = p.oe[:1]
-			p.addElement(p.tok.Data, p.tok.Attr)
-			p.im = inFramesetIM
-			return true
-		case "base", "basefont", "bgsound", "command", "link", "meta", "noframes", "script", "style", "title":
-			return inHeadIM(p)
 		case "image":
 			p.tok.Data = "img"
 			return false
@@ -880,18 +877,40 @@ func inBodyIM(p *parser) bool {
 	case EndTagToken:
 		switch p.tok.Data {
 		case "body":
-			// TODO: autoclose the stack of open elements.
-			p.im = afterBodyIM
+			if p.elementInScope(defaultScope, "body") {
+				p.im = afterBodyIM
+			}
+		case "html":
+			if p.elementInScope(defaultScope, "body") {
+				p.parseImpliedToken(EndTagToken, "body", nil)
+				return false
+			}
 			return true
+		case "address", "article", "aside", "blockquote", "button", "center", "details", "dir", "div", "dl", "fieldset", "figcaption", "figure", "footer", "header", "hgroup", "listing", "menu", "nav", "ol", "pre", "section", "summary", "ul":
+			p.popUntil(defaultScope, p.tok.Data)
+		case "form":
+			node := p.form
+			p.form = nil
+			i := p.indexOfElementInScope(defaultScope, "form")
+			if node == nil || i == -1 || p.oe[i] != node {
+				// Ignore the token.
+				return true
+			}
+			p.generateImpliedEndTags()
+			p.oe.remove(node)
 		case "p":
 			if !p.elementInScope(buttonScope, "p") {
 				p.addElement("p", nil)
 			}
 			p.popUntil(buttonScope, "p")
+		case "li":
+			p.popUntil(listItemScope, "li")
+		case "dd", "dt":
+			p.popUntil(defaultScope, p.tok.Data)
+		case "h1", "h2", "h3", "h4", "h5", "h6":
+			p.popUntil(defaultScope, "h1", "h2", "h3", "h4", "h5", "h6")
 		case "a", "b", "big", "code", "em", "font", "i", "nobr", "s", "small", "strike", "strong", "tt", "u":
 			p.inBodyEndTagFormatting(p.tok.Data)
-		case "address", "article", "aside", "blockquote", "button", "center", "details", "dir", "div", "dl", "fieldset", "figcaption", "figure", "footer", "header", "hgroup", "listing", "menu", "nav", "ol", "pre", "section", "summary", "ul":
-			p.popUntil(defaultScope, p.tok.Data)
 		case "applet", "marquee", "object":
 			if p.popUntil(defaultScope, p.tok.Data) {
 				p.clearActiveFormattingElements()
@@ -1769,29 +1788,52 @@ func (p *parser) inForeignContent() bool {
 	return true
 }
 
-func (p *parser) parse() error {
-	// Iterate until EOF. Any other error will cause an early return.
-	consumed := true
-	for {
-		if consumed {
-			if err := p.read(); err != nil {
-				if err == io.EOF {
-					break
-				}
-				return err
-			}
-		}
+// parseImpliedToken parses a token as though it had appeared in the parser's
+// input.
+func (p *parser) parseImpliedToken(t TokenType, data string, attr []Attribute) {
+	realToken, selfClosing := p.tok, p.hasSelfClosingToken
+	p.tok = Token{
+		Type: t,
+		Data: data,
+		Attr: attr,
+	}
+	p.hasSelfClosingToken = false
+	p.parseCurrentToken()
+	p.tok, p.hasSelfClosingToken = realToken, selfClosing
+}
+
+// parseCurrentToken runs the current token through the parsing routines
+// until it is consumed.
+func (p *parser) parseCurrentToken() {
+	if p.tok.Type == SelfClosingTagToken {
+		p.hasSelfClosingToken = true
+		p.tok.Type = StartTagToken
+	}
+
+	consumed := false
+	for !consumed {
 		if p.inForeignContent() {
 			consumed = parseForeignContent(p)
 		} else {
 			consumed = p.im(p)
 		}
 	}
-	// Loop until the final token (the ErrorToken signifying EOF) is consumed.
-	for {
-		if consumed = p.im(p); consumed {
-			break
+
+	if p.hasSelfClosingToken {
+		p.hasSelfClosingToken = false
+		p.parseImpliedToken(EndTagToken, p.tok.Data, nil)
+	}
+}
+
+func (p *parser) parse() error {
+	// Iterate until EOF. Any other error will cause an early return.
+	var err error
+	for err != io.EOF {
+		err = p.read()
+		if err != nil && err != io.EOF {
+			return err
 		}
+		p.parseCurrentToken()
 	}
 	return nil
 }
