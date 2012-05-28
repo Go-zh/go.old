@@ -370,7 +370,7 @@ func TestIdentityResponse(t *testing.T) {
 	})
 }
 
-func testTcpConnectionCloses(t *testing.T, req string, h Handler) {
+func testTCPConnectionCloses(t *testing.T, req string, h Handler) {
 	s := httptest.NewServer(h)
 	defer s.Close()
 
@@ -386,17 +386,18 @@ func testTcpConnectionCloses(t *testing.T, req string, h Handler) {
 	}
 
 	r := bufio.NewReader(conn)
-	_, err = ReadResponse(r, &Request{Method: "GET"})
+	res, err := ReadResponse(r, &Request{Method: "GET"})
 	if err != nil {
 		t.Fatal("ReadResponse error:", err)
 	}
 
-	success := make(chan bool)
+	didReadAll := make(chan bool, 1)
 	go func() {
 		select {
 		case <-time.After(5 * time.Second):
-			t.Fatal("body not closed after 5s")
-		case <-success:
+			t.Error("body not closed after 5s")
+			return
+		case <-didReadAll:
 		}
 	}()
 
@@ -404,27 +405,37 @@ func testTcpConnectionCloses(t *testing.T, req string, h Handler) {
 	if err != nil {
 		t.Fatal("read error:", err)
 	}
+	didReadAll <- true
 
-	success <- true
+	if !res.Close {
+		t.Errorf("Response.Close = false; want true")
+	}
 }
 
 // TestServeHTTP10Close verifies that HTTP/1.0 requests won't be kept alive.
 func TestServeHTTP10Close(t *testing.T) {
-	testTcpConnectionCloses(t, "GET / HTTP/1.0\r\n\r\n", HandlerFunc(func(w ResponseWriter, r *Request) {
+	testTCPConnectionCloses(t, "GET / HTTP/1.0\r\n\r\n", HandlerFunc(func(w ResponseWriter, r *Request) {
 		ServeFile(w, r, "testdata/file")
+	}))
+}
+
+// TestClientCanClose verifies that clients can also force a connection to close.
+func TestClientCanClose(t *testing.T) {
+	testTCPConnectionCloses(t, "GET / HTTP/1.1\r\nConnection: close\r\n\r\n", HandlerFunc(func(w ResponseWriter, r *Request) {
+		// Nothing.
 	}))
 }
 
 // TestHandlersCanSetConnectionClose verifies that handlers can force a connection to close,
 // even for HTTP/1.1 requests.
 func TestHandlersCanSetConnectionClose11(t *testing.T) {
-	testTcpConnectionCloses(t, "GET / HTTP/1.1\r\n\r\n", HandlerFunc(func(w ResponseWriter, r *Request) {
+	testTCPConnectionCloses(t, "GET / HTTP/1.1\r\n\r\n", HandlerFunc(func(w ResponseWriter, r *Request) {
 		w.Header().Set("Connection", "close")
 	}))
 }
 
 func TestHandlersCanSetConnectionClose10(t *testing.T) {
-	testTcpConnectionCloses(t, "GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n", HandlerFunc(func(w ResponseWriter, r *Request) {
+	testTCPConnectionCloses(t, "GET / HTTP/1.0\r\nConnection: keep-alive\r\n\r\n", HandlerFunc(func(w ResponseWriter, r *Request) {
 		w.Header().Set("Connection", "close")
 	}))
 }
@@ -661,30 +672,51 @@ func TestServerExpect(t *testing.T) {
 			t.Fatalf("Dial: %v", err)
 		}
 		defer conn.Close()
-		sendf := func(format string, args ...interface{}) {
-			_, err := fmt.Fprintf(conn, format, args...)
-			if err != nil {
-				t.Fatalf("On test %#v, error writing %q: %v", test, format, err)
-			}
-		}
+
+		// Only send the body immediately if we're acting like an HTTP client
+		// that doesn't send 100-continue expectations.
+		writeBody := test.contentLength > 0 && strings.ToLower(test.expectation) != "100-continue"
+
 		go func() {
-			sendf("POST /?readbody=%v HTTP/1.1\r\n"+
+			_, err := fmt.Fprintf(conn, "POST /?readbody=%v HTTP/1.1\r\n"+
 				"Connection: close\r\n"+
 				"Content-Length: %d\r\n"+
 				"Expect: %s\r\nHost: foo\r\n\r\n",
 				test.readBody, test.contentLength, test.expectation)
-			if test.contentLength > 0 && strings.ToLower(test.expectation) != "100-continue" {
+			if err != nil {
+				t.Errorf("On test %#v, error writing request headers: %v", test, err)
+				return
+			}
+			if writeBody {
 				body := strings.Repeat("A", test.contentLength)
-				sendf(body)
+				_, err = fmt.Fprint(conn, body)
+				if err != nil {
+					if !test.readBody {
+						// Server likely already hung up on us.
+						// See larger comment below.
+						t.Logf("On test %#v, acceptable error writing request body: %v", test, err)
+						return
+					}
+					t.Errorf("On test %#v, error writing request body: %v", test, err)
+				}
 			}
 		}()
 		bufr := bufio.NewReader(conn)
 		line, err := bufr.ReadString('\n')
 		if err != nil {
-			t.Fatalf("ReadString: %v", err)
+			if writeBody && !test.readBody {
+				// This is an acceptable failure due to a possible TCP race:
+				// We were still writing data and the server hung up on us. A TCP
+				// implementation may send a RST if our request body data was known
+				// to be lost, which may trigger our reads to fail.
+				// See RFC 1122 page 88.
+				t.Logf("On test %#v, acceptable error from ReadString: %v", test, err)
+				return
+			}
+			t.Fatalf("On test %#v, ReadString: %v", test, err)
 		}
 		if !strings.Contains(line, test.expectedResponse) {
-			t.Errorf("for test %#v got first line=%q", test, line)
+			t.Errorf("On test %#v, got first line = %q; want %q", test, line, test.expectedResponse)
 		}
 	}
 

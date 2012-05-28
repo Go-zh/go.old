@@ -124,8 +124,8 @@ enum
 	// Max number of threads to run garbage collection.
 	// 2, 3, and 4 are all plausible maximums depending
 	// on the hardware details of the machine.  The garbage
-	// collector scales well to 4 cpus.
-	MaxGcproc = 16,
+	// collector scales well to 8 cpus.
+	MaxGcproc = 8,
 };
 
 // A generic linked list of blocks.  (Typically the block is bigger than sizeof(MLink).)
@@ -380,7 +380,7 @@ struct MHeap
 extern MHeap runtime·mheap;
 
 void	runtime·MHeap_Init(MHeap *h, void *(*allocator)(uintptr));
-MSpan*	runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, int32 acct);
+MSpan*	runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, int32 acct, int32 zeroed);
 void	runtime·MHeap_Free(MHeap *h, MSpan *s, int32 acct);
 MSpan*	runtime·MHeap_Lookup(MHeap *h, void *v);
 MSpan*	runtime·MHeap_LookupMaybe(MHeap *h, void *v);
@@ -414,7 +414,8 @@ enum
 void	runtime·MProf_Malloc(void*, uintptr);
 void	runtime·MProf_Free(void*, uintptr);
 void	runtime·MProf_GC(void);
-int32	runtime·helpgc(bool*);
+int32	runtime·gcprocs(void);
+void	runtime·helpgc(int32 nproc);
 void	runtime·gchelper(void);
 
 bool	runtime·getfinalizer(void *p, bool del, void (**fn)(void*), int32 *nret);

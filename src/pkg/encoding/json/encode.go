@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"unicode"
 	"unicode/utf8"
@@ -95,7 +96,7 @@ import (
 //
 // Channel, complex, and function values cannot be encoded in JSON.
 // Attempting to encode such a value causes Marshal to return
-// an InvalidTypeError.
+// an UnsupportedTypeError.
 //
 // JSON cannot represent cyclic data structures and Marshal does not
 // handle them.  Passing cyclic structures to Marshal will result in
@@ -156,6 +157,8 @@ type Marshaler interface {
 	MarshalJSON() ([]byte, error)
 }
 
+// An UnsupportedTypeError is returned by Marshal when attempting
+// to encode an unsupported value type.
 type UnsupportedTypeError struct {
 	Type reflect.Type
 }
@@ -415,9 +418,11 @@ func isValidTag(s string) bool {
 		return false
 	}
 	for _, c := range s {
-		switch c {
-		case '$', '-', '_', '/', '%':
-			// Acceptable
+		switch {
+		case strings.ContainsRune("!#$%&()*+-./:<=>?@[]^_{|}~", c):
+			// Backslash and quote chars are reserved, but
+			// otherwise any punctuation chars are allowed
+			// in a tag name.
 		default:
 			if !unicode.IsLetter(c) && !unicode.IsDigit(c) {
 				return false

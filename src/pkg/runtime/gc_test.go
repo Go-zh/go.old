@@ -26,6 +26,7 @@ func TestGcSys(t *testing.T) {
 	}
 
 	// Should only be using a few MB.
+	// We allocated 100 MB or (if not short) 1 GB.
 	runtime.ReadMemStats(memstats)
 	if sys > memstats.Sys {
 		sys = 0
@@ -33,7 +34,7 @@ func TestGcSys(t *testing.T) {
 		sys = memstats.Sys - sys
 	}
 	t.Logf("used %d extra bytes", sys)
-	if sys > 4<<20 {
+	if sys > 16<<20 {
 		t.Fatalf("using too much memory: %d bytes", sys)
 	}
 }

@@ -31,7 +31,7 @@ import (
 // Errors introduced by the HTTP server.
 var (
 	ErrWriteAfterFlush = errors.New("Conn.Write called after Flush")
-	ErrBodyNotAllowed  = errors.New("http: response status code does not allow body")
+	ErrBodyNotAllowed  = errors.New("http: request method or response status code does not allow body")
 	ErrHijacked        = errors.New("Conn has been hijacked")
 	ErrContentLength   = errors.New("Conn.Write wrote more than the declared Content-Length")
 )
@@ -303,8 +303,7 @@ func (w *response) WriteHeader(code int) {
 		if !connectionHeaderSet {
 			w.header.Set("Connection", "keep-alive")
 		}
-	} else if !w.req.ProtoAtLeast(1, 1) {
-		// Client did not ask to keep connection alive.
+	} else if !w.req.ProtoAtLeast(1, 1) || w.req.wantsClose() {
 		w.closeAfterReply = true
 	}
 
@@ -390,6 +389,11 @@ func (w *response) WriteHeader(code int) {
 	if !w.req.ProtoAtLeast(1, 0) {
 		return
 	}
+
+	if w.closeAfterReply && !hasToken(w.header.Get("Connection"), "close") {
+		w.header.Set("Connection", "close")
+	}
+
 	proto := "HTTP/1.0"
 	if w.req.ProtoAtLeast(1, 1) {
 		proto = "HTTP/1.1"
@@ -917,11 +921,13 @@ func (mux *ServeMux) handler(r *Request) Handler {
 // ServeHTTP dispatches the request to the handler whose
 // pattern most closely matches the request URL.
 func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request) {
-	// Clean path to canonical form and redirect.
-	if p := cleanPath(r.URL.Path); p != r.URL.Path {
-		w.Header().Set("Location", p)
-		w.WriteHeader(StatusMovedPermanently)
-		return
+	if r.Method != "CONNECT" {
+		// Clean path to canonical form and redirect.
+		if p := cleanPath(r.URL.Path); p != r.URL.Path {
+			w.Header().Set("Location", p)
+			w.WriteHeader(StatusMovedPermanently)
+			return
+		}
 	}
 	mux.handler(r).ServeHTTP(w, r)
 }

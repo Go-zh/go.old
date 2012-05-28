@@ -414,23 +414,28 @@ func (s *state) evalField(dot reflect.Value, fieldName string, args []parse.Node
 		return s.evalCall(dot, method, fieldName, args, final)
 	}
 	hasArgs := len(args) > 1 || final.IsValid()
-	// It's not a method; is it a field of a struct?
+	// It's not a method; must be a field of a struct or an element of a map. The receiver must not be nil.
 	receiver, isNil := indirect(receiver)
-	if receiver.Kind() == reflect.Struct {
+	if isNil {
+		s.errorf("nil pointer evaluating %s.%s", typ, fieldName)
+	}
+	switch receiver.Kind() {
+	case reflect.Struct:
 		tField, ok := receiver.Type().FieldByName(fieldName)
 		if ok {
 			field := receiver.FieldByIndex(tField.Index)
-			if tField.PkgPath == "" { // field is exported
-				// If it's a function, we must call it.
-				if hasArgs {
-					s.errorf("%s has arguments but cannot be invoked as function", fieldName)
-				}
-				return field
+			if tField.PkgPath != "" { // field is unexported
+				s.errorf("%s is an unexported field of struct type %s", fieldName, typ)
 			}
+			// If it's a function, we must call it.
+			if hasArgs {
+				s.errorf("%s has arguments but cannot be invoked as function", fieldName)
+			}
+			return field
 		}
-	}
-	// If it's a map, attempt to use the field name as a key.
-	if receiver.Kind() == reflect.Map {
+		s.errorf("%s is not a field of struct type %s", fieldName, typ)
+	case reflect.Map:
+		// If it's a map, attempt to use the field name as a key.
 		nameVal := reflect.ValueOf(fieldName)
 		if nameVal.Type().AssignableTo(receiver.Type().Key()) {
 			if hasArgs {
@@ -438,9 +443,6 @@ func (s *state) evalField(dot reflect.Value, fieldName string, args []parse.Node
 			}
 			return receiver.MapIndex(nameVal)
 		}
-	}
-	if isNil {
-		s.errorf("nil pointer evaluating %s.%s", typ, fieldName)
 	}
 	s.errorf("can't evaluate field %s in type %s", fieldName, typ)
 	panic("not reached")
@@ -518,6 +520,13 @@ func (s *state) validateType(value reflect.Value, typ reflect.Type) reflect.Valu
 		}
 	}
 	if !value.Type().AssignableTo(typ) {
+		if value.Kind() == reflect.Interface && !value.IsNil() {
+			value = value.Elem()
+			if value.Type().AssignableTo(typ) {
+				return value
+			}
+			// fallthrough
+		}
 		// Does one dereference or indirection work? We could do more, as we
 		// do with method receivers, but that gets messy and method receivers
 		// are much more constrained, so it makes more sense there than here.

@@ -340,6 +340,8 @@ struct
 	"BSRL",		LTYPE3,	ABSRL,
 	"BSRQ",		LTYPE3,	ABSRQ,
 	"BSRW",		LTYPE3,	ABSRW,
+	"BSWAPL",	LTYPE1,	ABSWAPL,
+	"BSWAPQ",	LTYPE1,	ABSWAPQ,
 	"BTCL",		LTYPE3,	ABTCL,
 	"BTCQ",		LTYPE3,	ABTCQ,
 	"BTCW",		LTYPE3,	ABTCW,
@@ -1343,20 +1345,6 @@ outhist(void)
 			tofree = nil;
 		}
 	}
-}
-
-void
-pragbldicks(void)
-{
-	while(getnsc() != '\n')
-		;
-}
-
-void
-praghjdicks(void)
-{
-	while(getnsc() != '\n')
-		;
 }
 
 #include "../cc/lexbody"

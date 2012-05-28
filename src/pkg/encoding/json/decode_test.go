@@ -18,6 +18,10 @@ type T struct {
 	Z int `json:"-"`
 }
 
+type U struct {
+	Alphabet string `json:"alpha"`
+}
+
 type tx struct {
 	x int
 }
@@ -71,6 +75,10 @@ var unmarshalTests = []unmarshalTest{
 
 	// Z has a "-" tag.
 	{`{"Y": 1, "Z": 2}`, new(T), T{Y: 1}, nil},
+
+	{`{"alpha": "abc", "alphabet": "xyz"}`, new(U), U{Alphabet: "abc"}, nil},
+	{`{"alpha": "abc"}`, new(U), U{Alphabet: "abc"}, nil},
+	{`{"alphabet": "xyz"}`, new(U), U{}, nil},
 
 	// syntax errors
 	{`{"X": "foo", "Y"}`, nil, nil, &SyntaxError{"invalid character '}' after object key", 17}},
@@ -636,5 +644,24 @@ func TestAnonymous(t *testing.T) {
 	}
 	if s.T.Y != 0 {
 		t.Fatal("Unmarshal: did set T.Y")
+	}
+}
+
+// Test that the empty string doesn't panic decoding when ,string is specified
+// Issue 3450
+func TestEmptyString(t *testing.T) {
+	type T2 struct {
+		Number1 int `json:",string"`
+		Number2 int `json:",string"`
+	}
+	data := `{"Number1":"1", "Number2":""}`
+	dec := NewDecoder(strings.NewReader(data))
+	var t2 T2
+	err := dec.Decode(&t2)
+	if err == nil {
+		t.Fatal("Decode: did not return error")
+	}
+	if t2.Number1 != 1 {
+		t.Fatal("Decode: did not set Number1")
 	}
 }

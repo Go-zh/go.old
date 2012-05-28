@@ -119,6 +119,7 @@ main(int argc, char *argv[])
 		HEADTYPE = headtype(EARGF(usage()));
 		break;
 	case 'I':
+		debug['I'] = 1; // denote cmdline interpreter override
 		interpreter = EARGF(usage());
 		break;
 	case 'L':
@@ -332,7 +333,7 @@ zsym(char *pn, Biobuf *f, Sym *h[])
 {	
 	int o;
 	
-	o = Bgetc(f);
+	o = BGETC(f);
 	if(o < 0 || o >= NSYM || h[o] == nil)
 		mangle(pn);
 	return h[o];
@@ -346,12 +347,12 @@ zaddr(char *pn, Biobuf *f, Adr *a, Sym *h[])
 	Sym *s;
 	Auto *u;
 
-	t = Bgetc(f);
+	t = BGETC(f);
 	a->index = D_NONE;
 	a->scale = 0;
 	if(t & T_INDEX) {
-		a->index = Bgetc(f);
-		a->scale = Bgetc(f);
+		a->index = BGETC(f);
+		a->scale = BGETC(f);
 	}
 	a->type = D_NONE;
 	a->offset = 0;
@@ -375,7 +376,7 @@ zaddr(char *pn, Biobuf *f, Adr *a, Sym *h[])
 		a->type = D_SCONST;
 	}
 	if(t & T_TYPE)
-		a->type = Bgetc(f);
+		a->type = BGETC(f);
 	adrgotype = S;
 	if(t & T_GOTYPE)
 		adrgotype = zsym(pn, f, h);
@@ -451,10 +452,10 @@ newloop:
 loop:
 	if(f->state == Bracteof || Boffset(f) >= eof)
 		goto eof;
-	o = Bgetc(f);
+	o = BGETC(f);
 	if(o == Beof)
 		goto eof;
-	o |= Bgetc(f) << 8;
+	o |= BGETC(f) << 8;
 	if(o <= AXXX || o >= ALAST) {
 		if(o < 0)
 			goto eof;
@@ -467,8 +468,8 @@ loop:
 		sig = 0;
 		if(o == ASIGNAME)
 			sig = Bget4(f);
-		v = Bgetc(f);	/* type */
-		o = Bgetc(f);	/* sym */
+		v = BGETC(f);	/* type */
+		o = BGETC(f);	/* sym */
 		r = 0;
 		if(v == D_STATIC)
 			r = version;

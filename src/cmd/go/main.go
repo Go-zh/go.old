@@ -144,8 +144,9 @@ func main() {
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "Unknown command %#q\n\n", args[0])
-	usage()
+	fmt.Fprintf(os.Stderr, "go: unknown subcommand %q\nRun 'go help' for usage.\n", args[0])
+	setExitStatus(2)
+	exit()
 }
 
 var usageTemplate = `Go is a tool for managing Go source code.
@@ -339,6 +340,13 @@ func exitIfErrors() {
 
 func run(cmdargs ...interface{}) {
 	cmdline := stringList(cmdargs...)
+	if buildN || buildV {
+		fmt.Printf("%s\n", strings.Join(cmdline, " "))
+		if buildN {
+			return
+		}
+	}
+
 	cmd := exec.Command(cmdline[0], cmdline[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -500,13 +508,25 @@ func matchPackagesInFS(pattern string) []string {
 
 	var pkgs []string
 	filepath.Walk(dir, func(path string, fi os.FileInfo, err error) error {
-		if err != nil || !fi.IsDir() || path == dir {
+		if err != nil || !fi.IsDir() {
 			return nil
 		}
+		if path == dir {
+			// filepath.Walk starts at dir and recurses. For the recursive case,
+			// the path is the result of filepath.Join, which calls filepath.Clean.
+			// The initial case is not Cleaned, though, so we do this explicitly.
+			//
+			// This converts a path like "./io/" to "io". Without this step, running
+			// "cd $GOROOT/src/pkg; go list ./io/..." would incorrectly skip the io
+			// package, because prepending the prefix "./" to the unclean path would
+			// result in "././io", and match("././io") returns false.
+			path = filepath.Clean(path)
+		}
 
-		// Avoid .foo, _foo, and testdata directory trees.
+		// Avoid .foo, _foo, and testdata directory trees, but do not avoid "." or "..".
 		_, elem := filepath.Split(path)
-		if strings.HasPrefix(elem, ".") || strings.HasPrefix(elem, "_") || elem == "testdata" {
+		dot := strings.HasPrefix(elem, ".") && elem != "." && elem != ".."
+		if dot || strings.HasPrefix(elem, "_") || elem == "testdata" {
 			return filepath.SkipDir
 		}
 

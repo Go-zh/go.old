@@ -13,6 +13,7 @@ enum {
 	Debug = 0,
 	PtrSize = sizeof(void*),
 	DebugMark = 0,  // run second pass to check mark
+	DataBlock = 8*1024,
 
 	// Four bits per word (see #defines below).
 	wordsPerBitmapWord = sizeof(void*)*8/4,
@@ -72,9 +73,9 @@ static int32 gctrace;
 typedef struct Workbuf Workbuf;
 struct Workbuf
 {
-	Workbuf *next;
+	LFNode node; // must be first
 	uintptr nobj;
-	byte *obj[512-2];
+	byte *obj[512-(sizeof(LFNode)+sizeof(uintptr))/sizeof(byte*)];
 };
 
 typedef struct Finalizer Finalizer;
@@ -112,22 +113,32 @@ static Workbuf* getfull(Workbuf*);
 static void	putempty(Workbuf*);
 static Workbuf* handoff(Workbuf*);
 
+typedef struct GcRoot GcRoot;
+struct GcRoot
+{
+	byte *p;
+	uintptr n;
+};
+
 static struct {
-	Lock fmu;
-	Workbuf	*full;
-	Lock emu;
-	Workbuf	*empty;
+	uint64	full;  // lock-free list of full blocks
+	uint64	empty; // lock-free list of empty blocks
+	byte	pad0[CacheLineSize]; // prevents false-sharing between full/empty and nproc/nwait
 	uint32	nproc;
 	volatile uint32	nwait;
 	volatile uint32	ndone;
+	volatile uint32 debugmarkdone;
 	Note	alldone;
-	Lock	markgate;
-	Lock	sweepgate;
-	uint32	spanidx;
+	ParFor	*markfor;
+	ParFor	*sweepfor;
 
 	Lock;
 	byte	*chunk;
 	uintptr	nchunk;
+
+	GcRoot	*roots;
+	uint32	nroot;
+	uint32	rootcap;
 } work;
 
 // scanblock scans a block of n bytes starting at pointer b for references
@@ -163,7 +174,7 @@ scanblock(byte *b, int64 n)
 	nobj = 0;  // number of queued objects
 
 	// Scanblock helpers pass b==nil.
-	// The main proc needs to return to make more
+	// Procs needs to return to make more
 	// calls to scanblock.  But if work.nproc==1 then
 	// might as well process blocks as soon as we
 	// have them.
@@ -247,6 +258,14 @@ scanblock(byte *b, int64 n)
 			bits = xbits >> shift;
 
 		found:
+			// If another proc wants a pointer, give it some.
+			if(work.nwait > 0 && nobj > 4 && work.full == 0) {
+				wbuf->nobj = nobj;
+				wbuf = handoff(wbuf);
+				nobj = wbuf->nobj;
+				wp = wbuf->obj + nobj;
+			}
+
 			// Now we have bits, bitp, and shift correct for
 			// obj pointing at the base of the object.
 			// Only care about allocated and not marked.
@@ -270,14 +289,6 @@ scanblock(byte *b, int64 n)
 
 			PREFETCH(obj);
 
-			// If another proc wants a pointer, give it some.
-			if(nobj > 4 && work.nwait > 0 && work.full == nil) {
-				wbuf->nobj = nobj;
-				wbuf = handoff(wbuf);
-				nobj = wbuf->nobj;
-				wp = wbuf->obj + nobj;
-			}
-
 			// If buffer is full, get a new one.
 			if(wbuf == nil || nobj >= nelem(wbuf->obj)) {
 				if(wbuf != nil)
@@ -297,7 +308,8 @@ scanblock(byte *b, int64 n)
 		// Fetch b from the work buffer.
 		if(nobj == 0) {
 			if(!keepworking) {
-				putempty(wbuf);
+				if(wbuf)
+					putempty(wbuf);
 				return;
 			}
 			// Emptied our buffer: refill.
@@ -366,7 +378,6 @@ debug_scanblock(byte *b, int64 n)
 		if(s == nil)
 			continue;
 
-
 		p =  (byte*)((uintptr)s->start<<PageShift);
 		if(s->sizeclass == 0) {
 			obj = p;
@@ -403,53 +414,33 @@ debug_scanblock(byte *b, int64 n)
 	}
 }
 
+static void
+markroot(ParFor *desc, uint32 i)
+{
+	USED(&desc);
+	scanblock(work.roots[i].p, work.roots[i].n);
+}
+
 // Get an empty work buffer off the work.empty list,
 // allocating new buffers as needed.
 static Workbuf*
 getempty(Workbuf *b)
 {
-	if(work.nproc == 1) {
-		// Put b on full list.
-		if(b != nil) {
-			b->next = work.full;
-			work.full = b;
+	if(b != nil)
+		runtime·lfstackpush(&work.full, &b->node);
+	b = (Workbuf*)runtime·lfstackpop(&work.empty);
+	if(b == nil) {
+		// Need to allocate.
+		runtime·lock(&work);
+		if(work.nchunk < sizeof *b) {
+			work.nchunk = 1<<20;
+			work.chunk = runtime·SysAlloc(work.nchunk);
 		}
-		// Grab from empty list if possible.
-		b = work.empty;
-		if(b != nil) {
-			work.empty = b->next;
-			goto haveb;
-		}
-	} else {
-		// Put b on full list.
-		if(b != nil) {
-			runtime·lock(&work.fmu);
-			b->next = work.full;
-			work.full = b;
-			runtime·unlock(&work.fmu);
-		}
-		// Grab from empty list if possible.
-		runtime·lock(&work.emu);
-		b = work.empty;
-		if(b != nil)
-			work.empty = b->next;
-		runtime·unlock(&work.emu);
-		if(b != nil)
-			goto haveb;
+		b = (Workbuf*)work.chunk;
+		work.chunk += sizeof *b;
+		work.nchunk -= sizeof *b;
+		runtime·unlock(&work);
 	}
-
-	// Need to allocate.
-	runtime·lock(&work);
-	if(work.nchunk < sizeof *b) {
-		work.nchunk = 1<<20;
-		work.chunk = runtime·SysAlloc(work.nchunk);
-	}
-	b = (Workbuf*)work.chunk;
-	work.chunk += sizeof *b;
-	work.nchunk -= sizeof *b;
-	runtime·unlock(&work);
-
-haveb:
 	b->nobj = 0;
 	return b;
 }
@@ -457,19 +448,7 @@ haveb:
 static void
 putempty(Workbuf *b)
 {
-	if(b == nil)
-		return;
-
-	if(work.nproc == 1) {
-		b->next = work.empty;
-		work.empty = b;
-		return;
-	}
-
-	runtime·lock(&work.emu);
-	b->next = work.empty;
-	work.empty = b;
-	runtime·unlock(&work.emu);
+	runtime·lfstackpush(&work.empty, &b->node);
 }
 
 // Get a full work buffer off the work.full list, or return nil.
@@ -477,54 +456,21 @@ static Workbuf*
 getfull(Workbuf *b)
 {
 	int32 i;
-	Workbuf *b1;
 
-	if(work.nproc == 1) {
-		// Put b on empty list.
-		if(b != nil) {
-			b->next = work.empty;
-			work.empty = b;
-		}
-		// Grab from full list if possible.
-		// Since work.nproc==1, no one else is
-		// going to give us work.
-		b = work.full;
-		if(b != nil)
-			work.full = b->next;
+	if(b != nil)
+		runtime·lfstackpush(&work.empty, &b->node);
+	b = (Workbuf*)runtime·lfstackpop(&work.full);
+	if(b != nil || work.nproc == 1)
 		return b;
-	}
-
-	putempty(b);
-
-	// Grab buffer from full list if possible.
-	for(;;) {
-		b1 = work.full;
-		if(b1 == nil)
-			break;
-		runtime·lock(&work.fmu);
-		if(work.full != nil) {
-			b1 = work.full;
-			work.full = b1->next;
-			runtime·unlock(&work.fmu);
-			return b1;
-		}
-		runtime·unlock(&work.fmu);
-	}
 
 	runtime·xadd(&work.nwait, +1);
 	for(i=0;; i++) {
-		b1 = work.full;
-		if(b1 != nil) {
-			runtime·lock(&work.fmu);
-			if(work.full != nil) {
-				runtime·xadd(&work.nwait, -1);
-				b1 = work.full;
-				work.full = b1->next;
-				runtime·unlock(&work.fmu);
-				return b1;
-			}
-			runtime·unlock(&work.fmu);
-			continue;
+		if(work.full != 0) {
+			runtime·xadd(&work.nwait, -1);
+			b = (Workbuf*)runtime·lfstackpop(&work.full);
+			if(b != nil)
+				return b;
+			runtime·xadd(&work.nwait, +1);
 		}
 		if(work.nwait == work.nproc)
 			return nil;
@@ -557,17 +503,35 @@ handoff(Workbuf *b)
 	m->gcstats.nhandoffcnt += n;
 
 	// Put b on full list - let first half of b get stolen.
-	runtime·lock(&work.fmu);
-	b->next = work.full;
-	work.full = b;
-	runtime·unlock(&work.fmu);
-
+	runtime·lfstackpush(&work.full, &b->node);
 	return b1;
 }
 
-// Scanstack calls scanblock on each of gp's stack segments.
 static void
-scanstack(void (*scanblock)(byte*, int64), G *gp)
+addroot(byte *p, uintptr n)
+{
+	uint32 cap;
+	GcRoot *new;
+
+	if(work.nroot >= work.rootcap) {
+		cap = PageSize/sizeof(GcRoot);
+		if(cap < 2*work.rootcap)
+			cap = 2*work.rootcap;
+		new = (GcRoot*)runtime·SysAlloc(cap*sizeof(GcRoot));
+		if(work.roots != nil) {
+			runtime·memmove(new, work.roots, work.rootcap*sizeof(GcRoot));
+			runtime·SysFree(work.roots, work.rootcap*sizeof(GcRoot));
+		}
+		work.roots = new;
+		work.rootcap = cap;
+	}
+	work.roots[work.nroot].p = p;
+	work.roots[work.nroot].n = n;
+	work.nroot++;
+}
+
+static void
+addstackroots(G *gp)
 {
 	M *mp;
 	int32 n;
@@ -600,15 +564,13 @@ scanstack(void (*scanblock)(byte*, int64), G *gp)
 		}
 	}
 
-	if(Debug > 1)
-		runtime·printf("scanstack %d %p\n", gp->goid, sp);
 	n = 0;
 	while(stk) {
 		if(sp < guard-StackGuard || (byte*)stk < sp) {
 			runtime·printf("scanstack inconsistent: g%d#%d sp=%p not in [%p,%p]\n", gp->goid, n, sp, guard-StackGuard, stk);
 			runtime·throw("scanstack");
 		}
-		scanblock(sp, (byte*)stk - sp);
+		addroot(sp, (byte*)stk - sp);
 		sp = stk->gobuf.sp;
 		guard = stk->stackguard;
 		stk = (Stktop*)stk->stackbase;
@@ -616,10 +578,8 @@ scanstack(void (*scanblock)(byte*, int64), G *gp)
 	}
 }
 
-// Markfin calls scanblock on the blocks that have finalizers:
-// the things pointed at cannot be freed until the finalizers have run.
 static void
-markfin(void *v)
+addfinroots(void *v)
 {
 	uintptr size;
 
@@ -628,30 +588,22 @@ markfin(void *v)
 		runtime·throw("mark - finalizer inconsistency");
 
 	// do not mark the finalizer block itself.  just mark the things it points at.
-	scanblock(v, size);
+	addroot(v, size);
 }
 
 static void
-debug_markfin(void *v)
-{
-	uintptr size;
-
-	if(!runtime·mlookup(v, &v, &size, nil))
-		runtime·throw("debug_mark - finalizer inconsistency");
-	debug_scanblock(v, size);
-}
-
-// Mark
-static void
-mark(void (*scan)(byte*, int64))
+addroots(void)
 {
 	G *gp;
 	FinBlock *fb;
+	byte *p;
+
+	work.nroot = 0;
 
 	// mark data+bss.
-	scan(data, ebss - data);
+	for(p=data; p<ebss; p+=DataBlock)
+		addroot(p, p+DataBlock < ebss ? DataBlock : ebss-p);
 
-	// mark stacks
 	for(gp=runtime·allg; gp!=nil; gp=gp->alllink) {
 		switch(gp->status){
 		default:
@@ -662,27 +614,20 @@ mark(void (*scan)(byte*, int64))
 		case Grunning:
 			if(gp != g)
 				runtime·throw("mark - world not stopped");
-			scanstack(scan, gp);
+			addstackroots(gp);
 			break;
 		case Grunnable:
 		case Gsyscall:
 		case Gwaiting:
-			scanstack(scan, gp);
+			addstackroots(gp);
 			break;
 		}
 	}
 
-	// mark things pointed at by objects with finalizers
-	if(scan == debug_scanblock)
-		runtime·walkfintab(debug_markfin);
-	else
-		runtime·walkfintab(markfin);
+	runtime·walkfintab(addfinroots);
 
 	for(fb=allfin; fb; fb=fb->alllink)
-		scanblock((byte*)fb->fin, fb->cnt*sizeof(fb->fin[0]));
-
-	// in multiproc mode, join in the queued work.
-	scan(nil, 0);
+		addroot((byte*)fb->fin, fb->cnt*sizeof(fb->fin[0]));
 }
 
 static bool
@@ -692,7 +637,7 @@ handlespecial(byte *p, uintptr size)
 	int32 nret;
 	FinBlock *block;
 	Finalizer *f;
-	
+
 	if(!runtime·getfinalizer(p, true, &fn, &nret)) {
 		runtime·setblockspecial(p, false);
 		runtime·MProf_Free(p, size);
@@ -717,44 +662,14 @@ handlespecial(byte *p, uintptr size)
 	f->fn = fn;
 	f->nret = nret;
 	f->arg = p;
-	runtime·unlock(&finlock); 
+	runtime·unlock(&finlock);
 	return true;
 }
-
-static void sweepspan(MSpan *s);
 
 // Sweep frees or collects finalizers for blocks not marked in the mark phase.
 // It clears the mark bits in preparation for the next GC round.
 static void
-sweep(void)
-{
-	MSpan *s, **allspans;
-	int64 now;
-	uint32 spanidx, nspan;
-
-	now = runtime·nanotime();
-	nspan = runtime·mheap.nspan;
-	allspans = runtime·mheap.allspans;
-	for(;;) {
-		spanidx = runtime·xadd(&work.spanidx, 1) - 1;
-		if(spanidx >= nspan)
-			break;
-		s = allspans[spanidx];
-
-		// Stamp newly unused spans. The scavenger will use that
-		// info to potentially give back some pages to the OS.
-		if(s->state == MSpanFree && s->unusedsince == 0)
-			s->unusedsince = now;
-
-		if(s->state != MSpanInUse)
-			continue;
-
-		sweepspan(s);
-	}
-}
-
-static void
-sweepspan(MSpan *s)
+sweepspan(ParFor *desc, uint32 idx)
 {
 	int32 cl, n, npages;
 	uintptr size;
@@ -763,7 +678,16 @@ sweepspan(MSpan *s)
 	byte *arena_start;
 	MLink *start, *end;
 	int32 nfree;
+	MSpan *s;
 
+	USED(&desc);
+	s = runtime·mheap.allspans[idx];
+	// Stamp newly unused spans. The scavenger will use that
+	// info to potentially give back some pages to the OS.
+	if(s->state == MSpanFree && s->unusedsince == 0)
+		s->unusedsince = runtime·nanotime();
+	if(s->state != MSpanInUse)
+		return;
 	arena_start = runtime·mheap.arena_start;
 	p = (byte*)(s->start << PageShift);
 	cl = s->sizeclass;
@@ -848,16 +772,18 @@ sweepspan(MSpan *s)
 void
 runtime·gchelper(void)
 {
-	// Wait until main proc is ready for mark help.
-	runtime·lock(&work.markgate);
-	runtime·unlock(&work.markgate);
+	// parallel mark for over gc roots
+	runtime·parfordo(work.markfor);
+	// help other threads scan secondary blocks
 	scanblock(nil, 0);
 
-	// Wait until main proc is ready for sweep help.
-	runtime·lock(&work.sweepgate);
-	runtime·unlock(&work.sweepgate);
-	sweep();
+	if(DebugMark) {
+		// wait while the main thread executes mark(debug_scanblock)
+		while(runtime·atomicload(&work.debugmarkdone) == 0)
+			runtime·usleep(10);
+	}
 
+	runtime·parfordo(work.sweepfor);
 	if(runtime·xadd(&work.ndone, +1) == work.nproc-1)
 		runtime·notewakeup(&work.alldone);
 }
@@ -925,8 +851,8 @@ runtime·gc(int32 force)
 	int64 t0, t1, t2, t3;
 	uint64 heap0, heap1, obj0, obj1;
 	byte *p;
-	bool extra;
 	GCStats stats;
+	uint32 i;
 
 	// The gc is turned off (via enablegc) until
 	// the bootstrap has completed.
@@ -966,37 +892,52 @@ runtime·gc(int32 force)
 	m->gcing = 1;
 	runtime·stoptheworld();
 
-	cachestats(nil);
-	heap0 = mstats.heap_alloc;
-	obj0 = mstats.nmalloc - mstats.nfree;
-
-	runtime·lock(&work.markgate);
-	runtime·lock(&work.sweepgate);
-
-	extra = false;
-	work.nproc = 1;
-	if(runtime·gomaxprocs > 1 && runtime·ncpu > 1) {
-		runtime·noteclear(&work.alldone);
-		work.nproc += runtime·helpgc(&extra);
+	heap0 = 0;
+	obj0 = 0;
+	if(gctrace) {
+		cachestats(nil);
+		heap0 = mstats.heap_alloc;
+		obj0 = mstats.nmalloc - mstats.nfree;
 	}
+
 	work.nwait = 0;
 	work.ndone = 0;
+	work.debugmarkdone = 0;
+	work.nproc = runtime·gcprocs();
+	addroots();
+	if(work.markfor == nil)
+		work.markfor = runtime·parforalloc(MaxGcproc);
+	runtime·parforsetup(work.markfor, work.nproc, work.nroot, nil, false, markroot);
+	if(work.sweepfor == nil)
+		work.sweepfor = runtime·parforalloc(MaxGcproc);
+	runtime·parforsetup(work.sweepfor, work.nproc, runtime·mheap.nspan, nil, true, sweepspan);
+	if(work.nproc > 1) {
+		runtime·noteclear(&work.alldone);
+		runtime·helpgc(work.nproc);
+	}
 
-	runtime·unlock(&work.markgate);  // let the helpers in
-	mark(scanblock);
-	if(DebugMark)
-		mark(debug_scanblock);
+	runtime·parfordo(work.markfor);
+	scanblock(nil, 0);
+
+	if(DebugMark) {
+		for(i=0; i<work.nroot; i++)
+			debug_scanblock(work.roots[i].p, work.roots[i].n);
+		runtime·atomicstore(&work.debugmarkdone, 1);
+	}
 	t1 = runtime·nanotime();
 
-	work.spanidx = 0;
-	runtime·unlock(&work.sweepgate);  // let the helpers in
-	sweep();
-	if(work.nproc > 1)
-		runtime·notesleep(&work.alldone);
+	runtime·parfordo(work.sweepfor);
 	t2 = runtime·nanotime();
 
 	stealcache();
 	cachestats(&stats);
+
+	if(work.nproc > 1)
+		runtime·notesleep(&work.alldone);
+
+	stats.nprocyield += work.sweepfor->nprocyield;
+	stats.nosyield += work.sweepfor->nosyield;
+	stats.nsleep += work.sweepfor->nsleep;
 
 	mstats.next_gc = mstats.heap_alloc+mstats.heap_alloc*gcpercent/100;
 	m->gcing = 0;
@@ -1026,28 +967,21 @@ runtime·gc(int32 force)
 
 	if(gctrace) {
 		runtime·printf("gc%d(%d): %D+%D+%D ms, %D -> %D MB %D -> %D (%D-%D) objects,"
-				" %D(%D) handoff, %D/%D/%D yields\n",
+				" %D(%D) handoff, %D(%D) steal, %D/%D/%D yields\n",
 			mstats.numgc, work.nproc, (t1-t0)/1000000, (t2-t1)/1000000, (t3-t2)/1000000,
 			heap0>>20, heap1>>20, obj0, obj1,
 			mstats.nmalloc, mstats.nfree,
 			stats.nhandoff, stats.nhandoffcnt,
+			work.sweepfor->nsteal, work.sweepfor->nstealcnt,
 			stats.nprocyield, stats.nosyield, stats.nsleep);
 	}
-	
+
 	runtime·MProf_GC();
 	runtime·semrelease(&runtime·worldsema);
+	runtime·starttheworld();
 
-	// If we could have used another helper proc, start one now,
-	// in the hope that it will be available next time.
-	// It would have been even better to start it before the collection,
-	// but doing so requires allocating memory, so it's tricky to
-	// coordinate.  This lazy approach works out in practice:
-	// we don't mind if the first couple gc rounds don't have quite
-	// the maximum number of procs.
-	runtime·starttheworld(extra);
-
-	// give the queued finalizers, if any, a chance to run	
-	if(finq != nil)	
+	// give the queued finalizers, if any, a chance to run
+	if(finq != nil)
 		runtime·gosched();
 
 	if(gctrace > 1 && !force)
@@ -1068,7 +1002,7 @@ runtime·ReadMemStats(MStats *stats)
 	*stats = mstats;
 	m->gcing = 0;
 	runtime·semrelease(&runtime·worldsema);
-	runtime·starttheworld(false);
+	runtime·starttheworld();
 }
 
 static void

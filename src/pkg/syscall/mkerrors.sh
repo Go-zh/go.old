@@ -104,6 +104,9 @@ includes_NetBSD='
 #include <netinet/ip.h>
 #include <netinet/ip_mroute.h>
 #include <netinet/if_ether.h>
+
+// Needed since <sys/param.h> refers to it...
+#define schedppq 1
 '
 
 includes_OpenBSD='
@@ -174,15 +177,30 @@ ccflags="$@"
 		$2 !~ /^EQUIV_/ &&
 		$2 !~ /^EXPR_/ &&
 		$2 ~ /^E[A-Z0-9_]+$/ ||
+		$2 ~ /^B[0-9_]+$/ ||
+		$2 ~ /^V[A-Z0-9]+$/ ||
+		$2 ~ /^CS[A-Z0-9]/ ||
+		$2 ~ /^I(SIG|CANON|CRNL|EXTEN|MAXBEL|STRIP|UTF8)$/ ||
+		$2 ~ /^IGN/ ||
+		$2 ~ /^IX(ON|ANY|OFF)$/ ||
+		$2 ~ /^IN(LCR|PCK)$/ ||
+		$2 ~ /(^FLU?SH)|(FLU?SH$)/ ||
+		$2 ~ /^C(LOCAL|READ)$/ ||
+		$2 == "BRKINT" ||
+		$2 == "HUPCL" ||
+		$2 == "PENDIN" ||
+		$2 == "TOSTOP" ||
+		$2 ~ /^PAR/ ||
 		$2 ~ /^SIG[^_]/ ||
+		$2 ~ /^O[CNPFP][A-Z]+[^_][A-Z]+$/ ||
 		$2 ~ /^IN_/ ||
 		$2 ~ /^LOCK_(SH|EX|NB|UN)$/ ||
 		$2 ~ /^(AF|SOCK|SO|SOL|IPPROTO|IP|IPV6|TCP|EVFILT|NOTE|EV|SHUT|PROT|MAP|PACKET|MSG|SCM|MCL|DT|MADV|PR)_/ ||
 		$2 == "SOMAXCONN" ||
 		$2 == "NAME_MAX" ||
 		$2 == "IFNAMSIZ" ||
-		$2 == "CTL_NET" ||
-		$2 == "CTL_MAXNAME" ||
+		$2 ~ /^CTL_(MAXNAME|NET|QUERY)$/ ||
+		$2 ~ /^SYSCTL_VERS/ ||
 		$2 ~ /^(MS|MNT)_/ ||
 		$2 ~ /^TUN(SET|GET|ATTACH|DETACH)/ ||
 		$2 ~ /^(O|F|FD|NAME|S|PTRACE|PT)_/ ||

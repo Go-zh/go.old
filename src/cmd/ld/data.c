@@ -159,7 +159,7 @@ relocsym(Sym *s)
 			diag("%s: invalid relocation %d+%d not in [%d,%d)", s->name, off, siz&~Rbig, 0, s->np);
 			continue;
 		}
-		if(r->sym != S && (r->sym->type == 0 || r->sym->type == SXREF)) {
+		if(r->sym != S && (r->sym->type & SMASK == 0 || r->sym->type & SMASK == SXREF)) {
 			diag("%s: not defined", r->sym->name);
 			continue;
 		}
@@ -282,7 +282,7 @@ dynrelocsym(Sym *s)
 	}
 
 	for(r=s->r; r<s->r+s->nr; r++)
-		if(r->sym->type == SDYNIMPORT || r->type >= 256)
+		if(r->sym != S && r->sym->type == SDYNIMPORT || r->type >= 256)
 			adddynrel(s, r);
 }
 

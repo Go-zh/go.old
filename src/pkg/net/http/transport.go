@@ -480,6 +480,7 @@ type persistConn struct {
 	t        *Transport
 	cacheKey string // its connectMethod.String()
 	conn     net.Conn
+	closed   bool                // whether conn has been closed
 	br       *bufio.Reader       // from conn
 	bw       *bufio.Writer       // to conn
 	reqch    chan requestAndChan // written by roundTrip(); read by readLoop()
@@ -567,29 +568,32 @@ func (pc *persistConn) readLoop() {
 
 		hasBody := resp != nil && resp.ContentLength != 0
 		var waitForBodyRead chan bool
-		if alive {
-			if hasBody {
-				lastbody = resp.Body
-				waitForBodyRead = make(chan bool)
-				resp.Body.(*bodyEOFSignal).fn = func() {
-					if !pc.t.putIdleConn(pc) {
-						alive = false
-					}
-					waitForBodyRead <- true
-				}
-			} else {
-				// When there's no response body, we immediately
-				// reuse the TCP connection (putIdleConn), but
-				// we need to prevent ClientConn.Read from
-				// closing the Response.Body on the next
-				// loop, otherwise it might close the body
-				// before the client code has had a chance to
-				// read it (even though it'll just be 0, EOF).
-				lastbody = nil
-
-				if !pc.t.putIdleConn(pc) {
+		if hasBody {
+			lastbody = resp.Body
+			waitForBodyRead = make(chan bool)
+			resp.Body.(*bodyEOFSignal).fn = func() {
+				if alive && !pc.t.putIdleConn(pc) {
 					alive = false
 				}
+				if !alive {
+					pc.close()
+				}
+				waitForBodyRead <- true
+			}
+		}
+
+		if alive && !hasBody {
+			// When there's no response body, we immediately
+			// reuse the TCP connection (putIdleConn), but
+			// we need to prevent ClientConn.Read from
+			// closing the Response.Body on the next
+			// loop, otherwise it might close the body
+			// before the client code has had a chance to
+			// read it (even though it'll just be 0, EOF).
+			lastbody = nil
+
+			if !pc.t.putIdleConn(pc) {
+				alive = false
 			}
 		}
 
@@ -599,6 +603,10 @@ func (pc *persistConn) readLoop() {
 		// before we race and peek on the underlying bufio reader.
 		if waitForBodyRead != nil {
 			<-waitForBodyRead
+		}
+
+		if !alive {
+			pc.close()
 		}
 	}
 }
@@ -665,7 +673,10 @@ func (pc *persistConn) close() {
 
 func (pc *persistConn) closeLocked() {
 	pc.broken = true
-	pc.conn.Close()
+	if !pc.closed {
+		pc.conn.Close()
+		pc.closed = true
+	}
 	pc.mutateHeaderFunc = nil
 }
 

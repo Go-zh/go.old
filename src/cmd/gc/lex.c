@@ -1271,6 +1271,8 @@ tnum:
 				continue;
 			if(cp == lexbuf+2)
 				yyerror("malformed hex constant");
+			if(c == 'p')
+				goto casep;
 			goto ncu;
 		}
 	}
@@ -1531,9 +1533,7 @@ getc(void)
 	if(c != 0) {
 		curio.peekc = curio.peekc1;
 		curio.peekc1 = 0;
-		if(c == '\n' && pushedio.bin == nil)
-			lexlineno++;
-		return c;
+		goto check;
 	}
 	
 	if(curio.bin == nil) {
@@ -1543,6 +1543,7 @@ getc(void)
 	} else
 		c = Bgetc(curio.bin);
 
+check:
 	switch(c) {
 	case 0:
 		if(curio.bin != nil) {
