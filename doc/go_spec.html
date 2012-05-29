@@ -1377,7 +1377,7 @@ using a receiver of that type.
 
 <p>
 一个类型的方法集决定了其所<a href="#接口类型">实现</a>的接口
-与可使用该类型接收器<a href="#调用">调用</a>的方法。
+与可使用该类型接收器<a href="#函数与方法的调用">调用</a>的方法。
 </p>
 
 <div class="english">
@@ -5128,7 +5128,7 @@ returning a value and a boolean indicating success.  (§<a href="#Assignments">A
 <h3 id="Calls">Calls</h3>
 </div>
 
-<h3 id="调用">调用</h3>
+<h3 id="函数与方法的调用">函数与方法的调用</h3>
 
 <div class="english">
 <p>
@@ -5403,8 +5403,8 @@ unary_op   = "+" | "-" | "!" | "^" | "*" | "&amp;" | "&lt;-" .
 表达式     = 一元表达式 | 表达式 二元操作符 一元表达式 .
 一元表达式 = 主表达式 | 一元操作符 一元表达式 .
 
-二元操作符 = "||" | "&amp;&amp;" | 比较操作符 | 加法操作符 | 乘法操作符 .
-比较操作符 = "==" | "!=" | "&lt;" | "&lt;=" | ">" | ">=" .
+二元操作符 = "||" | "&amp;&amp;" | 关系操作符 | 加法操作符 | 乘法操作符 .
+关系操作符 = "==" | "!=" | "&lt;" | "&lt;=" | ">" | ">=" .
 加法操作符 = "+" | "-" | "|" | "^" .
 乘法操作符 = "*" | "/" | "%" | "&lt;&lt;" | "&gt;&gt;" | "&amp;" | "&amp;^" .
 
@@ -5604,19 +5604,19 @@ to strings. All other arithmetic operators apply to integers only.
 </p>
 
 <pre class="grammar">
-+    和                     integers, floats, complex values, strings
--    差                     integers, floats, complex values
-*    积                     integers, floats, complex values
-/    商                     integers, floats, complex values
-%    余                     integers
++    和              integers, floats, complex values, strings
+-    差              integers, floats, complex values
+*    积              integers, floats, complex values
+/    商              integers, floats, complex values
+%    余              integers
 
-&amp;    按位与                 integers
-|    按位或                 integers
-^    按位异或               integers
-&amp;^   位清除（同或）         integers
+&amp;    按位与          integers
+|    按位或          integers
+^    按位异或        integers
+&amp;^   位清除（同或）  integers
 
-&lt;&lt;   向左移位               integer &lt;&lt; unsigned integer
-&gt;&gt;   向右移位               integer &gt;&gt; unsigned integer
+&lt;&lt;   向左移位        integer &lt;&lt; unsigned integer
+&gt;&gt;   向右移位        integer &gt;&gt; unsigned integer
 </pre>
 
 <div class="english">
@@ -8406,7 +8406,7 @@ function completes.
 </div>
 
 <p>
-该表达式必须为一个调用。在调用Go程中，函数值与形参<a href="#调用">按照惯例求值</a>，
+该表达式必须为一个调用。在调用Go程中，函数值与形参<a href="#函数与方法的调用">按照惯例求值</a>，
 但不像一般的调用，程序的执行并不等待已被调用的函数完成。取而代之，该函数在一个新的Go程中独立执行。
 当该函数终止后，其Go程也将终止。若该函数拥有任何返回值，它们将在该函数完成后被丢弃。
 </p>
@@ -9026,7 +9026,7 @@ func f() (result int) {
 
 <p>
 该表达时必须为一个函数或方法调用。"defer"语句每执行一次，该调用的函数值与形参就会
-<a href="#调用">按照惯例求值</a>并重新保存，但实际的函数并不会被调用。
+<a href="#函数与方法的调用">按照惯例求值</a>并重新保存，但实际的函数并不会被调用。
 取而代之的是，在外围的函数返回前，延迟的调用会按照后进先出的顺序立即执行，
 在该调用返回值后，如果还有需要求值的，则会在它们返回给调用者之前求值。
 例如，若被推迟的函数为<a href="#函数字面">函数字面</a>，而其外围函数在其作用域中的函数字面内拥有
@@ -9086,7 +9086,7 @@ BuiltinArgs = Type [ "," ExpressionList ] | ExpressionList .
 </div>
 
 <p>
-内建函数并没有标准的Go类型，因此它们只能出现在<a href="#调用">调用表达式</a>中，而不能作为函数值被使用。
+内建函数并没有标准的Go类型，因此它们只能出现在<a href="#函数与方法的调用">调用表达式</a>中，而不能作为函数值被使用。
 </p>
 
 <pre class="ebnf">
@@ -9213,7 +9213,7 @@ constant and <code>s</code> is evaluated.
 <p>
 若 <code>s</code> 为字符串常量，则表达式 <code>len(s)</code> 即为 <a href="#常量">常量</a>。
 若 <code>s</code> 的类型为数组或数组指针，且表达式 <code>s</code> 不包含<a href="#接收操作符">信道接收</a>
-或<a href="#调用">函数调用</a>，则表达式 <code>len(s)</code> 与 <code>cap(s)</code> 即为常量，在这种用情况下，
+或<a href="#函数与方法的调用">函数调用</a>，则表达式 <code>len(s)</code> 与 <code>cap(s)</code> 即为常量，在这种用情况下，
 <code>s</code> 不会被求值。否则，<code>len</code> 与 <code>cap</code> 的调用不为常量，且 <code>s</code> 会被求值。
 </p>
 
