@@ -1,49 +1,46 @@
 <!--{
-	"Title": "References",
+	"Title": "参考",
     "Path":  "/ref/"
 }-->
 
 <img class="gopher" src="/doc/gopher/ref.png" />
 
-<p>Good bedtime reading.</p>
+<p>不错的睡前读物。</p>
 
 <div>
 
-<h3 id="pkg"><a href="/pkg/">Package Documentation</a></h3>
+<h3 id="pkg"><a href="/pkg/">包文档</a></h3>
 <p>
-The documentation for the Go standard library.
+Go标准库文档。
 </p>
 
-<h3 id="cmd"><a href="/doc/cmd">Command Documentation</a></h3>
+<h3 id="cmd"><a href="/doc/cmd">命令文档</a></h3>
 <p>
-The documentation for the Go tools.
+Go工具文档。
 </p>
 
-<h3 id="spec"><a href="/ref/spec">Language Specification</a></h3>
+<h3 id="spec"><a href="/ref/spec">语言规范</a></h3>
 <p>
-The official Go Language specification. 
+官方Go编程语言规范。
 </p>
 
-<h3 id="appengine"><a href="http://code.google.com/appengine/docs/go/">App Engine Go Runtime Documentation</a></h3>
+<h3 id="appengine"><a href="http://code.google.com/appengine/docs/go/">应用引擎Go运行时文档</a></h3>
 <p>
-The documentation for
-<a href="http://code.google.com/appengine/">Google App Engine</a>'s Go runtime.
+<a href="http://code.google.com/appengine/">Google应用引擎</a>的Go运行时文档。
 </p>
 
-<h3 id="go_mem"><a href="/ref/mem">The Go Memory Model</a></h3>
+<h3 id="go_mem"><a href="/ref/mem">Go内存模型</a></h3>
 <p>
-A document that specifies the conditions under which reads of a variable in
-one goroutine can be guaranteed to observe values produced by writes to the
-same variable in a different goroutine.
+此文档指定了在不同Go程中，写入同一个变量所产生的值，能够保证被另一个Go程所读取的条件。
 </p>
 
-<h4 id="subrepos">Sub-repositories</h4>
+<h4 id="subrepos">子代码库</h4>
 
 <p>
-These packages are part of the Go Project but outside the main Go tree.
-They are developed under looser <a href="/doc/go1compat.html">compatibility
-requirements</a> than the Go core.
-Install them with "<code><a href="/cmd/go/#Download_and_install_packages_and_dependencies">go get</a></code>".
+这些包是Go项目的一部分，但它们并不在Go的主源码树中。
+它们在比Go核心更为宽松的<a href="/doc/go1compat.html">兼容性需求</a>下开发。
+可使用 "<code><a href="/cmd/go/#Download_and_install_packages_and_dependencies">go get</a></code>"
+命令来安装它们。
 </p>
 
 <ul>
@@ -53,19 +50,20 @@ Install them with "<code><a href="/cmd/go/#Download_and_install_packages_and_dep
 <li><a href="http://code.google.com/p/go/source/browse?repo=net"><code>code.google.com/p/go.net</code></a> [<a href="http://gopkgdoc.appspot.com/pkg/code.google.com/p/go.net">docs</a>]
 </ul>
 
-<h4 id="articles">Articles</h4>
+<h4 id="articles">文章</h4>
 
 <ul>
-<li><a href="/doc/articles/c_go_cgo.html">C? Go? Cgo!</a> - linking against C code with <a href="/cmd/cgo/">cgo</a>.</li>
-<li><a href="/doc/gdb">Debugging Go Code with GDB</a></li>
-<li><a href="/doc/articles/defer_panic_recover.html">Defer, Panic, and Recover</a></li>
-<li><a href="/doc/articles/slices_usage_and_internals.html">Go Slices: usage and internals</a></li>
-<li><a href="/doc/articles/godoc_documenting_go_code.html">Godoc: documenting Go code</a> - writing good documentation for <a href="/cmd/godoc/">godoc</a>.</li>
-<li><a href="http://blog.golang.org/2011/06/profiling-go-programs.html">Profiling Go Programs</a></li>
+<li><a href="/doc/articles/c_go_cgo.html">C? Go? Cgo!</a> - 使用<a href="/cmd/cgo/">cgo</a>链接C代码。</li>
+<li><a href="/doc/gdb">使用GDB调试Go代码</a></li>
+<li><a href="/doc/articles/defer_panic_recover.html">Defer、Panic与Recover</a></li>
+<li><a href="/doc/articles/slices_usage_and_internals.html">Go切片：用法与内部构件</a></li>
+<li><a href="/doc/articles/godoc_documenting_go_code.html">Godoc：编写Go代码文档</a> -
+	为<a href="/cmd/godoc/">godoc</a>编写好的文档。</li>
+<li><a href="http://blog.golang.org/2011/06/profiling-go-programs.html">Go程序性能分析</a></li>
 </ul>
 
 <p>
-See the <a href="/doc/#articles">documentation page</a> for more articles.
+更多文章见<a href="/doc/#articles">文档页面</a>。
 </p>
 
 </div>

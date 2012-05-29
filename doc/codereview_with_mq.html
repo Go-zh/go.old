@@ -1,28 +1,24 @@
 <!--{
-	"Title": "Using Mercurial Queues with Codereview"
+	"Title": "使用Mercurial队列进行代码检查"
 }-->
 
-<h2 id="Introduction">Introduction</h2>
+<h2 id="前言">前言</h2>
 
 <p>
-The Mercurial Queues extension (<code>mq</code>) provides a mechanism for
-managing patches on top of a Mercurial repository and is described in detail
-in Chapters
+Mercurial队列（<code>mq</code>）为管理Mercurial代码库顶部的补丁提供一种机制，
+它的细节描述在<a href="http://hgbook.red-bean.com/read/">Mercurial：最后的指南</a>第
 <a href="http://hgbook.red-bean.com/read/managing-change-with-mercurial-queues.html">12</a>
-and <a href="http://hgbook.red-bean.com/read/advanced-uses-of-mercurial-queues.html">13</a>
-of <a href="http://hgbook.red-bean.com/read/">Mercurial: The Definitive Guide</a>.
-This document explains how to use <code>mq</code> in conjunction
-with the <code>codereview</code> Mercurial extension described in the
-instructions for <a href="contribute.html">contributing to the Go project</a>.
-It assumes you have read those instructions.
+及第<a href="http://hgbook.red-bean.com/read/advanced-uses-of-mercurial-queues.html">13</a>章中。
+本文档说明了如何使 <code>mq</code> 与<a href="contribute.html">为Go项目做贡献</a>说明中描述的
+<code>codereview</code> Mercurial扩展协同工作。本文假定你已经阅读了那些说明。
 </p>
 
-<h2>Configuration</h2>
+<h2>配置</h2>
 
 <p>
-To enable <code>mq</code> edit either <code>$HOME/.hgrc</code> (to enable it
-for all of your repositories) or <code>$GOROOT/.hg/hgrc</code> (to enable it for the
-repository at <code>$GOROOT</code>) to add:</p>
+要启用 <code>mq</code>，请编辑 <code>$HOME/.hgrc</code>（为你的所有代码库启用）或
+<code>$GOROOT/.hg/hgrc</code>（为 <code>$GOROOT</code>中的代码库启用），添加：
+</p>
 
 <pre>
 [extensions]
@@ -30,41 +26,36 @@ mq=
 </pre>
 
 <p>
-Since pulling, pushing, updating and committing while <code>mq</code> patches
-are applied can damage your repository or a remote one, add these lines to
-prevent that case: 
+在 <code>mq</code> 补丁被应用时，进行拉取、推送、更新或提交会损坏你本地或远程的代码库，
+添加以下几行来避免此情况的发生：
 </p>
 
 <pre>
 [hooks]
-# Prevent "hg pull" if MQ patches are applied.
+# 若MQ补丁被应用则阻止"hg pull"
 prechangegroup.mq-no-pull = ! hg qtop > /dev/null 2>&amp;1
-# Prevent "hg push" if MQ patches are applied.
+# 若MQ补丁被应用则阻止"hg push"
 preoutgoing.mq-no-push = ! hg qtop > /dev/null 2>&amp;1
-# Prevent "hg update" if MQ patches are applied.
+# 若MQ补丁被应用则阻止"hg update"
 preupdate.mq-no-update = ! hg qtop > /dev/null 2>&amp;1
 </pre>
 
-<h2>Making a change</h2>
+<h2>进行一次更改</h2>
 
 <p>
-The entire checked-out tree is writable and you can use <code>mq</code>,
-as documented in Chapter
-<a href="http://hgbook.red-bean.com/read/managing-change-with-mercurial-queues.html">12</a>
-of "The Guide",
-to implement your change as a single patch or a series of patches.
-
+整体被检出的树是可写的，根据“指南”第
+<a href="http://hgbook.red-bean.com/read/managing-change-with-mercurial-queues.html">12</a>章的文档，
+你可以使用 <code>mq</code> 来将你的更改作为单个补丁或一系列补丁来实现。
 </p>
 
-<p>When you are ready to send a change out for review, run</p>
+<p>当你准备好为检查发送出一个更改时，从你的Go代码库任何目录中运行</p>
 
 <pre>
 $ hg change
 </pre>
 
-<p>from any directory in your Go repository with all of the <code>mq</code> patches relevant to your
-change applied and then proceed as instructed in <a href="contribute.html">contributing
-to the Go project</a>.
+<p>
+将应用关于你更改的所有 <code>mq</code> 补丁，然后按照<a href="contribute.html">为Go项目做贡献</a>中的指示处理。
 </p>
 
 <p>

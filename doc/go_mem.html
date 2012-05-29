@@ -1,4 +1,10 @@
 <!--{
+	"Title": "Go内存模型",
+	"Subtitle": "版本：2012年3月6日",
+	"Path": "/ref/mem"
+}-->
+
+<!--{
 	"Title": "The Go Memory Model",
 	"Subtitle": "Version of March 6, 2012",
 	"Path": "/ref/mem"
@@ -13,7 +19,19 @@ span.event {
 }
 </style>
 
+<div class="english">
 <h2>Introduction</h2>
+</div>
+
+<h2>前言</h2>
+
+<div class="english">
+<p>
+The Go memory model specifies the conditions under which
+reads of a variable in one goroutine can be guaranteed to
+observe values produced by writes to the same variable in a different goroutine.
+</p>
+</div>
 
 <p>
 The Go memory model specifies the conditions under which
