@@ -1767,7 +1767,7 @@ Moreover, the inner slices must be allocated individually (with <code>make</code
 
 <p>
 类似于数组，切片总是一维的，但可组合构造更高维的对象。
-元素为数组的数组，通过构造，其内部数组的长度始终相同；
+元素为数组的数组，根据其构造，其内部数组的长度始终相同；
 然而元素为切片的切片（或元素为数组的切片），其长度会动态地改变。
 此外，其内部的切片必须单独地（通过 <code>make</code>）分配。
 </p>
@@ -10298,7 +10298,7 @@ be no cyclic dependencies in initialization.
 </div>
 
 <p>
-由构造导入的包可保证在初始化中没有循环依赖。
+根据构造导入的包可保证在初始化中没有循环依赖。
 </p>
 
 <div class="english">

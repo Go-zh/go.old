@@ -1,11 +1,11 @@
 <!--{
-	"Title": "使用Mercurial队列进行代码检查"
+	"Title": "使用Mercurial队列进行代码审查"
 }-->
 
 <h2 id="前言">前言</h2>
 
 <p>
-Mercurial队列（<code>mq</code>）为管理Mercurial代码库顶部的补丁提供一种机制，
+Mercurial队列（<code>mq</code>）为管理Mercurial代码库顶端的补丁提供了一种机制，
 它的细节描述在<a href="http://hgbook.red-bean.com/read/">Mercurial：最后的指南</a>第
 <a href="http://hgbook.red-bean.com/read/managing-change-with-mercurial-queues.html">12</a>
 及第<a href="http://hgbook.red-bean.com/read/advanced-uses-of-mercurial-queues.html">13</a>章中。
@@ -43,12 +43,12 @@ preupdate.mq-no-update = ! hg qtop > /dev/null 2>&amp;1
 <h2>进行一次更改</h2>
 
 <p>
-整体被检出的树是可写的，根据“指南”第
+整体被检出的树是可写的，根据“指南”中第
 <a href="http://hgbook.red-bean.com/read/managing-change-with-mercurial-queues.html">12</a>章的文档，
 你可以使用 <code>mq</code> 来将你的更改作为单个补丁或一系列补丁来实现。
 </p>
 
-<p>当你准备好为检查发送出一个更改时，从你的Go代码库任何目录中运行</p>
+<p>当你准备好为审查发送出一个更改时，可在你的Go代码库中任何目录下运行</p>
 
 <pre>
 $ hg change
@@ -60,11 +60,9 @@ $ hg change
 
 <p>
 The change number reported by <code>hg change</code>, preceded by a <code>+</code>,
-can be used as an <code>mq</code> patch guard to assist in controlling which patches
-are applied as described in Chapter
-<a href="http://hgbook.red-bean.com/read/advanced-uses-of-mercurial-queues.html">13</a>
-of "The Guide".
-For example, the command:
+由 <code>hg change</code> 报告的更改数加上 <code>+</code> 前缀，可作为 <code>mq</code> 补丁来监视辅助控制，
+该补丁根据“指南”中第<a href="http://hgbook.red-bean.com/read/advanced-uses-of-mercurial-queues.html">13</a>
+章的描述来应用。例如，命令：
 </p>
 
 <pre>
@@ -72,35 +70,30 @@ for p in $(hg qapplied); do hg qguard $p +99999; done
 </pre>
 
 <p>
-will apply the guard <code>+99999</code> guard to all currently applied <code>mq</code>
-patches.
+将应用监视 <code>+99999</code> 来监视当前所有 <code>mq</code> 补丁的应用。
 </p>
 
-<h2>Synchronizing your client</h2>
+<h2>同步你的客户端</h2>
 
-<p>While you were working, others might have submitted changes
-to the repository and, as explained in <a href="contribute.html">contributing
-to the Go project</a>, it is necessary to synchronize your repository using
-<code>hg sync</code>before sending your change list for review.
-Because <code>hg sync</code> runs <code>hg pull -u</code>,
-you should not run <code>hg sync</code> while <code>mq</code> patches are
-applied. Instead
-pop all your patches before running <code>hg sync</code> and reapply them after
-it has completed.
+<p>
+当你工作时，其他人何能将更改提交至代码库，且根据<a href="contribute.html">为Go项目做贡献</a>中的解释，
+在向代码审查发送你的更改列表前，必须使用 <code>hg sync</code> 来同步你的代码库。由于 <code>hg sync</code>
+会运行 <code>hg pull -u</code>，因此你不应该在 <code>mq</code>补丁应用时运行 <code>hg sync</code>，
+而是在运行 <code>hg sync</code> 前抛出你所有的补丁，并在它完成后重新应用它们。
 </p>
 
 <p>
-When reapplying the patches, you may need to resolve conflicts
-as described in <a href="contribute.html">contributing to the Go project</a>.
+在重新应用补丁时，你可能需要根据<a href="contribute.html">为Go项目做贡献</a>中的描述来解决冲突。
 </p>
 
-<h2>Mailing the change for review</h2>
+<h2>为审查而发送更改</h2>
 
 <p>
-You should have all of the <code>mq</code> patches relevant to your
-change applied when you run <code>hg mail</code>.
+在运行 <code>hg mail</code> 时，你应当拥有所有关于你更改应用的 <code>mq</code> 补丁。
+</p>
 
-<h2>Submitting the change after the review</h2>
+<h2>在审查之后提交更改。</h2>
 
-If you are a committer, you should have all of the <code>mq</code> patches relevant to your
-change applied when you run <code>hg commit</code>.
+<p>
+若你是一个提交者，在运行 <code>hg commit</code> 时，你应当拥有所有关于你更改应用的 <code>mq</code> 补丁。
+</p>

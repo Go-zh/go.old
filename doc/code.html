@@ -1,19 +1,50 @@
 <!--{
+	"Title": "如何编写Go代码"
+}-->
+
+<!--{
 	"Title": "How to Write Go Code"
 }-->
 
+<div class="english">
 <h2 id="Introduction">Introduction</h2>
+</div>
 
+<h2 id="前言">前言</h2>
+
+<div class="english">
 <p>
 This document demonstrates the development of a simple Go package and
 introduces the <a href="/cmd/go/">go command</a>, the standard way to fetch,
 build, and install Go packages and commands.
 </p>
+</div>
 
+<p>
+本文档演示了一个简单Go包的开发，并介绍了<a href="/cmd/go/">go命令</a>——获取、构建并安装Go包及命令的标准方式。
+</p>
 
+<div class="english">
 <h2 id="GOPATH">Code organization</h2>
+</div>
 
+<h2 id="GOPATH">代码的组织</h2>
+
+<div class="english">
 <h3><code>GOPATH</code> and workspaces</h3>
+</div>
+
+<h3><code>GOPATH</code> 与工作空间</h3>
+
+<div class="english">
+<p>
+One of Go's design goals is to make writing software easier.  To that end, the
+<code>go</code> command doesn't use Makefiles or other configuration files to
+guide program construction. Instead, it uses the source code to find
+dependencies and determine build conditions. This means your source code and
+build scripts are always in sync; they are one and the same.
+</p>
+</div>
 
 <p>
 One of Go's design goals is to make writing software easier.  To that end, the
@@ -102,7 +133,7 @@ export PATH=$PATH:$HOME/mygo/bin
 
 <p>
 The standard packages are given short import paths such as <code>"fmt"</code>
-and <code>"net/http"</code> for convenience. 
+and <code>"net/http"</code> for convenience.
 For your own projects, it is important to choose a base import path that is
 unlikely to collide with future additions to the standard library or other
 external libraries.
@@ -111,7 +142,7 @@ external libraries.
 <p>
 The best way to choose an import path is to use the location of your version
 control repository.
-For instance, if your source repository is at <code>example.com</code> 
+For instance, if your source repository is at <code>example.com</code>
 or <code>code.google.com/p/example</code>, you should begin your package
 paths with that URL, as in "<code>example.com/foo/bar</code>" or
 "<code>code.google.com/p/example/foo/bar</code>".
@@ -335,7 +366,7 @@ The workspace directory tree now looks like this:
 bin/
     hello              # command executable
 pkg/
-    linux_amd64/ 
+    linux_amd64/
         example/
             newmath.a  # package object
 src/
@@ -351,7 +382,7 @@ The <code>go</code> command also provides a <code>build</code> command, which is
 like <code>install</code> except it builds all objects in a temporary directory
 and does not install them under <code>pkg</code> or <code>bin</code>.
 When building a command an executable named after the last element of the
-import path is written to the current directory. When building a package, 
+import path is written to the current directory. When building a package,
 <code>go build</code> serves merely to test that the package and its
 dependencies can be built. (The resulting package object is thrown away.)
 </p>
@@ -442,7 +473,7 @@ tree should now now look like this:
 bin/
     hello                 # command executable
 pkg/
-    linux_amd64/ 
+    linux_amd64/
         code.google.com/p/go.example/
             newmath.a     # package object
         example/

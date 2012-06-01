@@ -1,8 +1,8 @@
 <!--{
-	"Title": "Contribution Guidelines"
+	"Title": "贡献指南"
 }-->
 
-<h2 id="Introduction">Introduction</h2>
+<h2 id="前言">前言</h2>
 
 <p>
 This document explains how to contribute changes to the Go project.
@@ -36,7 +36,7 @@ In short, send mail before you code.
 And don't start the discussion by mailing a change list!
 </p>
 
-<h2 id="Testing">Testing redux</h2>
+<h2 id="测试">最终测试</h2>
 
 <p>
 You've <a href="code.html">written and tested your code</a>, but
@@ -64,7 +64,7 @@ add &ldquo;<code>test output differs</code>.&rdquo;
 </p>
 
 
-<h2 id="Code_review">Code review</h2>
+<h2 id="代码检查">代码检查</h2>
 
 <p>
 Changes to Go must be reviewed before they are submitted,
@@ -76,7 +76,7 @@ The extension is included in the Go source tree but needs
 to be added to your Mercurial configuration.
 </p>
 
-<h3>Caveat for Mercurial aficionados</h3>
+<h3>敬告Mercurial死忠</h3>
 
 <p>
 <i>Using Mercurial with the code review extension is not the same
@@ -109,7 +109,7 @@ Mercurial power users: if you prefer to use the Mercurial Queues extension, see
 <a href="codereview_with_mq.html">Using Mercurial Queues with Codereview</a>.
 </p>
 
-<h3>Configure the extension</h3>
+<h3>设置扩展</h3>
 
 <p>Edit <code>$GOROOT/.hg/hgrc</code> to add:</p>
 
@@ -127,7 +127,7 @@ The <code>username</code> information will not be used unless
 you are a committer (see below), but Mercurial complains if it is missing.
 </p>
 
-<h3>Log in to the code review site.</h3>
+<h3>登录到代码检查站</h3>
 
 <p>
 The code review server uses a Google Account to authenticate.
@@ -150,7 +150,7 @@ Password for rsc@golang.org:
 Saving authentication cookies to /Users/rsc/.codereview_upload_cookies_codereview.appspot.com
 </pre>
 
-<h3>Configure your account settings.</h3>
+<h3>配置你的帐户设置</h3>
 
 <p>Edit your <a href="http://codereview.appspot.com/settings">code review settings</a>.
 Grab a nickname.
@@ -163,7 +163,7 @@ can use that nickname as a shorthand for naming reviewers and the CC list.
 For example, <code>rsc</code> is an alias for <code>rsc@golang.org</code>.
 </p>
 
-<h3>Make a change</h3>
+<h3>进行更改</h3>
 
 <p>
 The entire checked-out tree is writable.
