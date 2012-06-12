@@ -2,8 +2,17 @@
 	"Title": "贡献指南"
 }-->
 
+<!--{
+	"Title": "Contribution Guidelines"
+}-->
+
+<div class="english">
+<h2 id="Introduction">Introduction</h2>
+</div>
+
 <h2 id="前言">前言</h2>
 
+<div class="english">
 <p>
 This document explains how to contribute changes to the Go project.
 It assumes you have installed Go using the
@@ -12,8 +21,13 @@ have <a href="code.html">written and tested your code</a>.
 (Note that the <code>gccgo</code> frontend lives elsewhere;
 see <a href="gccgo_contribute.html">Contributing to gccgo</a>.)
 </p>
+</div>
 
+<div class="english">
 <h2 id="Design">Discuss your design</h2>
+</div>
+
+<h2 id="设计">讨论你的设计</h2>
 
 <p>
 The project welcomes submissions but please let everyone know what
@@ -35,6 +49,10 @@ discussions.
 In short, send mail before you code.
 And don't start the discussion by mailing a change list!
 </p>
+
+<div class="english">
+<h2 id="Testing">Testing redux</h2>
+</div>
 
 <h2 id="测试">最终测试</h2>
 
@@ -64,7 +82,11 @@ add &ldquo;<code>test output differs</code>.&rdquo;
 </p>
 
 
-<h2 id="代码检查">代码检查</h2>
+<div class="english">
+<h2 id="Code_review">Code review</h2>
+</div>
+
+<h2 id="代码审查">代码审查</h2>
 
 <p>
 Changes to Go must be reviewed before they are submitted,
@@ -75,6 +97,10 @@ A Mercurial extension helps manage the code review process.
 The extension is included in the Go source tree but needs
 to be added to your Mercurial configuration.
 </p>
+
+<div class="english">
+<h3>Caveat for Mercurial aficionados</h3>
+</div>
 
 <h3>敬告Mercurial死忠</h3>
 
@@ -109,6 +135,10 @@ Mercurial power users: if you prefer to use the Mercurial Queues extension, see
 <a href="codereview_with_mq.html">Using Mercurial Queues with Codereview</a>.
 </p>
 
+<div class="english">
+<h3>Configure the extension</h3>
+</div>
+
 <h3>设置扩展</h3>
 
 <p>Edit <code>$GOROOT/.hg/hgrc</code> to add:</p>
@@ -126,6 +156,10 @@ The Mercurial configuration file format does not allow environment variable subs
 The <code>username</code> information will not be used unless
 you are a committer (see below), but Mercurial complains if it is missing.
 </p>
+
+<div class="english">
+<h3>Log in to the code review site.</h3>
+</div>
 
 <h3>登录到代码检查站</h3>
 
@@ -150,6 +184,10 @@ Password for rsc@golang.org:
 Saving authentication cookies to /Users/rsc/.codereview_upload_cookies_codereview.appspot.com
 </pre>
 
+<div class="english">
+<h3>Configure your account settings.</h3>
+</div>
+
 <h3>配置你的帐户设置</h3>
 
 <p>Edit your <a href="http://codereview.appspot.com/settings">code review settings</a>.
@@ -162,6 +200,10 @@ Many people prefer to set the Context option to
 can use that nickname as a shorthand for naming reviewers and the CC list.
 For example, <code>rsc</code> is an alias for <code>rsc@golang.org</code>.
 </p>
+
+<div class="english">
+<h3>Make a change</h3>
+</div>
 
 <h3>进行更改</h3>
 

@@ -2,8 +2,17 @@
 	"Title": "为gccgo做贡献"
 }-->
 
+<!--{
+	"Title": "Contributing to the gccgo frontend"
+}-->
+
+<div class="english">
+<h2>Introduction</h2>
+</div>
+
 <h2>前言</h2>
 
+<div class="english">
 <p>
 These are some notes on contributing to the gccgo frontend for GCC.
 For information on contributing to parts of Go other than gccgo,
@@ -11,9 +20,21 @@ see <a href="/doc/contribute.html">Contributing to the Go project</a>.  For
 information on building gccgo for yourself,
 see <a href="/doc/gccgo_install.html">Setting up and using gccgo</a>.
 </p>
+</div>
+
+<p>
+本文档为如何向GCC的gccgo前端做贡献的注记。欲获取为Go的其它部分做贡献的信息，请访问
+<a href="/doc/contribute.html">为Go项目做贡献</a>。有关如何自己构建gccgo的信息，
+请访问<a href="/doc/gccgo_install.html">设置并使用gccgo</a>.
+</p>
+
+<div class="english">
+<h2>Legal Prerequisites</h2>
+</div>
 
 <h2>合法前提</h2>
 
+<div class="english">
 <p>
 You must follow the <a href="/doc/contribute.html#copyright">Go copyright
 rules</a> for all changes to the gccgo frontend and the associated
@@ -21,9 +42,22 @@ libgo library.  Code that is part of GCC rather than gccgo must follow
 the general <a href="http://gcc.gnu.org/contribute.html">GCC
 contribution rules</a>.
 </p>
+</div>
+
+<p>
+你对gccgo前端及其关联libgo库的一切更改，都必须遵循
+<a href="/doc/contribute.html#copyright">Go版权条例</a>。
+非gccgo的GCC部分代码必须遵循通用
+<a href="http://gcc.gnu.org/contribute.html">GCC贡献规则</a>。
+</p>
+
+<div class="english">
+<h2>Code</h2>
+</div>
 
 <h2>代码</h2>
 
+<div class="english">
 <p>
 The master sources for the gccgo frontend may be found at
 <a href="http://code.google.com/p/gofrontend">http://code.google.com/p/gofrontend</a>.
@@ -40,14 +74,34 @@ from <a href="http://code.google.com/p/go">the main Go repository</a>
 is mirrored to the <code>gcc/testsuite/go.test/test</code> directory
 in the GCC repository.
 </p>
+</div>
 
+<p>
+gccgo前端的主源码可从<a href="http://code.google.com/p/gofrontend">
+http://code.google.com/p/gofrontend</a>找到。主源码不可通过其本身构建，
+只能与GCC结合使用（将来或许会支持其它编译器）。
+对gccgo前端的更改也可应用于托管在 <code>gcc.gnu.org</code> 上的GCC源码库中，
+<code>go</code> 目录镜像到了GCC仓库的 <code>gcc/go/gofrontend</code>
+目录，而 <code>gofrontend</code> <code>libgo</code> 目录镜像到了GCC仓库的
+<code>libgo</code> 目录。另外，<a href="http://code.google.com/p/go">主Go仓库</a>中的
+<code>test</code>镜像到了GCC仓库的 <code>gcc/testsuite/go.test/test</code> 目录。
+</p>
+
+<div class="english">
 <p>
 Changes to these directories always flow from the master sources to
 the GCC repository.  The files should never be changed in the GCC
 repository except by changing them in the master sources and mirroring
 them.
 </p>
+</div>
 
+<p>
+对这些目录的更改总是从主源到GCC仓库的。在GCC仓库中的文件绝不能更改，
+除非通过在主源中更改并镜像它们。
+</p>
+
+<div class="english">
 <p>
 The gccgo frontend is written in C++.  It follows the GNU coding
 standards to the extent that they apply to C++.  In writing code for
@@ -58,7 +112,24 @@ will migrate out of the frontend proper and into GCC proper.  In the
 GCC sources this will generally mean moving code
 from <code>gcc/go/gofrontend</code> to <code>gcc/go</code>.
 </p>
+</div>
 
+<p>
+The gccgo frontend is written in C++.  It follows the GNU coding
+standards to the extent that they apply to C++.  In writing code for
+the frontend, follow the formatting of the surrounding code.  Although
+the frontend is currently tied to the rest of the GCC codebase, we
+plan to make it more independent.  Eventually all GCC-specific code
+will migrate out of the frontend proper and into GCC proper.  In the
+GCC sources this will generally mean moving code
+from <code>gcc/go/gofrontend</code> to <code>gcc/go</code>.
+gccgo前端使用C++编写。它遵循适用于C++的GNU编码标准范围。在为该前端编写代码时，
+需遵循外围代码的格式。尽管该前端当前依赖于GCC代码库，但我们计划使它更独立。
+最终，所有GCC特有的代码将完全移出该前端并进入GCC中。在GCC源中，这通常意味着将代码从
+<code>gcc/go/gofrontend</code> 移动到 <code>gcc/go</code> 中。
+</p>
+
+<div class="english">
 <p>
 The run-time library for gccgo is mostly the same as the library
 in <a href="http://code.google.com/p/go">the main Go repository</a>.
@@ -71,14 +142,35 @@ of <code>libgo/go</code> are gccgo-specific; that said, some of the
 files in <code>libgo/runtime</code> are based on files
 in <code>src/pkg/runtime</code> in the main Go repository.
 </p>
+</div>
+
+<p>
+gccgo运行时库大部分与<a href="http://code.google.com/p/go">主Go仓库</a>中的库相同。
+Go仓库中的库代码定期合并到 <code>gofrontend</code> 的 <code>libgo/go</code>
+目录中，接着使用shell脚本 <code>libgo/merge.sh</code> 将其合并到GCC仓库中。
+因此，大部分库的更改应当在主Go仓库中进行。<code>libgo/go</code>
+之外的文件为gccgo特有的，也就是说，<code>libgo/runtime</code>
+中的一些文件基于主Go仓库内 <code>src/pkg/runtime</code> 中的文件。
+</p>
+
+<div class="english">
+<h2>Testing</h2>
+</div>
 
 <h2>测试</h2>
 
+<div class="english">
 <p>
 All patches must be tested.  A patch that introduces new failures is
 not acceptable.
 </p>
+</div>
 
+<p>
+所有补丁都必须经过测试，引入新的失败的补丁是不被接受的。
+</p>
+
+<div class="english">
 <p>
 To run the gccgo test suite, run <code>make check-go</code> in your
 build directory.  This will run various tests
@@ -87,7 +179,16 @@ the <code>libgo</code> testsuite.  This copy of the tests from the
 main Go repository is run using the DejaGNU script found in
 in <code>gcc/testsuite/go.test/go-test.exp</code>.
 </p>
+</div>
 
+<p>
+要运行gccgo测试套件，需在你的构建目录中运行 <code>make check-go</code>。
+这将在 <code>gcc/testsuite/go.*</code> 下运行各种测试，也会运行
+<code>libgo</code> 测试套件。来自主Go仓库中的此测试副本通过DejaGNU脚本查找
+<code>gcc/testsuite/go.test/go-test.exp</code> 来运行。
+</p>
+
+<div class="english">
 <p>
 Most new tests should be submitted to the main Go repository for later
 mirroring into the GCC repository.  If there is a need for specific
@@ -95,12 +196,35 @@ tests for gccgo, they should go in
 the <code>gcc/testsuite/go.go-torture</code>
 or <code>gcc/testsuite/go.dg</code> directories in the GCC repository.
 </p>
+</div>
+
+<p>
+Most new tests should be submitted to the main Go repository for later
+mirroring into the GCC repository.  If there is a need for specific
+tests for gccgo, they should go in
+the <code>gcc/testsuite/go.go-torture</code>
+or <code>gcc/testsuite/go.dg</code> directories in the GCC repository.
+大多数新的测试都应当被提交到主Go仓库，以镜像到GCC仓库中。若需提交gccgo的特殊测试，
+它们应当进入GCC仓库的 <code>gcc/testsuite/go.go-torture</code> 或
+<code>gcc/testsuite/go.dg</code> 目录中。
+</p>
+
+<div class="english">
+<h2>Submitting Changes</h2>
+</div>
 
 <h2>提交更改</h2>
 
+<div class="english">
 <p>
 Changes to the Go frontend should follow the same process as for the
 main Go repository, only for the <code>gofrontend</code> project
 rather than the <code>go</code> project.  Those changes will then be
 merged into the GCC sources.
+</p>
+</div>
+
+<p>
+对Go前端的更改应当遵循与主Go仓库相同的过程，只对 <code>gofrontend</code>
+项目而非 <code>go</code> 项目。那些更改将被合并到GCC源中。
 </p>

@@ -1,4 +1,9 @@
 <!--{
+    "Title": "Go1发行注记",
+    "Template": true
+}-->
+
+<!--{
 	"Title": "Go 1 Release Notes",
 	"Template": true
 }-->
@@ -774,7 +779,7 @@ to turn a string into an error. It replaces the old <code>os.NewError</code>.
 </p>
 
 {{code "/doc/progs/go1.go" `/ErrSyntax/`}}
-		
+
 <p>
 <em>Updating</em>:
 Running <code>go</code> <code>fix</code> will update almost all code affected by the change.
@@ -1826,7 +1831,7 @@ for full details.
 <tr><td>Uitob(x, b)</td> <td>FormatUint(uint64(x), b)</td></tr>
 <tr><td>Uitob64(x, b)</td> <td>FormatUint(x, b)</td></tr>
 </table>
-		
+
 <p>
 <em>Updating</em>:
 Running <code>go</code> <code>fix</code> will update almost all code affected by the change.
@@ -1840,7 +1845,7 @@ a cast that must be added by hand; the <code>go</code> <code>fix</code> tool wil
 <h3 id="templates">The template packages</h3>
 
 <p>
-The <code>template</code> and <code>exp/template/html</code> packages have moved to 
+The <code>template</code> and <code>exp/template/html</code> packages have moved to
 <a href="/pkg/text/template/"><code>text/template</code></a> and
 <a href="/pkg/html/template/"><code>html/template</code></a>.
 More significant, the interface to these packages has been simplified.
