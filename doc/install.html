@@ -1,30 +1,69 @@
 <!--{
+	"Title": "起步",
+	"Path":  "/doc/install"
+}-->
+
+<!--{
 	"Title": "Getting Started",
 	"Path":  "/doc/install"
 }-->
 
+<div class="english">
 <h2 id="introduction">Introduction</h2>
+</div>
 
+<h2 id="前言">前言</h2>
+
+<div class="english">
 <p>
 Go is an open source project with a BSD-style license.
 There are two official Go compiler toolchains: the <code>gc</code> Go compiler
 and the <code>gccgo</code> compiler that is part of the GNU C Compiler (GCC).
 </p>
+</div>
 
+<p>
+Go是一个使用BSD风格授权的开源项目，它有两个官方Go编译器工具链：<code>gc</code>
+Go编译器，以及 <code>gccgo</code> 编译器，它是GNU编译器集合（GCC）的一部分。
+</p>
+
+<div class="english">
 <p>
 The <code>gc</code> compiler is the more mature and well-tested of the two.
 This page is about installing a binary distribution of the <code>gc</code>
 compiler.
 </p>
+</div>
 
+<p>
+The <code>gc</code> compiler is the more mature and well-tested of the two.
+This page is about installing a binary distribution of the <code>gc</code>
+compiler.
+其中，<code>gc</code> 编译器更为成熟，测试更全面。本页面与安装 <code>gc</code>
+编译器的二进制发行版有关。
+</p>
+
+<div class="english">
 <p>
 For information about installing the <code>gc</code> compiler from source, see
 <a href="/doc/install/source">Installing Go from source</a>.
 For information about installing <code>gccgo</code>, see
 <a href="/doc/install/gccgo">Setting up and using gccgo</a>.
 </p>
+</div>
 
+<p>
+关于从源码安装 <code>gc</code> 编译器的信息，请访问<a href="/doc/install/source">从源码安装Go</a>。
+关于安装 <code>gccgo</code> 的信息，请访问<a href="/doc/install/gccgo">设置并使用gccgo</a>。
+</p>
+
+<div class="english">
 <h2 id="requirements">System requirements</h2>
+</div>
+
+<h2 id="需求">系统需求</h2>
+
+<div class="english">
 <p>
 The <code>gc</code> compiler supports the following operating systems and
 architectures. Please ensure your system meets these requirements before
@@ -32,7 +71,15 @@ proceeding. If your OS or architecture is not on the list, it's possible that
 <code>gccgo</code> might support your setup; see
 <a href="/doc/install/gccgo">Setting up and using gccgo</a> for details.
 </p>
+</div>
 
+<p>
+<code>gc</code> 编译器支持一下操作系统及架构。在开始前，请确保你的系统满足这些需求。
+若你的OS及架构不在此列表中，那么 <code>gccgo</code> 可能支持你的设置，
+详情请访问<a href="/doc/install/gccgo">设置并使用gccgo</a>。
+</p>
+
+<div class="english">
 <table class="codetable" frame="border" summary="requirements">
 <tr>
 <th align="middle">Operating system</th>
@@ -49,32 +96,85 @@ proceeding. If your OS or architecture is not on the list, it's possible that
 <p>
 <sup>&#8224;</sup><code>gcc</code> is required only if you plan to use <a href="/cmd/cgo">cgo</a>.
 </p>
+</div>
 
+<table class="codetable" frame="border" summary="requirements">
+<tr>
+<th align="middle">操作系统</th>
+<th align="middle">架构</th>
+<th align="middle">注记</th>
+</tr>
+<tr><td colspan="3"><hr></td></tr>
+<tr><td>FreeBSD 7或更新版本</td> <td>amd64, 386</td> <td>Debian GNU/kFreeBSD不支持</td></tr>
+<tr><td>Linux 2.6.23或更新版本配合glibc</td> <td>amd64, 386, arm</td> <td>CentOS/RHEL 5.x</td>不支持；还没有ARM的二进制发行版</tr>
+<tr><td>Mac OS X 10.6/10.7</td> <td>amd64, 386</td> <td>使用Xcode自带的gcc<sup>&#8224;</sup></td></tr>
+<tr><td>Windows 2000或更新版本</td> <td>amd64, 386</td> <td>使用mingw gcc<sup>&#8224;</sup>，无需cygwin或msys</td></tr>
+</table>
+
+<p>
+<sup>&#8224;只有当你打算使用<a href="/cmd/cgo">cgo</a>时才需要。
+</p>
+
+<div class="english">
 <h2 id="download">Download the Go tools</h2>
+</div>
 
+<h2 id="下载">下载Go工具</h2>
+
+<div class="english">
 <p>
 Visit the
 <a href="http://code.google.com/p/go/downloads">Go project's downloads page</a>
 and select the binary distribution that matches
 your operating system and processor architecture.
 </p>
+</div>
 
+<p>
+请访问<a href="http://code.google.com/p/go/downloads">Go项目的下载页面</a>，
+并选择与你的操作系统及处理器架构相匹配的二进制发行版。
+</p>
+
+<div class="english">
 <p>
 Official binary distributions are available
 for the FreeBSD, Linux, Mac OS X (Snow Leopard/Lion), and Windows operating systems
 and the 32-bit (<code>386</code>) and 64-bit (<code>amd64</code>)
 x86 processor architectures.
 </p>
+</div>
 
+<p>
+官方为FreeBSD、Linux、Mac OS X（Snow Leopard/Lion）与Windows操作系统以及32位
+（<code>386</code>）与64位（<code>amd64</code>）的x86处理器架构提供二进制发行版。
+</p>
+
+<div class="english">
 <p>
 If a binary distribution is not available for your
 OS/arch combination you may want to try
 <a href="/doc/install/source">installing from source</a> or
 <a href="/doc/install/gccgo">installing gccgo instead of gc</a>.
 </p>
+</div>
 
+<p>
+If a binary distribution is not available for your
+OS/arch combination you may want to try
+<a href="/doc/install/source">installing from source</a> or
+<a href="/doc/install/gccgo">installing gccgo instead of gc</a>.
+若对于你的OS/arch组合并未提供二进制发行版，你或许想试试
+<a href="/doc/install/source">从源码安装</a>或
+<a href="/doc/install/gccgo">安装gccgo以替代gc</a>.
+</p>
+
+<div class="english">
 <h2 id="install">Install the Go tools</h2>
+</div>
 
+<h2 id="安装">安装Go工具</h2>
+
+<div class="english">
 <p>
 The Go binary distributions assume they will be installed in
 <code>/usr/local/go</code> (or <code>c:\Go</code> under Windows),
@@ -82,10 +182,23 @@ but it is possible to install them in a different
 location. If you do this, you will need to set the <code>GOROOT</code>
 environment variable to that directory when using the Go tools.
 </p>
+</div>
 
+<p>
+Go二进制发行版假定它们会被安装到 <code>/usr/local/go</code>
+（或Windows下的 <code>c:\Go</code>）中，但也可将它们安装到不同的位置。
+若这样，则在你使用Go工具时，需要为该目录设置 <code>GOROOT</code> 环境变量。
+</p>
+
+<div class="english">
 <p>
 For example, if you installed Go to your home directory you should add the
 following commands to <code>$HOME/.profile</code>:
+</p>
+</div>
+
+<p>
+例如，若你将Go安装到你的home目录下，你应当将以下命令添加到 <code>$HOME/.profile</code> 文件中：
 </p>
 
 <pre>
@@ -93,39 +206,76 @@ export GOROOT=$HOME/go
 export PATH=$PATH:$GOROOT/bin
 </pre>
 
+<div class="english">
 <p>
 Windows users should read the section about <a href="#windows_env">setting
 environment variables under Windows</a>.
 </p>
+</div>
 
+<p>
+Windows用户应当阅读<a href="#环境变量">在Windows下设置环境变量</a>一节。
+</p>
+
+<div class="english">
 <h3 id="freebsd_linux">FreeBSD and Linux</h3>
+</div>
 
+<h3 id="freebsd与linux">FreeBSD与Linux</h3>
+
+<div class="english">
 <p>
 On FreeBSD and Linux, if you are upgrading from an older version of Go you must
 first remove the existing version from <code>/usr/local/go</code>:
+</p>
+</div>
+
+<p>
+在FreeBSD于Linux上，如果你从Go的老版本升级，那么首先你必须从
+<code>/usr/local/go</code> 中移除已存在的版本：
 </p>
 
 <pre>
 rm -r /usr/local/go
 </pre>
 
+<div class="english">
 <p>
 Extract <a href="http://code.google.com/p/go/downloads/list?q=OpSys-FreeBSD+OR+OpSys-Linux">the archive</a>
 into <code>/usr/local</code>, creating a Go tree in <code>/usr/local/go</code>:
+</p>
+</div>
+
+<p>
+将<a href="http://code.google.com/p/go/downloads/list?q=OpSys-FreeBSD+OR+OpSys-Linux">此压缩包</a>提取到
+<code>/usr/local</code> 目录，在 <code>/usr/local/go</code> 中创建Go目录树：
 </p>
 
 <pre>
 tar -C /usr/local -xzf go.release.go1.tar.gz
 </pre>
 
+<div class="english">
 <p>
 (Typically these commands must be run as root or through <code>sudo</code>.)
 </p>
+</div>
 
+<p>
+（此命令必须作为root或通过 <code>sudo</code> 运行。）
+</p>
+
+<div class="english">
 <p>
 Add <code>/usr/local/go/bin</code> to the <code>PATH</code> environment
 variable. You can do this by adding this line to your <code>/etc/profile</code>
 (for a system-wide installation) or <code>$HOME/.profile</code>:
+</p>
+</div>
+
+<p>
+要将 <code>/usr/local/go/bin</code> 添加到 <code>PATH</code> 环境变量，
+你需要将此行添加到你的 <code>/etc/profile</code>（全系统安装）或 <code>$HOME/.profile</code> 文件中：
 </p>
 
 <pre>
@@ -134,74 +284,164 @@ export PATH=$PATH:/usr/local/go/bin
 
 <h3 id="osx">Mac OS X</h3>
 
+<div class="english">
 <p>
 Open the <a href="http://code.google.com/p/go/downloads/list?q=OpSys-Darwin">package file</a>
 and follow the prompts to install the Go tools.
 The package installs the Go distribution to <code>/usr/local/go</code>.
 </p>
+</div>
 
+<p>
+打开此<a href="http://code.google.com/p/go/downloads/list?q=OpSys-Darwin">包文件</a>
+并跟随提示来安装Go工具。该包会将Go发行版安装到 <code>/usr/local/go</code> 中。
+</p>
+
+<div class="english">
 <p>
 The package should put the <code>/usr/local/go/bin</code> directory in your
 <code>PATH</code> environment variable. You may need to restart any open
 Terminal sessions for the change to take effect.
 </p>
+</div>
+
+<p>
+此包应该会将 <code>/usr/local/go/bin</code> 目录放到你的 <code>PATH</code> 环境变量中。
+要使此更改生效，你需要重启所有打开的终端回话。
+</p>
 
 <h3 id="windows">Windows</h3>
 
+<div class="english">
 <p>
 The Go project provides two installation options for Windows users
 (besides <a href="/doc/install/source">installing from source</a>):
 a zip archive that requires you to set some environment variables and an
 experimental MSI installer that configures your installation automatically.
 </p>
+</div>
 
+<p>
+对于Windows用户，Go项目提供两种安装选项（<a href="/doc/install/source">从源码安装</a>除外）：
+zip压缩包需要你设置一些环境变量，而实验性MSI安装程序则会自动配置你的安装。
+</p>
+
+<div class="english">
 <h4 id="windows_zip">Zip archive</h4>
+</div>
 
+<h4 id="windows_zip">Zip压缩包</h4>
+
+<div class="english">
 <p>
 Extract the <a href="http://code.google.com/p/go/downloads/list?q=OpSys-Windows+Type%3DArchive">zip file</a>
 to the directory of your choice (we suggest <code>c:\Go</code>).
 </p>
+</div>
 
+<p>
+将此<a href="http://code.google.com/p/go/downloads/list?q=OpSys-Windows+Type%3DArchive">zip文件</a>
+提取到你的自选目录（我们的建议是<code>c:\Go</code>）：
+</p>
+
+<div class="english">
 <p>
 If you chose a directory other than <code>c:\Go</code>, you must set
 the <code>GOROOT</code> environment variable to your chosen path.
 </p>
+</div>
 
+<p>
+若你选择了 <code>c:\Go</code> 之外的目录，你必须为你所选的路径设置 <code>GOROOT</code> 环境变量。
+</p>
+
+<div class="english">
 <p>
 Add the <code>bin</code> subdirectory of your Go root (for example, <code>c:\Go\bin</code>) to to your <code>PATH</code> environment variable.
 </p>
+</div>
 
-<h4 id="windows_msi">MSI installer (experimental)</h3>
+<p>
+将你的Go根目录中的 <code>bin</code> 子目录（例如 <code>c:\Go\bin</code>）添加到你的
+<code>PATH</code> 环境变量中。
+</p>
 
+<div class="english">
+<h4 id="windows_msi">MSI installer (experimental)</h4>
+</div>
+
+<h4 id="msi安装">MSI安装程序（实验性）</h4>
+
+<div class="english">
 <p>
 Open the <a href="http://code.google.com/p/go/downloads/list?q=OpSys-Windows+Type%3DInstaller">MSI file</a>
 and follow the prompts to install the Go tools.
 By default, the installer puts the Go distribution in <code>c:\Go</code>.
 </p>
+</div>
 
+<p>
+打开此<a href="http://code.google.com/p/go/downloads/list?q=OpSys-Windows+Type%3DInstaller">MSI文件</a>
+并跟随提示来安装Go工具。默认情况下，该安装程序会将Go发行版放到 <code>c:\Go</code> 中。
+</p>
+
+<div class="english">
 <p>
 The installer should put the <code>c:\Go\bin</code> directory in your
 <code>PATH</code> environment variable. You may need to restart any open
 command prompts for the change to take effect.
 </p>
+</div>
 
+<p>
+此安装程序应该会将 <code>c:\Go\bin</code> 目录放到你的 <code>PATH</code> 环境变量中。
+要使此更改生效，你需要重启所有打开的命令行。
+</p>
+
+<div class="english">
 <h4 id="windows_env">Setting environment variables under Windows</h4>
+</div>
 
+<h4 id="环境变量">在Windows下设置环境变量</h4>
+
+<div class="english">
 <p>
 Under Windows, you may set environment variables through the "Environment
 Variables" button on the "Advanced" tab of the "System" control panel. Some
 versions of Windows provide this control panel through the "Advanced System
 Settings" option inside the "System" control panel.
 </p>
+</div>
 
+<p>
+在Windows下，你可以通过在系统“控制面板”中，“高级”标签上的“环境变量”按钮来设置环境变量。
+Windows的一些版本通过系统“控制面板”中的“高级系统设置”选项提供此控制板。
+</p>
+
+<div class="english">
 <h2 id="testing">Test your installation</h2>
+</div>
 
+<h2 id="测试">测试你的安装</h2>
+
+<div class="english">
 <p>
 Check that Go is installed correctly by building a simple program, as follows.
 </p>
+</div>
 
 <p>
+通过构建一个简单的程序来检查Go的安装是否正确，具体操作如下：
+</p>
+
+<div class="english">
+<p>
 Create a file named <code>hello.go</code> and put the following program in it:
+</p>
+</div>
+
+<p>
+首先创建一个名为 <code>hello.go</code> 的文件，并将以下代码保存在其中：
 </p>
 
 <pre>
@@ -214,8 +454,14 @@ func main() {
 }
 </pre>
 
+<div class="english">
 <p>
 Then run it with the <code>go</code> tool:
+</p>
+</div>
+
+<p>
+接着通过 <code>go</code> 工具运行它：
 </p>
 
 <pre>
@@ -223,55 +469,125 @@ $ go run hello.go
 hello, world
 </pre>
 
+<div class="english">
 <p>
 If you see the "hello, world" message then your Go installation is working.
 </p>
+</div>
 
+<p>
+若你看到了“hello, world”信息，那么你的Go已被正确安装。
+</p>
+
+<div class="english">
 <h2 id="next">What's next</h2>
+</div>
 
+<h2 id="接着">接下来做什么？</h2>
+
+<div class="english">
 <p>
 Start by taking <a href="http://code.google.com/p/go-tour/">A Tour of Go</a>.
 </p>
+</div>
 
+<p>
+开始<a href="http://go-tour-zh.appsp0t.com/">Go语言之旅</a>。
+</p>
+
+<div class="english">
 <p>
 For more detail about the process of building and testing Go programs
 read <a href="/doc/code.html">How to Write Go Code</a>.
 </p>
+</div>
 
+<p>
+更多有关Go程序构建与测试的方法，请阅读<a href="/doc/code.html">如何编写Go代码</a>。
+</p>
+
+<div class="english">
 <p>
 Build a web application by following the <a href="/doc/articles/wiki/">Wiki
 Tutorial</a>.
 </p>
+</div>
 
+<p>
+跟随<a href="/doc/articles/wiki/">维基教程</a>来构建一个Web应用。
+</p>
+
+<div class="english">
 <p>
 Read <a href="/doc/effective_go.html">Effective Go</a> to learn about writing
 idiomatic Go code.
 </p>
+</div>
 
+<p>
+阅读<a href="/doc/effective_go.html">高效Go编程</a>来了解如何编写地道的Go代码。
+</p>
+
+<div class="english">
 <p>
 For the full story, consult Go's extensive <a href="/doc/">documentation</a>.
 </p>
+</div>
 
+<p>
+关于Go完整的故事，请查阅大量的<a href="/doc/">文档</a>。
+</p>
+
+<div class="english">
 <p>
 Subscribe to the
 <a href="http://groups.google.com/group/golang-announce">golang-announce</a>
 mailing list to be notified when a new stable version of Go is released.
 </p>
+</div>
+
+<p>
+订阅<a href="http://groups.google.com/group/golang-announce">golang-announce</a>
+邮件列表来关注新的Go稳定版何时发布。
+</p>
 
 
+<div class="english">
 <h2 id="community">Community resources</h2>
+</div>
 
+<h2 id="社区">社区资源</h2>
+
+<div class="english">
 <p>
 For real-time help, there may be users or developers on
 <code>#go-nuts</code> on the <a href="http://freenode.net/">Freenode</a> IRC server.
 </p>
+</div>
 
+<p>
+在<a href="http://freenode.net/">Freenode</a> IRC服务器上的 <code>#go-nuts</code>
+频道中可能有一些用户或开发者，你可以在这里取实时帮助。
+</p>
+
+<div class="english">
 <p>
 The official mailing list for discussion of the Go language is
 <a href="http://groups.google.com/group/golang-nuts">Go Nuts</a>.
 </p>
+</div>
 
+<p>
+关于Go语言讨论的官方邮件列表是<a href="http://groups.google.com/group/golang-nuts">Go Nuts</a>。
+</p>
+
+<div class="english">
 <p>
 Bugs should be reported using the
 <a href="http://code.google.com/p/go/issues/list">Go issue tracker</a>.
+</p>
+</div>
+
+<p>
+Bug应当使用<a href="http://code.google.com/p/go/issues/list">Go问题跟踪系统</a>报告。
 </p>
