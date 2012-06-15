@@ -8,11 +8,15 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"exp/html/atom"
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -104,6 +108,23 @@ func dumpIndent(w io.Writer, level int) {
 	}
 }
 
+type sortedAttributes []Attribute
+
+func (a sortedAttributes) Len() int {
+	return len(a)
+}
+
+func (a sortedAttributes) Less(i, j int) bool {
+	if a[i].Namespace != a[j].Namespace {
+		return a[i].Namespace < a[j].Namespace
+	}
+	return a[i].Key < a[j].Key
+}
+
+func (a sortedAttributes) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+
 func dumpLevel(w io.Writer, n *Node, level int) error {
 	dumpIndent(w, level)
 	switch n.Type {
@@ -117,13 +138,8 @@ func dumpLevel(w io.Writer, n *Node, level int) error {
 		} else {
 			fmt.Fprintf(w, "<%s>", n.Data)
 		}
-		attr := n.Attr
-		if len(attr) == 2 && attr[0].Namespace == "xml" && attr[1].Namespace == "xlink" {
-			// Some of the test cases in tests10.dat change the order of adjusted
-			// foreign attributes, but that behavior is not in the spec, and could
-			// simply be an implementation detail of html5lib's python map ordering.
-			attr[0], attr[1] = attr[1], attr[0]
-		}
+		attr := sortedAttributes(n.Attr)
+		sort.Sort(attr)
 		for _, a := range attr {
 			io.WriteString(w, "\n")
 			dumpIndent(w, level+1)
@@ -305,8 +321,9 @@ func testParseCase(text, want, context string) (result parseTestResult, err erro
 		}
 	} else {
 		contextNode := &Node{
-			Type: ElementNode,
-			Data: context,
+			Type:     ElementNode,
+			DataAtom: atom.Lookup([]byte(context)),
+			Data:     context,
 		}
 		nodes, err := ParseFragment(strings.NewReader(text), contextNode)
 		if err != nil {
@@ -372,4 +389,37 @@ var renderTestBlacklist = map[string]bool{
 	// A <plaintext> element is reparented, putting it before a table.
 	// A <plaintext> element can't have anything after it in HTML.
 	`<table><plaintext><td>`: true,
+}
+
+func TestNodeConsistency(t *testing.T) {
+	// inconsistentNode is a Node whose DataAtom and Data do not agree.
+	inconsistentNode := &Node{
+		Type:     ElementNode,
+		DataAtom: atom.Frameset,
+		Data:     "table",
+	}
+	_, err := ParseFragment(strings.NewReader("<p>hello</p>"), inconsistentNode)
+	if err == nil {
+		t.Errorf("got nil error, want non-nil")
+	}
+}
+
+func BenchmarkParser(b *testing.B) {
+	buf, err := ioutil.ReadFile("testdata/go1.html")
+	if err != nil {
+		b.Fatalf("could not read testdata/go1.html: %v", err)
+	}
+	b.SetBytes(int64(len(buf)))
+	runtime.GC()
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	mallocs := ms.Mallocs
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		Parse(bytes.NewBuffer(buf))
+	}
+	b.StopTimer()
+	runtime.ReadMemStats(&ms)
+	mallocs = ms.Mallocs - mallocs
+	b.Logf("%d iterations, %d mallocs per iteration\n", b.N, int(mallocs)/b.N)
 }

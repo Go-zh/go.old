@@ -310,7 +310,7 @@ func GetStdHandle(stdhandle int) (handle Handle, err error) {
 	return
 }
 
-func FindFirstFile(name *uint16, data *Win32finddata) (handle Handle, err error) {
+func findFirstFile1(name *uint16, data *win32finddata1) (handle Handle, err error) {
 	r0, _, e1 := Syscall(procFindFirstFileW.Addr(), 2, uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(data)), 0)
 	handle = Handle(r0)
 	if handle == InvalidHandle {
@@ -323,7 +323,7 @@ func FindFirstFile(name *uint16, data *Win32finddata) (handle Handle, err error)
 	return
 }
 
-func FindNextFile(handle Handle, data *Win32finddata) (err error) {
+func findNextFile1(handle Handle, data *win32finddata1) (err error) {
 	r1, _, e1 := Syscall(procFindNextFileW.Addr(), 2, uintptr(handle), uintptr(unsafe.Pointer(data)), 0)
 	if int(r1) == 0 {
 		if e1 != 0 {
@@ -1181,7 +1181,7 @@ func RegQueryValueEx(key Handle, name *uint16, reserved *uint32, valtype *uint32
 	return
 }
 
-func GetCurrentProcessId() (pid uint32) {
+func getCurrentProcessId() (pid uint32) {
 	r0, _, _ := Syscall(procGetCurrentProcessId.Addr(), 0, 0, 0, 0)
 	pid = uint32(r0)
 	return

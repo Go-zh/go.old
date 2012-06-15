@@ -5,7 +5,6 @@
 package http
 
 import (
-	"fmt"
 	"io"
 	"net/textproto"
 	"sort"
@@ -36,6 +35,14 @@ func (h Header) Get(key string) string {
 	return textproto.MIMEHeader(h).Get(key)
 }
 
+// get is like Get, but key must already be in CanonicalHeaderKey form.
+func (h Header) get(key string) string {
+	if v := h[key]; len(v) > 0 {
+		return v[0]
+	}
+	return ""
+}
+
 // Del deletes the values associated with key.
 func (h Header) Del(key string) {
 	textproto.MIMEHeader(h).Del(key)
@@ -53,7 +60,7 @@ var headerNewlineToSpace = strings.NewReplacer("\n", " ", "\r", " ")
 func (h Header) WriteSubset(w io.Writer, exclude map[string]bool) error {
 	keys := make([]string, 0, len(h))
 	for k := range h {
-		if exclude == nil || !exclude[k] {
+		if !exclude[k] {
 			keys = append(keys, k)
 		}
 	}
@@ -62,8 +69,10 @@ func (h Header) WriteSubset(w io.Writer, exclude map[string]bool) error {
 		for _, v := range h[k] {
 			v = headerNewlineToSpace.Replace(v)
 			v = strings.TrimSpace(v)
-			if _, err := fmt.Fprintf(w, "%s: %s\r\n", k, v); err != nil {
-				return err
+			for _, s := range []string{k, ": ", v, "\r\n"} {
+				if _, err := io.WriteString(w, s); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -76,3 +85,43 @@ func (h Header) WriteSubset(w io.Writer, exclude map[string]bool) error {
 // the rest are converted to lowercase.  For example, the
 // canonical key for "accept-encoding" is "Accept-Encoding".
 func CanonicalHeaderKey(s string) string { return textproto.CanonicalMIMEHeaderKey(s) }
+
+// hasToken returns whether token appears with v, ASCII
+// case-insensitive, with space or comma boundaries.
+// token must be all lowercase.
+// v may contain mixed cased.
+func hasToken(v, token string) bool {
+	if len(token) > len(v) || token == "" {
+		return false
+	}
+	if v == token {
+		return true
+	}
+	for sp := 0; sp <= len(v)-len(token); sp++ {
+		// Check that first character is good.
+		// The token is ASCII, so checking only a single byte
+		// is sufficient.  We skip this potential starting
+		// position if both the first byte and its potential
+		// ASCII uppercase equivalent (b|0x20) don't match.
+		// False positives ('^' => '~') are caught by EqualFold.
+		if b := v[sp]; b != token[0] && b|0x20 != token[0] {
+			continue
+		}
+		// Check that start pos is on a valid token boundary.
+		if sp > 0 && !isTokenBoundary(v[sp-1]) {
+			continue
+		}
+		// Check that end pos is on a valid token boundary.
+		if endPos := sp + len(token); endPos != len(v) && !isTokenBoundary(v[endPos]) {
+			continue
+		}
+		if strings.EqualFold(v[sp:sp+len(token)], token) {
+			return true
+		}
+	}
+	return false
+}
+
+func isTokenBoundary(b byte) bool {
+	return b == ' ' || b == ',' || b == '\t'
+}

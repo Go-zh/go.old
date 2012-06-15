@@ -69,6 +69,7 @@ typedef	struct	Hchan		Hchan;
 typedef	struct	Complex64	Complex64;
 typedef	struct	Complex128	Complex128;
 typedef	struct	WinCall		WinCall;
+typedef	struct	SEH		SEH;
 typedef	struct	Timers		Timers;
 typedef	struct	Timer		Timer;
 typedef struct	GCStats		GCStats;
@@ -166,7 +167,7 @@ struct	Slice
 struct	Gobuf
 {
 	// The offsets of these fields are known to (hard-coded in) libmach.
-	byte*	sp;
+	uintptr	sp;
 	byte*	pc;
 	G*	g;
 };
@@ -182,15 +183,15 @@ struct	GCStats
 };
 struct	G
 {
-	byte*	stackguard;	// cannot move - also known to linker, libmach, runtime/cgo
-	byte*	stackbase;	// cannot move - also known to libmach, runtime/cgo
+	uintptr	stackguard;	// cannot move - also known to linker, libmach, runtime/cgo
+	uintptr	stackbase;	// cannot move - also known to libmach, runtime/cgo
 	Defer*	defer;
 	Panic*	panic;
 	Gobuf	sched;
-	byte*	gcstack;		// if status==Gsyscall, gcstack = stackbase to use during gc
-	byte*	gcsp;		// if status==Gsyscall, gcsp = sched.sp to use during gc
-	byte*	gcguard;		// if status==Gsyscall, gcguard = stackguard to use during gc
-	byte*	stack0;
+	uintptr	gcstack;		// if status==Gsyscall, gcstack = stackbase to use during gc
+	uintptr	gcsp;		// if status==Gsyscall, gcsp = sched.sp to use during gc
+	uintptr	gcguard;		// if status==Gsyscall, gcguard = stackguard to use during gc
+	uintptr	stack0;
 	byte*	entry;		// initial function
 	G*	alllink;	// on allg
 	void*	param;		// passed parameter on wakeup
@@ -262,6 +263,7 @@ struct	M
 #ifdef GOOS_windows
 	void*	thread;		// thread handle
 #endif
+	SEH*	seh;
 	uintptr	end[];
 };
 
@@ -315,6 +317,11 @@ struct	WinCall
 	uintptr	r1;	// return values
 	uintptr	r2;
 	uintptr	err;	// error number
+};
+struct	SEH
+{
+	void*	prev;
+	void*	handler;
 };
 
 #ifdef GOOS_windows
@@ -390,6 +397,7 @@ struct ParFor
 #define	nelem(x)	(sizeof(x)/sizeof((x)[0]))
 #define	nil		((void*)0)
 #define	offsetof(s,m)	(uint32)(&(((s*)0)->m))
+#define	ROUND(x, n)	(((x)+(n)-1)&~((n)-1)) /* all-caps to mark as macro: it evaluates n twice */
 
 /*
  * known to compiler
@@ -478,7 +486,7 @@ struct Defer
 	byte*	pc;
 	byte*	fn;
 	Defer*	link;
-	byte	args[8];	// padded to actual size
+	void*	args[1];	// padded to actual size
 };
 
 /*
@@ -533,7 +541,6 @@ void	runtime·goenvs_unix(void);
 void*	runtime·getu(void);
 void	runtime·throw(int8*);
 void	runtime·panicstring(int8*);
-uint32	runtime·rnd(uint32, uint32);
 void	runtime·prints(int8*);
 void	runtime·printf(int8*, ...);
 byte*	runtime·mchr(byte*, byte, byte*);

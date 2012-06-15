@@ -5,6 +5,7 @@
 #include "runtime.h"
 #include "arch_GOARCH.h"
 #include "type.h"
+#include "typekind.h"
 #include "malloc.h"
 
 void
@@ -193,7 +194,7 @@ runtime·convT2I(Type *t, InterfaceType *inter, ...)
 
 	elem = (byte*)(&inter+1);
 	wid = t->size;
-	ret = (Iface*)(elem + runtime·rnd(wid, Structrnd));
+	ret = (Iface*)(elem + ROUND(wid, Structrnd));
 	ret->tab = itab(inter, t, 0);
 	copyin(t, elem, &ret->data);
 }
@@ -209,7 +210,7 @@ runtime·convT2E(Type *t, ...)
 
 	elem = (byte*)(&t+1);
 	wid = t->size;
-	ret = (Eface*)(elem + runtime·rnd(wid, Structrnd));
+	ret = (Eface*)(elem + ROUND(wid, Structrnd));
 	ret->type = t;
 	copyin(t, elem, &ret->data);
 }
@@ -387,7 +388,7 @@ void
 runtime·convI2I(InterfaceType* inter, Iface i, Iface ret)
 {
 	Itab *tab;
-	
+
 	ret.data = i.data;
 	if((tab = i.tab) == nil)
 		ret.tab = nil;
@@ -694,7 +695,7 @@ reflect·unsafe_NewArray(Eface typ, uint32 n, void *ret)
 	// We know that the pointer to the original
 	// type structure sits before the data pointer.
 	t = (Type*)((Eface*)typ.data-1);
-	
+
 	size = n*t->size;
 	if(t->kind&KindNoPointers)
 		ret = runtime·mallocgc(size, FlagNoPointers, 1, 1);

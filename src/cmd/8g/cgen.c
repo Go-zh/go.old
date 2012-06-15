@@ -63,9 +63,26 @@ cgen(Node *n, Node *res)
 	if(res == N || res->type == T)
 		fatal("cgen: res nil");
 
-	// inline slices
-	if(cgen_inline(n, res))
+	switch(n->op) {
+	case OSLICE:
+	case OSLICEARR:
+	case OSLICESTR:
+		if (res->op != ONAME || !res->addable) {
+			tempname(&n1, n->type);
+			cgen_slice(n, &n1);
+			cgen(&n1, res);
+		} else
+			cgen_slice(n, res);
 		return;
+	case OEFACE:
+		if (res->op != ONAME || !res->addable) {
+			tempname(&n1, n->type);
+			cgen_eface(n, &n1);
+			cgen(&n1, res);
+		} else
+			cgen_eface(n, res);
+		return;
+	}
 
 	while(n->op == OCONVNOP)
 		n = n->left;
@@ -160,6 +177,7 @@ cgen(Node *n, Node *res)
 		case OADD:
 		case OSUB:
 		case OMUL:
+		case OLROT:
 		case OLSH:
 		case ORSH:
 		case OAND:
@@ -195,12 +213,12 @@ cgen(Node *n, Node *res)
 	case OGE:
 	case OGT:
 	case ONOT:
-		p1 = gbranch(AJMP, T);
+		p1 = gbranch(AJMP, T, 0);
 		p2 = pc;
 		gmove(nodbool(1), res);
-		p3 = gbranch(AJMP, T);
+		p3 = gbranch(AJMP, T, 0);
 		patch(p1, pc);
-		bgen(n, 1, p2);
+		bgen(n, 1, 0, p2);
 		gmove(nodbool(0), res);
 		patch(p3, pc);
 		return;
@@ -274,7 +292,7 @@ cgen(Node *n, Node *res)
 
 			nodconst(&n2, types[tptr], 0);
 			gins(optoas(OCMP, types[tptr]), &n1, &n2);
-			p1 = gbranch(optoas(OEQ, types[tptr]), T);
+			p1 = gbranch(optoas(OEQ, types[tptr]), T, -1);
 
 			n2 = n1;
 			n2.op = OINDREG;
@@ -308,7 +326,7 @@ cgen(Node *n, Node *res)
 
 			nodconst(&n2, types[tptr], 0);
 			gins(optoas(OCMP, types[tptr]), &n1, &n2);
-			p1 = gbranch(optoas(OEQ, types[tptr]), T);
+			p1 = gbranch(optoas(OEQ, types[tptr]), T, -1);
 
 			n2 = n1;
 			n2.op = OINDREG;
@@ -360,20 +378,27 @@ cgen(Node *n, Node *res)
 
 	case OLSH:
 	case ORSH:
-		cgen_shift(n->op, nl, nr, res);
+	case OLROT:
+		cgen_shift(n->op, n->bounded, nl, nr, res);
 		break;
 	}
 	return;
 
 sbop:	// symmetric binary
-	if(nl->ullman < nr->ullman) {
+	if(nl->ullman < nr->ullman || nl->op == OLITERAL) {
 		r = nl;
 		nl = nr;
 		nr = r;
 	}
 
 abop:	// asymmetric binary
-	if(nl->ullman >= nr->ullman) {
+	if(smallintconst(nr)) {
+		regalloc(&n1, nr->type, res);
+		cgen(nl, &n1);
+		gins(a, nr, &n1);
+		gmove(&n1, res);
+		regfree(&n1);
+	} else if(nl->ullman >= nr->ullman) {
 		tempname(&nt, nl->type);
 		cgen(nl, &nt);
 		mgen(nr, &n2, N);
@@ -463,7 +488,7 @@ cgenindex(Node *n, Node *res)
 	nodconst(&zero, types[TINT32], 0);
 	gins(ACMPL, &hi, &zero);
 	splitclean();
-	return gbranch(AJNE, T);
+	return gbranch(AJNE, T, +1);
 }
 		
 /*
@@ -524,6 +549,20 @@ agen(Node *n, Node *res)
 		cgen_aret(n, res);
 		break;
 
+	case OSLICE:
+	case OSLICEARR:
+	case OSLICESTR:
+		tempname(&n1, n->type);
+		cgen_slice(n, &n1);
+		agen(&n1, res);
+		break;
+
+	case OEFACE:
+		tempname(&n1, n->type);
+		cgen_eface(n, &n1);
+		agen(&n1, res);
+		break;
+
 	case OINDEX:
 		p2 = nil;  // to be patched to panicindex.
 		w = n->type->width;
@@ -580,15 +619,15 @@ agen(Node *n, Node *res)
 				fatal("constant string constant index");
 			v = mpgetfix(nr->val.u.xval);
 			if(isslice(nl->type) || nl->type->etype == TSTRING) {
-				if(!debug['B'] && !n->etype) {
+				if(!debug['B'] && !n->bounded) {
 					n1 = n3;
 					n1.op = OINDREG;
 					n1.type = types[tptr];
 					n1.xoffset = Array_nel;
 					nodconst(&n2, types[TUINT32], v);
 					gins(optoas(OCMP, types[TUINT32]), &n1, &n2);
-					p1 = gbranch(optoas(OGT, types[TUINT32]), T);
-					ginscall(panicindex, 0);
+					p1 = gbranch(optoas(OGT, types[TUINT32]), T, +1);
+					ginscall(panicindex, -1);
 					patch(p1, pc);
 				}
 
@@ -612,7 +651,7 @@ agen(Node *n, Node *res)
 		gmove(&n1, &n2);
 		regfree(&n1);
 
-		if(!debug['B'] && !n->etype) {
+		if(!debug['B'] && !n->bounded) {
 			// check bounds
 			if(isconst(nl, CTSTR))
 				nodconst(&n1, types[TUINT32], nl->val.u.sval->len);
@@ -624,10 +663,10 @@ agen(Node *n, Node *res)
 			} else
 				nodconst(&n1, types[TUINT32], nl->type->bound);
 			gins(optoas(OCMP, types[TUINT32]), &n2, &n1);
-			p1 = gbranch(optoas(OLT, types[TUINT32]), T);
+			p1 = gbranch(optoas(OLT, types[TUINT32]), T, +1);
 			if(p2)
 				patch(p2, pc);
-			ginscall(panicindex, 0);
+			ginscall(panicindex, -1);
 			patch(p1, pc);
 		}
 		
@@ -792,7 +831,7 @@ agenr(Node *n, Node *a, Node *res)
  *	if(n == true) goto to;
  */
 void
-bgen(Node *n, int true, Prog *to)
+bgen(Node *n, int true, int likely, Prog *to)
 {
 	int et, a;
 	Node *nl, *nr, *r;
@@ -834,14 +873,14 @@ bgen(Node *n, int true, Prog *to)
 		a = AJNE;
 		if(!true)
 			a = AJEQ;
-		patch(gbranch(a, n->type), to);
+		patch(gbranch(a, n->type, likely), to);
 		regfree(&n1);
 		return;
 
 	case OLITERAL:
 		// need to ask if it is bool?
 		if(!true == !n->val.u.bval)
-			patch(gbranch(AJMP, T), to);
+			patch(gbranch(AJMP, T, 0), to);
 		return;
 
 	case ONAME:
@@ -852,7 +891,7 @@ bgen(Node *n, int true, Prog *to)
 		a = AJNE;
 		if(!true)
 			a = AJEQ;
-		patch(gbranch(a, n->type), to);
+		patch(gbranch(a, n->type, likely), to);
 		return;
 
 	case OANDAND:
@@ -860,12 +899,12 @@ bgen(Node *n, int true, Prog *to)
 			goto caseor;
 
 	caseand:
-		p1 = gbranch(AJMP, T);
-		p2 = gbranch(AJMP, T);
+		p1 = gbranch(AJMP, T, 0);
+		p2 = gbranch(AJMP, T, 0);
 		patch(p1, pc);
-		bgen(n->left, !true, p2);
-		bgen(n->right, !true, p2);
-		p1 = gbranch(AJMP, T);
+		bgen(n->left, !true, -likely, p2);
+		bgen(n->right, !true, -likely, p2);
+		p1 = gbranch(AJMP, T, 0);
 		patch(p1, to);
 		patch(p2, pc);
 		return;
@@ -875,8 +914,8 @@ bgen(Node *n, int true, Prog *to)
 			goto caseand;
 
 	caseor:
-		bgen(n->left, true, to);
-		bgen(n->right, true, to);
+		bgen(n->left, true, likely, to);
+		bgen(n->right, true, likely, to);
 		return;
 
 	case OEQ:
@@ -897,7 +936,7 @@ bgen(Node *n, int true, Prog *to)
 
 	switch(n->op) {
 	case ONOT:
-		bgen(nl, !true, to);
+		bgen(nl, !true, likely, to);
 		break;
 
 	case OEQ:
@@ -910,14 +949,14 @@ bgen(Node *n, int true, Prog *to)
 		if(!true) {
 			if(isfloat[nl->type->etype]) {
 				// brcom is not valid on floats when NaN is involved.
-				p1 = gbranch(AJMP, T);
-				p2 = gbranch(AJMP, T);
+				p1 = gbranch(AJMP, T, 0);
+				p2 = gbranch(AJMP, T, 0);
 				patch(p1, pc);
 				ll = n->ninit;  // avoid re-genning ninit
 				n->ninit = nil;
-				bgen(n, 1, p2);
+				bgen(n, 1, -likely, p2);
 				n->ninit = ll;
-				patch(gbranch(AJMP, T), to);
+				patch(gbranch(AJMP, T, 0), to);
 				patch(p2, pc);
 				break;
 			}				
@@ -948,7 +987,7 @@ bgen(Node *n, int true, Prog *to)
 			n2.type = types[tptr];
 			nodconst(&tmp, types[tptr], 0);
 			gins(optoas(OCMP, types[tptr]), &n2, &tmp);
-			patch(gbranch(a, types[tptr]), to);
+			patch(gbranch(a, types[tptr], likely), to);
 			regfree(&n1);
 			break;
 		}
@@ -967,7 +1006,7 @@ bgen(Node *n, int true, Prog *to)
 			n2.xoffset = 0;
 			nodconst(&tmp, types[tptr], 0);
 			gins(optoas(OCMP, types[tptr]), &n2, &tmp);
-			patch(gbranch(a, types[tptr]), to);
+			patch(gbranch(a, types[tptr], likely), to);
 			regfree(&n1);
 			break;
 		}
@@ -1014,21 +1053,21 @@ bgen(Node *n, int true, Prog *to)
 			}
 			if(a == OEQ) {
 				// neither NE nor P
-				p1 = gbranch(AJNE, T);
-				p2 = gbranch(AJPS, T);
-				patch(gbranch(AJMP, T), to);
+				p1 = gbranch(AJNE, T, -likely);
+				p2 = gbranch(AJPS, T, -likely);
+				patch(gbranch(AJMP, T, 0), to);
 				patch(p1, pc);
 				patch(p2, pc);
 			} else if(a == ONE) {
 				// either NE or P
-				patch(gbranch(AJNE, T), to);
-				patch(gbranch(AJPS, T), to);
+				patch(gbranch(AJNE, T, likely), to);
+				patch(gbranch(AJPS, T, likely), to);
 			} else
-				patch(gbranch(optoas(a, nr->type), T), to);
+				patch(gbranch(optoas(a, nr->type), T, likely), to);
 			break;
 		}
 		if(iscomplex[nl->type->etype]) {
-			complexbool(a, nl, nr, true, to);
+			complexbool(a, nl, nr, true, likely, to);
 			break;
 		}
 
@@ -1043,7 +1082,7 @@ bgen(Node *n, int true, Prog *to)
 				cgen(nr, &n2);
 				nr = &n2;
 			}
-			cmp64(nl, nr, a, to);
+			cmp64(nl, nr, a, likely, to);
 			break;
 		}
 
@@ -1064,7 +1103,7 @@ bgen(Node *n, int true, Prog *to)
 
 		if(smallintconst(nr)) {
 			gins(optoas(OCMP, nr->type), &n1, nr);
-			patch(gbranch(a, nr->type), to);
+			patch(gbranch(a, nr->type, likely), to);
 			break;
 		}
 
@@ -1075,7 +1114,7 @@ bgen(Node *n, int true, Prog *to)
 
 cmp:
 		gins(optoas(OCMP, nr->type), &n1, &n2);
-		patch(gbranch(a, nr->type), to);
+		patch(gbranch(a, nr->type, likely), to);
 		regfree(&n2);
 		break;
 	}

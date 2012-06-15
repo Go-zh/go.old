@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// +build !plan9
+
 package net
 
 import (
@@ -555,19 +557,19 @@ func TestWildWildcardListener(t *testing.T) {
 		}
 	}()
 
-	if ln, err := Listen("tcp", ""); err != nil {
+	if ln, err := Listen("tcp", ""); err == nil {
 		ln.Close()
 	}
-	if ln, err := ListenPacket("udp", ""); err != nil {
+	if ln, err := ListenPacket("udp", ""); err == nil {
 		ln.Close()
 	}
-	if ln, err := ListenTCP("tcp", nil); err != nil {
+	if ln, err := ListenTCP("tcp", nil); err == nil {
 		ln.Close()
 	}
-	if ln, err := ListenUDP("udp", nil); err != nil {
+	if ln, err := ListenUDP("udp", nil); err == nil {
 		ln.Close()
 	}
-	if ln, err := ListenIP("ip:icmp", nil); err != nil {
+	if ln, err := ListenIP("ip:icmp", nil); err == nil {
 		ln.Close()
 	}
 }

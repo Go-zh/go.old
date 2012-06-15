@@ -105,9 +105,13 @@ dumpdata(void)
 /*
  * generate a branch.
  * t is ignored.
+ * likely values are for branch prediction:
+ *	-1 unlikely
+ *	0 no opinion
+ *	+1 likely
  */
 Prog*
-gbranch(int as, Type *t)
+gbranch(int as, Type *t, int likely)
 {
 	Prog *p;
 
@@ -115,6 +119,10 @@ gbranch(int as, Type *t)
 	p = prog(as);
 	p->to.type = D_BRANCH;
 	p->to.branch = P;
+	if(likely != 0) {
+		p->from.type = D_CONST;
+		p->from.offset = likely > 0;
+	}
 	return p;
 }
 
@@ -166,44 +174,6 @@ newplist(void)
 }
 
 void
-clearstk(void)
-{
-	Plist *pl;
-	Prog *p1, *p2;
-	Node sp, di, cx, con, ax;
-
-	if(plast->firstpc->to.offset <= 0)
-		return;
-
-	// reestablish context for inserting code
-	// at beginning of function.
-	pl = plast;
-	p1 = pl->firstpc;
-	p2 = p1->link;
-	pc = mal(sizeof(*pc));
-	clearp(pc);
-	p1->link = pc;
-	
-	// zero stack frame
-	nodreg(&sp, types[tptr], D_SP);
-	nodreg(&di, types[tptr], D_DI);
-	nodreg(&cx, types[TUINT32], D_CX);
-	nodconst(&con, types[TUINT32], p1->to.offset / widthptr);
-	gins(ACLD, N, N);
-	gins(AMOVL, &sp, &di);
-	gins(AMOVL, &con, &cx);
-	nodconst(&con, types[TUINT32], 0);
-	nodreg(&ax, types[TUINT32], D_AX);
-	gins(AMOVL, &con, &ax);
-	gins(AREP, N, N);
-	gins(ASTOSL, N, N);
-
-	// continue with original code.
-	gins(ANOP, N, N)->link = p2;
-	pc = P;
-}	
-
-void
 gused(Node *n)
 {
 	gins(ANOP, n, N);	// used
@@ -214,7 +184,7 @@ gjmp(Prog *to)
 {
 	Prog *p;
 
-	p = gbranch(AJMP, T);
+	p = gbranch(AJMP, T, 0);
 	if(to != P)
 		patch(p, to);
 	return p;
@@ -570,6 +540,22 @@ optoas(int op, Type *t)
 	case CASE(OXOR, TUINT32):
 	case CASE(OXOR, TPTR32):
 		a = AXORL;
+		break;
+
+	case CASE(OLROT, TINT8):
+	case CASE(OLROT, TUINT8):
+		a = AROLB;
+		break;
+
+	case CASE(OLROT, TINT16):
+	case CASE(OLROT, TUINT16):
+		a = AROLW;
+		break;
+
+	case CASE(OLROT, TINT32):
+	case CASE(OLROT, TUINT32):
+	case CASE(OLROT, TPTR32):
+		a = AROLL;
 		break;
 
 	case CASE(OLSH, TINT8):
@@ -1429,10 +1415,10 @@ gmove(Node *f, Node *t)
 			fatal("gmove %T", t);
 		case TINT8:
 			gins(ACMPL, &t1, ncon(-0x80));
-			p1 = gbranch(optoas(OLT, types[TINT32]), T);
+			p1 = gbranch(optoas(OLT, types[TINT32]), T, -1);
 			gins(ACMPL, &t1, ncon(0x7f));
-			p2 = gbranch(optoas(OGT, types[TINT32]), T);
-			p3 = gbranch(AJMP, T);
+			p2 = gbranch(optoas(OGT, types[TINT32]), T, -1);
+			p3 = gbranch(AJMP, T, 0);
 			patch(p1, pc);
 			patch(p2, pc);
 			gmove(ncon(-0x80), &t1);
@@ -1441,14 +1427,14 @@ gmove(Node *f, Node *t)
 			break;
 		case TUINT8:
 			gins(ATESTL, ncon(0xffffff00), &t1);
-			p1 = gbranch(AJEQ, T);
+			p1 = gbranch(AJEQ, T, +1);
 			gins(AMOVL, ncon(0), &t1);
 			patch(p1, pc);
 			gmove(&t1, t);
 			break;
 		case TUINT16:
 			gins(ATESTL, ncon(0xffff0000), &t1);
-			p1 = gbranch(AJEQ, T);
+			p1 = gbranch(AJEQ, T, +1);
 			gins(AMOVL, ncon(0), &t1);
 			patch(p1, pc);
 			gmove(&t1, t);
@@ -1463,7 +1449,7 @@ gmove(Node *f, Node *t)
 		gmove(f, &t1);
 		split64(&t1, &tlo, &thi);
 		gins(ACMPL, &thi, ncon(0));
-		p1 = gbranch(AJEQ, T);
+		p1 = gbranch(AJEQ, T, +1);
 		gins(AMOVL, ncon(0), &tlo);
 		patch(p1, pc);
 		gmove(&tlo, t);
@@ -1482,18 +1468,18 @@ gmove(Node *f, Node *t)
 		// if 0 > v { answer = 0 }
 		gmove(&zerof, &f0);
 		gins(AFUCOMIP, &f0, &f1);
-		p1 = gbranch(optoas(OGT, types[tt]), T);
+		p1 = gbranch(optoas(OGT, types[tt]), T, 0);
 		// if 1<<64 <= v { answer = 0 too }
 		gmove(&two64f, &f0);
 		gins(AFUCOMIP, &f0, &f1);
-		p2 = gbranch(optoas(OGT, types[tt]), T);
+		p2 = gbranch(optoas(OGT, types[tt]), T, 0);
 		patch(p1, pc);
 		gins(AFMOVVP, &f0, t);	// don't care about t, but will pop the stack
 		split64(t, &tlo, &thi);
 		gins(AMOVL, ncon(0), &tlo);
 		gins(AMOVL, ncon(0), &thi);
 		splitclean();
-		p1 = gbranch(AJMP, T);
+		p1 = gbranch(AJMP, T, 0);
 		patch(p2, pc);
 
 		// in range; algorithm is:
@@ -1510,9 +1496,9 @@ gmove(Node *f, Node *t)
 		// actual work
 		gmove(&two63f, &f0);
 		gins(AFUCOMIP, &f0, &f1);
-		p2 = gbranch(optoas(OLE, types[tt]), T);
+		p2 = gbranch(optoas(OLE, types[tt]), T, 0);
 		gins(AFMOVVP, &f0, t);
-		p3 = gbranch(AJMP, T);
+		p3 = gbranch(AJMP, T, 0);
 		patch(p2, pc);
 		gmove(&two63f, &f0);
 		gins(AFSUBDP, &f0, &f1);
@@ -1583,11 +1569,11 @@ gmove(Node *f, Node *t)
 		split64(&t1, &tlo, &thi);
 		gmove(f, &t1);
 		gins(ACMPL, &thi, ncon(0));
-		p1 = gbranch(AJLT, T);
+		p1 = gbranch(AJLT, T, 0);
 		// native
 		t1.type = types[TINT64];
 		gmove(&t1, t);
-		p2 = gbranch(AJMP, T);
+		p2 = gbranch(AJMP, T, 0);
 		// simulated
 		patch(p1, pc);
 		gmove(&tlo, &ax);
@@ -1780,6 +1766,25 @@ gins(int as, Node *f, Node *t)
 	}
 
 	return p;
+}
+
+// Generate an instruction referencing *n
+// to force segv on nil pointer dereference.
+void
+checkref(Node *n)
+{
+	Node m;
+
+	if(n->type->type->width < unmappedzero)
+		return;
+
+	regalloc(&m, types[TUINTPTR], n);
+	cgen(n, &m);
+	m.xoffset = 0;
+	m.op = OINDREG;
+	m.type = types[TUINT8];
+	gins(ATESTB, nodintconst(0), &m);
+	regfree(&m);
 }
 
 static void

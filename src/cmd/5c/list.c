@@ -140,7 +140,7 @@ Dconv(Fmt *fp)
 {
 	char str[STRINGSZ];
 	Adr *a;
-	char *op;
+	const char *op;
 	int v;
 
 	a = va_arg(fp->args, Adr*);
@@ -169,7 +169,7 @@ Dconv(Fmt *fp)
 
 	case D_SHIFT:
 		v = a->offset;
-		op = "<<>>->@>" + (((v>>5) & 3) << 1);
+		op = &"<<>>->@>"[(((v>>5) & 3) << 1)];
 		if(v & (1<<4))
 			sprint(str, "R%d%c%cR%d", v&15, op[0], op[1], (v>>8)&15);
 		else

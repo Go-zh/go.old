@@ -167,6 +167,9 @@ init2(Node *n, NodeList **out)
 	init2list(n->rlist, out);
 	init2list(n->nbody, out);
 	init2list(n->nelse, out);
+	
+	if(n->op == OCLOSURE)
+		init2list(n->closure->nbody, out);
 }
 
 static void
@@ -747,7 +750,7 @@ slicelit(int ctxt, Node *n, Node *var, NodeList **init)
 		index = r->left;
 		value = r->right;
 		a = nod(OINDEX, var, index);
-		a->etype = 1;	// no bounds checking
+		a->bounded = 1;
 		// TODO need to check bounds?
 
 		switch(value->op) {
@@ -879,11 +882,11 @@ ctxt = 0;
 		index = temp(types[TINT]);
 
 		a = nod(OINDEX, vstat, index);
-		a->etype = 1;	// no bounds checking
+		a->bounded = 1;
 		a = nod(ODOT, a, newname(symb));
 
 		r = nod(OINDEX, vstat, index);
-		r->etype = 1;	// no bounds checking
+		r->bounded = 1;
 		r = nod(ODOT, r, newname(syma));
 		r = nod(OINDEX, var, r);
 

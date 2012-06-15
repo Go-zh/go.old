@@ -394,7 +394,7 @@ gen(Node *n)
 		}
 		gen(n->nincr);				// contin:	incr
 		patch(p1, pc);				// test:
-		bgen(n->ntest, 0, breakpc);		//		if(!test) goto break
+		bgen(n->ntest, 0, -1, breakpc);		//		if(!test) goto break
 		genlist(n->nbody);				//		body
 		gjmp(continpc);
 		patch(breakpc, pc);			// done:
@@ -410,7 +410,7 @@ gen(Node *n)
 		p1 = gjmp(P);			//		goto test
 		p2 = gjmp(P);			// p2:		goto else
 		patch(p1, pc);				// test:
-		bgen(n->ntest, 0, p2);			//		if(!test) goto p2
+		bgen(n->ntest, 0, 0, p2);			//		if(!test) goto p2
 		genlist(n->nbody);				//		then
 		p3 = gjmp(P);			//		goto done
 		patch(p2, pc);				// else:
@@ -647,6 +647,9 @@ cgen_as(Node *nl, Node *nr)
 		dump("cgen_as = ", nr);
 	}
 
+	while(nr != N && nr->op == OCONVNOP)
+		nr = nr->left;
+
 	if(nl == N || isblank(nl)) {
 		cgen_discard(nr);
 		return;
@@ -732,6 +735,79 @@ cgen_as(Node *nl, Node *nr)
 
 ret:
 	;
+}
+
+/*
+ * generate:
+ *	res = iface{typ, data}
+ * n->left is typ
+ * n->right is data
+ */
+void
+cgen_eface(Node *n, Node *res)
+{
+	Node dst;
+	dst = *res;
+	dst.type = types[tptr];
+	cgen(n->left, &dst);
+	dst.xoffset += widthptr;
+	cgen(n->right, &dst);
+}
+
+/*
+ * generate:
+ *	res = s[lo, hi];
+ * n->left is s
+ * n->list is (cap(s)-lo(TUINT32), hi-lo(TUINT32)[, lo*width(TUINTPTR)])
+ * caller (cgen) guarantees res is an addable ONAME.
+ */
+void
+cgen_slice(Node *n, Node *res)
+{
+	Node src, dst, *cap, *len, *offs, *add;
+
+	cap = n->list->n;
+	len = n->list->next->n;
+	offs = N;
+	if(n->list->next->next)
+		offs = n->list->next->next->n;
+
+	// dst.len = hi [ - lo ]
+	dst = *res;
+	dst.xoffset += Array_nel;
+	dst.type = types[TUINT32];
+	cgen(len, &dst);
+
+	if(n->op != OSLICESTR) {
+		// dst.cap = cap [ - lo ]
+		dst = *res;
+		dst.xoffset += Array_cap;
+		dst.type = types[TUINT32];
+		cgen(cap, &dst);
+	}
+
+	// dst.array = src.array  [ + lo *width ]
+	dst = *res;
+	dst.xoffset += Array_array;
+	dst.type = types[TUINTPTR];
+
+	if(n->op == OSLICEARR) {
+		if(!isptr[n->left->type->etype])
+			fatal("slicearr is supposed to work on pointer: %+N\n", n);
+		checkref(n->left);
+	}
+
+	src = *n->left;
+	src.xoffset += Array_array;
+	src.type = types[TUINTPTR];
+
+	if(offs == N) {
+		cgen(&src, &dst);
+	} else {
+		add = nod(OADD, &src, offs);
+		typecheck(&add, Erv);
+		cgen(add, &dst);
+	}
 }
 
 /*

@@ -90,7 +90,9 @@ func (e Errno) Error() string {
 	b := make([]uint16, 300)
 	n, err := FormatMessage(flags, 0, uint32(e), langid(LANG_ENGLISH, SUBLANG_ENGLISH_US), b, nil)
 	if err != nil {
-		return "error " + itoa(int(e)) + " (FormatMessage failed with err=" + itoa(int(err.(Errno))) + ")"
+		// TODO(brainman): Call FormatMessage again asking for "native" error message.
+		// http://code.google.com/p/go/issues/detail?id=3376 must be resolved first.
+		return "winapi error #" + itoa(int(e))
 	}
 	// trim terminating \r and \n
 	for ; n > 0 && (b[n-1] == '\n' || b[n-1] == '\r'); n-- {
@@ -127,8 +129,8 @@ func NewCallback(fn interface{}) uintptr
 //sys	SetFilePointer(handle Handle, lowoffset int32, highoffsetptr *int32, whence uint32) (newlowoffset uint32, err error) [failretval==0xffffffff]
 //sys	CloseHandle(handle Handle) (err error)
 //sys	GetStdHandle(stdhandle int) (handle Handle, err error) [failretval==InvalidHandle]
-//sys	FindFirstFile(name *uint16, data *Win32finddata) (handle Handle, err error) [failretval==InvalidHandle] = FindFirstFileW
-//sys	FindNextFile(handle Handle, data *Win32finddata) (err error) = FindNextFileW
+//sys	findFirstFile1(name *uint16, data *win32finddata1) (handle Handle, err error) [failretval==InvalidHandle] = FindFirstFileW
+//sys	findNextFile1(handle Handle, data *win32finddata1) (err error) = FindNextFileW
 //sys	FindClose(handle Handle) (err error)
 //sys	GetFileInformationByHandle(handle Handle, data *ByHandleFileInformation) (err error)
 //sys	GetCurrentDirectory(buflen uint32, buf *uint16) (n uint32, err error) = GetCurrentDirectoryW
@@ -199,7 +201,7 @@ func NewCallback(fn interface{}) uintptr
 //sys	RegQueryInfoKey(key Handle, class *uint16, classLen *uint32, reserved *uint32, subkeysLen *uint32, maxSubkeyLen *uint32, maxClassLen *uint32, valuesLen *uint32, maxValueNameLen *uint32, maxValueLen *uint32, saLen *uint32, lastWriteTime *Filetime) (regerrno error) = advapi32.RegQueryInfoKeyW
 //sys	RegEnumKeyEx(key Handle, index uint32, name *uint16, nameLen *uint32, reserved *uint32, class *uint16, classLen *uint32, lastWriteTime *Filetime) (regerrno error) = advapi32.RegEnumKeyExW
 //sys	RegQueryValueEx(key Handle, name *uint16, reserved *uint32, valtype *uint32, buf *byte, buflen *uint32) (regerrno error) = advapi32.RegQueryValueExW
-//sys	GetCurrentProcessId() (pid uint32) = kernel32.GetCurrentProcessId
+//sys	getCurrentProcessId() (pid uint32) = kernel32.GetCurrentProcessId
 
 // syscall interface implementation for other packages
 
@@ -700,7 +702,33 @@ func SetsockoptIPMreq(fd Handle, level, opt int, mreq *IPMreq) (err error) {
 }
 func SetsockoptIPv6Mreq(fd Handle, level, opt int, mreq *IPv6Mreq) (err error) { return EWINDOWS }
 
-func Getpid() (pid int) { return int(GetCurrentProcessId()) }
+func Getpid() (pid int) { return int(getCurrentProcessId()) }
+
+func FindFirstFile(name *uint16, data *Win32finddata) (handle Handle, err error) {
+	// NOTE(rsc): The Win32finddata struct is wrong for the system call:
+	// the two paths are each one uint16 short. Use the correct struct,
+	// a win32finddata1, and then copy the results out.
+	// There is no loss of expressivity here, because the final
+	// uint16, if it is used, is supposed to be a NUL, and Go doesn't need that.
+	// For Go 1.1, we might avoid the allocation of win32finddata1 here
+	// by adding a final Bug [2]uint16 field to the struct and then
+	// adjusting the fields in the result directly.
+	var data1 win32finddata1
+	handle, err = findFirstFile1(name, &data1)
+	if err == nil {
+		copyFindData(data, &data1)
+	}
+	return
+}
+
+func FindNextFile(handle Handle, data *Win32finddata) (err error) {
+	var data1 win32finddata1
+	err = findNextFile1(handle, &data1)
+	if err == nil {
+		copyFindData(data, &data1)
+	}
+	return
+}
 
 // TODO(brainman): fix all needed for os
 func Getppid() (ppid int) { return -1 }

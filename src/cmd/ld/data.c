@@ -1012,6 +1012,8 @@ textaddress(void)
 			continue;
 		if(sym->align != 0)
 			va = rnd(va, sym->align);
+		else if(sym->text != P)
+			va = rnd(va, FuncAlign);
 		sym->value = 0;
 		for(sub = sym; sub != S; sub = sub->sub) {
 			sub->value += va;
@@ -1058,7 +1060,7 @@ address(void)
 	segdata.filelen = 0;
 	if(HEADTYPE == Hwindows)
 		segdata.fileoff = segtext.fileoff + rnd(segtext.len, PEFILEALIGN);
-	if(HEADTYPE == Hplan9x32)
+	if(HEADTYPE == Hplan9x64 || HEADTYPE == Hplan9x32)
 		segdata.fileoff = segtext.fileoff + segtext.filelen;
 	data = nil;
 	noptr = nil;

@@ -148,7 +148,7 @@ static struct {
 // body.  Keeping an explicit work list is easier on the stack allocator and
 // more efficient.
 static void
-scanblock(byte *b, int64 n)
+scanblock(byte *b, uintptr n)
 {
 	byte *obj, *arena_start, *arena_used, *p;
 	void **vp;
@@ -159,8 +159,8 @@ scanblock(byte *b, int64 n)
 	Workbuf *wbuf;
 	bool keepworking;
 
-	if((int64)(uintptr)n != n || n < 0) {
-		runtime·printf("scanblock %p %D\n", b, n);
+	if((intptr)n < 0) {
+		runtime·printf("scanblock %p %D\n", b, (int64)n);
 		runtime·throw("scanblock");
 	}
 
@@ -191,7 +191,7 @@ scanblock(byte *b, int64 n)
 		// Each iteration scans the block b of length n, queueing pointers in
 		// the work buffer.
 		if(Debug > 1)
-			runtime·printf("scanblock %p %D\n", b, n);
+			runtime·printf("scanblock %p %D\n", b, (int64)n);
 
 		vp = (void**)b;
 		n >>= (2+PtrSize/8);  /* n /= PtrSize (4 or 8) */
@@ -339,7 +339,7 @@ scanblock(byte *b, int64 n)
 // it is simpler, slower, single-threaded, recursive,
 // and uses bitSpecial as the mark bit.
 static void
-debug_scanblock(byte *b, int64 n)
+debug_scanblock(byte *b, uintptr n)
 {
 	byte *obj, *p;
 	void **vp;
@@ -349,8 +349,8 @@ debug_scanblock(byte *b, int64 n)
 	if(!DebugMark)
 		runtime·throw("debug_scanblock without DebugMark");
 
-	if((int64)(uintptr)n != n || n < 0) {
-		runtime·printf("debug_scanblock %p %D\n", b, n);
+	if((intptr)n < 0) {
+		runtime·printf("debug_scanblock %p %D\n", b, (int64)n);
 		runtime·throw("debug_scanblock");
 	}
 
@@ -539,7 +539,7 @@ addstackroots(G *gp)
 	byte *sp, *guard;
 
 	stk = (Stktop*)gp->stackbase;
-	guard = gp->stackguard;
+	guard = (byte*)gp->stackguard;
 
 	if(gp == g) {
 		// Scanning our own stack: start at &gp.
@@ -550,17 +550,17 @@ addstackroots(G *gp)
 	} else {
 		// Scanning another goroutine's stack.
 		// The goroutine is usually asleep (the world is stopped).
-		sp = gp->sched.sp;
+		sp = (byte*)gp->sched.sp;
 
 		// The exception is that if the goroutine is about to enter or might
 		// have just exited a system call, it may be executing code such
 		// as schedlock and may have needed to start a new stack segment.
 		// Use the stack segment and stack pointer at the time of
 		// the system call instead, since that won't change underfoot.
-		if(gp->gcstack != nil) {
+		if(gp->gcstack != (uintptr)nil) {
 			stk = (Stktop*)gp->gcstack;
-			sp = gp->gcsp;
-			guard = gp->gcguard;
+			sp = (byte*)gp->gcsp;
+			guard = (byte*)gp->gcguard;
 		}
 	}
 
@@ -571,7 +571,7 @@ addstackroots(G *gp)
 			runtime·throw("scanstack");
 		}
 		addroot(sp, (byte*)stk - sp);
-		sp = stk->gobuf.sp;
+		sp = (byte*)stk->gobuf.sp;
 		guard = stk->stackguard;
 		stk = (Stktop*)stk->stackbase;
 		n++;
@@ -1042,7 +1042,6 @@ runfinq(void)
 					framecap = framesz;
 				}
 				*(void**)frame = f->arg;
-				runtime·setblockspecial(f->arg, false);
 				reflect·call((byte*)f->fn, frame, sizeof(uintptr) + f->nret);
 				f->fn = nil;
 				f->arg = nil;

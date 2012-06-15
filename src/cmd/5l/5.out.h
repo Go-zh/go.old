@@ -49,12 +49,11 @@
 #define REGM        (REGEXT-1)
 /* compiler allocates external registers R10 down */
 #define	REGTMP		11
-#define	REGSB		12
 #define	REGSP		13
 #define	REGLINK		14
 #define	REGPC		15
 
-#define	NFREG		8
+#define	NFREG		16
 #define	FREGRET		0
 #define	FREGEXT		7
 #define	FREGTMP		15
@@ -186,6 +185,15 @@ enum	as
 
 	APLD,
 
+	AUNDEF,
+
+	ACLZ,
+
+	AMULWT,
+	AMULWB,
+	AMULAWT,
+	AMULAWB,
+
 	ALAST,
 };
 
@@ -239,11 +247,13 @@ enum	as
 
 #define	D_SHIFT		(D_NONE+19)
 #define	D_FPCR		(D_NONE+20)
-#define	D_REGREG	(D_NONE+21)
+#define	D_REGREG	(D_NONE+21) // (reg, reg)
 #define	D_ADDR		(D_NONE+22)
 
 #define	D_SBIG		(D_NONE+23)
 #define	D_CONST2	(D_NONE+24)
+
+#define	D_REGREG2	(D_NONE+25) // reg, reg
 
 /* name */
 #define	D_EXTERN	(D_NONE+3)

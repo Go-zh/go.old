@@ -8,7 +8,7 @@
 
 #include "zasm_GOOS_GOARCH.h"
 
-// int64 lwp_create(void *context, uintptr flags, void *lwpid)
+// int32 lwp_create(void *context, uintptr flags, void *lwpid)
 TEXT runtime·lwp_create(SB),7,$0
 
 	MOVQ	context+0(FP), DI
@@ -58,6 +58,11 @@ TEXT runtime·lwp_unpark(SB),7,$0
 	MOVQ	8(SP), DI		// arg 1 - lwp
 	MOVL	16(SP), SI		// arg 2 - hint
 	MOVL	$321, AX		// sys__lwp_unpark
+	SYSCALL
+	RET
+
+TEXT runtime·lwp_self(SB),7,$0
+	MOVL	$311, AX		// sys__lwp_self
 	SYSCALL
 	RET
 

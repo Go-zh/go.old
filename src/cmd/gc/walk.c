@@ -21,7 +21,11 @@ static	NodeList*	reorder3(NodeList*);
 static	Node*	addstr(Node*, NodeList**);
 static	Node*	appendslice(Node*, NodeList**);
 static	Node*	append(Node*, NodeList**);
+static	Node*	sliceany(Node*, NodeList**);
 static	void	walkcompare(Node**, NodeList**);
+static	void	walkrotate(Node**);
+static	int	bounded(Node*, int64);
+static	Mpint	mpzero;
 
 // can this code branch reach the end
 // without an unconditional RETURN
@@ -368,7 +372,7 @@ walkexpr(Node **np, NodeList **init)
 	NodeList *ll, *lr, *lpost;
 	Type *t;
 	int et;
-	int64 v, v1, v2, len;
+	int64 v;
 	int32 lno;
 	Node *n, *fn;
 	char buf[100], *p;
@@ -432,6 +436,11 @@ walkexpr(Node **np, NodeList **init)
 		walkexpr(&n->left, init);
 		goto ret;
 
+	case OEFACE:
+		walkexpr(&n->left, init);
+		walkexpr(&n->right, init);
+		goto ret;
+
 	case OITAB:
 		walkexpr(&n->left, init);
 		goto ret;
@@ -454,9 +463,16 @@ walkexpr(Node **np, NodeList **init)
 
 	case OLSH:
 	case ORSH:
+		walkexpr(&n->left, init);
+		walkexpr(&n->right, init);
+	shiftwalked:
+		t = n->left->type;
+		n->bounded = bounded(n->right, 8*t->width);
+		if(debug['m'] && n->etype && !isconst(n->right, CTINT))
+			warn("shift bounds check elided");
+		goto ret;
+
 	case OAND:
-	case OOR:
-	case OXOR:
 	case OSUB:
 	case OMUL:
 	case OLT:
@@ -465,8 +481,16 @@ walkexpr(Node **np, NodeList **init)
 	case OGT:
 	case OADD:
 	case OCOMPLEX:
+	case OLROT:
 		walkexpr(&n->left, init);
 		walkexpr(&n->right, init);
+		goto ret;
+
+	case OOR:
+	case OXOR:
+		walkexpr(&n->left, init);
+		walkexpr(&n->right, init);
+		walkrotate(&n);
 		goto ret;
 
 	case OEQ:
@@ -694,10 +718,22 @@ walkexpr(Node **np, NodeList **init)
 		goto ret;
 
 	case OCONVIFACE:
+		walkexpr(&n->left, init);
+
+		// Optimize convT2E as a two-word copy when T is uintptr-shaped.
+		if(!isinter(n->left->type) && isnilinter(n->type) &&
+		   (n->left->type->width == widthptr) &&
+		   isint[simsimtype(n->left->type)]) {
+			l = nod(OEFACE, typename(n->left->type), n->left);
+			l->type = n->type;
+			l->typecheck = n->typecheck;
+			n = l;
+			goto ret;
+		}
+
 		// Build name of function: convI2E etc.
 		// Not all names are possible
 		// (e.g., we'll never generate convE2E or convE2I).
-		walkexpr(&n->left, init);
 		strcpy(buf, "conv");
 		p = buf+strlen(buf);
 		if(isnilinter(n->left->type))
@@ -794,7 +830,10 @@ walkexpr(Node **np, NodeList **init)
 			typecheck(&r, Etop);
 			walkexpr(&r, init);
 			n = r;
+			goto ret;
 		}
+		if(n->etype == OLSH || n->etype == ORSH)
+			goto shiftwalked;
 		goto ret;
 
 	case OANDNOT:
@@ -844,38 +883,40 @@ walkexpr(Node **np, NodeList **init)
 		walkexpr(&n->right, init);
 
 		// if range of type cannot exceed static array bound,
-		// disable bounds check
-		if(isfixedarray(n->left->type))
-		if(n->right->type->width < 4)
-		if((1<<(8*n->right->type->width)) <= n->left->type->bound)
-			n->etype = 1;
-
-		if(isconst(n->left, CTSTR))
-		if(n->right->type->width < 4)
-		if((1<<(8*n->right->type->width)) <= n->left->val.u.sval->len)
-			n->etype = 1;
-
-		// check for static out of bounds
-		if(isconst(n->right, CTINT) && !n->etype) {
-			v = mpgetfix(n->right->val.u.xval);
-			len = 1LL<<60;
-			t = n->left->type;
-			if(isconst(n->left, CTSTR))
-				len = n->left->val.u.sval->len;
-			if(t != T && isptr[t->etype])
-				t = t->type;
-			if(isfixedarray(t))
-				len = t->bound;
-			if(v < 0 || v >= (1LL<<31) || v >= len)
+		// disable bounds check.
+		if(n->bounded)
+			goto ret;
+		t = n->left->type;
+		if(t != T && isptr[t->etype])
+			t = t->type;
+		if(isfixedarray(t)) {
+			n->bounded = bounded(n->right, t->bound);
+			if(debug['m'] && n->bounded && !isconst(n->right, CTINT))
+				warn("index bounds check elided");
+			if(smallintconst(n->right) && !n->bounded)
 				yyerror("index out of bounds");
-			else if(isconst(n->left, CTSTR)) {
-				// replace "abc"[2] with 'b'.
-				// delayed until now because "abc"[2] is not
-				// an ideal constant.
-				nodconst(n, n->type, n->left->val.u.sval->s[v]);
-				n->typecheck = 1;
+		} else if(isconst(n->left, CTSTR)) {
+			n->bounded = bounded(n->right, n->left->val.u.sval->len);
+			if(debug['m'] && n->bounded && !isconst(n->right, CTINT))
+				warn("index bounds check elided");
+			if(smallintconst(n->right)) {
+				if(!n->bounded)
+					yyerror("index out of bounds");
+				else {
+					// replace "abc"[2] with 'b'.
+					// delayed until now because "abc"[2] is not
+					// an ideal constant.
+					v = mpgetfix(n->right->val.u.xval);
+					nodconst(n, n->type, n->left->val.u.sval->s[v]);
+					n->typecheck = 1;
+				}
 			}
 		}
+
+		if(isconst(n->right, CTINT))
+		if(mpcmpfixfix(n->right->val.u.xval, &mpzero) < 0 ||
+		   mpcmpfixfix(n->right->val.u.xval, maxintval[TINT]) > 0)
+			yyerror("index out of bounds");
 		goto ret;
 
 	case OINDEXMAP:
@@ -893,95 +934,29 @@ walkexpr(Node **np, NodeList **init)
 		goto ret;
 
 	case OSLICE:
+		if(n->right != N && n->right->left == N && n->right->right == N) { // noop
+			walkexpr(&n->left, init);
+			n = n->left;
+			goto ret;
+		}
+		// fallthrough
 	case OSLICEARR:
+	case OSLICESTR:
+		if(n->right == N) // already processed
+			goto ret;
+
 		walkexpr(&n->left, init);
-		n->left = safeexpr(n->left, init);
+		// cgen_slice can't handle string literals as source
+		// TODO the OINDEX case is a bug elsewhere that needs to be traced.  it causes a crash on ([2][]int{ ... })[1][lo:hi]
+		if((n->op == OSLICESTR && n->left->op == OLITERAL) || (n->left->op == OINDEX))
+			n->left = copyexpr(n->left, n->left->type, init);
+		else
+			n->left = safeexpr(n->left, init);
 		walkexpr(&n->right->left, init);
 		n->right->left = safeexpr(n->right->left, init);
 		walkexpr(&n->right->right, init);
 		n->right->right = safeexpr(n->right->right, init);
-
-		len = 1LL<<60;
-		t = n->left->type;
-		if(t != T && isptr[t->etype])
-			t = t->type;
-		if(isfixedarray(t))
-			len = t->bound;
-
-		// check for static out of bounds
-		// NOTE: v > len not v >= len.
-		v1 = -1;
-		v2 = -1;
-		if(isconst(n->right->left, CTINT)) {
-			v1 = mpgetfix(n->right->left->val.u.xval);
-			if(v1 < 0 || v1 >= (1LL<<31) || v1 > len) {
-				yyerror("slice index out of bounds");
-				v1 = -1;
-			}
-		}
-		if(isconst(n->right->right, CTINT)) {
-			v2 = mpgetfix(n->right->right->val.u.xval);
-			if(v2 < 0 || v2 >= (1LL<<31) || v2 > len) {
-				yyerror("slice index out of bounds");
-				v2 = -1;
-			}
-		}
-		if(v1 >= 0 && v2 >= 0 && v1 > v2)
-			yyerror("inverted slice range");
-
-		if(n->op == OSLICEARR)
-			goto slicearray;
-
-		// dynamic slice
-		// sliceslice(old []any, lb uint64, hb uint64, width uint64) (ary []any)
-		// sliceslice1(old []any, lb uint64, width uint64) (ary []any)
-		t = n->type;
-		et = n->etype;
-		if(n->right->left == N)
-			l = nodintconst(0);
-		else
-			l = conv(n->right->left, types[TUINT64]);
-		if(n->right->right != N) {
-			fn = syslook("sliceslice", 1);
-			argtype(fn, t->type);			// any-1
-			argtype(fn, t->type);			// any-2
-			n = mkcall1(fn, t, init,
-				n->left,
-				l,
-				conv(n->right->right, types[TUINT64]),
-				nodintconst(t->type->width));
-		} else {
-			fn = syslook("sliceslice1", 1);
-			argtype(fn, t->type);			// any-1
-			argtype(fn, t->type);			// any-2
-			n = mkcall1(fn, t, init,
-				n->left,
-				l,
-				nodintconst(t->type->width));
-		}
-		n->etype = et;	// preserve no-typecheck flag from OSLICE to the slice* call.
-		goto ret;
-
-	slicearray:
-		// static slice
-		// slicearray(old *any, uint64 nel, lb uint64, hb uint64, width uint64) (ary []any)
-		t = n->type;
-		fn = syslook("slicearray", 1);
-		argtype(fn, n->left->type->type);	// any-1
-		argtype(fn, t->type);			// any-2
-		if(n->right->left == N)
-			l = nodintconst(0);
-		else
-			l = conv(n->right->left, types[TUINT64]);
-		if(n->right->right == N)
-			r = nodintconst(n->left->type->type->bound);
-		else
-			r = conv(n->right->right, types[TUINT64]);
-		n = mkcall1(fn, t, init,
-			n->left, nodintconst(n->left->type->type->bound),
-			l,
-			r,
-			nodintconst(t->type->width));
+		n = sliceany(n, init);  // chops n->right, sets n->list
 		goto ret;
 
 	case OADDR:
@@ -1059,25 +1034,7 @@ walkexpr(Node **np, NodeList **init)
 	case OADDSTR:
 		n = addstr(n, init);
 		goto ret;
-
-	case OSLICESTR:
-		// sys_slicestring(s, lb, hb)
-		if(n->right->left == N)
-			l = nodintconst(0);
-		else
-			l = conv(n->right->left, types[TINT]);
-		if(n->right->right) {
-			n = mkcall("slicestring", n->type, init,
-				conv(n->left, types[TSTRING]),
-				l,
-				conv(n->right->right, types[TINT]));
-		} else {
-			n = mkcall("slicestring1", n->type, init,
-				conv(n->left, types[TSTRING]),
-				l);
-		}
-		goto ret;
-
+	
 	case OAPPEND:
 		if(n->isddd) {
 			if(istype(n->type->type, TUINT8) && istype(n->list->next->n->type, TSTRING))
@@ -2393,12 +2350,12 @@ append(Node *n, NodeList **init)
 	l = list(l, nod(OAS, nn, nod(OLEN, ns, N)));	 // n = len(s)
 
 	nx = nod(OSLICE, ns, nod(OKEY, N, nod(OADD, nn, na)));	 // ...s[:n+argc]
-	nx->etype = 1;	// disable bounds check
+	nx->bounded = 1;
 	l = list(l, nod(OAS, ns, nx));			// s = s[:n+argc]
 
 	for (a = n->list->next;	 a != nil; a = a->next) {
 		nx = nod(OINDEX, ns, nn);		// s[n] ...
-		nx->etype = 1;	// disable bounds check
+		nx->bounded = 1;
 		l = list(l, nod(OAS, nx, a->n));	// s[n] = arg
 		if (a->next != nil)
 			l = list(l, nod(OAS, nn, nod(OADD, nn, nodintconst(1))));  // n = n + 1
@@ -2408,6 +2365,155 @@ append(Node *n, NodeList **init)
 	walkstmtlist(l);
 	*init = concat(*init, l);
 	return ns;
+}
+
+
+// Generate frontend part for OSLICE[ARR|STR]
+// 
+static	Node*
+sliceany(Node* n, NodeList **init)
+{
+	int bounded;
+	Node *src, *lb, *hb, *bound, *chk, *chk1, *chk2;
+	int64 lbv, hbv, bv, w;
+	Type *bt;
+
+//	print("before sliceany: %+N\n", n);
+
+	src = n->left;
+	lb = n->right->left;
+	hb = n->right->right;
+
+	bounded = n->etype;
+	
+	if(n->op == OSLICESTR)
+		bound = nod(OLEN, src, N);
+	else
+		bound = nod(OCAP, src, N);
+
+	typecheck(&bound, Erv);
+	walkexpr(&bound, init);  // if src is an array, bound will be a const now.
+
+	// static checks if possible
+	bv = 1LL<<50;
+	if(isconst(bound, CTINT)) {
+		if(!smallintconst(bound))
+			yyerror("array len too large");
+		else
+			bv = mpgetfix(bound->val.u.xval);
+	}
+	lbv = -1;
+	hbv = -1;
+
+	if(isconst(hb, CTINT)) {
+		hbv = mpgetfix(hb->val.u.xval);
+		if(hbv < 0 || hbv > bv || !smallintconst(hb)) {
+			yyerror("slice index out of bounds");
+			hbv = -1;
+		}
+	}
+	if(isconst(lb, CTINT)) {
+		lbv = mpgetfix(lb->val.u.xval);
+		if(lbv < 0 || lbv > bv || !smallintconst(lb)) {
+			yyerror("slice index out of bounds");
+			lbv = -1;
+		}
+		if(lbv == 0)
+			lb = N;
+	}
+	if(lbv >= 0 && hbv >= 0 && lbv > hbv)
+		yyerror("inverted slice range");
+
+	// dynamic checks convert all bounds to unsigned to save us the bound < 0 comparison
+	// generate
+	//     if hb > bound || lb > hb { panicslice() }
+	chk = N;
+	chk1 = N;
+	chk2 = N;
+
+	bt = types[TUINT32];
+	if(hb != N && hb->type->width > 4)
+		bt = types[TUINT64];
+	if(lb != N && lb->type->width > 4)
+		bt = types[TUINT64];
+
+	bound = cheapexpr(conv(bound, bt), init);
+
+	if(hb != N) {
+		hb = cheapexpr(conv(hb, bt), init);
+		if(!bounded)
+			chk1 = nod(OLT, bound, hb);  
+	} else if(n->op == OSLICEARR) {
+		hb = bound;
+	} else {
+		hb = nod(OLEN, src, N);
+		typecheck(&hb, Erv);
+		walkexpr(&hb, init);
+		hb = cheapexpr(conv(hb, bt), init);
+	}
+
+	if(lb != N) {
+		lb = cheapexpr(conv(lb, bt), init);
+		if(!bounded)
+			chk2 = nod(OLT, hb, lb);  
+	}
+
+	if(chk1 != N || chk2 != N) {
+		chk = nod(OIF, N, N);
+		chk->nbody = list1(mkcall("panicslice", T, init));
+		if(chk1 != N)
+			chk->ntest = chk1;
+		if(chk2 != N) {
+			if(chk->ntest == N)
+				chk->ntest = chk2;
+			else
+				chk->ntest = nod(OOROR, chk->ntest, chk2);
+		}
+		typecheck(&chk, Etop);
+		walkstmt(&chk);
+		*init = concat(*init, chk->ninit);
+		chk->ninit = nil;
+		*init = list(*init, chk);
+	}
+	
+	// prepare new cap, len and offs for backend cgen_slice
+	// cap = bound [ - lo ]
+	n->right = N;
+	n->list = nil;
+	if(lb == N)
+		bound = conv(bound, types[TUINT32]);
+	else
+		bound = nod(OSUB, conv(bound, types[TUINT32]), conv(lb, types[TUINT32]));
+	typecheck(&bound, Erv);
+	walkexpr(&bound, init);
+	n->list = list(n->list, bound);
+
+	// len = hi [ - lo]
+	if(lb == N)
+		hb = conv(hb, types[TUINT32]);
+	else
+		hb = nod(OSUB, conv(hb, types[TUINT32]), conv(lb, types[TUINT32]));
+	typecheck(&hb, Erv);
+	walkexpr(&hb, init);
+	n->list = list(n->list, hb);
+
+	// offs = [width *] lo, but omit if zero
+	if(lb != N) {
+		if(n->op == OSLICESTR)
+			w = 1;
+		else
+			w = n->type->type->width;
+		lb = conv(lb, types[TUINTPTR]);
+		if(w > 1)
+			lb = nod(OMUL, nodintconst(w), lb);
+		typecheck(&lb, Erv);
+		walkexpr(&lb, init);
+		n->list = list(n->list, lb);
+	}
+
+//	print("after sliceany: %+N\n", n);
+
+	return n;
 }
 
 static Node*
@@ -2593,4 +2699,136 @@ hard:
 	}
 	*np = r;
 	return;
+}
+
+static int
+samecheap(Node *a, Node *b)
+{
+	if(a == N || b == N || a->op != b->op)
+		return 0;
+	
+	switch(a->op) {
+	case ONAME:
+		return a == b;
+	// TODO: Could do more here, but maybe this is enough.
+	// It's all cheapexpr does.
+	}
+	return 0;
+}
+
+static void
+walkrotate(Node **np)
+{
+	int w, sl, sr, s;
+	Node *l, *r;
+	Node *n;
+	
+	n = *np;
+
+	// Want << | >> or >> | << or << ^ >> or >> ^ << on unsigned value.
+	l = n->left;
+	r = n->right;
+	if((n->op != OOR && n->op != OXOR) ||
+	   (l->op != OLSH && l->op != ORSH) ||
+	   (r->op != OLSH && r->op != ORSH) ||
+	   n->type == T || issigned[n->type->etype] ||
+	   l->op == r->op) {
+		return;
+	}
+
+	// Want same, side effect-free expression on lhs of both shifts.
+	if(!samecheap(l->left, r->left))
+		return;
+	
+	// Constants adding to width?
+	w = l->type->width * 8;
+	if(smallintconst(l->right) && smallintconst(r->right)) {
+		if((sl=mpgetfix(l->right->val.u.xval)) >= 0 && (sr=mpgetfix(r->right->val.u.xval)) >= 0 && sl+sr == w)
+			goto yes;
+		return;
+	}
+	
+	// TODO: Could allow s and 32-s if s is bounded (maybe s&31 and 32-s&31).
+	return;
+	
+yes:
+	// Rewrite left shift half to left rotate.
+	if(l->op == OLSH)
+		n = l;
+	else
+		n = r;
+	n->op = OLROT;
+	
+	// Remove rotate 0 and rotate w.
+	s = mpgetfix(n->right->val.u.xval);
+	if(s == 0 || s == w)
+		n = n->left;
+
+	*np = n;
+	return;
+}
+
+// return 1 if integer n must be in range [0, max), 0 otherwise
+static int
+bounded(Node *n, int64 max)
+{
+	int64 v;
+	int32 bits;
+	int sign;
+
+	if(n->type == T || !isint[n->type->etype])
+		return 0;
+
+	sign = issigned[n->type->etype];
+	bits = 8*n->type->width;
+
+	if(smallintconst(n)) {
+		v = mpgetfix(n->val.u.xval);
+		return 0 <= v && v < max;
+	}
+
+	switch(n->op) {
+	case OAND:
+		v = -1;
+		if(smallintconst(n->left)) {
+			v = mpgetfix(n->left->val.u.xval);
+		} else if(smallintconst(n->right)) {
+			v = mpgetfix(n->right->val.u.xval);
+		}
+		if(0 <= v && v < max)
+			return 1;
+		break;
+
+	case OMOD:
+		if(!sign && smallintconst(n->right)) {
+			v = mpgetfix(n->right->val.u.xval);
+			if(0 <= v && v <= max)
+				return 1;
+		}
+		break;
+	
+	case ODIV:
+		if(!sign && smallintconst(n->right)) {
+			v = mpgetfix(n->right->val.u.xval);
+			while(bits > 0 && v >= 2) {
+				bits--;
+				v >>= 1;
+			}
+		}
+		break;
+	
+	case ORSH:
+		if(!sign && smallintconst(n->right)) {
+			v = mpgetfix(n->right->val.u.xval);
+			if(v > bits)
+				return 1;
+			bits -= v;
+		}
+		break;
+	}
+	
+	if(!sign && bits <= 62 && (1LL<<bits) <= max)
+		return 1;
+	
+	return 0;
 }

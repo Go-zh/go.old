@@ -79,6 +79,7 @@ nofollow(int a)
 	case ARETFL:
 	case ARETFQ:
 	case ARETFW:
+	case AUNDEF:
 		return 1;
 	}
 	return 0;
@@ -192,20 +193,34 @@ loop:
 		 * recurse to follow one path.
 		 * continue loop on the other.
 		 */
-		q = brchain(p->link);
-		if(q != P && q->mark)
-		if(a != ALOOP) {
-			p->as = relinv(a);
-			p->link = p->pcond;
+		if((q = brchain(p->pcond)) != P)
 			p->pcond = q;
+		if((q = brchain(p->link)) != P)
+			p->link = q;
+		if(p->from.type == D_CONST) {
+			if(p->from.offset == 1) {
+				/*
+				 * expect conditional jump to be taken.
+				 * rewrite so that's the fall-through case.
+				 */
+				p->as = relinv(a);
+				q = p->link;
+				p->link = p->pcond;
+				p->pcond = q;
+			}
+		} else {			
+			q = p->link;
+			if(q->mark)
+			if(a != ALOOP) {
+				p->as = relinv(a);
+				p->link = p->pcond;
+				p->pcond = q;
+			}
 		}
 		xfol(p->link, last);
-		q = brchain(p->pcond);
-		if(q->mark) {
-			p->pcond = q;
+		if(p->pcond->mark)
 			return;
-		}
-		p = q;
+		p = p->pcond;
 		goto loop;
 	}
 	p = p->link;
@@ -405,13 +420,21 @@ dostkoff(void)
 
 	for(cursym = textp; cursym != nil; cursym = cursym->next) {
 		if(cursym->text == nil || cursym->text->link == nil)
-			continue;
+			continue;				
 
 		p = cursym->text;
 		parsetextconst(p->to.offset);
 		autoffset = textstksiz;
 		if(autoffset < 0)
 			autoffset = 0;
+
+		if(autoffset < StackSmall && !(p->from.scale & NOSPLIT)) {
+			for(q = p; q != P; q = q->link)
+				if(q->as == ACALL)
+					goto noleaf;
+			p->from.scale |= NOSPLIT;
+		noleaf:;
+		}
 
 		q = P;
 		if((p->from.scale & NOSPLIT) && autoffset >= StackSmall)

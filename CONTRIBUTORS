@@ -68,6 +68,7 @@ Benjamin Black <b@b3k.us>
 Benny Siegert <bsiegert@gmail.com>
 Berengar Lehr <Berengar.Lehr@gmx.de>
 Bill Neubauer <wcn@golang.org> <wcn@google.com>
+Bill Thiede <couchmoney@gmail.com>
 Bjorn Tillenius <bjorn@tillenius.me>
 Bjorn Tipling <bjorn.tipling@gmail.com>
 Blake Mizerany <blake.mizerany@gmail.com>
@@ -87,6 +88,7 @@ Christian Himpel <chressie@googlemail.com> <chressie@gmail.com>
 Christoph Hack <christoph@tux21b.org>
 Christopher Nielsen <m4dh4tt3r@gmail.com>
 Christopher Redden <christopher.redden@gmail.com>
+Christopher Swenson <cswenson@google.com>
 Christopher Wedgwood <cw@f00f.org>
 Clement Skau <clementskau@gmail.com>
 Colby Ranger <cranger@google.com>
@@ -96,6 +98,7 @@ Damian Gryski <dgryski@gmail.com>
 Dan Sinclair <dan.sinclair@gmail.com>
 Daniel Fleischman <danielfleischman@gmail.com>
 Daniel Krech <eikeon@eikeon.com>
+Daniel Morsing <daniel.morsing@gmail.com>
 Daniel Nadasi <dnadasi@google.com>
 Daniel Theophanes <kardianos@gmail.com>
 Darren Elwood <darren@textnode.com>
@@ -201,9 +204,11 @@ Luuk van Dijk <lvd@golang.org> <lvd@google.com>
 Marcel van Lohuizen <mpvl@golang.org>
 Mark Zavislak <zavislak@google.com>
 Markus Duft <markus.duft@salomon.at>
+Markus Sonderegger <marraison@gmail.com>
 Martin Neubauer <m.ne@gmx.net>
 Mateusz Czapliński <czapkofan@gmail.com>
 Mathieu Lonjaret <mathieu.lonjaret@gmail.com>
+Mats Lidell <mats.lidell@cag.se> <mats.lidell@gmail.com>
 Matt Jones <mrjones@google.com>
 Matthew Horsnell <matthew.horsnell@gmail.com>
 Maxim Pimenov <mpimenov@google.com>
@@ -242,6 +247,7 @@ Paul Lalonde <paul.a.lalonde@gmail.com>
 Paul Sbarra <Sbarra.Paul@gmail.com>
 Petar Maymounkov <petarm@gmail.com>
 Peter Froehlich <peter.hans.froehlich@gmail.com>
+Peter Kleiweg <pkleiweg@xs4all.nl>
 Peter McKenzie <petermck@google.com>
 Peter Mundy <go.peter.90@gmail.com>
 Péter Szabó <pts@google.com>
@@ -263,6 +269,7 @@ Roger Peppe <rogpeppe@gmail.com>
 Ron Minnich <rminnich@gmail.com>
 Ross Light <rlight2@gmail.com>
 Russ Cox <rsc@golang.org>
+Ryan Barrett <ryanb@google.com>
 Ryan Hitchman <hitchmanr@gmail.com>
 Sam Thorogood <thorogood@google.com> <sam.thorogood@gmail.com>
 Sameer Ajmani <sameer@golang.org> <ajmani@gmail.com>

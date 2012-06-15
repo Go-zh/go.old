@@ -254,7 +254,9 @@ uchar	yscond[] =
 };
 uchar	yjcond[] =
 {
-	Ynone,	Ybr,	Zbr,	1,
+	Ynone,	Ybr,	Zbr,	0,
+	Yi0,	Ybr,	Zbr,	0,
+	Yi1,	Ybr,	Zbr,	1,
 	0
 };
 uchar	yloop[] =
@@ -777,6 +779,8 @@ Optab optab[] =
 	{ APREFETCHNTA,	yprefetch,	Pm,	0x18,(00) },
 
 	{ ABSWAPL,	ybswap,	Pm,	0xc8 },
+	
+	{ AUNDEF,		ynone,	Px,	0x0f, 0x0b },
 
 	0
 };

@@ -28,6 +28,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -51,12 +52,15 @@ var contexts = []*build.Context{
 	{GOOS: "linux", GOARCH: "386"},
 	{GOOS: "linux", GOARCH: "amd64", CgoEnabled: true},
 	{GOOS: "linux", GOARCH: "amd64"},
+	{GOOS: "linux", GOARCH: "arm"},
 	{GOOS: "darwin", GOARCH: "386", CgoEnabled: true},
 	{GOOS: "darwin", GOARCH: "386"},
 	{GOOS: "darwin", GOARCH: "amd64", CgoEnabled: true},
 	{GOOS: "darwin", GOARCH: "amd64"},
 	{GOOS: "windows", GOARCH: "amd64"},
 	{GOOS: "windows", GOARCH: "386"},
+	{GOOS: "freebsd", GOARCH: "amd64"},
+	{GOOS: "freebsd", GOARCH: "386"},
 }
 
 func contextName(c *build.Context) string {
@@ -95,6 +99,13 @@ func setContexts() {
 
 func main() {
 	flag.Parse()
+
+	if !strings.Contains(runtime.Version(), "weekly") {
+		if *nextFile != "" {
+			fmt.Printf("Go version is %q, ignoring -next %s\n", runtime.Version(), *nextFile)
+			*nextFile = ""
+		}
+	}
 
 	if *forceCtx != "" {
 		setContexts()
@@ -232,7 +243,11 @@ func fileFeatures(filename string) []string {
 	if err != nil {
 		log.Fatalf("Error reading file %s: %v", filename, err)
 	}
-	return strings.Split(strings.TrimSpace(string(bs)), "\n")
+	text := strings.TrimSpace(string(bs))
+	if text == "" {
+		return nil
+	}
+	return strings.Split(text, "\n")
 }
 
 // pkgSymbol represents a symbol in a package

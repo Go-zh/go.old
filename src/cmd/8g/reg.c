@@ -677,8 +677,8 @@ brk:
 				p->to.branch = p->to.branch->link;
 	}
 
-	if(r1 != R) {
-		r1->link = freer;
+	if(lastr != R) {
+		lastr->link = freer;
 		freer = firstr;
 	}
 
@@ -1605,7 +1605,7 @@ mark(Prog *firstp)
 		p->reg = alive;
 		if(p->as != ACALL && p->to.type == D_BRANCH && p->to.branch)
 			mark(p->to.branch);
-		if(p->as == AJMP || p->as == ARET || (p->as == ACALL && noreturn(p)))
+		if(p->as == AJMP || p->as == ARET || p->as == AUNDEF)
 			break;
 	}
 }

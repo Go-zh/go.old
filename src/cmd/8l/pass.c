@@ -75,6 +75,7 @@ nofollow(int a)
 	case ARET:
 	case AIRETL:
 	case AIRETW:
+	case AUNDEF:
 		return 1;
 	}
 	return 0;
@@ -184,20 +185,34 @@ loop:
 		 * recurse to follow one path.
 		 * continue loop on the other.
 		 */
-		q = brchain(p->link);
-		if(q != P && q->mark)
-		if(a != ALOOP) {
-			p->as = relinv(a);
-			p->link = p->pcond;
+		if((q = brchain(p->pcond)) != P)
 			p->pcond = q;
+		if((q = brchain(p->link)) != P)
+			p->link = q;
+		if(p->from.type == D_CONST) {
+			if(p->from.offset == 1) {
+				/*
+				 * expect conditional jump to be taken.
+				 * rewrite so that's the fall-through case.
+				 */
+				p->as = relinv(a);
+				q = p->link;
+				p->link = p->pcond;
+				p->pcond = q;
+			}
+		} else {
+			q = p->link;
+			if(q->mark)
+			if(a != ALOOP) {
+				p->as = relinv(a);
+				p->link = p->pcond;
+				p->pcond = q;
+			}
 		}
 		xfol(p->link, last);
-		q = brchain(p->pcond);
-		if(q->mark) {
-			p->pcond = q;
+		if(p->pcond->mark)
 			return;
-		}
-		p = q;
+		p = p->pcond;
 		goto loop;
 	}
 	p = p->link;

@@ -34,8 +34,8 @@
 #include "gg.h"
 #include "opt.h"
 
-#define	NREGVAR	24
-#define	REGBITS	((uint32)0xffffff)
+#define	NREGVAR	32
+#define	REGBITS	((uint32)0xffffffff)
 #define	P2R(p)	(Reg*)(p->reg)
 
 	void	addsplits(void);
@@ -160,6 +160,14 @@ static char* regname[] = {
 	".F5",
 	".F6",
 	".F7",
+	".F8",
+	".F9",
+	".F10",
+	".F11",
+	".F12",
+	".F13",
+	".F14",
+	".F15",
 };
 
 void
@@ -695,8 +703,8 @@ brk:
 			}
 		}
 	}
-	if(r1 != R) {
-		r1->link = freer;
+	if(lastr != R) {
+		lastr->link = freer;
 		freer = firstr;
 	}
 
@@ -866,6 +874,7 @@ mkvar(Reg *r, Adr *a)
 		goto onereg;
 
 	case D_REGREG:
+	case D_REGREG2:
 		bit = zbits;
 		if(a->offset != NREG)
 			bit.b[0] |= RtoB(a->offset);
@@ -1486,11 +1495,12 @@ addreg(Adr *a, int rn)
  *	1	R1
  *	...	...
  *	10	R10
+ *	12  R12
  */
 int32
 RtoB(int r)
 {
-	if(r >= REGTMP-2)	// excluded R9 and R10 for m and g
+	if(r >= REGTMP-2 && r != 12)	// excluded R9 and R10 for m and g, but not R12
 		return 0;
 	return 1L << r;
 }
@@ -1498,7 +1508,7 @@ RtoB(int r)
 int
 BtoR(int32 b)
 {
-	b &= 0x01fcL;	// excluded R9 and R10 for m and g
+	b &= 0x11fcL;	// excluded R9 and R10 for m and g, but not R12
 	if(b == 0)
 		return 0;
 	return bitno(b);
@@ -1509,7 +1519,7 @@ BtoR(int32 b)
  *	18	F2
  *	19	F3
  *	...	...
- *	23	F7
+ *	31	F15
  */
 int32
 FtoB(int f)
@@ -1524,7 +1534,7 @@ int
 BtoF(int32 b)
 {
 
-	b &= 0xfc0000L;
+	b &= 0xfffc0000L;
 	if(b == 0)
 		return 0;
 	return bitno(b) - 16;

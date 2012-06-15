@@ -79,3 +79,60 @@ func TestHeaderWrite(t *testing.T) {
 		buf.Reset()
 	}
 }
+
+type hasTokenTest struct {
+	header string
+	token  string
+	want   bool
+}
+
+var hasTokenTests = []hasTokenTest{
+	{"", "", false},
+	{"", "foo", false},
+	{"foo", "foo", true},
+	{"foo ", "foo", true},
+	{" foo", "foo", true},
+	{" foo ", "foo", true},
+	{"foo,bar", "foo", true},
+	{"bar,foo", "foo", true},
+	{"bar, foo", "foo", true},
+	{"bar,foo, baz", "foo", true},
+	{"bar, foo,baz", "foo", true},
+	{"bar,foo, baz", "foo", true},
+	{"bar, foo, baz", "foo", true},
+	{"FOO", "foo", true},
+	{"FOO ", "foo", true},
+	{" FOO", "foo", true},
+	{" FOO ", "foo", true},
+	{"FOO,BAR", "foo", true},
+	{"BAR,FOO", "foo", true},
+	{"BAR, FOO", "foo", true},
+	{"BAR,FOO, baz", "foo", true},
+	{"BAR, FOO,BAZ", "foo", true},
+	{"BAR,FOO, BAZ", "foo", true},
+	{"BAR, FOO, BAZ", "foo", true},
+	{"foobar", "foo", false},
+	{"barfoo ", "foo", false},
+}
+
+func TestHasToken(t *testing.T) {
+	for _, tt := range hasTokenTests {
+		if hasToken(tt.header, tt.token) != tt.want {
+			t.Errorf("hasToken(%q, %q) = %v; want %v", tt.header, tt.token, !tt.want, tt.want)
+		}
+	}
+}
+
+func BenchmarkHeaderWriteSubset(b *testing.B) {
+	h := Header(map[string][]string{
+		"Content-Length": {"123"},
+		"Content-Type":   {"text/plain"},
+		"Date":           {"some date at some time Z"},
+		"Server":         {"Go http package"},
+	})
+	var buf bytes.Buffer
+	for i := 0; i < b.N; i++ {
+		buf.Reset()
+		h.WriteSubset(&buf, nil)
+	}
+}

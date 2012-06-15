@@ -71,7 +71,7 @@ void	cgen_proc(Node*, int);
 void	cgen_callret(Node*, Node*);
 void	cgen_div(int, Node*, Node*, Node*);
 void	cgen_bmul(int, Node*, Node*, Node*);
-void	cgen_shift(int, Node*, Node*, Node*);
+void	cgen_shift(int, int, Node*, Node*, Node*);
 void	cgen_dcl(Node*);
 int	needconvert(Type*, Type*);
 void	genconv(Type*, Type*);
@@ -86,14 +86,12 @@ int	gen_as_init(Node*);
 void	agen(Node*, Node*);
 void	igen(Node*, Node*, Node*);
 vlong	fieldoffset(Type*, Node*);
-void	bgen(Node*, int, Prog*);
 void	sgen(Node*, Node*, int64);
 void	gmove(Node*, Node*);
 Prog*	gins(int, Node*, Node*);
 int	samaddr(Node*, Node*);
 void	naddr(Node*, Addr*, int);
 void	cgen_aret(Node*, Node*);
-int	cgen_inline(Node*, Node*);
 void	restx(Node*, Node*);
 void	savex(int, Node*, Node*, Node*, Type*);
 int	componentgen(Node*, Node*);
@@ -103,7 +101,7 @@ int	componentgen(Node*, Node*);
  */
 void	clearp(Prog*);
 void	proglist(void);
-Prog*	gbranch(int, Type*);
+Prog*	gbranch(int, Type*, int);
 Prog*	prog(int);
 void	gaddoffset(Node*);
 void	gconv(int, int);
@@ -136,7 +134,6 @@ void	nodfconst(Node*, Type*, Mpflt*);
 int	complexop(Node*, Node*);
 void	complexmove(Node*, Node*);
 void	complexgen(Node*, Node*);
-void	complexbool(int, Node*, Node*, int, Prog*);
 
 /*
  * gobj.c

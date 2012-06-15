@@ -83,7 +83,7 @@ int
 Dconv(Fmt *fp)
 {
 	char str[STRINGSZ];
-	char *op;
+	const char *op;
 	Addr *a;
 	int i;
 	int32 v;
@@ -119,7 +119,7 @@ Dconv(Fmt *fp)
 
 	case D_SHIFT:
 		v = a->offset;
-		op = "<<>>->@>" + (((v>>5) & 3) << 1);
+		op = &"<<>>->@>"[(((v>>5) & 3) << 1)];
 		if(v & (1<<4))
 			sprint(str, "R%d%c%cR%d", v&15, op[0], op[1], (v>>8)&15);
 		else
@@ -149,6 +149,12 @@ Dconv(Fmt *fp)
 
 	case D_REGREG:
 		sprint(str, "(R%d,R%d)", a->reg, (int)a->offset);
+		if(a->name != D_NONE || a->sym != S)
+			sprint(str, "%M(R%d)(REG)", a, a->reg);
+		break;
+
+	case D_REGREG2:
+		sprint(str, "R%d,R%d", a->reg, (int)a->offset);
 		if(a->name != D_NONE || a->sym != S)
 			sprint(str, "%M(R%d)(REG)", a, a->reg);
 		break;

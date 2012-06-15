@@ -33,9 +33,26 @@ cgen(Node *n, Node *res)
 	while(n->op == OCONVNOP)
 		n = n->left;
 
-	// inline slices
-	if(cgen_inline(n, res))
+	switch(n->op) {
+	case OSLICE:
+	case OSLICEARR:
+	case OSLICESTR:
+		if (res->op != ONAME || !res->addable) {
+			tempname(&n1, n->type);
+			cgen_slice(n, &n1);
+			cgen(&n1, res);
+		} else
+			cgen_slice(n, res);
 		goto ret;
+	case OEFACE:
+		if (res->op != ONAME || !res->addable) {
+			tempname(&n1, n->type);
+			cgen_eface(n, &n1);
+			cgen(&n1, res);
+		} else
+			cgen_eface(n, res);
+		goto ret;
+	}
 
 	if(n->ullman >= UINF) {
 		if(n->op == OINDREG)
@@ -187,12 +204,12 @@ cgen(Node *n, Node *res)
 	case OGE:
 	case OGT:
 	case ONOT:
-		p1 = gbranch(AJMP, T);
+		p1 = gbranch(AJMP, T, 0);
 		p2 = pc;
 		gmove(nodbool(1), res);
-		p3 = gbranch(AJMP, T);
+		p3 = gbranch(AJMP, T, 0);
 		patch(p1, pc);
-		bgen(n, 1, p2);
+		bgen(n, 1, 0, p2);
 		gmove(nodbool(0), res);
 		patch(p3, pc);
 		goto ret;
@@ -240,6 +257,25 @@ cgen(Node *n, Node *res)
 		goto abop;
 
 	case OCONV:
+		if(n->type->width > nl->type->width) {
+			// If loading from memory, do conversion during load,
+			// so as to avoid use of 8-bit register in, say, int(*byteptr).
+			switch(nl->op) {
+			case ODOT:
+			case ODOTPTR:
+			case OINDEX:
+			case OIND:
+			case ONAME:
+				igen(nl, &n1, res);
+				regalloc(&n2, n->type, res);
+				gmove(&n1, &n2);
+				gmove(&n2, res);
+				regfree(&n2);
+				regfree(&n1);
+				goto ret;
+			}
+		}
+
 		regalloc(&n1, nl->type, res);
 		regalloc(&n2, n->type, &n1);
 		cgen(nl, &n1);
@@ -280,7 +316,7 @@ cgen(Node *n, Node *res)
 
 			nodconst(&n2, types[tptr], 0);
 			gins(optoas(OCMP, types[tptr]), &n1, &n2);
-			p1 = gbranch(optoas(OEQ, types[tptr]), T);
+			p1 = gbranch(optoas(OEQ, types[tptr]), T, 0);
 
 			n2 = n1;
 			n2.op = OINDREG;
@@ -315,7 +351,7 @@ cgen(Node *n, Node *res)
 
 			nodconst(&n2, types[tptr], 0);
 			gins(optoas(OCMP, types[tptr]), &n1, &n2);
-			p1 = gbranch(optoas(OEQ, types[tptr]), T);
+			p1 = gbranch(optoas(OEQ, types[tptr]), T, 0);
 
 			n2 = n1;
 			n2.op = OINDREG;
@@ -370,13 +406,32 @@ cgen(Node *n, Node *res)
 
 	case OLSH:
 	case ORSH:
-		cgen_shift(n->op, nl, nr, res);
+	case OLROT:
+		cgen_shift(n->op, n->bounded, nl, nr, res);
 		break;
 	}
 	goto ret;
 
 sbop:	// symmetric binary
-	if(nl->ullman < nr->ullman) {
+	/*
+	 * put simplest on right - we'll generate into left
+	 * and then adjust it using the computation of right.
+	 * constants and variables have the same ullman
+	 * count, so look for constants specially.
+	 *
+	 * an integer constant we can use as an immediate
+	 * is simpler than a variable - we can use the immediate
+	 * in the adjustment instruction directly - so it goes
+	 * on the right.
+	 *
+	 * other constants, like big integers or floating point
+	 * constants, require a mov into a register, so those
+	 * might as well go on the left, so we can reuse that
+	 * register for the computation.
+	 */
+	if(nl->ullman < nr->ullman ||
+	   (nl->ullman == nr->ullman &&
+	    (smallintconst(nl) || (nr->op == OLITERAL && !smallintconst(nr))))) {
 		r = nl;
 		nl = nr;
 		nr = r;
@@ -386,7 +441,13 @@ abop:	// asymmetric binary
 	if(nl->ullman >= nr->ullman) {
 		regalloc(&n1, nl->type, res);
 		cgen(nl, &n1);
-
+	/*
+	 * This generates smaller code - it avoids a MOV - but it's
+	 * easily 10% slower due to not being able to
+	 * optimize/manipulate the move.
+	 * To see, run: go test -bench . crypto/md5
+	 * with and without.
+	 *
 		if(sudoaddable(a, nr, &addr)) {
 			p1 = gins(a, N, &n1);
 			p1->from = addr;
@@ -395,18 +456,30 @@ abop:	// asymmetric binary
 			regfree(&n1);
 			goto ret;
 		}
-		regalloc(&n2, nr->type, N);
-		cgen(nr, &n2);
+	 *
+	 */
+
+		if(smallintconst(nr))
+			n2 = *nr;
+		else {
+			regalloc(&n2, nr->type, N);
+			cgen(nr, &n2);
+		}
 	} else {
-		regalloc(&n2, nr->type, res);
-		cgen(nr, &n2);
+		if(smallintconst(nr))
+			n2 = *nr;
+		else {
+			regalloc(&n2, nr->type, res);
+			cgen(nr, &n2);
+		}
 		regalloc(&n1, nl->type, N);
 		cgen(nl, &n1);
 	}
 	gins(a, &n2, &n1);
 	gmove(&n1, res);
 	regfree(&n1);
-	regfree(&n2);
+	if(n2.op != OLITERAL)
+		regfree(&n2);
 	goto ret;
 
 uop:	// unary
@@ -476,6 +549,20 @@ agen(Node *n, Node *res)
 		cgen_aret(n, res);
 		break;
 
+	case OSLICE:
+	case OSLICEARR:
+	case OSLICESTR:
+		tempname(&n1, n->type);
+		cgen_slice(n, &n1);
+		agen(&n1, res);
+		break;
+
+	case OEFACE:
+		tempname(&n1, n->type);
+		cgen_eface(n, &n1);
+		agen(&n1, res);
+		break;
+
 	case OINDEX:
 		w = n->type->width;
 		if(nr->addable)
@@ -529,15 +616,15 @@ agen(Node *n, Node *res)
 				fatal("constant string constant index");	// front end should handle
 			v = mpgetfix(nr->val.u.xval);
 			if(isslice(nl->type) || nl->type->etype == TSTRING) {
-				if(!debug['B'] && !n->etype) {
+				if(!debug['B'] && !n->bounded) {
 					n1 = n3;
 					n1.op = OINDREG;
 					n1.type = types[tptr];
 					n1.xoffset = Array_nel;
 					nodconst(&n2, types[TUINT32], v);
 					gins(optoas(OCMP, types[TUINT32]), &n1, &n2);
-					p1 = gbranch(optoas(OGT, types[TUINT32]), T);
-					ginscall(panicindex, 0);
+					p1 = gbranch(optoas(OGT, types[TUINT32]), T, +1);
+					ginscall(panicindex, -1);
 					patch(p1, pc);
 				}
 
@@ -564,7 +651,7 @@ agen(Node *n, Node *res)
 		gmove(&n1, &n2);
 		regfree(&n1);
 
-		if(!debug['B'] && !n->etype) {
+		if(!debug['B'] && !n->bounded) {
 			// check bounds
 			n5.op = OXXX;
 			t = types[TUINT32];
@@ -586,10 +673,10 @@ agen(Node *n, Node *res)
 				nodconst(&n1, t, nl->type->bound);
 			}
 			gins(optoas(OCMP, t), &n2, &n1);
-			p1 = gbranch(optoas(OLT, t), T);
+			p1 = gbranch(optoas(OLT, t), T, +1);
 			if(n5.op != OXXX)
 				regfree(&n5);
-			ginscall(panicindex, 0);
+			ginscall(panicindex, -1);
 			patch(p1, pc);
 		}
 
@@ -692,6 +779,7 @@ igen(Node *n, Node *a, Node *res)
 {
 	Type *fp;
 	Iter flist;
+	Node n1, n2;
  
 	switch(n->op) {
 	case ONAME:
@@ -710,8 +798,29 @@ igen(Node *n, Node *a, Node *res)
 		a->xoffset = fp->width;
 		a->type = n->type;
 		return;
+	
+	case OINDEX:
+		// Index of fixed-size array by constant can
+		// put the offset in the addressing.
+		// Could do the same for slice except that we need
+		// to use the real index for the bounds checking.
+		if(isfixedarray(n->left->type) ||
+		   (isptr[n->left->type->etype] && isfixedarray(n->left->left->type)))
+		if(isconst(n->right, CTINT)) {
+			nodconst(&n1, types[TINT64], 0);
+			n2 = *n;
+			n2.right = &n1;
+
+			regalloc(a, types[tptr], res);
+			agen(&n2, a);
+			a->op = OINDREG;
+			a->xoffset = mpgetfix(n->right->val.u.xval)*n->type->width;
+			a->type = n->type;
+			return;
+		}
+			
 	}
- 
+
 	regalloc(a, types[tptr], res);
 	agen(n, a);
 	a->op = OINDREG;
@@ -723,7 +832,7 @@ igen(Node *n, Node *a, Node *res)
  *	if(n == true) goto to;
  */
 void
-bgen(Node *n, int true, Prog *to)
+bgen(Node *n, int true, int likely, Prog *to)
 {
 	int et, a;
 	Node *nl, *nr, *l, *r;
@@ -765,14 +874,14 @@ bgen(Node *n, int true, Prog *to)
 		a = AJNE;
 		if(!true)
 			a = AJEQ;
-		patch(gbranch(a, n->type), to);
+		patch(gbranch(a, n->type, likely), to);
 		regfree(&n1);
 		goto ret;
 
 	case OLITERAL:
 		// need to ask if it is bool?
 		if(!true == !n->val.u.bval)
-			patch(gbranch(AJMP, T), to);
+			patch(gbranch(AJMP, T, likely), to);
 		goto ret;
 
 	case ONAME:
@@ -783,7 +892,7 @@ bgen(Node *n, int true, Prog *to)
 		a = AJNE;
 		if(!true)
 			a = AJEQ;
-		patch(gbranch(a, n->type), to);
+		patch(gbranch(a, n->type, likely), to);
 		goto ret;
 
 	case OANDAND:
@@ -791,12 +900,12 @@ bgen(Node *n, int true, Prog *to)
 			goto caseor;
 
 	caseand:
-		p1 = gbranch(AJMP, T);
-		p2 = gbranch(AJMP, T);
+		p1 = gbranch(AJMP, T, 0);
+		p2 = gbranch(AJMP, T, 0);
 		patch(p1, pc);
-		bgen(n->left, !true, p2);
-		bgen(n->right, !true, p2);
-		p1 = gbranch(AJMP, T);
+		bgen(n->left, !true, -likely, p2);
+		bgen(n->right, !true, -likely, p2);
+		p1 = gbranch(AJMP, T, 0);
 		patch(p1, to);
 		patch(p2, pc);
 		goto ret;
@@ -806,8 +915,8 @@ bgen(Node *n, int true, Prog *to)
 			goto caseand;
 
 	caseor:
-		bgen(n->left, true, to);
-		bgen(n->right, true, to);
+		bgen(n->left, true, likely, to);
+		bgen(n->right, true, likely, to);
 		goto ret;
 
 	case OEQ:
@@ -830,7 +939,7 @@ bgen(Node *n, int true, Prog *to)
 	switch(n->op) {
 
 	case ONOT:
-		bgen(nl, !true, to);
+		bgen(nl, !true, likely, to);
 		goto ret;
 
 	case OEQ:
@@ -843,14 +952,14 @@ bgen(Node *n, int true, Prog *to)
 		if(!true) {
 			if(isfloat[nr->type->etype]) {
 				// brcom is not valid on floats when NaN is involved.
-				p1 = gbranch(AJMP, T);
-				p2 = gbranch(AJMP, T);
+				p1 = gbranch(AJMP, T, 0);
+				p2 = gbranch(AJMP, T, 0);
 				patch(p1, pc);
 				ll = n->ninit;   // avoid re-genning ninit
 				n->ninit = nil;
-				bgen(n, 1, p2);
+				bgen(n, 1, -likely, p2);
 				n->ninit = ll;
-				patch(gbranch(AJMP, T), to);
+				patch(gbranch(AJMP, T, 0), to);
 				patch(p2, pc);
 				goto ret;
 			}				
@@ -881,7 +990,7 @@ bgen(Node *n, int true, Prog *to)
 			n2.type = types[tptr];
 			nodconst(&tmp, types[tptr], 0);
 			gins(optoas(OCMP, types[tptr]), &n2, &tmp);
-			patch(gbranch(a, types[tptr]), to);
+			patch(gbranch(a, types[tptr], likely), to);
 			regfree(&n1);
 			break;
 		}
@@ -900,12 +1009,12 @@ bgen(Node *n, int true, Prog *to)
 			n2.xoffset = 0;
 			nodconst(&tmp, types[tptr], 0);
 			gins(optoas(OCMP, types[tptr]), &n2, &tmp);
-			patch(gbranch(a, types[tptr]), to);
+			patch(gbranch(a, types[tptr], likely), to);
 			regfree(&n1);
 			break;
 		}
 		if(iscomplex[nl->type->etype]) {
-			complexbool(a, nl, nr, true, to);
+			complexbool(a, nl, nr, true, likely, to);
 			break;
 		}
 
@@ -931,7 +1040,7 @@ bgen(Node *n, int true, Prog *to)
 
 		if(smallintconst(nr)) {
 			gins(optoas(OCMP, nr->type), &n1, nr);
-			patch(gbranch(optoas(a, nr->type), nr->type), to);
+			patch(gbranch(optoas(a, nr->type), nr->type, likely), to);
 			regfree(&n1);
 			break;
 		}
@@ -953,18 +1062,18 @@ bgen(Node *n, int true, Prog *to)
 		if(isfloat[nr->type->etype] && (n->op == OEQ || n->op == ONE)) {
 			if(n->op == OEQ) {
 				// neither NE nor P
-				p1 = gbranch(AJNE, T);
-				p2 = gbranch(AJPS, T);
-				patch(gbranch(AJMP, T), to);
+				p1 = gbranch(AJNE, T, -likely);
+				p2 = gbranch(AJPS, T, -likely);
+				patch(gbranch(AJMP, T, 0), to);
 				patch(p1, pc);
 				patch(p2, pc);
 			} else {
 				// either NE or P
-				patch(gbranch(AJNE, T), to);
-				patch(gbranch(AJPS, T), to);
+				patch(gbranch(AJNE, T, likely), to);
+				patch(gbranch(AJPS, T, likely), to);
 			}
 		} else
-			patch(gbranch(optoas(a, nr->type), nr->type), to);
+			patch(gbranch(optoas(a, nr->type), nr->type, likely), to);
 		regfree(&n1);
 		regfree(&n2);
 		break;

@@ -37,15 +37,15 @@ func notifyOnFailure(c appengine.Context, com *Commit, builder string) error {
 
 	p := &Package{Path: com.PackagePath}
 	var broken *Commit
-	ok, present := com.OK(builder, "")
-	if !present {
+	cr := com.Result(builder, "")
+	if cr == nil {
 		return fmt.Errorf("no result for %s/%s", com.Hash, builder)
 	}
 	q := datastore.NewQuery("Commit").Ancestor(p.Key(c))
-	if ok {
+	if cr.OK {
 		// This commit is OK. Notify if next Commit is broken.
 		next := new(Commit)
-		q.Filter("ParentHash=", com.Hash)
+		q = q.Filter("ParentHash=", com.Hash)
 		if err := firstMatch(c, q, next); err != nil {
 			if err == datastore.ErrNoSuchEntity {
 				// OK at tip, no notification necessary.
@@ -53,13 +53,15 @@ func notifyOnFailure(c appengine.Context, com *Commit, builder string) error {
 			}
 			return err
 		}
-		if ok, present := next.OK(builder, ""); present && !ok {
+		if nr := next.Result(builder, ""); nr != nil && !nr.OK {
+			c.Debugf("commit ok: %#v\nresult: %#v", com, cr)
+			c.Debugf("next commit broken: %#v\nnext result:%#v", next, nr)
 			broken = next
 		}
 	} else {
 		// This commit is broken. Notify if the previous Commit is OK.
 		prev := new(Commit)
-		q.Filter("Hash=", com.ParentHash)
+		q = q.Filter("Hash=", com.ParentHash)
 		if err := firstMatch(c, q, prev); err != nil {
 			if err == datastore.ErrNoSuchEntity {
 				// No previous result, let the backfill of
@@ -68,7 +70,9 @@ func notifyOnFailure(c appengine.Context, com *Commit, builder string) error {
 			}
 			return err
 		}
-		if ok, present := prev.OK(builder, ""); present && ok {
+		if pr := prev.Result(builder, ""); pr != nil && pr.OK {
+			c.Debugf("commit broken: %#v\nresult: %#v", com, cr)
+			c.Debugf("previous commit ok: %#v\nprevious result:%#v", prev, pr)
 			broken = com
 		}
 	}

@@ -202,6 +202,31 @@ For example, <code>rsc</code> is an alias for <code>rsc@golang.org</code>.
 </p>
 
 <div class="english">
+<h3>Switch to the default branch</h3>
+</div>
+
+<h3>切换到default分支</h3>
+
+<div class="english">
+<p>
+Most Go installations use a release branch, but new changes should
+only be made to the default branch. (They may be applied later to a release
+branch as part of the release process.)
+Before making a change, make sure you use the default branch:
+</p>
+</div>
+
+<p>
+大多数Go安装使用release分支，但是任何新的改动都只能对default分支进行。（他们
+会在发布下一步发布版时候被合并到release分支。）
+在做任何修改之前，请确保已经切换到了default分支：
+</p>
+
+<pre>
+$ hg update default
+</pre>
+
+<div class="english">
 <h3>Make a change</h3>
 </div>
 

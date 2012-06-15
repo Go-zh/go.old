@@ -6,6 +6,7 @@ package big
 
 import (
 	"io"
+	"math/rand"
 	"strings"
 	"testing"
 )
@@ -135,26 +136,22 @@ func TestMulRangeN(t *testing.T) {
 	}
 }
 
-var mulArg, mulTmp nat
+var rnd = rand.New(rand.NewSource(0x43de683f473542af))
+var mulx = rndNat(1e4)
+var muly = rndNat(1e4)
 
-func init() {
-	const n = 1000
-	mulArg = make(nat, n)
+func rndNat(n int) nat {
+	x := make(nat, n)
 	for i := 0; i < n; i++ {
-		mulArg[i] = _M
+		x[i] = Word(rnd.Int63()<<1 + rnd.Int63n(2))
 	}
-}
-
-func benchmarkMulLoad() {
-	for j := 1; j <= 10; j++ {
-		x := mulArg[0 : j*100]
-		mulTmp.mul(x, x)
-	}
+	return x
 }
 
 func BenchmarkMul(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		benchmarkMulLoad()
+		var z nat
+		z.mul(mulx, muly)
 	}
 }
 
@@ -616,13 +613,22 @@ func TestModW(t *testing.T) {
 }
 
 func TestTrailingZeroBits(t *testing.T) {
-	var x Word
-	x--
-	for i := 0; i < _W; i++ {
-		if trailingZeroBits(x) != i {
-			t.Errorf("Failed at step %d: x: %x got: %d", i, x, trailingZeroBits(x))
+	x := Word(1)
+	for i := uint(0); i <= _W; i++ {
+		n := trailingZeroBits(x)
+		if n != i%_W {
+			t.Errorf("got trailingZeroBits(%#x) = %d; want %d", x, n, i%_W)
 		}
 		x <<= 1
+	}
+
+	y := nat(nil).set(natOne)
+	for i := uint(0); i <= 3*_W; i++ {
+		n := y.trailingZeroBits()
+		if n != i {
+			t.Errorf("got 0x%s.trailingZeroBits() = %d; want %d", y.string(lowercaseDigits[0:16]), n, i)
+		}
+		y = y.shl(y, 1)
 	}
 }
 

@@ -19,6 +19,7 @@ import (
 	"mime/multipart"
 	"net/textproto"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -369,36 +370,29 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header) err
 	return bw.Flush()
 }
 
-// Convert decimal at s[i:len(s)] to integer,
-// returning value, string position where the digits stopped,
-// and whether there was a valid number (digits, not too big).
-func atoi(s string, i int) (n, i1 int, ok bool) {
-	const Big = 1000000
-	if i >= len(s) || s[i] < '0' || s[i] > '9' {
-		return 0, 0, false
-	}
-	n = 0
-	for ; i < len(s) && '0' <= s[i] && s[i] <= '9'; i++ {
-		n = n*10 + int(s[i]-'0')
-		if n > Big {
-			return 0, 0, false
-		}
-	}
-	return n, i, true
-}
-
 // ParseHTTPVersion parses a HTTP version string.
 // "HTTP/1.0" returns (1, 0, true).
 func ParseHTTPVersion(vers string) (major, minor int, ok bool) {
-	if len(vers) < 5 || vers[0:5] != "HTTP/" {
+	const Big = 1000000 // arbitrary upper bound
+	switch vers {
+	case "HTTP/1.1":
+		return 1, 1, true
+	case "HTTP/1.0":
+		return 1, 0, true
+	}
+	if !strings.HasPrefix(vers, "HTTP/") {
 		return 0, 0, false
 	}
-	major, i, ok := atoi(vers, 5)
-	if !ok || i >= len(vers) || vers[i] != '.' {
+	dot := strings.Index(vers, ".")
+	if dot < 0 {
 		return 0, 0, false
 	}
-	minor, i, ok = atoi(vers, i+1)
-	if !ok || i != len(vers) {
+	major, err := strconv.Atoi(vers[5:dot])
+	if err != nil || major < 0 || major > Big {
+		return 0, 0, false
+	}
+	minor, err = strconv.Atoi(vers[dot+1:])
+	if err != nil || minor < 0 || minor > Big {
 		return 0, 0, false
 	}
 	return major, minor, true
@@ -513,9 +507,9 @@ func ReadRequest(b *bufio.Reader) (req *Request, err error) {
 	// the same.  In the second case, any Host line is ignored.
 	req.Host = req.URL.Host
 	if req.Host == "" {
-		req.Host = req.Header.Get("Host")
+		req.Host = req.Header.get("Host")
 	}
-	req.Header.Del("Host")
+	delete(req.Header, "Host")
 
 	fixPragmaCacheControl(req.Header)
 
@@ -732,24 +726,16 @@ func (r *Request) FormFile(key string) (multipart.File, *multipart.FileHeader, e
 }
 
 func (r *Request) expectsContinue() bool {
-	return hasToken(r.Header.Get("Expect"), "100-continue")
+	return hasToken(r.Header.get("Expect"), "100-continue")
 }
 
 func (r *Request) wantsHttp10KeepAlive() bool {
 	if r.ProtoMajor != 1 || r.ProtoMinor != 0 {
 		return false
 	}
-	return hasToken(r.Header.Get("Connection"), "keep-alive")
+	return hasToken(r.Header.get("Connection"), "keep-alive")
 }
 
 func (r *Request) wantsClose() bool {
-	return hasToken(r.Header.Get("Connection"), "close")
-}
-
-func hasToken(s, token string) bool {
-	if s == "" {
-		return false
-	}
-	// TODO This is a poor implementation of the RFC. See http://golang.org/issue/3535
-	return strings.Contains(strings.ToLower(s), token)
+	return hasToken(r.Header.get("Connection"), "close")
 }

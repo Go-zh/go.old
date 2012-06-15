@@ -1950,6 +1950,12 @@ safeexpr(Node *n, NodeList **init)
 	if(n == N)
 		return N;
 
+	if(n->ninit) {
+		walkstmtlist(n->ninit);
+		*init = concat(*init, n->ninit);
+		n->ninit = nil;
+	}
+
 	switch(n->op) {
 	case ONAME:
 	case OLITERAL:
@@ -2663,7 +2669,7 @@ genhash(Sym *sym, Type *t)
 		call->list = list(call->list, nh);
 		call->list = list(call->list, nodintconst(t->type->width));
 		nx = nod(OINDEX, np, ni);
-		nx->etype = 1;  // no bounds check
+		nx->bounded = 1;
 		na = nod(OADDR, nx, N);
 		na->etype = 1;  // no escape to heap
 		call->list = list(call->list, na);
@@ -2678,7 +2684,7 @@ genhash(Sym *sym, Type *t)
 		first = T;
 		for(t1=t->type;; t1=t1->down) {
 			if(t1 != T && (isblanksym(t1->sym) || algtype1(t1->type, nil) == AMEM)) {
-				if(first == T)
+				if(first == T && !isblanksym(t1->sym))
 					first = t1;
 				continue;
 			}
@@ -2874,9 +2880,9 @@ geneq(Sym *sym, Type *t)
 		
 		// if p[i] != q[i] { *eq = false; return }
 		nx = nod(OINDEX, np, ni);
-		nx->etype = 1;  // no bounds check
+		nx->bounded = 1;
 		ny = nod(OINDEX, nq, ni);
-		ny->etype = 1;  // no bounds check
+		ny->bounded = 1;
 
 		nif = nod(OIF, N, N);
 		nif->ntest = nod(ONE, nx, ny);
@@ -2895,7 +2901,7 @@ geneq(Sym *sym, Type *t)
 		first = T;
 		for(t1=t->type;; t1=t1->down) {
 			if(t1 != T && (isblanksym(t1->sym) || algtype1(t1->type, nil) == AMEM)) {
-				if(first == T)
+				if(first == T && !isblanksym(t1->sym))
 					first = t1;
 				continue;
 			}

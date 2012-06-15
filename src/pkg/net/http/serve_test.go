@@ -20,7 +20,9 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/exec"
 	"reflect"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -1140,6 +1142,52 @@ func TestServerBufferedChunking(t *testing.T) {
 	}
 }
 
+// Tests that the server flushes its response headers out when it's
+// ignoring the response body and waits a bit before forcefully
+// closing the TCP connection, causing the client to get a RST.
+// See http://golang.org/issue/3595
+func TestServerGracefulClose(t *testing.T) {
+	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+		Error(w, "bye", StatusUnauthorized)
+	}))
+	defer ts.Close()
+
+	conn, err := net.Dial("tcp", ts.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	const bodySize = 5 << 20
+	req := []byte(fmt.Sprintf("POST / HTTP/1.1\r\nHost: foo.com\r\nContent-Length: %d\r\n\r\n", bodySize))
+	for i := 0; i < bodySize; i++ {
+		req = append(req, 'x')
+	}
+	writeErr := make(chan error)
+	go func() {
+		_, err := conn.Write(req)
+		writeErr <- err
+	}()
+	br := bufio.NewReader(conn)
+	lineNum := 0
+	for {
+		line, err := br.ReadString('\n')
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("ReadLine: %v", err)
+		}
+		lineNum++
+		if lineNum == 1 && !strings.Contains(line, "401 Unauthorized") {
+			t.Errorf("Response line = %q; want a 401", line)
+		}
+	}
+	// Wait for write to finish. This is a broken pipe on both
+	// Darwin and Linux, but checking this isn't the point of
+	// the test.
+	<-writeErr
+}
+
 // goTimeout runs f, failing t if f takes more than ns to complete.
 func goTimeout(t *testing.T, d time.Duration, f func()) {
 	ch := make(chan bool, 2)
@@ -1215,4 +1263,57 @@ func BenchmarkClientServer(b *testing.B) {
 	}
 
 	b.StopTimer()
+}
+
+// A benchmark for profiling the server without the HTTP client code.
+// The client code runs in a subprocess.
+//
+// For use like:
+//   $ go test -c
+//   $ ./http.test -test.run=XX -test.bench=Benchmarktime=15 -test.cpuprofile=http.prof
+//   $ go tool pprof http.test http.prof
+//   (pprof) web
+func BenchmarkServer(b *testing.B) {
+	// Child process mode;
+	if url := os.Getenv("TEST_BENCH_SERVER_URL"); url != "" {
+		n, err := strconv.Atoi(os.Getenv("TEST_BENCH_CLIENT_N"))
+		if err != nil {
+			panic(err)
+		}
+		for i := 0; i < n; i++ {
+			res, err := Get(url)
+			if err != nil {
+				log.Panicf("Get:", err)
+			}
+			all, err := ioutil.ReadAll(res.Body)
+			if err != nil {
+				log.Panicf("ReadAll:", err)
+			}
+			body := string(all)
+			if body != "Hello world.\n" {
+				log.Panicf("Got body:", body)
+			}
+		}
+		os.Exit(0)
+		return
+	}
+
+	var res = []byte("Hello world.\n")
+	b.StopTimer()
+	ts := httptest.NewServer(HandlerFunc(func(rw ResponseWriter, r *Request) {
+		rw.Header().Set("Content-Type", "text/html; charset=utf-8")
+		rw.Write(res)
+	}))
+	defer ts.Close()
+	b.StartTimer()
+
+	cmd := exec.Command(os.Args[0], "-test.run=XXXX", "-test.bench=BenchmarkServer")
+	cmd.Env = append([]string{
+		fmt.Sprintf("TEST_BENCH_CLIENT_N=%d", b.N),
+		fmt.Sprintf("TEST_BENCH_SERVER_URL=%s", ts.URL),
+	}, os.Environ()...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		b.Errorf("Test failure: %v, with output: %s", err, out)
+	}
 }

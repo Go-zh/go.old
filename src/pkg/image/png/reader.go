@@ -98,13 +98,6 @@ type UnsupportedError string
 
 func (e UnsupportedError) Error() string { return "png: unsupported feature: " + string(e) }
 
-func abs(x int) int {
-	if x < 0 {
-		return -x
-	}
-	return x
-}
-
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -241,20 +234,6 @@ func (d *decoder) parsetRNS(length uint32) error {
 	return d.verifyChecksum()
 }
 
-// The Paeth filter function, as per the PNG specification.
-func paeth(a, b, c uint8) uint8 {
-	p := int(a) + int(b) - int(c)
-	pa := abs(p - int(a))
-	pb := abs(p - int(b))
-	pc := abs(p - int(c))
-	if pa <= pb && pa <= pc {
-		return a
-	} else if pb <= pc {
-		return b
-	}
-	return c
-}
-
 // Read presents one or more IDAT chunks as one continuous stream (minus the
 // intermediate chunk headers and footers). If the PNG data looked like:
 //   ... len0 IDAT xxx crc0 len1 IDAT yy crc1 len2 IEND crc2
@@ -376,8 +355,8 @@ func (d *decoder) decode() (image.Image, error) {
 				cdat[i] += cdat[i-bytesPerPixel]
 			}
 		case ftUp:
-			for i := 0; i < len(cdat); i++ {
-				cdat[i] += pdat[i]
+			for i, p := range pdat {
+				cdat[i] += p
 			}
 		case ftAverage:
 			for i := 0; i < bytesPerPixel; i++ {
@@ -387,12 +366,7 @@ func (d *decoder) decode() (image.Image, error) {
 				cdat[i] += uint8((int(cdat[i-bytesPerPixel]) + int(pdat[i])) / 2)
 			}
 		case ftPaeth:
-			for i := 0; i < bytesPerPixel; i++ {
-				cdat[i] += paeth(0, pdat[i], 0)
-			}
-			for i := bytesPerPixel; i < len(cdat); i++ {
-				cdat[i] += paeth(cdat[i-bytesPerPixel], pdat[i], pdat[i-bytesPerPixel])
-			}
+			filterPaeth(cdat, pdat, bytesPerPixel)
 		default:
 			return nil, FormatError("bad filter type")
 		}

@@ -351,6 +351,36 @@ type Win32finddata struct {
 	AlternateFileName [13]uint16
 }
 
+// This is the actual system call structure.
+// Win32finddata is what we committed to in Go 1.
+type win32finddata1 struct {
+	FileAttributes    uint32
+	CreationTime      Filetime
+	LastAccessTime    Filetime
+	LastWriteTime     Filetime
+	FileSizeHigh      uint32
+	FileSizeLow       uint32
+	Reserved0         uint32
+	Reserved1         uint32
+	FileName          [MAX_PATH]uint16
+	AlternateFileName [14]uint16
+}
+
+func copyFindData(dst *Win32finddata, src *win32finddata1) {
+	dst.FileAttributes = src.FileAttributes
+	dst.CreationTime = src.CreationTime
+	dst.LastAccessTime = src.LastAccessTime
+	dst.LastWriteTime = src.LastWriteTime
+	dst.FileSizeHigh = src.FileSizeHigh
+	dst.FileSizeLow = src.FileSizeLow
+	dst.Reserved0 = src.Reserved0
+	dst.Reserved1 = src.Reserved1
+
+	// The src is 1 element bigger than dst, but it must be NUL.
+	copy(dst.FileName[:], src.FileName[:])
+	copy(dst.AlternateFileName[:], src.AlternateFileName[:])
+}
+
 type ByHandleFileInformation struct {
 	FileAttributes     uint32
 	CreationTime       Filetime

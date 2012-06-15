@@ -129,7 +129,7 @@ type response struct {
 	// maxBytesReader hits its max size. It is checked in
 	// WriteHeader, to make sure we don't consume the the
 	// remaining request body to try to advance to the next HTTP
-	// request. Instead, when this is set, we stop doing
+	// request. Instead, when this is set, we stop reading
 	// subsequent requests on this connection and stop reading
 	// input from it.
 	requestBodyLimitHit bool
@@ -287,7 +287,7 @@ func (w *response) WriteHeader(code int) {
 	// Check for a explicit (and valid) Content-Length header.
 	var hasCL bool
 	var contentLength int64
-	if clenStr := w.header.Get("Content-Length"); clenStr != "" {
+	if clenStr := w.header.get("Content-Length"); clenStr != "" {
 		var err error
 		contentLength, err = strconv.ParseInt(clenStr, 10, 64)
 		if err == nil {
@@ -307,7 +307,7 @@ func (w *response) WriteHeader(code int) {
 		w.closeAfterReply = true
 	}
 
-	if w.header.Get("Connection") == "close" {
+	if w.header.get("Connection") == "close" {
 		w.closeAfterReply = true
 	}
 
@@ -331,7 +331,7 @@ func (w *response) WriteHeader(code int) {
 	if code == StatusNotModified {
 		// Must not have body.
 		for _, header := range []string{"Content-Type", "Content-Length", "Transfer-Encoding"} {
-			if w.header.Get(header) != "" {
+			if w.header.get(header) != "" {
 				// TODO: return an error if WriteHeader gets a return parameter
 				// or set a flag on w to make future Writes() write an error page?
 				// for now just log and drop the header.
@@ -341,7 +341,7 @@ func (w *response) WriteHeader(code int) {
 		}
 	} else {
 		// If no content type, apply sniffing algorithm to body.
-		if w.header.Get("Content-Type") == "" && w.req.Method != "HEAD" {
+		if w.header.get("Content-Type") == "" && w.req.Method != "HEAD" {
 			w.needSniff = true
 		}
 	}
@@ -350,7 +350,7 @@ func (w *response) WriteHeader(code int) {
 		w.Header().Set("Date", time.Now().UTC().Format(TimeFormat))
 	}
 
-	te := w.header.Get("Transfer-Encoding")
+	te := w.header.get("Transfer-Encoding")
 	hasTE := te != ""
 	if hasCL && hasTE && te != "identity" {
 		// TODO: return an error if WriteHeader gets a return parameter
@@ -390,7 +390,7 @@ func (w *response) WriteHeader(code int) {
 		return
 	}
 
-	if w.closeAfterReply && !hasToken(w.header.Get("Connection"), "close") {
+	if w.closeAfterReply && !hasToken(w.header.get("Connection"), "close") {
 		w.header.Set("Connection", "close")
 	}
 
@@ -515,8 +515,8 @@ func (w *response) finishRequest() {
 	// If this was an HTTP/1.0 request with keep-alive and we sent a Content-Length
 	// back, we can make this a keep-alive response ...
 	if w.req.wantsHttp10KeepAlive() {
-		sentLength := w.header.Get("Content-Length") != ""
-		if sentLength && w.header.Get("Connection") == "keep-alive" {
+		sentLength := w.header.get("Content-Length") != ""
+		if sentLength && w.header.get("Connection") == "keep-alive" {
 			w.closeAfterReply = false
 		}
 	}
@@ -555,15 +555,28 @@ func (w *response) Flush() {
 	w.conn.buf.Flush()
 }
 
-// Close the connection.
-func (c *conn) close() {
+func (c *conn) finalFlush() {
 	if c.buf != nil {
 		c.buf.Flush()
 		c.buf = nil
 	}
+}
+
+// Close the connection.
+func (c *conn) close() {
+	c.finalFlush()
 	if c.rwc != nil {
 		c.rwc.Close()
 		c.rwc = nil
+	}
+}
+
+// closeWrite flushes any outstanding data and sends a FIN packet (if client
+// is connected via TCP), signalling that we're done.
+func (c *conn) closeWrite() {
+	c.finalFlush()
+	if tcp, ok := c.rwc.(*net.TCPConn); ok {
+		tcp.CloseWrite()
 	}
 }
 
@@ -628,7 +641,7 @@ func (c *conn) serve() {
 				break
 			}
 			req.Header.Del("Expect")
-		} else if req.Header.Get("Expect") != "" {
+		} else if req.Header.get("Expect") != "" {
 			// TODO(bradfitz): let ServeHTTP handlers handle
 			// requests with non-standard expectation[s]? Seems
 			// theoretical at best, and doesn't fit into the
@@ -663,6 +676,20 @@ func (c *conn) serve() {
 		}
 		w.finishRequest()
 		if w.closeAfterReply {
+			if w.requestBodyLimitHit {
+				// Flush our response and send a FIN packet and wait a bit
+				// before closing the connection, so the client has a chance
+				// to read our response before they possibly get a RST from
+				// our TCP stack from ignoring their unread body.
+				// See http://golang.org/issue/3595
+				c.closeWrite()
+				// Now wait a bit for our machine to send the FIN and the client's
+				// machine's HTTP client to read the request before we close
+				// the connection, which might send a RST (on BSDs, at least).
+				// 250ms is somewhat arbitrary (~latency around half the planet),
+				// but this doesn't need to be a full second probably.
+				time.Sleep(250 * time.Millisecond)
+			}
 			break
 		}
 	}
@@ -840,8 +867,9 @@ func RedirectHandler(url string, code int) Handler {
 // redirecting any request containing . or .. elements to an
 // equivalent .- and ..-free URL.
 type ServeMux struct {
-	mu sync.RWMutex
-	m  map[string]muxEntry
+	mu    sync.RWMutex
+	m     map[string]muxEntry
+	hosts bool // whether any patterns contain hostnames
 }
 
 type muxEntry struct {
@@ -903,12 +931,14 @@ func (mux *ServeMux) match(path string) Handler {
 }
 
 // handler returns the handler to use for the request r.
-func (mux *ServeMux) handler(r *Request) Handler {
+func (mux *ServeMux) handler(r *Request) (h Handler) {
 	mux.mu.RLock()
 	defer mux.mu.RUnlock()
 
 	// Host-specific pattern takes precedence over generic ones
-	h := mux.match(r.Host + r.URL.Path)
+	if mux.hosts {
+		h = mux.match(r.Host + r.URL.Path)
+	}
 	if h == nil {
 		h = mux.match(r.URL.Path)
 	}
@@ -949,6 +979,10 @@ func (mux *ServeMux) Handle(pattern string, handler Handler) {
 	}
 
 	mux.m[pattern] = muxEntry{explicit: true, h: handler}
+
+	if pattern[0] != '/' {
+		mux.hosts = true
+	}
 
 	// Helpful behavior:
 	// If pattern is /tree/, insert an implicit permanent redirect for /tree.

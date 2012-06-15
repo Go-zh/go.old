@@ -161,7 +161,7 @@ int
 Dconv(Fmt *fp)
 {
 	char str[STRINGSZ];
-	char *op;
+	const char *op;
 	Adr *a;
 	int32 v;
 
@@ -191,7 +191,7 @@ Dconv(Fmt *fp)
 
 	case D_SHIFT:
 		v = a->offset;
-		op = "<<>>->@>" + (((v>>5) & 3) << 1);
+		op = &"<<>>->@>"[(((v>>5) & 3) << 1)];
 		if(v & (1<<4))
 			snprint(str, sizeof str, "R%d%c%cR%d", v&15, op[0], op[1], (v>>8)&15);
 		else
@@ -221,6 +221,12 @@ Dconv(Fmt *fp)
 
 	case D_REGREG:
 		snprint(str, sizeof str, "(R%d,R%d)", a->reg, (int)a->offset);
+		if(a->name != D_NONE || a->sym != S)
+			snprint(str, sizeof str, "%N(R%d)(REG)", a, a->reg);
+		break;
+
+	case D_REGREG2:
+		snprint(str, sizeof str, "R%d,R%d", a->reg, (int)a->offset);
 		if(a->name != D_NONE || a->sym != S)
 			snprint(str, sizeof str, "%N(R%d)(REG)", a, a->reg);
 		break;
@@ -438,6 +444,7 @@ cnames[] =
 	[C_RCON]	= "C_RCON",
 	[C_REG]		= "C_REG",
 	[C_REGREG]	= "C_REGREG",
+	[C_REGREG2]	= "C_REGREG2",
 	[C_ROREG]	= "C_ROREG",
 	[C_SAUTO]	= "C_SAUTO",
 	[C_SBRA]	= "C_SBRA",

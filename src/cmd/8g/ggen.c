@@ -106,8 +106,11 @@ ginscall(Node *f, int proc)
 		break;
 
 	case 0:	// normal call
+	case -1:	// normal call but no return
 		p = gins(ACALL, N, f);
 		afunclit(&p->to);
+		if(proc == -1 || noreturn(p))
+			gins(AUNDEF, N, N);
 		break;
 
 	case 1:	// call in new proc (go)
@@ -125,7 +128,7 @@ ginscall(Node *f, int proc)
 		if(proc == 2) {
 			nodreg(&reg, types[TINT64], D_AX);
 			gins(ATESTL, &reg, &reg);
-			patch(gbranch(AJNE, T), retpc);
+			patch(gbranch(AJNE, T, -1), retpc);
 		}
 		break;
 	}
@@ -539,17 +542,17 @@ dodiv(int op, Node *nl, Node *nr, Node *res, Node *ax, Node *dx)
 	if(check) {
 		nodconst(&n4, t, -1);
 		gins(optoas(OCMP, t), &n1, &n4);
-		p1 = gbranch(optoas(ONE, t), T);
+		p1 = gbranch(optoas(ONE, t), T, +1);
 		nodconst(&n4, t, -1LL<<(t->width*8-1));
 		gins(optoas(OCMP, t), ax, &n4);
-		p2 = gbranch(optoas(ONE, t), T);
+		p2 = gbranch(optoas(ONE, t), T, +1);
 		if(op == ODIV)
 			gmove(&n4, res);
 		if(op == OMOD) {
 			nodconst(&n4, t, 0);
 			gmove(&n4, res);
 		}
-		p3 = gbranch(AJMP, T);
+		p3 = gbranch(AJMP, T, 0);
 		patch(p1, pc);
 		patch(p2, pc);
 	}
@@ -630,7 +633,7 @@ cgen_div(int op, Node *nl, Node *nr, Node *res)
  *	res = nl >> nr
  */
 void
-cgen_shift(int op, Node *nl, Node *nr, Node *res)
+cgen_shift(int op, int bounded, Node *nl, Node *nr, Node *res)
 {
 	Node n1, n2, nt, cx, oldcx, hi, lo;
 	int a, w;
@@ -651,7 +654,7 @@ cgen_shift(int op, Node *nl, Node *nr, Node *res)
 		gmove(&n2, &n1);
 		sc = mpgetfix(nr->val.u.xval);
 		if(sc >= nl->type->width*8) {
-			// large shift gets 2 shifts by width
+			// large shift gets 2 shifts by width-1
 			gins(a, ncon(w-1), &n1);
 			gins(a, ncon(w-1), &n1);
 		} else
@@ -689,27 +692,37 @@ cgen_shift(int op, Node *nl, Node *nr, Node *res)
 	}
 
 	// test and fix up large shifts
-	if(nr->type->width > 4) {
-		// delayed reg alloc
-		nodreg(&n1, types[TUINT32], D_CX);
-		regalloc(&n1, types[TUINT32], &n1);		// to hold the shift type in CX
-		split64(&nt, &lo, &hi);
-		gmove(&lo, &n1);
-		gins(optoas(OCMP, types[TUINT32]), &hi, ncon(0));
-		p2 = gbranch(optoas(ONE, types[TUINT32]), T);
-		gins(optoas(OCMP, types[TUINT32]), &n1, ncon(w));
-		p1 = gbranch(optoas(OLT, types[TUINT32]), T);
-		patch(p2, pc);
+	if(bounded) {
+		if(nr->type->width > 4) {
+			// delayed reg alloc
+			nodreg(&n1, types[TUINT32], D_CX);
+			regalloc(&n1, types[TUINT32], &n1);		// to hold the shift type in CX
+			split64(&nt, &lo, &hi);
+			gmove(&lo, &n1);
+		}
 	} else {
-		gins(optoas(OCMP, nr->type), &n1, ncon(w));
-		p1 = gbranch(optoas(OLT, types[TUINT32]), T);
+		if(nr->type->width > 4) {
+			// delayed reg alloc
+			nodreg(&n1, types[TUINT32], D_CX);
+			regalloc(&n1, types[TUINT32], &n1);		// to hold the shift type in CX
+			split64(&nt, &lo, &hi);
+			gmove(&lo, &n1);
+			gins(optoas(OCMP, types[TUINT32]), &hi, ncon(0));
+			p2 = gbranch(optoas(ONE, types[TUINT32]), T, +1);
+			gins(optoas(OCMP, types[TUINT32]), &n1, ncon(w));
+			p1 = gbranch(optoas(OLT, types[TUINT32]), T, +1);
+			patch(p2, pc);
+		} else {
+			gins(optoas(OCMP, nr->type), &n1, ncon(w));
+			p1 = gbranch(optoas(OLT, types[TUINT32]), T, +1);
+		}
+		if(op == ORSH && issigned[nl->type->etype]) {
+			gins(a, ncon(w-1), &n2);
+		} else {
+			gmove(ncon(0), &n2);
+		}
+		patch(p1, pc);
 	}
-	if(op == ORSH && issigned[nl->type->etype]) {
-		gins(a, ncon(w-1), &n2);
-	} else {
-		gmove(ncon(0), &n2);
-	}
-	patch(p1, pc);
 	gins(a, &n1, &n2);
 
 	if(oldcx.op != 0)
@@ -766,402 +779,4 @@ cgen_bmul(int op, Node *nl, Node *nr, Node *res)
 	regfree(&n2w);
 	regfree(&n1b);
 	regfree(&n2b);
-}
-
-static int
-regcmp(const void *va, const void *vb)
-{
-	Node *ra, *rb;
-
-	ra = (Node*)va;
-	rb = (Node*)vb;
-	return ra->local - rb->local;
-}
-
-static	Prog*	throwpc;
-
-// We're only going to bother inlining if we can
-// convert all the arguments to 32 bits safely.  Can we?
-static int
-fix64(NodeList *nn, int n)
-{
-	NodeList *l;
-	Node *r;
-	int i;
-	
-	l = nn;
-	for(i=0; i<n; i++) {
-		r = l->n->right;
-		if(is64(r->type) && !smallintconst(r)) {
-			if(r->op == OCONV)
-				r = r->left;
-			if(is64(r->type))
-				return 0;
-		}
-		l = l->next;
-	}
-	return 1;
-}
-
-void
-getargs(NodeList *nn, Node *reg, int n)
-{
-	NodeList *l;
-	Node *r;
-	int i;
-
-	throwpc = nil;
-
-	l = nn;
-	for(i=0; i<n; i++) {
-		r = l->n->right;
-		if(is64(r->type)) {
-			if(r->op == OCONV)
-				r = r->left;
-			else if(smallintconst(r))
-				r->type = types[TUINT32];
-			if(is64(r->type))
-				fatal("getargs");
-		}
-		if(!smallintconst(r) && !isslice(r->type)) {
-			if(i < 3)	// AX CX DX
-				nodreg(reg+i, r->type, D_AX+i);
-			else
-				reg[i].op = OXXX;
-			regalloc(reg+i, r->type, reg+i);
-			cgen(r, reg+i);
-		} else
-			reg[i] = *r;
-		if(reg[i].local != 0)
-			yyerror("local used");
-		reg[i].local = l->n->left->xoffset;
-		l = l->next;
-	}
-	qsort((void*)reg, n, sizeof(*reg), regcmp);
-	for(i=0; i<n; i++)
-		reg[i].local = 0;
-}
-
-void
-cmpandthrow(Node *nl, Node *nr)
-{
-	vlong cl;
-	Prog *p1;
-	int op;
-	Node *c, n1;
-	Type *t;
-
-	op = OLE;
-	if(smallintconst(nl)) {
-		cl = mpgetfix(nl->val.u.xval);
-		if(cl == 0)
-			return;
-		if(smallintconst(nr))
-			return;
-		// put the constant on the right
-		op = brrev(op);
-		c = nl;
-		nl = nr;
-		nr = c;
-	}
-	
-	// Arguments are known not to be 64-bit,
-	// but they might be smaller than 32 bits.
-	// Check if we need to use a temporary.
-	// At least one of the arguments is 32 bits
-	// (the len or cap) so one temporary suffices.
-	n1.op = OXXX;
-	t = types[TUINT32];
-	if(nl->type->width != t->width) {
-		regalloc(&n1, t, nl);
-		gmove(nl, &n1);
-		nl = &n1;
-	} else if(nr->type->width != t->width) {
-		regalloc(&n1, t, nr);
-		gmove(nr, &n1);
-		nr = &n1;
-	}
-	gins(optoas(OCMP, t), nl, nr);
-	if(n1.op != OXXX)
-		regfree(&n1);
-	if(throwpc == nil) {
-		p1 = gbranch(optoas(op, t), T);
-		throwpc = pc;
-		ginscall(panicslice, 0);
-		patch(p1, pc);
-	} else {
-		op = brcom(op);
-		p1 = gbranch(optoas(op, t), T);
-		patch(p1, throwpc);
-	}
-}
-
-int
-sleasy(Node *n)
-{
-	if(n->op != ONAME)
-		return 0;
-	if(!n->addable)
-		return 0;
-	return 1;
-}
-
-// generate inline code for
-//	slicearray
-//	sliceslice
-//	arraytoslice
-int
-cgen_inline(Node *n, Node *res)
-{
-	Node nodes[5];
-	Node n1, n2, nres, ntemp;
-	vlong v;
-	int i, narg, nochk;
-
-	if(n->op != OCALLFUNC)
-		goto no;
-	if(!n->left->addable)
-		goto no;
-	if(n->left->sym == S)
-		goto no;
-	if(n->left->sym->pkg != runtimepkg)
-		goto no;
-	if(strcmp(n->left->sym->name, "slicearray") == 0)
-		goto slicearray;
-	if(strcmp(n->left->sym->name, "sliceslice") == 0) {
-		narg = 4;
-		goto sliceslice;
-	}
-	if(strcmp(n->left->sym->name, "sliceslice1") == 0) {
-		narg = 3;
-		goto sliceslice;
-	}
-	goto no;
-
-slicearray:
-	if(!sleasy(res))
-		goto no;
-	if(!fix64(n->list, 5))
-		goto no;
-	getargs(n->list, nodes, 5);
-
-	// if(hb[3] > nel[1]) goto throw
-	cmpandthrow(&nodes[3], &nodes[1]);
-
-	// if(lb[2] > hb[3]) goto throw
-	cmpandthrow(&nodes[2], &nodes[3]);
-
-	// len = hb[3] - lb[2] (destroys hb)
-	n2 = *res;
-	n2.xoffset += Array_nel;
-	n2.type = types[TUINT32];
-
-	if(smallintconst(&nodes[3]) && smallintconst(&nodes[2])) {
-		v = mpgetfix(nodes[3].val.u.xval) -
-			mpgetfix(nodes[2].val.u.xval);
-		nodconst(&n1, types[TUINT32], v);
-		gins(optoas(OAS, types[TUINT32]), &n1, &n2);
-	} else {
-		regalloc(&n1, types[TUINT32], &nodes[3]);
-		gmove(&nodes[3], &n1);
-		if(!smallintconst(&nodes[2]) || mpgetfix(nodes[2].val.u.xval) != 0)
-			gins(optoas(OSUB, types[TUINT32]), &nodes[2], &n1);
-		gins(optoas(OAS, types[TUINT32]), &n1, &n2);
-		regfree(&n1);
-	}
-
-	// cap = nel[1] - lb[2] (destroys nel)
-	n2 = *res;
-	n2.xoffset += Array_cap;
-	n2.type = types[TUINT32];
-
-	if(smallintconst(&nodes[1]) && smallintconst(&nodes[2])) {
-		v = mpgetfix(nodes[1].val.u.xval) -
-			mpgetfix(nodes[2].val.u.xval);
-		nodconst(&n1, types[TUINT32], v);
-		gins(optoas(OAS, types[TUINT32]), &n1, &n2);
-	} else {
-		regalloc(&n1, types[TUINT32], &nodes[1]);
-		gmove(&nodes[1], &n1);
-		if(!smallintconst(&nodes[2]) || mpgetfix(nodes[2].val.u.xval) != 0)
-			gins(optoas(OSUB, types[TUINT32]), &nodes[2], &n1);
-		gins(optoas(OAS, types[TUINT32]), &n1, &n2);
-		regfree(&n1);
-	}
-
-	// if slice could be too big, dereference to
-	// catch nil array pointer.
-	if(nodes[0].op == OREGISTER && nodes[0].type->type->width >= unmappedzero) {
-		n2 = nodes[0];
-		n2.xoffset = 0;
-		n2.op = OINDREG;
-		n2.type = types[TUINT8];
-		gins(ATESTB, nodintconst(0), &n2);
-	}
-
-	// ary = old[0] + (lb[2] * width[4]) (destroys old)
-	n2 = *res;
-	n2.xoffset += Array_array;
-	n2.type = types[tptr];
-
-	if(smallintconst(&nodes[2]) && smallintconst(&nodes[4])) {
-		v = mpgetfix(nodes[2].val.u.xval) *
-			mpgetfix(nodes[4].val.u.xval);
-		if(v != 0) {
-			nodconst(&n1, types[tptr], v);
-			gins(optoas(OADD, types[tptr]), &n1, &nodes[0]);
-		}
-	} else {
-		regalloc(&n1, types[tptr], &nodes[2]);
-		gmove(&nodes[2], &n1);
-		if(!smallintconst(&nodes[4]) || mpgetfix(nodes[4].val.u.xval) != 1)
-			gins(optoas(OMUL, types[tptr]), &nodes[4], &n1);
-		gins(optoas(OADD, types[tptr]), &n1, &nodes[0]);
-		regfree(&n1);
-	}
-	gins(optoas(OAS, types[tptr]), &nodes[0], &n2);
-
-	for(i=0; i<5; i++) {
-		if(nodes[i].op == OREGISTER)
-			regfree(&nodes[i]);
-	}
-	return 1;
-
-sliceslice:
-	if(!fix64(n->list, narg))
-		goto no;
-	nochk = n->etype;  // skip bounds checking
-	ntemp.op = OXXX;
-	if(!sleasy(n->list->n->right)) {
-		Node *n0;
-		
-		n0 = n->list->n->right;
-		tempname(&ntemp, res->type);
-		cgen(n0, &ntemp);
-		n->list->n->right = &ntemp;
-		getargs(n->list, nodes, narg);
-		n->list->n->right = n0;
-	} else
-		getargs(n->list, nodes, narg);
-
-	nres = *res;		// result
-	if(!sleasy(res)) {
-		if(ntemp.op == OXXX)
-			tempname(&ntemp, res->type);
-		nres = ntemp;
-	}
-
-	if(narg == 3) {	// old[lb:]
-		// move width to where it would be for old[lb:hb]
-		nodes[3] = nodes[2];
-		nodes[2].op = OXXX;
-		
-		// if(lb[1] > old.nel[0]) goto throw;
-		n2 = nodes[0];
-		n2.xoffset += Array_nel;
-		n2.type = types[TUINT32];
-		if(!nochk)
-			cmpandthrow(&nodes[1], &n2);
-
-		// ret.nel = old.nel[0]-lb[1];
-		n2 = nodes[0];
-		n2.xoffset += Array_nel;
-		n2.type = types[TUINT32];
-	
-		regalloc(&n1, types[TUINT32], N);
-		gins(optoas(OAS, types[TUINT32]), &n2, &n1);
-		if(!smallintconst(&nodes[1]) || mpgetfix(nodes[1].val.u.xval) != 0)
-			gins(optoas(OSUB, types[TUINT32]), &nodes[1], &n1);
-	
-		n2 = nres;
-		n2.xoffset += Array_nel;
-		n2.type = types[TUINT32];
-		gins(optoas(OAS, types[TUINT32]), &n1, &n2);
-		regfree(&n1);
-	} else {	// old[lb:hb]
-		n2 = nodes[0];
-		n2.xoffset += Array_cap;
-		n2.type = types[TUINT32];
-		if (!nochk) {
-			// if(hb[2] > old.cap[0]) goto throw;
-			cmpandthrow(&nodes[2], &n2);
-			// if(lb[1] > hb[2]) goto throw;
-			cmpandthrow(&nodes[1], &nodes[2]);
-		}
-
-		// ret.len = hb[2]-lb[1]; (destroys hb[2])
-		n2 = nres;
-		n2.xoffset += Array_nel;
-		n2.type = types[TUINT32];
-
-		if(smallintconst(&nodes[2]) && smallintconst(&nodes[1])) {
-			v = mpgetfix(nodes[2].val.u.xval) -
-				mpgetfix(nodes[1].val.u.xval);
-			nodconst(&n1, types[TUINT32], v);
-			gins(optoas(OAS, types[TUINT32]), &n1, &n2);
-		} else {
-			regalloc(&n1, types[TUINT32], &nodes[2]);
-			gmove(&nodes[2], &n1);
-			if(!smallintconst(&nodes[1]) || mpgetfix(nodes[1].val.u.xval) != 0)
-				gins(optoas(OSUB, types[TUINT32]), &nodes[1], &n1);
-			gins(optoas(OAS, types[TUINT32]), &n1, &n2);
-			regfree(&n1);
-		}
-	}
-
-	// ret.cap = old.cap[0]-lb[1]; (uses hb[2])
-	n2 = nodes[0];
-	n2.xoffset += Array_cap;
-	n2.type = types[TUINT32];
-
-	regalloc(&n1, types[TUINT32], &nodes[2]);
-	gins(optoas(OAS, types[TUINT32]), &n2, &n1);
-	if(!smallintconst(&nodes[1]) || mpgetfix(nodes[1].val.u.xval) != 0)
-		gins(optoas(OSUB, types[TUINT32]), &nodes[1], &n1);
-
-	n2 = nres;
-	n2.xoffset += Array_cap;
-	n2.type = types[TUINT32];
-	gins(optoas(OAS, types[TUINT32]), &n1, &n2);
-	regfree(&n1);
-
-	// ret.array = old.array[0]+lb[1]*width[3]; (uses lb[1])
-	n2 = nodes[0];
-	n2.xoffset += Array_array;
-	n2.type = types[tptr];
-
-	regalloc(&n1, types[tptr], &nodes[1]);
-	if(smallintconst(&nodes[1]) && smallintconst(&nodes[3])) {
-		gins(optoas(OAS, types[tptr]), &n2, &n1);
-		v = mpgetfix(nodes[1].val.u.xval) *
-			mpgetfix(nodes[3].val.u.xval);
-		if(v != 0) {
-			nodconst(&n2, types[tptr], v);
-			gins(optoas(OADD, types[tptr]), &n2, &n1);
-		}
-	} else {
-		gmove(&nodes[1], &n1);
-		if(!smallintconst(&nodes[3]) || mpgetfix(nodes[3].val.u.xval) != 1)
-			gins(optoas(OMUL, types[tptr]), &nodes[3], &n1);
-		gins(optoas(OADD, types[tptr]), &n2, &n1);
-	}
-
-	n2 = nres;
-	n2.xoffset += Array_array;
-	n2.type = types[tptr];
-	gins(optoas(OAS, types[tptr]), &n1, &n2);
-	regfree(&n1);
-
-	for(i=0; i<4; i++) {
-		if(nodes[i].op == OREGISTER)
-			regfree(&nodes[i]);
-	}
-
-	if(!sleasy(res)) {
-		cgen(&nres, res);
-	}
-	return 1;
-
-no:
-	return 0;
 }

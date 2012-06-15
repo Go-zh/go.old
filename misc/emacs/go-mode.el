@@ -33,8 +33,8 @@
     ;; Operators (punctuation)
     (modify-syntax-entry ?+  "." st)
     (modify-syntax-entry ?-  "." st)
-    (modify-syntax-entry ?*  ". 23" st)   ; also part of comments
-    (modify-syntax-entry ?/  ". 124b" st) ; ditto
+    (modify-syntax-entry ?*  ". 23" st)                                    ; also part of comments
+    (modify-syntax-entry ?/ (if (featurep 'xemacs) ". 1456" ". 124b") st)  ; ditto
     (modify-syntax-entry ?%  "." st)
     (modify-syntax-entry ?&  "." st)
     (modify-syntax-entry ?|  "." st)
@@ -182,6 +182,10 @@ to and including character (1- go-mode-mark-comment-end)).")
 marked from the beginning up to this point.")
 (make-variable-buffer-local 'go-mode-mark-nesting-end)
 
+(defun go-mode-mark-clear-cs (b e l)
+  "An after-change-function that removes the go-mode-cs text property"
+  (remove-text-properties b e '(go-mode-cs)))
+
 (defun go-mode-mark-clear-cache (b e)
   "A before-change-function that clears the comment/string and
 nesting caches from the modified point on."
@@ -246,8 +250,8 @@ comment or string."
 
   (unless pos
     (setq pos (point)))
-  (when (> pos go-mode-mark-cs-end)
-    (go-mode-mark-cs pos))
+  (when (>= pos go-mode-mark-cs-end)
+    (go-mode-mark-cs (1+ pos)))
   (get-text-property pos 'go-mode-cs))
 
 (defun go-mode-mark-cs (end)
@@ -438,7 +442,7 @@ if no further tokens of the type exist."
 		  (when (search-forward "\n" (cdr cs) t)
 		    (put-text-property
 		     (car cs) (cdr cs) 'font-lock-multline t))
-		  (set-match-data (list (car cs) (cdr cs) (current-buffer)))
+		  (set-match-data (list (car cs) (copy-marker (cdr cs))))
 		  (goto-char (cdr cs))
 		  (setq result t))
 	      ;; Wrong type.  Look for next comment/string after this one.
@@ -550,7 +554,7 @@ token on the line."
 (defun go-mode-whitespace-p (char)
   "Is newline, or char whitespace in the syntax table for go."
   (or (eq char ?\n)
-      (eq 32 (char-syntax char))))
+      (= (char-syntax char) ?\ )))
 
 (defun go-mode-backward-skip-comments ()
   "Skip backward over comments and whitespace."
@@ -593,7 +597,7 @@ indented one level."
       (cond
        ((and cs (save-excursion
                   (goto-char (car cs))
-                  (looking-at "\\s\"")))
+                  (looking-at "`")))
         ;; Inside a multi-line string.  Don't mess with indentation.
         nil)
        (cs
@@ -702,13 +706,18 @@ functions, and some types.  It also provides indentation that is
   ;; Remove stale text properties
   (save-restriction
     (widen)
-    (remove-text-properties 1 (point-max)
-                            '(go-mode-cs nil go-mode-nesting nil)))
+    (let ((modified (buffer-modified-p)))
+      (remove-text-properties 1 (point-max)
+                              '(go-mode-cs nil go-mode-nesting nil))
+      ;; remove-text-properties marks the buffer modified. undo that if it
+      ;; wasn't originally marked modified.
+      (set-buffer-modified-p modified)))
 
   ;; Reset the syntax mark caches
   (setq go-mode-mark-cs-end      1
         go-mode-mark-nesting-end 1)
   (add-hook 'before-change-functions #'go-mode-mark-clear-cache nil t)
+  (add-hook 'after-change-functions #'go-mode-mark-clear-cs nil t)
 
   ;; Indentation
   (set (make-local-variable 'indent-line-function)
@@ -720,7 +729,20 @@ functions, and some types.  It also provides indentation that is
   (set (make-local-variable 'comment-end)   "")
 
   ;; Go style
-  (setq indent-tabs-mode t))
+  (setq indent-tabs-mode t)
+
+  ;; Handle unit test failure output in compilation-mode
+  ;;
+  ;; Note the final t argument to add-to-list for append, ie put these at the
+  ;; *ends* of compilation-error-regexp-alist[-alist]. We want go-test to be
+  ;; handled first, otherwise other elements will match that don't work, and
+  ;; those alists are traversed in *reverse* order:
+  ;; http://lists.gnu.org/archive/html/bug-gnu-emacs/2001-12/msg00674.html
+  (when (and (boundp 'compilation-error-regexp-alist)
+           (boundp 'compilation-error-regexp-alist-alist))
+      (add-to-list 'compilation-error-regexp-alist 'go-test t)
+      (add-to-list 'compilation-error-regexp-alist-alist
+                   '(go-test . ("^\t+\\([^()\t\n]+\\):\\([0-9]+\\):? .*$" 1 2)) t)))
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist (cons "\\.go$" #'go-mode))
@@ -741,39 +763,79 @@ Replace the current buffer on success; display errors on failure."
 
   (interactive)
   (let ((currconf (current-window-configuration)))
-    (let ((srcbuf (current-buffer)))
-      (with-temp-buffer
-        (let ((outbuf (current-buffer))
-              (errbuf (get-buffer-create "*Gofmt Errors*"))
+    (let ((srcbuf (current-buffer))
+          (filename buffer-file-name)
+          (patchbuf (get-buffer-create "*Gofmt patch*")))
+      (with-current-buffer patchbuf
+        (let ((errbuf (get-buffer-create "*Gofmt Errors*"))
               (coding-system-for-read 'utf-8)    ;; use utf-8 with subprocesses
               (coding-system-for-write 'utf-8))
-          (with-current-buffer errbuf (erase-buffer))
+          (with-current-buffer errbuf
+            (toggle-read-only 0)
+            (erase-buffer))
           (with-current-buffer srcbuf
             (save-restriction
               (let (deactivate-mark)
                 (widen)
-                (if (= 0 (shell-command-on-region (point-min) (point-max) "gofmt"
-                                                  outbuf nil errbuf))
-                    ;; restore window config
-                    ;; gofmt succeeded: replace the current buffer with outbuf,
-                    ;; restore the mark and point, and discard errbuf.
-                    (let ((old-mark (mark t))
-                          (old-point (point))
-                          (old-start (window-start)))
-                      (erase-buffer)
-                      (insert-buffer-substring outbuf)
-                      (set-window-configuration currconf)
-                      (set-window-start (selected-window) (min old-start (point-max)))
-                      (goto-char (min old-point (point-max)))
-                      (if old-mark (push-mark (min old-mark (point-max)) t))
-                      (kill-buffer errbuf))
+                ; If this is a new file, diff-mode can't apply a
+                ; patch to a non-exisiting file, so replace the buffer
+                ; completely with the output of 'gofmt'.
+                ; If the file exists, patch it to keep the 'undo' list happy.
+                (let* ((newfile (not (file-exists-p filename)))
+                      (flag (if newfile "" " -d")))
+                  (if (= 0 (shell-command-on-region (point-min) (point-max)
+                                                    (concat "gofmt" flag)
+                                                    patchbuf nil errbuf))
+                      ; gofmt succeeded: replace buffer or apply patch hunks.
+                      (let ((old-point (point))
+                            (old-mark (mark t)))
+                        (kill-buffer errbuf)
+                        (if newfile
+                            ; New file, replace it (diff-mode won't work)
+                            (gofmt-replace-buffer srcbuf patchbuf)
+                          ; Existing file, patch it
+                          (gofmt-apply-patch filename srcbuf patchbuf))
+                        (goto-char (min old-point (point-max)))
+                        ;; Restore the mark and point
+                        (if old-mark (push-mark (min old-mark (point-max)) t))
+                        (set-window-configuration currconf))
 
                   ;; gofmt failed: display the errors
-                  (display-buffer errbuf)))))
+                  (gofmt-process-errors filename errbuf))))))
 
           ;; Collapse any window opened on outbuf if shell-command-on-region
           ;; displayed it.
-          (delete-windows-on outbuf))))))
+          (delete-windows-on patchbuf)))
+      (kill-buffer patchbuf))))
+
+(defun gofmt-replace-buffer (srcbuf patchbuf)
+  (with-current-buffer srcbuf
+    (erase-buffer)
+    (insert-buffer-substring patchbuf)))
+
+(defconst gofmt-stdin-tag "<standard input>")
+
+(defun gofmt-apply-patch (filename srcbuf patchbuf)
+  (require 'diff-mode)
+  ;; apply all the patch hunks
+  (with-current-buffer patchbuf
+    (replace-regexp "^--- /tmp/gofmt[0-9]*" (concat "--- " filename)
+                      nil (point-min) (point-max))
+    (condition-case nil
+        (while t
+          (diff-hunk-next)
+          (diff-apply-hunk))
+      ;; When there's no more hunks, diff-hunk-next signals an error, ignore it
+      (error nil))))
+
+(defun gofmt-process-errors (filename errbuf)
+  ;; Convert the gofmt stderr to something understood by the compilation mode.
+  (with-current-buffer errbuf
+    (beginning-of-buffer)
+    (insert "gofmt errors:\n")
+    (replace-string gofmt-stdin-tag (file-name-nondirectory filename) nil (point-min) (point-max))
+    (display-buffer errbuf)
+    (compilation-mode)))
 
 ;;;###autoload
 (defun gofmt-before-save ()
