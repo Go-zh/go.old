@@ -1,6 +1,6 @@
 <!--{
 	"Title": "Go编程语言规范",
-	"Subtitle": "版本：2012年5月24日 || 译者：Oling Cat <olingcat@gmail.com>",
+	"Subtitle": "版本：2012年6月4日 || 译者：Oling Cat <olingcat@gmail.com>",
 	"Path": "/ref/spec"
 }-->
 
@@ -1352,6 +1352,8 @@ consists of all methods with receiver type <code>T</code>.
 The method set of the corresponding pointer type <code>*T</code>
 is the set of all methods with receiver <code>*T</code> or <code>T</code>
 (that is, it also contains the method set of <code>T</code>).
+Further rules apply to structs containing anonymous fields, as described
+in the section on <a href="#Struct_types">struct types</a>.
 Any other type has an empty method set.
 In a method set, each method must have a
 <a href="#Uniqueness_of_identifiers">unique</a> <a href="#MethodName">method name</a>.
@@ -1362,7 +1364,8 @@ In a method set, each method must have a
 类型可拥有一个与其相关联的 <i>方法集</i>（§<a href="#接口类型">接口类型</a>，§<a href="#方法声明">方法声明</a>）。
 <a href="#接口类型">接口类型</a>的方法集为其接口。其它任意类型 <code>T</code> 的方法集由所有带接收器类型
 <code>T</code> 的方法组成。与指针类型 <code>*T</code> 相应的方法集为所有带接收器 <code>*T</code> 或 <code>T</code>
-+的方法的集（就是说，它也包含 <code>T</code> 的方法集）。任何其它类型都有一个空方法集。
+的方法的集（就是说，它也包含 <code>T</code> 的方法集）。根据<a href="#结构类型">结构类型</a>一节的描述，
+更进一步的规则也适用于包含匿名字段的结构。任何其它类型都有一个空方法集。
 在方法集中，每个方法都必须有<a href="#标识符的唯一性">唯一</a>的<a href="#方法名">方法名</a>。
 </p>
 
@@ -1904,47 +1907,68 @@ struct {
 
 <div class="english">
 <p>
-Fields and methods (§<a href="#Method_declarations">Method declarations</a>) of an anonymous field are
-promoted to be ordinary fields and methods of the struct (§<a href="#Selectors">Selectors</a>).
-The following rules apply for a struct type <code>S</code> and
-a type named <code>T</code>:
+A field or <a href="#Method_declarations">method</a> <code>f</code> of an
+anonymous field in a struct <code>x</code> is called <i>promoted</i> if
+<code>x.f</code> is a legal <a href="#Selectors">selector</a> that denotes
+that field or method <code>f</code>.
+</p>
+</div>
+
+<p>
+在结构 <code>x</code> 中，若 <code>x.f</code> 为表示字段或<a href="#方法声明">方法</a>
+<code>f</code> 的合法<a href="#选择器">选择器</a>，则匿名字段的字段或方法 <code>f</code>
+即为<i>已提升</i>的。
+</p>
+
+<div class="english">
+<p>
+Promoted fields act like ordinary fields
+of a struct except that they cannot be used as field names in
+<a href="#Composite_literals">composite literals</a> of the struct.
+</p>
+</div>
+
+<p>
+已提升字段除了不能用作该结构<a href="#复合字面">复合字面</a>中的字段名外，
+其行为如同结构的一般字段。
+</p>
+
+<div class="english">
+<p>
+Given a struct type <code>S</code> and a type named <code>T</code>,
+promoted methods are included in the method set of the struct as follows:
 </p>
 <ul>
-	<li>If <code>S</code> contains an anonymous field <code>T</code>, the
-	    <a href="#Method_sets">method set</a> of <code>S</code> includes the
-	    method set of <code>T</code>.
+	<li>
+	If <code>S</code> contains an anonymous field <code>T</code>,
+	the <a href="#Method_sets">method sets</a> of <code>S</code>
+	and <code>*S</code> both include promoted methods with receiver
+	<code>T</code>. The method set of <code>*S</code> also
+	includes promoted methods with receiver <code>*T</code>.
 	</li>
 
-	<li>If <code>S</code> contains an anonymous field <code>*T</code>, the
-	    method set of <code>S</code> includes the method set of <code>*T</code>
-	    (which itself includes the method set of <code>T</code>).
-	</li>
-
-	<li>If <code>S</code> contains an anonymous field <code>T</code> or
-	    <code>*T</code>, the method set of <code>*S</code> includes the
-	    method set of <code>*T</code> (which itself includes the method
-	    set of <code>T</code>).
+	<li>
+	If <code>S</code> contains an anonymous field <code>*T</code>,
+	the method sets of <code>S</code> and <code>*S</code> both
+	include promoted methods with receiver <code>T</code> or
+	<code>*T</code>.
 	</li>
 </ul>
 </div>
 
 <p>
-匿名字段的字段和方法（§<a href="#方法声明">方法声明</a>）
-可升级为结构的普通字段和方法（§<a href="#选择器">选择器</a>）。
-以下规则适用于名为 <code>S</code> 的结构类型和名为 <code>T</code> 的类型：
+给定结构类型 <code>S</code> 与名为 <code>T</code> 的类型，包含在结构方法集中的已提升方法如下：
 </p>
 <ul>
-	<li>若 <code>S</code> 包含一个匿名字段 <code>T</code>，
-		则<a href="#方法集">方法集</a> <code>S</code> 包含 <code>T</code> 的方法集。
+	<li>
+	若 <code>S</code> 包含一个匿名字段 <code>T</code>，则 <code>S</code> 与 <code>*S</code>
+	的<a href="#方法集">方法集</a>均包含带接收器 <code>T</code> 的已提升方法。<code>*S</code>
+	的方法集也包含带接收器 <code>*T</code> 的已提升方法。
 	</li>
 
-	<li>若 <code>S</code> 包含一个匿名字段 <code>*T</code>，
-		则方法集 <code>S</code> 包含 <code>*T</code> 的方法集
-	    （它本身就包含 <code>T</code> 的方法集）。
-	</li>
-
-	<li>若 <code>S</code> 包含一个匿名字段 <code>T</code> 或 <code>*T</code>，
-		则方法集 <code>*S</code> 包含 <code>*T</code> 的方法集(它本身就包含 <code>T</code> 的方法集）。
+	<li>
+	若 <code>S</code> 包含匿名字段 <code>*T</code>，则 <code>S</code> 与 <code>*S</code>
+	的方法集均包含带接收器 <code>T</code> 或 <code>*T</code> 的已提升方法。
 	</li>
 </ul>
 
@@ -3561,7 +3585,7 @@ VarSpec     = IdentifierList ( Type [ "=" ExpressionList ] | "=" ExpressionList 
 
 <pre class="ebnf">
 变量声明     = "var" ( 变量实现 | "(" { 变量实现 ";" } ")" ) .
-变量实现     = 标识符列表 ( 类型 [ "=" 表达式类表 ] | "=" 表达式列表 ) .
+变量实现     = 标识符列表 ( 类型 [ "=" 表达式列表 ] | "=" 表达式列表 ) .
 </pre>
 
 <div class="english">
