@@ -36,7 +36,7 @@ import (
 //
 // Boolean values encode as JSON booleans.
 //
-// Floating point and integer values encode as JSON numbers.
+// Floating point, integer, and Number values encode as JSON numbers.
 //
 // String values encode as JSON strings, with each invalid UTF-8 sequence
 // replaced by the encoding of the Unicode replacement character U+FFFD.
@@ -55,7 +55,7 @@ import (
 // nil pointer or interface value, and any array, slice, map, or string of
 // length zero. The object's default key string is the struct field name
 // but can be specified in the struct field's tag value. The "json" key in
-// struct field's tag value is the key name, followed by an optional comma
+// the struct field's tag value is the key name, followed by an optional comma
 // and options. Examples:
 //
 //   // Field is ignored by this package.
@@ -312,6 +312,14 @@ func (e *encodeState) reflectValueQuoted(v reflect.Value, quoted bool) {
 			e.Write(b)
 		}
 	case reflect.String:
+		if v.Type() == numberType {
+			numStr := v.String()
+			if numStr == "" {
+				numStr = "0" // Number's zero-val
+			}
+			e.WriteString(numStr)
+			break
+		}
 		if quoted {
 			sb, err := Marshal(v.String())
 			if err != nil {

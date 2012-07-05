@@ -1270,7 +1270,7 @@ func BenchmarkClientServer(b *testing.B) {
 //
 // For use like:
 //   $ go test -c
-//   $ ./http.test -test.run=XX -test.bench=Benchmarktime=15 -test.cpuprofile=http.prof
+//   $ ./http.test -test.run=XX -test.bench=BenchmarkServer -test.benchtime=15 -test.cpuprofile=http.prof
 //   $ go tool pprof http.test http.prof
 //   (pprof) web
 func BenchmarkServer(b *testing.B) {
@@ -1283,15 +1283,15 @@ func BenchmarkServer(b *testing.B) {
 		for i := 0; i < n; i++ {
 			res, err := Get(url)
 			if err != nil {
-				log.Panicf("Get:", err)
+				log.Panicf("Get: %v", err)
 			}
 			all, err := ioutil.ReadAll(res.Body)
 			if err != nil {
-				log.Panicf("ReadAll:", err)
+				log.Panicf("ReadAll: %v", err)
 			}
 			body := string(all)
 			if body != "Hello world.\n" {
-				log.Panicf("Got body:", body)
+				log.Panicf("Got body: %q", body)
 			}
 		}
 		os.Exit(0)

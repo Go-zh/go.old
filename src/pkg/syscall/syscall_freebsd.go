@@ -89,11 +89,6 @@ func Pipe(p []int) (err error) {
 	return
 }
 
-// TODO
-func Sendfile(outfd int, infd int, offset *int64, count int) (written int, err error) {
-	return -1, ENOSYS
-}
-
 func GetsockoptIPMreqn(fd, level, opt int) (*IPMreqn, error) {
 	var value IPMreqn
 	vallen := _Socklen(SizeofIPMreqn)

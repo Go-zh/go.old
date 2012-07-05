@@ -1,12 +1,12 @@
 <!--{
 	"Title": "Go编程语言规范",
-	"Subtitle": "版本：2012年6月4日 || 译者：Oling Cat <olingcat@gmail.com>",
+	"Subtitle": "版本：2012年6月27日 || 译者：Oling Cat <olingcat@gmail.com>",
 	"Path": "/ref/spec"
 }-->
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of June 4, 2012",
+	"Subtitle": "Version of June 27, 2012",
 	"Path": "/ref/spec"
 }-->
 
@@ -21,7 +21,6 @@ TODO
 [ ] need explicit language about the result type of operations
 [ ] should probably write something about evaluation order of statements even
 	though obvious
-[ ] review language on implicit dereferencing
 -->
 
 <!--
@@ -35,7 +34,6 @@ TODO
 [ ] 关于操作符的返回类型需要详尽的语言描述
 [ ] 或许应当写一些关于语句求值顺序的东西，
     尽管它很明显
-[ ] 复审语言的隐式间接引用
 -->
 
 
@@ -1238,29 +1236,29 @@ expressions</a>.
 <div class="english">
 <p>
 A type determines the set of values and operations specific to values of that
-type.  A type may be specified by a (possibly qualified) <i>type name</i>
-(§<a href="#Qualified_identifiers">Qualified identifier</a>, §<a href="#Type_declarations">Type declarations</a>) or a <i>type literal</i>,
+type.  A type may be specified by a
+(possibly <a href="#Qualified_identifiers">qualified</a>) <i>type name</i>
+(§<a href="#Type_declarations">Type declarations</a>) or a <i>type literal</i>,
 which composes a new type from previously declared types.
 </p>
 
 <pre class="ebnf">
 Type      = TypeName | TypeLit | "(" Type ")" .
-TypeName  = QualifiedIdent .
+TypeName  = identifier | QualifiedIdent .
 TypeLit   = ArrayType | StructType | PointerType | FunctionType | InterfaceType |
 	    SliceType | MapType | ChannelType .
 </pre>
 </div>
 
 <p>
-类型决定值的集合与该类型值的具体操作。类型可（有限制地）通过<i>类型名</i>
-类型决定值的集合与该类型值特定的操作。类型可（有限制地）通过<i>类型名</i>
-（§<a href="#限定标识符">限定标识符</a>， §<a href="#类型声明">类型声明</a>）
-或<i>类型字面</i>指定，它将根据之前声明的类型组成新的类型。
+类型决定值的集合与该类型值特定的操作。类型可通过（或许为<a href="#限定标识符">限定的</a>）
+<i>类型名</i>（§<a href="#类型声明">类型声明</a>）或<i>类型字面</i>指定，
+它将根据之前声明的类型组成新的类型。
 </p>
 
 <pre class="ebnf">
 类型     = 类型名 | 类型字面 | "(" 类型 ")" .
-类型名   = 限定标识符 .
+类型名   = 标识符 | 限定标识符 .
 类型字面 = 数组类型 | 结构类型 | 指针类型 | 函数类型 | 接口类型 |
            切片类型 | 映射类型 | 信道类型 .
 </pre>
@@ -3991,24 +3989,35 @@ operators and functions to operands.
 
 <div class="english">
 <p>
-Operands denote the elementary values in an expression.
+Operands denote the elementary values in an expression. An operand may be a
+literal, a (possibly <a href="#Qualified_identifiers">qualified</a>) identifier
+denoting a
+<a href="#Constant_declarations">constant</a>,
+<a href="#Variable_declarations">variable</a>, or
+<a href="#Function_declarations">function</a>,
+a <a href="#Method_expressions">method expression</a> yielding a function,
+or a parenthesized expression.
 </p>
 
 <pre class="ebnf">
-Operand    = Literal | QualifiedIdent | MethodExpr | "(" Expression ")" .
+Operand    = Literal | OperandName| MethodExpr | "(" Expression ")" .
 Literal    = BasicLit | CompositeLit | FunctionLit .
 BasicLit   = int_lit | float_lit | imaginary_lit | char_lit | string_lit .
+OperandName = identifier | QualifiedIdent.
 </pre>
 </div>
 
 <p>
-操作数表示表达式中的基本值。
+操作数表示表达式中的基本值。操作数可为字面，（可能为<a href="#限定标识符">限定的</a>）
+标识符可表示一个<a href="#常量声明">常量</a>、<a href="#变量声明">变量</a>或<a href="#函数声明">函数</a>，
+<a href="#方法表达式">方法表达式</a>可产生函数或者括号表达式。
 </p>
 
 <pre class="ebnf">
-操作数   = 字面 | 限定标识符 | 方法表达式 | "(" 表达式 ")" .
+操作数   = 字面 | 操作数名 | 方法表达式 | "(" 表达式 ")" .
 字面     = 基本字面 | 复合字面 | 函数字面 .
 基本字面 = 整数字面 | 浮点数字面 | 虚数字面 | 字符字面 | 字符串字面 .
+操作数名 = 标识符 | 限定标识符.
 </pre>
 
 
@@ -4020,21 +4029,23 @@ BasicLit   = int_lit | float_lit | imaginary_lit | char_lit | string_lit .
 
 <div class="english">
 <p>
-A qualified identifier is a non-<a href="#Blank_identifier">blank</a> identifier
-qualified by a package name prefix.
+A qualified identifier is an identifier qualified with a package name prefix.
+Both the package name and the identifier must not be
+<a href="#Blank_identifier">blank</a>.
 </p>
 
 <pre class="ebnf">
-QualifiedIdent = [ PackageName "." ] identifier .
+QualifiedIdent = PackageName "." identifier .
 </pre>
 </div>
 
 <p>
-限定标识符为通过包名前缀限定的非<a href="#空白标识符">空白</a>标志符
+
+限定标识符为使用包名前缀限定的标志符。包名与标识符均不能为<a href="#空白标识符">空白的</a>。
 </p>
 
 <pre class="ebnf">
-限定标识符 = [ 包名 "." ] 标识符 .
+限定标识符 = 包名 "." 标识符 .
 </pre>
 
 <div class="english">
@@ -4533,7 +4544,6 @@ Point{1, 2}
 m["foo"]
 s[i : j + 1]
 obj.color
-math.Sin
 f.p[i].x()
 </pre>
 
@@ -4546,12 +4556,15 @@ f.p[i].x()
 
 <div class="english">
 <p>
-A primary expression of the form
+For a <a href="#Primary_expressions">primary expression</a> <code>x</code>
+that is not a <a href="#Package_clause">package name</a>, the
+<i>selector expression</i>
 </p>
 </div>
 
 <p>
-形式为
+对于不为<a href="#包子句">包名</a>的<a href="#主表达式">主表达式</a> <code>x</code>，
+<i>选择其表达式</i>
 </p>
 
 <pre>
@@ -4560,18 +4573,21 @@ x.f
 
 <div class="english">
 <p>
-denotes the field or method <code>f</code> of the value denoted by <code>x</code>
-(or sometimes <code>*x</code>; see below). The identifier <code>f</code>
-is called the (field or method)
-<i>selector</i>; it must not be the <a href="#Blank_identifier">blank identifier</a>.
-The type of the expression is the type of <code>f</code>.
+denotes the field or method <code>f</code> of the value <code>x</code>
+(or sometimes <code>*x</code>; see below).
+The identifier <code>f</code> is called the (field or method) <i>selector</i>;
+it must not be the <a href="#Blank_identifier">blank identifier</a>.
+The type of the selector expression is the type of <code>f</code>.
+If <code>x</code> is a package name, see the section on
+<a href="#Qualified_identifiers">qualified identifiers</a>.
 </p>
 </div>
 
 <p>
-的主表达式表示 <code>x</code>（有时为 <code>*x</code>，见下）所表示的值的字段或方法 <code>f</code>。
+表示值 <code>x</code>（有时为 <code>*x</code>，见下）的字段或方法 <code>f</code>。
 标识符 <code>f</code> 称为（字段或方法）<i>选择器</i>，它不能为<a href="#空白标识符">空白标识符</a>。
-该表达式的类型即为 <code>f</code> 的类型。
+该选择器表达式的类型即为 <code>f</code> 的类型。若 <code>x</code> 为包名，
+见<a href="#限定标识符">限定标识符</a>的相关章节。
 </p>
 
 <div class="english">
@@ -4615,15 +4631,21 @@ If there is not exactly <a href="#Uniqueness_of_identifiers">one <code>f</code><
 with shallowest depth, the selector expression is illegal.
 </li>
 <li>
-For a variable <code>x</code> of type <code>I</code>
-where <code>I</code> is an interface type,
-<code>x.f</code> denotes the actual method with name <code>f</code> of the value assigned
-to <code>x</code> if there is such a method.
-If no value or <code>nil</code> was assigned to <code>x</code>, <code>x.f</code> is illegal.
+For a variable <code>x</code> of type <code>I</code> where <code>I</code>
+is an interface type, <code>x.f</code> denotes the actual method with name
+<code>f</code> of the value assigned to <code>x</code>.
+If there is no method with name <code>f</code> in the
+<a href="#Method_sets">method set</a> of <code>I</code>, the selector
+expression is illegal.
 </li>
 <li>
 In all other cases, <code>x.f</code> is illegal.
 </li>
+<li>
+If <code>x</code> is of pointer or interface type and has the value
+<code>nil</code>, assigning to, evaluating, or calling <code>x.f</code>
+causes a <a href="#Run_time_panics">run-time panic</a>.
+</i>
 </ol>
 </div>
 
@@ -4638,18 +4660,22 @@ In all other cases, <code>x.f</code> is illegal.
 若并非<a href="#标识符的唯一性">只有一个 <code>f</code></a>，该选择器表达式即为非法的。
 </li>
 <li>
-对于接口类型 <code>I</code> 的变量 <code>x</code>，
-<code>x.f</code> 表示赋予 <code>x</code> 的值名为 <code>f</code> 的真实方法。
-若没有值或 <code>nil</code> 赋予 <code>x</code>，<code>x.f</code>即为非法的。
+对于接口类型 <code>I</code> 的变量 <code>x</code>，<code>x.f</code> 表示赋予
+<code>x</code> 的值的名为 <code>f</code> 的真实方法。若在 <code>I</code>
+的<a href="#方法集">方法集</a>中没有名为 <code>f</code> 的方法，该选择器即为非法的。
 </li>
 <li>
 其它情况下，所有 <code>x.f</code> 均为非法的。
+</li>
+<li>
+若 <code>x</code> 为指针或接口类型且值为 <code>nil</code>，对 <code>x.f</code>
+进行赋值、求值或调用会产生 <a href="#运行时异常">运行时异常</a>.
 </li>
 </ol>
 
 <div class="english">
 <p>
-Selectors automatically dereference pointers to structs.
+Selectors automatically <a href="#Address_operators">dereference</a> pointers to structs.
 If <code>x</code> is a pointer to a struct, <code>x.y</code>
 is shorthand for <code>(*x).y</code>; if the field <code>y</code>
 is also a pointer to a struct, <code>x.y.z</code> is shorthand
@@ -4661,7 +4687,7 @@ where <code>A</code> is also a struct type,
 </div>
 
 <p>
-选择器会自动解引用指向结构的指针。
+选择器会自动<a href="#地址操作符">解引用</a>指向结构的指针。
 若 <code>x</code> 为指向结构的指针，<code>x.y</code> 即为 <code>(*x).y</code> 的缩写；
 若字段 <code>y</code> 亦为指向结构的指针，<code>x.y.z</code> 即为 <code>(*(*x).y).z</code> 的缩写,
 以此类推。
@@ -6192,6 +6218,9 @@ the value of the receive operation <code>&lt;-ch</code> is the value received
 from the channel <code>ch</code>. The type of the value is the element type of
 the channel. The expression blocks until a value is available.
 Receiving from a <code>nil</code> channel blocks forever.
+Receiving from a <a href="#Close">closed</a> channel always succeeds,
+immediately returning the element type's <a href="#The_zero_value">zero
+value</a>.
 </p>
 
 <pre>
@@ -6205,7 +6234,8 @@ f(&lt;-ch)
 <p>
 对于<a href="#信道类型">信道类型</a>的操作数 <code>ch</code>，接收操作符 <code>&lt;-ch</code> 的值即为从信道
 <code>ch</code> 接收的值。该值的类型即为该信道的元素类型。该值前的表达式块是有效的。
-从 <code>nil</code> 信道接收将永远阻塞。
+从 <code>nil</code> 信道接收将永远阻塞。从<a href="#关闭">已关闭</a>的信道接收将总是成功，
+它会立刻返回其元素类型的<a href="#零值">零值</a>
 </p>
 
 <pre>

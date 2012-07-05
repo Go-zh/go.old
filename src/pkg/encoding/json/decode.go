@@ -137,6 +137,22 @@ func (d *decodeState) unmarshal(v interface{}) (err error) {
 	return d.savedError
 }
 
+// A Number represents a JSON number literal.
+type Number string
+
+// String returns the literal text of the number.
+func (n Number) String() string { return string(n) }
+
+// Float64 returns the number as a float64.
+func (n Number) Float64() (float64, error) {
+	return strconv.ParseFloat(string(n), 64)
+}
+
+// Int64 returns the number as an int64.
+func (n Number) Int64() (int64, error) {
+	return strconv.ParseInt(string(n), 10, 64)
+}
+
 // decodeState represents the state while decoding a JSON value.
 type decodeState struct {
 	data       []byte
@@ -145,6 +161,7 @@ type decodeState struct {
 	nextscan   scanner // for calls to nextValue
 	savedError error
 	tempstr    string // scratch space to avoid some allocations
+	useNumber  bool
 }
 
 // errPhase is used for errors that should not happen unless
@@ -265,47 +282,32 @@ func (d *decodeState) indirect(v reflect.Value, decodingNull bool) (Unmarshaler,
 		v = v.Addr()
 	}
 	for {
-		var isUnmarshaler bool
-		if v.Type().NumMethod() > 0 {
-			// Remember that this is an unmarshaler,
-			// but wait to return it until after allocating
-			// the pointer (if necessary).
-			_, isUnmarshaler = v.Interface().(Unmarshaler)
-		}
-
 		// Load value from interface, but only if the result will be
 		// usefully addressable.
-		if iv := v; iv.Kind() == reflect.Interface && !iv.IsNil() {
-			e := iv.Elem()
+		if v.Kind() == reflect.Interface && !v.IsNil() {
+			e := v.Elem()
 			if e.Kind() == reflect.Ptr && !e.IsNil() && (!decodingNull || e.Elem().Kind() == reflect.Ptr) {
 				v = e
 				continue
 			}
 		}
 
-		pv := v
-		if pv.Kind() != reflect.Ptr {
+		if v.Kind() != reflect.Ptr {
 			break
 		}
 
-		if pv.Elem().Kind() != reflect.Ptr && decodingNull && pv.CanSet() {
-			return nil, pv
+		if v.Elem().Kind() != reflect.Ptr && decodingNull && v.CanSet() {
+			break
 		}
-		if pv.IsNil() {
-			pv.Set(reflect.New(pv.Type().Elem()))
+		if v.IsNil() {
+			v.Set(reflect.New(v.Type().Elem()))
 		}
-		if isUnmarshaler {
-			// Using v.Interface().(Unmarshaler)
-			// here means that we have to use a pointer
-			// as the struct field.  We cannot use a value inside
-			// a pointer to a struct, because in that case
-			// v.Interface() is the value (x.f) not the pointer (&x.f).
-			// This is an unfortunate consequence of reflect.
-			// An alternative would be to look up the
-			// UnmarshalJSON method and return a FuncValue.
-			return v.Interface().(Unmarshaler), reflect.Value{}
+		if v.Type().NumMethod() > 0 {
+			if unmarshaler, ok := v.Interface().(Unmarshaler); ok {
+				return unmarshaler, reflect.Value{}
+			}
 		}
-		v = pv.Elem()
+		v = v.Elem()
 	}
 	return nil, v
 }
@@ -591,6 +593,21 @@ func (d *decodeState) literal(v reflect.Value) {
 	d.literalStore(d.data[start:d.off], v, false)
 }
 
+// convertNumber converts the number literal s to a float64 or a Number
+// depending on the setting of d.useNumber.
+func (d *decodeState) convertNumber(s string) (interface{}, error) {
+	if d.useNumber {
+		return Number(s), nil
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return nil, &UnmarshalTypeError{"number " + s, reflect.TypeOf(0.0)}
+	}
+	return f, nil
+}
+
+var numberType = reflect.TypeOf(Number(""))
+
 // literalStore decodes a literal stored in item into v.
 //
 // fromQuoted indicates whether this literal came from unwrapping a
@@ -679,15 +696,19 @@ func (d *decodeState) literalStore(item []byte, v reflect.Value, fromQuoted bool
 		s := string(item)
 		switch v.Kind() {
 		default:
+			if v.Kind() == reflect.String && v.Type() == numberType {
+				v.SetString(s)
+				break
+			}
 			if fromQuoted {
 				d.error(fmt.Errorf("json: invalid use of ,string struct tag, trying to unmarshal %q into %v", item, v.Type()))
 			} else {
 				d.error(&UnmarshalTypeError{"number", v.Type()})
 			}
 		case reflect.Interface:
-			n, err := strconv.ParseFloat(s, 64)
+			n, err := d.convertNumber(s)
 			if err != nil {
-				d.saveError(&UnmarshalTypeError{"number " + s, v.Type()})
+				d.saveError(err)
 				break
 			}
 			v.Set(reflect.ValueOf(n))
@@ -841,9 +862,9 @@ func (d *decodeState) literalInterface() interface{} {
 		if c != '-' && (c < '0' || c > '9') {
 			d.error(errPhase)
 		}
-		n, err := strconv.ParseFloat(string(item), 64)
+		n, err := d.convertNumber(string(item))
 		if err != nil {
-			d.saveError(&UnmarshalTypeError{"number " + string(item), reflect.TypeOf(0.0)})
+			d.saveError(err)
 		}
 		return n
 	}
