@@ -2,16 +2,31 @@
 	"Title": "FAQ"
 }-->
 
+<div class="english">
 <h2 id="Origins">Origins</h2>
+</div>
 
+<h2 id="由来">由来</h2>
+
+<div class="english">
 <h3 id="What_is_the_purpose_of_the_project">
 What is the purpose of the project?</h3>
+</div>
 
+<h3 id="项目目的">该项目的目的在于什么？</h3>
+
+<div class="english">
 <p>
 No major systems language has emerged in over a decade, but over that time
 the computing landscape has changed tremendously. There are several trends:
 </p>
+</div>
 
+<p>
+在过去十年间，并未出现过主流的系统级编程语言，但在这期间，计算环境已经发生了巨大的变化。以下是一些趋势：
+</p>
+
+<div class="english">
 <ul>
 <li>
 Computers are enormously quicker but software development is not faster.
@@ -29,12 +44,33 @@ are not well supported by popular systems languages.
 <li>
 The emergence of multicore computers has generated worry and confusion.
 </ul>
+</div>
 
+<ul>
+<li>
+计算机的速度变得极快，但软件开发还不够快。
+<li>
+在今天，依赖管理成为了软件开发的一大部分，但C传统语言的“头文件”与清晰的依赖分析——以及快速编译背道而驰。
+<li>
+对于像Java和C++那笨重的类型系统的反抗越来越多，这将人们推向了Python和JavaScript之类的动态类型语言。
+<li>
+流行的系统语言对于像垃圾回收与并行计算那种基本思想的支持并不算好。
+<li>
+多核计算机的出现产生了一些麻烦与混乱。
+</ul>
+
+<div class="english">
 <p>
 We believe it's worth trying again with a new language, a concurrent,
 garbage-collected language with fast compilation. Regarding the points above:
 </p>
+</div>
 
+<p>
+我们相信这值得重新尝试一种新的语言，一种并发的、带垃圾回收的、快速编译的语言。它需要满足以下几点：
+</p>
+
+<div class="english">
 <ul>
 <li>
 It is possible to compile a large Go program in a few seconds on a single computer.
@@ -53,17 +89,41 @@ concurrent execution and communication.
 By its design, Go proposes an approach for the construction of system
 software on multicore machines.
 </ul>
+</div>
 
+<ul>
+<li>
+它可以在一台计算机上用几秒钟的时间编译一个大型的Go程序。
+<li>
+Go为软件构造提供了一种模型，它使依赖分析更加容易，且避免了大部分C风格include文件与库的开头。
+<li>
+Go的类型系统没有等级之分，因此不需要在类型之间定义关系上花费时间。另外，尽管Go是静态类型的，
+该语言也试图使类型感觉起来比典型的面向对象语言更轻量级。
+<li>
+Go完全是垃圾回收型的，并为并发执行与通信提供了基本的支持。
+<li>
+按照其设计，Go打算为多核机器上系统软件的构造提供一种方法。
+</ul>
+
+<div class="english">
 <h3 id="What_is_the_origin_of_the_name">
 What is the origin of the name?</h3>
+</div>
+
+<h3 id="名字">名字的由来是什么？</h3>
 
 <p>
-&ldquo;Ogle&rdquo; would be a good name for a Go debugger.
+对于Go的调试器，&ldquo;Ogle&rdquo;将会是个不错的名字。
 </p>
 
+<div class="english">
 <h3 id="Whats_the_origin_of_the_mascot">
 What's the origin of the mascot?</h3>
+</div>
 
+<h3 id="吉祥物">吉祥物的由来是什么？</h3>
+
+<div class="english">
 <p>
 The mascot and logo were designed by
 <a href="http://reneefrench.blogspot.com">Renée French</a>, who also designed
@@ -75,9 +135,23 @@ The logo and mascot are covered by the
 <a href="http://creativecommons.org/licenses/by/3.0/">Creative Commons Attribution 3.0</a>
 license.
 </p>
+</div>
 
+<p>
+其吉祥物与Logo由<a href="http://reneefrench.blogspot.com">Renée French</a>设计，
+她也设计了Plan 9的兔子<a href="http://plan9.bell-labs.com/plan9/glenda.html">Glenda</a>。
+Gopher衍生自她在几年前为<a href="http://wfmu.org/">WFMU</a>设计的一件T恤衫。
+其Logo与吉祥物以<a href="http://creativecommons.org/licenses/by/3.0/">知识共享-署名3.0</a>方式授权。
+</p>
+
+<div class="english">
 <h3 id="history">
 What is the history of the project?</h3>
+</div>
+
+<h3 id="历史">该项目的历史是什么？</h3>
+
+<div class="english">
 <p>
 Robert Griesemer, Rob Pike and Ken Thompson started sketching the
 goals for a new language on the white board on September 21, 2007.
@@ -91,14 +165,36 @@ Ian Taylor independently started on a GCC front end for Go using the
 draft specification.  Russ Cox joined in late 2008 and helped move the language
 and libraries from prototype to reality.
 </p>
+</div>
 
+<p>
+2007年9月21日，Robert Griesemer、Rob Pike与Ken Thompson在白板上开始了对新语言目标的描绘。
+在几天之内，目标被安排为计划来做一些事情，并产生了它会成为什么样的美妙想法。
+设计在与工作无关的平行时间中继续。到了2008年1月，Ken开始了编译器的工作，并在其上探索各种想法，
+它生成C代码作为其输出。到了年中，该语言成为了全职项目，并拥有了充足的安排来尝试一个产品编译器。
+在2008年5月时，Ian Taylor根据规范草案独自开始了Go GCC前端的工作。2008年年末，
+Russ Cox加入并帮助将该语言与库从原形变成了现实。
+</p>
+
+<div class="english">
 <p>
 Go became a public open source project on November 10, 2009.
 Many people from the community have contributed ideas, discussions, and code.
 </p>
+</div>
 
+<p>
+Go在2009年11月10日成为了公共开源项目。来自社区的许多人都可以贡献想法，参与讨论及编写代码。
+</p>
+
+<div class="english">
 <h3 id="creating_a_new_language">
 Why are you creating a new language?</h3>
+</div>
+
+<h3 id="新语言">你们为什么要创造新的语言？</h3>
+
+<div class="english">
 <p>
 Go was born out of frustration with existing languages and
 environments for systems programming.  Programming had become too
@@ -108,6 +204,21 @@ programming; all three were not available in the same mainstream
 language.  Programmers who could were choosing ease over
 safety and efficiency by moving to dynamically typed languages such as
 Python and JavaScript rather than C++ or, to a lesser extent, Java.
+</p>
+</div>
+
+<p>
+Go was born out of frustration with existing languages and
+environments for systems programming.  Programming had become too
+difficult and the choice of languages was partly to blame.  One had to
+choose either efficient compilation, efficient execution, or ease of
+programming; all three were not available in the same mainstream
+language.  Programmers who could were choosing ease over
+safety and efficiency by moving to dynamically typed languages such as
+Python and JavaScript rather than C++ or, to a lesser extent, Java.
+Go在既有语言与环境下进行系统编程的挫折中诞生。编程变得太难，对语言的选择有一定的责任。
+我们必须在有效率地编译、有效率地执行或轻松地编程之间选择其一，在同样主流的语言中，
+三者不能同时达到。程序员们选择轻松在安全和效率之上，
 </p>
 
 <p>
@@ -124,8 +235,13 @@ and so on.  These cannot be addressed well by libraries or tools; a new
 language was called for.
 </p>
 
+<div class="english">
 <h3 id="ancestors">
 What are Go's ancestors?</h3>
+</div>
+
+<h3 id="前身">Go的前身是什么？</h3>
+
 <p>
 Go is mostly in the C family (basic syntax),
 with significant input from the Pascal/Modula/Oberon
@@ -139,8 +255,13 @@ about what programmers do and how to make programming, at least the
 kind of programming we do, more effective, which means more fun.
 </p>
 
+<div class="english">
 <h3 id="principles">
 What are the guiding principles in the design?</h3>
+</div>
+
+<h3 id="原则">其设计的指导原则是什么？</h3>
+
 <p>
 Programming today involves too much bookkeeping, repetition, and
 clerical work.  As Dick Gabriel says, &ldquo;Old programs read
@@ -170,12 +291,20 @@ interfaces represent abstraction; and so on.  Orthogonality makes it
 easier to understand what happens when things combine.
 </p>
 
+<div class="english">
 <h2 id="Usage">Usage</h2>
+</div>
 
+<h2 id="使用">使用</h2>
+
+<div class="english">
 <h3 id="Is_Google_using_go_internally"> Is Google using Go internally?</h3>
+</div>
+
+<h3 id="Google使用Go">Google是否在内部使用Go？</h3>
 
 <p>
-Yes. There are now several Go programs deployed in 
+Yes. There are now several Go programs deployed in
 production inside Google.  A public example is the server behind
 <a href="http://golang.org">http://golang.org</a>.
 It's just the <a href="/cmd/godoc"><code>godoc</code></a>
@@ -183,28 +312,36 @@ document server running in a production configuration on
 <a href="http://code.google.com/appengine/">Google App Engine</a>.
 </p>
 
+<div class="english">
 <h3 id="Do_Go_programs_link_with_Cpp_programs">
 Do Go programs link with C/C++ programs?</h3>
+</div>
+
+<h3 id="Go链接C">Go程序能否链接C/C++程序？</h3>
 
 <p>
 There are two Go compiler implementations, <code>gc</code>
 (the <code>6g</code> program and friends) and <code>gccgo</code>.
 <code>Gc</code> uses a different calling convention and linker and can
 therefore only be linked with C programs using the same convention.
-There is such a C compiler but no C++ compiler. 
-<code>Gccgo</code> is a GCC front-end that can, with care, be linked with 
-GCC-compiled C or C++ programs. 
+There is such a C compiler but no C++ compiler.
+<code>Gccgo</code> is a GCC front-end that can, with care, be linked with
+GCC-compiled C or C++ programs.
 </p>
 
 <p>
-The <a href="/cmd/cgo/">cgo</a> program provides the mechanism for a 
-&ldquo;foreign function interface&rdquo; to allow safe calling of 
+The <a href="/cmd/cgo/">cgo</a> program provides the mechanism for a
+&ldquo;foreign function interface&rdquo; to allow safe calling of
 C libraries from Go code. SWIG extends this capability to C++ libraries.
 </p>
 
 
+<div class="english">
 <h3 id="Does_Go_support_Google_protocol_buffers">
 Does Go support Google's protocol buffers?</h3>
+</div>
+
+<h3 id="Go对Google缓存协议的支持">Go是否支持Google的缓存协议？</h3>
 
 <p>
 A separate open source project provides the necessary compiler plugin and library.
@@ -213,8 +350,12 @@ It is available at
 </p>
 
 
+<div class="english">
 <h3 id="Can_I_translate_the_Go_home_page">
 Can I translate the Go home page into another language?</h3>
+</div>
+
+<h3 id="Go主页的翻译">我能否将Go主页翻译为其它语言？</h3>
 
 <p>
 Absolutely. We encourage developers to make Go Language sites in their own languages.
@@ -224,10 +365,18 @@ you will need to abide by the guidelines at
 <a href="http://www.google.com/permissions/guidelines.html">http://www.google.com/permissions/guidelines.html</a>
 </p>
 
+<div class="english">
 <h2 id="Design">Design</h2>
+</div>
 
+<h2 id="设计">设计</h2>
+
+<div class="english">
 <h3 id="unicode_identifiers">
 What's up with Unicode identifiers?</h3>
+</div>
+
+<h3 id="Unicode标识符">Unicode标识符怎么样了？</h3>
 
 <p>
 It was important to us to extend the space of identifiers from the
@@ -254,7 +403,11 @@ case-for-visibility rule is unlikely to change however; it's one
 of our favorite features of Go.
 </p>
 
+<div class="english">
 <h3 id="Why_doesnt_Go_have_feature_X">Why does Go not have feature X?</h3>
+</div>
+
+<h3 id="X特性">为什么Go没有X特性？</h3>
 
 <p>
 Every language contains novel features and omits someone's favorite
@@ -272,8 +425,13 @@ please forgive us and investigate the features that Go does have. You might find
 they compensate in interesting ways for the lack of <var>X</var>.
 </p>
 
+<div class="english">
 <h3 id="generics">
 Why does Go not have generic types?</h3>
+</div>
+
+<h3 id="泛型">为什么Go没有泛型？</h3>
+
 <p>
 Generics may well be added at some point.  We don't feel an urgency for
 them, although we understand some programmers do.
@@ -293,8 +451,13 @@ code that does what generics would enable, if less smoothly.
 This remains an open issue.
 </p>
 
+<div class="english">
 <h3 id="exceptions">
 Why does Go not have exceptions?</h3>
+</div>
+
+<h3 id="异常处理">为什么Go没有异常处理？</h3>
+
 <p>
 We believe that coupling exceptions to a control
 structure, as in the <code>try-catch-finally</code> idiom, results in
@@ -324,8 +487,12 @@ when used well, can result in clean error-handling code.
 See the <a href="/doc/articles/defer_panic_recover.html">Defer, Panic, and Recover</a> article for details.
 </p>
 
+<div class="english">
 <h3 id="assertions">
 Why does Go not have assertions?</h3>
+</div>
+
+<h3 id="断言">为什么Go没有断言？</h3>
 
 <p>
 Go doesn't provide assertions. They are undeniably convenient, but our
@@ -344,8 +511,13 @@ the Go language and libraries that differ from modern practices, simply
 because we feel it's sometimes worth trying a different approach.
 </p>
 
+<div class="english">
 <h3 id="csp">
 Why build concurrency on the ideas of CSP?</h3>
+</div>
+
+<h3 id="csp并发">为什么以CSP思想来构建并发？</h3>
+
 <p>
 Concurrency and multi-threaded programming have a reputation
 for difficulty.  We believe this is due partly to complex
@@ -363,8 +535,13 @@ Go's concurrency primitives derive from a different part of the family tree
 whose main contribution is the powerful notion of channels as first class objects.
 </p>
 
+<div class="english">
 <h3 id="goroutines">
 Why goroutines instead of threads?</h3>
+</div>
+
+<h3 id="Go程">为什么使用Go程而非线程？</h3>
+
 <p>
 Goroutines are part of making concurrency easy to use.  The idea, which has
 been around for a while, is to multiplex independently executing
@@ -388,8 +565,12 @@ address space.  If goroutines were just threads, system resources would
 run out at a much smaller number.
 </p>
 
+<div class="english">
 <h3 id="atomic_maps">
 Why are map operations not defined to be atomic?</h3>
+</div>
+
+<h3 id="原子性映射">为什么映射操作不定义为原子性的？</h3>
 
 <p>
 After long discussion it was decided that the typical use of maps did not require
@@ -406,10 +587,18 @@ as when hosting an untrusted program, the implementation could interlock
 map access.
 </p>
 
+<div class="english">
 <h2 id="types">Types</h2>
+</div>
 
+<h2 id="类型">类型</h2>
+
+<div class="english">
 <h3 id="Is_Go_an_object-oriented_language">
 Is Go an object-oriented language?</h3>
+</div>
+
+<h3 id="Go面向对象">Go是面向对象的语言吗？</h3>
 
 <p>
 Yes and no. Although Go has types and methods and allows an
@@ -429,16 +618,31 @@ Also, the lack of type hierarchy makes &ldquo;objects&rdquo; in Go feel much mor
 lightweight than in languages such as C++ or Java.
 </p>
 
+<div class="english">
 <h3 id="How_do_I_get_dynamic_dispatch_of_methods">
 How do I get dynamic dispatch of methods?</h3>
+</div>
 
+<h3 id="动态分配">我如何获得方法的动态分配？</h3>
+
+<div class="english">
 <p>
 The only way to have dynamically dispatched methods is through an
 interface. Methods on a struct or any other concrete type are always resolved statically.
 </p>
+</div>
 
+<p>
+拥有动态分配方法的唯一途径就是通过接口。结构或其它混合类型的方法总是静态地决定。
+</p>
+
+<div class="english">
 <h3 id="inheritance">
 Why is there no type inheritance?</h3>
+</div>
+
+<h3 id="继承">为什么没有继承类型？</h3>
+
 <p>
 Object-oriented programming, at least in the best-known languages,
 involves too much discussion of the relationships between types,
@@ -478,8 +682,13 @@ It takes some getting used to but this implicit style of type
 dependency is one of the most productive things about Go.
 </p>
 
+<div class="english">
 <h3 id="methods_on_basics">
 Why is <code>len</code> a function and not a method?</h3>
+</div>
+
+<h3 id="基本的方法">为什么 <code>len</code> 是函数而非方法？</h3>
+
 <p>
 We debated this issue but decided
 implementing <code>len</code> and friends as functions was fine in practice and
@@ -487,8 +696,13 @@ didn't complicate questions about the interface (in the Go type sense)
 of basic types.
 </p>
 
+<div class="english">
 <h3 id="overloading">
 Why does Go not support overloading of methods and operators?</h3>
+</div>
+
+<h3 id="重载">为什么Go不支持方法和操作符的重载？</h3>
+
 <p>
 Method dispatch is simplified if it doesn't need to do type matching as well.
 Experience with other languages told us that having a variety of
@@ -503,8 +717,12 @@ Regarding operator overloading, it seems more a convenience than an absolute
 requirement.  Again, things are simpler without it.
 </p>
 
+<div class="english">
 <h3 id="implements_interface">
 Why doesn't Go have "implements" declarations?</h3>
+</div>
+
+<h3 id="接口实现">为什么Go没有 "implements" 声明？</h3>
 
 <p>
 A Go type satisfies an interface by implementing the methods of that interface,
@@ -520,8 +738,12 @@ lightweight feel.
 See the <a href="#inheritance">question on type inheritance</a> for more detail.
 </p>
 
+<div class="english">
 <h3 id="guarantee_satisfies_interface">
 How can I guarantee my type satisfies an interface?</h3>
+</div>
+
+<h3 id="保证满足接口">我如何保证我的类型满足某个接口？</h3>
 
 <p>
 You can ask the compiler to check that the type <code>T</code> implements the
@@ -564,13 +786,17 @@ func (b Bar) Foo() {}
 </pre>
 
 <p>
-Most code doesn't make use of such constraints, since they limit the utility of 
+Most code doesn't make use of such constraints, since they limit the utility of
 the interface idea. Sometimes, though, they're necessary to resolve ambiguities
 among similar interfaces.
 </p>
 
+<div class="english">
 <h3 id="t_and_equal_interface">
 Why doesn't type T satisfy the Equal interface?</h3>
+</div>
+
+<h3 id="t与equal接口">为什么类型T不满足Equal接口？</h3>
 
 <p>
 Consider this simple interface to represent an object that can compare
@@ -648,8 +874,12 @@ typing, we expect there would be a way to express the idea of these
 examples and also have them be statically checked.
 </p>
 
+<div class="english">
 <h3 id="convert_slice_of_interface">
 Can I convert a []T to an []interface{}?</h3>
+</div>
+
+<h3 id="转换切片至接口">我能否将[]T转换为[]interface{}？</h3>
 
 <p>
 Not directly, because they do not have the same representation in memory.
@@ -666,9 +896,13 @@ for i, v := range t {
 }
 </pre>
 
+<div class="english">
 <h3 id="nil_error">
 Why is my nil error value not equal to nil?
 </h3>
+</div>
+
+<h3 id="nil错误">为什么我的nil错误值不等于nil？</h3>
 
 <p>
 Under the covers, interfaces are implemented as two elements, a type and a value.
@@ -745,16 +979,24 @@ For more information, see
 </p>
 
 
+<div class="english">
 <h3 id="unions">
 Why are there no untagged unions, as in C?</h3>
+</div>
+
+<h3 id="联合">为什么没有像C那样的无标签联合？</h3>
 
 <p>
 Untagged unions would violate Go's memory safety
 guarantees.
 </p>
 
+<div class="english">
 <h3 id="variant_types">
 Why does Go not have variant types?</h3>
+</div>
+
+<h3 id="变体类型">为什么没有变体类型？</h3>
 
 <p>
 Variant types, also known as algebraic types, provide a way to specify
@@ -781,10 +1023,19 @@ value to hold the error and a type switch to discriminate cases.  The
 syntax tree example is also doable, although not as elegantly.
 </p>
 
+<div class="english">
 <h2 id="values">Values</h2>
+</div>
 
+<h2 id="值">值</h2>
+
+<div class="english">
 <h3 id="conversions">
 Why does Go not provide implicit numeric conversions?</h3>
+</div>
+
+<h3 id="转换">为什么Go不提供隐式数值转换？</h3>
+
 <p>
 The convenience of automatic conversion between numeric types in C is
 outweighed by the confusion it causes.  When is an expression unsigned?
@@ -806,8 +1057,13 @@ type is generic; if you care about how many bits an integer holds, Go
 encourages you to be explicit.
 </p>
 
+<div class="english">
 <h3 id="builtin_maps">
 Why are maps built in?</h3>
+</div>
+
+<h3 id="内建映射">为什么映射是内建的？</h3>
+
 <p>
 The same reason strings are: they are such a powerful and important data
 structure that providing one excellent implementation with syntactic support
@@ -817,8 +1073,13 @@ If a specific application can benefit from a custom implementation, it's possibl
 to write one but it will not be as convenient syntactically; this seems a reasonable tradeoff.
 </p>
 
+<div class="english">
 <h3 id="map_keys">
 Why don't maps allow slices as keys?</h3>
+</div>
+
+<h3 id="映射键">为什么映射不允许切片作为键？</h3>
+
 <p>
 Map lookup requires an equality operator, which slices do not implement.
 They don't implement equality because equality is not well defined on such types;
@@ -834,8 +1095,14 @@ In Go 1, unlike prior releases, equality is defined for structs and arrays, so s
 types can be used as map keys. Slices still do not have a definition of equality, though.
 </p>
 
+<div class="english">
 <h3 id="references">
 Why are maps, slices, and channels references while arrays are values?</h3>
+</div>
+
+<h3 id="参考">为什么映射、切片和信道参考了数组值？
+Why are maps, slices, and channels references while arrays are values?</h3>
+
 <p>
 There's a lot of history on that topic.  Early on, maps and channels
 were syntactically pointers and it was impossible to declare or use a
@@ -848,10 +1115,18 @@ language but they have a large effect on usability: Go became a more
 productive, comfortable language when they were introduced.
 </p>
 
+<div class="english">
 <h2 id="Writing_Code">Writing Code</h2>
+</div>
 
+<h2 id="编写代码">编写代码</h2>
+
+<div class="english">
 <h3 id="How_are_libraries_documented">
 How are libraries documented?</h3>
+</div>
+
+<h3 id="库文档化">如何将库文档化？</h3>
 
 <p>
 There is a program, <code>godoc</code>, written in Go, that extracts
@@ -862,8 +1137,12 @@ In fact, <code>godoc</code> implements the full site at
 <a href="http://golang.org/">http://golang.org/</a>.
 </p>
 
+<div class="english">
 <h3 id="Is_there_a_Go_programming_style_guide">
 Is there a Go programming style guide?</h3>
+</div>
+
+<h3 id="编程风格">有没有Go编程风格指南？</h3>
 
 <p>
 Eventually, there may be a small number of rules to guide things
@@ -876,8 +1155,12 @@ compendium of do's and don'ts that allows interpretation.
 All the Go code in the repository has been run through <code>gofmt</code>.
 </p>
 
+<div class="english">
 <h3 id="How_do_I_submit_patches_to_the_Go_libraries">
 How do I submit patches to the Go libraries?</h3>
+</div>
+
+<h3 id="提交补丁">我如何向Go库提交补丁？</h3>
 
 <p>
 The library sources are in <code>go/src/pkg</code>.
@@ -890,10 +1173,18 @@ See the document
 for more information about how to proceed.
 </p>
 
+<div class="english">
 <h2 id="Pointers">Pointers and Allocation</h2>
+</div>
 
+<h2 id="指针">指针与分配</h2>
+
+<div class="english">
 <h3 id="pass_by_value">
 When are function parameters passed by value?</h3>
+</div>
+
+<h3 id="传值">函数形参什么时候传值？</h3>
 
 <p>
 As in all languages in the C family, everything in Go is passed by value.
@@ -912,11 +1203,15 @@ slice value doesn't copy the data it points to.  Copying an interface value
 makes a copy of the thing stored in the interface value.  If the interface
 value holds a struct, copying the interface value makes a copy of the
 struct.  If the interface value holds a pointer, copying the interface value
-makes a copy of the pointer, but again not the data it points to. 
+makes a copy of the pointer, but again not the data it points to.
 </p>
 
+<div class="english">
 <h3 id="methods_on_values_or_pointers">
 Should I define methods on values or pointers?</h3>
+</div>
+
+<h3 id="值或指针的方法">我应当为值或指针定义方法吗？</h3>
 
 <pre>
 func (s *MyStruct) pointerMethod() { } // method on pointer
@@ -975,8 +1270,12 @@ requires a pointer, a value receiver is efficient and clear.
 </p>
 
 
+<div class="english">
 <h3 id="new_and_make">
 What's the difference between new and make?</h3>
+</div>
+
+<h3 id="new与make">new与make之间有什么不同？</h3>
 
 <p>
 In short: <code>new</code> allocates memory, <code>make</code> initializes
@@ -988,8 +1287,12 @@ See the <a href="/doc/effective_go.html#allocation_new">relevant section
 of Effective Go</a> for more details.
 </p>
 
+<div class="english">
 <h3 id="q_int_sizes">
 Why is <code>int</code> 32 bits on 64 bit machines?</h3>
+</div>
+
+<h3 id="int的大小问题">为什么 <code>int</code> 在64位机器上为32位？</h3>
 
 <p>
 The sizes of <code>int</code> and <code>uint</code> are implementation-specific
@@ -1010,8 +1313,12 @@ However, we expect that <code>int</code> will be increased to 64 bits on 64-bit
 architectures in a future release of Go.
 </p>
 
+<div class="english">
 <h3 id="stack_or_heap">
 How do I know whether a variable is allocated on the heap or the stack?</h3>
+</div>
+
+<h3 id="堆或栈">我如何知道变量分配在堆上还是栈上？</h3>
 
 <p>
 From a correctness standpoint, you don't need to know.
@@ -1038,10 +1345,19 @@ analysis</em> recognizes some cases when such variables will not
 live past the return from the function and can reside on the stack.
 </p>
 
+<div class="english">
 <h2 id="Concurrency">Concurrency</h2>
+</div>
 
+<h2 id="并发">并发</h2>
+
+<div class="english">
 <h3 id="What_operations_are_atomic_What_about_mutexes">
 What operations are atomic? What about mutexes?</h3>
+</div>
+
+<h3 id="原子性与互斥性">
+什么操作是原子性的？什么是互斥性的？</h3>
 
 <p>
 We haven't fully defined it all yet, but some details about atomicity are
@@ -1064,14 +1380,18 @@ Do not communicate by sharing memory. Instead, share memory by communicating.
 See the <a href="/doc/codewalk/sharemem/">Share Memory By Communicating</a> code walk and its <a href="http://blog.golang.org/2010/07/share-memory-by-communicating.html">associated article</a> for a detailed discussion of this concept.
 </p>
 
+<div class="english">
 <h3 id="Why_no_multi_CPU">
 Why doesn't my multi-goroutine program use multiple CPUs?</h3>
+</div>
+
+<h3 id="不能使用多CPU">为什么我的多Go程程序不能使用多个CPU？</h3>
 
 <p>
 You must set the <code>GOMAXPROCS</code> shell environment variable
 or use the similarly-named <a href="/pkg/runtime/#GOMAXPROCS"><code>function</code></a>
 of the runtime package to allow the
-run-time support to utilize more than one OS thread. 
+run-time support to utilize more than one OS thread.
 </p>
 
 <p>
@@ -1079,12 +1399,16 @@ Programs that perform parallel computation should benefit from an increase in
 <code>GOMAXPROCS</code>.
 </p>
 
+<div class="english">
 <h3 id="Why_GOMAXPROCS">
 Why does using <code>GOMAXPROCS</code> &gt; 1 sometimes make my program
 slower?</h3>
+</div>
+
+<h3 id="使用GOMAXPROCS">为什么使用 <code>GOMAXPROCS</code> &gt; 1 有时会使我的程序变慢？</h3>
 
 <p>
-It depends on the nature of your program. 
+It depends on the nature of your program.
 Problems that are intrinsically sequential cannot be sped up by adding
 more goroutines.
 Concurrency only becomes parallelism when the problem is
@@ -1110,10 +1434,18 @@ should recognize such cases and optimize its use of OS threads. For now,
 <code>GOMAXPROCS</code> should be set on a per-application basis.
 </p>
 
+<div class="english">
 <h2 id="Functions_methods">Functions and Methods</h2>
+</div>
 
+<h2 id="函数与方法">函数与方法</h2>
+
+<div class="english">
 <h3 id="different_method_sets">
 Why do T and *T have different method sets?</h3>
+</div>
+
+<h3 id="不同的方法集">为什么T与*T拥有不同的方法集？</h3>
 
 <p>
 From the <a href="/ref/spec#Types">Go Spec</a>:
@@ -1151,8 +1483,12 @@ not into <code>buf</code> itself.
 This is almost never the desired behavior.
 </p>
 
+<div class="english">
 <h3 id="closures_and_goroutines">
 What happens with closures running as goroutines?</h3>
+</div>
+
+<h3 id="闭包与Go程">闭包作为Go程在运行时会发生什么？</h3>
 
 <p>
 Some confusion may arise when using closures with concurrency.
@@ -1173,18 +1509,18 @@ func main() {
 
     // wait for all goroutines to complete before exiting
     for _ = range values {
-        &lt;-done 
+        &lt;-done
     }
 }
 </pre>
 
 <p>
-One might mistakenly expect to see <code>a, b, c</code> as the output. 
-What you'll probably see instead is <code>c, c, c</code>.  This is because 
+One might mistakenly expect to see <code>a, b, c</code> as the output.
+What you'll probably see instead is <code>c, c, c</code>.  This is because
 each iteration of the loop uses the same instance of the variable <code>v</code>, so
-each closure shares that single variable. When the closure runs, it prints the 
+each closure shares that single variable. When the closure runs, it prints the
 value of <code>v</code> at the time <code>fmt.Println</code> is executed,
-but <code>v</code> may have been modified since the goroutine was launched. 
+but <code>v</code> may have been modified since the goroutine was launched.
 </p>
 
 <p>
@@ -1202,15 +1538,23 @@ could modify the inner loop to read:
 </pre>
 
 <p>
-In this example, the value of <code>v</code> is passed as an argument to the 
+In this example, the value of <code>v</code> is passed as an argument to the
 anonymous function. That value is then accessible inside the function as
 the variable <code>u</code>.
 </p>
 
+<div class="english">
 <h2 id="Control_flow">Control flow</h2>
+</div>
 
+<h2 id="流程控制">流程控制</h2>
+
+<div class="english">
 <h3 id="Does_Go_have_a_ternary_form">
 Does Go have the <code>?:</code> operator?</h3>
+</div>
+
+<h3 id="三元形式">Go有没有 <code>?:</code> 操作符？</h3>
 
 <p>
 There is no ternary form in Go. You may use the following to achieve the same
@@ -1225,10 +1569,18 @@ if expr {
 }
 </pre>
 
+<div class="english">
 <h2 id="Packages_Testing">Packages and Testing</h2>
+</div>
 
+<h2 id="包测试">包与测试</h2>
+
+<div class="english">
 <h3 id="How_do_I_create_a_multifile_package">
 How do I create a multifile package?</h3>
+</div>
+
+<h3 id="多文件包">我如何创建多文件包？</h3>
 
 <p>
 Put all the source files for the package in a directory by themselves.
@@ -1241,8 +1593,12 @@ Other than being split into multiple files, the package will compile and test
 just like a single-file package.
 </p>
 
+<div class="english">
 <h3 id="How_do_I_write_a_unit_test">
 How do I write a unit test?</h3>
+</div>
+
+<h3 id="单元测试">我如何编写单元测试？</h3>
 
 <p>
 Create a new file ending in <code>_test.go</code> in the same directory
@@ -1267,8 +1623,12 @@ the <a href="/pkg/testing/"><code>testing</code></a> package
 and the <a href="/cmd/go/#Test_packages"><code>go test</code></a> subcommand for more details.
 </p>
 
+<div class="english">
 <h3 id="testing_framework">
 Where is my favorite helper function for testing?</h3>
+</div>
+
+<h3 id="测试框架">我最喜欢的测试助手函数在哪？</h3>
 
 <p>
 Go's standard <a href="/pkg/testing/"><code>testing</code></a> package makes it easy to write unit tests, but it lacks
@@ -1306,10 +1666,18 @@ test cases. The standard Go library is full of illustrative examples, such as in
 </p>
 
 
+<div class="english">
 <h2 id="Implementation">Implementation</h2>
+</div>
 
+<h2 id="实现">实现</h2>
+
+<div class="english">
 <h3 id="What_compiler_technology_is_used_to_build_the_compilers">
 What compiler technology is used to build the compilers?</h3>
+</div>
+
+<h3 id="编译器">该编译器使用什么编译器技术构建？</h3>
 
 <p>
 <code>Gccgo</code> has a C++ front-end with a recursive descent parser coupled to the
@@ -1335,8 +1703,12 @@ We also considered using LLVM for <code>gc</code> but we felt it was too large a
 slow to meet our performance goals.
 </p>
 
+<div class="english">
 <h3 id="How_is_the_run_time_support_implemented">
 How is the run-time support implemented?</h3>
+</div>
+
+<h3 id="运行时支持">运行时如何支持实现？</h3>
 
 <p>
 Again due to bootstrapping issues, the run-time code is mostly in C (with a
@@ -1350,8 +1722,12 @@ The <code>gccgo</code> compiler implements segmented
 stacks on Linux only, supported by recent modifications to the gold linker.
 </p>
 
+<div class="english">
 <h3 id="Why_is_my_trivial_program_such_a_large_binary">
 Why is my trivial program such a large binary?</h3>
+</div>
+
+<h3 id="二进制文件">为什么我琐碎的程序其二进制文件却如此之大？</h3>
 
 <p>
 The linkers in the gc tool chain (<code>5l</code>, <code>6l</code>, and <code>8l</code>)
@@ -1369,8 +1745,12 @@ is around 1.2 MB, but
 that includes more powerful run-time support.
 </p>
 
+<div class="english">
 <h3 id="unused_variables_and_imports">
 Can I stop these complaints about my unused variable/import?</h3>
+</div>
+
+<h3 id="未使用变量与导入">我能否停止关于我未使用变量/导入的抱怨？</h3>
 
 <p>
 The presence of an unused variable may indicate a bug, while
@@ -1383,7 +1763,7 @@ For these reasons, Go allows neither.
 <p>
 When developing code, it's common to create these situations
 temporarily and it can be annoying to have to edit them out before the
-program will compile.  
+program will compile.
 </p>
 
 <p>
@@ -1423,20 +1803,28 @@ func main() {
 }
 </pre>
 
+<div class="english">
 <h2 id="Performance">Performance</h2>
+</div>
 
+<h2 id="性能">性能</h2>
+
+<div class="english">
 <h3 id="Why_does_Go_perform_badly_on_benchmark_x">
 Why does Go perform badly on benchmark X?</h3>
+</div>
+
+<h3 id="基准测试">为什么Go在基准测试X中表现很差？</h3>
 
 <p>
 One of Go's design goals is to approach the performance of C for comparable
-programs, yet on some benchmarks it does quite poorly, including several 
-in <a href="/test/bench/shootout/">test/bench/shootout</a>. The slowest depend on libraries 
-for which versions of comparable performance are not available in Go. 
+programs, yet on some benchmarks it does quite poorly, including several
+in <a href="/test/bench/shootout/">test/bench/shootout</a>. The slowest depend on libraries
+for which versions of comparable performance are not available in Go.
 For instance, <a href="/test/bench/shootout/pidigits.go">pidigits.go</a>
 depends on a multi-precision math package, and the C
 versions, unlike Go's, use <a href="http://gmplib.org/">GMP</a> (which is
-written in optimized assembler). 
+written in optimized assembler).
 Benchmarks that depend on regular expressions
 (<a href="/test/bench/shootout/regex-dna.go">regex-dna.go</a>, for instance) are
 essentially comparing Go's native <a href="/pkg/regexp">regexp package</a> to
@@ -1455,7 +1843,7 @@ indicate.
 <p>
 Still, there is room for improvement. The compilers are good but could be
 better, many libraries need major performance work, and the garbage collector
-isn't fast enough yet. (Even if it were, taking care not to generate unnecessary 
+isn't fast enough yet. (Even if it were, taking care not to generate unnecessary
 garbage can have a huge effect.)
 </p>
 
@@ -1467,10 +1855,19 @@ See the blog post about
 <a href="http://blog.golang.org/2011/06/profiling-go-programs.html">profiling
 Go programs</a> for an informative example.
 
+<div class="english">
 <h2 id="change_from_c">Changes from C</h2>
+</div>
 
+<h2 id="对于C的改变">对于C的改变</h2>
+
+<div class="english">
 <h3 id="different_syntax">
 Why is the syntax so different from C?</h3>
+</div>
+
+<h3 id="不同的语法">为什么它的语法与C如此不同？</h3>
+
 <p>
 Other than declaration syntax, the differences are not major and stem
 from two desires.  First, the syntax should feel light, without too
@@ -1482,8 +1879,13 @@ documentation extractors, IDE plug-ins, and so on.  C and its
 descendants are notoriously difficult in this regard.
 </p>
 
+<div class="english">
 <h3 id="declarations_backwards">
 Why are declarations backwards?</h3>
+</div>
+
+<h3 id="声明在后">为什么声明在后面？</h3>
+
 <p>
 They're only backwards if you're used to C. In C, the notion is that a
 variable is declared like an expression denoting its type, which is a
@@ -1528,8 +1930,13 @@ See the article about
 for more details.
 </p>
 
+<div class="english">
 <h3 id="no_pointer_arithmetic">
 Why is there no pointer arithmetic?</h3>
+</div>
+
+<h3 id="没有指针运算">为什么没有指针运算？</h3>
+
 <p>
 Safety.  Without pointer arithmetic it's possible to create a
 language that can never derive an illegal address that succeeds
@@ -1539,8 +1946,13 @@ using pointer arithmetic.  Also, the lack of pointer arithmetic can
 simplify the implementation of the garbage collector.
 </p>
 
+<div class="english">
 <h3 id="inc_dec">
 Why are <code>++</code> and <code>--</code> statements and not expressions?  And why postfix, not prefix?</h3>
+</div>
+
+<h3 id="递增递减">为什么 <code>++</code> 与 <code>--</code> 语句不是表达式？为什么只有后缀式而没有前缀式？</h3>
+
 <p>
 Without pointer arithmetic, the convenience value of pre- and postfix
 increment operators drops.  By removing them from the expression
@@ -1554,9 +1966,14 @@ with the STL, a library for a language whose name contains, ironically, a
 postfix increment.
 </p>
 
+<div class="english">
 <h3 id="semicolons">
 Why are there braces but no semicolons? And why can't I put the opening
 brace on the next line?</h3>
+</div>
+
+<h3 id="分号">为什么有大括号却没有分号？为什么我不能将开大括号放在下一行？</h3>
+
 <p>
 Go uses brace brackets for statement grouping, a syntax familiar to
 programmers who have worked with any language in the C family.
@@ -1585,8 +2002,13 @@ Note too that Go's style means that an interactive implementation of
 Go can use the standard syntax one line at a time without special rules.
 </p>
 
+<div class="english">
 <h3 id="garbage_collection">
 Why do garbage collection?  Won't it be too expensive?</h3>
+</div>
+
+<h3 id="垃圾回收">为什么要有垃圾回收？代价会不会太高？</h3>
+
 <p>
 One of the biggest sources of bookkeeping in systems programs is
 memory management.  We feel it's critical to eliminate that

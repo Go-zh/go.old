@@ -267,6 +267,9 @@ func (p *parser) fosterParent(n *Node) {
 // addText adds text to the preceding node if it is a text node, or else it
 // calls addChild with a new text node.
 func (p *parser) addText(text string) {
+	if text == "" {
+		return
+	}
 	// TODO: distinguish whitespace text from others.
 	t := p.top()
 	if i := len(t.Child); i > 0 && t.Child[i-1].Type == TextNode {
@@ -387,6 +390,10 @@ func (p *parser) reconstructActiveFormattingElements() {
 
 // read reads the next token from the tokenizer.
 func (p *parser) read() error {
+	// CDATA sections are allowed only in foreign content.
+	n := p.oe.top()
+	p.tokenizer.cdataOK = n != nil && n.Namespace != ""
+
 	p.tokenizer.Next()
 	p.tok = p.tokenizer.Token()
 	if p.tok.Type == ErrorToken {
@@ -725,7 +732,10 @@ func inBodyIM(p *parser) bool {
 		}
 		p.reconstructActiveFormattingElements()
 		p.addText(d)
-		p.framesetOK = false
+		if p.framesetOK && strings.TrimLeft(d, whitespace) != "" {
+			// There were non-whitespace characters inserted.
+			p.framesetOK = false
+		}
 	case StartTagToken:
 		switch p.tok.DataAtom {
 		case a.Html:
@@ -1836,14 +1846,16 @@ func afterAfterFramesetIM(p *parser) bool {
 	return true
 }
 
+const whitespaceOrNUL = whitespace + "\x00"
+
 // Section 12.2.5.5.
 func parseForeignContent(p *parser) bool {
 	switch p.tok.Type {
 	case TextToken:
-		p.tok.Data = strings.Replace(p.tok.Data, "\x00", "", -1)
 		if p.framesetOK {
-			p.framesetOK = strings.TrimLeft(p.tok.Data, whitespace) == ""
+			p.framesetOK = strings.TrimLeft(p.tok.Data, whitespaceOrNUL) == ""
 		}
+		p.tok.Data = strings.Replace(p.tok.Data, "\x00", "\ufffd", -1)
 		p.addText(p.tok.Data)
 	case CommentToken:
 		p.addChild(&Node{

@@ -25,7 +25,6 @@ type file struct {
 	fd      syscall.Handle
 	name    string
 	dirinfo *dirInfo   // nil unless directory being read
-	nepipe  int        // number of consecutive EPIPE in Write
 	l       sync.Mutex // used to implement windows pread/pwrite
 }
 
@@ -53,6 +52,9 @@ type dirInfo struct {
 	data     syscall.Win32finddata
 	needdata bool
 	path     string
+}
+
+func epipecheck(file *File, e error) {
 }
 
 const DevNull = "NUL"

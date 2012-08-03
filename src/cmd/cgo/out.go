@@ -14,6 +14,7 @@ import (
 	"go/printer"
 	"go/token"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -57,7 +58,13 @@ func (p *Package) writeDefs() {
 	fmt.Fprintf(fgo2, "type _ unsafe.Pointer\n\n")
 	fmt.Fprintf(fgo2, "func _Cerrno(dst *error, x int) { *dst = syscall.Errno(x) }\n")
 
-	for name, def := range typedef {
+	typedefNames := make([]string, 0, len(typedef))
+	for name := range typedef {
+		typedefNames = append(typedefNames, name)
+	}
+	sort.Strings(typedefNames)
+	for _, name := range typedefNames {
+		def := typedef[name]
 		fmt.Fprintf(fgo2, "type %s ", name)
 		conf.Fprint(fgo2, fset, def.Go)
 		fmt.Fprintf(fgo2, "\n\n")
@@ -467,6 +474,8 @@ func (p *Package) writeExports(fgo2, fc, fm *os.File) {
 	fmt.Fprintf(fgcc, "/* Created by cgo - DO NOT EDIT. */\n")
 	fmt.Fprintf(fgcc, "#include \"_cgo_export.h\"\n")
 
+	fmt.Fprintf(fgcc, "\nextern void crosscall2(void (*fn)(void *, int), void *, int);\n\n")
+
 	for _, exp := range p.ExpFunc {
 		fn := exp.Func
 
@@ -558,7 +567,7 @@ func (p *Package) writeExports(fgo2, fc, fm *os.File) {
 		s += ")"
 		fmt.Fprintf(fgcch, "\nextern %s;\n", s)
 
-		fmt.Fprintf(fgcc, "extern _cgoexp%s_%s(void *, int);\n", cPrefix, exp.ExpName)
+		fmt.Fprintf(fgcc, "extern void _cgoexp%s_%s(void *, int);\n", cPrefix, exp.ExpName)
 		fmt.Fprintf(fgcc, "\n%s\n", s)
 		fmt.Fprintf(fgcc, "{\n")
 		fmt.Fprintf(fgcc, "\t%s __attribute__((packed)) a;\n", ctype)
@@ -662,7 +671,21 @@ func (p *Package) writeGccgoExports(fgo2, fc, fm *os.File) {
 		}
 		return '_'
 	}
-	gccgoSymbolPrefix := strings.Map(clean, *gccgoprefix)
+
+	var gccgoSymbolPrefix string
+	if *gccgopkgpath != "" {
+		gccgoSymbolPrefix = strings.Map(clean, *gccgopkgpath)
+	} else {
+		if *gccgoprefix == "" && p.PackageName == "main" {
+			gccgoSymbolPrefix = "main"
+		} else {
+			prefix := strings.Map(clean, *gccgoprefix)
+			if prefix == "" {
+				prefix = "go"
+			}
+			gccgoSymbolPrefix = prefix + "." + p.PackageName
+		}
+	}
 
 	for _, exp := range p.ExpFunc {
 		// TODO: support functions with receivers.
@@ -700,7 +723,7 @@ func (p *Package) writeGccgoExports(fgo2, fc, fm *os.File) {
 
 		// The function name.
 		fmt.Fprintf(cdeclBuf, " "+exp.ExpName)
-		gccgoSymbol := fmt.Sprintf("%s.%s.%s", gccgoSymbolPrefix, p.PackageName, exp.Func.Name)
+		gccgoSymbol := fmt.Sprintf("%s.%s", gccgoSymbolPrefix, exp.Func.Name)
 		fmt.Fprintf(cdeclBuf, " (")
 		// Function parameters.
 		forFieldList(fntype.Params,

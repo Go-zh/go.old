@@ -28,7 +28,8 @@ import (
 type Dir string
 
 func (d Dir) Open(name string) (File, error) {
-	if filepath.Separator != '/' && strings.IndexRune(name, filepath.Separator) >= 0 {
+	if filepath.Separator != '/' && strings.IndexRune(name, filepath.Separator) >= 0 ||
+		strings.Contains(name, "\x00") {
 		return nil, errors.New("http: invalid character in file path")
 	}
 	dir := string(d)
@@ -154,7 +155,7 @@ func serveContent(w ResponseWriter, r *Request, name string, modtime time.Time, 
 		}
 		if sumRangesSize(ranges) >= size {
 			// The total number of bytes in all the ranges
-			// is larger the the size of the file by
+			// is larger than the size of the file by
 			// itself, so this is probably an attack, or a
 			// dumb client.  Ignore the range request.
 			ranges = nil

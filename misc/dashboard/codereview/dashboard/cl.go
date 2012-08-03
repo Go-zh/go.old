@@ -14,7 +14,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	netmail "net/mail"
 	"net/url"
 	"regexp"
 	"sort"
@@ -23,7 +22,6 @@ import (
 
 	"appengine"
 	"appengine/datastore"
-	"appengine/mail"
 	"appengine/taskqueue"
 	"appengine/urlfetch"
 	"appengine/user"
@@ -35,6 +33,7 @@ func init() {
 }
 
 const codereviewBase = "http://codereview.appspot.com"
+const gobotBase = "http://research.swtch.com/gobot_codereview"
 
 var clRegexp = regexp.MustCompile(`\d+`)
 
@@ -49,6 +48,8 @@ type CL struct {
 	Description []byte `datastore:",noindex"`
 	FirstLine   string `datastore:",noindex"`
 	LGTMs       []string
+	NotLGTMs    []string
+	LastUpdate  string
 
 	// Mail information.
 	Subject       string   `datastore:",noindex"`
@@ -78,9 +79,9 @@ func (cl *CL) FirstLineHTML() template.HTML {
 	return template.HTML(s)
 }
 
-func (cl *CL) LGTMHTML() template.HTML {
-	x := make([]string, len(cl.LGTMs))
-	for i, s := range cl.LGTMs {
+func formatEmails(e []string) template.HTML {
+	x := make([]string, len(e))
+	for i, s := range e {
 		s = template.HTMLEscapeString(s)
 		if !strings.Contains(s, "@") {
 			s = "<b>" + s + "</b>"
@@ -89,6 +90,14 @@ func (cl *CL) LGTMHTML() template.HTML {
 		x[i] = s
 	}
 	return template.HTML(strings.Join(x, ", "))
+}
+
+func (cl *CL) LGTMHTML() template.HTML {
+	return formatEmails(cl.LGTMs)
+}
+
+func (cl *CL) NotLGTMHTML() template.HTML {
+	return formatEmails(cl.NotLGTMs)
 }
 
 func (cl *CL) ModifiedAgo() string {
@@ -120,7 +129,8 @@ func handleAssign(w http.ResponseWriter, r *http.Request) {
 	}
 
 	u := user.Current(c)
-	if _, ok := emailToPerson[u.Email]; !ok {
+	person, ok := emailToPerson[u.Email]
+	if !ok {
 		http.Error(w, "Not allowed", http.StatusUnauthorized)
 		return
 	}
@@ -175,34 +185,21 @@ func handleAssign(w http.ResponseWriter, r *http.Request) {
 		if !found {
 			c.Infof("Adding %v as a reviewer of CL %v", rev, n)
 
-			// We can't do this easily, as we need authentication to edit
-			// an issue on behalf of a user, which is non-trivial. For now,
-			// just send a mail with the body "R=<reviewer>", Cc'ing that person,
-			// and rely on social convention.
-			cl := new(CL)
-			err := datastore.Get(c, key, cl)
+			url := fmt.Sprintf("%s?cl=%s&r=%s&obo=%s", gobotBase, n, rev, person)
+			resp, err := urlfetch.Client(c).Get(url)
 			if err != nil {
-				c.Errorf("%s", err)
+				c.Errorf("Gobot GET failed: %v", err)
 				http.Error(w, err.Error(), 500)
 				return
 			}
-			msg := &mail.Message{
-				Sender: u.Email,
-				To:     []string{preferredEmail[rev]},
-				Cc:     cl.Recipients,
-				// Take care to match Rietveld's subject line
-				// so that Gmail will correctly thread mail.
-				Subject: cl.Subject + " (issue " + n + ")",
-				Body:    "R=" + rev + "\n\n(sent by gocodereview)",
+			defer resp.Body.Close()
+			if resp.StatusCode != 200 {
+				c.Errorf("Gobot GET failed: got HTTP response %d", resp.StatusCode)
+				http.Error(w, "Failed contacting Gobot", 500)
+				return
 			}
-			if cl.LastMessageID != "" {
-				msg.Headers = netmail.Header{
-					"In-Reply-To": []string{cl.LastMessageID},
-				}
-			}
-			if err := mail.Send(c, msg); err != nil {
-				c.Errorf("mail.Send: %v", err)
-			}
+
+			c.Infof("Gobot said %q", resp.Status)
 		}
 	}
 
@@ -285,12 +282,13 @@ func updateCL(c appengine.Context, n string) error {
 	}
 
 	var apiResp struct {
-		Description string `json:"description"`
-		Created     string `json:"created"`
-		OwnerEmail  string `json:"owner_email"`
-		Modified    string `json:"modified"`
-		Closed      bool   `json:"closed"`
-		Subject     string `json:"subject"`
+		Description string   `json:"description"`
+		Reviewers   []string `json:"reviewers"`
+		Created     string   `json:"created"`
+		OwnerEmail  string   `json:"owner_email"`
+		Modified    string   `json:"modified"`
+		Closed      bool     `json:"closed"`
+		Subject     string   `json:"subject"`
 		Messages    []struct {
 			Text       string   `json:"text"`
 			Sender     string   `json:"sender"`
@@ -325,7 +323,15 @@ func updateCL(c appengine.Context, n string) error {
 	if i := strings.Index(cl.FirstLine, "\n"); i >= 0 {
 		cl.FirstLine = cl.FirstLine[:i]
 	}
+	// Treat zero reviewers as a signal that the CL is completed.
+	// This could be after the CL has been submitted, but before the CL author has synced,
+	// but it could also be a CL manually edited to remove reviewers.
+	if len(apiResp.Reviewers) == 0 {
+		cl.Closed = true
+	}
+
 	lgtm := make(map[string]bool)
+	notLGTM := make(map[string]bool)
 	rcpt := make(map[string]bool)
 	for _, msg := range apiResp.Messages {
 		s, rev := msg.Sender, false
@@ -343,6 +349,11 @@ func updateCL(c appengine.Context, n string) error {
 
 		if msg.Approval {
 			lgtm[s] = true
+			delete(notLGTM, s) // "LGTM" overrules previous "NOT LGTM"
+		}
+		if strings.Contains(msg.Text, "NOT LGTM") {
+			notLGTM[s] = true
+			delete(lgtm, s) // "NOT LGTM" overrules previous "LGTM"
 		}
 
 		for _, r := range msg.Recipients {
@@ -352,10 +363,14 @@ func updateCL(c appengine.Context, n string) error {
 	for l := range lgtm {
 		cl.LGTMs = append(cl.LGTMs, l)
 	}
+	for l := range notLGTM {
+		cl.NotLGTMs = append(cl.NotLGTMs, l)
+	}
 	for r := range rcpt {
 		cl.Recipients = append(cl.Recipients, r)
 	}
 	sort.Strings(cl.LGTMs)
+	sort.Strings(cl.NotLGTMs)
 	sort.Strings(cl.Recipients)
 
 	err = datastore.RunInTransaction(c, func(c appengine.Context) error {

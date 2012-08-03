@@ -24,12 +24,16 @@ func init() {
 	http.HandleFunc("/favicon.ico", http.NotFound)
 }
 
+// maximum number of active CLs to show in person-specific tables.
+const maxCLs = 100
+
 func handleFront(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
 
 	data := &frontPageData{
 		Reviewers: personList,
 		User:      user.Current(c).Email,
+		IsAdmin:   user.IsAdmin(c),
 	}
 	var currentPerson string
 	currentPerson, data.UserIsReviewer = emailToPerson[data.User]
@@ -54,7 +58,7 @@ func handleFront(w http.ResponseWriter, r *http.Request) {
 
 	if data.UserIsReviewer {
 		tableFetch(0, func(tbl *clTable) error {
-			q := activeCLs.Filter("Reviewer =", currentPerson).Limit(10)
+			q := activeCLs.Filter("Reviewer =", currentPerson).Limit(maxCLs)
 			tbl.Title = "CLs assigned to you for review"
 			tbl.Assignable = true
 			_, err := q.GetAll(c, &tbl.CLs)
@@ -63,7 +67,7 @@ func handleFront(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tableFetch(1, func(tbl *clTable) error {
-		q := activeCLs.Filter("Author =", currentPerson).Limit(10)
+		q := activeCLs.Filter("Author =", currentPerson).Limit(maxCLs)
 		tbl.Title = "CLs sent by you"
 		tbl.Assignable = true
 		_, err := q.GetAll(c, &tbl.CLs)
@@ -136,6 +140,7 @@ type frontPageData struct {
 	UserIsReviewer bool
 
 	User, LogoutURL string
+	IsAdmin         bool
 }
 
 type clTable struct {
@@ -242,9 +247,11 @@ var frontPage = template.Must(template.New("front").Funcs(template.FuncMap{
     {{end}}
     <td>
       <a href="http://codereview.appspot.com/{{.Number}}/" title="{{ printf "%s" .Description}}">{{.Number}}: {{.FirstLineHTML}}</a>
-      {{if and .LGTMs $tbl.Assignable}}<br /><span style="font-size: smaller;">LGTMs: {{.LGTMHTML}}{{end}}</span>
+      {{if and .LGTMs $tbl.Assignable}}<br /><span style="font-size: smaller;">LGTMs: {{.LGTMHTML}}</span>{{end}}
+      {{if and .NotLGTMs $tbl.Assignable}}<br /><span style="font-size: smaller; color: #f74545;">NOT LGTMs: {{.NotLGTMHTML}}</span>{{end}}
     </td>
     <td title="Last modified">{{.ModifiedAgo}}</td>
+    {{if $.IsAdmin}}<td><a href="/update-cl?cl={{.Number}}" title="Update this CL">&#x27f3;</a></td>{{end}}
   </tr>
 {{end}}
 </table>

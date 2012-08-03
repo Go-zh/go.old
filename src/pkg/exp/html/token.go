@@ -152,6 +152,11 @@ type Tokenizer struct {
 	rawTag string
 	// textIsRaw is whether the current text token's data is not escaped.
 	textIsRaw bool
+	// convertNUL is whether NUL bytes in the current token's data should
+	// be converted into \ufffd replacement characters.
+	convertNUL bool
+	// cdataOK is whether CDATA sections are allowed in the current context.
+	cdataOK bool
 }
 
 // Err returns the error associated with the most recent ErrorToken token.
@@ -236,6 +241,12 @@ func (z *Tokenizer) skipWhiteSpace() {
 // readRawOrRCDATA reads until the next "</foo>", where "foo" is z.rawTag and
 // is typically something like "script" or "textarea".
 func (z *Tokenizer) readRawOrRCDATA() {
+	if z.rawTag == "script" {
+		z.readScript()
+		z.textIsRaw = true
+		z.rawTag = ""
+		return
+	}
 loop:
 	for {
 		c := z.readByte()
@@ -252,33 +263,250 @@ loop:
 		if c != '/' {
 			continue loop
 		}
-		for i := 0; i < len(z.rawTag); i++ {
-			c = z.readByte()
-			if z.err != nil {
-				break loop
-			}
-			if c != z.rawTag[i] && c != z.rawTag[i]-('a'-'A') {
-				continue loop
-			}
-		}
-		c = z.readByte()
-		if z.err != nil {
+		if z.readRawEndTag() || z.err != nil {
 			break loop
-		}
-		switch c {
-		case ' ', '\n', '\r', '\t', '\f', '/', '>':
-			// The 3 is 2 for the leading "</" plus 1 for the trailing character c.
-			z.raw.end -= 3 + len(z.rawTag)
-			break loop
-		case '<':
-			// Step back one, to catch "</foo</foo>".
-			z.raw.end--
 		}
 	}
 	z.data.end = z.raw.end
 	// A textarea's or title's RCDATA can contain escaped entities.
 	z.textIsRaw = z.rawTag != "textarea" && z.rawTag != "title"
 	z.rawTag = ""
+}
+
+// readRawEndTag attempts to read a tag like "</foo>", where "foo" is z.rawTag.
+// If it succeeds, it backs up the input position to reconsume the tag and 
+// returns true. Otherwise it returns false. The opening "</" has already been
+// consumed.
+func (z *Tokenizer) readRawEndTag() bool {
+	for i := 0; i < len(z.rawTag); i++ {
+		c := z.readByte()
+		if z.err != nil {
+			return false
+		}
+		if c != z.rawTag[i] && c != z.rawTag[i]-('a'-'A') {
+			z.raw.end--
+			return false
+		}
+	}
+	c := z.readByte()
+	if z.err != nil {
+		return false
+	}
+	switch c {
+	case ' ', '\n', '\r', '\t', '\f', '/', '>':
+		// The 3 is 2 for the leading "</" plus 1 for the trailing character c.
+		z.raw.end -= 3 + len(z.rawTag)
+		return true
+	}
+	z.raw.end--
+	return false
+}
+
+// readScript reads until the next </script> tag, following the byzantine
+// rules for escaping/hiding the closing tag.
+func (z *Tokenizer) readScript() {
+	defer func() {
+		z.data.end = z.raw.end
+	}()
+	var c byte
+
+scriptData:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	if c == '<' {
+		goto scriptDataLessThanSign
+	}
+	goto scriptData
+
+scriptDataLessThanSign:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch c {
+	case '/':
+		goto scriptDataEndTagOpen
+	case '!':
+		goto scriptDataEscapeStart
+	}
+	z.raw.end--
+	goto scriptData
+
+scriptDataEndTagOpen:
+	if z.readRawEndTag() || z.err != nil {
+		return
+	}
+	goto scriptData
+
+scriptDataEscapeStart:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	if c == '-' {
+		goto scriptDataEscapeStartDash
+	}
+	z.raw.end--
+	goto scriptData
+
+scriptDataEscapeStartDash:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	if c == '-' {
+		goto scriptDataEscapedDashDash
+	}
+	z.raw.end--
+	goto scriptData
+
+scriptDataEscaped:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch c {
+	case '-':
+		goto scriptDataEscapedDash
+	case '<':
+		goto scriptDataEscapedLessThanSign
+	}
+	goto scriptDataEscaped
+
+scriptDataEscapedDash:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch c {
+	case '-':
+		goto scriptDataEscapedDashDash
+	case '<':
+		goto scriptDataEscapedLessThanSign
+	}
+	goto scriptDataEscaped
+
+scriptDataEscapedDashDash:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch c {
+	case '-':
+		goto scriptDataEscapedDashDash
+	case '<':
+		goto scriptDataEscapedLessThanSign
+	case '>':
+		goto scriptData
+	}
+	goto scriptDataEscaped
+
+scriptDataEscapedLessThanSign:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	if c == '/' {
+		goto scriptDataEscapedEndTagOpen
+	}
+	if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' {
+		goto scriptDataDoubleEscapeStart
+	}
+	z.raw.end--
+	goto scriptData
+
+scriptDataEscapedEndTagOpen:
+	if z.readRawEndTag() || z.err != nil {
+		return
+	}
+	goto scriptDataEscaped
+
+scriptDataDoubleEscapeStart:
+	z.raw.end--
+	for i := 0; i < len("script"); i++ {
+		c = z.readByte()
+		if z.err != nil {
+			return
+		}
+		if c != "script"[i] && c != "SCRIPT"[i] {
+			z.raw.end--
+			goto scriptDataEscaped
+		}
+	}
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch c {
+	case ' ', '\n', '\r', '\t', '\f', '/', '>':
+		goto scriptDataDoubleEscaped
+	}
+	z.raw.end--
+	goto scriptDataEscaped
+
+scriptDataDoubleEscaped:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch c {
+	case '-':
+		goto scriptDataDoubleEscapedDash
+	case '<':
+		goto scriptDataDoubleEscapedLessThanSign
+	}
+	goto scriptDataDoubleEscaped
+
+scriptDataDoubleEscapedDash:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch c {
+	case '-':
+		goto scriptDataDoubleEscapedDashDash
+	case '<':
+		goto scriptDataDoubleEscapedLessThanSign
+	}
+	goto scriptDataDoubleEscaped
+
+scriptDataDoubleEscapedDashDash:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	switch c {
+	case '-':
+		goto scriptDataDoubleEscapedDashDash
+	case '<':
+		goto scriptDataDoubleEscapedLessThanSign
+	case '>':
+		goto scriptData
+	}
+	goto scriptDataDoubleEscaped
+
+scriptDataDoubleEscapedLessThanSign:
+	c = z.readByte()
+	if z.err != nil {
+		return
+	}
+	if c == '/' {
+		goto scriptDataDoubleEscapeEnd
+	}
+	z.raw.end--
+	goto scriptDataDoubleEscaped
+
+scriptDataDoubleEscapeEnd:
+	if z.readRawEndTag() {
+		z.raw.end += len("</script>")
+		goto scriptDataEscaped
+	}
+	if z.err != nil {
+		return
+	}
+	goto scriptDataDoubleEscaped
 }
 
 // readComment reads the next comment token starting with "<!--". The opening
@@ -344,8 +572,8 @@ func (z *Tokenizer) readUntilCloseAngle() {
 }
 
 // readMarkupDeclaration reads the next token starting with "<!". It might be
-// a "<!--comment-->", a "<!DOCTYPE foo>", or "<!a bogus comment". The opening
-// "<!" has already been consumed.
+// a "<!--comment-->", a "<!DOCTYPE foo>", a "<![CDATA[section]]>" or
+// "<!a bogus comment". The opening "<!" has already been consumed.
 func (z *Tokenizer) readMarkupDeclaration() TokenType {
 	z.data.start = z.raw.end
 	var c [2]byte
@@ -361,27 +589,81 @@ func (z *Tokenizer) readMarkupDeclaration() TokenType {
 		return CommentToken
 	}
 	z.raw.end -= 2
+	if z.readDoctype() {
+		return DoctypeToken
+	}
+	if z.cdataOK && z.readCDATA() {
+		z.convertNUL = true
+		return TextToken
+	}
+	// It's a bogus comment.
+	z.readUntilCloseAngle()
+	return CommentToken
+}
+
+// readDoctype attempts to read a doctype declaration and returns true if
+// successful. The opening "<!" has already been consumed.
+func (z *Tokenizer) readDoctype() bool {
 	const s = "DOCTYPE"
 	for i := 0; i < len(s); i++ {
 		c := z.readByte()
 		if z.err != nil {
 			z.data.end = z.raw.end
-			return CommentToken
+			return false
 		}
 		if c != s[i] && c != s[i]+('a'-'A') {
 			// Back up to read the fragment of "DOCTYPE" again.
 			z.raw.end = z.data.start
-			z.readUntilCloseAngle()
-			return CommentToken
+			return false
 		}
 	}
 	if z.skipWhiteSpace(); z.err != nil {
 		z.data.start = z.raw.end
 		z.data.end = z.raw.end
-		return DoctypeToken
+		return true
 	}
 	z.readUntilCloseAngle()
-	return DoctypeToken
+	return true
+}
+
+// readCDATA attempts to read a CDATA section and returns true if
+// successful. The opening "<!" has already been consumed.
+func (z *Tokenizer) readCDATA() bool {
+	const s = "[CDATA["
+	for i := 0; i < len(s); i++ {
+		c := z.readByte()
+		if z.err != nil {
+			z.data.end = z.raw.end
+			return false
+		}
+		if c != s[i] {
+			// Back up to read the fragment of "[CDATA[" again.
+			z.raw.end = z.data.start
+			return false
+		}
+	}
+	z.data.start = z.raw.end
+	brackets := 0
+	for {
+		c := z.readByte()
+		if z.err != nil {
+			z.data.end = z.raw.end
+			return true
+		}
+		switch c {
+		case ']':
+			brackets++
+		case '>':
+			if brackets >= 2 {
+				z.data.end = z.raw.end - len("]]>")
+				return true
+			}
+			brackets = 0
+		default:
+			brackets = 0
+		}
+	}
+	panic("unreachable")
 }
 
 // startTagIn returns whether the start tag in z.buf[z.data.start:z.data.end]
@@ -409,28 +691,9 @@ loop:
 // readStartTag reads the next start tag token. The opening "<a" has already
 // been consumed, where 'a' means anything in [A-Za-z].
 func (z *Tokenizer) readStartTag() TokenType {
-	z.attr = z.attr[:0]
-	z.nAttrReturned = 0
-	// Read the tag name and attribute key/value pairs.
-	z.readTagName()
-	if z.skipWhiteSpace(); z.err != nil {
+	z.readTag()
+	if z.err != nil && len(z.attr) == 0 {
 		return ErrorToken
-	}
-	for {
-		c := z.readByte()
-		if z.err != nil || c == '>' {
-			break
-		}
-		z.raw.end--
-		z.readTagAttrKey()
-		z.readTagAttrVal()
-		// Save pendingAttr if it has a non-empty key.
-		if z.pendingAttr[0].start != z.pendingAttr[0].end {
-			z.attr = append(z.attr, z.pendingAttr)
-		}
-		if z.skipWhiteSpace(); z.err != nil {
-			break
-		}
 	}
 	// Several tags flag the tokenizer's next token as raw.
 	c, raw := z.buf[z.data.start], false
@@ -461,16 +724,30 @@ func (z *Tokenizer) readStartTag() TokenType {
 	return StartTagToken
 }
 
-// readEndTag reads the next end tag token. The opening "</a" has already
-// been consumed, where 'a' means anything in [A-Za-z].
-func (z *Tokenizer) readEndTag() {
+// readTag reads the next tag token. The opening "<a" or "</a" has already been
+// consumed, where 'a' means anything in [A-Za-z].
+func (z *Tokenizer) readTag() {
 	z.attr = z.attr[:0]
 	z.nAttrReturned = 0
+	// Read the tag name and attribute key/value pairs.
 	z.readTagName()
+	if z.skipWhiteSpace(); z.err != nil {
+		return
+	}
 	for {
 		c := z.readByte()
 		if z.err != nil || c == '>' {
-			return
+			break
+		}
+		z.raw.end--
+		z.readTagAttrKey()
+		z.readTagAttrVal()
+		// Save pendingAttr if it has a non-empty key.
+		if z.pendingAttr[0].start != z.pendingAttr[0].end {
+			z.attr = append(z.attr, z.pendingAttr)
+		}
+		if z.skipWhiteSpace(); z.err != nil {
+			break
 		}
 	}
 }
@@ -597,16 +874,19 @@ func (z *Tokenizer) Next() TokenType {
 			for z.err == nil {
 				z.readByte()
 			}
+			z.data.end = z.raw.end
 			z.textIsRaw = true
 		} else {
 			z.readRawOrRCDATA()
 		}
 		if z.data.end > z.data.start {
 			z.tt = TextToken
+			z.convertNUL = true
 			return z.tt
 		}
 	}
 	z.textIsRaw = false
+	z.convertNUL = false
 
 loop:
 	for {
@@ -665,7 +945,7 @@ loop:
 				continue loop
 			}
 			if 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' {
-				z.readEndTag()
+				z.readTag()
 				z.tt = EndTagToken
 				return z.tt
 			}
@@ -731,6 +1011,11 @@ func convertNewlines(s []byte) []byte {
 	return s
 }
 
+var (
+	nul         = []byte("\x00")
+	replacement = []byte("\ufffd")
+)
+
 // Text returns the unescaped text of a text, comment or doctype token. The
 // contents of the returned slice may change on the next call to Next.
 func (z *Tokenizer) Text() []byte {
@@ -740,8 +1025,11 @@ func (z *Tokenizer) Text() []byte {
 		z.data.start = z.raw.end
 		z.data.end = z.raw.end
 		s = convertNewlines(s)
+		if (z.convertNUL || z.tt == CommentToken) && bytes.Contains(s, nul) {
+			s = bytes.Replace(s, nul, replacement, -1)
+		}
 		if !z.textIsRaw {
-			s = unescape(s)
+			s = unescape(s, false)
 		}
 		return s
 	}
@@ -775,7 +1063,7 @@ func (z *Tokenizer) TagAttr() (key, val []byte, moreAttr bool) {
 			z.nAttrReturned++
 			key = z.buf[x[0].start:x[0].end]
 			val = z.buf[x[1].start:x[1].end]
-			return lower(key), unescape(convertNewlines(val)), z.nAttrReturned < len(z.attr)
+			return lower(key), unescape(convertNewlines(val), true), z.nAttrReturned < len(z.attr)
 		}
 	}
 	return nil, nil, false
@@ -788,22 +1076,18 @@ func (z *Tokenizer) Token() Token {
 	switch z.tt {
 	case TextToken, CommentToken, DoctypeToken:
 		t.Data = string(z.Text())
-	case StartTagToken, SelfClosingTagToken:
-		var attr []Attribute
+	case StartTagToken, SelfClosingTagToken, EndTagToken:
 		name, moreAttr := z.TagName()
-		for moreAttr {
-			var key, val []byte
-			key, val, moreAttr = z.TagAttr()
-			attr = append(attr, Attribute{"", atom.String(key), string(val)})
+		// Since end tags should not have attributes, the high-level tokenizer
+		// interface will not return attributes for an end tag token even if
+		// it looks like </br foo="bar">.
+		if z.tt != EndTagToken {
+			for moreAttr {
+				var key, val []byte
+				key, val, moreAttr = z.TagAttr()
+				t.Attr = append(t.Attr, Attribute{"", atom.String(key), string(val)})
+			}
 		}
-		if a := atom.Lookup(name); a != 0 {
-			t.DataAtom, t.Data = a, a.String()
-		} else {
-			t.DataAtom, t.Data = 0, string(name)
-		}
-		t.Attr = attr
-	case EndTagToken:
-		name, _ := z.TagName()
 		if a := atom.Lookup(name); a != 0 {
 			t.DataAtom, t.Data = a, a.String()
 		} else {
