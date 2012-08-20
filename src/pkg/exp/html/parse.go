@@ -19,9 +19,8 @@ type parser struct {
 	tokenizer *Tokenizer
 	// tok is the most recently read token.
 	tok Token
-	// Self-closing tags like <hr/> are re-interpreted as a two-token sequence:
-	// <hr> followed by </hr>. hasSelfClosingToken is true if we have just read
-	// the synthetic start tag and the next one due is the matching end tag.
+	// Self-closing tags like <hr/> are treated as start tags, except that
+	// hasSelfClosingToken is set while they are being processed.
 	hasSelfClosingToken bool
 	// doc is the document root element.
 	doc *Node
@@ -42,6 +41,8 @@ type parser struct {
 	fosterParenting bool
 	// quirks is whether the parser is operating in "quirks mode."
 	quirks bool
+	// fragment is whether the parser is parsing an HTML fragment.
+	fragment bool
 	// context is the context element when parsing an HTML fragment
 	// (section 12.4).
 	context *Node
@@ -208,7 +209,7 @@ loop:
 // addChild adds a child node n to the top element, and pushes n onto the stack
 // of open elements if it is an element node.
 func (p *parser) addChild(n *Node) {
-	if p.fosterParenting {
+	if p.shouldFosterParent() {
 		p.fosterParent(n)
 	} else {
 		p.top().Add(n)
@@ -219,10 +220,21 @@ func (p *parser) addChild(n *Node) {
 	}
 }
 
+// shouldFosterParent returns whether the next node to be added should be
+// foster parented.
+func (p *parser) shouldFosterParent() bool {
+	if p.fosterParenting {
+		switch p.top().DataAtom {
+		case a.Table, a.Tbody, a.Tfoot, a.Thead, a.Tr:
+			return true
+		}
+	}
+	return false
+}
+
 // fosterParent adds a child node according to the foster parenting rules.
 // Section 12.2.5.3, "foster parenting".
 func (p *parser) fosterParent(n *Node) {
-	p.fosterParenting = false
 	var table, parent *Node
 	var i int
 	for i = len(p.oe) - 1; i >= 0; i-- {
@@ -270,7 +282,15 @@ func (p *parser) addText(text string) {
 	if text == "" {
 		return
 	}
-	// TODO: distinguish whitespace text from others.
+
+	if p.shouldFosterParent() {
+		p.fosterParent(&Node{
+			Type: TextNode,
+			Data: text,
+		})
+		return
+	}
+
 	t := p.top()
 	if i := len(t.Child); i > 0 && t.Child[i-1].Type == TextNode {
 		t.Child[i-1].Data += text
@@ -289,16 +309,6 @@ func (p *parser) addElement() {
 		DataAtom: p.tok.DataAtom,
 		Data:     p.tok.Data,
 		Attr:     p.tok.Attr,
-	})
-}
-
-// addSyntheticElement adds a child element with the given tag and attributes.
-func (p *parser) addSyntheticElement(tagAtom a.Atom, attr []Attribute) {
-	p.addChild(&Node{
-		Type:     ElementNode,
-		DataAtom: tagAtom,
-		Data:     tagAtom.String(),
-		Attr:     attr,
 	})
 }
 
@@ -392,7 +402,7 @@ func (p *parser) reconstructActiveFormattingElements() {
 func (p *parser) read() error {
 	// CDATA sections are allowed only in foreign content.
 	n := p.oe.top()
-	p.tokenizer.cdataOK = n != nil && n.Namespace != ""
+	p.tokenizer.AllowCDATA(n != nil && n.Namespace != "")
 
 	p.tokenizer.Next()
 	p.tok = p.tokenizer.Token()
@@ -662,7 +672,7 @@ func afterHeadIM(p *parser) bool {
 			return true
 		case a.Base, a.Basefont, a.Bgsound, a.Link, a.Meta, a.Noframes, a.Script, a.Style, a.Title:
 			p.oe = append(p.oe, p.head)
-			defer p.oe.pop()
+			defer p.oe.remove(p.head)
 			return inHeadIM(p)
 		case a.Head:
 			// Ignore the token.
@@ -914,22 +924,23 @@ func inBodyIM(p *parser) bool {
 			}
 			p.acknowledgeSelfClosingTag()
 			p.popUntil(buttonScope, a.P)
-			p.addSyntheticElement(a.Form, nil)
-			p.form = p.top()
+			p.parseImpliedToken(StartTagToken, a.Form, a.Form.String())
 			if action != "" {
 				p.form.Attr = []Attribute{{Key: "action", Val: action}}
 			}
-			p.addSyntheticElement(a.Hr, nil)
-			p.oe.pop()
-			p.addSyntheticElement(a.Label, nil)
+			p.parseImpliedToken(StartTagToken, a.Hr, a.Hr.String())
+			p.parseImpliedToken(StartTagToken, a.Label, a.Label.String())
 			p.addText(prompt)
-			p.addSyntheticElement(a.Input, attr)
+			p.addChild(&Node{
+				Type:     ElementNode,
+				DataAtom: a.Input,
+				Data:     a.Input.String(),
+				Attr:     attr,
+			})
 			p.oe.pop()
-			p.oe.pop()
-			p.addSyntheticElement(a.Hr, nil)
-			p.oe.pop()
-			p.oe.pop()
-			p.form = nil
+			p.parseImpliedToken(EndTagToken, a.Label, a.Label.String())
+			p.parseImpliedToken(StartTagToken, a.Hr, a.Hr.String())
+			p.parseImpliedToken(EndTagToken, a.Form, a.Form.String())
 		case a.Textarea:
 			p.addElement()
 			p.setOriginalIM()
@@ -978,6 +989,10 @@ func inBodyIM(p *parser) bool {
 			adjustForeignAttributes(p.tok.Attr)
 			p.addElement()
 			p.top().Namespace = p.tok.Data
+			if p.hasSelfClosingToken {
+				p.oe.pop()
+				p.acknowledgeSelfClosingTag()
+			}
 			return true
 		case a.Caption, a.Col, a.Colgroup, a.Frame, a.Head, a.Tbody, a.Td, a.Tfoot, a.Th, a.Thead, a.Tr:
 			// Ignore the token.
@@ -1011,7 +1026,7 @@ func inBodyIM(p *parser) bool {
 			p.oe.remove(node)
 		case a.P:
 			if !p.elementInScope(buttonScope, a.P) {
-				p.addSyntheticElement(a.P, nil)
+				p.parseImpliedToken(StartTagToken, a.P, a.P.String())
 			}
 			p.popUntil(buttonScope, a.P)
 		case a.Li:
@@ -1308,11 +1323,8 @@ func inTableIM(p *parser) bool {
 		return true
 	}
 
-	switch p.top().DataAtom {
-	case a.Table, a.Tbody, a.Tfoot, a.Thead, a.Tr:
-		p.fosterParenting = true
-		defer func() { p.fosterParenting = false }()
-	}
+	p.fosterParenting = true
+	defer func() { p.fosterParenting = false }()
 
 	return inBodyIM(p)
 }
@@ -1601,6 +1613,8 @@ func inSelectIM(p *parser) bool {
 				p.parseImpliedToken(EndTagToken, a.Select, a.Select.String())
 				return false
 			}
+			// In order to properly ignore <textarea>, we need to change the tokenizer mode.
+			p.tokenizer.NextIsNotRawText()
 			// Ignore the token.
 			return true
 		case a.Script:
@@ -1674,7 +1688,9 @@ func afterBodyIM(p *parser) bool {
 		}
 	case EndTagToken:
 		if p.tok.DataAtom == a.Html {
-			p.im = afterAfterBodyIM
+			if !p.fragment {
+				p.im = afterAfterBodyIM
+			}
 			return true
 		}
 	case CommentToken:
@@ -1902,6 +1918,11 @@ func parseForeignContent(p *parser) bool {
 		namespace := p.top().Namespace
 		p.addElement()
 		p.top().Namespace = namespace
+		if namespace != "" {
+			// Don't let the tokenizer go into raw text mode in foreign content
+			// (e.g. in an SVG <title> tag).
+			p.tokenizer.NextIsNotRawText()
+		}
 		if p.hasSelfClosingToken {
 			p.oe.pop()
 			p.acknowledgeSelfClosingTag()
@@ -1984,8 +2005,8 @@ func (p *parser) parseCurrentToken() {
 	}
 
 	if p.hasSelfClosingToken {
+		// This is a parse error, but ignore it.
 		p.hasSelfClosingToken = false
-		p.parseImpliedToken(EndTagToken, p.tok.DataAtom, p.tok.Data)
 	}
 }
 
@@ -2025,15 +2046,7 @@ func Parse(r io.Reader) (*Node, error) {
 // found. If the fragment is the InnerHTML for an existing element, pass that
 // element in context.
 func ParseFragment(r io.Reader, context *Node) ([]*Node, error) {
-	p := &parser{
-		tokenizer: NewTokenizer(r),
-		doc: &Node{
-			Type: DocumentNode,
-		},
-		scripting: true,
-		context:   context,
-	}
-
+	contextTag := ""
 	if context != nil {
 		if context.Type != ElementNode {
 			return nil, errors.New("html: ParseFragment of non-element Node")
@@ -2044,10 +2057,16 @@ func ParseFragment(r io.Reader, context *Node) ([]*Node, error) {
 		if context.DataAtom != a.Lookup([]byte(context.Data)) {
 			return nil, fmt.Errorf("html: inconsistent Node: DataAtom=%q, Data=%q", context.DataAtom, context.Data)
 		}
-		switch context.DataAtom {
-		case a.Iframe, a.Noembed, a.Noframes, a.Noscript, a.Plaintext, a.Script, a.Style, a.Title, a.Textarea, a.Xmp:
-			p.tokenizer.rawTag = context.DataAtom.String()
-		}
+		contextTag = context.DataAtom.String()
+	}
+	p := &parser{
+		tokenizer: NewTokenizerFragment(r, contextTag),
+		doc: &Node{
+			Type: DocumentNode,
+		},
+		scripting: true,
+		fragment:  true,
+		context:   context,
 	}
 
 	root := &Node{

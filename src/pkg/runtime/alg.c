@@ -324,6 +324,10 @@ runtime·strequal(bool *eq, uintptr s, void *a, void *b)
 		*eq = false;
 		return;
 	}
+	if(((String*)a)->str == ((String*)b)->str) {
+		*eq = true;
+		return;
+	}
 	runtime·memequal(eq, alen, ((String*)a)->str, ((String*)b)->str);
 }
 
@@ -472,7 +476,7 @@ runtime·equal(Type *t, ...)
 	uintptr ret;
 	
 	x = (byte*)(&t+1);
-	y = x + ROUND(t->size, t->align);
+	y = x + t->size;
 	ret = (uintptr)(y + t->size);
 	ret = ROUND(ret, Structrnd);
 	t->alg->equal((bool*)ret, t->size, x, y);

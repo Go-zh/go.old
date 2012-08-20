@@ -77,16 +77,23 @@ func main() {
 	if flag.NArg() > 0 {
 		for _, arg := range flag.Args() {
 			if arg == "-" || arg == "--" {
-				// Permit running either:
+				// Permit running:
 				// $ go run run.go - env.go
 				// $ go run run.go -- env.go
+				// $ go run run.go - ./fixedbugs
+				// $ go run run.go -- ./fixedbugs
 				continue
 			}
-			if !strings.HasSuffix(arg, ".go") {
-				log.Fatalf("can't yet deal with non-go file %q", arg)
+			if fi, err := os.Stat(arg); err == nil && fi.IsDir() {
+				for _, baseGoFile := range goFiles(arg) {
+					tests = append(tests, startTest(arg, baseGoFile))
+				}
+			} else if strings.HasSuffix(arg, ".go") {
+				dir, file := filepath.Split(arg)
+				tests = append(tests, startTest(dir, file))
+			} else {
+				log.Fatalf("can't yet deal with non-directory and non-go file %q", arg)
 			}
-			dir, file := filepath.Split(arg)
-			tests = append(tests, startTest(dir, file))
 		}
 	} else {
 		for _, dir := range dirs {
@@ -314,6 +321,9 @@ func (t *test) run() {
 			return
 		}
 		for _, gofile := range files {
+			if filepath.Ext(gofile.Name()) != ".go" {
+				continue
+			}
 			afile := strings.Replace(gofile.Name(), ".go", "."+letter, -1)
 			out, err := runcmd("go", "tool", gc, "-e", "-D.", "-I.", "-o", afile, filepath.Join(longdir, gofile.Name()))
 			if err != nil {
@@ -390,6 +400,9 @@ func (t *test) errorCheck(outStr string, full, short string) (err error) {
 	// 6g error messages continue onto additional lines with leading tabs.
 	// Split the output at the beginning of each line that doesn't begin with a tab.
 	for _, line := range strings.Split(outStr, "\n") {
+		if strings.HasSuffix(line, "\r") {	// remove '\r', output by compiler on windows
+			line = line[:len(line)-1]
+		}
 		if strings.HasPrefix(line, "\t") {
 			out[len(out)-1] += "\n" + line
 		} else {

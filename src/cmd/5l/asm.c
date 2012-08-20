@@ -33,6 +33,7 @@
 #include	"l.h"
 #include	"../ld/lib.h"
 #include	"../ld/elf.h"
+#include	"../ld/dwarf.h"
 
 static Prog *PP;
 
@@ -509,6 +510,7 @@ doelf(void)
 	if(!debug['s']) {
 		elfstr[ElfStrSymtab] = addstring(shstrtab, ".symtab");
 		elfstr[ElfStrStrtab] = addstring(shstrtab, ".strtab");
+		dwarfaddshstrings(shstrtab);
 	}
 	elfstr[ElfStrShstrtab] = addstring(shstrtab, ".shstrtab");
 
@@ -723,12 +725,11 @@ asmb(void)
 			cflush();
 			cwrite(elfstrdat, elfstrsize);
 
-			// if(debug['v'])
-			// 	Bprint(&bso, "%5.2f dwarf\n", cputime());
-			// dwarfemitdebugsections();
+			if(debug['v'])
+				Bprint(&bso, "%5.2f dwarf\n", cputime());
+			dwarfemitdebugsections();
 		}
 		cflush();
-		
 	}
 
 	cursym = nil;
@@ -962,6 +963,11 @@ asmb(void)
 		ph->flags = PF_W+PF_R;
 		ph->align = 4;
 
+		ph = newElfPhdr();
+		ph->type = PT_PAX_FLAGS;
+		ph->flags = 0x2a00; // mprotect, randexec, emutramp disabled
+		ph->align = 4;
+
 		sh = newElfShstrtab(elfstr[ElfStrShstrtab]);
 		sh->type = SHT_STRTAB;
 		sh->addralign = 1;
@@ -989,7 +995,7 @@ asmb(void)
 			sh->size = elfstrsize;
 			sh->addralign = 1;
 
-			// dwarfaddelfheaders();
+			dwarfaddelfheaders();
 		}
 
 		/* Main header */
@@ -1948,8 +1954,8 @@ oprrr(int a, int sc)
 	case ADIVF:	return o | (0xe<<24) | (0x8<<20) | (0xa<<8) | (0<<4);
 	case ASQRTD:	return o | (0xe<<24) | (0xb<<20) | (1<<16) | (0xb<<8) | (0xc<<4);
 	case ASQRTF:	return o | (0xe<<24) | (0xb<<20) | (1<<16) | (0xa<<8) | (0xc<<4);
-	case AABSD: return o | (0xe<<24) | (0xb<<20) | (0<<16) | (0xb<<8) | (0xc<<4);
-	case AABSF: return o | (0xe<<24) | (0xb<<20) | (0<<16) | (0xa<<8) | (0xc<<4);
+	case AABSD:	return o | (0xe<<24) | (0xb<<20) | (0<<16) | (0xb<<8) | (0xc<<4);
+	case AABSF:	return o | (0xe<<24) | (0xb<<20) | (0<<16) | (0xa<<8) | (0xc<<4);
 	case ACMPD:	return o | (0xe<<24) | (0xb<<20) | (4<<16) | (0xb<<8) | (0xc<<4);
 	case ACMPF:	return o | (0xe<<24) | (0xb<<20) | (4<<16) | (0xa<<8) | (0xc<<4);
 
@@ -2316,10 +2322,4 @@ genasmsym(void (*put)(Sym*, char*, int, vlong, vlong, int, Sym*))
 	if(debug['v'] || debug['n'])
 		Bprint(&bso, "symsize = %ud\n", symsize);
 	Bflush(&bso);
-}
-
-void
-setpersrc(Sym *s)
-{
-	USED(s);
 }

@@ -85,6 +85,12 @@ var lexTests = []lexTest{
 		tRight,
 		tEOF,
 	}},
+	{"nil", "{{nil}}", []item{
+		tLeft,
+		{itemNil, 0, "nil"},
+		tRight,
+		tEOF,
+	}},
 	{"dots", "{{.x . .2 .x.y}}", []item{
 		tLeft,
 		{itemField, 0, ".x"},
@@ -196,6 +202,10 @@ var lexTests = []lexTest{
 		tPipe,
 		tRight,
 		tEOF,
+	}},
+	{"text with bad comment", "hello-{{/*/}}-world", []item{
+		{itemText, 0, "hello-"},
+		{itemError, 0, `unclosed comment`},
 	}},
 }
 

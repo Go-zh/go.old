@@ -1299,7 +1299,7 @@ func (gcToolchain) pack(b *builder, p *Package, objDir, afile string, ofiles []s
 	for _, f := range ofiles {
 		absOfiles = append(absOfiles, mkAbs(objDir, f))
 	}
-	return b.run(p.Dir, p.ImportPath, tool("pack"), "grc", mkAbs(objDir, afile), absOfiles)
+	return b.run(p.Dir, p.ImportPath, tool("pack"), "grcP", b.work, mkAbs(objDir, afile), absOfiles)
 }
 
 func (gcToolchain) ld(b *builder, p *Package, out string, allactions []*action, mainpkg string, ofiles []string) error {
@@ -1558,6 +1558,24 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, gccfiles []string) (outGo,
 
 	// gcc
 	var linkobj []string
+
+	var bareLDFLAGS []string
+	// filter out -lsomelib, and -framework X if on Darwin
+	for i := 0; i < len(cgoLDFLAGS); i++ {
+		f := cgoLDFLAGS[i]
+		if !strings.HasPrefix(f, "-l") {
+			if goos == "darwin" && f == "-framework" { // skip the -framework X
+				i += 1
+				continue
+			}
+			bareLDFLAGS = append(bareLDFLAGS, f)
+		}
+	}
+	staticLibs := []string{"-lgcc"}
+	if goos == "windows" {
+		staticLibs = append(staticLibs, "-lmingwex", "-lmingw32")
+	}
+
 	for _, cfile := range cfiles {
 		ofile := obj + cfile[:len(cfile)-1] + "o"
 		if err := b.gcc(p, ofile, cgoCFLAGS, obj+cfile); err != nil {
@@ -1576,6 +1594,7 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, gccfiles []string) (outGo,
 		linkobj = append(linkobj, ofile)
 		outObj = append(outObj, ofile)
 	}
+	linkobj = append(linkobj, p.SysoFiles...)
 	dynobj := obj + "_cgo_.o"
 	if goarch == "arm" && goos == "linux" { // we need to use -pie for Linux/ARM to get accurate imported sym
 		cgoLDFLAGS = append(cgoLDFLAGS, "-pie")
@@ -1604,10 +1623,23 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, gccfiles []string) (outGo,
 		return nil, nil, err
 	}
 
+	ofile := obj + "_all.o"
+	var gccObjs, nonGccObjs []string
+	for _, f := range outObj {
+		if strings.HasSuffix(f, ".o") {
+			gccObjs = append(gccObjs, f)
+		} else {
+			nonGccObjs = append(nonGccObjs, f)
+		}
+	}
+	if err := b.gccld(p, ofile, stringList(bareLDFLAGS, "-Wl,-r", "-nostdlib", staticLibs), gccObjs); err != nil {
+		return nil, nil, err
+	}
+
 	// NOTE(rsc): The importObj is a 5c/6c/8c object and on Windows
 	// must be processed before the gcc-generated objects.
 	// Put it first.  http://golang.org/issue/2601
-	outObj = append([]string{importObj}, outObj...)
+	outObj = stringList(importObj, nonGccObjs, ofile)
 
 	return outGo, outObj, nil
 }
