@@ -1,12 +1,12 @@
 <!--{
 	"Title": "Go编程语言规范",
-	"Subtitle": "版本：2012年7月11日 || 译者：Oling Cat <olingcat@gmail.com>",
+	"Subtitle": "版本：2012年8月17日 || 译者：Oling Cat <olingcat@gmail.com>",
 	"Path": "/ref/spec"
 }-->
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of July 11, 2012",
+	"Subtitle": "Version of August 17, 2012",
 	"Path": "/ref/spec"
 }-->
 
@@ -5822,18 +5822,18 @@ follows:
 
 <div class="english">
 <p>
-For floating-point numbers,
+For floating-point and complex numbers,
 <code>+x</code> is the same as <code>x</code>,
 while <code>-x</code> is the negation of <code>x</code>.
-The result of a floating-point division by zero is not specified beyond the
+The result of a floating-point or complex division by zero is not specified beyond the
 IEEE-754 standard; whether a <a href="#Run_time_panics">run-time panic</a>
 occurs is implementation-specific.
 </p>
 </div>
 
 <p>
-对于浮点数，<code>+x</code> 等价于 <code>x</code>，而 <code>-x</code> 则为 <code>x</code> 的相反数。
-浮点数除以零的结果仅满足 IEEE-754 标准而无额外保证；是否会出现<a href="#运行时异常">运行时异常</a>取决于具体实现。
+对于浮点数与复数来说，<code>+x</code> 等价于 <code>x</code>，而 <code>-x</code> 则为 <code>x</code> 的相反数。
+浮点数或复数除以零的结果仅满足 IEEE-754 标准而无额外保证；是否会出现<a href="#运行时异常">运行时异常</a>取决于具体实现。
 </p>
 
 <div class="english">
@@ -7158,15 +7158,18 @@ TODO: 也许 ^ 应当禁止用于非无符号整数，而不是采取二进制�
 
 <div class="english">
 <p>
-When evaluating the elements of an assignment or expression,
-all function calls, method calls and
+When evaluating the <a href="#Operands">operands</a> of an expression,
+<a href="#Assignments">assignment</a>, or
+<a href="#Return_statements">return statement</a>,
+all function calls, method calls, and
 communication operations are evaluated in lexical left-to-right
 order.
 </p>
 </div>
 
 <p>
-当对复制或表达式的元素进行求值时，所有函数调用、方法调用与通信操作均按从左到右的词法顺序求值。
+当对一个表达式、<a href="#赋值">赋值</a>或<a href="#Return语句">Return语句</a>进行求值时，
+所有函数调用、方法调用以及通信操作均按从左到右的词法顺序求值。
 </p>
 
 <div class="english">
@@ -7192,6 +7195,12 @@ However, the order of those events compared to the evaluation
 and indexing of <code>x</code> and the evaluation
 of <code>y</code> is not specified.
 </p>
+
+<pre>
+a := 1
+f := func() int { a = 2; return 3 }
+x := []int{a, f()}  // x may be [1, 3] or [2, 3]: evaluation order between a and f() is not specified
+</pre>
 </div>
 
 <p>
@@ -7199,6 +7208,12 @@ of <code>y</code> is not specified.
 <code>&lt;-c</code>、<code>g()</code> 和 <code>k()</code> 发生。然而，相较于这些事件的顺序，<code>x</code>
 的求值与索引及 <code>y</code> 的求值并未指定。
 </p>
+
+<pre>
+a := 1
+f := func() int { a = 2; return 3 }
+x := []int{a, f()}  // x可能为[1, 3]或[2, 3]：a与f()之间的求职顺序并未指定
+</pre>
 
 <div class="english">
 <p>
