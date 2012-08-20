@@ -1,7 +1,6 @@
 package main
 
-// fib returns a function that returns
-// successive Fibonacci numbers.
+// fib 返回一个函数，该函数返回连续的斐波纳契数。
 func fib() func() int {
 	a, b := 0, 1
 	return func() int {
@@ -12,6 +11,6 @@ func fib() func() int {
 
 func main() {
 	f := fib()
-	// Function calls are evaluated left-to-right.
+	// 函数调用按从左到右顺序求值。
 	println(f(), f(), f(), f(), f())
 }

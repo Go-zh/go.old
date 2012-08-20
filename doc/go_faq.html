@@ -23,7 +23,7 @@ the computing landscape has changed tremendously. There are several trends:
 </div>
 
 <p>
-在过去十年间，并未出现过主流的系统级编程语言，但在这期间，计算环境已经发生了巨大的变化。以下是一些趋势：
+十年以来，主流的系统级编程语言并未出现过，但在这期间，计算环境已经发生了巨大的变化。以下是一些趋势：
 </p>
 
 <div class="english">
@@ -50,7 +50,7 @@ The emergence of multicore computers has generated worry and confusion.
 <li>
 计算机的速度变得极快，但软件开发还不够快。
 <li>
-在今天，依赖管理成为了软件开发的一大部分，但C传统语言的“头文件”与清晰的依赖分析——以及快速编译背道而驰。
+在今天，依赖管理成为了软件开发中一个大的部分，但C传统语言的“头文件”与清晰的依赖分析——以及快速编译背道而驰。
 <li>
 对于像Java和C++那笨重的类型系统的反抗越来越多，这将人们推向了Python和JavaScript之类的动态类型语言。
 <li>
@@ -97,10 +97,10 @@ software on multicore machines.
 <li>
 Go为软件构造提供了一种模型，它使依赖分析更加容易，且避免了大部分C风格include文件与库的开头。
 <li>
-Go的类型系统没有等级之分，因此不需要在类型之间定义关系上花费时间。另外，尽管Go是静态类型的，
+Go的类型系统没有等级之分，因此不需要在类型之间的关系定义上花费时间。此外，尽管Go是静态类型的，
 该语言也试图使类型感觉起来比典型的面向对象语言更轻量级。
 <li>
-Go完全是垃圾回收型的，并为并发执行与通信提供了基本的支持。
+Go完全是垃圾回收型的语言，并为并发执行与通信提供了基本的支持。
 <li>
 按照其设计，Go打算为多核机器上系统软件的构造提供一种方法。
 </ul>
@@ -110,7 +110,7 @@ Go完全是垃圾回收型的，并为并发执行与通信提供了基本的支
 What is the status of the project?</h3>
 </div>
 
-<h3 id="项目状态">该项目目前是什么状态？</h3>
+<h3 id="项目状态">该项目的状态如何？</h3>
 
 <div class="english">
 <p>
@@ -178,9 +178,11 @@ What is the origin of the name?</h3>
 
 <h3 id="名字">名字的由来是什么？</h3>
 
+<div class="english">
 <p>
 &ldquo;Ogle&rdquo; would be a good name for a Go debugger.
 </p>
+</div>
 
 <p>
 对于Go的调试器，&ldquo;Ogle&rdquo;将会是个不错的名字。
@@ -209,7 +211,7 @@ license.
 
 <p>
 其吉祥物与Logo由<a href="http://reneefrench.blogspot.com">Renée French</a>设计，
-她也设计了Plan 9的兔子<a href="http://plan9.bell-labs.com/plan9/glenda.html">Glenda</a>。
+她也设计了Plan 9的小兔子<a href="http://plan9.bell-labs.com/plan9/glenda.html">Glenda</a>。
 Gopher衍生自她在几年前为<a href="http://wfmu.org/">WFMU</a>设计的一件T恤衫。
 其Logo与吉祥物以<a href="http://creativecommons.org/licenses/by/3.0/">知识共享-署名3.0</a>方式授权。
 </p>
@@ -239,11 +241,11 @@ and libraries from prototype to reality.
 
 <p>
 2007年9月21日，Robert Griesemer、Rob Pike与Ken Thompson在白板上开始了对新语言目标的描绘。
-在几天之内，目标被安排为计划来做一些事情，并产生了它会成为什么样的美妙想法。
-设计在与工作无关的平行时间中继续。到了2008年1月，Ken开始了编译器的工作，并在其上探索各种想法，
-它生成C代码作为其输出。到了年中，该语言成为了全职项目，并拥有了充足的安排来尝试一个产品编译器。
+在几天之内，目标被制定成做事的计划，关于其未来的美妙想法便在此刻产生。
+其设计在与工作无关的平行时间中继续。到了2008年1月，Ken开始了编译器的工作，并在其上探索各种想法；
+它生成C代码并将其输出。到了年中，该语言成为了全职项目，拥有了充足的安排来尝试一个产品级编译器。
 在2008年5月时，Ian Taylor根据规范草案独自开始了Go GCC前端的工作。2008年年末，
-Russ Cox加入并帮助将该语言与库从原形变成了现实。
+Russ Cox的加入帮助将该语言与库从原型变成了现实。
 </p>
 
 <div class="english">
@@ -278,19 +280,13 @@ Python and JavaScript rather than C++ or, to a lesser extent, Java.
 </div>
 
 <p>
-Go was born out of frustration with existing languages and
-environments for systems programming.  Programming had become too
-difficult and the choice of languages was partly to blame.  One had to
-choose either efficient compilation, efficient execution, or ease of
-programming; all three were not available in the same mainstream
-language.  Programmers who could were choosing ease over
-safety and efficiency by moving to dynamically typed languages such as
-Python and JavaScript rather than C++ or, to a lesser extent, Java.
 Go在既有语言与环境下进行系统编程的挫折中诞生。编程变得太难，对语言的选择有一定的责任。
 我们必须在有效率地编译、有效率地执行或轻松地编程之间选择其一，在同样主流的语言中，
-三者不能同时达到。程序员们选择轻松在安全和效率之上，
+三者不能同时达到。程序员们通过转移到Python和JavaScript之类的动态类型语言，
+而非C++或一定程度上的Java上，来选择轻松在安全和效率之上。
 </p>
 
+<div class="english">
 <p>
 Go is an attempt to combine the ease of programming of an interpreted,
 dynamically typed
@@ -304,6 +300,14 @@ concurrency and garbage collection; rigid dependency specification;
 and so on.  These cannot be addressed well by libraries or tools; a new
 language was called for.
 </p>
+</div>
+
+<p>
+Go试图成为结合解释型编程的轻松、动态类型语言的搞笑以及静态类型语言的安全的编译型语言。
+它也打算成为现代的，支持网络与多核计算的语言。要满足这些目标，需要解决一些语言上的问题：
+一个富有表达能力但轻量级的类型系统，并发与垃圾回收机制，严格的依赖规范等等。
+这些无法通过库或工具解决好，必须创造新的语言。
+</p>
 
 <div class="english">
 <h3 id="ancestors">
@@ -312,6 +316,7 @@ What are Go's ancestors?</h3>
 
 <h3 id="前身">Go的前身是什么？</h3>
 
+<div class="english">
 <p>
 Go is mostly in the C family (basic syntax),
 with significant input from the Pascal/Modula/Oberon
@@ -324,6 +329,14 @@ In every respect the language was designed by thinking
 about what programmers do and how to make programming, at least the
 kind of programming we do, more effective, which means more fun.
 </p>
+</div>
+
+<p>
+Go主要是C家族的（基本语法），从Pascal/Modula/Oberon家族引入了有意义的东西（声明，包），
+加上一些由Tony Hoare的CSP所激发的语言理念，例如Newsqueak与Limbo（并发）。然而，
+它是一个全新的语言。在各个方面上，该语言的设计都考虑到程序员做的事情以及如何去编程，
+至少是我们进行的那种编程。更实际，也就意味着更有趣。
+</p>
 
 <div class="english">
 <h3 id="principles">
@@ -332,6 +345,7 @@ What are the guiding principles in the design?</h3>
 
 <h3 id="原则">其设计的指导原则是什么？</h3>
 
+<div class="english">
 <p>
 Programming today involves too much bookkeeping, repetition, and
 clerical work.  As Dick Gabriel says, &ldquo;Old programs read
@@ -341,6 +355,20 @@ Who'd have guessed sophistication bought such noise?&rdquo;
 The sophistication is worthwhile&mdash;no one wants to go back to
 the old languages&mdash;but can it be more quietly achieved?
 </p>
+</div>
+
+<p>
+Programming today involves too much bookkeeping, repetition, and
+clerical work.  As Dick Gabriel says, &ldquo;Old programs read
+like quiet conversations between a well-spoken research worker and a
+well-studied mechanical colleague, not as a debate with a compiler.
+Who'd have guessed sophistication bought such noise?&rdquo;
+The sophistication is worthwhile&mdash;no one wants to go back to
+the old languages&mdash;but can it be more quietly achieved?
+如今的编程包含了太多记账式的、重复的、文书式的工作。就像Dick Gabriel说的那样，
+“”
+</p>
+
 <p>
 Go attempts to reduce the amount of typing in both senses of the word.
 Throughout its design, we have tried to reduce clutter and
