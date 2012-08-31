@@ -2812,6 +2812,7 @@ Can I stop these complaints about my unused variable/import?</h3>
 
 <h3 id="未使用变量与导入">我能否停止关于我未使用变量/导入的抱怨？</h3>
 
+<div class="english">
 <p>
 The presence of an unused variable may indicate a bug, while
 unused imports just slow down compilation.
@@ -2819,13 +2820,27 @@ Accumulate enough unused imports in your code tree and
 things can get very slow.
 For these reasons, Go allows neither.
 </p>
+</div>
 
+<p>
+未使用变量的存在可能预示着bug，而未使用的导入只会减慢编译速度。
+在你的代码树中积累太多的未使用导入可能会使事情变得非常慢。
+由于这些原因，Go都不允许它们出现。
+</p>
+
+<div class="english">
 <p>
 When developing code, it's common to create these situations
 temporarily and it can be annoying to have to edit them out before the
 program will compile.
 </p>
+</div>
 
+<p>
+在开发代码时，临时创建这些状况很常见，而在程序编译之前必须将它们编辑掉是很烦人的。
+</p>
+
+<div class="english">
 <p>
 Some have asked for a compiler option to turn those checks off
 or at least reduce them to warnings.
@@ -2834,7 +2849,15 @@ because compiler options should not affect the semantics of the
 language and because the Go compiler does not report warnings, only
 errors that prevent compilation.
 </p>
+</div>
 
+<p>
+有些人要求加入一个编译器选项来关闭这些检查，或至少减少那些警告。
+然而，这样的选项还未被添加，因为编译器选项不能影响到语言的语义，
+而且Go编译器并不报告警告，只会报告错误来防止编译。
+</p>
+
+<div class="english">
 <p>
 There are two reasons for having no warnings.  First, if it's worth
 complaining about, it's worth fixing in the code.  (And if it's not
@@ -2843,12 +2866,26 @@ generate warnings encourages the implementation to warn about weak
 cases that can make compilation noisy, masking real errors that
 <em>should</em> be fixed.
 </p>
+</div>
 
+<p>
+没有警告的理由有两个。其一，若它值得抱怨，也就值得在代码中修复它。（而如果它不值得修复，
+也就没必要提到。）其二，让编译器产生警告会鼓励实现就微弱的情况产生警告，这会使编译器变得嘈杂，
+从而掩盖那些<em>需要</em>被修复的真正的错误。
+</p>
+
+<div class="english">
 <p>
 It's easy to address the situation, though.  Use the blank identifier
 to let unused things persist while you're developing.
 </p>
+</div>
 
+<p>
+尽管解说这些情况是容易的，然而可以使用空白标识符来让未使用的东西在你的开发中存在一会儿。
+</p>
+
+<div class="english">
 <pre>
 import "unused"
 
@@ -2859,6 +2896,20 @@ var _ = unused.Item  // TODO: Delete before committing!
 func main() {
     debugData := debug.Profile()
     _ = debugData // Used only during debugging.
+    ....
+}
+</pre>
+</div>
+
+<pre>
+import "unused"
+
+// 此声明标记了从包中导入的被引用的条目。
+var _ = unused.Item  // TODO：在提交前删除它！
+
+func main() {
+    debugData := debug.Profile()
+    _ = debugData // 只在调试时使用
     ....
 }
 </pre>
@@ -2876,6 +2927,7 @@ Why does Go perform badly on benchmark X?</h3>
 
 <h3 id="基准测试">为什么Go在基准测试X中表现很差？</h3>
 
+<div class="english">
 <p>
 One of Go's design goals is to approach the performance of C for comparable
 programs, yet on some benchmarks it does quite poorly, including several
@@ -2890,7 +2942,21 @@ Benchmarks that depend on regular expressions
 essentially comparing Go's native <a href="/pkg/regexp">regexp package</a> to
 mature, highly optimized regular expression libraries like PCRE.
 </p>
+</div>
 
+<p>
+Go的设计目标之一就是在可比较的程序上逼近C的性能，然而在一些基准测试中它的表现确实很差，
+包括几项<a href="/test/bench/shootout/">test/bench/shootout</a>中的测试。
+最慢的依赖库对于可比较性能的版本来说在Go中并不可用。例如
+<a href="/test/bench/shootout/pidigits.go">pidigits.go</a>
+依赖于一个多精度的数学包，而C版本的则使用<a href="http://gmplib.org/">GMP</a>
+（它使用优化的汇编编写的）。依赖于正则表达式的基准测试
+（例如<a href="/test/bench/shootout/regex-dna.go">regex-dna.go</a>）
+在本质上是将Go的原生<a href="/pkg/regexp">regexp包</a>与像PCRE那样成熟的，
+高度优化的正则表达式库相比较。
+</p>
+
+<div class="english">
 <p>
 Benchmark games are won by extensive tuning and the Go versions of most
 of the benchmarks need attention.  If you measure comparable C
@@ -2899,14 +2965,29 @@ and Go programs
 languages are much closer in raw performance than this suite would
 indicate.
 </p>
+</div>
 
+<p>
+虽然基准测试游戏通过广泛的调优赢了，但大部分Go版本的基准测试还需要关注。如果你考量了C和Go的可比较程序
+（<a href="/test/bench/shootout/reverse-complement.go">reverse-complement.go</a>是其中一个例子），
+你就会发现这两种语言在这个套件上表明的原始性能非常接近。
+</p>
+
+<div class="english">
 <p>
 Still, there is room for improvement. The compilers are good but could be
 better, many libraries need major performance work, and the garbage collector
 isn't fast enough yet. (Even if it were, taking care not to generate unnecessary
 garbage can have a huge effect.)
 </p>
+</div>
 
+<p>
+不过，它还有提升的空间。编译器很好，但可以变得更好，一些库需要主要的性能工作，
+且垃圾回收器也还不够快。（即使这样，也要小心不要产生不必要的垃圾，否则会有巨大的影响。）
+</p>
+
+<div class="english">
 <p>
 In any case, Go can often be very competitive.
 There has been significant improvement in the performance of many programs
@@ -2914,6 +2995,14 @@ as the language and tools have developed.
 See the blog post about
 <a href="http://blog.golang.org/2011/06/profiling-go-programs.html">profiling
 Go programs</a> for an informative example.
+</p>
+</div>
+
+<p>
+在任何情况下，Go都是非常有竞争力的。用该语言及工具开发的许多软件在性能上都有着明显的改善。
+请参阅博文<a href="http://blog.golang.org/2011/06/profiling-go-programs.html">分析Go程序</a>
+了解一个有益的例子。
+</p>
 
 <div class="english">
 <h2 id="change_from_c">Changes from C</h2>
@@ -2926,8 +3015,9 @@ Go programs</a> for an informative example.
 Why is the syntax so different from C?</h3>
 </div>
 
-<h3 id="不同的语法">为什么它的语法与C如此不同？</h3>
+<h3 id="不同的语法">为什么它的语法和C如此不同？</h3>
 
+<div class="english">
 <p>
 Other than declaration syntax, the differences are not major and stem
 from two desires.  First, the syntax should feel light, without too
@@ -2938,6 +3028,14 @@ to build tools such as debuggers, dependency analyzers, automated
 documentation extractors, IDE plug-ins, and so on.  C and its
 descendants are notoriously difficult in this regard.
 </p>
+</div>
+
+<p>
+除了声明语法外，它们之间的不同并不多，这主要源于两种需求。首先，语法应当感觉很轻量，
+没有太多强制性的关键字、重复或奥秘。其次，该语言被设计成易于分析的，无需符号表来解析。
+这会使构建诸如调试器、依赖分析器、自动文档提取器、IDE插件等工具变得更加容易。
+C及其后代在这方面上是极其困难的。
+</p>
 
 <div class="english">
 <h3 id="declarations_backwards">
@@ -2946,6 +3044,7 @@ Why are declarations backwards?</h3>
 
 <h3 id="声明在后">为什么声明在后面？</h3>
 
+<div class="english">
 <p>
 They're only backwards if you're used to C. In C, the notion is that a
 variable is declared like an expression denoting its type, which is a
@@ -2955,39 +3054,86 @@ separates expression and type syntax and that simplifies things (using
 prefix <code>*</code> for pointers is an exception that proves the rule).  In C,
 the declaration
 </p>
+</div>
+
+<p>
+如果你习惯于C，对你来说它们只是在后面而已。在C中，它的概念就像用表示它类型的表达式来声明变量。
+这是个好主意，不过类型和表达式的语法不要混合得太好，而结果会使人迷惑；考虑函数指针。
+Go将表达式和类型语法大部分分离开，并简化了一些东西（对指针使用 <code>*</code> 前缀是检验该规则的例外）。
+在C中，声明
+</p>
+
 <pre>
     int* a, b;
 </pre>
+
+<div class="english">
 <p>
 declares <code>a</code> to be a pointer but not <code>b</code>; in Go
 </p>
+</div>
+
+<p>
+会将 <code>a</code> 声明为指针，而 <code>b</code> 则不会；而在Go中
+</p>
+
 <pre>
     var a, b *int
 </pre>
+<div class="english">
 <p>
 declares both to be pointers.  This is clearer and more regular.
 Also, the <code>:=</code> short declaration form argues that a full variable
 declaration should present the same order as <code>:=</code> so
 </p>
+</div>
+
+<p>
+会将二者都声明为指针。这样更清楚也更规则。另外，<code>:=</code>
+短变量声明形式证明一个完整的变量声明应当以 <code>:=</code> 呈现相同的顺序，因此
+</p>
+
 <pre>
     var a uint64 = 1
 </pre>
+
+<div class="english">
 <p>
 has the same effect as
 </p>
+</div>
+
+<p>
+的效果等同于
+</p>
+
 <pre>
     a := uint64(1)
 </pre>
+
+<div class="english">
 <p>
 Parsing is also simplified by having a distinct grammar for types that
 is not just the expression grammar; keywords such as <code>func</code>
 and <code>chan</code> keep things clear.
 </p>
+</div>
 
+<p>
+解析也通过拥有一个独特的，不只是表达式的类型语法而得到了简化，像 <code>func</code>
+和 <code>chan</code> 这样的关键字让事情变得清晰。
+</p>
+
+<div class="english">
 <p>
 See the article about
 <a href="/doc/articles/gos_declaration_syntax.html">Go's Declaration Syntax</a>
 for more details.
+</p>
+</div>
+
+<p>
+更多详情请参阅<a href="/doc/articles/gos_declaration_syntax.html">Go的声明语法</a>。
 </p>
 
 <div class="english">
@@ -2997,6 +3143,7 @@ Why is there no pointer arithmetic?</h3>
 
 <h3 id="没有指针运算">为什么没有指针运算？</h3>
 
+<div class="english">
 <p>
 Safety.  Without pointer arithmetic it's possible to create a
 language that can never derive an illegal address that succeeds
@@ -3004,6 +3151,13 @@ incorrectly.  Compiler and hardware technology have advanced to the
 point where a loop using array indices can be as efficient as a loop
 using pointer arithmetic.  Also, the lack of pointer arithmetic can
 simplify the implementation of the garbage collector.
+</p>
+</div>
+
+<p>
+为了安全。没有指针运算可创建一种语言，它不会派生出可以错误地成功访问的非法地址。
+编译器和硬件技术已经发展到了循环使用数组下标比循环使用指针运算更有效率的地步。
+此外，指针运算的缺失还可以简化垃圾收集器的实现。
 </p>
 
 <div class="english">
@@ -3013,6 +3167,7 @@ Why are <code>++</code> and <code>--</code> statements and not expressions?  And
 
 <h3 id="递增递减">为什么 <code>++</code> 与 <code>--</code> 语句不是表达式？为什么只有后缀式而没有前缀式？</h3>
 
+<div class="english">
 <p>
 Without pointer arithmetic, the convenience value of pre- and postfix
 increment operators drops.  By removing them from the expression
@@ -3025,6 +3180,15 @@ the postfix version is more traditional; insistence on prefix arose
 with the STL, a library for a language whose name contains, ironically, a
 postfix increment.
 </p>
+</div>
+
+<p>
+没有指针运算，前缀和后缀增量操作符的便利性就会减少。通过将它们从表达式层级中整体移除，
+表达式语法就会简化，而围绕 <code>++</code> 和 <code>--</code> 求值顺序混乱的问题
+（考虑 <code>f(i++)</code> 和 <code>p[i] = q[++i]</code>）就能被很好地消除。
+这种简化是非常有意义的。至于后缀式与前缀式，二者都能很好地工作，但后缀式版本更加传统；
+前缀式则是STL所坚持的。具有讽刺意味的是，具有讽刺意味的是，它是为某种名字里包含后缀增量的语言写的。
+</p>
 
 <div class="english">
 <h3 id="semicolons">
@@ -3034,6 +3198,7 @@ brace on the next line?</h3>
 
 <h3 id="分号">为什么有大括号却没有分号？为什么我不能将开大括号放在下一行？</h3>
 
+<div class="english">
 <p>
 Go uses brace brackets for statement grouping, a syntax familiar to
 programmers who have worked with any language in the C family.
@@ -3046,7 +3211,17 @@ This works very well in practice but has the effect that it forces a
 brace style.  For instance, the opening brace of a function cannot
 appear on a line by itself.
 </p>
+</div>
 
+<p>
+Go使用大括号为语句进行分组，这种语法对于使用C家族中任何语言工作的程序员来说是很熟悉的。
+然而，分号是为了解析器，而不是人们，而我们想要尽可能地消除它。为实现这个目标，
+Go从BCPL里借鉴了一个小诡计：用来分隔语句的分号还在正式的语法中，但词法分析器将所有行末都当做语句的结束，
+并自动插入分号，而无需前瞻。这种做法在实践中非常好，不过副作用就是强制的大括号风格。
+例如，函数的开大括号不能单独占据一行。
+</p>
+
+<div class="english">
 <p>
 Some have argued that the lexer should do lookahead to permit the
 brace to live on the next line.  We disagree.  Since Go code is meant
@@ -3061,6 +3236,17 @@ any perceived disadvantages of the particular style.
 Note too that Go's style means that an interactive implementation of
 Go can use the standard syntax one line at a time without special rules.
 </p>
+</div>
+
+<p>
+一些人争论词法分析器应当前瞻性地允许大括号占据下一行。而我们不这么认为。
+由于Go代码会自动地被<a href="/cmd/gofmt/"><code>gofmt</code></a> 格式化，
+<i>一些</i>风格就必须被选择。那种风格可能不同于你在C或Java中使用的风格，
+但Go是一门新的语言，而且 <code>gofmt</code> 的风格比任何其它的风格都要好。
+更重要——还要重要的是，对于所有的Go程序来说，单一的、程序化的、强制性格式的优势，
+比任何独有的风格的劣势都更加好。还需要注意的是，
+Go的风格意味着Go的交互式实现可以使用标准的的语法，一次一行而无需特殊的规则。
+</p>
 
 <div class="english">
 <h3 id="garbage_collection">
@@ -3069,6 +3255,7 @@ Why do garbage collection?  Won't it be too expensive?</h3>
 
 <h3 id="垃圾回收">为什么要有垃圾回收？代价会不会太高？</h3>
 
+<div class="english">
 <p>
 One of the biggest sources of bookkeeping in systems programs is
 memory management.  We feel it's critical to eliminate that
@@ -3077,7 +3264,14 @@ technology in the last few years give us confidence that we can
 implement it with low enough overhead and no significant
 latency.
 </p>
+</div>
 
+<p>
+记账式系统编程的最大来源就是内存管理。我们觉得关键就在于消除程序员的开销，
+而垃圾回收技术的进步给了我们以足够低的开销和没有明显的延迟来实现它的信心。
+</p>
+
+<div class="english">
 <p>
 Another point is that a large part of the difficulty of concurrent
 and multi-threaded programming is memory management;
@@ -3088,17 +3282,38 @@ Of course, implementing garbage collection in a concurrent environment is
 itself a challenge, but meeting it once rather than in every
 program helps everyone.
 </p>
+</div>
 
+<p>
+另一点是并发和多线程编程的一大部分困难也源于内存管理；
+在线程之间传递的对象要保证它们被安全地释放是很麻烦的。自动垃圾回收使并发代码很容易编写。
+当然，在并发环境中实现垃圾回收本身也是一个挑战，但比起在每个程序中实现它来说，
+只需实现它一次就能帮助到每一个人。
+</p>
+
+<div class="english">
 <p>
 Finally, concurrency aside, garbage collection makes interfaces
 simpler because they don't need to specify how memory is managed across them.
 </p>
+</div>
 
+<p>
+最后，撇开并发不说，垃圾回收使接口更简单，因为它们无需指定内存该如何管理。
+</p>
+
+<div class="english">
 <p>
 The current implementation is a parallel mark-and-sweep
 collector but a future version might take a different approach.
 </p>
+</div>
 
+<p>
+当前实现是并行的标记并清理试收集器，但将来的版本可能会使用不同的方法。
+</p>
+
+<div class="english">
 <p>
 On the topic of performance, keep in mind that Go gives the programmer
 considerable control over memory layout and allocation, much more than
@@ -3109,3 +3324,11 @@ see the article about
 Go programs</a> for a worked example, including a demonstration of Go's
 profiling tools.
 </p>
+
+<p>
+关于性能的话题，只需记住Go在内存布局和分配上给了程序员相当大的控制权，比典型的垃圾回收式语言更多。
+细心的程序员通过好好使用该语言，可以显著减少垃圾收集的开销；
+请参阅关于<a href="http://blog.golang.org/2011/06/profiling-go-programs.html">分析Go程序</a>的文章，
+里面包含了一个可工作的例子和一个Go分析工具的演示。
+</p>
+</div>
