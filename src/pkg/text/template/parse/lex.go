@@ -46,10 +46,13 @@ const (
 	itemField      // alphanumeric identifier, starting with '.', possibly chained ('.x.y')
 	itemIdentifier // alphanumeric identifier
 	itemLeftDelim  // left action delimiter
+	itemLeftParen  // '(' inside action
 	itemNumber     // simple number, including imaginary
 	itemPipe       // pipe symbol
 	itemRawString  // raw quoted string (includes quotes)
 	itemRightDelim // right action delimiter
+	itemRightParen // ')' inside action
+	itemSpace      // run of spaces separating arguments
 	itemString     // quoted string (includes quotes)
 	itemText       // plain text
 	itemVariable   // variable starting with '$', such as '$' or  '$1' or '$hello'.
@@ -65,44 +68,6 @@ const (
 	itemTemplate // template keyword
 	itemWith     // with keyword
 )
-
-// Make the types prettyprint.
-var itemName = map[itemType]string{
-	itemError:        "error",
-	itemBool:         "bool",
-	itemChar:         "char",
-	itemCharConstant: "charconst",
-	itemComplex:      "complex",
-	itemColonEquals:  ":=",
-	itemEOF:          "EOF",
-	itemField:        "field",
-	itemIdentifier:   "identifier",
-	itemLeftDelim:    "left delim",
-	itemNumber:       "number",
-	itemPipe:         "pipe",
-	itemRawString:    "raw string",
-	itemRightDelim:   "right delim",
-	itemString:       "string",
-	itemVariable:     "variable",
-	// keywords
-	itemDot:      ".",
-	itemDefine:   "define",
-	itemElse:     "else",
-	itemIf:       "if",
-	itemEnd:      "end",
-	itemNil:      "nil",
-	itemRange:    "range",
-	itemTemplate: "template",
-	itemWith:     "with",
-}
-
-func (i itemType) String() string {
-	s := itemName[i]
-	if s == "" {
-		return fmt.Sprintf("item%d", int(i))
-	}
-	return s
-}
 
 var key = map[string]itemType{
 	".":        itemDot,
@@ -133,6 +98,7 @@ type lexer struct {
 	width      int       // width of last rune read from input.
 	lastPos    int       // position of most recent item returned by nextItem
 	items      chan item // channel of scanned items.
+	parenDepth int       // nesting depth of ( ) exprs
 }
 
 // next returns the next rune in the input.
@@ -269,6 +235,7 @@ func lexLeftDelim(l *lexer) stateFn {
 		return lexComment
 	}
 	l.emit(itemLeftDelim)
+	l.parenDepth = 0
 	return lexInsideAction
 }
 
@@ -294,16 +261,19 @@ func lexRightDelim(l *lexer) stateFn {
 // lexInsideAction scans the elements inside action delimiters.
 func lexInsideAction(l *lexer) stateFn {
 	// Either number, quoted string, or identifier.
-	// Spaces separate and are ignored.
+	// Spaces separate arguments; runs of spaces turn into itemSpace.
 	// Pipe symbols separate and are emitted.
 	if strings.HasPrefix(l.input[l.pos:], l.rightDelim) {
-		return lexRightDelim
+		if l.parenDepth == 0 {
+			return lexRightDelim
+		}
+		return l.errorf("unclosed left paren")
 	}
 	switch r := l.next(); {
-	case r == eof || r == '\n':
+	case r == eof || isEndOfLine(r):
 		return l.errorf("unclosed action")
 	case isSpace(r):
-		l.ignore()
+		return lexSpace
 	case r == ':':
 		if l.next() != '=' {
 			return l.errorf("expected :=")
@@ -334,12 +304,33 @@ func lexInsideAction(l *lexer) stateFn {
 	case isAlphaNumeric(r):
 		l.backup()
 		return lexIdentifier
+	case r == '(':
+		l.emit(itemLeftParen)
+		l.parenDepth++
+		return lexInsideAction
+	case r == ')':
+		l.emit(itemRightParen)
+		l.parenDepth--
+		if l.parenDepth < 0 {
+			return l.errorf("unexpected right paren %#U", r)
+		}
+		return lexInsideAction
 	case r <= unicode.MaxASCII && unicode.IsPrint(r):
 		l.emit(itemChar)
 		return lexInsideAction
 	default:
 		return l.errorf("unrecognized character in action: %#U", r)
 	}
+	return lexInsideAction
+}
+
+// lexSpace scans a run of space characters.
+// One space has already been seen.
+func lexSpace(l *lexer) stateFn {
+	for isSpace(l.peek()) {
+		l.next()
+	}
+	l.emit(itemSpace)
 	return lexInsideAction
 }
 
@@ -382,11 +373,11 @@ Loop:
 // arithmetic.
 func (l *lexer) atTerminator() bool {
 	r := l.peek()
-	if isSpace(r) {
+	if isSpace(r) || isEndOfLine(r) {
 		return true
 	}
 	switch r {
-	case eof, ',', '|', ':':
+	case eof, ',', '|', ':', ')', '(':
 		return true
 	}
 	// Does r start the delimiter? This can be ambiguous (with delim=="//", $x/2 will
@@ -502,11 +493,12 @@ Loop:
 
 // isSpace reports whether r is a space character.
 func isSpace(r rune) bool {
-	switch r {
-	case ' ', '\t', '\n', '\r':
-		return true
-	}
-	return false
+	return r == ' ' || r == '\t'
+}
+
+// isEndOfLine reports whether r is an end-of-line character
+func isEndOfLine(r rune) bool {
+	return r == '\r' || r == '\n'
 }
 
 // isAlphaNumeric reports whether r is an alphabetic, digit, or underscore.

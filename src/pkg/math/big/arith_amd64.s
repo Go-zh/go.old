@@ -5,7 +5,15 @@
 // This file provides fast assembly versions for the elementary
 // arithmetic operations on vectors implemented in arith.go.
 
-// TODO(gri) - experiment with unrolled loops for faster execution
+// Literal instruction for MOVQ $0, CX.
+// (MOVQ $0, reg is translated to XORQ reg, reg and clears CF.)
+#define ZERO_CX BYTE $0x48; \
+		BYTE $0xc7; \
+		BYTE $0xc1; \
+		BYTE $0x00; \
+		BYTE $0x00; \
+		BYTE $0x00; \
+		BYTE $0x00
 
 // func mulWW(x, y Word) (z1, z0 Word)
 TEXT ·mulWW(SB),7,$0
@@ -28,95 +36,212 @@ TEXT ·divWW(SB),7,$0
 
 // func addVV(z, x, y []Word) (c Word)
 TEXT ·addVV(SB),7,$0
-	MOVQ z+0(FP), R10
+	MOVL n+8(FP), DI
 	MOVQ x+16(FP), R8
 	MOVQ y+32(FP), R9
-	MOVL n+8(FP), R11
-	MOVQ $0, BX		// i = 0
-	MOVQ $0, DX		// c = 0
-	JMP E1
+	MOVQ z+0(FP), R10
 
-L1:	MOVQ (R8)(BX*8), AX
-	RCRQ $1, DX
-	ADCQ (R9)(BX*8), AX
-	RCLQ $1, DX
-	MOVQ AX, (R10)(BX*8)
-	ADDL $1, BX		// i++
+	MOVQ $0, CX		// c = 0
+	MOVQ $0, SI		// i = 0
 
-E1:	CMPQ BX, R11		// i < n
-	JL L1
+	// s/JL/JMP/ below to disable the unrolled loop
+	SUBQ $4, DI		// n -= 4
+	JL V1			// if n < 0 goto V1
 
-	MOVQ DX, c+48(FP)
+U1:	// n >= 0
+	// regular loop body unrolled 4x
+	RCRQ $1, CX		// CF = c
+	MOVQ 0(R8)(SI*8), R11
+	MOVQ 8(R8)(SI*8), R12
+	MOVQ 16(R8)(SI*8), R13
+	MOVQ 24(R8)(SI*8), R14
+	ADCQ 0(R9)(SI*8), R11
+	ADCQ 8(R9)(SI*8), R12
+	ADCQ 16(R9)(SI*8), R13
+	ADCQ 24(R9)(SI*8), R14
+	MOVQ R11, 0(R10)(SI*8)
+	MOVQ R12, 8(R10)(SI*8)
+	MOVQ R13, 16(R10)(SI*8)
+	MOVQ R14, 24(R10)(SI*8)
+	RCLQ $1, CX		// c = CF
+
+	ADDQ $4, SI		// i += 4
+	SUBQ $4, DI		// n -= 4
+	JGE U1			// if n >= 0 goto U1
+
+V1:	ADDQ $4, DI		// n += 4
+	JLE E1			// if n <= 0 goto E1
+
+L1:	// n > 0
+	RCRQ $1, CX		// CF = c
+	MOVQ 0(R8)(SI*8), R11
+	ADCQ 0(R9)(SI*8), R11
+	MOVQ R11, 0(R10)(SI*8)
+	RCLQ $1, CX		// c = CF
+
+	ADDQ $1, SI		// i++
+	SUBQ $1, DI		// n--
+	JG L1			// if n > 0 goto L1
+
+E1:	MOVQ CX, c+48(FP)	// return c
 	RET
 
 
 // func subVV(z, x, y []Word) (c Word)
-// (same as addVV_s except for SBBQ instead of ADCQ and label names)
+// (same as addVV except for SBBQ instead of ADCQ and label names)
 TEXT ·subVV(SB),7,$0
-	MOVQ z+0(FP), R10
+	MOVL n+8(FP), DI
 	MOVQ x+16(FP), R8
 	MOVQ y+32(FP), R9
-	MOVL n+8(FP), R11
-	MOVQ $0, BX		// i = 0
-	MOVQ $0, DX		// c = 0
-	JMP E2
+	MOVQ z+0(FP), R10
 
-L2:	MOVQ (R8)(BX*8), AX
-	RCRQ $1, DX
-	SBBQ (R9)(BX*8), AX
-	RCLQ $1, DX
-	MOVQ AX, (R10)(BX*8)
-	ADDL $1, BX		// i++
+	MOVQ $0, CX		// c = 0
+	MOVQ $0, SI		// i = 0
 
-E2:	CMPQ BX, R11		// i < n
-	JL L2
+	// s/JL/JMP/ below to disable the unrolled loop
+	SUBQ $4, DI		// n -= 4
+	JL V2			// if n < 0 goto V2
 
-	MOVQ DX, c+48(FP)
+U2:	// n >= 0
+	// regular loop body unrolled 4x
+	RCRQ $1, CX		// CF = c
+	MOVQ 0(R8)(SI*8), R11
+	MOVQ 8(R8)(SI*8), R12
+	MOVQ 16(R8)(SI*8), R13
+	MOVQ 24(R8)(SI*8), R14
+	SBBQ 0(R9)(SI*8), R11
+	SBBQ 8(R9)(SI*8), R12
+	SBBQ 16(R9)(SI*8), R13
+	SBBQ 24(R9)(SI*8), R14
+	MOVQ R11, 0(R10)(SI*8)
+	MOVQ R12, 8(R10)(SI*8)
+	MOVQ R13, 16(R10)(SI*8)
+	MOVQ R14, 24(R10)(SI*8)
+	RCLQ $1, CX		// c = CF
+
+	ADDQ $4, SI		// i += 4
+	SUBQ $4, DI		// n -= 4
+	JGE U2			// if n >= 0 goto U2
+
+V2:	ADDQ $4, DI		// n += 4
+	JLE E2			// if n <= 0 goto E2
+
+L2:	// n > 0
+	RCRQ $1, CX		// CF = c
+	MOVQ 0(R8)(SI*8), R11
+	SBBQ 0(R9)(SI*8), R11
+	MOVQ R11, 0(R10)(SI*8)
+	RCLQ $1, CX		// c = CF
+
+	ADDQ $1, SI		// i++
+	SUBQ $1, DI		// n--
+	JG L2			// if n > 0 goto L2
+
+E2:	MOVQ CX, c+48(FP)	// return c
 	RET
 
 
 // func addVW(z, x []Word, y Word) (c Word)
 TEXT ·addVW(SB),7,$0
-	MOVQ z+0(FP), R10
+	MOVL n+8(FP), DI
 	MOVQ x+16(FP), R8
-	MOVQ y+32(FP), AX	// c = y
-	MOVL n+8(FP), R11
-	MOVQ $0, BX		// i = 0
-	JMP E3
+	MOVQ y+32(FP), CX	// c = y
+	MOVQ z+0(FP), R10
 
-L3:	ADDQ (R8)(BX*8), AX
-	MOVQ AX, (R10)(BX*8)
-	RCLQ $1, AX
-	ANDQ $1, AX
-	ADDL $1, BX		// i++
+	MOVQ $0, SI		// i = 0
 
-E3:	CMPQ BX, R11		// i < n
-	JL L3
+	// s/JL/JMP/ below to disable the unrolled loop
+	SUBQ $4, DI		// n -= 4
+	JL V3			// if n < 4 goto V3
 
-	MOVQ AX, c+40(FP)
+U3:	// n >= 0
+	// regular loop body unrolled 4x
+	MOVQ 0(R8)(SI*8), R11
+	MOVQ 8(R8)(SI*8), R12
+	MOVQ 16(R8)(SI*8), R13
+	MOVQ 24(R8)(SI*8), R14
+	ADDQ CX, R11
+	ZERO_CX
+	ADCQ $0, R12
+	ADCQ $0, R13
+	ADCQ $0, R14
+	SETCS CX		// c = CF
+	MOVQ R11, 0(R10)(SI*8)
+	MOVQ R12, 8(R10)(SI*8)
+	MOVQ R13, 16(R10)(SI*8)
+	MOVQ R14, 24(R10)(SI*8)
+
+	ADDQ $4, SI		// i += 4
+	SUBQ $4, DI		// n -= 4
+	JGE U3			// if n >= 0 goto U3
+
+V3:	ADDQ $4, DI		// n += 4
+	JLE E3			// if n <= 0 goto E3
+
+L3:	// n > 0
+	ADDQ 0(R8)(SI*8), CX
+	MOVQ CX, 0(R10)(SI*8)
+	ZERO_CX
+	RCLQ $1, CX		// c = CF
+
+	ADDQ $1, SI		// i++
+	SUBQ $1, DI		// n--
+	JG L3			// if n > 0 goto L3
+
+E3:	MOVQ CX, c+40(FP)	// return c
 	RET
 
 
 // func subVW(z, x []Word, y Word) (c Word)
+// (same as addVW except for SUBQ/SBBQ instead of ADDQ/ADCQ and label names)
 TEXT ·subVW(SB),7,$0
-	MOVQ z+0(FP), R10
+	MOVL n+8(FP), DI
 	MOVQ x+16(FP), R8
-	MOVQ y+32(FP), AX	// c = y
-	MOVL n+8(FP), R11
-	MOVQ $0, BX		// i = 0
-	JMP E4
+	MOVQ y+32(FP), CX	// c = y
+	MOVQ z+0(FP), R10
+	
+	MOVQ $0, SI		// i = 0
 
-L4:	MOVQ (R8)(BX*8), DX	// TODO(gri) is there a reverse SUBQ?
-	SUBQ AX, DX
-	MOVQ DX, (R10)(BX*8)
-	RCLQ $1, AX
-	ANDQ $1, AX
-	ADDL $1, BX		// i++
+	// s/JL/JMP/ below to disable the unrolled loop
+	SUBQ $4, DI		// n -= 4
+	JL V4			// if n < 4 goto V4
 
-E4:	CMPQ BX, R11		// i < n
-	JL L4
+U4:	// n >= 0
+	// regular loop body unrolled 4x
+	MOVQ 0(R8)(SI*8), R11
+	MOVQ 8(R8)(SI*8), R12
+	MOVQ 16(R8)(SI*8), R13
+	MOVQ 24(R8)(SI*8), R14
+	SUBQ CX, R11
+	ZERO_CX
+	SBBQ $0, R12
+	SBBQ $0, R13
+	SBBQ $0, R14
+	SETCS CX		// c = CF
+	MOVQ R11, 0(R10)(SI*8)
+	MOVQ R12, 8(R10)(SI*8)
+	MOVQ R13, 16(R10)(SI*8)
+	MOVQ R14, 24(R10)(SI*8)
 
-	MOVQ AX, c+40(FP)
+	ADDQ $4, SI		// i += 4
+	SUBQ $4, DI		// n -= 4
+	JGE U4			// if n >= 0 goto U4
+
+V4:	ADDQ $4, DI		// n += 4
+	JLE E4			// if n <= 0 goto E4
+
+L4:	// n > 0
+	MOVQ 0(R8)(SI*8), R11
+	SUBQ CX, R11
+	MOVQ R11, 0(R10)(SI*8)
+	ZERO_CX
+	RCLQ $1, CX		// c = CF
+
+	ADDQ $1, SI		// i++
+	SUBQ $1, DI		// n--
+	JG L4			// if n > 0 goto L4
+
+E4:	MOVQ CX, c+40(FP)	// return c
 	RET
 
 
@@ -266,7 +391,7 @@ E7:	SUBL $1, BX		// i--
 TEXT ·bitLen(SB),7,$0
 	BSRQ x+0(FP), AX
 	JZ Z1
-	INCL AX
+	ADDL $1, AX
 	MOVL AX, n+8(FP)
 	RET
 

@@ -86,12 +86,17 @@ proceeding. If your OS or architecture is not on the list, it's possible that
 <tr><td colspan="3"><hr></td></tr>
 <tr><td>FreeBSD 7 or later</td> <td>amd64, 386</td> <td>Debian GNU/kFreeBSD not supported</td></tr>
 <tr><td>Linux 2.6.23 or later with glibc</td> <td>amd64, 386, arm</td> <td>CentOS/RHEL 5.x not supported; no binary distribution for ARM yet</td></tr>
-<tr><td>Mac OS X 10.6/10.7</td> <td>amd64, 386</td> <td>use the gcc<sup>&#8224;</sup> that comes with Xcode</td></tr>
+<tr><td>Mac OS X 10.6/10.7</td> <td>amd64, 386</td> <td>use the gcc<sup>&#8224;</sup> that comes with Xcode<sup>&#8225;</sup></td></tr>
 <tr><td>Windows 2000 or later</td> <td>amd64, 386</td> <td>use mingw gcc<sup>&#8224;</sup>; cygwin or msys is not needed</td></tr>
 </table>
 
 <p>
-<sup>&#8224;</sup><code>gcc</code> is required only if you plan to use <a href="/cmd/cgo">cgo</a>.
+<sup>&#8224;</sup><code>gcc</code> is required only if you plan to use
+<a href="/cmd/cgo">cgo</a>.<br/>
+<sup>&#8225;</sup>You only need to install the command line tools for
+<a href="http://developer.apple.com/Xcode/">Xcode</a>. If you have already
+installed Xcode 4.3+, you can install it from the Components tab of the
+Downloads preferences panel.
 </p>
 </div>
 
@@ -104,12 +109,14 @@ proceeding. If your OS or architecture is not on the list, it's possible that
 <tr><td colspan="3"><hr></td></tr>
 <tr><td>FreeBSD 7或更新版本</td> <td>amd64, 386</td> <td>Debian GNU/kFreeBSD不支持</td></tr>
 <tr><td>Linux 2.6.23或更新版本配合glibc</td> <td>amd64, 386, arm</td> <td>CentOS/RHEL 5.x不支持；还没有ARM的二进制发行版</td></tr>
-<tr><td>Mac OS X 10.6/10.7</td> <td>amd64, 386</td> <td>使用Xcode自带的gcc<sup>&#8224;</sup></td></tr>
+<tr><td>Mac OS X 10.6/10.7</td> <td>amd64, 386</td> <td>使用Xcode<sup>&#8225;</sup>自带的gcc<sup>&#8224;</sup></td></tr>
 <tr><td>Windows 2000或更新版本</td> <td>amd64, 386</td> <td>使用mingw gcc<sup>&#8224;</sup>，无需cygwin或msys</td></tr>
 </table>
 
 <p>
-<sup>&#8224;只有当你打算使用<a href="/cmd/cgo">cgo</a>时才需要<code>gcc</code>。
+<sup>&#8224;</sup>只有当你打算使用<a href="/cmd/cgo">cgo</a>时才需要<code>gcc</code>。
+<sup>&#8225;</sup>你只需为<a href="http://developer.apple.com/Xcode/">Xcode</a>安装命令行工具。
+如果你已经安装了Xcode 4.3+，就可以从Download首选项面板的Components选项卡安装。
 </p>
 
 <div class="english">

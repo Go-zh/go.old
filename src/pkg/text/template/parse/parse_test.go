@@ -185,6 +185,8 @@ var parseTests = []parseTest{
 		`{{.X | .Y}}`},
 	{"pipeline with decl", "{{$x := .X|.Y}}", noError,
 		`{{$x := .X | .Y}}`},
+	{"nested pipeline", "{{.X (.Y .Z) (.A | .B .C) (.E)}}", noError,
+		`{{.X (.Y .Z) (.A | .B .C) (.E)}}`},
 	{"simple if", "{{if .X}}hello{{end}}", noError,
 		`{{if .X}}"hello"{{end}}`},
 	{"if with else", "{{if .X}}true{{else}}false{{end}}", noError,
@@ -230,6 +232,9 @@ var parseTests = []parseTest{
 	{"invalid punctuation", "{{printf 3, 4}}", hasError, ""},
 	{"multidecl outside range", "{{with $v, $u := 3}}{{end}}", hasError, ""},
 	{"too many decls in range", "{{range $u, $v, $w := 3}}{{end}}", hasError, ""},
+	{"dot applied to parentheses", "{{printf (printf .).}}", hasError, ""},
+	{"adjacent args", "{{printf 3`x`}}", hasError, ""},
+	{"adjacent args with .", "{{printf `x`.}}", hasError, ""},
 	// Equals (and other chars) do not assignments make (yet).
 	{"bug0a", "{{$x := 0}}{{$x}}", noError, "{{$x := 0}}{{$x}}"},
 	{"bug0b", "{{$x = 1}}{{$x}}", hasError, ""},

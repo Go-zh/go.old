@@ -36,6 +36,7 @@ Abhinav Gupta <abhinav.g90@gmail.com>
 Adam Langley <agl@golang.org>
 Adrian O'Grady <elpollouk@gmail.com>
 Akshat Kumar <seed@mail.nanosouffle.net>
+Alan Donovan <adonovan@google.com>
 Albert Strasheim <fullung@gmail.com>
 Aleksandar Dezelin <dezelin@gmail.com>
 Alex Brainman <alex.brainman@gmail.com>
@@ -80,6 +81,7 @@ Brad Fitzpatrick <bradfitz@golang.org> <bradfitz@gmail.com>
 Brian Dellisanti <briandellisanti@gmail.com>
 Brendan O'Dea <bod@golang.org>
 Caine Tighe <arctanofyourface@gmail.com>
+Carlos Castillo <cookieo9@gmail.com>
 Cary Hull <chull@google.com>
 Charles L. Dorian <cldorian@gmail.com>
 Chris Dollin <ehog.hedge@gmail.com>
@@ -106,6 +108,7 @@ Daniel Morsing <daniel.morsing@gmail.com>
 Daniel Nadasi <dnadasi@google.com>
 Daniel Theophanes <kardianos@gmail.com>
 Darren Elwood <darren@textnode.com>
+Dave Borowitz <dborowitz@google.com>
 Dave Cheney <dave@cheney.net>
 Dave Grijalva <dgrijalva@ngmoco.com>
 David Anderson <danderson@google.com>
@@ -172,6 +175,7 @@ Jeff Hodges <jeff@somethingsimilar.com>
 Jeff R. Allen <jra@nella.org> <jeff.allen@gmail.com>
 Jeremy Jackins <jeremyjackins@gmail.com>
 Jim McGrath <jimmc2@gmail.com>
+Joakim Sernbrant <serbaut@gmail.com>
 Joe Poirier <jdpoirier@gmail.com>
 Joel Sing <jsing@google.com>
 Johan Euphrosine <proppy@google.com>
@@ -189,6 +193,7 @@ Jose Luis Vázquez González <josvazg@gmail.com>
 Josh Goebel <dreamer3@gmail.com>
 Jukka-Pekka Kekkonen <karatepekka@gmail.com>
 Julian Phillips <julian@quantumfyre.co.uk>
+Julien Schmidt <google@julienschmidt.com>
 Kai Backman <kaib@golang.org>
 Kei Son <hey.calmdown@gmail.com>
 Keith Rarick <kr@xph.us>
@@ -249,6 +254,7 @@ Olivier Duperray <duperray.olivier@gmail.com>
 Padraig Kitterick <padraigkitterick@gmail.com>
 Paolo Giarrusso <p.giarrusso@gmail.com>
 Pascal S. de Kloe <pascal@quies.net>
+Patrick Crosby <patrick@stathat.com>
 Patrick Gavlin <pgavlin@gmail.com>
 Patrick Mylund Nielsen <patrick@patrickmn.com>
 Paul Borman <borman@google.com>
@@ -304,6 +310,7 @@ Tarmigan Casebolt <tarmigan@gmail.com>
 Taru Karttunen <taruti@taruti.net>
 Thomas Alan Copeland <talan.copeland@gmail.com>
 Timo Savola <timo.savola@gmail.com>
+Tobias Columbus <tobias.columbus@gmail.com> <tobias.columbus@googlemail.com>
 Tom Szymanski <tgs@google.com>
 Tor Andersson <tor.andersson@gmail.com>
 Trevor Strohman <trevor.strohman@gmail.com>

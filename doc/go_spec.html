@@ -1,12 +1,12 @@
 <!--{
 	"Title": "Go编程语言规范",
-	"Subtitle": "版本：2012年8月17日 || 译者：Oling Cat <olingcat@gmail.com>",
+	"Subtitle": "版本：2012年8月29日 || 译者：Oling Cat <olingcat@gmail.com>",
 	"Path": "/ref/spec"
 }-->
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of August 17, 2012",
+	"Subtitle": "Version of August 29, 2012",
 	"Path": "/ref/spec"
 }-->
 
@@ -411,7 +411,7 @@ token is
 	    <a href="#Integer_literals">integer</a>,
 	    <a href="#Floating-point_literals">floating-point</a>,
 	    <a href="#Imaginary_literals">imaginary</a>,
-	    <a href="#Character_literals">character</a>, or
+	    <a href="#Rune_literals">rune</a>, or
 	    <a href="#String_literals">string</a> literal
 	</li>
 
@@ -457,7 +457,7 @@ may be omitted before a closing <code>")"</code> or <code>"}"</code>.
 	    <a href="#整数">整数</a>，
 	    <a href="#浮点数">浮点数</a>，
 	    <a href="#虚数">虚数</a>，
-	    <a href="#字符">字符</a>或
+	    <a href="#符文">符文</a>或
 	    <a href="#字符串">字符串</a>文字
 	</li>
 
@@ -721,26 +721,29 @@ imaginary_lit = (decimals | float_lit) "i" .
 
 
 <div class="english">
-<h3 id="Character_literals">Character literals</h3>
+<h3 id="Rune_literals">Rune literals</h3>
 </div>
 
-<h3 id="字符字面">字符字面</h3>
+<h3 id="符文字面">符文字面</h3>
 
 <div class="english">
 <p>
-A character literal represents a <a href="#Constants">character constant</a>,
-typically a Unicode code point, as one or more characters enclosed in single
-quotes.  Within the quotes, any character may appear except single
-quote and newline. A single quoted character represents itself,
+A rune literal represents a <a href="#Constants">rune constant</a>,
+an integer value identifying a Unicode code point.
+A rune literal is expressed as one or more characters enclosed in single quotes.
+Within the quotes, any character may appear except single
+quote and newline. A single quoted character represents the Unicode value
+of the character itself,
 while multi-character sequences beginning with a backslash encode
 values in various formats.
 </p>
 </div>
 
 <p>
-字符字面由一个<a href="#常量">字符常量</a>表示，通常一个Unicode码点作为一个或更多字符围绕在单引号中。
-在引号内，除单引号和换行符外的任何字符都可出现。
-引号内的单个字符通常代表其自身，而以反斜杠开头的多字符序列则会编码为不同的形式。
+符文字面由一个<a href="#常量">符文常量</a>表示，一个整数值确定一个Unicode码点。
+一个符文字面由围绕在单引号中的一个或更多字符表示。通常一个Unicode码点作为一个或更多字符围绕在单引号中。
+在引号内，除单引号和换行符外的任何字符都可出现。引号内的单个字符通常代表该字符的Unicode值自身，
+而以反斜杠开头的多字符序列则会编码为不同的形式。
 </p>
 
 <div class="english">
@@ -765,7 +768,7 @@ Unicode字符U+00E4，值 <code>0xe4</code>。
 
 <div class="english">
 <p>
-Several backslash escapes allow arbitrary values to be represented
+Several backslash escapes allow arbitrary values to be encoded
 as ASCII text.  There are four ways to represent the integer value
 as a numeric constant: <code>\x</code> followed by exactly two hexadecimal
 digits; <code>\u</code> followed by exactly four hexadecimal digits;
@@ -777,7 +780,7 @@ the digits in the corresponding base.
 </div>
 
 <p>
-反斜杠转义允许用ASCII文本来表示任意值。将整数值表示为数字常量有4种方法：
+反斜杠转义允许用ASCII文本来编码任意值。将整数值表示为数字常量有4种方法：
 <code>\x</code> 紧跟2个十六进制数字；<code>\u</code> 紧跟4个十六进制数字；
 <code>\U</code> 紧跟8个十六进制数字；单个<code>\</code>紧跟3个八进制数字。
 在任何情况下，字面的值都是其相应进制的数字表示的值。
@@ -797,7 +800,7 @@ in particular those above <code>0x10FFFF</code> and surrogate halves.
 <p>
 尽管这些表示方式都会产生整数，其有效范围却不相同。八进制转义只能表示 0 到 255 之间的值。
 十六进制转义则视其结构而定。转义符 <code>\u</code> 和 <code>\U</code> 表示Unicode码点，
-因此其中的一些值是非法的，特别是那些大于 <code>0x10FFFF</code> 的值和半替代值。
+因此其中的一些值是非法的，特别是那些大于 <code>0x10FFFF</code> 的值和半代理值。
 </p>
 
 <div class="english">
@@ -813,7 +816,7 @@ After a backslash, certain single-character escapes represent special values:
 \t   U+0009 horizontal tab
 \v   U+000b vertical tab
 \\   U+005c backslash
-\'   U+0027 single quote  (valid escape only within character literals)
+\'   U+0027 single quote  (valid escape only within rune literals)
 \"   U+0022 double quote  (valid escape only within string literals)
 </pre>
 </div>
@@ -830,13 +833,13 @@ After a backslash, certain single-character escapes represent special values:
 \t   U+0009 横向制表
 \v   U+000b 纵向制表
 \\   U+005c 反斜杠
-\'   U+0027 单引号(仅在字符字面中有效)
+\'   U+0027 单引号(仅在符文字面中有效)
 \"   U+0022 双引号(仅在字符串字面中有效)
 </pre>
 
 <div class="english">
 <p>
-All other sequences starting with a backslash are illegal inside character literals.
+All other sequences starting with a backslash are illegal inside rune literals.
 </p>
 <pre class="ebnf">
 char_lit         = "'" ( unicode_value | byte_value ) "'" .
@@ -849,10 +852,29 @@ big_u_value      = `\` "U" hex_digit hex_digit hex_digit hex_digit
                            hex_digit hex_digit hex_digit hex_digit .
 escaped_char     = `\` ( "a" | "b" | "f" | "n" | "r" | "t" | "v" | `\` | "'" | `"` ) .
 </pre>
+
+<pre>
+'a'
+'ä'
+'本'
+'\t'
+'\000'
+'\007'
+'\377'
+'\x07'
+'\xff'
+'\u12e4'
+'\U00101234'
+'aa'         // illegal: too many characters
+'\xa'        // illegal: too few hexadecimal digits
+'\0'         // illegal: too few octal digits
+'\uDFFF'     // illegal: surrogate half
+'\U00110000' // illegal: invalid Unicode code point
+</pre>
 </div>
 
 <p>
-在字符字面中，所有其它以反斜杠开始的序列都是非法的。
+在符文字面中，所有其它以反斜杠开始的序列都是非法的。
 </p>
 <pre class="ebnf">
 字符字面       = "'" ( Unicode值 | 字节值 ) "'" .
@@ -878,6 +900,11 @@ Unicode值      = Unicode字符 | 小Unicode值 | 大Unicode值 | 转义字符 .
 '\xff'
 '\u12e4'
 '\U00101234'
+'aa'         // 非法：太多字符
+'\xa'        // 非法：太少16进制数字
+'\0'         // 非法：太少8进制数字
+'\uDFFF'     // 非法：半代理值
+'\U00110000' // 非法：无效Unicode码点
 </pre>
 
 
@@ -906,6 +933,8 @@ Raw string literals are character sequences between back quotes
 <code>``</code>.  Within the quotes, any character is legal except
 back quote. The value of a raw string literal is the
 string composed of the uninterpreted characters between the quotes;
+string composed of the uninterpreted (implicitly UTF-8-encoded) characters
+between the quotes;
 in particular, backslashes have no special meaning and the string may
 contain newlines.
 Carriage returns inside raw string literals
@@ -915,7 +944,7 @@ are discarded from the raw string value.
 
 <p>
 原始字符串字面为反引号 <code>``</code> 之间的字符序列。在该引号内，
-除反引号外的任何字符都是合法的。原始字符串字面的值为此引号之间的无解译字符组成的字符串；
+除反引号外的任何字符都是合法的。原始字符串字面的值为此引号之间的无解译（隐式UTF-8编码的）字符组成的字符串；
 另外，反斜杠没有特殊意义且字符串可包含换行符。原始字符串字面中的回车符将会从原始字符串的值中丢弃。
 </p>
 
@@ -925,8 +954,9 @@ Interpreted string literals are character sequences between double
 quotes <code>&quot;&quot;</code>. The text between the quotes,
 which may not contain newlines, forms the
 value of the literal, with backslash escapes interpreted as they
-are in character literals (except that <code>\'</code> is illegal and
-<code>\"</code> is legal).  The three-digit octal (<code>\</code><i>nnn</i>)
+are in rune literals (except that <code>\'</code> is illegal and
+<code>\"</code> is legal), with the same restrictions.
+The three-digit octal (<code>\</code><i>nnn</i>)
 and two-digit hexadecimal (<code>\x</code><i>nn</i>) escapes represent individual
 <i>bytes</i> of the resulting string; all other escapes represent
 the (possibly multi-byte) UTF-8 encoding of individual <i>characters</i>.
@@ -953,12 +983,14 @@ interpreted_string_lit = `"` { unicode_value | byte_value } `"` .
 "日本語"
 "\u65e5本\U00008a9e"
 "\xff\u00FF"
+"\uD800"       // illegal: surrogate half
+"\U00110000"   // illegal: invalid Unicode code point
 </pre>
 </div>
 
 <p>
 解译字符串字面为双引号 <code>&quot;&quot;</code> 之间的字符序列。
-在该引号内，不包含换行符的文本形成字面的值，反斜杠转义序列如同在字符字面中一样被解译
+在该引号内，不包含换行符的文本形成字面的值，反斜杠转义序列如同在符文字面中一样以相同的限制被解译
 （其中<code>\'</code>是非法的，而 <code>\"</code> 是合法的）。
 3位八进制（<code>\</code><i>nnn</i>）和2位十六进制（<code>\x</code><i>nn</i>）
 转义表示字符串值的独立 <i>字节</i> ；其它转义符表示（可多字节）UTF-8编码的独立 <i>字符</i>。
@@ -983,6 +1015,8 @@ interpreted_string_lit = `"` { unicode_value | byte_value } `"` .
 "日本語"
 "\u65e5本\U00008a9e"
 "\xff\u00FF"
+"\uD800"       // 非法：半代理值
+"\U00110000"   // 非法：无效的Unicode码点
 </pre>
 
 <div class="english">
@@ -993,9 +1027,9 @@ These examples all represent the same string:
 <pre>
 "日本語"                                 // UTF-8 input text
 `日本語`                                 // UTF-8 input text as a raw literal
-"\u65e5\u672c\u8a9e"                    // The explicit Unicode code points
-"\U000065e5\U0000672c\U00008a9e"        // The explicit Unicode code points
-"\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e"  // The explicit UTF-8 bytes
+"\u65e5\u672c\u8a9e"                    // the explicit Unicode code points
+"\U000065e5\U0000672c\U00008a9e"        // the explicit Unicode code points
+"\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e"  // the explicit UTF-8 bytes
 </pre>
 </div>
 
@@ -1015,7 +1049,7 @@ These examples all represent the same string:
 <p>
 If the source code represents a character as two code points, such as
 a combining form involving an accent and a letter, the result will be
-an error if placed in a character literal (it is not a single code
+an error if placed in a rune literal (it is not a single code
 point), and will appear as two code points if placed in a string
 literal.
 </p>
@@ -1023,7 +1057,7 @@ literal.
 
 <p>
 如果源码将两个码点表示为一个字符，例如包含着重号和字母的结合形式，那么将它放置在
-字符字面中就会产生一个错误（它不是单一码点），而放置在字符串字面中则会显示为两个码点。
+符文字面中就会产生一个错误（它不是单一码点），而放置在字符串字面中则会显示为两个码点。
 </p>
 
 <div class="english">
@@ -1034,7 +1068,7 @@ literal.
 
 <div class="english">
 <p>There are <i>boolean constants</i>,
-<i>character constants</i>,
+<i>rune constants</i>,
 <i>integer constants</i>,
 <i>floating-point constants</i>, <i>complex constants</i>,
 and <i>string constants</i>. Character, integer, floating-point,
@@ -1044,7 +1078,7 @@ collectively called <i>numeric constants</i>.
 </div>
 
 <p>
-常量包含<i>布尔常量</i>，<i>字符常量</i>，
+常量包含<i>布尔常量</i>，<i>符文常量</i>，
 <i>整数常量</i>，<i>浮点数常量</i>，
 <i>复数常量</i>和<i>字符串常量</i>。
 字符，整数，浮点数和复数常量统称为<i>数值常量</i>.
@@ -1053,7 +1087,7 @@ collectively called <i>numeric constants</i>.
 <div class="english">
 <p>
 A constant value is represented by a
-<a href="#Character_literals">character</a>,
+<a href="#Rune_literals">rune</a>,
 <a href="#Integer_literals">integer</a>,
 <a href="#Floating-point_literals">floating-point</a>,
 <a href="#Imaginary_literals">imaginary</a>,
@@ -1076,7 +1110,7 @@ The boolean truth values are represented by the predeclared constants
 
 <p>
 常量的值可由
-<a href="#字符字面">字符</a>，
+<a href="#符文字面">符文</a>，
 <a href="#整数字面">整数</a>，
 <a href="#浮点数字面">浮点数</a>，
 <a href="#虚数字面">虚数</a>或
@@ -4645,7 +4679,7 @@ In all other cases, <code>x.f</code> is illegal.
 If <code>x</code> is of pointer or interface type and has the value
 <code>nil</code>, assigning to, evaluating, or calling <code>x.f</code>
 causes a <a href="#Run_time_panics">run-time panic</a>.
-</i>
+</li>
 </ol>
 </div>
 
@@ -6948,7 +6982,7 @@ wherever it is legal to use an operand of boolean, numeric, or string type,
 respectively.
 Except for shift operations, if the operands of a binary operation are
 different kinds of untyped constants, the operation and, for non-boolean operations, the result use
-the kind that appears later in this list: integer, character, floating-point, complex.
+the kind that appears later in this list: integer, rune, floating-point, complex.
 For example, an untyped integer constant divided by an
 untyped complex constant yields an untyped complex constant.
 </p>
@@ -6957,7 +6991,7 @@ untyped complex constant yields an untyped complex constant.
 <p>
 无类型化布尔、数值和字符串常量可被用作操作数，无论使用布尔、数值或字符串类型的操作数是否合法。
 除移位操作外，若二元操作的操作数是不同种类的无类型化常量，对于非布尔操作，该操作与其结果使用出现在此列表中较后的种类：
-整数、字符、浮点数、复数。例如，由无类型化复数常量分离的无类型化整数常量将产生一个无类型化复数常量。
+整数、符文、浮点数、复数。例如，由无类型化复数常量分离的无类型化整数常量将产生一个无类型化复数常量。
 </p>
 
 <div class="english">
@@ -6984,7 +7018,7 @@ const f = int32(1) &lt;&lt; 33   // f == 0     (type int32)
 const g = float64(2) &gt;&gt; 1  // illegal    (float64(2) is a typed floating-point constant)
 const h = "foo" &gt; "bar"    // h == true  (untyped boolean constant)
 const j = true             // j == true  (untyped boolean constant)
-const k = 'w' + 1          // k == 'x'   (untyped character constant)
+const k = 'w' + 1          // k == 'x'   (untyped rune constant)
 const l = "hi"             // l == "hi"  (untyped string constant)
 const m = string(k)        // m == "x"   (type string)
 const Σ = 1 - 0.707i       //            (untyped complex constant)
@@ -7011,7 +7045,7 @@ const f = int32(1) &lt;&lt; 33   // f == 0     （类型为int32）
 const g = float64(2) &gt;&gt; 1  // 非法       （float64(2)为无类型化浮点数常量）
 const h = "foo" &gt; "bar"    // h == true  （无类型化布尔常量）
 const j = true             // j == true  （无类型化布尔常量）
-const k = 'w' + 1          // k == 'x'   （无类型化字符常量）
+const k = 'w' + 1          // k == 'x'   （无类型化符文常量）
 const l = "hi"             // l == "hi"  （无类型化字符串常量）
 const m = string(k)        // m == "x"   （类型为string）
 const Σ = 1 - 0.707i       //            （无类型化复数常量）
@@ -7022,7 +7056,7 @@ const Φ = iota*1i - 1/1i   //            （无类型化复数常量）
 <div class="english">
 <p>
 Applying the built-in function <code>complex</code> to untyped
-integer, character, or floating-point constants yields
+integer, rune, or floating-point constants yields
 an untyped complex constant.
 </p>
 
@@ -7033,7 +7067,7 @@ const iΘ = complex(0, Θ)   // iΘ == 1.5i  (type complex128)
 </div>
 
 <p>
-将内建函数 <code>complex</code> 应用于无类型化整数、字符或浮点数常量将产生一个无类型化复数常量。
+将内建函数 <code>complex</code> 应用于无类型化整数、符文或浮点数常量将产生一个无类型化复数常量。
 </p>
 
 <pre>
@@ -7672,7 +7706,7 @@ is assigned to a variable of interface type, the constant is <a href="#Conversio
 to type <code>bool</code>, <code>rune</code>, <code>int</code>, <code>float64</code>,
 <code>complex128</code> or <code>string</code>
 respectively, depending on whether the value is a
-boolean, character, integer, floating-point, complex, or string constant.
+boolean, rune, integer, floating-point, complex, or string constant.
 </p>
 </div>
 
@@ -7680,7 +7714,7 @@ boolean, character, integer, floating-point, complex, or string constant.
 在赋值中，每个值必须<a href="#可赋值性">可赋予</a>已赋值操作数的类型。若无类型化<a href="#常量">常量</a>
 已被赋予接口类型的变量，则该常量即被<a href="#类型转换">转换</a>为类型
 <code>bool</code>、<code>rune</code>、<code>int</code>、<code>float64</code>、<code>complex128</code>
-或 <code>string</code> 之一，这取决于该值是否为布尔、字符、整数、浮点数、复数或字符串常量。
+或 <code>string</code> 之一，这取决于该值是否为布尔、符文、整数、浮点数、复数或字符串常量。
 </p>
 
 
@@ -10627,7 +10661,8 @@ Calls to <code>Alignof</code>, <code>Offsetof</code>, and
 </div>
 
 <p>
-调用 <code>Alignof</code>、<code>Offsetof</code> 和 <code>Sizeof</code> 是类型为 <code>uintptr</code> 的编译时are compile-time constant expressions of type <code>uintptr</code>.
+调用 <code>Alignof</code>、<code>Offsetof</code> 和 <code>Sizeof</code> 是类型为
+<code>uintptr</code> 的编译时常量表达式。
 </p>
 
 

@@ -379,7 +379,18 @@ func (t *Transport) getConn(cm *connectMethod) (*persistConn, error) {
 
 	if cm.targetScheme == "https" {
 		// Initiate TLS and check remote host name against certificate.
-		conn = tls.Client(conn, t.TLSClientConfig)
+		cfg := t.TLSClientConfig
+		if cfg == nil || cfg.ServerName == "" {
+			host, _, _ := net.SplitHostPort(cm.addr())
+			if cfg == nil {
+				cfg = &tls.Config{ServerName: host}
+			} else {
+				clone := *cfg // shallow clone
+				clone.ServerName = host
+				cfg = &clone
+			}
+		}
+		conn = tls.Client(conn, cfg)
 		if err = conn.(*tls.Conn).Handshake(); err != nil {
 			return nil, err
 		}
@@ -538,7 +549,6 @@ func remoteSideClosed(err error) bool {
 
 func (pc *persistConn) readLoop() {
 	defer close(pc.closech)
-	defer close(pc.writech)
 	alive := true
 	var lastbody io.ReadCloser // last response body, if any, read on this connection
 
@@ -640,19 +650,24 @@ func (pc *persistConn) readLoop() {
 }
 
 func (pc *persistConn) writeLoop() {
-	for wr := range pc.writech {
-		if pc.isBroken() {
-			wr.ch <- errors.New("http: can't write HTTP request on broken connection")
-			continue
+	for {
+		select {
+		case wr := <-pc.writech:
+			if pc.isBroken() {
+				wr.ch <- errors.New("http: can't write HTTP request on broken connection")
+				continue
+			}
+			err := wr.req.Request.write(pc.bw, pc.isProxy, wr.req.extra)
+			if err == nil {
+				err = pc.bw.Flush()
+			}
+			if err != nil {
+				pc.markBroken()
+			}
+			wr.ch <- err
+		case <-pc.closech:
+			return
 		}
-		err := wr.req.Request.write(pc.bw, pc.isProxy, wr.req.extra)
-		if err == nil {
-			err = pc.bw.Flush()
-		}
-		if err != nil {
-			pc.markBroken()
-		}
-		wr.ch <- err
 	}
 }
 
