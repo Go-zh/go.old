@@ -1,5 +1,5 @@
 <!--{
-    "Title": "Go1发行注记",
+    "Title": "Go 1发行注记",
     "Template": true
 }-->
 
@@ -8,14 +8,21 @@
 	"Template": true
 }-->
 
-<h2 id="introduction">Introduction to Go 1</h2>
+<h2 id="前言">Go 1介绍</h2>
 
+<div class="english">
 <p>
 Go version 1, Go 1 for short, defines a language and a set of core libraries
 that provide a stable foundation for creating reliable products, projects, and
 publications.
 </p>
+</div>
 
+<p>
+Go版本1，简称Go 1，它定义了一种语言和一组核心库，为创建可靠的产品、项目及出版物提供了稳定的基础。
+</p>
+
+<div class="english">
 <p>
 The driving motivation for Go 1 is stability for its users. People should be able to
 write Go programs and expect that they will continue to compile and run without
@@ -24,7 +31,15 @@ Google App Engine. Similarly, people should be able to write books about Go, be
 able to say which version of Go the book is describing, and have that version
 number still be meaningful much later.
 </p>
+</div>
 
+<p>
+Go 1的动力源于用户的稳定性需求。人们应该能编写Go程序，并期望它们无需更改就可以继续编译并运行，
+在年的时间尺度上，它包含在了诸如Google应用引擎之类的生产环境中。同样，人们也应该能够编写关于Go的书籍，
+能够说明该书籍描述了Go的哪个版本，而保留该版本号在以后仍然是有意义的。
+</p>
+
+<div class="english">
 <p>
 Code that compiles in Go 1 should, with few exceptions, continue to compile and
 run throughout the lifetime of that version, even as we issue updates and bug
@@ -34,7 +49,16 @@ add functionality but will not break existing Go 1 programs.
 <a href="go1compat.html">The Go 1 compatibility document</a>
 explains the compatibility guidelines in more detail.
 </p>
+</div>
 
+<p>
+在Go 1中编译的代码，除了少数例外，都能够继续编译并在该版本的整个生命周期中运行，
+即便是我们更新了问题或修复了Bug，比如Go版本1.1、1.2等等。除了关键的修复外，
+更改可能会在Go 1的后续版本中增加功能，但不会破坏现有的Go 1程序。
+<a href="go1compat.html">Go 1兼容性文档</a>详细介绍了兼容性指引。
+</p>
+
+<div class="english">
 <p>
 Go 1 is a representation of Go as it used today, not a wholesale rethinking of
 the language. We avoided designing new features and instead focused on cleaning
@@ -46,16 +70,40 @@ helpful for the long term, but also means that Go 1 introduces incompatibilities
 for old programs. Fortunately, the <code>go</code> <code>fix</code> tool can
 automate much of the work needed to bring programs up to the Go 1 standard.
 </p>
+</div>
 
+<p>
+Go 1是Go在现今使用的代表，并不是该语言的大规模重新思考。我们避免了设计新的特性，
+而是专注于清理问题和不一致性，并提升可移植性。对于Go语言和包的一些更改，
+我们已经考虑了一段时间并有了原型，但没有公布的原因在于它们非常重要且不向后兼容。
+Go 1是个让它们出现的时机，这在长期来讲是有帮助的，但这也意味着Go 1引入了对旧程序的不兼容性。
+幸运的是，<code>go</code> <code>fix</code> 工具可以自动完成将程序升级到Go 1标准的许多工作。
+</p>
+
+<div class="english">
 <p>
 This document outlines the major changes in Go 1 that will affect programmers
 updating existing code; its reference point is the prior release, r60 (tagged as
 r60.3). It also explains how to update code from r60 to run under Go 1.
 </p>
+</div>
 
+<p>
+本文档概括了在Go 1中会影响程序员更新既有代码的主要更改，它的参考点是以前的发行版，
+即r60（标签为r60.3）。它也说明了如何从r60更新代码使其能运行在Go 1上。
+</p>
+
+<div class="english">
 <h2 id="language">Changes to the language</h2>
+</div>
 
+<h2 id="语言">对语言进行的更改</h2>
+
+<div class="english">
 <h3 id="append">Append</h3>
+</div>
+
+<h3 id="追加">追加</h3>
 
 <p>
 The <code>append</code> predeclared variadic function makes it easy to grow a slice
@@ -81,7 +129,11 @@ The conversion is no longer necessary:
 This is a new feature, so existing code needs no changes.
 </p>
 
+<div class="english">
 <h3 id="close">Close</h3>
+</div>
+
+<h3 id="关闭">关闭</h3>
 
 <p>
 The <code>close</code> predeclared function provides a mechanism
@@ -116,7 +168,7 @@ erroneous even before Go 1 and should be fixed.  The compiler will
 now reject such code.
 </p>
 
-<h3 id="literals">Composite literals</h3>
+<h3 id="字面">复合字面</h3>
 
 <p>
 In Go 1, a composite literal of array, slice, or map type can elide the
@@ -133,8 +185,11 @@ This change has no effect on existing code, but the command
 will, among other things, elide explicit element types wherever permitted.
 </p>
 
-
+<div class="english">
 <h3 id="init">Goroutines during init</h3>
+</div>
+
+<h3 id="初始化">在初始化中的Go程</h3>
 
 <p>
 The old language defined that <code>go</code> statements executed during initialization created goroutines but that they did not begin to run until initialization of the entire program was complete.
@@ -162,7 +217,11 @@ although it's possible that code that depends on goroutines not starting before 
 There was no such code in the standard repository.
 </p>
 
+<div class="english">
 <h3 id="rune">The rune type</h3>
+</div>
+
+<h3 id="符文类型">rune类型</h3>
 
 <p>
 The language spec allows the <code>int</code> type to be 32 or 64 bits wide, but current implementations set <code>int</code> to 32 bits even on 64-bit platforms.
@@ -204,7 +263,11 @@ from there.
 Some code may get type errors that a trivial conversion will resolve.
 </p>
 
+<div class="english">
 <h3 id="error">The error type</h3>
+</div>
+
+<h3 id="错误类型">error类型</h3>
 
 <p>
 Go 1 introduces a new built-in type, <code>error</code>, which has the following definition:
@@ -221,7 +284,11 @@ Since the consequences of this type are all in the package library,
 it is discussed <a href="#errors">below</a>.
 </p>
 
+<div class="english">
 <h3 id="delete">Deleting from maps</h3>
+</div>
+
+<h3 id="delete">从映射中删除</h3>
 
 <p>
 In the old language, to delete the entry with key <code>k</code> from map <code>m</code>, one wrote the statement,
@@ -260,7 +327,11 @@ The fix tool
 will flag other uses of the syntax for inspection by the programmer.
 </p>
 
+<div class="english">
 <h3 id="iteration">Iterating in maps</h3>
+</div>
+
+<h3 id="迭代">映射中的迭代</h3>
 
 <p>
 The old language specification did not define the order of iteration for maps,
@@ -295,7 +366,11 @@ Note that it was already incorrect to depend on the iteration order, which
 was unspecified. This change codifies the unpredictability.
 </p>
 
+<div class="english">
 <h3 id="multiple_assignment">Multiple assignment</h3>
+</div>
+
+<h3 id="多重复值">多重赋值</h3>
 
 <p>
 The language specification has long guaranteed that in assignments
@@ -326,7 +401,7 @@ No code in the standard repository was broken by this change, and code
 that depended on the previous unspecified behavior was already incorrect.
 </p>
 
-<h3 id="shadowing">Returns and shadowed variables</h3>
+<h3 id="屏蔽">返回和屏蔽变量</h3>
 
 <p>
 A common mistake is to use <code>return</code> (without arguments) after an assignment to a variable that has the same name as a result variable but is not the same variable.
@@ -364,7 +439,11 @@ Code that shadows return values in this way will be rejected by the compiler and
 The few cases that arose in the standard repository were mostly bugs.
 </p>
 
+<div class="english">
 <h3 id="unexported">Copying structs with unexported fields</h3>
+</div>
+
+<h3 id="未导出">带未导出字段复制结构</h3>
 
 <p>
 The old language did not allow a package to make a copy of a struct value containing unexported fields belonging to a different package.
@@ -422,7 +501,11 @@ will show that the secret field of the struct has been copied to the new value.
 This is a new feature, so existing code needs no changes.
 </p>
 
+<div class="english">
 <h3 id="equality">Equality</h3>
+</div>
+
+<h3 id="相等性">相等性</h3>
 
 <p>
 Before Go 1, the language did not define equality on struct and array values.
@@ -468,7 +551,11 @@ Few programs will be affected, but the fix may require some
 redesign.
 </p>
 
+<div class="english">
 <h2 id="packages">The package hierarchy</h2>
+</div>
+
+<h2 id="包">包层的级</h2>
 
 <p>
 Go 1 addresses many deficiencies in the old standard library and
@@ -482,7 +569,11 @@ Some have moved, some have been renamed, some have been deleted.
 New packages are described in later sections.
 </p>
 
+<div class="english">
 <h3 id="hierarchy">The package hierarchy</h3>
+</div>
+
+<h3 id="层级">包的层级</h3>
 
 <p>
 Go 1 has a rearranged package hierarchy that groups related items
@@ -564,7 +655,11 @@ that are no longer in the standard repository will need to be edited
 by hand.
 </p>
 
+<div class="english">
 <h3 id="exp">The package tree exp</h3>
+</div>
+
+<h3 id="表达式">包树exp</h3>
 
 <p>
 Because they are not standardized, the packages under the <code>exp</code> directory will not be available in the
@@ -609,7 +704,11 @@ or else compiled from an installation that has <code>exp</code> available.
 The <code>go</code> <code>fix</code> tool or the compiler will complain about such uses.
 </p>
 
+<div class="english">
 <h3 id="old">The package tree old</h3>
+</div>
+
+<h3 id="旧的">包树old</h3>
 
 <p>
 Because they are deprecated, the packages under the <code>old</code> directory will not be available in the
@@ -660,7 +759,11 @@ Language Community Wiki</a> for some suggestions.
 Code that uses the other packages (there should be almost zero) will need to be rethought.
 </p>
 
+<div class="english">
 <h3 id="subrepo">Packages moving to subrepositories</h3>
+</div>
+
+<h3 id="子仓库">移入子仓库的包</h3>
 
 <p>
 Go 1 has moved a number of packages into other repositories, usually sub-repositories of
@@ -721,14 +824,22 @@ Installations that depend on these packages will need to install them using
 a <code>go get</code> command.
 </p>
 
+<div class="english">
 <h2 id="major">Major changes to the library</h2>
+</div>
+
+<h2 id="主要的">对库的主要更改</h2>
 
 <p>
 This section describes significant changes to the core libraries, the ones that
 affect the most programs.
 </p>
 
+<div class="english">
 <h3 id="errors">The error type and errors package</h3>
+</div>
+
+<h3 id="错误">erro类型与errors包</h3>
 
 <p>
 The placement of <code>os.Error</code> in package <code>os</code> is mostly historical: errors first came up when implementing package <code>os</code>, and they seemed system-related at the time.
@@ -787,7 +898,11 @@ Code that defines error types with a <code>String</code> method will need to be 
 by hand to rename the methods to <code>Error</code>.
 </p>
 
+<div class="english">
 <h3 id="errno">System call errors</h3>
+</div>
+
+<h3 id="错误号">系统调用错误</h3>
 
 <p>
 The old <code>syscall</code> package, which predated <code>os.Error</code>
@@ -818,7 +933,11 @@ Regardless, most code should use the <code>os</code> package
 rather than <code>syscall</code> and so will be unaffected.
 </p>
 
+<div class="english">
 <h3 id="time">Time</h3>
+</div>
+
+<h3 id="时间">时间</h3>
 
 <p>
 Time is always a challenge to support well in a programming language.
@@ -888,7 +1007,11 @@ the correct function or method for the old functionality, but
 may have the wrong type or require further analysis.
 </p>
 
+<div class="english">
 <h2 id="minor">Minor changes to the library</h2>
+</div>
+
+<h2 id="次要的">对库的次要更改</h2>
 
 <p>
 This section describes smaller changes, such as those to less commonly
@@ -899,7 +1022,11 @@ Collectively they improve portability, regularize behavior, and
 make the interfaces more modern and Go-like.
 </p>
 
+<div class="english">
 <h3 id="archive_zip">The archive/zip package</h3>
+</div>
+
+<h3 id="zip归档">archive/zip包</h3>
 
 <p>
 In Go 1, <a href="/pkg/archive/zip/#Writer"><code>*zip.Writer</code></a> no
@@ -911,7 +1038,11 @@ longer has a <code>Write</code> method. Its presence was a mistake.
 What little code is affected will be caught by the compiler and must be updated by hand.
 </p>
 
+<div class="english">
 <h3 id="bufio">The bufio package</h3>
+</div>
+
+<h3 id="IO缓存">bufio包</h3>
 
 <p>
 In Go 1, <a href="/pkg/bufio/#NewReaderSize"><code>bufio.NewReaderSize</code></a>
@@ -927,7 +1058,11 @@ Running <code>go</code> <code>fix</code> will update calls that assign the error
 Calls that aren't fixed will be caught by the compiler and must be updated by hand.
 </p>
 
+<div class="english">
 <h3 id="compress">The compress/flate, compress/gzip and compress/zlib packages</h3>
+</div>
+
+<h3 id="压缩">compress/flate、compress/gzip和compress/zlib包</h3>
 
 <p>
 In Go 1, the <code>NewWriterXxx</code> functions in
@@ -947,7 +1082,11 @@ Running <code>go</code> <code>fix</code> will update old names and calls that as
 Calls that aren't fixed will be caught by the compiler and must be updated by hand.
 </p>
 
+<div class="english">
 <h3 id="crypto_aes_des">The crypto/aes and crypto/des packages</h3>
+</div>
+
+<h3 id="aes和des加密">crypto/aes与crypto/des包</h3>
 
 <p>
 In Go 1, the <code>Reset</code> method has been removed. Go does not guarantee
@@ -966,7 +1105,11 @@ Remove the calls to Reset. Replace uses of the specific cipher types with
 cipher.Block.
 </p>
 
+<div class="english">
 <h3 id="crypto_elliptic">The crypto/elliptic package</h3>
+</div>
+
+<h3 id="椭圆加密">crypto/elliptic包</h3>
 
 <p>
 In Go 1, <a href="/pkg/crypto/elliptic/#Curve"><code>elliptic.Curve</code></a>
@@ -985,7 +1128,11 @@ in <code>crypto/elliptic</code> that take an <code>elliptic.Curve</code>
 as their first argument.
 </p>
 
+<div class="english">
 <h3 id="crypto_hmac">The crypto/hmac package</h3>
+</div>
+
+<h3 id="hmac加密">crypto/hmac包</h3>
 
 <p>
 In Go 1, the hash-specific functions, such as <code>hmac.NewMD5</code>, have
@@ -998,7 +1145,11 @@ a function that returns a <code>hash.Hash</code>, such as <code>md5.New</code>.
 Running <code>go</code> <code>fix</code> will perform the needed changes.
 </p>
 
+<div class="english">
 <h3 id="crypto_x509">The crypto/x509 package</h3>
+</div>
+
+<h3 id="x509加密">crypto/x509包</h3>
 
 <p>
 In Go 1, the
@@ -1016,7 +1167,11 @@ to be implemented in the future.
 No changes will be needed.
 </p>
 
+<div class="english">
 <h3 id="encoding_binary">The encoding/binary package</h3>
+</div>
+
+<h3 id="二进制解码">encoding/binary包</h3>
 
 <p>
 In Go 1, the <code>binary.TotalSize</code> function has been replaced by
@@ -1030,7 +1185,11 @@ a <code>reflect.Value</code>.
 What little code is affected will be caught by the compiler and must be updated by hand.
 </p>
 
+<div class="english">
 <h3 id="encoding_xml">The encoding/xml package</h3>
+</div>
+
+<h3 id="XML解码">encoding/xml包</h3>
 
 <p>
 In Go 1, the <a href="/pkg/encoding/xml/"><code>xml</code></a> package
@@ -1073,7 +1232,11 @@ misbehave silently in some cases. For example, the old
 <code>"attr"</code> remains valid but with a different meaning.
 </p>
 
+<div class="english">
 <h3 id="expvar">The expvar package</h3>
+</div>
+
+<h3 id="导出变量">expvar包</h3>
 
 <p>
 In Go 1, the <code>RemoveAll</code> function has been removed.
@@ -1090,7 +1253,11 @@ Most code using <code>expvar</code> will not need changing. The rare code that u
 <code>Iter</code> can be updated to pass a closure to <code>Do</code> to achieve the same effect.
 </p>
 
+<div class="english">
 <h3 id="flag">The flag package</h3>
+</div>
+
+<h3 id="标记">flag包</h3>
 
 <p>
 In Go 1, the interface <a href="/pkg/flag/#Value"><code>flag.Value</code></a> has changed slightly.
@@ -1115,7 +1282,11 @@ The <code>Duration</code> flag is new and affects no existing code.
 </p>
 
 
+<div class="english">
 <h3 id="go">The go/* packages</h3>
+</div>
+
+<h3 id="Go包">go/*包</h3>
 
 <p>
 Several packages under <code>go</code> have slightly revised APIs.
@@ -1224,7 +1395,11 @@ compiler will reject incorrect uses. Templates used in conjunction with any of t
 to run-time errors.
 </p>
 
+<div class="english">
 <h3 id="hash">The hash package</h3>
+</div>
+
+<h3 id="hash包">hash包</h3>
 
 <p>
 In Go 1, the definition of <a href="/pkg/hash/#Hash"><code>hash.Hash</code></a> includes
@@ -1253,7 +1428,11 @@ implementations of <code>hash.Hash</code>.
 Since the package's functionality is new, no updating is necessary.
 </p>
 
+<div class="english">
 <h3 id="http">The http package</h3>
+</div>
+
+<h3 id="http包">http包</h3>
 
 <p>
 In Go 1 the <a href="/pkg/net/http/"><code>http</code></a> package is refactored,
@@ -1295,7 +1474,11 @@ Running <code>go</code> <code>fix</code> will update the few programs that are a
 uses of <code>RawURL</code>, which must be fixed by hand.
 </p>
 
+<div class="english">
 <h3 id="image">The image package</h3>
+</div>
+
+<h3 id="image包">image包</h3>
 
 <p>
 The <a href="/pkg/image/"><code>image</code></a> package has had a number of
@@ -1410,7 +1593,11 @@ and
 Running <code>go</code> <code>fix</code> will update almost all code affected by the change.
 </p>
 
+<div class="english">
 <h3 id="log_syslog">The log/syslog package</h3>
+</div>
+
+<h3 id="系统记录包">log/syslog包</h3>
 
 <p>
 In Go 1, the <a href="/pkg/log/syslog/#NewLogger"><code>syslog.NewLogger</code></a>
@@ -1422,7 +1609,11 @@ function returns an error as well as a <code>log.Logger</code>.
 What little code is affected will be caught by the compiler and must be updated by hand.
 </p>
 
+<div class="english">
 <h3 id="mime">The mime package</h3>
+</div>
+
+<h3 id="mime包">mime包</h3>
 
 <p>
 In Go 1, the <a href="/pkg/mime/#FormatMediaType"><code>FormatMediaType</code></a> function
@@ -1437,7 +1628,11 @@ It now takes <code>"text/html"</code> rather than <code>"text"</code> and <code>
 What little code is affected will be caught by the compiler and must be updated by hand.
 </p>
 
+<div class="english">
 <h3 id="net">The net package</h3>
+</div>
+
+<h3 id="net包">net包</h3>
 
 <p>
 In Go 1, the various <code>SetTimeout</code>,
@@ -1468,7 +1663,11 @@ Code that uses the old methods will fail to compile and must be updated by hand.
 The semantic change makes it difficult for the fix tool to update automatically.
 </p>
 
+<div class="english">
 <h3 id="os">The os package</h3>
+</div>
+
+<h3 id="os包">os包</h3>
 
 <p>
 The <code>Time</code> function has been removed; callers should use
@@ -1544,7 +1743,11 @@ Running <code>go</code> <code>fix</code> will drop a zero argument to <code>Proc
 All other changes will be caught by the compiler and must be updated by hand.
 </p>
 
+<div class="english">
 <h4 id="os_fileinfo">The os.FileInfo type</h4>
+</div>
+
+<h4 id="os文件信息">os.FileInfo类型</h4>
 
 <p>
 Go 1 redefines the <a href="/pkg/os/#FileInfo"><code>os.FileInfo</code></a> type,
@@ -1629,7 +1832,11 @@ Code that uses the old POSIX error values from the <code>os</code> package
 will fail to compile and will also need to be updated by hand.
 </p>
 
+<div class="english">
 <h3 id="os_signal">The os/signal package</h3>
+</div>
+
+<h3 id="os信号">os/signal包</h3>
 
 <p>
 The <code>os/signal</code> package in Go 1 replaces the
@@ -1662,7 +1869,11 @@ c := make(chan os.Signal)
 signal.Notify(c, syscall.SIGHUP, syscall.SIGQUIT)
 </pre>
 
+<div class="english">
 <h3 id="path_filepath">The path/filepath package</h3>
+</div>
+
+<h3 id="文件路径">path/filepath包</h3>
 
 <p>
 In Go 1, the <a href="/pkg/path/filepath/#Walk"><code>Walk</code></a> function of the
@@ -1693,7 +1904,11 @@ will need to be updated by hand.
 The compiler will catch code using the old interface.
 </p>
 
+<div class="english">
 <h3 id="regexp">The regexp package</h3>
+</div>
+
+<h3 id="正则表达式">regexp包</h3>
 
 <p>
 The <a href="/pkg/regexp/"><code>regexp</code></a> package has been rewritten.
@@ -1707,7 +1922,11 @@ it supports has changed from the old "egrep" form to that of
 Code that uses the package should have its regular expressions checked by hand.
 </p>
 
+<div class="english">
 <h3 id="runtime">The runtime package</h3>
+</div>
+
+<h3 id="运行时">runtime包</h3>
 
 <p>
 In Go 1, much of the API exported by package
@@ -1747,7 +1966,11 @@ Running <code>go</code> <code>fix</code> will update code for the function renam
 Other code will need to be updated by hand.
 </p>
 
+<div class="english">
 <h3 id="strconv">The strconv package</h3>
+</div>
+
+<h3 id="字符串转换">strconv包</h3>
 
 <p>
 In Go 1, the
@@ -1842,7 +2065,11 @@ a cast that must be added by hand; the <code>go</code> <code>fix</code> tool wil
 </p>
 
 
+<div class="english">
 <h3 id="templates">The template packages</h3>
+</div>
+
+<h3 id="模版">template包</h3>
 
 <p>
 The <code>template</code> and <code>exp/template/html</code> packages have moved to
@@ -1874,7 +2101,11 @@ The <a href="/pkg/text/template/#examples">examples</a> in
 the documentation for <code>text/template</code> can provide guidance.
 </p>
 
+<div class="english">
 <h3 id="testing">The testing package</h3>
+</div>
+
+<h3 id="测试">testing包</h3>
 
 <p>
 The testing package has a type, <code>B</code>, passed as an argument to benchmark functions.
@@ -1890,7 +2121,11 @@ Existing code is unaffected, although benchmarks that use <code>println</code>
 or <code>panic</code> should be updated to use the new methods.
 </p>
 
+<div class="english">
 <h3 id="testing_script">The testing/script package</h3>
+</div>
+
+<h3 id="测试脚本">testing/script包</h3>
 
 <p>
 The testing/script package has been deleted. It was a dreg.
@@ -1901,7 +2136,11 @@ The testing/script package has been deleted. It was a dreg.
 No code is likely to be affected.
 </p>
 
+<div class="english">
 <h3 id="unsafe">The unsafe package</h3>
+</div>
+
+<h3 id="unsafe包">unsafe包</h3>
 
 <p>
 In Go 1, the functions
@@ -1920,7 +2159,11 @@ The changes to <a href="http://code.google.com/p/go/source/detail?r=2646dc956207
 may be helpful as examples.
 </p>
 
+<div class="english">
 <h3 id="url">The url package</h3>
+</div>
+
+<h3 id="url包">url包</h3>
 
 <p>
 In Go 1 several fields from the <a href="/pkg/net/url/#URL"><code>url.URL</code></a> type
@@ -1992,7 +2235,11 @@ Code that uses the old fields will fail to compile and must be updated by hand.
 The semantic changes make it difficult for the fix tool to update automatically.
 </p>
 
+<div class="english">
 <h2 id="cmd_go">The go command</h2>
+</div>
+
+<h2 id="go命令">go命令</h2>
 
 <p>
 Go 1 introduces the <a href="/cmd/go/">go command</a>, a tool for fetching,
@@ -2016,7 +2263,11 @@ switch to using the <code>go</code> command for building Go code and, if
 necessary, rewrite their makefiles to perform any auxiliary build tasks.
 </p>
 
+<div class="english">
 <h2 id="cmd_cgo">The cgo command</h2>
+</div>
+
+<h2 id="cgo命令">cgo命令</h2>
 
 <p>
 In Go 1, the <a href="/cmd/cgo">cgo command</a>
@@ -2029,7 +2280,11 @@ package using <code>//export</code> must not put function definitions
 or variable initializations in the C preamble.
 </p>
 
+<div class="english">
 <h2 id="releases">Packaged releases</h2>
+</div>
+
+<h2 id="发行">已打包发行版</h2>
 
 <p>
 One of the most significant changes associated with Go 1 is the availability
