@@ -1,9 +1,18 @@
 <!--{
+    "Title": "高效Go编程",
+    "Template": true
+}-->
+
+<!--{
 	"Title": "Effective Go",
 	"Template": true
 }-->
 
+<div class="english">
 <h2 id="introduction">Introduction</h2>
+</div>
+
+<h2 id="前言">前言</h2>
 
 <p>
 Go is a new language.  Although it borrows ideas from
@@ -34,7 +43,11 @@ all of which you
 should read first.
 </p>
 
+<div class="english">
 <h3 id="examples">Examples</h3>
+</div>
+
+<h3 id="示例">示例</h3>
 
 <p>
 The <a href="/src/pkg/">Go package sources</a>
@@ -47,7 +60,11 @@ background.
 </p>
 
 
+<div class="english">
 <h2 id="formatting">Formatting</h2>
+</div>
+
+<h2 id="格式化">格式化</h2>
 
 <p>
 Formatting issues are the most contentious
@@ -134,7 +151,11 @@ x&lt;&lt;8 + y&lt;&lt;16
     </dd>
 </dl>
 
+<div class="english">
 <h2 id="commentary">Commentary</h2>
+</div>
+
+<h2 id="注释">注释</h2>
 
 <p>
 Go provides C-style <code>/* */</code> block comments
@@ -262,7 +283,11 @@ var (
 )
 </pre>
 
+<div class="english">
 <h2 id="names">Names</h2>
+</div>
+
+<h2 id="命名">命名</h2>
 
 <p>
 Names are as important in Go as in any other language.
@@ -274,7 +299,11 @@ in Go programs.
 </p>
 
 
+<div class="english">
 <h3 id="package-names">Package names</h3>
+</div>
+
+<h3 id="包名">包名</h3>
 
 <p>
 When a package is imported, the package name becomes an accessor for the
@@ -341,7 +370,11 @@ to write a helpful doc comment than to attempt to put all the information
 into the name.
 </p>
 
+<div class="english">
 <h3 id="Getters">Getters</h3>
+</div>
+
+<h3 id="获取器">获取器</h3>
 
 <p>
 Go doesn't provide automatic support for getters and setters.
@@ -362,7 +395,11 @@ if owner != user {
 }
 </pre>
 
+<div class="english">
 <h3 id="interface-names">Interface names</h3>
+</div>
+
+<h3 id="接口名">接口名</h3>
 
 <p>
 By convention, one-method interfaces are named by
@@ -384,7 +421,7 @@ give it the same name and signature;
 call your string-converter method <code>String</code> not <code>ToString</code>.
 </p>
 
-<h3 id="mixed-caps">MixedCaps</h3>
+<h3 id="混合大小写">混合大小写</h3>
 
 <p>
 Finally, the convention in Go is to use <code>MixedCaps</code>
@@ -392,7 +429,11 @@ or <code>mixedCaps</code> rather than underscores to write
 multiword names.
 </p>
 
+<div class="english">
 <h2 id="semicolons">Semicolons</h2>
+</div>
+
+<h2 id="分号">分号</h2>
 
 <p>
 Like C, Go's formal grammar uses semicolons to terminate statements;
@@ -455,7 +496,11 @@ if i &lt; f()  // wrong!
 </pre>
 
 
+<div class="english">
 <h2 id="control-structures">Control structures</h2>
+</div>
+
+<h2 id="控制结构">控制结构</h2>
 
 <p>
 The control structures of Go are related to those of C but differ
@@ -541,7 +586,11 @@ codeUsing(f, d)
 </pre>
 
 
+<div class="english">
 <h3 id="redeclaration">Redeclaration</h3>
+</div>
+
+<h3 id="重新声明">重新声明</h3>
 
 <p>
 An aside: The last example in the previous section demonstrates a detail of how the
@@ -772,9 +821,17 @@ case *int:
 }
 </pre>
 
+<div class="english">
 <h2 id="functions">Functions</h2>
+</div>
 
+<h2 id="函数">函数</h2>
+
+<div class="english">
 <h3 id="multiple-returns">Multiple return values</h3>
+</div>
+
+<h3 id="多返回值">多返回值</h3>
 
 <p>
 One of Go's unusual features is that functions and methods
@@ -835,7 +892,11 @@ You could use it to scan the numbers in an input array <code>a</code> like this:
     }
 </pre>
 
+<div class="english">
 <h3 id="named-results">Named result parameters</h3>
+</div>
+
+<h3 id="命名返回">命名返回形参</h3>
 
 <p>
 The return or result "parameters" of a Go function can be given names and
@@ -876,7 +937,11 @@ func ReadFull(r Reader, buf []byte) (n int, err error) {
 }
 </pre>
 
+<div class="english">
 <h3 id="defer">Defer</h3>
+</div>
+
+<h3 id="推迟">推迟</h3>
 
 <p>
 Go's <code>defer</code> statement schedules a function call (the
@@ -1010,7 +1075,11 @@ that it's not block-based but function-based.  In the section on
 example of its possibilities.
 </p>
 
+<div class="english">
 <h2 id="data">Data</h2>
+</div>
+
+<h2 id="数据">数据</h2>
 
 <h3 id="allocation_new">Allocation with <code>new</code></h3>
 
@@ -1066,7 +1135,11 @@ p := new(SyncedBuffer)  // type *SyncedBuffer
 var v SyncedBuffer      // type  SyncedBuffer
 </pre>
 
+<div class="english">
 <h3 id="composite_literals">Constructors and composite literals</h3>
+</div>
+
+<h3 id="复合字面">构造器与复合字面</h3>
 
 <p>
 Sometimes the zero value isn't good enough and an initializing
@@ -1147,7 +1220,11 @@ s := []string      {Enone: "no error", Eio: "Eio", Einval: "invalid argument"}
 m := map[int]string{Enone: "no error", Eio: "Eio", Einval: "invalid argument"}
 </pre>
 
+<div class="english">
 <h3 id="allocation_make">Allocation with <code>make</code></h3>
+</div>
+
+<h3 id="make分配">使用 <code>make</code> 分配内存</h3>
 
 <p>
 Back to allocation.
@@ -1204,7 +1281,11 @@ and does not return a pointer.
 To obtain an explicit pointer allocate with <code>new</code>.
 </p>
 
+<div class="english">
 <h3 id="arrays">Arrays</h3>
+</div>
+
+<h3 id="数组">数组</h3>
 
 <p>
 Arrays are useful when planning the detailed layout of memory and sometimes
@@ -1251,7 +1332,11 @@ x := Sum(&amp;array)  // Note the explicit address-of operator
 But even this style isn't idiomatic Go.  Slices are.
 </p>
 
+<div class="english">
 <h3 id="slices">Slices</h3>
+</div>
+
+<h3 id="切片">切片</h3>
 
 <p>
 Slices wrap arrays to give a more general, powerful, and convenient
@@ -1338,7 +1423,11 @@ to it later.
 </p>
 
 
+<div class="english">
 <h3 id="maps">Maps</h3>
+</div>
+
+<h3 id="映射">映射</h3>
 
 <p>
 Maps are a convenient and powerful built-in data structure to associate
@@ -1444,7 +1533,11 @@ from the map.
 delete(timeZone, "PDT")  // Now on Standard Time
 </pre>
 
+<div class="english">
 <h3 id="printing">Printing</h3>
+</div>
+
+<h3 id="打印">打印</h3>
 
 <p>
 Formatted printing in Go uses a style similar to C's <code>printf</code>
@@ -1626,7 +1719,12 @@ func Min(a ...int) int {
 }
 </pre>
 
+<div class="english">
 <h3 id="append">Append</h3>
+</div>
+
+<h3 id="追加">追加</h3>
+
 <p>
 Now we have the missing piece we needed to explain the design of
 the <code>append</code> built-in function.  The signature of <code>append</code>
@@ -1676,7 +1774,11 @@ Without that <code>...</code>, it wouldn't compile because the types
 would be wrong; <code>y</code> is not of type <code>int</code>.
 </p>
 
+<div class="english">
 <h2 id="initialization">Initialization</h2>
+</div>
+
+<h2 id="初始化">初始化</h2>
 
 <p>
 Although it doesn't look superficially very different from
@@ -1686,7 +1788,11 @@ issues between initialized objects in different packages are handled
 correctly.
 </p>
 
+<div class="english">
 <h3 id="constants">Constants</h3>
+</div>
+
+<h3 id="常量">常量</h3>
 
 <p>
 Constants in Go are just that&mdash;constant.
@@ -1730,7 +1836,11 @@ The <code>ByteSize</code> implementation of <code>String</code> is safe
 because it calls <code>Sprintf</code> with <code>%f</code>.
 </p>
 
+<div class="english">
 <h3 id="variables">Variables</h3>
+</div>
+
+<h3 id="变量">变量</h3>
 
 <p>
 Variables can be initialized just like constants but the
@@ -1744,7 +1854,11 @@ var (
 )
 </pre>
 
+<div class="english">
 <h3 id="init">The init function</h3>
+</div>
+
+<h3 id="init函数">init函数</h3>
 
 <p>
 Finally, each source file can define its own niladic <code>init</code> function to
@@ -1777,9 +1891,18 @@ func init() {
 }
 </pre>
 
+<div class="english">
 <h2 id="methods">Methods</h2>
+</div>
 
+<h2 id="方法">方法</h2>
+
+<div class="english">
 <h3 id="pointers_vs_values">Pointers vs. Values</h3>
+</div>
+
+<h3 id="指针vs值">指针vs.值</h3>
+
 <p>
 Methods can be defined for any named type that is not a pointer or an interface;
 the receiver does not have to be a struct.
@@ -1844,9 +1967,18 @@ By the way, the idea of using <code>Write</code> on a slice of bytes
 is implemented by <code>bytes.Buffer</code>.
 </p>
 
+<div class="english">
 <h2 id="interfaces_and_types">Interfaces and other types</h2>
+</div>
 
+<h2 id="接口与类型">接口与其它类型</h2>
+
+<div class="english">
 <h3 id="interfaces">Interfaces</h3>
+</div>
+
+<h3 id="接口">接口</h3>
+
 <p>
 Interfaces in Go provide a way to specify the behavior of an
 object: if something can do <em>this</em>, then it can be used
@@ -1869,7 +2001,11 @@ In this contrived example <code>Sequence</code> satisfies both.
 </p>
 {{code "/doc/progs/eff_sequence.go" `/^type/` "$"}}
 
+<div class="english">
 <h3 id="conversions">Conversions</h3>
+</div>
+
+<h3 id="转换">转换</h3>
 
 <p>
 The <code>String</code> method of <code>Sequence</code> is recreating the
@@ -1919,7 +2055,12 @@ and <code>[]int</code>), each of which does some part of the job.
 That's more unusual in practice but can be effective.
 </p>
 
+<div class="english">
 <h3 id="generality">Generality</h3>
+</div>
+
+<h3 id="一般性">一般性</h3>
+
 <p>
 If a type exists only to implement an interface
 and has no exported methods beyond that interface,
@@ -1992,7 +2133,12 @@ calls must be edited, but because the surrounding code must treat the result onl
 as a <code>Stream</code>, it won't notice the difference.
 </p>
 
+<div class="english">
 <h3 id="interface_methods">Interfaces and methods</h3>
+</div>
+
+<h3 id="接口方法">接口与方法</h3>
+
 <p>
 Since almost anything can have methods attached, almost anything can
 satisfy an interface.  One illustrative example is in the <code>http</code>
@@ -2143,7 +2289,11 @@ a channel, and a function, all because interfaces are just sets of
 methods, which can be defined for (almost) any type.
 </p>
 
+<div class="english">
 <h2 id="embedding">Embedding</h2>
+</div>
+
+<h2 id="嵌入">嵌入</h2>
 
 <p>
 Go does not provide the typical, type-driven notion of subclassing,
@@ -2313,9 +2463,17 @@ is ever used.
 </p>
 
 
+<div class="english">
 <h2 id="concurrency">Concurrency</h2>
+</div>
 
+<h2 id="并发">并发</h2>
+
+<div class="english">
 <h3 id="sharing">Share by communicating</h3>
+</div>
+
+<h3 id="共享">通过通信共享</h3>
 
 <p>
 Concurrent programming is a large topic and there is space only for some
@@ -2351,7 +2509,11 @@ Communicating Sequential Processes (CSP),
 it can also be seen as a type-safe generalization of Unix pipes.
 </p>
 
+<div class="english">
 <h3 id="goroutines">Goroutines</h3>
+</div>
+
+<h3 id="Go程">Go程</h3>
 
 <p>
 They're called <em>goroutines</em> because the existing
@@ -2378,7 +2540,7 @@ exits, silently.  (The effect is similar to the Unix shell's
 background.)
 </p>
 <pre>
-go list.Sort()  // run list.Sort concurrently; don't wait for it. 
+go list.Sort()  // run list.Sort concurrently; don't wait for it.
 </pre>
 <p>
 A function literal can be handy in a goroutine invocation.
@@ -2398,7 +2560,11 @@ These examples aren't too practical because the functions have no way of signali
 completion.  For that, we need channels.
 </p>
 
+<div class="english">
 <h3 id="channels">Channels</h3>
+</div>
+
+<h3 id="信道">信道</h3>
 
 <p>
 Like maps, channels are a reference type and are allocated with <code>make</code>.
@@ -2425,7 +2591,7 @@ c := make(chan int)  // Allocate a channel.
 // Start the sort in a goroutine; when it completes, signal on the channel.
 go func() {
     list.Sort()
-    c &lt;- 1  // Send a signal; value does not matter. 
+    c &lt;- 1  // Send a signal; value does not matter.
 }()
 doSomethingForAWhile()
 &lt;-c   // Wait for sort to finish; discard sent value.
@@ -2488,7 +2654,12 @@ func Serve(clientRequests chan *Request, quit chan bool) {
 }
 </pre>
 
+<div class="english">
 <h3 id="chan_of_chan">Channels of channels</h3>
+</div>
+
+<h3 id="信道的信道">信道的信道</h3>
+
 <p>
 One of the most important properties of Go is that
 a channel is a first-class value that can be allocated and passed
@@ -2542,7 +2713,12 @@ code is a framework for a rate-limited, parallel, non-blocking RPC
 system, and there's not a mutex in sight.
 </p>
 
+<div class="english">
 <h3 id="parallel">Parallelization</h3>
+</div>
+
+<h3 id="并行">并行</h3>
+
 <p>
 Another application of these ideas is to parallelize a calculation
 across multiple CPU cores.  If the calculation can be broken into
@@ -2606,7 +2782,11 @@ of logical CPUs on the local machine.
 Again, this requirement is expected to be retired as the scheduling and run-time improve.
 </p>
 
+<div class="english">
 <h3 id="leaky_buffer">A leaky buffer</h3>
+</div>
+
+<h3 id="泄露缓存">泄露缓存</h3>
 
 <p>
 The tools of concurrent programming can even make non-concurrent
@@ -2672,7 +2852,11 @@ in just a few lines, relying on the buffered channel and
 the garbage collector for bookkeeping.
 </p>
 
+<div class="english">
 <h2 id="errors">Errors</h2>
+</div>
+
+<h2 id="错误">错误</h2>
 
 <p>
 Library routines must often return some sort of error indication to
@@ -2761,7 +2945,11 @@ error was of type <code>*os.PathError</code>, and then so is <code>e</code>,
 which we can examine for more information about the error.
 </p>
 
+<div class="english">
 <h3 id="panic">Panic</h3>
+</div>
+
+<h3 id="恐慌">恐慌</h3>
 
 <p>
 The usual way to report an error to a caller is to return an
@@ -2818,7 +3006,11 @@ func init() {
 }
 </pre>
 
+<div class="english">
 <h3 id="recover">Recover</h3>
+</div>
+
+<h3 id="恢复">恢复</h3>
 
 <p>
 When <code>panic</code> is called, including implicitly for run-time
@@ -2953,7 +3145,11 @@ That's left as an exercise for the reader.
 </p>
 
 
+<div class="english">
 <h2 id="web_server">A web server</h2>
+</div>
+
+<h2 id="Web服务器">Web服务器</h2>
 
 <p>
 Let's finish with a complete Go program, a web server.
@@ -2996,7 +3192,7 @@ The template package is powerful;
 this program just touches on its capabilities.
 In essence, it rewrites a piece of text on the fly by substituting elements derived
 from data items passed to <code>templ.Execute</code>, in this case the
-form value.  
+form value.
 Within the template text (<code>templateStr</code>),
 double-brace-delimited pieces denote template actions.
 The piece from <code>{{html "{{if .}}"}}</code>
@@ -3025,7 +3221,7 @@ TODO
 <pre>
 verifying implementation
 type Color uint32
-    
+
 // Check that Color implements image.Color and image.Image
 var _ image.Color = Black
 var _ image.Image = Black

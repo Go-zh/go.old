@@ -708,7 +708,7 @@ The <code>go</code> <code>fix</code> tool or the compiler will complain about su
 <h3 id="old">The package tree old</h3>
 </div>
 
-<h3 id="旧的">包树old</h3>
+<h3 id="旧包">包树old</h3>
 
 <p>
 Because they are deprecated, the packages under the <code>old</code> directory will not be available in the
@@ -731,7 +731,11 @@ or else compiled from an installation that has <code>old</code> available.
 The <code>go</code> <code>fix</code> tool will warn about such uses.
 </p>
 
+<div class="english">
 <h3 id="deleted">Deleted packages</h3>
+</div>
+
+<h3 id="已删除">已删除的包</h3>
 
 <p>
 Go 1 deletes several packages outright:
@@ -828,7 +832,7 @@ a <code>go get</code> command.
 <h2 id="major">Major changes to the library</h2>
 </div>
 
-<h2 id="主要的">对库的主要更改</h2>
+<h2 id="主要">对库的主要更改</h2>
 
 <p>
 This section describes significant changes to the core libraries, the ones that
@@ -839,7 +843,7 @@ affect the most programs.
 <h3 id="errors">The error type and errors package</h3>
 </div>
 
-<h3 id="错误">erro类型与errors包</h3>
+<h3 id="错误">error类型与errors包</h3>
 
 <p>
 The placement of <code>os.Error</code> in package <code>os</code> is mostly historical: errors first came up when implementing package <code>os</code>, and they seemed system-related at the time.
@@ -1011,7 +1015,7 @@ may have the wrong type or require further analysis.
 <h2 id="minor">Minor changes to the library</h2>
 </div>
 
-<h2 id="次要的">对库的次要更改</h2>
+<h2 id="次要">对库的次要更改</h2>
 
 <p>
 This section describes smaller changes, such as those to less commonly
@@ -1026,7 +1030,7 @@ make the interfaces more modern and Go-like.
 <h3 id="archive_zip">The archive/zip package</h3>
 </div>
 
-<h3 id="zip归档">archive/zip包</h3>
+<h3 id="zip归档">包archive/zip</h3>
 
 <p>
 In Go 1, <a href="/pkg/archive/zip/#Writer"><code>*zip.Writer</code></a> no
@@ -1042,7 +1046,7 @@ What little code is affected will be caught by the compiler and must be updated 
 <h3 id="bufio">The bufio package</h3>
 </div>
 
-<h3 id="IO缓存">bufio包</h3>
+<h3 id="IO缓存">包bufio</h3>
 
 <p>
 In Go 1, <a href="/pkg/bufio/#NewReaderSize"><code>bufio.NewReaderSize</code></a>
@@ -1062,7 +1066,7 @@ Calls that aren't fixed will be caught by the compiler and must be updated by ha
 <h3 id="compress">The compress/flate, compress/gzip and compress/zlib packages</h3>
 </div>
 
-<h3 id="压缩">compress/flate、compress/gzip和compress/zlib包</h3>
+<h3 id="压缩">包compress/flate、compress/gzip和compress/zlib</h3>
 
 <p>
 In Go 1, the <code>NewWriterXxx</code> functions in
@@ -1086,7 +1090,7 @@ Calls that aren't fixed will be caught by the compiler and must be updated by ha
 <h3 id="crypto_aes_des">The crypto/aes and crypto/des packages</h3>
 </div>
 
-<h3 id="aes和des加密">crypto/aes与crypto/des包</h3>
+<h3 id="aes和des加密">包crypto/aes和crypto/des</h3>
 
 <p>
 In Go 1, the <code>Reset</code> method has been removed. Go does not guarantee
@@ -1109,7 +1113,7 @@ cipher.Block.
 <h3 id="crypto_elliptic">The crypto/elliptic package</h3>
 </div>
 
-<h3 id="椭圆加密">crypto/elliptic包</h3>
+<h3 id="椭圆加密">包crypto/elliptic</h3>
 
 <p>
 In Go 1, <a href="/pkg/crypto/elliptic/#Curve"><code>elliptic.Curve</code></a>
@@ -1132,7 +1136,7 @@ as their first argument.
 <h3 id="crypto_hmac">The crypto/hmac package</h3>
 </div>
 
-<h3 id="hmac加密">crypto/hmac包</h3>
+<h3 id="hmac加密">包crypto/hmac</h3>
 
 <p>
 In Go 1, the hash-specific functions, such as <code>hmac.NewMD5</code>, have
@@ -1149,7 +1153,7 @@ Running <code>go</code> <code>fix</code> will perform the needed changes.
 <h3 id="crypto_x509">The crypto/x509 package</h3>
 </div>
 
-<h3 id="x509加密">crypto/x509包</h3>
+<h3 id="x509加密">包crypto/x509</h3>
 
 <p>
 In Go 1, the
@@ -1171,7 +1175,7 @@ No changes will be needed.
 <h3 id="encoding_binary">The encoding/binary package</h3>
 </div>
 
-<h3 id="二进制解码">encoding/binary包</h3>
+<h3 id="二进制解码">包encoding/binary</h3>
 
 <p>
 In Go 1, the <code>binary.TotalSize</code> function has been replaced by
@@ -1189,7 +1193,7 @@ What little code is affected will be caught by the compiler and must be updated 
 <h3 id="encoding_xml">The encoding/xml package</h3>
 </div>
 
-<h3 id="XML解码">encoding/xml包</h3>
+<h3 id="XML解码">包encoding/xml</h3>
 
 <p>
 In Go 1, the <a href="/pkg/encoding/xml/"><code>xml</code></a> package
@@ -1236,7 +1240,7 @@ misbehave silently in some cases. For example, the old
 <h3 id="expvar">The expvar package</h3>
 </div>
 
-<h3 id="导出变量">expvar包</h3>
+<h3 id="导出变量">包expvar</h3>
 
 <p>
 In Go 1, the <code>RemoveAll</code> function has been removed.
@@ -1257,7 +1261,7 @@ Most code using <code>expvar</code> will not need changing. The rare code that u
 <h3 id="flag">The flag package</h3>
 </div>
 
-<h3 id="标记">flag包</h3>
+<h3 id="标记">包flag</h3>
 
 <p>
 In Go 1, the interface <a href="/pkg/flag/#Value"><code>flag.Value</code></a> has changed slightly.
@@ -1286,7 +1290,7 @@ The <code>Duration</code> flag is new and affects no existing code.
 <h3 id="go">The go/* packages</h3>
 </div>
 
-<h3 id="Go包">go/*包</h3>
+<h3 id="包go">包go/*</h3>
 
 <p>
 Several packages under <code>go</code> have slightly revised APIs.
@@ -1399,7 +1403,7 @@ to run-time errors.
 <h3 id="hash">The hash package</h3>
 </div>
 
-<h3 id="hash包">hash包</h3>
+<h3 id="散列表">包hash</h3>
 
 <p>
 In Go 1, the definition of <a href="/pkg/hash/#Hash"><code>hash.Hash</code></a> includes
@@ -1432,7 +1436,7 @@ Since the package's functionality is new, no updating is necessary.
 <h3 id="http">The http package</h3>
 </div>
 
-<h3 id="http包">http包</h3>
+<h3 id="超文本协议">包http</h3>
 
 <p>
 In Go 1 the <a href="/pkg/net/http/"><code>http</code></a> package is refactored,
@@ -1478,7 +1482,7 @@ uses of <code>RawURL</code>, which must be fixed by hand.
 <h3 id="image">The image package</h3>
 </div>
 
-<h3 id="image包">image包</h3>
+<h3 id="图像">包image</h3>
 
 <p>
 The <a href="/pkg/image/"><code>image</code></a> package has had a number of
@@ -1597,7 +1601,7 @@ Running <code>go</code> <code>fix</code> will update almost all code affected by
 <h3 id="log_syslog">The log/syslog package</h3>
 </div>
 
-<h3 id="系统记录包">log/syslog包</h3>
+<h3 id="系统记录包">包log/syslog</h3>
 
 <p>
 In Go 1, the <a href="/pkg/log/syslog/#NewLogger"><code>syslog.NewLogger</code></a>
@@ -1613,7 +1617,7 @@ What little code is affected will be caught by the compiler and must be updated 
 <h3 id="mime">The mime package</h3>
 </div>
 
-<h3 id="mime包">mime包</h3>
+<h3 id="媒体类型">包mime</h3>
 
 <p>
 In Go 1, the <a href="/pkg/mime/#FormatMediaType"><code>FormatMediaType</code></a> function
@@ -1632,7 +1636,7 @@ What little code is affected will be caught by the compiler and must be updated 
 <h3 id="net">The net package</h3>
 </div>
 
-<h3 id="net包">net包</h3>
+<h3 id="网络">包net</h3>
 
 <p>
 In Go 1, the various <code>SetTimeout</code>,
@@ -1667,7 +1671,7 @@ The semantic change makes it difficult for the fix tool to update automatically.
 <h3 id="os">The os package</h3>
 </div>
 
-<h3 id="os包">os包</h3>
+<h3 id="系统">包os</h3>
 
 <p>
 The <code>Time</code> function has been removed; callers should use
@@ -1747,7 +1751,7 @@ All other changes will be caught by the compiler and must be updated by hand.
 <h4 id="os_fileinfo">The os.FileInfo type</h4>
 </div>
 
-<h4 id="os文件信息">os.FileInfo类型</h4>
+<h4 id="系统文件信息">os.FileInfo类型</h4>
 
 <p>
 Go 1 redefines the <a href="/pkg/os/#FileInfo"><code>os.FileInfo</code></a> type,
@@ -1836,7 +1840,7 @@ will fail to compile and will also need to be updated by hand.
 <h3 id="os_signal">The os/signal package</h3>
 </div>
 
-<h3 id="os信号">os/signal包</h3>
+<h3 id="系统信号">包os/signal</h3>
 
 <p>
 The <code>os/signal</code> package in Go 1 replaces the
@@ -1873,7 +1877,7 @@ signal.Notify(c, syscall.SIGHUP, syscall.SIGQUIT)
 <h3 id="path_filepath">The path/filepath package</h3>
 </div>
 
-<h3 id="文件路径">path/filepath包</h3>
+<h3 id="文件路径">包path/filepath</h3>
 
 <p>
 In Go 1, the <a href="/pkg/path/filepath/#Walk"><code>Walk</code></a> function of the
@@ -1908,7 +1912,7 @@ The compiler will catch code using the old interface.
 <h3 id="regexp">The regexp package</h3>
 </div>
 
-<h3 id="正则表达式">regexp包</h3>
+<h3 id="正则表达式">包regexp</h3>
 
 <p>
 The <a href="/pkg/regexp/"><code>regexp</code></a> package has been rewritten.
@@ -1926,7 +1930,7 @@ Code that uses the package should have its regular expressions checked by hand.
 <h3 id="runtime">The runtime package</h3>
 </div>
 
-<h3 id="运行时">runtime包</h3>
+<h3 id="运行时">包runtime</h3>
 
 <p>
 In Go 1, much of the API exported by package
@@ -1970,7 +1974,7 @@ Other code will need to be updated by hand.
 <h3 id="strconv">The strconv package</h3>
 </div>
 
-<h3 id="字符串转换">strconv包</h3>
+<h3 id="字符串转换">包strconv</h3>
 
 <p>
 In Go 1, the
@@ -2069,7 +2073,7 @@ a cast that must be added by hand; the <code>go</code> <code>fix</code> tool wil
 <h3 id="templates">The template packages</h3>
 </div>
 
-<h3 id="模版">template包</h3>
+<h3 id="模版">包template</h3>
 
 <p>
 The <code>template</code> and <code>exp/template/html</code> packages have moved to
@@ -2105,7 +2109,7 @@ the documentation for <code>text/template</code> can provide guidance.
 <h3 id="testing">The testing package</h3>
 </div>
 
-<h3 id="测试">testing包</h3>
+<h3 id="测试">包testing</h3>
 
 <p>
 The testing package has a type, <code>B</code>, passed as an argument to benchmark functions.
@@ -2125,7 +2129,7 @@ or <code>panic</code> should be updated to use the new methods.
 <h3 id="testing_script">The testing/script package</h3>
 </div>
 
-<h3 id="测试脚本">testing/script包</h3>
+<h3 id="测试脚本">包testing/script</h3>
 
 <p>
 The testing/script package has been deleted. It was a dreg.
@@ -2140,7 +2144,7 @@ No code is likely to be affected.
 <h3 id="unsafe">The unsafe package</h3>
 </div>
 
-<h3 id="unsafe包">unsafe包</h3>
+<h3 id="包unsafe">包unsafe</h3>
 
 <p>
 In Go 1, the functions
@@ -2163,7 +2167,7 @@ may be helpful as examples.
 <h3 id="url">The url package</h3>
 </div>
 
-<h3 id="url包">url包</h3>
+<h3 id="包url">包url</h3>
 
 <p>
 In Go 1 several fields from the <a href="/pkg/net/url/#URL"><code>url.URL</code></a> type
@@ -2239,7 +2243,7 @@ The semantic changes make it difficult for the fix tool to update automatically.
 <h2 id="cmd_go">The go command</h2>
 </div>
 
-<h2 id="go命令">go命令</h2>
+<h2 id="命令go">命令go</h2>
 
 <p>
 Go 1 introduces the <a href="/cmd/go/">go command</a>, a tool for fetching,
@@ -2267,7 +2271,7 @@ necessary, rewrite their makefiles to perform any auxiliary build tasks.
 <h2 id="cmd_cgo">The cgo command</h2>
 </div>
 
-<h2 id="cgo命令">cgo命令</h2>
+<h2 id="命令cgo">命令cgo</h2>
 
 <p>
 In Go 1, the <a href="/cmd/cgo">cgo command</a>
