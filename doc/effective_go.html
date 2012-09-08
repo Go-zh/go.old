@@ -14,6 +14,7 @@
 
 <h2 id="前言">前言</h2>
 
+<div class="english">
 <p>
 Go is a new language.  Although it borrows ideas from
 existing languages,
@@ -33,7 +34,18 @@ programming in Go, such as naming, formatting, program
 construction, and so on, so that programs you write
 will be easy for other Go programmers to understand.
 </p>
+</div>
 
+<p>
+Go是一门新的语言。尽管它从已有的语言中借鉴了一些理念，但其出众的特性，
+使高效的Go程序不同于其它语言编写的程序。
+将C++或Java程序直译为Go并不能产生满意的结果——毕竟Java程序是用Java编写的，而不是Go。
+另一方面，以Go的观点考虑问题将产生非常成功但非常不同的程序。换句话说，要将Go程序写得好，
+就必须理解其特性和风格。了解使用Go编程的既定规则也十分重要的，例如命名、格式化、
+程序结构等等，这样你所编写的程序将更容易被其他程序所理解。
+</p>
+
+<div class="english">
 <p>
 This document gives tips for writing clear, idiomatic Go code.
 It augments the <a href="/ref/spec">language specification</a>,
@@ -42,6 +54,13 @@ and <a href="/doc/code.html">How to Write Go Code</a>,
 all of which you
 should read first.
 </p>
+</div>
+
+<p>
+本文档就如何编写清晰、地道的Go代码提供了一些技巧。它是对<a href="/ref/spec">语言规范</a>，
+<a href="http://tour.golang.org/">Go语言之旅</a>以及及<a href="/doc/code.html">如何编写Go代码</a>的补充，
+在阅读本文档之前，你应该先阅读这些文档。
+</p>
 
 <div class="english">
 <h3 id="examples">Examples</h3>
@@ -49,6 +68,7 @@ should read first.
 
 <h3 id="示例">示例</h3>
 
+<div class="english">
 <p>
 The <a href="/src/pkg/">Go package sources</a>
 are intended to serve not
@@ -58,6 +78,12 @@ If you have a question about how to approach a problem or how something
 might be implemented, they can provide answers, ideas and
 background.
 </p>
+</div>
+
+<p>
+<a href="/src/pkg/">Go包源码</a>不仅是核心库，同时也是如何使用该语言的示例源码。
+如果你有关于如何解决问题或某些东西如何实现方面的疑问，它们可以提供答案、思路和背景。
+</p>
 
 
 <div class="english">
@@ -66,6 +92,7 @@ background.
 
 <h2 id="格式化">格式化</h2>
 
+<div class="english">
 <p>
 Formatting issues are the most contentious
 but the least consequential.
@@ -76,7 +103,15 @@ if everyone adheres to the same style.
 The problem is how to approach this Utopia without a long
 prescriptive style guide.
 </p>
+</div>
 
+<p>
+格式化总是最具争议性的问题，但很难争论出结果。人们可以采取不同的格式化风格，
+但如果不这样做的话会更好，如果所有人都遵循相同的风格，那么花费在该问题上的时间将会更少。
+问题在于如何实现这个理想，而无需一个冗长的风格手册。
+</p>
+
+<div class="english">
 <p>
 With Go we take an unusual
 approach and let the machine
@@ -93,41 +128,94 @@ situation, run <code>gofmt</code>; if the answer doesn't
 seem right, rearrange your program (or file a bug about <code>gofmt</code>),
 don't work around it.
 </p>
+</div>
 
+<p>
+在Go中我们使用了一种特别的方法，即让机器来处理大部分格式化问题。<code>gofmt</code>
+程序（也可使用 <code>go fmt</code>，它在包的级别上而非源文件的级别上进行操作）
+读取Go程序并按照缩进和对齐的标准风格生成源码，保留并在需要时重新格式化注释。
+如果你想知道如何处理一些新的布局情况，请运行 <code>gofmt</code>；如果结果看起来不太对，
+请从新调整你的程序（或提交一个关于 <code>gofmt</code> 的Bug），而不要自己去修改它。
+</p>
+
+<div class="english">
 <p>
 As an example, there's no need to spend time lining up
 the comments on the fields of a structure.
 <code>Gofmt</code> will do that for you.  Given the
 declaration
 </p>
+</div>
 
+<p>
+举例来说，对于结构中字段的注释，并不需要花时间将他们对齐。<code>gofmt</code>
+会为你做这些事。对于给定的声明
+</p>
+
+<div class="english">
 <pre>
 type T struct {
     name string // name of the object
     value int // its value
 }
 </pre>
+</div>
 
+<pre>
+type T struct {
+    name string // 对象的名字
+    value int // 它的值
+}
+</pre>
+
+<div class="english">
 <p>
 <code>gofmt</code> will line up the columns:
 </p>
+</div>
 
+<p>
+<code>gofmt</code> 会按列对齐为：
+</p>
+
+<div class="english">
 <pre>
 type T struct {
     name    string // name of the object
     value   int    // its value
 }
 </pre>
+</div>
 
+<pre>
+type T struct {
+    name    string // 对象的名字
+    value   int    // 它的值
+}
+</pre>
+
+<div class="english">
 <p>
 All Go code in the standard packages has been formatted with <code>gofmt</code>.
 </p>
+</div>
+
+<p>
+在标准包中的所有Go代码都已经使用 <code>gofmt</code> 格式化过了。
+</p>
 
 
+<div class="english">
 <p>
 Some formatting details remain.  Very briefly,
 </p>
+</div>
 
+<p>
+一些格式化细节需要保留。这些都非常简单明了：
+</p>
+
+<div class="english">
 <dl>
     <dt>Indentation</dt>
     <dd>We use tabs for indentation and <code>gofmt</code> emits them by default.
@@ -150,6 +238,27 @@ x&lt;&lt;8 + y&lt;&lt;16
     means what the spacing implies.
     </dd>
 </dl>
+</div>
+
+<dl>
+    <dt>缩进</dt>
+    <dd>我们使用制表符（tab）缩进，<code>gofmt</code> 默认也使用它。你也可以特意使用空格。
+    </dd>
+    <dt>行的长度</dt>
+    <dd>
+    Go没有行的长度限制。不要担心代码会在穿孔卡片上溢出。如果一行实在太长，
+    可以进行折行并使用一个额外的制表符将其缩进。
+    </dd>
+    <dt>圆括号</dt>
+    <dd>
+    Go很少需要括号：控制结构（<code>if</code>、<code>for</code> 和 <code>switch</code>）
+    在语法上不需要圆括号。此外，操作符优先级将变得更加简短而清楚，因此
+<pre>
+x&lt;&lt;8 + y&lt;&lt;16
+</pre>
+    所表达的意思与其中空格暗示的一样。
+    </dd>
+</dl>
 
 <div class="english">
 <h2 id="commentary">Commentary</h2>
@@ -157,6 +266,7 @@ x&lt;&lt;8 + y&lt;&lt;16
 
 <h2 id="注释">注释</h2>
 
+<div class="english">
 <p>
 Go provides C-style <code>/* */</code> block comments
 and C++-style <code>//</code> line comments.
@@ -164,7 +274,14 @@ Line comments are the norm;
 block comments appear mostly as package comments and
 are also useful to disable large swaths of code.
 </p>
+</div>
 
+<p>
+Go提供C风格的 <code>/* */</code> 块注释和C++风格的 <code>//</code> 行注释。
+行注释是标准的，而块注释大多用在包注释，或禁用一大段代码时使用。
+</p>
+
+<div class="english">
 <p>
 The program—and web server—<code>godoc</code> processes
 Go source files to extract documentation about the contents of the
@@ -174,7 +291,15 @@ are extracted along with the declaration to serve as explanatory text for the it
 The nature and style of these comments determines the
 quality of the documentation <code>godoc</code> produces.
 </p>
+</div>
 
+<p>
+<code>godoc</code> 既是一个程序，又是一个Web服务器，它对Go的源码进行处理，提取其包中的文档内容。
+出现在顶级声明之前，且中间不包括新行的注释将与该声明一起被提取出来，作为该条目的解释文本。
+这些注释的内容和样式决定了 <code>godoc</code> 生成的文档质量。
+</p>
+
+<div class="english">
 <p>
 Every package should have a <i>package comment</i>, a block
 comment preceding the package clause.
@@ -185,7 +310,15 @@ provide information relevant to the package as a whole.
 It will appear first on the <code>godoc</code> page and
 should set up the detailed documentation that follows.
 </p>
+</div>
 
+<p>
+每个包都应该有一个<i>包注释</i>，放置在包子句前的一个块注释。对于包含多文件的包，
+包注释只需出现在一个文件中，任何一个文件都可以。包注释应在整体上对该包行径介绍，
+并提供包的相关信息。它将在 <code>godoc</code> 页面中首先出现，并为其下的内容建立详细的文档。
+</p>
+
+<div class="english">
 <pre>
 /*
     Package regexp implements a simple library for
@@ -209,16 +342,53 @@ should set up the detailed documentation that follows.
 */
 package regexp
 </pre>
+</div>
 
+<pre>
+/*
+    包regexp为正则表达式实现了一个简单的库。
+
+    该正则表达式接受的语法为：
+
+    正则表达式:
+        串联 { '|' 串联 }
+    串联:
+        { 闭包 }
+    闭包:
+        条目 [ '*' | '+' | '?' ]
+    条目:
+        '^'
+        '$'
+        '.'
+        字符
+        '[' [ '^' ] 字符遍历 ']'
+        '(' 正则表达式 ')'
+*/
+package regexp
+</pre>
+
+<div class="english">
 <p>
 If the package is simple, the package comment can be brief.
 </p>
+</div>
 
+<p>
+如果包很简单，则该包的注释也可以很简洁。
+</p>
+
+<div class="english">
 <pre>
 // Package path implements utility routines for
 // manipulating slash-separated filename paths.
 </pre>
+</div>
 
+<pre>
+// 包path为操作以斜杠分隔的文件名路径实现了实用工具。
+</pre>
+
+<div class="english">
 <p>
 Comments do not need extra formatting such as banners of stars.
 The generated output may not even be presented in a fixed-width font, so don't depend
@@ -232,33 +402,71 @@ reformat comments, so make sure they look good straight up:
 use correct spelling, punctuation, and sentence structure,
 fold long lines, and so on.
 </p>
+</div>
 
+<p>
+注释无需额外的格式化，比如星号横幅。生成的输出甚至可能无法以等宽字体显示，因此不要依赖于空格对齐，
+<code>godoc</code> 和 <code>gofmt</code> 一样，会自动对这些进行处理。注释是不被会解析的纯文本，
+因此像HTML或其它类似于 <code>_this_</code> 的东西将按<i>原样</i>输出，因此不应使用它们。
+根据上下文，<code>godoc</code> 可能不会重新格式化注释，因此必须保证它们看上去是直白的：
+使用正确的拼写、标点和语句结构，折叠长行等等。
+</p>
+
+<div class="english">
 <p>
 Inside a package, any comment immediately preceding a top-level declaration
 serves as a <i>doc comment</i> for that declaration.
 Every exported (capitalized) name in a program should
 have a doc comment.
 </p>
+</div>
 
+<p>
+在包中，任何放在顶级声明前面的注释都将作为该声明的<i>文档注释</i>。
+在程序中，每个已导出（首字母大写）的名称都应该有文档注释。
+</p>
+
+<div class="english">
 <p>
 Doc comments work best as complete sentences, which allow
 a wide variety of automated presentations.
 The first sentence should be a one-sentence summary that
 starts with the name being declared.
 </p>
+</div>
 
+<p>
+文档注释最好为完整的句子，这样它就能适用于各种自动化展示。第一句应当为一个单句的摘要，
+并以被声明的东西开头。
+</p>
+
+<div class="english">
 <pre>
 // Compile parses a regular expression and returns, if successful, a Regexp
 // object that can be used to match against text.
 func Compile(str string) (regexp *Regexp, err error) {
 </pre>
+</div>
 
+<pre>
+// Compile用于解析正则表达式并返回，如果成功，则Regexp对象就可用于匹配所针对的文本。
+func Compile(str string) (regexp *Regexp, err error) {
+</pre>
+
+<div class="english">
 <p>
 Go's declaration syntax allows grouping of declarations.
 A single doc comment can introduce a group of related constants or variables.
 Since the whole declaration is presented, such a comment can often be perfunctory.
 </p>
+</div>
 
+<p>
+Go的声明语法允许成组声明。单个文档注释可介绍一组相关的常量或变量。
+由于是整体声明，这种注释往往是概括性的。
+</p>
+
+<div class="english">
 <pre>
 // Error codes returned by failures to parse an expression.
 var (
@@ -268,10 +476,27 @@ var (
     ...
 )
 </pre>
+</div>
 
+<pre>
+// 通过解析表达式失败来返回错误代码。
+var (
+    ErrInternal      = errors.New("regexp: internal error")
+    ErrUnmatchedLpar = errors.New("regexp: unmatched '('")
+    ErrUnmatchedRpar = errors.New("regexp: unmatched ')'")
+    ...
+)
+</pre>
+
+<div class="english">
 <p>
 Even for private names, grouping can also indicate relationships between items,
 such as the fact that a set of variables is protected by a mutex.
+</p>
+</div>
+
+<p>
+即便是对于私有名称，也可通过成组声明来表明条目之间的关系，例如实际由互斥体保护的一组变量。
 </p>
 
 <pre>
@@ -289,6 +514,7 @@ var (
 
 <h2 id="命名">命名</h2>
 
+<div class="english">
 <p>
 Names are as important in Go as in any other language.
 In some cases they even have semantic effect: for instance,
@@ -296,6 +522,13 @@ the visibility of a name outside a package is determined by whether its
 first character is upper case.
 It's therefore worth spending a little time talking about naming conventions
 in Go programs.
+</p>
+</div>
+
+<p>
+在Go中的命名与其它语言中的一样重要。在某些情况下，它们甚至会对语义有影响：
+例如，一个名称在包外的可见性就由其首个字符是否为大写字母来决定。
+因此有必要花点时间来讨论Go程序中的命名约定。
 </p>
 
 
@@ -305,15 +538,22 @@ in Go programs.
 
 <h3 id="包名">包名</h3>
 
+<div class="english">
 <p>
 When a package is imported, the package name becomes an accessor for the
 contents.  After
+</p>
+</div>
+
+<p>
+当一个包被导入时，该包的包名会成为其内容的访问器。在
 </p>
 
 <pre>
 import "bytes"
 </pre>
 
+<div class="english">
 <p>
 the importing package can talk about <code>bytes.Buffer</code>.  It's
 helpful if everyone using the package can use the same name to refer to
@@ -329,6 +569,17 @@ across all source code, and in the rare case of a collision the
 importing package can choose a different name to use locally.
 In any case, confusion is rare because the file name in the import
 determines just which package is being used.
+</p>
+</div>
+
+<p>
+之后，被导入的包就可以用 <code>bytes.Buffer</code> 了。
+所有使用该包的人都以一个相同的名称来引用其内容是很有益的，这意味着包应该好好地命名：
+名字应该简洁明了而易于理解。按照惯例，包应当以小写的单个单词来命名，且不应使用下划线或大小写混合。
+Err的命名就是出于简短考虑的，因为任何使用你的包的人都会键入该名称。不必担心它与<i>已有的</i>东西冲突。
+包的名称是唯一需要导入的默认名称，它并不需要在所有源码上都是唯一的，即便在少数发生冲突的情况下，
+也可选择一个不同的名字导入该包以便于局部地使用。不论如何，由于可通过文件名判定使用的是哪个包，
+因此不会产生混淆。
 </p>
 
 <p>
@@ -1081,7 +1332,11 @@ example of its possibilities.
 
 <h2 id="数据">数据</h2>
 
+<div class="english">
 <h3 id="allocation_new">Allocation with <code>new</code></h3>
+</div>
+
+<h3 id="new分配">使用 <code>new</code> 分配内存</h3>
 
 <p>
 Go has two allocation primitives, the built-in functions
@@ -2786,7 +3041,7 @@ Again, this requirement is expected to be retired as the scheduling and run-time
 <h3 id="leaky_buffer">A leaky buffer</h3>
 </div>
 
-<h3 id="泄露缓存">泄露缓存</h3>
+<h3 id="漏桶缓存">漏桶缓存</h3>
 
 <p>
 The tools of concurrent programming can even make non-concurrent
