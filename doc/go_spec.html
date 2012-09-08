@@ -1,12 +1,12 @@
 <!--{
 	"Title": "Go编程语言规范",
-	"Subtitle": "版本：2012年8月29日 || 译者：Oling Cat <olingcat@gmail.com>",
+	"Subtitle": "版本：2012年9月7日 || 译者：Oling Cat <olingcat@gmail.com>",
 	"Path": "/ref/spec"
 }-->
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of August 29, 2012",
+	"Subtitle": "Version of September 7, 2012",
 	"Path": "/ref/spec"
 }-->
 
@@ -218,6 +218,19 @@ compiler may disallow the NUL character (U+0000) in the source text.
 
 <p>
 实现限制：为兼容其它工具，编译器会阻止字符NUL（U+0000）出现在源码文本中。
+</p>
+
+<div class="english">
+<p>
+Implementation restriction: For compatibility with other tools, a
+compiler may ignore a UTF-8-encoded byte order mark
+(U+FEFF) if it is the first Unicode code point in the source text.
+</p>
+</div>
+
+<p>
+实现限制：为兼容其它工具，若UTF-8编码的字节序标记（U+FEFF）为源文本中的第一个Unicode码点，
+编译器就会忽略它。
 </p>
 
 
