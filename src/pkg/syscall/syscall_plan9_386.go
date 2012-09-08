@@ -3,3 +3,5 @@
 // license that can be found in the LICENSE file.
 
 package syscall
+
+func Getpagesize() int { return 0x1000 }

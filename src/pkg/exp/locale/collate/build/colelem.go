@@ -5,6 +5,7 @@
 package build
 
 import (
+	"exp/locale/collate"
 	"fmt"
 	"unicode"
 )
@@ -196,4 +197,133 @@ func implicitPrimary(r rune) int {
 		return int(r) + rareUnifiedOffset
 	}
 	return int(r) + otherOffset
+}
+
+// convertLargeWeights converts collation elements with large 
+// primaries (either double primaries or for illegal runes)
+// to our own representation.
+// A CJK character C is represented in the DUCET as
+//   [.FBxx.0020.0002.C][.BBBB.0000.0000.C]
+// We will rewrite these characters to a single CE.
+// We assume the CJK values start at 0x8000.
+// See http://unicode.org/reports/tr10/#Implicit_Weights
+func convertLargeWeights(elems [][]int) (res [][]int, err error) {
+	const (
+		cjkPrimaryStart   = 0xFB40
+		rarePrimaryStart  = 0xFB80
+		otherPrimaryStart = 0xFBC0
+		illegalPrimary    = 0xFFFE
+		highBitsMask      = 0x3F
+		lowBitsMask       = 0x7FFF
+		lowBitsFlag       = 0x8000
+		shiftBits         = 15
+	)
+	for i := 0; i < len(elems); i++ {
+		ce := elems[i]
+		p := ce[0]
+		if p < cjkPrimaryStart {
+			continue
+		}
+		if p > 0xFFFF {
+			return elems, fmt.Errorf("found primary weight %X; should be <= 0xFFFF", p)
+		}
+		if p >= illegalPrimary {
+			ce[0] = illegalOffset + p - illegalPrimary
+		} else {
+			if i+1 >= len(elems) {
+				return elems, fmt.Errorf("second part of double primary weight missing: %v", elems)
+			}
+			if elems[i+1][0]&lowBitsFlag == 0 {
+				return elems, fmt.Errorf("malformed second part of double primary weight: %v", elems)
+			}
+			np := ((p & highBitsMask) << shiftBits) + elems[i+1][0]&lowBitsMask
+			switch {
+			case p < rarePrimaryStart:
+				np += commonUnifiedOffset
+			case p < otherPrimaryStart:
+				np += rareUnifiedOffset
+			default:
+				p += otherOffset
+			}
+			ce[0] = np
+			for j := i + 1; j+1 < len(elems); j++ {
+				elems[j] = elems[j+1]
+			}
+			elems = elems[:len(elems)-1]
+		}
+	}
+	return elems, nil
+}
+
+// nextWeight computes the first possible collation weights following elems
+// for the given level.
+func nextWeight(level collate.Level, elems [][]int) [][]int {
+	nce := make([][]int, len(elems))
+	copy(nce, elems)
+
+	if level != collate.Identity {
+		nce[0] = make([]int, len(elems[0]))
+		copy(nce[0], elems[0])
+		nce[0][level]++
+		if level < collate.Secondary {
+			nce[0][collate.Secondary] = defaultSecondary
+		}
+		if level < collate.Tertiary {
+			nce[0][collate.Tertiary] = defaultTertiary
+		}
+	}
+	return nce
+}
+
+func nextVal(elems [][]int, i int, level collate.Level) (index, value int) {
+	for ; i < len(elems) && elems[i][level] == 0; i++ {
+	}
+	if i < len(elems) {
+		return i, elems[i][level]
+	}
+	return i, 0
+}
+
+// compareWeights returns -1 if a < b, 1 if a > b, or 0 otherwise.
+// It also returns the collation level at which the difference is found.
+func compareWeights(a, b [][]int) (result int, level collate.Level) {
+	for level := collate.Primary; level < collate.Identity; level++ {
+		var va, vb int
+		for ia, ib := 0, 0; ia < len(a) || ib < len(b); ia, ib = ia+1, ib+1 {
+			ia, va = nextVal(a, ia, level)
+			ib, vb = nextVal(b, ib, level)
+			if va != vb {
+				if va < vb {
+					return -1, level
+				} else {
+					return 1, level
+				}
+			}
+		}
+	}
+	return 0, collate.Identity
+}
+
+func equalCE(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < 3; i++ {
+		if b[i] != a[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func equalCEArrays(a, b [][]int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !equalCE(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
 }
