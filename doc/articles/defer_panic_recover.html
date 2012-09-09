@@ -1,5 +1,5 @@
 <!--{
-	"Title": "Defer, Panic 和 Recover",
+	"Title": "Defer、Panic和Recover",
 	"Template": true
 }-->
 
@@ -15,10 +15,10 @@ has the go statement to run code in a separate goroutine.  Here I'd like to
 discuss some of the less common ones: defer, panic, and recover.
 </p>
 </div>
- 
+
 <p>
-Go语言提供一般的流程控制语句：if，for，switch，goto。
-同时它还提供go语句来执行一个goroutine。这里我们将介绍几个不太常见的语句：defer，panic和recover。
+Go语言提供一般的流程控制语句：if、for、switch、goto。
+同时它还提供go语句来执行一个Go程。这里我们将介绍几个不太常见的语句：defer、panic和recover。
 </p>
 
 <div class="english">
@@ -30,11 +30,10 @@ used to simplify functions that perform various clean-up actions.
 </div>
 
 <p>
-一个 <b>defer</b> 调用的函数将被暂时保存到调用列表中。
-保存的调用列表在当前环境返回的时候被执行。
+一个 <b>defer</b> 调用的函数将被暂时保存到调用列表中。保存的调用列表在当前环境返回的时候被执行。
 Defer一般可以用于简化代码，执行各种清理操作。
 </p>
- 
+
 <div class="english">
 <p>
 For example, let's look at a function that opens two files and copies the
@@ -45,7 +44,7 @@ contents of one file to the other:
 <p>
 让我们演示一个文件复制的例子：函数需要打开两个文件，然后将其中一个文件的内容复制到另一个文件。
 </p>
- 
+
 {{code "/doc/progs/defer.go" `/func CopyFile/` `/STOP/`}}
 
 <div class="english">
@@ -66,7 +65,7 @@ files are always closed:
 但是当代码变得复杂时，类似bug将很难被发现和修复。
 通过defer语句，我们可以确保每个文件被关闭：
 </p>
- 
+
 {{code "/doc/progs/defer2.go" `/func CopyFile/` `/STOP/`}}
 
 <div class="english">
@@ -81,7 +80,7 @@ function, the files <i>will</i> be closed.
 Defer语言可以让我们在打开文件时就思考如何关闭文件。
 不管函数如何返回，文件关闭语句始终会被执行。
 </p>
- 
+
 <div class="english">
 <p>
 The behavior of defer statements is straightforward and predictable. There are
@@ -93,38 +92,38 @@ three simple rules:
 Defer语句的行为简单且可预测。
 有三个基本原则：
 </p>
- 
+
 <div class="english">
 <p>
 1. <i>A deferred function's arguments are evaluated when the defer statement is
-evaluated.</i> 
+evaluated.</i>
 </p>
 </div>
 
 <p>
 1. <i>当defer调用函数的时候，函数用到的每个参数和变量的值也会被计算。</i>
 </p>
- 
+
 <div class="english">
 <p>
 In this example, the expression "i" is evaluated when the Println call is
 deferred. The deferred call will print "0" after the function returns.
 </p>
 </div>
- 
+
 {{code "/doc/progs/defer.go" `/func a/` `/STOP/`}}
 
 <div class="english">
 <p>
 2. <i>Deferred function calls are executed in Last In First Out order
-</i>after<i> the surrounding function returns.</i> 
+</i>after<i> the surrounding function returns.</i>
 </p>
 </div>
 
 <p>
 2. <i>Defer调用的函数将在当前函数返回的时候，以后进先出的顺序执行。</i>
 </p>
- 
+
 <div class="english">
 <p>
 This function prints "3210":
@@ -132,18 +131,18 @@ This function prints "3210":
 </div>
 
 {{code "/doc/progs/defer.go" `/func b/` `/STOP/`}}
- 
+
 <div class="english">
 <p>
 3. <i>Deferred functions may read and assign to the returning function's named
-return values.</i> 
+return values.</i>
 </p>
 </div>
 
 <p>
 3. <i>Defer调用的函数可以在返回语句执行后读取或修改命名的返回值。</i>
 </p>
- 
+
 <div class="english">
 <p>
 In this example, a deferred function increments the return value i <i>after</i>
@@ -156,7 +155,7 @@ the surrounding function returns. Thus, this function returns 2:
 </p>
 
 {{code "/doc/progs/defer.go" `/func c/` `/STOP/`}}
- 
+
 <div class="english">
 <p>
 This is convenient for modifying the error return value of a function; we will
@@ -167,7 +166,7 @@ see an example of this shortly.
 <p>
 利用该特性，我们可以方便修改函数的错误返回值；以后应该可以看到类似的例子。
 </p>
- 
+
 <div class="english">
 <p>
 <b>Panic</b> is a built-in function that stops the ordinary flow of control and
@@ -188,7 +187,7 @@ out-of-bounds array accesses.
 以上的处理流程会一直沿着调用栈回朔，直到当前的goroutine返回引起程序崩溃！
 Panics可以通过直接调用panic方式触发，也可以由某些运行时错误触发，例如：数组的越界访问。
 </p>
- 
+
 <div class="english">
 <p>
 <b>Recover</b> is a built-in function that regains control of a panicking
@@ -205,7 +204,7 @@ Recover 和 defer 配合使用会非常有用。
 对于一个普通的执行流程，调用recover将返回nil，也没有任何效果。
 但如果当前goroutine处于panicking状态，recover调用会捕获触发panic时的参数，并且恢复到正常的执行流程。
 </p>
- 
+
 <div class="english">
 <p>
 Here's an example program that demonstrates the mechanics of panic and defer:
@@ -217,7 +216,7 @@ Here's an example program that demonstrates the mechanics of panic and defer:
 </p>
 
 {{code "/doc/progs/defer2.go" `/package main/` `/STOP/`}}
- 
+
 <div class="english">
 <p>
 The function g takes the int i, and panics if i is greater than 3, or else it
@@ -232,7 +231,7 @@ the output of this program might be before reading on.
 函数f通过defers中调用recover来捕获异常，并输出触发异常的参数（如果不是nil的话）。
 在查看输出结果前，读者可以自己现预测一下输出结果。
 </p>
- 
+
 <div class="english">
 <p>
 The program will output:
@@ -242,7 +241,7 @@ The program will output:
 <p>
 程序的输出：
 </p>
- 
+
 <pre>Calling g.
 Printing in g 0
 Printing in g 1
@@ -254,7 +253,7 @@ Defer in g 2
 Defer in g 1
 Defer in g 0
 Recovered in f 4
-Returned normally from f.</pre> 
+Returned normally from f.</pre>
 
 <div class="english">
 <p>
@@ -268,7 +267,7 @@ modified program will output:
 如果我们从函数f中移除deferred语句，panic在扩散到goroutine栈顶前将不会被捕获，最终会引起 程序崩溃。
 下面是修改后的输出结果：
 </p>
- 
+
 <pre>Calling g.
 Printing in g 0
 Printing in g 1
@@ -280,9 +279,9 @@ Defer in g 2
 Defer in g 1
 Defer in g 0
 panic: 4
- 
+
 panic PC=0x2a9cd8
-[stack trace omitted]</pre> 
+[stack trace omitted]</pre>
 
 <div class="english">
 <p>
@@ -315,7 +314,7 @@ internally, its external API still presents explicit error return values.
 <p>
 Go库的实现习惯：即使在pkg内部使用了panic，但是在导出API时会被转化为明确的错误值。
 </p>
- 
+
 <div class="english">
 <p>
 Other uses of <b>defer</b> (beyond the file.Close example given earlier)
@@ -328,7 +327,7 @@ include releasing a mutex:
 </p>
 
 <pre>mu.Lock()
-defer mu.Unlock()</pre> 
+defer mu.Unlock()</pre>
 
 <div class="english">
 <p>
@@ -339,9 +338,9 @@ printing a footer:
 <p>
 打印页眉和页脚：
 </p>
- 
+
 <pre>printHeader()
-defer printFooter()</pre> 
+defer printFooter()</pre>
 
 <div class="english">
 <p>
@@ -352,7 +351,7 @@ and more.
 <p>
 更多。
 </p>
- 
+
 <div class="english">
 <p>
 In summary, the defer statement (with or without panic and recover) provides an
