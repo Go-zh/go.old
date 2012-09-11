@@ -763,8 +763,6 @@ as it scans, so the input text is mostly free of them.
 </div>
 
 <p>
-Like C, Go's formal grammar uses semicolons to terminate statements;
-unlike C, those semicolons do not appear in the source.
 和C一样，Go的正式语法使用分号来终止语句；和C不同的是，这些分号并在源码中出现。
 取而代之，词法分析器在扫描时使用一条简单的规则来自动插入分号，因此输入的文本多数时候就不需要它们了。
 </p>
@@ -1229,34 +1227,32 @@ replacement rune U+FFFD. The loop
 占用一个字节的错误编码以字符U+FFFD来代替。以下循环
 </p>
 
-<div class="english">
 <pre>
 for pos, char := range "日本語" {
     fmt.Printf("character %c starts at byte position %d\n", char, pos)
 }
 </pre>
+
+<div class="english">
 <p>
 prints
 </p>
+</div>
+
+<p>
+将打印
+</p>
+
 <pre>
 character 日 starts at byte position 0
 character 本 starts at byte position 3
 character 語 starts at byte position 6
 </pre>
-</div>
 
 <pre>
 for pos, char := range "日本語" {
     fmt.Printf("字符 %c 起始于字节位置 %d\n", char, pos)
 }
-</pre>
-<p>
-将打印
-</p>
-<pre>
-字符 日 起始于字节位置 0
-字符 本 起始于字节位置 3
-字符 語 起始于字节位置 6
 </pre>
 
 <div class="english">
@@ -1852,6 +1848,7 @@ example of its possibilities.
 
 <h3 id="new分配">使用 <code>new</code> 分配内存</h3>
 
+<div class="english">
 <p>
 Go has two allocation primitives, the built-in functions
 <code>new</code> and <code>make</code>.
@@ -1867,7 +1864,19 @@ That is,
 In Go terminology, it returns a pointer to a newly allocated zero value of type
 <code>T</code>.
 </p>
+</div>
 
+<p>
+Go有两种内存分配原语，即内建函数 <code>new</code> 和 <code>make</code>。
+它们所做的事情不同，所应用到的类型也不同，这可能引起混淆，但规则却很简单。
+让我们先讨论 <code>new</code>。它是一个用来分配内存的函数，但不像其它语言中同名的操作，
+它不会<em>初始化</em>内存，只会将内存<em>清零</em>。<code>new(T)</code>
+会为一个类型为 <code>T</code> 的新条目分配已清零的存储空间并返回其地址，
+也就是一个类型为 <code>*T</code> 的值。用Go的术语来说，它返回一个指向类型为
+<code>T</code> 的新分配零值的指针。
+</p>
+
+<div class="english">
 <p>
 Since the memory returned by <code>new</code> is zeroed, it's helpful to arrange
 when designing your data structures that the
@@ -1881,9 +1890,25 @@ have an explicit constructor or <code>Init</code> method.
 Instead, the zero value for a <code>sync.Mutex</code>
 is defined to be an unlocked mutex.
 </p>
+</div>
 
 <p>
+由于通过 <code>new</code> 返回的内存已清零，这样就更便于设计你的数据结构，
+因为每个类型的零值不必进一步初始化就可以使用。这意味着该数据结构的使用者只需用
+<code>new</code> 创建一个新的就能正确工作。例如，<code>bytes.Buffer</code>
+的文档这样表述：“零值的 <code>Buffer</code> 为已准备就绪的缓存器。”
+同样，<code>sync.Mutex</code> 并没有显式的构造器或 <code>Init</code> 方法，
+不过零值的 <code>sync.Mutex</code> 已经被定义为解锁的互斥了。
+</p>
+
+<div class="english">
+<p>
 The zero-value-is-useful property works transitively. Consider this type declaration.
+</p>
+</div>
+
+<p>
+零值属性是可以传递的。考虑以下类型声明。
 </p>
 
 <pre>
@@ -1893,10 +1918,17 @@ type SyncedBuffer struct {
 }
 </pre>
 
+<div class="english">
 <p>
 Values of type <code>SyncedBuffer</code> are also ready to use immediately upon allocation
 or just declaration.  In the next snippet, both <code>p</code> and <code>v</code> will work
 correctly without further arrangement.
+</p>
+</div>
+
+<p>
+类型为 <code>SyncedBuffer</code> 的值也是在声明时就分配好内存并准备就绪了。
+在下一个程序片段中，<code>p</code> 和 <code>v</code> 无需进一步处理就可以正确地工作。
 </p>
 
 <pre>
@@ -1910,10 +1942,16 @@ var v SyncedBuffer      // type  SyncedBuffer
 
 <h3 id="复合字面">构造器与复合字面</h3>
 
+<div class="english">
 <p>
 Sometimes the zero value isn't good enough and an initializing
 constructor is necessary, as in this example derived from
 package <code>os</code>.
+</p>
+</div>
+
+<p>
+有时零值并不够好，这时就需要一个初始化构造器，如来自包 <code>os</code> 中的这段代码所示。
 </p>
 
 <pre>
@@ -1930,11 +1968,18 @@ func NewFile(fd int, name string) *File {
 }
 </pre>
 
+<div class="english">
 <p>
 There's a lot of boiler plate in there.  We can simplify it
 using a <i>composite literal</i>, which is
 an expression that creates a
 new instance each time it is evaluated.
+</p>
+</div>
+
+<p>
+这里有很多类似的语句。我们可以使用<i>复合字面</i>来对其进行简化，
+这是一个在每次求值时都创建一个新实例的表达式。
 </p>
 
 <pre>
@@ -1947,6 +1992,7 @@ func NewFile(fd int, name string) *File {
 }
 </pre>
 
+<div class="english">
 <p>
 Note that, unlike in C, it's perfectly OK to return the address of a local variable;
 the storage associated with the variable survives after the function
@@ -1955,32 +2001,61 @@ In fact, taking the address of a composite literal
 allocates a fresh instance each time it is evaluated,
 so we can combine these last two lines.
 </p>
+</div>
+
+<p>
+请注意，返回一个局部变量的地址完全没有问题，这点与C不同，与此变量对应的存储在函数返回后仍然存在。
+实际上，每当获取一个复合字面的地址时，都将为一个新的实例分配内存，
+因此我们可以将上面的最后两行代码合并。
+</p>
 
 <pre>
     return &amp;File{fd, name, nil, 0}
 </pre>
 
+<div class="english">
 <p>
 The fields of a composite literal are laid out in order and must all be present.
 However, by labeling the elements explicitly as <i>field</i><code>:</code><i>value</i>
 pairs, the initializers can appear in any
 order, with the missing ones left as their respective zero values.  Thus we could say
 </p>
+</div>
 
+<p>
+复合字面的字段必须按顺序全部列出。但如果以 <i>字段</i><code>:</code><i>值</i>
+对的形式显式地标出元素，初始化器就可以按任何顺序出现，未给出的字段值则为零值。
+因此，我们可以用如下形式：
+</p>
 <pre>
     return &amp;File{fd: fd, name: name}
 </pre>
 
+<div class="english">
 <p>
 As a limiting case, if a composite literal contains no fields at all, it creates
 a zero value for the type.  The expressions <code>new(File)</code> and <code>&amp;File{}</code> are equivalent.
 </p>
+</div>
 
+<p>
+少数情况下，若复合字面不包括任何字段，它将创建该类型的零值。表达式
+<code>new(File)</code> 和 <code>&amp;File{}</code> 是等价的。
+</p>
+
+<div class="english">
 <p>
 Composite literals can also be created for arrays, slices, and maps,
 with the field labels being indices or map keys as appropriate.
 In these examples, the initializations work regardless of the values of <code>Enone</code>,
 <code>Eio</code>, and <code>Einval</code>, as long as they are distinct.
+</p>
+</div>
+
+<p>
+复合字面同样可用于创建数组、切片和映射，映射的字段标签是索引还是映射键则视情况而定。
+在下面例字的初始化过程中，不管 <code>Enone</code>、<code>Eio</code> 和 <code>Einval</code>
+的值是什么，只要它们的标签不同就行。
 </p>
 
 <pre>
@@ -1995,6 +2070,7 @@ m := map[int]string{Enone: "no error", Eio: "Eio", Einval: "invalid argument"}
 
 <h3 id="make分配">使用 <code>make</code> 分配内存</h3>
 
+<div class="english">
 <p>
 Back to allocation.
 The built-in function <code>make(T, </code><i>args</i><code>)</code> serves
@@ -2013,11 +2089,23 @@ For slices, maps, and channels,
 the value for use.
 For instance,
 </p>
+</div>
+
+<p>
+再回到内存分配上来。内建函数 <code>make(T, </code><i>args</i><code>)</code>
+的目的不同于 <code>new(T)</code>。它只用于创建切片、映射和信道，并返回类型为
+<code>T</code>（而非 <code>*T</code>）的一个<em>已初始化</em> （而非<em>清零</em>）的值。
+出现这种用差异的原因是由于这三种类型本质上为引用数据类型，它们在使用前必须初始化。
+例如，切片是一个具有三项内容的描述符，包含一个指向（数组内部）数据的指针、长度以及容量，
+在这三项被初始化之前，该切片为 <code>nil</code>。对于切片、映射和信道，<code>make</code>
+用于初始化其内部的数据结构并准备好将要使用的值。例如，
+</p>
 
 <pre>
 make([]int, 10, 100)
 </pre>
 
+<div class="english">
 <p>
 allocates an array of 100 ints and then creates a slice
 structure with length 10 and a capacity of 100 pointing at the first
@@ -2026,12 +2114,29 @@ structure with length 10 and a capacity of 100 pointing at the first
 for more information.)
 In contrast, <code>new([]int)</code> returns a pointer to a newly allocated, zeroed slice
 structure, that is, a pointer to a <code>nil</code> slice value.
+</p>
+</div>
 
+<p>
+会分配一个具有100个 <code>int</code> 的数组，接着创建一个长度为10，
+容量为100并指向该数组中前10个元素的切片构造。（生成切片时，其容量可以省略，更多信息见切片一节。）
+与此相反，<code>new([]int)</code> 会返回一个指向新分配的，已清零的切片构造，
+即一个指向 <code>nil</code> 切片值的指针。returns a pointer to a newly allocated, zeroed slice
+structure, that is, a pointer to a <code>nil</code> slice value.
+</p>
+
+<div class="english">
 <p>
 These examples illustrate the difference between <code>new</code> and
 <code>make</code>.
 </p>
+</div>
 
+<p>
+下面的例子阐明了 <code>new</code> 与 <code>make</code> 之间的不同。
+</p>
+
+<div class="english">
 <pre>
 var p *[]int = new([]int)       // allocates slice structure; *p == nil; rarely useful
 var v  []int = make([]int, 100) // the slice v now refers to a new array of 100 ints
@@ -2043,11 +2148,31 @@ var p *[]int = new([]int)
 // Idiomatic:
 v := make([]int, 100)
 </pre>
+</div>
 
+<pre>
+var p *[]int = new([]int)       // 分配切片构造；*p == nil；基本没用
+var v  []int = make([]int, 100) // 切片v现在引用了一个具有100个int元素的新数组
+
+// 不必要地使问题复杂化：
+var p *[]int = new([]int)
+*p = make([]int, 100, 100)
+
+// 习惯用法：
+v := make([]int, 100)
+</pre>
+
+<div class="english">
 <p>
 Remember that <code>make</code> applies only to maps, slices and channels
 and does not return a pointer.
 To obtain an explicit pointer allocate with <code>new</code>.
+</p>
+</div>
+
+<p>
+请记住，<code>make</code> 只适用于映射、切片和信道且不返回指针。要获得一个明确的指针，
+请使用 <code>new</code> 分配内存。
 </p>
 
 <div class="english">
@@ -2056,13 +2181,21 @@ To obtain an explicit pointer allocate with <code>new</code>.
 
 <h3 id="数组">数组</h3>
 
+<div class="english">
 <p>
 Arrays are useful when planning the detailed layout of memory and sometimes
 can help avoid allocation, but primarily
 they are a building block for slices, the subject of the next section.
 To lay the foundation for that topic, here are a few words about arrays.
 </p>
+</div>
 
+<p>
+在详细规划内存布局时，数组是非常有用的，有时可帮助避免内存分配，但它们主要用作切片的构件，
+这将是下一节的主题。作为对该主题的一个铺垫，这里先对数组说上几句。
+</p>
+
+<div class="english">
 <p>
 There are major differences between the ways arrays work in Go and C.
 In Go,
@@ -2079,12 +2212,35 @@ The size of an array is part of its type.  The types <code>[10]int</code>
 and <code>[20]int</code> are distinct.
 </li>
 </ul>
+</div>
 
+<p>
+以下为在Go和C中的数组的主要区别，在Go中，
+</p>
+<ul>
+<li>
+数组是值。将一个数组赋予另一个数组将复制其所有元素。
+</li>
+<li>
+特别地，如果你将一个数组传递给一个函数，它将接收到该数组的一个<i>副本</i>，
+而不是指向它的指针。
+<li>
+数组的大小是其类型的一部分。类型 <code>[10]int</code> 和 <code>[20]int</code> 是不同的。
+</li>
+</ul>
+
+<div class="english">
 <p>
 The value property can be useful but also expensive; if you want C-like behavior and efficiency,
 you can pass a pointer to the array.
 </p>
+</div>
 
+<p>
+数组为值的属性很有用，但代价高昂；如果你想要类似于C的行为和效率，你可以传递一个指向该数组的指针。
+</p>
+
+<div class="english">
 <pre>
 func Sum(a *[3]float64) (sum float64) {
     for _, v := range *a {
@@ -2100,6 +2256,29 @@ x := Sum(&amp;array)  // Note the explicit address-of operator
 <p>
 But even this style isn't idiomatic Go.  Slices are.
 </p>
+</div>
+
+<pre>
+func Sum(a *[3]float64) (sum float64) {
+    for _, v := range *a {
+        sum += v
+    }
+    return
+}
+
+array := [...]float64{7.0, 8.5, 9.1}
+x := Sum(&amp;array)  // 注意显式的取址操作
+</pre>
+
+<div class="english">
+<p>
+But even this style isn't idiomatic Go.  Slices are.
+</p>
+</div>
+
+<p>
+但这并不是Go的习惯用法，切片才是。
+</p>
 
 <div class="english">
 <h3 id="slices">Slices</h3>
@@ -2107,12 +2286,21 @@ But even this style isn't idiomatic Go.  Slices are.
 
 <h3 id="切片">切片</h3>
 
+<div class="english">
 <p>
 Slices wrap arrays to give a more general, powerful, and convenient
 interface to sequences of data.  Except for items with explicit
 dimension such as transformation matrices, most array programming in
 Go is done with slices rather than simple arrays.
 </p>
+</div>
+
+<p>
+切片通过包装数组对数据序列提供了一个更通用、强大和方便的界面。
+除了像矩阵变换这种需要明确尺寸的情况外，Go中的数组编程是通过切片而非简单的数组完成的。
+</p>
+
+<div class="english">
 <p>
 Slices are <i>reference types</i>, which means that if you assign one
 slice to another, both refer to the same underlying array.  For
@@ -2125,21 +2313,49 @@ limit of how much data to read.  Here is the signature of the
 <code>Read</code> method of the <code>File</code> type in package
 <code>os</code>:
 </p>
+</div>
+
+<p>
+切片是<i>引用类型</i>，这意味着如果你将一个切片赋予另外一个，这两个切片将引用同一个基本数组。
+例如，若一个函数获取了一个切片实参，它对切片元素的修改对于调用者来说是可见的。
+类似于传递一个指向其基本数组的指针。因此，<code>Read</code> 函数可接受一个切片实参而非指针或计数；
+切片的决定了可读取数据的上限。以下为 <code>os</code> 包中 <code>File</code>
+类型的 <code>Read</code> 方法签名：
+</p>
+
 <pre>
 func (file *File) Read(buf []byte) (n int, err error)
 </pre>
+
+<div class="english">
 <p>
 The method returns the number of bytes read and an error value, if
 any.  To read into the first 32 bytes of a larger buffer
 <code>b</code>, <i>slice</i> (here used as a verb) the buffer.
 </p>
+</div>
+
+<p>
+该方法返回读取的字节数和一个错误值（若有的话）。要读入一个大型缓存器 <code>b</code>
+的前32个字节，只需<i>切分</i>该缓冲区即可。
+</p>
+
 <pre>
     n, err := f.Read(buf[0:32])
 </pre>
+
+<div class="english">
 <p>
 Such slicing is common and efficient.  In fact, leaving efficiency aside for
 the moment, the following snippet would also read the first 32 bytes of the buffer.
 </p>
+</div>
+
+<p>
+这种切分的方法常用且高效。实际上，暂不考虑效率问题，一下片段同样可读取该缓存器的前32个字节。
+</p>
+
+<div class="english">
 <pre>
     var n int
     var err error
@@ -2152,6 +2368,22 @@ the moment, the following snippet would also read the first 32 bytes of the buff
         n += nbytes
     }
 </pre>
+</div>
+
+<pre>
+    var n int
+    var err error
+    for i := 0; i &lt; 32; i++ {
+        nbytes, e := f.Read(buf[i:i+1])  // 读取一个字节。
+        if nbytes == 0 || e != nil {
+            err = e
+            break
+        }
+        n += nbytes
+    }
+</pre>
+
+<div class="english">
 <p>
 The length of a slice may be changed as long as it still fits within
 the limits of the underlying array; just assign it to a slice of
@@ -2163,6 +2395,17 @@ resulting slice is returned.  The function uses the fact that
 <code>len</code> and <code>cap</code> are legal when applied to the
 <code>nil</code> slice, and return 0.
 </p>
+</div>
+
+<p>
+切片的长度是可改变的，只要它不超出其基本数组的长度极限；只需将该数组的一个切片赋予它便可。
+切片的<i>容量</i>可通过内建函数 <code>cap</code> 访问，它将给出该切片可被赋予的最大长度。
+以下是为切片追加数据的函数。若数据超出容量其，则会重新分配该切片。返回值即为所得的切片。
+该函数中所使用的 <code>len</code> 和 <code>cap</code> 在应用于 <code>nil</code>
+切片时是合法的，它会返回0.
+</p>
+
+<div class="english">
 <pre>
 func Append(slice, data[]byte) []byte {
     l := len(slice)
@@ -2180,15 +2423,51 @@ func Append(slice, data[]byte) []byte {
     return slice
 }
 </pre>
+</div>
+
+<pre>
+func Append(slice, data[]byte) []byte {
+    l := len(slice)
+    if l + len(data) &gt; cap(slice) {  // 重新分配
+        // 为后面需要的增长分配两份。
+        newSlice := make([]byte, (l+len(data))*2)
+        //  copy函数是预声明的，且可工作于任何切片类型。
+        copy(newSlice, slice)
+        slice = newSlice
+    }
+    slice = slice[0:l+len(data)]
+    for i, c := range data {
+        slice[l+i] = c
+    }
+    return slice
+}
+</pre>
+
+<div class="english">
 <p>
 We must return the slice afterwards because, although <code>Append</code>
 can modify the elements of <code>slice</code>, the slice itself (the run-time data
 structure holding the pointer, length, and capacity) is passed by value.
+</p>
+</div>
+
+<p>
+我们必须在最后返回切片，这是因为尽管 <code>Append</code> 可修改 <code>slice</code>
+的元素，但切片自身（其运行时数据结构包含指针、长度和容量）是通过值传递的。
+</p>
+
+<div class="english">
 <p>
 The idea of appending to a slice is so useful it's captured by the
 <code>append</code> built-in function.  To understand that function's
 design, though, we need a little more information, so we'll return
 to it later.
+</p>
+</div>
+
+<p>
+为切片追加东西的想法非常有用，因此有一个专门的内建函数 <code>append</code>。
+要理解该函数的设计，我们还需要更多一点的信息，我们将稍后再介绍它。
 </p>
 
 
@@ -2198,6 +2477,7 @@ to it later.
 
 <h3 id="映射">映射</h3>
 
+<div class="english">
 <p>
 Maps are a convenient and powerful built-in data structure to associate
 values of different types.
@@ -2211,11 +2491,27 @@ Like slices, maps are a reference type. If you pass a map to a function
 that changes the contents of the map, the changes will be visible
 in the caller.
 </p>
+</div>
+
+<p>
+映射是方便而强大的内建数据结构，它可以关联不同类型的值。其键可以是任意的已定义了相等性操作符的类型，
+如整数、浮点数和复数、字符串、指针、接口（只要其动态类型支持相等性）、结构以及数组。
+切片不能用作映射键，因为它们的相等性还未定义。就像切片一样，映射也是引用类型。
+若你将一个映射传递给函数，并更改了该映射的内容，则此修改对于调用者来说是可见的。
+</p>
+
+<div class="english">
 <p>
 Maps can be constructed using the usual composite literal syntax
 with colon-separated key-value pairs,
 so it's easy to build them during initialization.
 </p>
+</div>
+
+<p>
+映射可使用通常的复合字面语法进行构建，其键-值对使用逗号分隔，因此可在初始化时来构建它们
+</p>
+
 <pre>
 var timeZone = map[string] int {
     "UTC":  0*60*60,
@@ -2225,14 +2521,24 @@ var timeZone = map[string] int {
     "PST": -8*60*60,
 }
 </pre>
+
+<div class="english">
 <p>
 Assigning and fetching map values looks syntactically just like
 doing the same for arrays except that the index doesn't need to
 be an integer.
 </p>
+</div>
+
+<p>
+赋值和获取映射值的语法类似于数组，不同的是映射的索引不必为整数。
+</p>
+
 <pre>
 offset := timeZone["EST"]
 </pre>
+
+<div class="english">
 <p>
 An attempt to fetch a map value with a key that
 is not present in the map will return the zero value for the type
@@ -2243,6 +2549,16 @@ A set can be implemented as a map with value type <code>bool</code>.
 Set the map entry to <code>true</code> to put the value in the set, and then
 test it by simple indexing.
 </p>
+</div>
+
+<p>
+如果试图使用一个不存在的键来获取映射值，就会返回在该映射对应该条目类型的零值。
+例如，若映射包含整数，查找一个不存在的键将返回 <code>0</code>。一个集合可使用一个值类型为
+<code>bool</code> 的映射来实现。通过将该映射中的条目置为 <code>true</code>
+来将值放入集合中，然后通过简单的索引对齐进行测试。
+</p>
+
+<div class="english">
 <pre>
 attended := map[string] bool {
     "Ann": true,
@@ -2254,17 +2570,41 @@ if attended[person] { // will be false if person is not in the map
     fmt.Println(person, "was at the meeting")
 }
 </pre>
+</div>
+
+<pre>
+attended := map[string] bool {
+    "Ann": true,
+    "Joe": true,
+    ...
+}
+
+if attended[person] { // 若人不在该映射中，则为false
+    fmt.Println(person, "was at the meeting")
+}
+</pre>
+
+<div class="english">
 <p>
 Sometimes you need to distinguish a missing entry from
 a zero value.  Is there an entry for <code>"UTC"</code>
 or is that zero value because it's not in the map at all?
 You can discriminate with a form of multiple assignment.
 </p>
+</div>
+
+<p>
+有时你需要从零值中区分出不存在的条目。如对于一个值本应为零的 <code>"UTC"</code>
+条目，也可能是由于不存在该项而得到零值。你可以使用多重赋值的形式来分辨这种情况。
+</p>
+
 <pre>
 var seconds int
 var ok bool
 seconds, ok = timeZone[tz]
 </pre>
+
+<div class="english">
 <p>
 For obvious reasons this is called the &ldquo;comma ok&rdquo; idiom.
 In this example, if <code>tz</code> is present, <code>seconds</code>
@@ -2273,6 +2613,14 @@ will be set appropriately and <code>ok</code> will be true; if not,
 be false.
 Here's a function that puts it together with a nice error report:
 </p>
+</div>
+
+<p>
+显然这种习惯的用法可称作“逗号ok”。在下面的例子中，若 <code>tz</code> 存在，
+<code>seconds</code> 就会被恰当地设置，而 <code>ok</code> 将为 <code>true</code>；
+若不存在，<code>seconds</code> 将会被置为零，而 <code>ok</code> 将为 <code>false</code>。
+</p>
+
 <pre>
 func offset(tz string) int {
     if seconds, ok := timeZone[tz]; ok {
@@ -2282,6 +2630,8 @@ func offset(tz string) int {
     return 0
 }
 </pre>
+
+<div class="english">
 <p>
 To test for presence in the map without worrying about the actual value,
 you can use the blank identifier (<code>_</code>).
@@ -2289,17 +2639,40 @@ The blank identifier can be assigned or declared with any value of any type, wit
 value discarded harmlessly.  For testing just presence in a map, use the blank
 identifier in place of the usual variable for the value.
 </p>
+</div>
+
+<p>
+若只需测试映射中是否存在某项而不关心实际的值，可使用空白标识符（<code>_</code>）。
+空白标识符可被赋予或声明任意类型的任意值，这样的值将被丢弃，且并不产生任何问题。
+对于只是测试某项是否在映射中而言，可将原本存储值的变量替换为空白标识符。
+</p>
+
 <pre>
 _, present := timeZone[tz]
 </pre>
+
+<div class="english">
 <p>
 To delete a map entry, use the <code>delete</code>
 built-in function, whose arguments are the map and the key to be deleted.
 It's safe to do this this even if the key is already absent
 from the map.
 </p>
+</div>
+
+<p>
+要删除映射中的一项，可使用内建函数 <code>delete</code>，其实参为该映射以及要被删除的键。
+即便对应的键不在该映射中，此操作也是安全的。
+</p>
+
+<div class="english">
 <pre>
 delete(timeZone, "PDT")  // Now on Standard Time
+</pre>
+</div>
+
+<pre>
+delete(timeZone, "PDT")  // 现在是标准时间
 </pre>
 
 <div class="english">
@@ -2308,6 +2681,7 @@ delete(timeZone, "PDT")  // Now on Standard Time
 
 <h3 id="打印">打印</h3>
 
+<div class="english">
 <p>
 Formatted printing in Go uses a style similar to C's <code>printf</code>
 family but is richer and more general. The functions live in the <code>fmt</code>
@@ -2315,6 +2689,16 @@ package and have capitalized names: <code>fmt.Printf</code>, <code>fmt.Fprintf</
 <code>fmt.Sprintf</code> and so on.  The string functions (<code>Sprintf</code> etc.)
 return a string rather than filling in a provided buffer.
 </p>
+</div>
+
+<p>
+Go中格式化打印的风格类似于C的 <code>printf</code> 家族，但却更加丰富和通用。
+这些函数位于 <code>fmt</code> 包中，且函数名以答谢字母开头：如
+<code>fmt.Printf</code>、<code>fmt.Fprintf</code>，<code>fmt.Sprintf</code> 等。
+字符串函数（<code>Sprintf</code> 等）并不是填充一个给定的缓存区，而是返回一个字符串。
+</p>
+
+<div class="english">
 <p>
 You don't need to provide a format string.  For each of <code>Printf</code>,
 <code>Fprintf</code> and <code>Sprintf</code> there is another pair
@@ -2325,12 +2709,24 @@ between arguments and append a newline to the output while
 the <code>Print</code> versions add blanks only if the operand on neither side is a string.
 In this example each line produces the same output.
 </p>
+</div>
+
+<p>
+你无须提供一个格式字符串。每个 <code>Printf</code>、<code>Fprintf</code> 和
+<code>Sprintf</code> 都分别对应另外对函数，如 <code>Print</code> 与 <code>Println</code>。
+这些函数并不接受格式字符串，而是为每个实参生成一种么人格式。<code>Println</code>
+的版本还会在实参中插入一个空白并在输出时追加一个换行符，而 <code>Print</code>
+版本仅在操作数两遍都没有字符串时才添加空白。以下示例中各行产生的输出都是一样的。
+</p>
+
 <pre>
 fmt.Printf("Hello %d\n", 23)
 fmt.Fprint(os.Stdout, "Hello ", 23, "\n")
 fmt.Println("Hello", 23)
 fmt.Println(fmt.Sprint("Hello ", 23))
 </pre>
+
+<div class="english">
 <p>
 As mentioned in
 the <a href="http://tour.golang.org">Tour</a>, <code>fmt.Fprint</code>
@@ -2338,21 +2734,47 @@ and friends take as a first argument any object
 that implements the <code>io.Writer</code> interface; the variables <code>os.Stdout</code>
 and <code>os.Stderr</code> are familiar instances.
 </p>
+</div>
+
+<p>
+正如<a href="http://tour.golang.org">Go语言之旅</a>中所说，<code>fmt.Fprint</code>
+一类的函数可接受任何实现了 <code>io.Writer</code> 接口的对象作为第一个实参；变量
+<code>os.Stdout</code> 与 <code>os.Stderr</code> 都是大家熟知的例子。
+</p>
+
+<div class="english">
 <p>
 Here things start to diverge from C.  First, the numeric formats such as <code>%d</code>
 do not take flags for signedness or size; instead, the printing routines use the
 type of the argument to decide these properties.
 </p>
+</div>
+
+<p>
+这里与C还有些不同。首先，像 <code>%d</code> 这样的数值格式并不接受表示符号或大小的标记，
+打印例程会根据实参的类型来决定这些属性。
+</p>
+
 <pre>
 var x uint64 = 1&lt;&lt;64 - 1
 fmt.Printf("%d %x; %d %x\n", x, x, int64(x), int64(x))
 </pre>
+
+<div class="english">
 <p>
 prints
 </p>
+</div>
+
+<p>
+将打印
+</p>
+
 <pre>
 18446744073709551615 ffffffffffffffff; -1 -1
 </pre>
+
+<div class="english">
 <p>
 If you just want the default conversion, such as decimal for integers, you can use
 the catchall format <code>%v</code> (for &ldquo;value&rdquo;); the result is exactly
@@ -2360,21 +2782,53 @@ what <code>Print</code> and <code>Println</code> would produce.
 Moreover, that format can print <em>any</em> value, even arrays, structs, and
 maps.  Here is a print statement for the time zone map defined in the previous section.
 </p>
+</div>
+
+<p>
+如果你只想要默认的转换，如使用十进制的整数，你可以使用通用的格式
+<code>%v</code>（对应“值”）；其结果与 <code>Print</code> 和 <code>Println</code>
+产生的输出时完全一样的。此外，这种格式可打印<em>任意</em>值，甚至包括数组、结构和映射。
+以下是针对上一节中定义的时区映射的打印语句。
+</p>
+
+<div class="english">
 <pre>
 fmt.Printf("%v\n", timeZone)  // or just fmt.Println(timeZone)
 </pre>
+</div>
+
+<pre>
+fmt.Printf("%v\n", timeZone)  // 或只用 fmt.Println(timeZone)
+</pre>
+
+<div class="english">
 <p>
 which gives output
 </p>
+</div>
+
+<p>
+这会输出
+</p>
+
 <pre>
 map[CST:-21600 PST:-28800 EST:-18000 UTC:0 MST:-25200]
 </pre>
+
+<div class="english">
 <p>
 For maps the keys may be output in any order, of course.
 When printing a struct, the modified format <code>%+v</code> annotates the
 fields of the structure with their names, and for any value the alternate
 format <code>%#v</code> prints the value in full Go syntax.
 </p>
+</div>
+
+<p>
+当然，映射中的键可能按任意顺序输出。当打印一个结构时，改进的格式 <code>%+v</code>
+将使用字段的名称来注解该结构的字段，而另外一个格式将完全按照Go的语法打印任意值。
+</p>
+
 <pre>
 type T struct {
     a int
@@ -2387,15 +2841,25 @@ fmt.Printf("%+v\n", t)
 fmt.Printf("%#v\n", t)
 fmt.Printf("%#v\n", timeZone)
 </pre>
+
+<div class="english">
 <p>
 prints
 </p>
+</div>
+
+<p>
+将打印
+</p>
+
 <pre>
 &amp;{7 -2.35 abc   def}
 &amp;{a:7 b:-2.35 c:abc     def}
 &amp;main.T{a:7, b:-2.35, c:"abc\tdef"}
 map[string] int{"CST":-21600, "PST":-28800, "EST":-18000, "UTC":0, "MST":-25200}
 </pre>
+
+<div class="english">
 <p>
 (Note the ampersands.)
 That quoted string format is also available through <code>%q</code> when
@@ -2405,40 +2869,93 @@ Also, <code>%x</code> works on strings and arrays of bytes as well as on integer
 generating a long hexadecimal string, and with
 a space in the format (<code>%&nbsp;x</code>) it puts spaces between the bytes.
 </p>
+</div>
+
+<p>
+（请注意其中的&amp;符号）当遇到 <code>string</code> 或 <code>[]byte</code> 值时，
+可使用 <code>%q</code> 产生带引号的字符串；而格式 <code>%#q</code> 将尽可能使用反引号。
+另外，<code>%x</code> 还可用于字符串、字节数组以及整数，并生成一个很长的十六进制字符串，
+而带空格的格式（<code>%&nbsp;x</code>）还会在字节之间插入空格。
+</p>
+
+<div class="english">
 <p>
 Another handy format is <code>%T</code>, which prints the <em>type</em> of a value.
+</p>
+</div>
+
+<p>
+另一个方便的格式是 <code>%T</code>，它会打印一个值的<em>类型</em>。
+</p>
+
 <pre>
 fmt.Printf(&quot;%T\n&quot;, timeZone)
 </pre>
+
+<div class="english">
 <p>
 prints
 </p>
+</div>
+
+<p>
+将打印
+</p>
+
 <pre>
 map[string] int
 </pre>
+
+<div class="english">
 <p>
 If you want to control the default format for a custom type, all that's required is to define
 a method with the signature <code>String() string</code> on the type.
 For our simple type <code>T</code>, that might look like this.
 </p>
+</div>
+
+<p>
+如果你想要控制一个自定义类型的默认格式，只需为此类型定义一个具有
+<code>String() string</code> 签名的方法。对于我们简单的类型 <code>T</code>，
+可进行如下操作。
+</p>
+
 <pre>
 func (t *T) String() string {
     return fmt.Sprintf("%d/%g/%q", t.a, t.b, t.c)
 }
 fmt.Printf("%v\n", t)
 </pre>
+
+<div class="english">
 <p>
 to print in the format
 </p>
+</div>
+
+<p>
+它将以格式化的形式打印
+</p>
+
 <pre>
 7/-2.35/"abc\tdef"
 </pre>
+
+<div class="english">
 <p>
 (If you need to print <em>values</em> of type <code>T</code> as well as pointers to <code>T</code>,
 the receiver for <code>String</code> must be of value type; this example used a pointer because
 that's more efficient and idiomatic for struct types.
 See the section below on <a href="#pointers_vs_values">pointers vs. value receivers</a> for more information.)
 </p>
+</div>
+
+<p>
+（如果你需要像指向 <code>T</code> 的指针那样打印类型 <code>T</code> 的<em>值</em>，
+<code>String</code> 的接收者就必须是值类型的；上面的例子中接收者是一个指针，
+因为这对结构来说更高效和惯用。更多详情见<a href="#指针vs值">指针vs.值接收者</a>一节）
+</p>
+
 <p>
 Our <code>String</code> method is able to call <code>Sprintf</code> because the
 print routines are fully reentrant and can be used recursively.

@@ -515,15 +515,15 @@ before the <code>print</code>.
 <p>
 If the channel were buffered (e.g., <code>c = make(chan int, 1)</code>)
 then the program would not be guaranteed to print
-<code>"hello, world"</code>.  (It might print the empty string;
-it cannot print <code>"goodbye, universe"</code>, nor can it crash.)
+<code>"hello, world"</code>.  (It might print the empty string,
+crash, or do something else.)
 </p>
 </div>
 
 <p>
 若该信道为带缓冲的（例如，<code>c = make(chan int, 1)</code>），
 则该程序将无法保证打印出 <code>"hello, world"</code>。（它可能会打印出空字符串，
-且既不会打印出 <code>"goodbye, universe"</code> 之类的东西，也不会崩溃。）
+崩溃，或最一些别的事情。）
 </p>
 
 <div class="english">
