@@ -42,7 +42,7 @@ Go是一门新的语言。尽管它从已有的语言中借鉴了一些理念，
 将C++或Java程序直译为Go并不能产生满意的结果——毕竟Java程序是用Java编写的，而不是Go。
 另一方面，以Go的观点考虑问题将产生非常成功但非常不同的程序。换句话说，要将Go程序写得好，
 就必须理解其特性和风格。了解使用Go编程的既定规则也十分重要的，例如命名、格式化、
-程序结构等等，这样你所编写的程序将更容易被其他程序所理解。
+程序结构等等，这样你所编写的程序将更容易被其他程序员所理解。
 </p>
 
 <div class="english">
@@ -58,7 +58,7 @@ should read first.
 
 <p>
 本文档就如何编写清晰、地道的Go代码提供了一些技巧。它是对<a href="/ref/spec">语言规范</a>，
-<a href="http://tour.golang.org/">Go语言之旅</a>以及及<a href="/doc/code.html">如何编写Go代码</a>的补充，
+<a href="http://tour.golang.org/">Go语言之旅</a>以及<a href="/doc/code.html">如何编写Go代码</a>的补充，
 在阅读本文档之前，你应该先阅读这些文档。
 </p>
 
@@ -278,7 +278,7 @@ are also useful to disable large swaths of code.
 
 <p>
 Go提供C风格的 <code>/* */</code> 块注释和C++风格的 <code>//</code> 行注释。
-行注释是标准的，而块注释大多用在包注释，或禁用一大段代码时使用。
+行注释是标准的，而块注释大多在包注释，或禁用一大段代码时使用。
 </p>
 
 <div class="english">
@@ -385,7 +385,7 @@ If the package is simple, the package comment can be brief.
 </div>
 
 <pre>
-// 包path为操作以斜杠分隔的文件名路径实现了实用工具。
+// 包path为斜杠分隔的文件名路径的操作实现了实用工具。
 </pre>
 
 <div class="english">
@@ -1330,7 +1330,7 @@ in comma-separated lists.
 </div>
 
 <p>
-switch并不自动贯穿，但多个分支可通过逗号分隔的列表来呈现。
+switch并不会自动贯穿，但多个分支可通过逗号分隔的列表来呈现。
 </p>
 
 <pre>
@@ -1457,6 +1457,7 @@ Go的一个不寻常的特性就是函数和方法可返回多个值。这种形
 带内错误返回（例如用 <code>-1</code> 代表 <code>EOF</code>）以及修改实参。
 </p>
 
+<div class="english">
 <p>
 In C, a write error is signaled by a negative count with the
 error code secreted away in a volatile location.
@@ -1465,24 +1466,49 @@ can return a count <i>and</i> an error: &ldquo;Yes, you wrote some
 bytes but not all of them because you filled the device&rdquo;.
 The signature of <code>File.Write</code> in package <code>os</code> is:
 </p>
+</div>
+
+<p>
+In C, a write error is signaled by a negative count with the
+error code secreted away in a volatile location.
+在C中，写入操作的错误通过一个负数进行标记，该错误代码隐藏在一个不确定的位置。
+在Go中，<code>Write</code> 可以返回一个计数<i>和</i>一个错误：
+“是的，您写入了一些字节，但并没有全部写入，因为设备已满”。
+在 <code>os</code> 包中，<code>File.Write</code> 的签名为：
+</p>
 
 <pre>
 func (file *File) Write(b []byte) (n int, err error)
 </pre>
 
+<div class="english">
 <p>
 and as the documentation says, it returns the number of bytes
 written and a non-nil <code>error</code> when <code>n</code>
 <code>!=</code> <code>len(b)</code>.
 This is a common style; see the section on error handling for more examples.
 </p>
+</div>
 
+<p>
+如文档所述，当 <code>n</code> <code>!=</code> <code>len(b)</code>
+时，它返回被写入的字节数与一个非nil的 <code>error</code>。这是一种常用的方式，
+更多示例见错误处理一节。
+</p>
+
+<div class="english">
 <p>
 A similar approach obviates the need to pass a pointer to a return
 value to simulate a reference parameter.
 Here's a simple-minded function to
 grab a number from a position in a byte array, returning the number
 and the next position.
+</p>
+</div>
+
+<p>
+类似的方法无需再将一个指针传至返回值来模拟引用形参。
+以下简单的函数可从字节数组中的特定位置获取一个数，它返回该数值和下一个位置。
 </p>
 
 <pre>
@@ -1497,8 +1523,14 @@ func nextInt(b []byte, i int) (int, int) {
 }
 </pre>
 
+<div class="english">
 <p>
 You could use it to scan the numbers in an input array <code>a</code> like this:
+</p>
+</div>
+
+<p>
+你可以使用它从一个输入的数组 <code>a</code> 中扫描获取数字，就像这样：
 </p>
 
 <pre>
@@ -1512,8 +1544,9 @@ You could use it to scan the numbers in an input array <code>a</code> like this:
 <h3 id="named-results">Named result parameters</h3>
 </div>
 
-<h3 id="命名返回">命名返回形参</h3>
+<h3 id="带名称结果">带名称的结果形参</h3>
 
+<div class="english">
 <p>
 The return or result "parameters" of a Go function can be given names and
 used as regular variables, just like the incoming parameters.
@@ -1522,7 +1555,15 @@ the function begins; if the function executes a <code>return</code> statement
 with no arguments, the current values of the result parameters are
 used as the returned values.
 </p>
+</div>
 
+<p>
+Go函数的返回值或结果“形参”可给定名称并像常规变量那样使用，就像输入的参数那样。
+命名后，一旦该函数开始执行，它们就会被初始化为对应其类型的零值，若该函数执行了
+不带实参的 <code>return</code> 语句，则结果形参的当前值将作为返回值返回。
+</p>
+
+<div class="english">
 <p>
 The names are not mandatory but they can make code shorter and clearer:
 they're documentation.
@@ -1530,15 +1571,28 @@ If we name the results of <code>nextInt</code> it becomes
 obvious which returned <code>int</code>
 is which.
 </p>
+</div>
+
+<p>
+此名称不是强制的，但它们能使代码更加简短而清晰：它们就是文档。如果我们命名了
+<code>nextInt</code> 的返回值，各个返回的 <code>int</code> 是什么意思就显而易见了。
+</p>
 
 <pre>
 func nextInt(b []byte, pos int) (value, nextPos int) {
 </pre>
 
+<div class="english">
 <p>
 Because named results are initialized and tied to an unadorned return, they can simplify
 as well as clarify.  Here's a version
 of <code>io.ReadFull</code> that uses them well:
+</p>
+</div>
+
+<p>
+由于被命名的结果已经初始化，且已关联至一个无参数的返回，它们就可以简化并清晰化代码。
+这里的 <code>io.ReadFull</code> 就是使用它们的一个很好的例子。
 </p>
 
 <pre>
@@ -1559,6 +1613,7 @@ func ReadFull(r Reader, buf []byte) (n int, err error) {
 
 <h3 id="推迟">推迟</h3>
 
+<div class="english">
 <p>
 Go's <code>defer</code> statement schedules a function call (the
 <i>deferred</i> function) to be run immediately before the function
@@ -1567,7 +1622,16 @@ effective way to deal with situations such as resources that must be
 released regardless of which path a function takes to return.  The
 canonical examples are unlocking a mutex or closing a file.
 </p>
+</div>
 
+<p>
+Go的 <code>defer</code> 语句用于预设一个函数调用（<i>推迟执行</i>的函数），
+该函数会在函数执行 <code>defer</code> 返回之前立即执行。它显得不同常规，
+但却是处理一些情况的有效方式，例如无论怎样返回，都必须对其进行资源释放的函数。
+典型的例子就是解锁一个互斥或关闭一个文件。
+</p>
+
+<div class="english">
 <pre>
 // Contents returns the file's contents as a string.
 func Contents(filename string) (string, error) {
@@ -1592,7 +1656,34 @@ func Contents(filename string) (string, error) {
     return string(result), nil // f will be closed if we return here.
 }
 </pre>
+</div>
 
+<pre>
+// Contents将文件的内容作为字符串返回。
+func Contents(filename string) (string, error) {
+    f, err := os.Open(filename)
+    if err != nil {
+        return "", err
+    }
+    defer f.Close()  // f.Close会在我们结束后运行。
+
+    var result []byte
+    buf := make([]byte, 100)
+    for {
+        n, err := f.Read(buf[0:])
+        result = append(result, buf[0:n]...) // append将在后面讨论。
+        if err != nil {
+            if err == io.EOF {
+                break
+            }
+            return "", err  // 我们在此返回后，f就会被关闭。
+        }
+    }
+    return string(result), nil // 我们在此返回后，f就会被关闭。
+}
+</pre>
+
+<div class="english">
 <p>
 Deferring a call to a function such as <code>Close</code> has two advantages.  First, it
 guarantees that you will never forget to close the file, a mistake
@@ -1600,7 +1691,15 @@ that's easy to make if you later edit the function to add a new return
 path.  Second, it means that the close sits near the open,
 which is much clearer than placing it at the end of the function.
 </p>
+</div>
 
+<p>
+对于像 <code>Close</code> 这种函数的推迟调用有两个优点。其一，它能确保你不会忘记关闭文件，
+如果你以后编辑该函数来添加一个新的返回路径时，这种情况往往就会发生。其二，
+它意味着关闭离打开很近，这要比将关闭放在函数结尾处更为清楚明了。
+</p>
+
+<div class="english">
 <p>
 The arguments to the deferred function (which include the receiver if
 the function is a method) are evaluated when the <i>defer</i>
@@ -1609,6 +1708,13 @@ about variables changing values as the function executes, this means
 that a single deferred call site can defer multiple function
 executions.  Here's a silly example.
 </p>
+</div>
+
+<p>
+被推迟函数的实参（如果该函数为方法则还包括接收者）在<i>延期</i>执行时就会求值，
+而不是在<i>调用</i>执行时才求值。这样不仅无需担心变量值在函数执行时被改变，
+同时也意味着单个已推迟的调用可推迟多个函数的执行。下面是个简单的例子。
+</p>
 
 <pre>
 for i := 0; i &lt; 5; i++ {
@@ -1616,6 +1722,7 @@ for i := 0; i &lt; 5; i++ {
 }
 </pre>
 
+<div class="english">
 <p>
 Deferred functions are executed in LIFO order, so this code will cause
 <code>4 3 2 1 0</code> to be printed when the function returns.  A
@@ -1623,7 +1730,15 @@ more plausible example is a simple way to trace function execution
 through the program.  We could write a couple of simple tracing
 routines like this:
 </p>
+</div>
 
+<p>
+被推迟的函数按照后进先出（LIFO）的顺序执行，因此以上代码在函数返回时会打印
+<code>4 3 2 1 0</code>。一个更合理的例子是用一种简单的方法通过程序来跟踪函数的执行。
+我们可以编写一对简单的跟踪例程，就像这样：
+</p>
+
+<div class="english">
 <pre>
 func trace(s string)   { fmt.Println("entering:", s) }
 func untrace(s string) { fmt.Println("leaving:", s) }
@@ -1635,12 +1750,32 @@ func a() {
     // do something....
 }
 </pre>
+</div>
 
+<pre>
+func trace(s string)   { fmt.Println("entering:", s) }
+func untrace(s string) { fmt.Println("leaving:", s) }
+
+// 像这样使用它们：
+func a() {
+    trace("a")
+    defer untrace("a")
+    // 做一些事情....
+}
+</pre>
+
+<div class="english">
 <p>
 We can do better by exploiting the fact that arguments to deferred
 functions are evaluated when the <code>defer</code> executes.  The
 tracing routine can set up the argument to the untracing routine.
 This example:
+</p>
+</div>
+
+<p>
+我们可以通过利用被推迟函数的实参在 <code>defer</code> 执行时求值的特点做得更好。
+跟踪例程可针对反跟踪例程建立实参。以下程序：
 </p>
 
 <pre>
@@ -1669,8 +1804,14 @@ func main() {
 }
 </pre>
 
+<div class="english">
 <p>
 prints
+</p>
+</div>
+
+<p>
+会打印
 </p>
 
 <pre>
@@ -1682,6 +1823,7 @@ leaving: a
 leaving: b
 </pre>
 
+<div class="english">
 <p>
 For programmers accustomed to block-level resource management from
 other languages, <code>defer</code> may seem peculiar, but its most
@@ -1689,6 +1831,13 @@ interesting and powerful applications come precisely from the fact
 that it's not block-based but function-based.  In the section on
 <code>panic</code> and <code>recover</code> we'll see another
 example of its possibilities.
+</p>
+</div>
+
+<p>
+对于习惯其它语言中块级资源管理的程序员，<code>defer</code> 似乎有点怪异，
+但它最有趣和强大的应用恰恰来自于其基于函数而非基于块的特点。在 <code>panic</code>
+和 <code>recover</code> 两节中我们将看到它另一种应用的例子。
 </p>
 
 <div class="english">
