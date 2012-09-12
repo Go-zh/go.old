@@ -1369,8 +1369,6 @@ func Compare(a, b []byte) int {
 </div>
 
 <p>
-Here's a comparison routine for byte arrays that uses two
-<code>switch</code> statements:
 以下程序通过使用两个 <code>switch</code> 语句对字节数组进行比较：
 </p>
 <pre>
@@ -1465,8 +1463,6 @@ The signature of <code>File.Write</code> in package <code>os</code> is:
 </div>
 
 <p>
-In C, a write error is signaled by a negative count with the
-error code secreted away in a volatile location.
 在C中，写入操作的错误通过一个负数进行标记，该错误代码隐藏在一个不确定的位置。
 在Go中，<code>Write</code> 可以返回一个计数<i>和</i>一个错误：
 “是的，您写入了一些字节，但并没有全部写入，因为设备已满”。
@@ -2953,9 +2949,10 @@ See the section below on <a href="#pointers_vs_values">pointers vs. value receiv
 <p>
 （如果你需要像指向 <code>T</code> 的指针那样打印类型 <code>T</code> 的<em>值</em>，
 <code>String</code> 的接收者就必须是值类型的；上面的例子中接收者是一个指针，
-因为这对结构来说更高效和惯用。更多详情见<a href="#指针vs值">指针vs.值接收者</a>一节）
+因为这对结构来说更高效而常用。更多详情见<a href="#指针vs值">指针vs.值接收者</a>一节）
 </p>
 
+<div class="english">
 <p>
 Our <code>String</code> method is able to call <code>Sprintf</code> because the
 print routines are fully reentrant and can be used recursively.
@@ -2964,9 +2961,20 @@ The signature of <code>Printf</code> uses the type <code>...interface{}</code>
 for its final argument to specify that an arbitrary number of parameters (of arbitrary type)
 can appear after the format.
 </p>
+</div>
+
+<p>
+<code>String</code> 方法也可调用 <code>Sprintf</code>，这是由于打印例程完全可以重新加入并递归使用。
+我们甚至可以将一个打印例程的实参直接传递给另一个这样的例程。<code>Printf</code> 的签名使用
+<code>...interface{}</code>
+类型作为其最后一个实参，这样就可以指定（任意类型的）任意数量的形参出现在 <code>format</code> 之后了。
+</p>
+
 <pre>
 func Printf(format string, v ...interface{}) (n int, err error) {
 </pre>
+
+<div class="english">
 <p>
 Within the function <code>Printf</code>, <code>v</code> acts like a variable of type
 <code>[]interface{}</code> but if it is passed to another variadic function, it acts like
@@ -2975,27 +2983,85 @@ Here is the implementation of the
 function <code>log.Println</code> we used above. It passes its arguments directly to
 <code>fmt.Sprintln</code> for the actual formatting.
 </p>
+</div>
+
+<p>
+在 <code>Printf</code> 函数中，<code>v</code> 就像一个类型为 <code>[]interface{}</code>
+的变量，但如果将它传递至另一个变参函数中，它就变得与常规实参列表一样了。
+以下是我们在上面使用过的 <code>log.Println</code> 函数。它直接将其实参传递给
+<code>fmt.Sprintln</code> 进行实际的格式化。
+</p>
+
+<div class="english">
 <pre>
 // Println prints to the standard logger in the manner of fmt.Println.
 func Println(v ...interface{}) {
     std.Output(2, fmt.Sprintln(v...))  // Output takes parameters (int, string)
 }
 </pre>
+</div>
+
+<pre>
+// Println prints to the standard logger in the manner of fmt.Println.
+func Println(v ...interface{}) {
+    std.Output(2, fmt.Sprintln(v...))  // 输出接受形参(int, string)
+}
+</pre>
+
+<div class="english">
 <p>
 We write <code>...</code> after <code>v</code> in the nested call to <code>Sprintln</code> to tell the
 compiler to treat <code>v</code> as a list of arguments; otherwise it would just pass
 <code>v</code> as a single slice argument.
+</p>
+</div>
+
+<p>
+我们通过在嵌套调用的 <code>Sprintln</code> 中的 <code>v</code> 之后写上 <code>...</code>
+来告诉编译器将 <code>v</code> 视作一个实参列表，否则它就只会将 <code>v</code>
+作为一个单一的切片实参来传递。
+</p>
+
+<div class="english">
 <p>
 There's even more to printing than we've covered here.  See the <code>godoc</code> documentation
 for package <code>fmt</code> for the details.
 </p>
+</div>
+
+<p>
+还有一些我们没有介绍的打印。详情请参阅 <code>fmt</code> 包中的 <code>godoc</code> 文档
+</p>
+
+<div class="english">
 <p>
 By the way, a <code>...</code> parameter can be of a specific type, for instance <code>...int</code>
 for a min function that chooses the least of a list of integers:
 </p>
+</div>
+
+<p>
+顺便说一下，<code>...</code> 形参可以指定类型，如 <code>...int</code>
+可以让求最小值的函数选定一个整数列表中的最小值：
+</p>
+
+<div class="english">
 <pre>
 func Min(a ...int) int {
     min := int(^uint(0) >> 1)  // largest int
+    for _, i := range a {
+        if i &lt; min {
+            min = i
+        }
+    }
+    return min
+}
+</pre>
+</div>
+
+<pre>
+func Min(a ...int) int {
+    min := int(^uint(0) >> 1)  // 最大整数
     for _, i := range a {
         if i &lt; min {
             min = i
@@ -3011,15 +3077,25 @@ func Min(a ...int) int {
 
 <h3 id="追加">追加</h3>
 
+<div class="english">
 <p>
 Now we have the missing piece we needed to explain the design of
 the <code>append</code> built-in function.  The signature of <code>append</code>
 is different from our custom <code>Append</code> function above.
 Schematically, it's like this:
 </p>
+</div>
+
+<p>
+现在我们要对内建函数 <code>append</code> 的设计进行补充说明。<code>append</code>
+函数的签名不同于前面我们自定义的 <code>Append</code> 函数。大致来说，它就像这样：
+</p>
+
 <pre>
 func append(slice []<i>T</i>, elements...T) []<i>T</i>
 </pre>
+
+<div class="english">
 <p>
 where <i>T</i> is a placeholder for any given type.  You can't
 actually write a function in Go where the type <code>T</code>
@@ -3027,37 +3103,78 @@ is determined by the caller.
 That's why <code>append</code> is built in: it needs support from the
 compiler.
 </p>
+</div>
+
+<p>
+其中的 <i>T</i> 为任意给定类型的占位符。实际上在Go中你无法编写一个类型 <code>T</code>
+由调用者决定的函数。这也就是为什么 <code>append</code> 是内建函数的原因：它需要编译器的支持。
+</p>
+
+<div class="english">
 <p>
 What <code>append</code> does is append the elements to the end of
 the slice and return the result.  The result needs to be returned
 because, as with our hand-written <code>Append</code>, the underlying
 array may change.  This simple example
 </p>
+</div>
+
+<p>
+<code>append</code> 所做的就是在切片的末尾追加元素并返回结果。必须返回结果的原因与前面我们手写的
+<code>Append</code> 一样，即其基本数组可能已发生改变。以下简单的例子
+</p>
+
 <pre>
 x := []int{1,2,3}
 x = append(x, 4, 5, 6)
 fmt.Println(x)
 </pre>
+
+<div class="english">
 <p>
 prints <code>[1 2 3 4 5 6]</code>.  So <code>append</code> works a
 little like <code>Printf</code>, collecting an arbitrary number of
 arguments.
 </p>
+</div>
+
+<p>
+将打印 <code>[1 2 3 4 5 6]</code>。因此 <code>append</code> 有点像 <code>Printf</code>
+那样，可接受任意个数的实参。
+</p>
+
+<div class="english">
 <p>
 But what if we wanted to do what our <code>Append</code> does and
 append a slice to a slice?  Easy: use <code>...</code> at the call
 site, just as we did in the call to <code>Output</code> above.  This
 snippet produces identical output to the one above.
 </p>
+</div>
+
+<p>
+但如果我们想做 <code>Append</code> 做的工作，或者将一个切片追加到另一个切片事怎么办？
+很简单：在调用的地方使用 <code>...</code>，就像我们在上面调用 <code>Output</code>
+那样。以下代码片段的输出与上一个一样。
+</p>
+
 <pre>
 x := []int{1,2,3}
 y := []int{4,5,6}
 x = append(x, y...)
 fmt.Println(x)
 </pre>
+
+<div class="english">
 <p>
 Without that <code>...</code>, it wouldn't compile because the types
 would be wrong; <code>y</code> is not of type <code>int</code>.
+</p>
+</div>
+
+<p>
+如果没有 <code>...</code>，它就会由于类型错误而无法编译，因为 <code>y</code>
+不是 <code>int</code> 类型的。
 </p>
 
 <div class="english">
