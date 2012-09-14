@@ -257,6 +257,7 @@ struct	Node
 	uchar	implicit;
 	uchar	addrtaken;	// address taken, even if not moved to heap
 	uchar	dupok;	// duplicate definitions ok (for func)
+	schar	likely; // likeliness of if statement
 
 	// most nodes
 	Type*	type;
@@ -346,6 +347,7 @@ enum
 	SymExported	= 1<<2,	// already written out by export
 	SymUniq		= 1<<3,
 	SymSiggen	= 1<<4,
+	SymGcgen	= 1<<5,
 };
 
 struct	Sym
@@ -363,6 +365,7 @@ struct	Sym
 	Label*	label;	// corresponding label (ephemeral)
 	int32	block;		// blocknumber to catch redeclaration
 	int32	lastlineno;	// last declaration for diagnostic
+	Pkg*	origpkg;	// original package for . import
 };
 #define	S	((Sym*)0)
 

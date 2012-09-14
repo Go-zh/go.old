@@ -777,7 +777,7 @@ igen(Node *n, Node *a, Node *res)
 			break;
 		*a = *n;
 		return;
- 
+
 	case OCALLFUNC:
 		fp = structfirst(&flist, getoutarg(n->left->type));
 		cgen_call(n, 0);
@@ -969,18 +969,15 @@ bgen(Node *n, int true, int likely, Prog *to)
 		if(isslice(nl->type)) {
 			// front end should only leave cmp to literal nil
 			if((a != OEQ && a != ONE) || nr->op != OLITERAL) {
-				yyerror("illegal array comparison");
+				yyerror("illegal slice comparison");
 				break;
 			}
 			a = optoas(a, types[tptr]);
-			regalloc(&n1, types[tptr], N);
-			agen(nl, &n1);
-			n2 = n1;
-			n2.op = OINDREG;
-			n2.xoffset = Array_array;
-			n2.type = types[tptr];
+			igen(nl, &n1, N);
+			n1.xoffset += Array_array;
+			n1.type = types[tptr];
 			nodconst(&tmp, types[tptr], 0);
-			gins(optoas(OCMP, types[tptr]), &n2, &tmp);
+			gins(optoas(OCMP, types[tptr]), &n1, &tmp);
 			patch(gbranch(a, types[tptr], likely), to);
 			regfree(&n1);
 			break;
@@ -993,13 +990,10 @@ bgen(Node *n, int true, int likely, Prog *to)
 				break;
 			}
 			a = optoas(a, types[tptr]);
-			regalloc(&n1, types[tptr], N);
-			agen(nl, &n1);
-			n2 = n1;
-			n2.op = OINDREG;
-			n2.xoffset = 0;
+			igen(nl, &n1, N);
+			n1.type = types[tptr];
 			nodconst(&tmp, types[tptr], 0);
-			gins(optoas(OCMP, types[tptr]), &n2, &tmp);
+			gins(optoas(OCMP, types[tptr]), &n1, &tmp);
 			patch(gbranch(a, types[tptr], likely), to);
 			regfree(&n1);
 			break;
@@ -1197,6 +1191,11 @@ sgen(Node *n, Node *res, int64 w)
 		return;
 	}
 
+	if (w == 8 || w == 12) {
+		if(componentgen(n, res))
+			return;
+	}
+
 	// offset on the stack
 	osrc = stkof(n);
 	odst = stkof(res);
@@ -1280,3 +1279,156 @@ sgen(Node *n, Node *res, int64 w)
 	}
 }
 
+static int
+cadable(Node *n)
+{
+	if(!n->addable) {
+		// dont know how it happens,
+		// but it does
+		return 0;
+	}
+
+	switch(n->op) {
+	case ONAME:
+		return 1;
+	}
+	return 0;
+}
+
+/*
+ * copy a structure component by component
+ * return 1 if can do, 0 if cant.
+ * nr is N for copy zero
+ */
+int
+componentgen(Node *nr, Node *nl)
+{
+	Node nodl, nodr;
+	int freel, freer;
+
+	freel = 0;
+	freer = 0;
+
+	switch(nl->type->etype) {
+	default:
+		goto no;
+
+	case TARRAY:
+		if(!isslice(nl->type))
+			goto no;
+	case TSTRING:
+	case TINTER:
+		break;
+	}
+
+	nodl = *nl;
+	if(!cadable(nl)) {
+		if(nr == N || !cadable(nr))
+			goto no;
+		igen(nl, &nodl, N);
+		freel = 1;
+	}
+
+	if(nr != N) {
+		nodr = *nr;
+		if(!cadable(nr)) {
+			igen(nr, &nodr, N);
+			freer = 1;
+		}
+	}
+
+	switch(nl->type->etype) {
+	case TARRAY:
+		nodl.xoffset += Array_array;
+		nodl.type = ptrto(nl->type->type);
+
+		if(nr != N) {
+			nodr.xoffset += Array_array;
+			nodr.type = nodl.type;
+		} else
+			nodconst(&nodr, nodl.type, 0);
+		gmove(&nodr, &nodl);
+
+		nodl.xoffset += Array_nel-Array_array;
+		nodl.type = types[TUINT32];
+
+		if(nr != N) {
+			nodr.xoffset += Array_nel-Array_array;
+			nodr.type = nodl.type;
+		} else
+			nodconst(&nodr, nodl.type, 0);
+		gmove(&nodr, &nodl);
+
+		nodl.xoffset += Array_cap-Array_nel;
+		nodl.type = types[TUINT32];
+
+		if(nr != N) {
+			nodr.xoffset += Array_cap-Array_nel;
+			nodr.type = nodl.type;
+		} else
+			nodconst(&nodr, nodl.type, 0);
+		gmove(&nodr, &nodl);
+
+		goto yes;
+
+	case TSTRING:
+		nodl.xoffset += Array_array;
+		nodl.type = ptrto(types[TUINT8]);
+
+		if(nr != N) {
+			nodr.xoffset += Array_array;
+			nodr.type = nodl.type;
+		} else
+			nodconst(&nodr, nodl.type, 0);
+		gmove(&nodr, &nodl);
+
+		nodl.xoffset += Array_nel-Array_array;
+		nodl.type = types[TUINT32];
+
+		if(nr != N) {
+			nodr.xoffset += Array_nel-Array_array;
+			nodr.type = nodl.type;
+		} else
+			nodconst(&nodr, nodl.type, 0);
+		gmove(&nodr, &nodl);
+
+		goto yes;
+
+	case TINTER:
+		nodl.xoffset += Array_array;
+		nodl.type = ptrto(types[TUINT8]);
+
+		if(nr != N) {
+			nodr.xoffset += Array_array;
+			nodr.type = nodl.type;
+		} else
+			nodconst(&nodr, nodl.type, 0);
+		gmove(&nodr, &nodl);
+
+		nodl.xoffset += Array_nel-Array_array;
+		nodl.type = ptrto(types[TUINT8]);
+
+		if(nr != N) {
+			nodr.xoffset += Array_nel-Array_array;
+			nodr.type = nodl.type;
+		} else
+			nodconst(&nodr, nodl.type, 0);
+		gmove(&nodr, &nodl);
+
+		goto yes;
+	}
+
+no:
+	if(freer)
+		regfree(&nodr);
+	if(freel)
+		regfree(&nodl);
+	return 0;
+
+yes:
+	if(freer)
+		regfree(&nodr);
+	if(freel)
+		regfree(&nodl);
+	return 1;
+}
