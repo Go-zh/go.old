@@ -67,7 +67,7 @@ compile/link model to generate executable binaries.
 </div>
 
 <p>
-Go是通用型编程语言，它为系统编程而设计。它是强类型化的语言，具有垃圾回收机制，并明确支持并发编程。
+Go是通用型编程语言，它为系统编程而设计。它是强类型化的语言，具有垃圾回收机制，并显式支持并发编程。
 程序由<i>包</i>构造，以此来提供高效的依赖管理功能。当前实现使用传统的 编译/链接 模型来生成可执行的二进制文件。
 </p>
 
@@ -106,7 +106,7 @@ Repetition  = "{" Expression "}" .
 </div>
 
 <p>
-其语法使用扩展巴克斯-诺尔范式（EBNF）定义：
+语法使用扩展巴克斯-诺尔范式（EBNF）定义：
 </p>
 
 <pre class="grammar">
@@ -389,8 +389,8 @@ valid token.
 
 <p>
 标记构成Go语言的词汇。它有4种类型：<i>标识符</i>，<i>关键字</i>，
-<i>运算符与分隔符</i>以及<i>文字</i>。<i>空白符</i>由空格（U+0020），
-横向制表符（U+0009），回车符（U+000D）和换行符（U+000A）组成，除非用来分隔会结合成单个的标记，
+<i>运算符与分隔符</i>以及<i>字面</i>。<i>空白符</i>由空格（U+0020），
+横向制表符（U+0009），回车符（U+000D）和换行符（U+000A）组成，除非用它来分隔会结合成单个的标记，
 否则它将被忽略。此外，换行符或EOF（文件结束符）会触发<a href="#分号">分号</a>的插入。
 当把输入分解为标记时，可形成有效标记的最长字符序列将作为下一个标记。
 </p>
@@ -471,13 +471,13 @@ may be omitted before a closing <code>")"</code> or <code>"}"</code>.
 	    <a href="#浮点数">浮点数</a>，
 	    <a href="#虚数">虚数</a>，
 	    <a href="#符文">符文</a>或
-	    <a href="#字符串">字符串</a>文字
+	    <a href="#字符串">字符串</a> 字面
 	</li>
 
 	<li><a href="#关键字">关键字</a>
 	    <code>break</code>，
 	    <code>continue</code>，
-	    <code>fallthrough</code>或
+	    <code>fallthrough</code> 或
 	    <code>return</code>
 	</li>
 
@@ -713,8 +713,8 @@ imaginary_lit = (decimals | float_lit) "i" .
 </div>
 
 <p>
-虚数字面由十进制<a href="#常量">复数常量</a>的虚部表示。它由
-<a href="#浮点数字面">浮点数字面</a>或十进制整数紧跟小写字母 <code>i</code> 构成。
+虚数字面由十进制<a href="#常量">复数常量</a>的虚部表示。
+它由<a href="#浮点数字面">浮点数字面</a>或十进制整数紧跟小写字母 <code>i</code> 构成。
 </p>
 <pre class="ebnf">
 虚数字面 = (十进制数 | 浮点数字面) "i" .
