@@ -772,7 +772,7 @@ a literal <code>a</code>-dieresis, U+00E4, value <code>0xe4</code>.
 </div>
 
 <p>
-最简单的形式就是引号内只有一个字符；既然Go源码文本是UTF-8编码的Unicode字符，
+最简单的形式就是引号内只有一个字符；由于Go源码文本是UTF-8编码的Unicode字符，
 多个UTF-8编码的字节就可以表示一个单一的整数值。例如，字面 <code>'a'</code> 包含一个字节，
 表示一个字面 <code>a</code>，Unicode字符U+0061，值 <code>0x61</code>，而 <code>'ä'</code>
 则包含两个字节（<code>0xc3</code> <code>0xa4</code>），表示一个字面 <code>分音符-a</code>，
@@ -1069,8 +1069,8 @@ literal.
 </div>
 
 <p>
-如果源码将两个码点表示为一个字符，例如包含着重号和字母的结合形式，那么将它放置在
-符文字面中就会产生一个错误（它不是单一码点），而放置在字符串字面中则会显示为两个码点。
+如果源码将两个码点表示为一个字符，例如包含着重号和字母的结合形式，
+那么将它放置在符文字面中就会产生一个错误（它不是单一码点），而放置在字符串字面中则会显示为两个码点。
 </p>
 
 <div class="english">
@@ -1094,7 +1094,7 @@ collectively called <i>numeric constants</i>.
 常量包含<i>布尔常量</i>，<i>符文常量</i>，
 <i>整数常量</i>，<i>浮点数常量</i>，
 <i>复数常量</i>和<i>字符串常量</i>。
-字符，整数，浮点数和复数常量统称为<i>数值常量</i>.
+字符，整数，浮点数和复数常量统称为<i>数值常量</i>。
 </p>
 
 <div class="english">
@@ -1126,13 +1126,12 @@ The boolean truth values are represented by the predeclared constants
 <a href="#符文字面">符文</a>，
 <a href="#整数字面">整数</a>，
 <a href="#浮点数字面">浮点数</a>，
-<a href="#虚数字面">虚数</a>或
+<a href="#虚数字面">虚数</a> 或
 <a href="#字符串字面">字符串</a>字面表示，
 一个标识符可代表一个常量，一个<a href="#常量表达式">常量表达式</a>，
 一个结果为常量的<a href="#类型转换">类型转换</a>，或一些内建函数的返回值。
 例如 <code>unsafe.Sizeof</code> 作用于任何值时产生的值，
-<code>cap</code> 或 <code>len</code> 作用于
-<a href="#长度与容量">一些表达式</a>，时产生的值，
+<code>cap</code> 或 <code>len</code> 作用于<a href="#长度与容量">一些表达式</a>时产生的值，
 <code>real</code> 和 <code>imag</code> 作用于复数常量时产生的值，以及
 <code>complex</code> 作用于数值常量所产生的值。
 布尔值由预声明的常量 <code>true</code> 和 <code>false</code> 来表示。
