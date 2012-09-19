@@ -118,6 +118,10 @@ enum
 	true	= 1,
 	false	= 0,
 };
+enum
+{
+	PtrSize = sizeof(void*),
+};
 
 /*
  * structures
@@ -610,7 +614,8 @@ uint32	runtime·fastrand1(void);
 void	runtime·exit(int32);
 void	runtime·breakpoint(void);
 void	runtime·gosched(void);
-void	runtime·tsleep(int64);
+void	runtime·park(void(*)(Lock*), Lock*, int8*);
+void	runtime·tsleep(int64, int8*);
 M*	runtime·newm(void);
 void	runtime·goexit(void);
 void	runtime·asmcgocall(void (*fn)(void*), void*);

@@ -135,12 +135,10 @@ type uintptr uintptr
 // 它习惯用于区别字节值与8位无符号整数值。
 type byte byte
 
-// rune is an alias for int and is equivalent to int in all ways. It is
+// rune is an alias for int32 and is equivalent int32 in all ways. It is
 // used, by convention, to distinguish character values from integer values.
-// In a future version of Go, it will change to an alias of int32.
 
-// rune 为 int 的别名，它在各方面上都等价于 int。
-// 它习惯用于区别字符值与整数值。在未来的Go版本中，它将会更改为 int32 的别名。
+// rune 为 int32 的别名，它在各方面上都等价于 int32。它习惯用于区别字符值与整数值。
 type rune rune
 
 // Type is here for the purposes of documentation only. It is a stand-in
