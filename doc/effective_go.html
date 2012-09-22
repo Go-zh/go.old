@@ -40,8 +40,8 @@ will be easy for other Go programmers to understand.
 Go是一门新的语言。尽管它从已有的语言中借鉴了一些理念，但其与众不同的特性，
 使得实际的Go程序不同于其它语言编写的程序。
 将C++或Java程序直译为Go并不能产生满意的结果——毕竟Java程序是用Java编写的，而不是Go。
-另一方面，以Go的观点考虑问题将产生非常成功但非常不同的程序。换句话说，要将Go程序写得好，
-就必须理解其特性和风格。了解使用Go编程的既定规则也十分重要的，例如命名、格式化、
+另一方面，以Go的观点考虑问题将会写出成功而不同的程序。换句话说，要想将Go程序写得好，
+就必须理解其特性和风格。了解使用Go编程的既定规则也是十分重要的，例如命名、格式化、
 程序结构等等，这样你所编写的程序将更容易被其他程序员所理解。
 </p>
 
@@ -58,7 +58,7 @@ should read first.
 
 <p>
 本文档就如何编写清晰、地道的Go代码提供了一些技巧。它是对<a href="/ref/spec">语言规范</a>，
-<a href="http://tour.golang.org/">Go语言之旅</a>以及<a href="/doc/code.html">如何编写Go代码</a>的补充，
+<a href="https://go-tour-zh.appspot.com/">Go语言之旅</a>以及<a href="/doc/code.html">如何编写Go代码</a>的补充，
 在阅读本文档之前，你应该先阅读这些文档。
 </p>
 
@@ -108,7 +108,7 @@ prescriptive style guide.
 <p>
 格式化总是最具争议性的问题，但很难争论出结果。虽然人们可以采取不同的格式化风格，
 但如果不这样做的话会更好。假如所有人都遵循相同的风格，那么花费在该问题上的时间将会更少。
-问题在于如何实现这个理想，而无需一个冗长的规范风格手册。
+问题在于如何实现这个理想，而无需一个冗长的风格规范手册。
 </p>
 
 <div class="english">
@@ -148,7 +148,7 @@ declaration
 </div>
 
 <p>
-举例来说，对于结构中字段的注释，并不需要花时间将它们对齐。<code>gofmt</code>
+举例来说，对于结构中字段的注释，并不需要花时间将它们对齐，<code>gofmt</code>
 会为你做这些事。对于给定的声明
 </p>
 
@@ -212,7 +212,7 @@ Some formatting details remain.  Very briefly,
 </div>
 
 <p>
-一些格式化细节需要保留。这些都非常简单明了：
+还有一些格式化的详细说明，这些都非常简单明了：
 </p>
 
 <div class="english">
@@ -242,7 +242,8 @@ x&lt;&lt;8 + y&lt;&lt;16
 
 <dl>
     <dt>缩进</dt>
-    <dd>我们使用制表符（tab）缩进，<code>gofmt</code> 默认也使用它。你也可以特意使用空格。
+    <dd>
+    我们使用制表符（tab）缩进，<code>gofmt</code> 默认也使用它。当然你也可以特意使用空格。
     </dd>
     <dt>行的长度</dt>
     <dd>
@@ -256,7 +257,7 @@ x&lt;&lt;8 + y&lt;&lt;16
 <pre>
 x&lt;&lt;8 + y&lt;&lt;16
 </pre>
-    所表达的意思与其中空格暗示的一样。
+    所表达的意思与其中空格所暗示的一样。
     </dd>
 </dl>
 
@@ -294,7 +295,7 @@ quality of the documentation <code>godoc</code> produces.
 </div>
 
 <p>
-<code>godoc</code> 既是一个程序，又是一个Web服务器，它对Go的源码进行处理，提取其包中的文档内容。
+<code>godoc</code> 既是一个程序，又是一个Web服务器，它对Go的源码进行处理，提取包中的文档内容。
 出现在顶级声明之前且中间没有新行的注释，将与该声明一起被提取出来，作为该条目的解释性文本。
 这些注释的内容和样式决定了 <code>godoc</code> 生成的文档质量。
 </p>
@@ -315,7 +316,7 @@ should set up the detailed documentation that follows.
 <p>
 每个包都应该有一个<i>包注释</i>，即放置在包子句前的一个块注释。对于包含多个文件的包，
 包注释只需出现在其中的任何一个文件中均可。包注释应在整体上对该包进行介绍，并提供包的相关信息。
-它将出现在 <code>godoc</code> 页面中的最前面，并为其下的内容建立详细的文档。
+它将出现在 <code>godoc</code> 页面中的最上面，并为其下的内容建立详细的文档。
 </p>
 
 <div class="english">
@@ -346,7 +347,7 @@ package regexp
 
 <pre>
 /*
-    包regexp为正则表达式实现了一个简单的库。
+    regexp包为正则表达式实现了一个简单的库。
 
     该正则表达式接受的语法为：
 
@@ -374,7 +375,7 @@ If the package is simple, the package comment can be brief.
 </div>
 
 <p>
-如果包很简单，则该包的注释也可以很简洁。
+如果包很简单，那么该包的注释也可以很简洁。
 </p>
 
 <div class="english">
@@ -385,7 +386,7 @@ If the package is simple, the package comment can be brief.
 </div>
 
 <pre>
-// path包实现了一些常用的工具，以用于操作反斜杠分隔的路径。
+// path包实现了一些常用的工具，以便于操作用反斜杠分隔的路径。
 </pre>
 
 <div class="english">
@@ -405,7 +406,7 @@ fold long lines, and so on.
 </div>
 
 <p>
-注释无需额外的格式化，如星号横幅等。生成的输出甚至可能无法以等宽字体显示，因此不要依赖于空格对齐，
+注释无需额外的格式化，如星号横幅等。生成的输出甚至会无法以等宽字体显示，因此不要依赖于空格对齐，
 <code>godoc</code> 和 <code>gofmt</code> 一样，会自动对这些文档进行处理。注释是不会被解析的纯文本，
 因此像HTML或其它类似于 <code>_this_</code> 的东西将按照<i>原样</i>输出，因此不应使用它们。
 根据上下文，<code>godoc</code> 可能不会重新格式化注释，因此必须保证它们看上去是直白的：
@@ -734,6 +735,10 @@ call your string-converter method <code>String</code> not <code>ToString</code>.
 请将你的字符串转换方法称为 <code>String</code> 而非 <code>ToString</code>。
 </p>
 
+<div class="english">
+<h3 id="mixed-caps">MixedCaps</h3>
+</div>
+
 <h3 id="混合大小写">混合大小写</h3>
 
 <div class="english">
@@ -1020,6 +1025,14 @@ codeUsing(f, d)
 </div>
 
 <h3 id="重复声明">重复声明</h3>
+
+<div class="english">
+<p>
+An aside: The last example in the previous section demonstrates a detail of how the
+<code>:=</code> short declaration form works.
+The declaration that calls <code>os.Open</code> reads,
+</p>
+</div>
 
 <p>
 顺便说一下：上一节中的最后一个例子展示了短声明形式 <code>:=</code> 的详细工作方式。
@@ -3239,8 +3252,8 @@ sets of values.
 </div>
 
 <p>
-在Go中，枚举常量使用枚举符 <code>iota</code> 创建。由于 <code>iota</code>
-可为表达式的一部分，并且表达式可以被隐式地重复，这样就更容易构建复杂的值集。
+在Go中，枚举常量使用枚举器 <code>iota</code> 创建。由于 <code>iota</code>
+可为表达式的一部分，而表达式可以被隐式地重复，这样也就更容易构建复杂的值的集合。
 </p>
 
 {{code "/doc/progs/eff_bytesize.go" `/^type ByteSize/` `/^\)/`}}
@@ -3285,7 +3298,7 @@ because it calls <code>Sprintf</code> with <code>%f</code>.
 </div>
 
 <p>
-注意，在 <code>String</code> 的实现方法中调用 <code>Sprintf</code> 这类函数完全没有问题，
+注意，在 <code>String</code> 方法的实现中调用 <code>Sprintf</code> 这类函数完全没有问题，
 但要知道在使用字符串格式（<code>%s</code>、<code>%q</code>、<code>%v</code>、<code>%x</code>
 或 <code>%X</code>）嵌套调用 <code>Sprintf</code> 时可导致 <code>String</code>
 方法被多次递归调用。上面所实现的 <code>ByteSize</code> 的 <code>String</code>
@@ -3486,8 +3499,6 @@ like a standard <code>Write</code> method, like this,
 </div>
 
 <p>
-In fact, we can do even better.  If we modify our function so it looks
-like a standard <code>Write</code> method, like this,
 事实上，我们可以做得更好。我们可以修改我们函数使其看起来更像一个标准的 <code>Write</code>
 方法，就像这样：
 </p>
@@ -3523,7 +3534,6 @@ print into one.
 <p>
 这样类型 <code>*ByteSlice</code> 就满足标准的接口 <code>io.Writer</code> 了，
 这样做有其方便之处。例如，我们可以将它用于打印。
-print into one.
 </p>
 
 <pre>
@@ -3856,7 +3866,7 @@ as a <code>Stream</code>, it won't notice the difference.
 <p>
 <code>NewCTR</code> 使用的加密算法和数据源并没有被特别限定，而是任何 <code>Block</code>
 接口的实现和任意的 <code>Stream</code>。由于它们返回了接口值，
-将CTR加密替换为其他的加密模式将只是一个局部更改。必须要修改其构造器调用，
+将CTR加密替换为其它的加密模式将只是一个局部更改。必须要修改其构造器调用，
 但由于外围的代码仅将结果看作一个 <code>Stream</code>，它将不会在意已完成的改动。
 </p>
 

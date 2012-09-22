@@ -11,7 +11,6 @@
 
 enum {
 	Debug = 0,
-	PtrSize = sizeof(void*),
 	DebugMark = 0,  // run second pass to check mark
 	DataBlock = 8*1024,
 
@@ -1028,9 +1027,7 @@ runfinq(void)
 		finq = nil;
 		if(fb == nil) {
 			fingwait = 1;
-			g->status = Gwaiting;
-			g->waitreason = "finalizer wait";
-			runtime·gosched();
+			runtime·park(nil, nil, "finalizer wait");
 			continue;
 		}
 		for(; fb; fb=next) {

@@ -1,12 +1,12 @@
 <!--{
 	"Title": "Go编程语言规范",
-	"Subtitle": "版本：2012年9月7日 || 译者：Oling Cat <olingcat@gmail.com>",
+	"Subtitle": "版本：2012年9月18日 || 译者：Oling Cat <olingcat@gmail.com>",
 	"Path": "/ref/spec"
 }-->
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of September 12, 2012",
+	"Subtitle": "Version of September 18, 2012",
 	"Path": "/ref/spec"
 }-->
 
@@ -188,14 +188,15 @@ Source code is Unicode text encoded in
 canonicalized, so a single accented code point is distinct from the
 same character constructed from combining an accent and a letter;
 those are treated as two code points.  For simplicity, this document
-will use the term <i>character</i> to refer to a Unicode code point.
+will use the unqualified term <i>character</i> to refer to a Unicode code point
+in the source text.
 </p>
 </div>
 
 <p>
 源码是采用<a href="http://en.wikipedia.org/wiki/UTF-8">UTF-8</a>编码的Unicode文本。
 该文本是非商业化的，因此单一的着重号码点不同于结合了字母与着重号的字符结构，
-那些应当视为两个码点。为简单起见，本文档将使用术语<i>字符</i>来代替Unicode码点。
+那些应当视为两个码点。为简单起见，本文档将使用未限定的术语<i>字符</i>在源文本中代替Unicode码点。
 </p>
 
 <div class="english">
@@ -1570,35 +1571,37 @@ particular architecture.
 <div class="english">
 <p>
 A <i>string type</i> represents the set of string values.
-Strings behave like slices of bytes but are immutable: once created,
+A string value is a (possibly empty) sequence of bytes.
+Strings are immutable: once created,
 it is impossible to change the contents of a string.
 The predeclared string type is <code>string</code>.
 </p>
 </div>
 
 <p>
-<i>字符串类型</i> 表示字符串值的集。字符串的行为类似于字节数组，但它是不可变的：
+<i>字符串类型</i> 表示字符串值的集。字符串的值为（可能为空的）字节序列。字符串是不可变的：
 一旦被创建，字符串的内容就不能更改。预声明的字符串类型为 <code>string</code>。
 </p>
 
 <div class="english">
 <p>
-The elements of strings have type <code>byte</code> and may be
-accessed using the usual <a href="#Indexes">indexing operations</a>.  It is
-illegal to take the address of such an element; if
-<code>s[i]</code> is the <i>i</i>th byte of a
-string, <code>&amp;s[i]</code> is invalid.  The length of string
-<code>s</code> can be discovered using the built-in function
-<code>len</code>. The length is a compile-time constant if <code>s</code>
-is a string literal.
+The length of a string <code>s</code> (its size in bytes) can be discovered using
+the built-in function <a href="#Length_and_capacity"><code>len</code></a>.
+The length is a compile-time constant if the string is a constant.
+A string's bytes can be accessed by integer indices 0 through
+<code>len(s)-1</code> (§<a href="#Indexes">Indexes</a>).
+It is illegal to take the address of such an element; if
+<code>s[i]</code> is the <code>i</code>'th byte of a
+string, <code>&amp;s[i]</code> is invalid.
 </p>
 </div>
 
 <p>
-字符串元素的类型为 <code>byte</code>，通常使用<a href="#下标">下标操作</a>访问。
-要获取这种元素的地址是非法的；若 <code>s[i]</code> 为字符串中的第 <i>i</i>个字节，
-<code>&amp;s[i]</code> 操作是无效的。字符串 <code>s</code> 的长度可使用内建函数
-<code>len</code>获取。若 <code>s</code> 为一个字符串字面，其长度则为一个编译时常量。
+字符串 <code>s</code> 的长度（即其字节大小）可使用内建函数
+<a href="#长度与容量"><code>len</code></a> 获取。若该字符串为常量，则其长度即为编译时常量。
+字符串的字节可通过整数下标0至 <code>len(s)-1</code> 访问（§<a href="#下标">下标</a>）。
+获取这样一个元素的地址是非法的；若 <code>s[i]</code> 为字符串的第 <code>i</code>
+个字节，<code>&amp;s[i]</code> 就是无效的。
 </p>
 
 
@@ -1638,7 +1641,7 @@ ElementType = Type .
 The length is part of the array's type and must be a
 <a href="#Constant_expressions">constant expression</a> that evaluates to a non-negative
 integer value.  The length of array <code>a</code> can be discovered
-using the built-in function <a href="#Length_and_capacity"><code>len(a)</code></a>.
+using the built-in function <a href="#Length_and_capacity"><code>len</code></a>.
 The elements can be indexed by integer
 indices 0 through <code>len(a)-1</code> (§<a href="#Indexes">Indexes</a>).
 Array types are always one-dimensional but may be composed to form
@@ -1656,7 +1659,7 @@ multi-dimensional types.
 
 <p>
 长度是数组类型的一部分，且必须是求值结果为非负整数值的<a href="#常量表达式">常量表达式</a>。
-数组 <code>a</code> 的长度可使用内建函数 <a href="#长度与容量"><code>len(a)</code></a>获取，
+数组 <code>a</code> 的长度可使用内建函数 <a href="#长度与容量"><code>len</code></a>获取，
 其元素可通过整数下标 0 到 <code>len(a)-1</code> 索引（§<a href="#下标">下标</a>）。
 数组类型总是一维的，但可组合构成多维的类型。
 </p>
@@ -1701,7 +1704,7 @@ SliceType = "[" "]" ElementType .
 <p>
 Like arrays, slices are indexable and have a length.  The length of a
 slice <code>s</code> can be discovered by the built-in function
-<a href="#Length_and_capacity"><code>len(s)</code></a>; unlike with arrays it may change during
+<a href="#Length_and_capacity"><code>len</code></a>; unlike with arrays it may change during
 execution.  The elements can be addressed by integer indices 0
 through <code>len(s)-1</code> (§<a href="#Indexes">Indexes</a>).  The slice index of a
 given element may be less than the index of the same element in the
@@ -1711,7 +1714,7 @@ underlying array.
 
 <p>
 类似于数组，切片是可索引的且拥有一个长度。切片 <code>s</code> 的长度可通过内建函数
-<a href="#长度与容量"><code>len(s)</code></a>获取；不同于数组的是，切片可在执行过程中被改变，
+<a href="#长度与容量"><code>len</code></a>获取；不同于数组的是，切片可在执行过程中被改变，
 其元素可通过整数下标 0 到 <code>len(s)-1</code> 寻址（§<a href="#下标">下标</a>）。
 给定元素的切片下标可能小于它在其基本数组中的下标。
 </p>
@@ -2468,7 +2471,7 @@ map[string]interface{}
 <p>
 The number of map elements is called its length.
 For a map <code>m</code>, it can be discovered using the
-built-in function <a href="#Length_and_capacity"><code>len(m)</code></a>
+built-in function <a href="#Length_and_capacity"><code>len</code></a>
 and may change during execution. Elements may be added during execution
 using <a href="#Assignments">assignments</a> and retrieved with
 <a href="#Indexes">index</a> expressions; they may be removed with the
@@ -2478,7 +2481,7 @@ using <a href="#Assignments">assignments</a> and retrieved with
 
 <p>
 元素的数量称为长度。
-对于映射 <code>m</code>，其长度可使用内建函数 <a href="#长度与容量"><code>len(m)</code></a>
+对于映射 <code>m</code>，其长度可使用内建函数 <a href="#长度与容量"><code>len</code></a>
 获取并可在执行时更改。元素可在执行时使用<a href="#赋值">赋值</a>来添加并通过
 <a href="#索引">索引</a> 表达式来检索；它们也可通过内建函数
 <a href="#映射元素的删除"><code>delete</code></a> 删除。
@@ -5809,7 +5812,7 @@ be replaced by a bitwise AND operation:
 
 <p>
 若被除数为零，就会出现一个<a href="#运行时恐慌">运行时恐慌</a>。
-若被除数为正，且除数为2的常量次幂，则该除法可被向右移位取代，且计算其商可被按位“与”操作取代：
+若被除数为正，且除数为2的常量次幂，则该除法可被向右移位取代，且计算其余数可被按位“与”操作取代：
 </p>
 
 <pre>
@@ -7378,7 +7381,9 @@ Error: log.Panic("error encountered")
 
 <div class="english">
 <p>
-Function calls, method calls, and receive operations
+With the exception of specific built-in functions,
+function and method <a href="#Calls">calls</a> and
+<a href="#Receive_operator">receive operations</a>
 can appear in statement context. Such statements may be parenthesized.
 </p>
 
@@ -7388,18 +7393,45 @@ ExpressionStmt = Expression .
 </div>
 
 <p>
-函数调用、方法调用与接收操作可出现在语句上下文中。这样的语句可加小括号。
+除特殊的内建函数外，函数与方法的<a href="#调用">调用</a>及
+<a href="#接收操作">接收操作</a>均可出现在语句上下文中。这样的语句可能需要加小括号。
 </p>
 
 <pre class="ebnf">
 表达式语句 = 表达式 .
 </pre>
 
+<div class="english">
+<p>
+The following built-in functions are not permitted in statement context:
+</p>
+</div>
+
+<p>
+以下内建函数不允许出现在语句上下文中：
+</p>
+
+<pre>
+append cap complex imag len make new real
+unsafe.Alignof unsafe.Offsetof unsafe.Sizeof
+</pre>
+
+<div class="english">
 <pre>
 h(x+y)
 f.Close()
 &lt;-ch
 (&lt;-ch)
+len("foo")  // illegal if len is the built-in function
+</pre>
+</div>
+
+<pre>
+h(x+y)
+f.Close()
+&lt;-ch
+(&lt;-ch)
+len("foo")  // 若len为内建函数即为非法
 </pre>
 
 
@@ -10618,26 +10650,28 @@ a <code>Pointer</code> and vice versa.
 
 <div class="english">
 <p>
-The function <code>Sizeof</code> takes an expression denoting a
-variable of any type and returns the size of the variable in bytes.
+The functions <code>Alignof</code> and <code>Sizeof</code> take an expression <code>x</code>
+of any type and return the alignment or size, respectively, of a hypothetical variable <code>v</code>
+as if <code>v</code> was declared via <code>var v = x</code>.
 </p>
 </div>
 
 <p>
-函数 <code>Sizeof</code> 接受一个表示任何类型变量的表达式并返回其字节大小。
+函数 <code>Alignof</code> 与 <code>Sizeof</code> 接受一个任何类型的表达式 <code>x</code>，
+就好像通过 <code>var v = x</code> 声明的变量 <code>v</code> 一样，分别返回其列数或大小。
 </p>
 
 <div class="english">
 <p>
-The function <code>Offsetof</code> takes a selector (§<a href="#Selectors">Selectors</a>) denoting a struct
-field of any type and returns the field offset in bytes relative to the
+The function <code>Offsetof</code> takes a (possibly parenthesized) <a href="#Selectors">selector</a>
+denoting a struct field of any type and returns the field offset in bytes relative to the
 struct's address.
 For a struct <code>s</code> with field <code>f</code>:
 </p>
 </div>
 
 <p>
-函数 <code>Offsetof</code> 接受一个表示任何类型结构字段的选择者（§<a href="#选择者">选择者</a>）
+函数 <code>Offsetof</code> 接受一个表示任何类型结构字段的（可能带括号的）<a href="#选择者">选择者</a>
 并返回该字段相对于该结构地址偏移的字节。对于带字段 <code>f</code> 的结构 <code>s</code> ：
 </p>
 

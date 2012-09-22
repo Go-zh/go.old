@@ -264,13 +264,11 @@ func reusePackage(p *Package, stk *importStack) *Package {
 // isGoTool is the list of directories for Go programs that are installed in
 // $GOROOT/pkg/tool.
 var isGoTool = map[string]bool{
-	"cmd/api":      true,
-	"cmd/cgo":      true,
-	"cmd/fix":      true,
-	"cmd/vet":      true,
-	"cmd/yacc":     true,
-	"exp/gotype":   true,
-	"exp/ebnflint": true,
+	"cmd/api":  true,
+	"cmd/cgo":  true,
+	"cmd/fix":  true,
+	"cmd/vet":  true,
+	"cmd/yacc": true,
 }
 
 // expandScanner expands a scanner.List error into all the errors in the list.
@@ -321,7 +319,7 @@ func (p *Package) load(stk *importStack, bp *build.Package, err error) *Package 
 			elem = full
 		}
 		p.target = filepath.Join(p.build.BinDir, elem)
-		if p.Goroot && isGoTool[p.ImportPath] {
+		if p.Goroot && (isGoTool[p.ImportPath] || strings.HasPrefix(p.ImportPath, "exp/")) {
 			p.target = filepath.Join(gorootPkg, "tool", full)
 		}
 		if buildContext.GOOS == "windows" {
@@ -344,6 +342,11 @@ func (p *Package) load(stk *importStack, bp *build.Package, err error) *Package 
 	// Everything depends on runtime, except runtime and unsafe.
 	if !p.Standard || (p.ImportPath != "runtime" && p.ImportPath != "unsafe") {
 		importPaths = append(importPaths, "runtime")
+		// When race detection enabled everything depends on runtime/race.
+		// Exclude runtime/cgo and cmd/cgo to avoid circular dependencies.
+		if buildRace && (!p.Standard || (p.ImportPath != "runtime/race" && p.ImportPath != "runtime/cgo" && p.ImportPath != "cmd/cgo")) {
+			importPaths = append(importPaths, "runtime/race")
+		}
 	}
 
 	// Build list of full paths to all Go files in the package,

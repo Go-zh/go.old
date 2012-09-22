@@ -218,21 +218,20 @@ Windows用户应当阅读<a href="#环境变量">在Windows下设置环境变量
 </p>
 
 <div class="english">
-<h3 id="freebsd_linux">FreeBSD and Linux</h3>
+<h3 id="freebsd_linux">FreeBSD, Linux, and Mac OS X tarballs</h3>
 </div>
 
-<h3 id="freebsd与linux">FreeBSD与Linux</h3>
+<h3 id="freebsd与linux">FreeBSD、Linux与Mac OS X压缩包</h3>
 
 <div class="english">
 <p>
-On FreeBSD and Linux, if you are upgrading from an older version of Go you must
+If you are upgrading from an older version of Go you must
 first remove the existing version from <code>/usr/local/go</code>:
 </p>
 </div>
 
 <p>
-在FreeBSD于Linux上，如果你从Go的老版本升级，那么首先你必须从
-<code>/usr/local/go</code> 中移除已存在的版本：
+如果你要从Go的老版本升级，那么首先必须从 <code>/usr/local/go</code> 中移除已存在的版本：
 </p>
 
 <pre>
@@ -241,18 +240,18 @@ rm -r /usr/local/go
 
 <div class="english">
 <p>
-Extract <a href="http://code.google.com/p/go/downloads/list?q=OpSys-FreeBSD+OR+OpSys-Linux">the archive</a>
+Extract <a href="http://code.google.com/p/go/downloads/list?q=OpSys-FreeBSD+OR+OpSys-Linux+OR+OpSys-OSX+AND+Type-Archive">the archive</a>
 into <code>/usr/local</code>, creating a Go tree in <code>/usr/local/go</code>:
 </p>
 </div>
 
 <p>
-将<a href="http://code.google.com/p/go/downloads/list?q=OpSys-FreeBSD+OR+OpSys-Linux">此压缩包</a>提取到
+将<a href="http://code.google.com/p/go/downloads/list?q=OpSys-FreeBSD+OR+OpSys-Linux+OR+OpSys-OSX+AND+Type-Archive">此压缩包</a>提取到
 <code>/usr/local</code> 目录，在 <code>/usr/local/go</code> 中创建Go目录树：
 </p>
 
 <pre>
-tar -C /usr/local -xzf go.release.go1.tar.gz
+tar -C /usr/local -xzf go1.0.2.linux-amd64.tar.gz
 </pre>
 
 <div class="english">
@@ -282,18 +281,22 @@ variable. You can do this by adding this line to your <code>/etc/profile</code>
 export PATH=$PATH:/usr/local/go/bin
 </pre>
 
-<h3 id="osx">Mac OS X</h3>
+<div class="english">
+<h3 id="osx">Mac OS X package installer</h3>
+</div>
+
+<h3 id="osx">Mac OS X安装包</h3>
 
 <div class="english">
 <p>
-Open the <a href="http://code.google.com/p/go/downloads/list?q=OpSys-Darwin">package file</a>
+Open the <a href="http://code.google.com/p/go/downloads/list?q=OpSys-Darwin+AND+Type-Installer">package file</a>
 and follow the prompts to install the Go tools.
 The package installs the Go distribution to <code>/usr/local/go</code>.
 </p>
 </div>
 
 <p>
-打开此<a href="http://code.google.com/p/go/downloads/list?q=OpSys-Darwin">包文件</a>
+打开此<a href="http://code.google.com/p/go/downloads/list?q=OpSys-Darwin+AND+Type-Installer">包文件</a>
 并跟随提示来安装Go工具。该包会将Go发行版安装到 <code>/usr/local/go</code> 中。
 </p>
 
