@@ -616,16 +616,17 @@ func (p *Package) loadDWARF(f *File, names []*Name) {
 			n.FuncType = conv.FuncType(f, pos)
 		} else {
 			n.Type = conv.Type(types[i], pos)
-			// Prefer debug data over DWARF debug output, if we have it.
-			if n.Kind == "const" && i < len(enumVal) {
-				n.Const = fmt.Sprintf("%#x", enumVal[i])
-			} else if enums[i] != 0 && n.Type.EnumValues != nil {
+			if enums[i] != 0 && n.Type.EnumValues != nil {
 				k := fmt.Sprintf("__cgo_enum__%d", i)
 				n.Kind = "const"
 				n.Const = fmt.Sprintf("%#x", n.Type.EnumValues[k])
 				// Remove injected enum to ensure the value will deep-compare
 				// equally in future loads of the same constant.
 				delete(n.Type.EnumValues, k)
+			}
+			// Prefer debug data over DWARF debug output, if we have it.
+			if n.Kind == "const" && i < len(enumVal) {
+				n.Const = fmt.Sprintf("%#x", enumVal[i])
 			}
 		}
 	}
@@ -829,15 +830,25 @@ func (p *Package) gccDebug(stdin []byte) (*dwarf.Data, binary.ByteOrder, []byte)
 		return d, f.ByteOrder, data
 	}
 
-	// Can skip debug data block in PE for now.
-	// The DWARF information is complete.
-
 	if f, err := pe.Open(gccTmp()); err == nil {
 		d, err := f.DWARF()
 		if err != nil {
 			fatalf("cannot load DWARF output from %s: %v", gccTmp(), err)
 		}
-		return d, binary.LittleEndian, nil
+		var data []byte
+		for _, s := range f.Symbols {
+			if s.Name == "_"+"__cgodebug_data" {
+				if i := int(s.SectionNumber) - 1; 0 <= i && i < len(f.Sections) {
+					sect := f.Sections[i]
+					if s.Value < sect.Size {
+						if sdat, err := sect.Data(); err == nil {
+							data = sdat[s.Value:]
+						}
+					}
+				}
+			}
+		}
+		return d, binary.LittleEndian, data
 	}
 
 	fatalf("cannot parse gcc output %s as ELF, Mach-O, PE object", gccTmp())
@@ -1189,11 +1200,12 @@ func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
 		t.Go = name // publish before recursive calls
 		goIdent[name.Name] = name
 		switch dt.Kind {
-		case "union", "class":
+		case "class", "union":
 			t.Go = c.Opaque(t.Size)
 			if t.C.Empty() {
 				t.C.Set("typeof(unsigned char[%d])", t.Size)
 			}
+			t.Align = 1 // TODO: should probably base this on field alignment.
 			typedef[name.Name] = t
 		case "struct":
 			g, csyntax, align := c.Struct(dt, pos)
