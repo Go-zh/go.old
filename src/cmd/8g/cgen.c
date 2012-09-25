@@ -342,9 +342,8 @@ cgen(Node *n, Node *res)
 		}
 		if(isslice(nl->type)) {
 			igen(nl, &n1, res);
-			n1.op = OINDREG;
 			n1.type = types[TUINT32];
-			n1.xoffset = Array_cap;
+			n1.xoffset += Array_cap;
 			gmove(&n1, res);
 			regfree(&n1);
 			break;
@@ -509,6 +508,20 @@ agen(Node *n, Node *res)
 	while(n->op == OCONVNOP)
 		n = n->left;
 
+	if(isconst(n, CTNIL) && n->type->width > widthptr) {
+		// Use of a nil interface or nil slice.
+		// Create a temporary we can take the address of and read.
+		// The generated code is just going to panic, so it need not
+		// be terribly efficient. See issue 3670.
+		tempname(&n1, n->type);
+		clearfat(&n1);
+		regalloc(&n2, types[tptr], res);
+		gins(ALEAL, &n1, &n2);
+		gmove(&n2, res);
+		regfree(&n2);
+		return;
+	}
+		
 	// addressable var is easy
 	if(n->addable) {
 		if(n->op == OREGISTER)
@@ -767,15 +780,48 @@ agen(Node *n, Node *res)
 void
 igen(Node *n, Node *a, Node *res)
 {
-	Node n1;
 	Type *fp;
 	Iter flist;
-  
+	Node n1;
+
 	switch(n->op) {
 	case ONAME:
 		if((n->class&PHEAP) || n->class == PPARAMREF)
 			break;
 		*a = *n;
+		return;
+
+	case OINDREG:
+		// Increase the refcount of the register so that igen's caller
+		// has to call regfree.
+		if(n->val.u.reg != D_SP)
+			reg[n->val.u.reg]++;
+		*a = *n;
+		return;
+
+	case ODOT:
+		igen(n->left, a, res);
+		a->xoffset += n->xoffset;
+		a->type = n->type;
+		return;
+
+	case ODOTPTR:
+		regalloc(a, types[tptr], res);
+		cgen(n->left, a);
+		if(n->xoffset != 0) {
+			// explicit check for nil if struct is large enough
+			// that we might derive too big a pointer.
+			if(n->left->type->type->width >= unmappedzero) {
+				n1 = *a;
+				n1.op = OINDREG;
+				n1.type = types[TUINT8];
+				n1.xoffset = 0;
+				gins(ATESTB, nodintconst(0), &n1);
+			}
+		}
+		a->op = OINDREG;
+		a->xoffset += n->xoffset;
+		a->type = n->type;
 		return;
 
 	case OCALLFUNC:
@@ -1077,31 +1123,43 @@ bgen(Node *n, int true, int likely, Prog *to)
 		a = optoas(a, nr->type);
 
 		if(nr->ullman >= UINF) {
-			tempname(&n1, nl->type);
-			tempname(&tmp, nr->type);
-			cgen(nl, &n1);
-			cgen(nr, &tmp);
+			if(!nl->addable) {
+				tempname(&n1, nl->type);
+				cgen(nl, &n1);
+				nl = &n1;
+			}
+			if(!nr->addable) {
+				tempname(&tmp, nr->type);
+				cgen(nr, &tmp);
+				nr = &tmp;
+			}
 			regalloc(&n2, nr->type, N);
-			cgen(&tmp, &n2);
+			cgen(nr, &n2);
 			goto cmp;
 		}
 
-		tempname(&n1, nl->type);
-		cgen(nl, &n1);
+		if(!nl->addable) {
+			tempname(&n1, nl->type);
+			cgen(nl, &n1);
+			nl = &n1;
+		}
 
 		if(smallintconst(nr)) {
-			gins(optoas(OCMP, nr->type), &n1, nr);
+			gins(optoas(OCMP, nr->type), nl, nr);
 			patch(gbranch(a, nr->type, likely), to);
 			break;
 		}
 
-		tempname(&tmp, nr->type);
-		cgen(nr, &tmp);
+		if(!nr->addable) {
+			tempname(&tmp, nr->type);
+			cgen(nr, &tmp);
+			nr = &tmp;
+		}
 		regalloc(&n2, nr->type, N);
-		gmove(&tmp, &n2);
+		gmove(nr, &n2);
 
 cmp:
-		gins(optoas(OCMP, nr->type), &n1, &n2);
+		gins(optoas(OCMP, nr->type), nl, &n2);
 		patch(gbranch(a, nr->type, likely), to);
 		regfree(&n2);
 		break;

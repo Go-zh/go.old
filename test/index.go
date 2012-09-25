@@ -4,6 +4,9 @@
 // ./$A.out -pass 2 >tmp.go && errchk $G -e tmp.go
 // rm -f tmp.go $A.out1
 
+// NOTE: This test is not run by 'run.go' and so not run by all.bash.
+// To run this test you must use the ./run shell script.
+
 // Copyright 2010 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -18,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 )
 
 const prolog = `
@@ -221,6 +225,10 @@ func main() {
 				// the next pass from running.
 				// So run it as a separate check.
 				thisPass = 1
+			} else if i == "i64big" || i == "i64bigger" && runtime.GOARCH == "amd64" {
+				// On amd64, these huge numbers do fit in an int, so they are not
+				// rejected at compile time.
+				thisPass = 0
 			} else {
 				thisPass = 2
 			}

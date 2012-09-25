@@ -860,7 +860,7 @@ addmove(Reg *r, int bn, int rn, int f)
 	p1->as = AMOVL;
 	switch(v->etype) {
 	default:
-		fatal("unknown type\n");
+		fatal("unknown type %E", v->etype);
 	case TINT8:
 	case TUINT8:
 	case TBOOL:
@@ -945,7 +945,8 @@ Bits
 mkvar(Reg *r, Adr *a)
 {
 	Var *v;
-	int i, t, n, et, z, w, flag;
+	int i, t, n, et, z, flag;
+	int64 w;
 	uint32 regu;
 	int32 o;
 	Bits bit;
@@ -998,7 +999,7 @@ mkvar(Reg *r, Adr *a)
 	o = a->offset;
 	w = a->width;
 	if(w < 0)
-		fatal("bad width %d for %D", w, a);
+		fatal("bad width %lld for %D", w, a);
 
 	flag = 0;
 	for(i=0; i<nvar; i++) {
@@ -1041,7 +1042,7 @@ mkvar(Reg *r, Adr *a)
 	v->node = node;
 
 	if(debug['R'])
-		print("bit=%2d et=%2d w=%d+%d %#N %D flag=%d\n", i, et, o, w, node, a, v->addr);
+		print("bit=%2d et=%2E w=%d+%d %#N %D flag=%d\n", i, et, o, w, node, a, v->addr);
 
 	ostats.nvar++;
 
@@ -1600,16 +1601,16 @@ BtoR(int32 b)
 
 /*
  *	bit	reg
- *	16	X5 (FREGMIN)
+ *	16	X0
  *	...
- *	26	X15 (FREGEXT)
+ *	31	X15
  */
 int32
 FtoB(int f)
 {
-	if(f < FREGMIN || f > FREGEXT)
+	if(f < D_X0 || f > D_X15)
 		return 0;
-	return 1L << (f - FREGMIN + 16);
+	return 1L << (f - D_X0 + 16);
 }
 
 int
@@ -1619,7 +1620,7 @@ BtoF(int32 b)
 	b &= 0xFFFF0000L;
 	if(b == 0)
 		return 0;
-	return bitno(b) - 16 + FREGMIN;
+	return bitno(b) - 16 + D_X0;
 }
 
 void

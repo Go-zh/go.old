@@ -1,4 +1,4 @@
-// errchk -0 $G -m -l $D/$F.go
+// errorcheck -0 -m -l
 
 // Copyright 2010 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -1210,4 +1210,22 @@ func foo137() {
 			_ = r
 		}()
 	}()
+}
+
+func foo138() *byte {
+	type T struct {
+		x [1]byte
+	}
+	t := new(T) // ERROR "new.T. escapes to heap"
+	return &t.x[0] // ERROR "&t.x.0. escapes to heap"
+}
+
+func foo139() *byte {
+	type T struct {
+		x struct {
+			y byte
+		}
+	}
+	t := new(T) // ERROR "new.T. escapes to heap"
+	return &t.x.y // ERROR "&t.x.y escapes to heap"
 }

@@ -547,6 +547,82 @@ func (v Value) call(method string, in []Value) []Value {
 	return ret
 }
 
+// callReflect is the call implementation used by a function
+// returned by MakeFunc. In many ways it is the opposite of the
+// method Value.call above. The method above converts a call using Values
+// into a call of a function with a concrete argument frame, while
+// callReflect converts a call of a function with a concrete argument
+// frame into a call using Values.
+// It is in this file so that it can be next to the call method above.
+// The remainder of the MakeFunc implementation is in makefunc.go.
+func callReflect(ftyp *funcType, f func([]Value) []Value, frame unsafe.Pointer) {
+	// Copy argument frame into Values.
+	ptr := frame
+	off := uintptr(0)
+	in := make([]Value, 0, len(ftyp.in))
+	for _, arg := range ftyp.in {
+		typ := toCommonType(arg)
+		off += -off & uintptr(typ.align-1)
+		v := Value{typ, nil, flag(typ.Kind()) << flagKindShift}
+		if typ.size <= ptrSize {
+			// value fits in word.
+			v.val = unsafe.Pointer(loadIword(unsafe.Pointer(uintptr(ptr)+off), typ.size))
+		} else {
+			// value does not fit in word.
+			// Must make a copy, because f might keep a reference to it,
+			// and we cannot let f keep a reference to the stack frame
+			// after this function returns, not even a read-only reference.
+			v.val = unsafe_New(typ)
+			memmove(v.val, unsafe.Pointer(uintptr(ptr)+off), typ.size)
+			v.flag |= flagIndir
+		}
+		in = append(in, v)
+		off += typ.size
+	}
+
+	// Call underlying function.
+	out := f(in)
+	if len(out) != len(ftyp.out) {
+		panic("reflect: wrong return count from function created by MakeFunc")
+	}
+
+	// Copy results back into argument frame.
+	if len(ftyp.out) > 0 {
+		off += -off & (ptrSize - 1)
+		for i, arg := range ftyp.out {
+			typ := toCommonType(arg)
+			v := out[i]
+			if v.typ != typ {
+				panic("reflect: function created by MakeFunc using " + funcName(f) +
+					" returned wrong type: have " +
+					out[i].typ.String() + " for " + typ.String())
+			}
+			if v.flag&flagRO != 0 {
+				panic("reflect: function created by MakeFunc using " + funcName(f) +
+					" returned value obtained from unexported field")
+			}
+			off += -off & uintptr(typ.align-1)
+			addr := unsafe.Pointer(uintptr(ptr) + off)
+			if v.flag&flagIndir == 0 {
+				storeIword(addr, iword(v.val), typ.size)
+			} else {
+				memmove(addr, v.val, typ.size)
+			}
+			off += typ.size
+		}
+	}
+}
+
+// funcName returns the name of f, for use in error messages.
+func funcName(f func([]Value) []Value) string {
+	pc := *(*uintptr)(unsafe.Pointer(&f))
+	rf := runtime.FuncForPC(pc)
+	if rf != nil {
+		return rf.Name()
+	}
+	return "closure"
+}
+
 // Cap returns v's capacity.
 // It panics if v's Kind is not Array, Chan, or Slice.
 func (v Value) Cap() int {
@@ -930,9 +1006,9 @@ func (v Value) Len() int {
 		tt := (*arrayType)(unsafe.Pointer(v.typ))
 		return int(tt.len)
 	case Chan:
-		return int(chanlen(v.iword()))
+		return chanlen(v.iword())
 	case Map:
-		return int(maplen(v.iword()))
+		return maplen(v.iword())
 	case Slice:
 		// Slice is bigger than a word; assume flagIndir.
 		return (*SliceHeader)(v.val).Len
@@ -989,7 +1065,7 @@ func (v Value) MapKeys() []Value {
 	}
 
 	m := v.iword()
-	mlen := int32(0)
+	mlen := int(0)
 	if m != nil {
 		mlen = maplen(m)
 	}
@@ -1821,7 +1897,7 @@ func MakeChan(typ Type, buffer int) Value {
 	if typ.ChanDir() != BothDir {
 		panic("reflect.MakeChan: unidirectional channel type")
 	}
-	ch := makechan(typ.runtimeType(), uint32(buffer))
+	ch := makechan(typ.runtimeType(), uint64(buffer))
 	return Value{typ.common(), unsafe.Pointer(ch), flag(Chan) << flagKindShift}
 }
 
@@ -2235,20 +2311,20 @@ func cvtI2I(v Value, typ Type) Value {
 }
 
 // implemented in ../pkg/runtime
-func chancap(ch iword) int32
+func chancap(ch iword) int
 func chanclose(ch iword)
-func chanlen(ch iword) int32
+func chanlen(ch iword) int
 func chanrecv(t *runtimeType, ch iword, nb bool) (val iword, selected, received bool)
 func chansend(t *runtimeType, ch iword, val iword, nb bool) bool
 
-func makechan(typ *runtimeType, size uint32) (ch iword)
+func makechan(typ *runtimeType, size uint64) (ch iword)
 func makemap(t *runtimeType) (m iword)
 func mapaccess(t *runtimeType, m iword, key iword) (val iword, ok bool)
 func mapassign(t *runtimeType, m iword, key, val iword, ok bool)
 func mapiterinit(t *runtimeType, m iword) *byte
 func mapiterkey(it *byte) (key iword, ok bool)
 func mapiternext(it *byte)
-func maplen(m iword) int32
+func maplen(m iword) int
 
 func call(fn, arg unsafe.Pointer, n uint32)
 func ifaceE2I(t *runtimeType, src interface{}, dst unsafe.Pointer)
