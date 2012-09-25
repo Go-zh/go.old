@@ -210,22 +210,26 @@ methods(Type *t)
 				// but we can generate more efficient code
 				// using genembedtramp if all that is necessary
 				// is a pointer adjustment and a JMP.
+				compiling_wrappers = 1;
 				if(isptr[it->etype] && isptr[this->etype]
 				&& f->embedded && !isifacemethod(f->type))
 					genembedtramp(it, f, a->isym, 1);
 				else
 					genwrapper(it, f, a->isym, 1);
+				compiling_wrappers = 0;
 			}
 		}
 
 		if(!(a->tsym->flags & SymSiggen)) {
 			a->tsym->flags |= SymSiggen;
 			if(!eqtype(this, t)) {
+				compiling_wrappers = 1;
 				if(isptr[t->etype] && isptr[this->etype]
 				&& f->embedded && !isifacemethod(f->type))
 					genembedtramp(t, f, a->tsym, 0);
 				else
 					genwrapper(t, f, a->tsym, 0);
+				compiling_wrappers = 0;
 			}
 		}
 	}
@@ -374,9 +378,9 @@ dextratype(Sym *sym, int off, Type *t, int ptroff)
 	}
 
 	// slice header
-	ot = dsymptr(s, ot, s, ot + widthptr + 2*4);
-	ot = duint32(s, ot, n);
-	ot = duint32(s, ot, n);
+	ot = dsymptr(s, ot, s, ot + widthptr + 2*widthint);
+	ot = duintxx(s, ot, n, widthint);
+	ot = duintxx(s, ot, n, widthint);
 
 	// methods
 	for(a=m; a; a=a->link) {
@@ -776,13 +780,13 @@ ok:
 
 		// two slice headers: in and out.
 		ot = rnd(ot, widthptr);
-		ot = dsymptr(s, ot, s, ot+2*(widthptr+2*4));
+		ot = dsymptr(s, ot, s, ot+2*(widthptr+2*widthint));
 		n = t->thistuple + t->intuple;
-		ot = duint32(s, ot, n);
-		ot = duint32(s, ot, n);
-		ot = dsymptr(s, ot, s, ot+1*(widthptr+2*4)+n*widthptr);
-		ot = duint32(s, ot, t->outtuple);
-		ot = duint32(s, ot, t->outtuple);
+		ot = duintxx(s, ot, n, widthint);
+		ot = duintxx(s, ot, n, widthint);
+		ot = dsymptr(s, ot, s, ot+1*(widthptr+2*widthint)+n*widthptr);
+		ot = duintxx(s, ot, t->outtuple, widthint);
+		ot = duintxx(s, ot, t->outtuple, widthint);
 
 		// slice data
 		for(t1=getthisx(t)->type; t1; t1=t1->down, n++)
@@ -804,9 +808,9 @@ ok:
 		// ../../pkg/runtime/type.go:/InterfaceType
 		ot = dcommontype(s, ot, t);
 		xt = ot - 2*widthptr;
-		ot = dsymptr(s, ot, s, ot+widthptr+2*4);
-		ot = duint32(s, ot, n);
-		ot = duint32(s, ot, n);
+		ot = dsymptr(s, ot, s, ot+widthptr+2*widthint);
+		ot = duintxx(s, ot, n, widthint);
+		ot = duintxx(s, ot, n, widthint);
 		for(a=m; a; a=a->link) {
 			// ../../pkg/runtime/type.go:/imethod
 			ot = dgostringptr(s, ot, a->name);
@@ -849,9 +853,9 @@ ok:
 		}
 		ot = dcommontype(s, ot, t);
 		xt = ot - 2*widthptr;
-		ot = dsymptr(s, ot, s, ot+widthptr+2*4);
-		ot = duint32(s, ot, n);
-		ot = duint32(s, ot, n);
+		ot = dsymptr(s, ot, s, ot+widthptr+2*widthint);
+		ot = duintxx(s, ot, n, widthint);
+		ot = duintxx(s, ot, n, widthint);
 		for(t1=t->type; t1!=T; t1=t1->down) {
 			// ../../pkg/runtime/type.go:/structField
 			if(t1->sym && !t1->embedded) {

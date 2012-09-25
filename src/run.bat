@@ -57,11 +57,10 @@ go build ..\misc\dashboard\builder ..\misc\goplay
 if errorlevel 1 goto fail
 echo.
 
-:: TODO(brainman): disabled, because it fails with: mkdir C:\Users\ADMINI~1\AppData\Local\Temp\2.....\test\bench\: The filename or extension is too long.
-::echo # ..\test\bench\go1
-::go test ..\test\bench\go1
-::if errorlevel 1 goto fail
-::echo.
+echo # ..\test\bench\go1
+go test ..\test\bench\go1
+if errorlevel 1 goto fail
+echo.
 
 :: cgo tests
 if x%CGO_ENABLED% == x0 goto nocgo
@@ -71,17 +70,15 @@ if x%CGO_ENABLED% == x0 goto nocgo
 ::if errorlevel 1 goto fail
 ::echo.
 
-:: TODO ..\misc\cgo\stdio
-::echo # ..\misc\cgo\stdio
-::go run %GOROOT%\test\run.go - ..\misc\cgo\stdio
-::if errorlevel 1 goto fail
-::echo.
+echo # ..\misc\cgo\stdio
+go run %GOROOT%\test\run.go - ..\misc\cgo\stdio
+if errorlevel 1 goto fail
+echo.
 
-:: TODO(brainman): disabled, because it fails with: mkdir C:\Users\ADMINI~1\AppData\Local\Temp\2.....\go\misc\cgo\: The filename or extension is too long.
-::echo # ..\misc\cgo\test
-::go test ..\misc\cgo\test
-::if errorlevel 1 goto fail
-::echo.
+echo # ..\misc\cgo\test
+go test ..\misc\cgo\test
+if errorlevel 1 goto fail
+echo.
 :nocgo
 
 echo # ..\doc\progs

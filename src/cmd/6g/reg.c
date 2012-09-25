@@ -579,8 +579,9 @@ regopt(Prog *firstp)
 				addrs.b[z] |= bit.b[z];
 		}
 
-//		print("bit=%2d addr=%d et=%-6E w=%-2d s=%S + %lld\n",
-//			i, v->addr, v->etype, v->width, v->sym, v->offset);
+		if(debug['R'] && debug['v'])
+			print("bit=%2d addr=%d et=%-6E w=%-2d s=%N + %lld\n",
+				i, v->addr, v->etype, v->width, v->node, v->offset);
 	}
 
 	if(debug['R'] && debug['v'])
@@ -743,6 +744,9 @@ loop2:
 brk:
 	qsort(region, nregion, sizeof(region[0]), rcmp);
 
+	if(debug['R'] && debug['v'])
+		dumpit("pass5", firstr);
+
 	/*
 	 * pass 6
 	 * determine used registers (paint2)
@@ -753,8 +757,16 @@ brk:
 		bit = blsh(rgp->varno);
 		vreg = paint2(rgp->enter, rgp->varno);
 		vreg = allreg(vreg, rgp);
-		if(rgp->regno != 0)
+		if(rgp->regno != 0) {
+			if(debug['R'] && debug['v']) {
+				Var *v;
+
+				v = var + rgp->varno;
+				print("registerize %N+%d (bit=%2d et=%2E) in %R\n",
+						v->node, v->offset, rgp->varno, v->etype, rgp->regno);
+			}
 			paint3(rgp->enter, rgp->varno, vreg, rgp->regno);
+		}
 		rgp++;
 	}
 
@@ -848,7 +860,7 @@ addmove(Reg *r, int bn, int rn, int f)
 	p1->as = AMOVL;
 	switch(v->etype) {
 	default:
-		fatal("unknown type\n");
+		fatal("unknown type %E", v->etype);
 	case TINT8:
 	case TUINT8:
 	case TBOOL:
@@ -933,7 +945,8 @@ Bits
 mkvar(Reg *r, Adr *a)
 {
 	Var *v;
-	int i, t, n, et, z, w, flag;
+	int i, t, n, et, z, flag;
+	int64 w;
 	uint32 regu;
 	int32 o;
 	Bits bit;
@@ -985,6 +998,8 @@ mkvar(Reg *r, Adr *a)
 	et = a->etype;
 	o = a->offset;
 	w = a->width;
+	if(w < 0)
+		fatal("bad width %lld for %D", w, a);
 
 	flag = 0;
 	for(i=0; i<nvar; i++) {
@@ -1027,7 +1042,8 @@ mkvar(Reg *r, Adr *a)
 	v->node = node;
 
 	if(debug['R'])
-		print("bit=%2d et=%2d w=%d %#N %D\n", i, et, w, node, a);
+		print("bit=%2d et=%2E w=%d+%d %#N %D flag=%d\n", i, et, o, w, node, a, v->addr);
+
 	ostats.nvar++;
 
 	bit = blsh(i);
@@ -1585,26 +1601,26 @@ BtoR(int32 b)
 
 /*
  *	bit	reg
- *	16	X5 (FREGMIN)
+ *	16	X0
  *	...
- *	26	X15 (FREGEXT)
+ *	31	X15
  */
 int32
 FtoB(int f)
 {
-	if(f < FREGMIN || f > FREGEXT)
+	if(f < D_X0 || f > D_X15)
 		return 0;
-	return 1L << (f - FREGMIN + 16);
+	return 1L << (f - D_X0 + 16);
 }
 
 int
 BtoF(int32 b)
 {
 
-	b &= 0xFF0000L;
+	b &= 0xFFFF0000L;
 	if(b == 0)
 		return 0;
-	return bitno(b) - 16 + FREGMIN;
+	return bitno(b) - 16 + D_X0;
 }
 
 void
