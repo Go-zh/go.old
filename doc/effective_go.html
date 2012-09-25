@@ -3375,7 +3375,7 @@ func init() {
         log.Fatal("$USER not set")
     }
     if HOME == "" {
-        HOME = "/usr/" + USER
+        HOME = "/home/" + USER
     }
     if GOROOT == "" {
         GOROOT = HOME + "/go"
@@ -3392,7 +3392,7 @@ func init() {
         log.Fatal("$USER not set")
     }
     if HOME == "" {
-        HOME = "/usr/" + USER
+        HOME = "/home/" + USER
     }
     if GOROOT == "" {
         GOROOT = HOME + "/go"
