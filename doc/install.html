@@ -240,19 +240,31 @@ rm -r /usr/local/go
 
 <div class="english">
 <p>
-Extract <a href="http://code.google.com/p/go/downloads/list?q=OpSys-FreeBSD+OR+OpSys-Linux+OR+OpSys-OSX+AND+Type-Archive">the archive</a>
-into <code>/usr/local</code>, creating a Go tree in <code>/usr/local/go</code>:
+Extract <a href="http://code.google.com/p/go/downloads/list?q=OpSys-FreeBSD+OR+OpSys-Linux+OR+OpSys-OSX+Type-Archive">the archive</a>
+into <code>/usr/local</code>, creating a Go tree in <code>/usr/local/go</code>.
+For example:
 </p>
 </div>
 
 <p>
 将<a href="http://code.google.com/p/go/downloads/list?q=OpSys-FreeBSD+OR+OpSys-Linux+OR+OpSys-OSX+AND+Type-Archive">此压缩包</a>提取到
-<code>/usr/local</code> 目录，在 <code>/usr/local/go</code> 中创建Go目录树：
+<code>/usr/local</code> 目录，在 <code>/usr/local/go</code> 中创建Go目录树。例如：
 </p>
 
 <pre>
-tar -C /usr/local -xzf go1.0.2.linux-amd64.tar.gz
+tar -C /usr/local -xzf go1.0.3.linux-amd64.tar.gz
 </pre>
+
+<div class="english">
+<p>
+The name of the archive may differ, depending on the version of Go you are
+installing and your system's operating system and processor architecture.
+</p>
+</div>
+
+<p>
+该压缩包的名称可能不同，这取决于你安装的Go版本和你的操作系统以及处理器架构。
+</p>
 
 <div class="english">
 <p>
@@ -289,7 +301,7 @@ export PATH=$PATH:/usr/local/go/bin
 
 <div class="english">
 <p>
-Open the <a href="http://code.google.com/p/go/downloads/list?q=OpSys-Darwin+AND+Type-Installer">package file</a>
+Open the <a href="http://code.google.com/p/go/downloads/list?q=OpSys-OSX+Type-Installer">package file</a>
 and follow the prompts to install the Go tools.
 The package installs the Go distribution to <code>/usr/local/go</code>.
 </p>
