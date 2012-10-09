@@ -8,6 +8,8 @@
   <title>Go 编程语言</title>
 {{end}}
 <link type="text/css" rel="stylesheet" href="/doc/style.css">
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+<script type="text/javascript">window.jQuery || document.write(unescape("%3Cscript src='/doc/jquery.js' type='text/javascript'%3E%3C/script%3E"));</script>
 <script type="text/javascript" src="/doc/godocs.js"></script>
 {{if .SearchBox}}
 <link rel="search" type="application/opensearchdescription+xml" title="godoc" href="/opensearch.xml" />
@@ -24,7 +26,7 @@
 <a href="/pkg/">包</a>
 <a href="/project/">项目</a>
 <a href="/help/">帮助</a>
-<input type="text" id="search" name="q" class="inactive" value="搜索">
+<input type="text" id="search" name="q" class="inactive" value="Search" placeholder="Search">
 </div>
 <div id="heading"><a href="/">Go 编程语言</a></div>
 </form>
@@ -51,10 +53,11 @@
 </div>
 
 <div id="footer">
-godoc 版本 {{.Version}}。<br>
-除<a href="http://code.google.com/policies.html#restrictions">特别说明</a>外，本内容使用知识共享-署名 3.0 授权，代码遵循<a href="/LICENSE">BSD协议</a>。<br>
+构建版本 {{html .Version}}.<br>
+除<a href="http://code.google.com/policies.html#restrictions">特别说明</a>外，
+本页内容使用知识共享-署名 3.0 授权，代码遵循<a href="/LICENSE">BSD授权许可</a>。<br>
 <a href="/doc/tos.html">服务条款</a> |
-<a href="http://www.google.com/intl/en/privacy/privacy-policy.html">隐私政策</a>
+<a href="http://www.google.com/intl/en/policies/privacy/">隐私政策</a>
 </div>
 
 </body>
@@ -63,31 +66,6 @@ godoc 版本 {{.Version}}。<br>
     var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
     po.src = 'https://apis.google.com/js/plusone.js';
     var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
-  })();
-  (function() {
-    /*bindEvent(window, 'load', function ()*/ {
-		var texts
-		var query = window.location.search.substring(1);
-		var vars = query.split("&");
-		var langs = "", pair
-		// parse lang=en,zh querystring
-		for (var i = 0; i < vars.length; i++) {
-			pair = vars[i].split("=");
-			if (pair[0] == "lang") {
-				langs = unescape(pair[1])
-				break
-			}
-		}
-		// if en not enabled, don't show english translation
-		if (langs != "en") {
-			texts = document.getElementsByTagName('div')
-			for (var i in texts) {
-				if (texts[i].className == "english") {
-					texts[i].className = "invisible_translation";
-				}
-			}
-		}
-	}/*);*/
   })();
 </script>
 </html>
