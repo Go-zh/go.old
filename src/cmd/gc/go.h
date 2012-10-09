@@ -146,7 +146,7 @@ struct	Type
 	uchar	copyany;
 	uchar	local;		// created in this file
 	uchar	deferwidth;
-	uchar	broke;
+	uchar	broke;  	// broken type definition.
 	uchar	isddd;		// TFIELD is ... argument
 	uchar	align;
 
@@ -838,6 +838,7 @@ EXTERN	Pkg*	builtinpkg;	// fake package for builtins
 EXTERN	Pkg*	gostringpkg;	// fake pkg for Go strings
 EXTERN	Pkg*	itabpkg;	// fake pkg for itab cache
 EXTERN	Pkg*	runtimepkg;	// package runtime
+EXTERN	Pkg*	racepkg;	// package runtime/race
 EXTERN	Pkg*	stringpkg;	// fake package for C strings
 EXTERN	Pkg*	typepkg;	// fake package for runtime type info
 EXTERN	Pkg*	weaktypepkg;	// weak references to runtime type info
@@ -935,7 +936,7 @@ void	checkwidth(Type *t);
 void	defercheckwidth(void);
 void	dowidth(Type *t);
 void	resumecheckwidth(void);
-uint32	rnd(uint32 o, uint32 r);
+vlong	rnd(vlong o, vlong r);
 void	typeinit(void);
 
 /*
@@ -1442,3 +1443,8 @@ void	zname(Biobuf *b, Sym *s, int t);
 #pragma	varargck	type	"V"	Val*
 #pragma	varargck	type	"Y"	char*
 #pragma	varargck	type	"Z"	Strlit*
+
+/*
+ *	racewalk.c
+ */
+void	racewalk(Node *fn);

@@ -106,6 +106,27 @@ typekind(Type *t)
 }
 
 /*
+ * sprint_depchain prints a dependency chain
+ * of nodes into fmt.
+ * It is used by typecheck in the case of OLITERAL nodes
+ * to print constant definition loops.
+ */
+static void
+sprint_depchain(Fmt *fmt, NodeList *stack, Node *cur, Node *first)
+{
+	NodeList *l;
+
+	for(l = stack; l; l=l->next) {
+		if(l->n->op == cur->op) {
+			if(l->n != first)
+				sprint_depchain(fmt, l->next, l->n, first);
+			fmtprint(fmt, "\n\t%L: %N uses %N", l->n->lineno, l->n, cur);
+			return;
+		}
+	}
+}
+
+/*
  * type check node *np.
  * replaces *np with a new pointer in some cases.
  * returns the final value of *np as a convenience.
@@ -155,6 +176,24 @@ typecheck(Node **np, int top)
 	}
 
 	if(n->typecheck == 2) {
+		// Typechecking loop. Trying printing a meaningful message,
+		// otherwise a stack trace of typechecking.
+		switch(n->op) {
+		case ONAME:
+			// We can already diagnose variables used as types.
+			if((top & (Erv|Etype)) == Etype)
+				yyerror("%N is not a type", n);
+			break;
+		case OLITERAL:
+			if((top & (Erv|Etype)) == Etype) {
+				yyerror("%N is not a type", n);
+				break;
+			}
+			fmtstrinit(&fmt);
+			sprint_depchain(&fmt, tcstack, n, n);
+			yyerrorl(n->lineno, "constant definition loop%s", fmtstrflush(&fmt));
+			break;
+		}
 		if(nsavederrors+nerrors == 0) {
 			fmtstrinit(&fmt);
 			for(l=tcstack; l; l=l->next)
@@ -165,7 +204,7 @@ typecheck(Node **np, int top)
 		return n;
 	}
 	n->typecheck = 2;
-	
+
 	if(tcfree != nil) {
 		l = tcfree;
 		tcfree = l->next;
@@ -2136,7 +2175,7 @@ typecheckcomplit(Node **np)
 	Node *l, *n, *r, **hash;
 	NodeList *ll;
 	Type *t, *f;
-	Sym *s;
+	Sym *s, *s1;
 	int32 lno;
 	ulong nhash;
 	Node *autohash[101];
@@ -2302,9 +2341,11 @@ typecheckcomplit(Node **np)
 				// Sym might have resolved to name in other top-level
 				// package, because of import dot.  Redirect to correct sym
 				// before we do the lookup.
-				if(s->pkg != localpkg && exportname(s->name))
-					s = lookup(s->name);
-
+				if(s->pkg != localpkg && exportname(s->name)) {
+					s1 = lookup(s->name);
+					if(s1->origpkg == s->pkg)
+						s = s1;
+				}
 				f = lookdot1(nil, s, t, t->type, 0);
 				if(f == nil) {
 					yyerror("unknown %T field '%S' in struct literal", t, s);

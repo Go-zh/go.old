@@ -223,7 +223,7 @@ command.
 <div class="english">
 <pre>
 [extensions]
-codereview = YOUR_GO_ROOT/lib/codereview/codereview.py
+codereview = $GO_ROOT/lib/codereview/codereview.py
 
 [ui]
 username = Your Name &lt;you@server.dom&gt;
@@ -232,22 +232,20 @@ username = Your Name &lt;you@server.dom&gt;
 
 <pre>
 [extensions]
-codereview = 你的Go根目录/lib/codereview/codereview.py
+codereview = $GOROOT/lib/codereview/codereview.py
 
 [ui]
 username = 你的名字 &lt;你的@邮件.地址&gt;
 </pre>
 
 <div class="english">
-<p>Replace YOUR_GO_ROOT with the value of <code>$GOROOT</code>.
-The Mercurial configuration file format does not allow environment variable substitution.
+<p>
 The <code>username</code> information will not be used unless
 you are a committer (see below), but Mercurial complains if it is missing.
 </p>
 </div>
 
 <p>
-请用 <code>$GOROOT</code> 的值来代替“你的Go根目录”。Mercurial配置文件不允许环境变量代换。
 除非你是提交者（见下），否者 <code>username</code> 信息将不会被使用，但如果没有的话，Mercurial会发牢骚。
 </p>
 

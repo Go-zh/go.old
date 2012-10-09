@@ -35,11 +35,7 @@ type component struct {
 	tq uint8 // Quantization table destination selector.
 }
 
-type block [blockSize]int
-
 const (
-	blockSize = 64 // A DCT block is 8x8.
-
 	dcTable = 0
 	acTable = 1
 	maxTc   = 1
@@ -96,6 +92,7 @@ type Reader interface {
 
 type decoder struct {
 	r             Reader
+	b             bits
 	width, height int
 	img1          *image.Gray
 	img3          *image.YCbCr
@@ -104,7 +101,6 @@ type decoder struct {
 	comp          [nColorComponent]component
 	huff          [maxTc + 1][maxTh + 1]huffman
 	quant         [maxTq + 1]block // Quantization tables, in zig-zag order.
-	b             bits
 	tmp           [1024]byte
 }
 
@@ -313,8 +309,10 @@ func (d *decoder) processSOS(n int) error {
 					}
 
 					// Perform the inverse DCT and store the MCU component to the image.
+					idct(&b)
+					dst, stride := []byte(nil), 0
 					if d.nComp == nGrayComponent {
-						idct(d.img1.Pix[8*(my*d.img1.Stride+mx):], d.img1.Stride, &b)
+						dst, stride = d.img1.Pix[8*(my*d.img1.Stride+mx):], d.img1.Stride
 					} else {
 						switch i {
 						case 0:
@@ -325,11 +323,27 @@ func (d *decoder) processSOS(n int) error {
 								mx0 += j % 2
 								my0 += j / 2
 							}
-							idct(d.img3.Y[8*(my0*d.img3.YStride+mx0):], d.img3.YStride, &b)
+							dst, stride = d.img3.Y[8*(my0*d.img3.YStride+mx0):], d.img3.YStride
 						case 1:
-							idct(d.img3.Cb[8*(my*d.img3.CStride+mx):], d.img3.CStride, &b)
+							dst, stride = d.img3.Cb[8*(my*d.img3.CStride+mx):], d.img3.CStride
 						case 2:
-							idct(d.img3.Cr[8*(my*d.img3.CStride+mx):], d.img3.CStride, &b)
+							dst, stride = d.img3.Cr[8*(my*d.img3.CStride+mx):], d.img3.CStride
+						}
+					}
+					// Level shift by +128, clip to [0, 255], and write to dst.
+					for y := 0; y < 8; y++ {
+						y8 := y * 8
+						yStride := y * stride
+						for x := 0; x < 8; x++ {
+							c := b[y8+x]
+							if c < -128 {
+								c = 0
+							} else if c > 127 {
+								c = 255
+							} else {
+								c += 128
+							}
+							dst[yStride+x] = uint8(c)
 						}
 					}
 				} // for j

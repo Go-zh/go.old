@@ -16,7 +16,7 @@ cgen(Node *n, Node *res)
 {
 	Node *nl, *nr, *r;
 	Node n1, n2, n3, f0, f1;
-	int a, w;
+	int a, w, rg;
 	Prog *p1, *p2, *p3;
 	Addr addr;
 
@@ -328,10 +328,7 @@ cgen(Node *n, Node *res)
 			cgen(nl, &n1);
 
 			nodconst(&n2, types[tptr], 0);
-			regalloc(&n3, n2.type, N);
-			gmove(&n2, &n3);
-			gcmp(optoas(OCMP, types[tptr]), &n1, &n3);
-			regfree(&n3);
+			gcmp(optoas(OCMP, types[tptr]), &n1, &n2);
 			p1 = gbranch(optoas(OEQ, types[tptr]), T, -1);
 
 			n2 = n1;
@@ -370,10 +367,7 @@ cgen(Node *n, Node *res)
 			cgen(nl, &n1);
 
 			nodconst(&n2, types[tptr], 0);
-			regalloc(&n3, n2.type, N);
-			gmove(&n2, &n3);
-			gcmp(optoas(OCMP, types[tptr]), &n1, &n3);
-			regfree(&n3);
+			gcmp(optoas(OCMP, types[tptr]), &n1, &n2);
 			p1 = gbranch(optoas(OEQ, types[tptr]), T, -1);
 
 			n2 = n1;
@@ -406,17 +400,27 @@ cgen(Node *n, Node *res)
 		break;
 
 	case OCALLMETH:
-		cgen_callmeth(n, 0);
+	case OCALLFUNC:
+		// Release res so that it is available for cgen_call.
+		// Pick it up again after the call.
+		rg = -1;
+		if(n->ullman >= UINF) {
+			if(res->op == OREGISTER || res->op == OINDREG) {
+				rg = res->val.u.reg;
+				reg[rg]--;
+			}
+		}
+		if(n->op == OCALLMETH)
+			cgen_callmeth(n, 0);
+		else
+			cgen_call(n, 0);
+		if(rg >= 0)
+			reg[rg]++;
 		cgen_callret(n, res);
 		break;
 
 	case OCALLINTER:
 		cgen_callinter(n, res, 0);
-		cgen_callret(n, res);
-		break;
-
-	case OCALLFUNC:
-		cgen_call(n, 0);
 		cgen_callret(n, res);
 		break;
 
@@ -439,18 +443,43 @@ abop:	// asymmetric binary
 	if(nl->ullman >= nr->ullman) {
 		regalloc(&n1, nl->type, res);
 		cgen(nl, &n1);
-		regalloc(&n2, nr->type, N);
-		cgen(nr, &n2);
+		switch(n->op) {
+		case OADD:
+		case OSUB:
+		case OAND:
+		case OOR:
+		case OXOR:
+			if(smallintconst(nr)) {
+				n2 = *nr;
+				break;
+			}
+		default:
+			regalloc(&n2, nr->type, N);
+			cgen(nr, &n2);
+		}
 	} else {
-		regalloc(&n2, nr->type, res);
-		cgen(nr, &n2);
+		switch(n->op) {
+		case OADD:
+		case OSUB:
+		case OAND:
+		case OOR:
+		case OXOR:
+			if(smallintconst(nr)) {
+				n2 = *nr;
+				break;
+			}
+		default:
+			regalloc(&n2, nr->type, res);
+			cgen(nr, &n2);
+		}
 		regalloc(&n1, nl->type, N);
 		cgen(nl, &n1);
 	}
 	gins(a, &n2, &n1);
 	gmove(&n1, res);
 	regfree(&n1);
-	regfree(&n2);
+	if(n2.op != OLITERAL)
+		regfree(&n2);
 	goto ret;
 
 flt:	// floating-point.
@@ -538,7 +567,7 @@ void
 agen(Node *n, Node *res)
 {
 	Node *nl, *nr;
-	Node n1, n2, n3, n4, n5, tmp;
+	Node n1, n2, n3, n4, tmp;
 	Prog *p1, *p2;
 	uint32 w;
 	uint64 v;
@@ -680,11 +709,8 @@ agen(Node *n, Node *res)
 					regalloc(&n4, n1.type, N);
 					cgen(&n1, &n4);
 					nodconst(&n2, types[TUINT32], v);
-					regalloc(&n5, n2.type, N);
-					gmove(&n2, &n5);
-					gcmp(optoas(OCMP, types[TUINT32]), &n4, &n5);
+					gcmp(optoas(OCMP, types[TUINT32]), &n4, &n2);
 					regfree(&n4);
-					regfree(&n5);
 					p1 = gbranch(optoas(OGT, types[TUINT32]), T, +1);
 					ginscall(panicindex, 0);
 					patch(p1, pc);
@@ -698,11 +724,7 @@ agen(Node *n, Node *res)
 			}
 
 			nodconst(&n2, types[tptr], v*w);
-			regalloc(&n4, n2.type, N);
-			gmove(&n2, &n4);
-			gins(optoas(OADD, types[tptr]), &n4, &n3);
-			regfree(&n4);
-
+			gins(optoas(OADD, types[tptr]), &n2, &n3);
 			gmove(&n3, res);
 			regfree(&n3);
 			break;

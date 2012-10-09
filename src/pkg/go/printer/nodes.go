@@ -203,7 +203,7 @@ func (p *printer) exprList(prev0 token.Pos, list []ast.Expr, depth int, mode exp
 			} else {
 				const r = 4 // threshold
 				ratio := float64(size) / float64(prevSize)
-				useFF = ratio <= 1/r || r <= ratio
+				useFF = ratio <= 1.0/r || r <= ratio
 			}
 		}
 
@@ -791,7 +791,14 @@ func (p *printer) expr1(expr ast.Expr, prec1, depth int) {
 		if len(x.Args) > 1 {
 			depth++
 		}
-		p.expr1(x.Fun, token.HighestPrec, depth)
+		if _, ok := x.Fun.(*ast.FuncType); ok {
+			// conversions to literal function types require parentheses around the type
+			p.print(token.LPAREN)
+			p.expr1(x.Fun, token.HighestPrec, depth)
+			p.print(token.RPAREN)
+		} else {
+			p.expr1(x.Fun, token.HighestPrec, depth)
+		}
 		p.print(x.Lparen, token.LPAREN)
 		if x.Ellipsis.IsValid() {
 			p.exprList(x.Lparen, x.Args, depth, 0, x.Ellipsis)
@@ -853,9 +860,9 @@ func (p *printer) expr1(expr ast.Expr, prec1, depth int) {
 		case ast.SEND | ast.RECV:
 			p.print(token.CHAN)
 		case ast.RECV:
-			p.print(token.ARROW, token.CHAN)
+			p.print(token.ARROW, token.CHAN) // x.Arrow and x.Pos() are the same
 		case ast.SEND:
-			p.print(token.CHAN, token.ARROW)
+			p.print(token.CHAN, x.Arrow, token.ARROW)
 		}
 		p.print(blank)
 		p.expr(x.Value)

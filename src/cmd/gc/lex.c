@@ -264,7 +264,12 @@ main(int argc, char *argv[])
 		print("%cg version %s%s%s\n", thechar, getgoversion(), *p ? " " : "", p);
 		exits(0);
 	} ARGEND
-	
+
+	if(debug['b']) {
+		racepkg = mkpkg(strlit("runtime/race"));
+		racepkg->name = "race";
+	}
+
 	// enable inlining.  for now:
 	//	default: inlining on.  (debug['l'] == 1)
 	//	-l: inlining off  (debug['l'] == 0)
@@ -530,7 +535,7 @@ static int
 findpkg(Strlit *name)
 {
 	Idir *p;
-	char *q;
+	char *q, *race;
 
 	if(islocalname(name)) {
 		if(safemode)
@@ -568,10 +573,13 @@ findpkg(Strlit *name)
 			return 1;
 	}
 	if(goroot != nil) {
-		snprint(namebuf, sizeof(namebuf), "%s/pkg/%s_%s/%Z.a", goroot, goos, goarch, name);
+		race = "";
+		if(debug['b'])
+			race = "_race";
+		snprint(namebuf, sizeof(namebuf), "%s/pkg/%s_%s%s/%Z.a", goroot, goos, goarch, race, name);
 		if(access(namebuf, 0) >= 0)
 			return 1;
-		snprint(namebuf, sizeof(namebuf), "%s/pkg/%s_%s/%Z.%c", goroot, goos, goarch, name, thechar);
+		snprint(namebuf, sizeof(namebuf), "%s/pkg/%s_%s%s/%Z.%c", goroot, goos, goarch, race, name, thechar);
 		if(access(namebuf, 0) >= 0)
 			return 1;
 	}
@@ -1524,7 +1532,7 @@ yylex(void)
 static int
 getc(void)
 {
-	int c;
+	int c, c1, c2;
 
 	c = curio.peekc;
 	if(c != 0) {
@@ -1537,8 +1545,20 @@ getc(void)
 		c = *curio.cp & 0xff;
 		if(c != 0)
 			curio.cp++;
-	} else
+	} else {
+	loop:
 		c = Bgetc(curio.bin);
+		if(c == 0xef) {
+			c1 = Bgetc(curio.bin);
+			c2 = Bgetc(curio.bin);
+			if(c1 == 0xbb && c2 == 0xbf) {
+				yyerrorl(lexlineno, "Unicode (UTF-8) BOM in middle of file");
+				goto loop;
+			}
+			Bungetc(curio.bin);
+			Bungetc(curio.bin);
+		}
+	}
 
 check:
 	switch(c) {
@@ -1589,10 +1609,6 @@ loop:
 	if(!fullrune(str, i))
 		goto loop;
 	c = chartorune(&rune, str);
-	if(rune == BOM) {
-		lineno = lexlineno;
-		yyerror("Unicode (UTF-8) BOM in middle of file");
-	}
 	if(rune == Runeerror && c == 1) {
 		lineno = lexlineno;
 		yyerror("illegal UTF-8 sequence");
@@ -1823,16 +1839,16 @@ lexinit(void)
 		if(etype != Txxx) {
 			if(etype < 0 || etype >= nelem(types))
 				fatal("lexinit: %s bad etype", s->name);
+			s1 = pkglookup(syms[i].name, builtinpkg);
 			t = types[etype];
 			if(t == T) {
 				t = typ(etype);
-				t->sym = s;
+				t->sym = s1;
 
 				if(etype != TANY && etype != TSTRING)
 					dowidth(t);
 				types[etype] = t;
 			}
-			s1 = pkglookup(syms[i].name, builtinpkg);
 			s1->lexical = LNAME;
 			s1->def = typenod(t);
 			continue;
@@ -2182,7 +2198,7 @@ mkpackage(char* pkgname)
 {
 	Sym *s;
 	int32 h;
-	char *p;
+	char *p, *q;
 
 	if(localpkg->name == nil) {
 		if(strcmp(pkgname, "_") == 0)
@@ -2222,6 +2238,11 @@ mkpackage(char* pkgname)
 
 	if(outfile == nil) {
 		p = strrchr(infile, '/');
+		if(windows) {
+			q = strrchr(infile, '\\');
+			if(q > p)
+				p = q;
+		}
 		if(p == nil)
 			p = infile;
 		else

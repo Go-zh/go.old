@@ -1,12 +1,12 @@
 <!--{
 	"Title": "Go编程语言规范",
-	"Subtitle": "版本：2012年9月22日 || 译者：Oling Cat <olingcat@gmail.com>",
+	"Subtitle": "版本：2012年10月3日 || 译者：Oling Cat <olingcat@gmail.com>",
 	"Path": "/ref/spec"
 }-->
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of September 28, 2012",
+	"Subtitle": "Version of October 3, 2012",
 	"Path": "/ref/spec"
 }-->
 
@@ -6592,17 +6592,22 @@ Conversion = Type "(" Expression [ "," ] ")" .
 <div class="english">
 <p>
 If the type starts with an operator it must be parenthesized:
+If the type starts with the operator <code>*</code> or <code>&lt;-</code>,
+or the keyword <code>func</code>, it must be parenthesized:
 </p>
 <pre>
 *Point(p)        // same as *(Point(p))
 (*Point)(p)      // p is converted to (*Point)
 &lt;-chan int(c)    // same as &lt;-(chan int(c))
 (&lt;-chan int)(c)  // c is converted to (&lt;-chan int)
+func()(x)        // function signature func() x
+(func())(x)      // x is converted to (func())
 </pre>
 </div>
 
 <p>
-若该类型以操作符开始则必须加上括号：
+若类型以操作符 <code>*</code>、<code>&lt;-</code> 或关键字 <code>func</code>
+开始则必须加上括号：
 </p>
 
 <pre>
@@ -6610,6 +6615,8 @@ If the type starts with an operator it must be parenthesized:
 (*Point)(p)      // p 被转换为 (*Point)
 &lt;-chan int(c)    // 等价于 &lt;-(chan int(c))
 (&lt;-chan int)(c)  // c 被转换为 (&lt;-chan int)
+func()(x)        // 函数签名 func() x
+(func())(x)      // x 被转换为 (func())
 </pre>
 
 <div class="english">
@@ -6738,7 +6745,7 @@ in any of these cases:
 	当 <code>x</code> 的类型与 <code>T</code> 同为复数类型时。
 	</li>
 	<li>
-	当 <code>x</code> 为整数或字节切片或符文切片且 <code>T</code> 为字符串类型时。
+	当 <code>x</code> 为整数、字节切片或符文切片且 <code>T</code> 为字符串类型时。
 	</li>
 	<li>
 	当 <code>x</code> 为字符串且 <code>T</code> 为字节切片或符文切片时。
@@ -9517,7 +9524,8 @@ by the arguments overlaps.
 </div>
 
 <p>
-两个内建函数用来协助一般的切片操作。
+内建函数 <code>append</code> 与 <code>copy</code> 协助一般的切片操作。对于这两个函数，
+无论其内存引用是否与其实参重复，其结果都是独立的。
 </p>
 
 <div class="english">
@@ -9584,15 +9592,16 @@ b = append(b, "bar"...)            // append string contents      b == []byte{'b
 
 <pre>
 s0 := []int{0, 0}
-s1 := append(s0, 2)        // 追加单个元素    s1 == []int{0, 0, 2}
-s2 := append(s1, 3, 5, 7)  // 追加多个元素    s2 == []int{0, 0, 2, 3, 5, 7}
-s3 := append(s2, s0...)    // 追加一个切片    s3 == []int{0, 0, 2, 3, 5, 7, 0, 0}
+s1 := append(s0, 2)                 // 追加单个元素    s1 == []int{0, 0, 2}
+s2 := append(s1, 3, 5, 7)           // 追加多个元素    s2 == []int{0, 0, 2, 3, 5, 7}
+s3 := append(s2, s0...)             // 追加一个切片    s3 == []int{0, 0, 2, 3, 5, 7, 0, 0}
+s4 := append(s3[3:6], s3[2:]...)    // 追加重复切片    s4 == []int{3, 5, 7, 2, 3, 5, 7, 0, 0}
 
 var t []interface{}
-t = append(t, 42, 3.1415, "foo")              t == []interface{}{42, 3.1415, "foo"}
+t = append(t, 42, 3.1415, "foo")                        t == []interface{}{42, 3.1415, "foo"}
 
 var b []byte
-b = append(b, "bar"...)    // 追加字符串常量  b == []byte{'b', 'a', 'r' }
+b = append(b, "bar"...)             // 追加字符串常量  b == []byte{'b', 'a', 'r' }
 </pre>
 
 <div class="english">
@@ -9612,7 +9621,7 @@ This form copies the bytes from the string into the byte slice.
 
 <p>
 函数 <code>copy</code> 将切片元素从来源 <code>src</code> 复制到目标 <code>dst</code>
-并返回复制的元素数量。来源与目标可以重叠。两个实参必须都拥有<a href="#类型标识">相同</a>的元素类型
+并返回复制的元素数量。两个实参必须都拥有<a href="#类型标识">相同</a>的元素类型
 <code>T</code>，且必须都<a href="#可赋值性">可赋予</a>类型为 <code>[]T</code> 的切片。
 被复制的元素数量为 <code>len(src)</code> 与 <code>len(dst)</code> 中最小的那个。
 作为一个特例，<code>copy</code> 也接受一个可赋予类型 <code>[]byte</code>

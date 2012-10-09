@@ -17,10 +17,10 @@
 			</dl>
 			<dl>
 			<dd><a href="#pkg-overview" class="overviewLink">Overview</a></dd>
-			<dd><a href="#pkg-index">Index</a></dd>
 			{{if $.Examples}}
-				<dd><a href="#pkg-examples">Examples</a></dd>
+				<dd><a href="#pkg-examples" class="examplesLink">Examples</a></dd>
 			{{end}}
+			<dd><a href="#pkg-index" class="indexLink">Index</a></dd>
 			{{if $.Dirs}}
 				<dd><a href="#pkg-subdirectories">Subdirectories</a></dd>
 			{{end}}
@@ -37,10 +37,32 @@
 			</div>
 		</div>
 		{{example_html "" $.Examples $.FSet}}
+
+		{{if $.Examples}}
+		<div id="pkg-examples" class="toggleVisible">
+			<div class="collapsed">
+				<h2 class="toggleButton" title="Click to show Examples section">Examples ▹</h2>
+			</div>
+			<div class="expanded">
+				<h2 class="toggleButton" title="Click to hide Examples section">Examples ▾</h2>
+				<dl>
+				{{range $.Examples}}
+				<dd><a class="exampleLink" href="#example_{{.Name}}">{{example_name .Name}}</a></dd>
+				{{end}}
+				</dl>
+			</div>
+		</div>
+		{{end}}
 	
-		<h2 id="pkg-index">Index</h2>
+		<div id="pkg-index" class="toggleVisible">
+		<div class="collapsed">
+			<h2 class="toggleButton" title="Click to show Index section">Index ▹</h2>
+		</div>
+		<div class="expanded">
+			<h2 class="toggleButton" title="Click to hide Index section">Index ▾</h2>
+
 		<!-- Table of contents for API; must be named manual-nav to turn off auto nav. -->
-		<div id="manual-nav">
+			<div id="manual-nav">
 			<dl>
 			{{if .Consts}}
 				<dd><a href="#pkg-constants">Constants</a></dd>
@@ -67,16 +89,8 @@
 			{{if .Bugs}}
 				<dd><a href="#pkg-bugs">Bugs</a></dd>
 			{{end}}
-		</dl>
-
-		{{if $.Examples}}
-			<h4 id="pkg-examples">Examples</h4>
-			<dl>
-			{{range $.Examples}}
-			<dd><a class="exampleLink" href="#example_{{.Name}}">{{example_name .Name}}</a></dd>
-			{{end}}
 			</dl>
-		{{end}}
+			</div><!-- #manual-nav -->
 
 		{{with .Filenames}}
 			<h4>Package files</h4>
@@ -88,6 +102,8 @@
 			</span>
 			</p>
 		{{end}}
+		</div><!-- .expanded -->
+		</div><!-- #pkg-index -->
 	
 		{{with .Consts}}
 			<h2 id="pkg-constants">Constants</h2>
@@ -205,4 +221,46 @@
 	{{if $.PDoc}}{{else}}
 	<p>Need more packages? Take a look at the <a href="http://godashboard.appspot.com/">Go Project Dashboard</a>.</p>
 	{{end}}
+{{end}}
+
+{{if $.Examples}}
+<script type="text/javascript" src="/doc/play/playground.js"></script>
+<script>
+$(document).ready(function() {
+	'use strict';
+	// Set up playground when each element is toggled.
+	$('div.play').each(function (i, el) {
+		var built = false;
+		$(el).closest('.toggle').click(function() {
+			// Only set up playground once.
+			if (built) {
+				return;
+			}
+			built = true;
+
+			// Set up playground.
+			var code = $('.code', el);
+			playground({
+				'codeEl':   code,
+				'outputEl': $('.output', el),
+				'runEl':    $('.run', el),
+				'fmtEl':    $('.fmt', el),
+				'shareEl':  $('.share', el),
+				'shareRedirect': 'http://play.golang.org/p/'
+			});
+
+			// Make the code textarea resize to fit content.
+			var resize = function() {
+				code.height(0);
+				var h = code[0].scrollHeight;
+				code.height(h+20); // minimize bouncing
+				code.closest('.input').height(h);
+			};
+			code.on('keydown', resize);
+			code.on('keyup', resize);
+			code.keyup(); // resize now.
+		});
+	});
+});
+</script>
 {{end}}
