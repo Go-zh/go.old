@@ -394,6 +394,8 @@ img.gopher {
 }
 h2 { clear: right; }
 
+.invisible_translation { display: none; }
+
 div.play {
 	padding: 0 20px 40px 20px;
 }
