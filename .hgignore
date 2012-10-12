@@ -2,6 +2,7 @@ syntax:glob
 .DS_Store
 .git
 .gitignore
+.idea
 *.[568ao]
 *.a[568o]
 *.so
@@ -17,6 +18,7 @@ syntax:glob
 core
 *.cgo*.go
 *.cgo*.c
+*.iml
 _cgo_*
 _obj
 _test
