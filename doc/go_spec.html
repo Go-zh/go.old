@@ -68,7 +68,7 @@ compile/link model to generate executable binaries.
 
 <p>
 Go是通用型编程语言，它为系统编程而设计。它是强类型化的语言，具有垃圾回收机制，并显式支持并发编程。
-程序由<i>包</i>构造，以此来提供高效的依赖管理功能。当前实现使用传统的 编译/链接 模型来生成可执行的二进制文件。
+程序由<i>包</i>构造，以此来提供高效的依赖管理功能。当前实现使用传统的“编译-链接”模型来生成可执行的二进制文件。
 </p>
 
 <div class="english">
@@ -153,8 +153,8 @@ double quotes <code>""</code> or back quotes <code>``</code>.
 </div>
 
 <p>
-小写生成式名用于识别词法标记。非终止符使用驼峰记法。
-词法符号由双引号 <code>""</code> 或反引号 <code>``</code> 围绕。
+小写生成式名用于确定词法标记。非最终（Non-terminals）词法标记使用驼峰记法（CamelCase）。
+置于双引号 <code>""</code> 或反引号 <code>``</code> 中的为词法标记。
 </p>
 
 <div class="english">
@@ -547,7 +547,7 @@ Some identifiers are <a href="#Predeclared_identifiers">predeclared</a>.
 </div>
 
 <p>
-有些标识符是<a href="#预声明">预声明</a>的。
+有些标识符是<a href="#预声明标识符">预声明</a>的。
 </p>
 
 
@@ -2954,7 +2954,7 @@ Blocks nest and influence <a href="#Declarations_and_scope">scoping</a>.
 </div>
 
 <p>
-块嵌套并影响 <a href="#声明与作用域">作用域</a>。
+块可嵌套并会影响<a href="#声明与作用域">作用域</a>。
 </p>
 
 
@@ -3903,8 +3903,8 @@ BaseTypeName = identifier .
 
 <pre class="ebnf">
 方法声明   = "func" 接收者 方法名 签名 [ 函数体 ] .
-接收者     = "(" [ 标志符 ] [ "*" ] 基础类型名 ")" .
-基础类型名 = 标志符 .
+接收者     = "(" [ 标识符 ] [ "*" ] 基础类型名 ")" .
+基础类型名 = 标识符 .
 </pre>
 
 <div class="english">
@@ -4090,7 +4090,7 @@ QualifiedIdent = PackageName "." identifier .
 
 <p>
 
-限定标识符为使用包名前缀限定的标志符。包名与标识符均不能为<a href="#空白标识符">空白的</a>。
+限定标识符为使用包名前缀限定的标识符。包名与标识符均不能为<a href="#空白标识符">空白的</a>。
 </p>
 
 <pre class="ebnf">

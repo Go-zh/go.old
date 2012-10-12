@@ -97,7 +97,7 @@ import (
 
 // Prefix is a Markov chain prefix of one or more words.
 
-// Prefix 为一个或多个单词的链马尔可夫链前缀。
+// Prefix 为拥有一个或多个单词的链马尔可夫链的前缀。
 type Prefix []string
 
 // String returns the Prefix as a string (for use as a map key).
@@ -109,7 +109,7 @@ func (p Prefix) String() string {
 
 // Shift removes the first word from the Prefix and appends the given word.
 
-// Shift 从 Prefix 中移除第一个单词并附加上给定的单词。
+// Shift 从 Prefix 中移除第一个单词并追加上给定的单词。
 func (p Prefix) Shift(word string) {
 	copy(p, p[1:])
 	p[len(p)-1] = word
@@ -191,7 +191,7 @@ func main() {
 	prefixLen := flag.Int("prefix", 2, "prefix length in words")
 
 	flag.Parse()                     // 解析命令行标记。
-	rand.Seed(time.Now().UnixNano()) // 产生随机数生成器。
+	rand.Seed(time.Now().UnixNano()) // 设置随机数生成器的种子。
 
 	c := NewChain(*prefixLen)     // 初始化一个新的 Chain。
 	c.Build(os.Stdin)             // 从标准输入中构建链。
