@@ -92,6 +92,7 @@ enum {
 	ElfStrGnuVersionR,
 	ElfStrNoteNetbsdIdent,
 	ElfStrNoteOpenbsdIdent,
+	ElfStrNoteBuildInfo,
 	ElfStrNoPtrData,
 	ElfStrNoPtrBss,
 	NElfStr
@@ -416,6 +417,7 @@ adddynsym(Sym *s)
 	Sym *d, *str;
 	int t;
 	char *name;
+	vlong off;
 	
 	if(s->dynid >= 0)
 		return;
@@ -479,16 +481,51 @@ adddynsym(Sym *s)
 		name = s->dynimpname;
 		if(name == nil)
 			name = s->name;
-		s->dynid = d->size/12;
+		if(d->size == 0 && ndynexp > 0) { // pre-allocate for dynexps
+			symgrow(d, ndynexp*12);
+		}
+		if(s->dynid <= -100) { // pre-allocated, see cmd/ld/go.c:^sortdynexp()
+			s->dynid = -s->dynid-100;
+			off = s->dynid*12;
+		} else {
+			off = d->size;
+			s->dynid = off/12;
+		}
 		// darwin still puts _ prefixes on all C symbols
 		str = lookup(".dynstr", 0);
-		adduint32(d, str->size);
+		setuint32(d, off, str->size);
+		off += 4;
 		adduint8(str, '_');
 		addstring(str, name);
-		adduint8(d, 0x01);	// type - N_EXT - external symbol
-		adduint8(d, 0);	// section
-		adduint16(d, 0);	// desc
-		adduint32(d, 0);	// value
+		if(s->type == SDYNIMPORT) {
+			setuint8(d, off, 0x01); // type - N_EXT - external symbol
+			off++;
+			setuint8(d, off, 0); // section
+			off++;
+		} else {
+			setuint8(d, off, 0x0f);
+			off++;
+			switch(s->type) {
+			default:
+			case STEXT:
+				setuint8(d, off, 1);
+				break;
+			case SDATA:
+				setuint8(d, off, 2);
+				break;
+			case SBSS:
+				setuint8(d, off, 4);
+				break;
+			}
+			off++;
+		}
+		setuint16(d, off, 0); // desc
+		off += 2;
+		if(s->type == SDYNIMPORT)
+			setuint32(d, off, 0); // value
+		else
+			setaddr(d, off, s);
+		off += 4;
 	} else if(HEADTYPE != Hwindows) {
 		diag("adddynsym: unsupported binary format");
 	}
@@ -537,6 +574,8 @@ doelf(void)
 		elfstr[ElfStrNoteNetbsdIdent] = addstring(shstrtab, ".note.netbsd.ident");
 	if(HEADTYPE == Hopenbsd)
 		elfstr[ElfStrNoteOpenbsdIdent] = addstring(shstrtab, ".note.openbsd.ident");
+	if(buildinfolen > 0)
+		elfstr[ElfStrNoteBuildInfo] = addstring(shstrtab, ".note.gnu.build-id");
 	addstring(shstrtab, ".elfdata");
 	addstring(shstrtab, ".rodata");
 	addstring(shstrtab, ".gcdata");
@@ -674,7 +713,7 @@ asmb(void)
 	int a, dynsym;
 	uint32 symo, startva, dwarfoff, machlink, resoff;
 	ElfEhdr *eh;
-	ElfPhdr *ph, *pph;
+	ElfPhdr *ph, *pph, *pnote;
 	ElfShdr *sh;
 	Section *sect;
 	Sym *sym;
@@ -727,6 +766,8 @@ asmb(void)
 				elftextsh += 2;
 		}
 		if(HEADTYPE == Hnetbsd || HEADTYPE == Hopenbsd)
+			elftextsh += 1;
+		if(buildinfolen > 0)
 			elftextsh += 1;
 	}
 
@@ -1000,6 +1041,7 @@ asmb(void)
 			phsh(ph, sh);
 		}
 
+		pnote = nil;
 		if(HEADTYPE == Hnetbsd || HEADTYPE == Hopenbsd) {
 			sh = nil;
 			switch(HEADTYPE) {
@@ -1013,10 +1055,22 @@ asmb(void)
 				break;
 			}
 
-			ph = newElfPhdr();
-			ph->type = PT_NOTE;
-			ph->flags = PF_R;
-			phsh(ph, sh);
+			pnote = newElfPhdr();
+			pnote->type = PT_NOTE;
+			pnote->flags = PF_R;
+			phsh(pnote, sh);
+		}
+
+		if(buildinfolen > 0) {
+			sh = newElfShdr(elfstr[ElfStrNoteBuildInfo]);
+			resoff -= elfbuildinfo(sh, startva, resoff);
+
+			if(pnote == nil) {
+				pnote = newElfPhdr();
+				pnote->type = PT_NOTE;
+				pnote->flags = PF_R;
+			}
+			phsh(pnote, sh);
 		}
 
 		// Additions to the reserved area must be above this line.
@@ -1213,6 +1267,8 @@ asmb(void)
 			a += elfwritenetbsdsig(elfstr[ElfStrNoteNetbsdIdent]);
 		if(HEADTYPE == Hopenbsd)
 			a += elfwriteopenbsdsig(elfstr[ElfStrNoteOpenbsdIdent]);
+		if(buildinfolen > 0)
+			a += elfwritebuildinfo(elfstr[ElfStrNoteBuildInfo]);
 		if(a > ELFRESERVE)	
 			diag("ELFRESERVE too small: %d > %d", a, ELFRESERVE);
 		break;

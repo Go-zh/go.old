@@ -2139,6 +2139,33 @@ live past the return from the function and can reside on the stack.
 </p>
 
 <div class="english">
+<h3 id="Why_does_my_Go_process_use_so_much_virtual_memory">
+Why does my Go process use so much virtual memory?</h3>
+</div>
+
+<h3 id="用的虚拟内存多">
+为什么我的Go进程会使用那么多虚拟内存？</h3>
+
+<div class="english">
+<p>
+The Go memory allocator reserves a large region of virtual memory as an arena
+for allocations. This virtual memory is local to the specific Go process; the
+reservation does not deprive other processes of memory.
+</p>
+</div>
+
+<p>
+Go的内存分配器在虚拟内存中预留了一大块区域作为分配的地方。这块虚拟内存局部于具体的Go进程，
+而这种预留并不会剥夺内存中的其它进程。
+</p>
+
+<p>
+要得出分配给某个Go进程的实际内存数额，请使用Unix的 <code>top</code> 命令并查阅
+<code>RES</code>（Linux）或 <code>RSIZE</code>（Mac OS X）一列。
+<!-- TODO(adg): find out how this works on Windows -->
+</p>
+
+<div class="english">
 <h2 id="Concurrency">Concurrency</h2>
 </div>
 

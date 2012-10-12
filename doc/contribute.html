@@ -97,41 +97,28 @@ tree to make sure the changes don't break other packages or programs:
 请对整个代码树运行所有的测试，以确保此更改不会破坏其它包或程序：
 </p>
 
+<div class="english">
 <pre>
 cd $GOROOT/src
-./all.bash
+./all.bash    # On Windows, run all.bat
 </pre>
-
-<div class="english">
-<p>
-The final line printed by <code>make all</code> should be of the form:
-</p>
 </div>
-
-<p>
-<code>make all</code> 打印的最后一行应为如下形式：
-</p>
 
 <pre>
-<i>N</i> known bugs; 0 unexpected bugs
+cd $GOROOT/src
+./all.bash    # 在Windows下，请运行all.bat
 </pre>
 
 <div class="english">
 <p>
-The value of <i>N</i> varies over time, but the line must
-say &ldquo;<code>0 unexpected bugs</code>&rdquo; and must not
-add &ldquo;<code>test output differs</code>.&rdquo;
+After running for a while, the command should print "<code>ALL TESTS PASSED</code>".
 </p>
 </div>
 
 <p>
-<i>N</i> 的值会随时间变化，但此行必须显示为
-&ldquo;<code>0 unexpected bugs</code>&rdquo;，且绝对不能出现
-&ldquo;<code>test output differs</code>&rdquo;。
+运行一会儿之后，命令行应当打印出“<code>ALL TESTS PASSED</code>”。
 </p>
 
-
-<div class="english">
 <h2 id="Code_review">Code review</h2>
 </div>
 
@@ -266,6 +253,8 @@ will be recorded in the <a href="http://code.google.com/p/go/source/list">Mercur
 and in the <a href="/CONTRIBUTORS"><code>CONTRIBUTORS</code></a> file.
 You can <a href="https://www.google.com/accounts/NewAccount">create a Google Account</a>
 associated with any address where you receive email.
+If you've enabled the two-step verification feature, don't forget to generate an
+application-specific password and use that when prompted for a password.
 </p>
 </div>
 
@@ -276,6 +265,7 @@ associated with any address where you receive email.
 <a href="http://code.google.com/p/go/source/list">Mercurial更改日志</a> 和
 <a href="/CONTRIBUTORS"><code>CONTRIBUTORS</code></a> 文件中。
 你可以<a href="https://www.google.com/accounts/NewAccount">创建一个Google账户</a>来关联到任何你接收邮件的地址。
+如果你开启了两步验证特性，请不要忘记生成一个特定于应用的密码并在提示输入密码时输入它。
 </p>
 
 <pre>
@@ -533,13 +523,18 @@ CL created: http://codereview.appspot.com/99999
 
 <div class="english">
 <p>
-If you need to re-edit the change description,
-run <code>hg change 99999</code>.
+If you need to re-edit the change description, or change the files included in the CL,
+run <code>hg change 99999</code>. Alternatively, you can use <code>hg file 99999 somefile</code>
+to add <code>somefile</code> to CL 99999, and use <code>hg file -d 99999 somefile</code> to remove
+<code>somefile</code> from the CL.
 </p>
 </div>
 
 <p>
-若你需要重新编辑更改描述，请运行 <code>hg change</code> 99999</p>。
+若你需要重新编辑更改描述，或更改包含在该CL中的文件，请运行 <code>hg change</code> 99999</p>。
+作为选择，你也可以使用 <code>hg file 99999 somefile</code> 将 <code>somefile</code> 添加到CL
+99999中，并使用 <code>hg file -d 99999 somefile</code> 将 <code>somefile</code>
+从该CL中移除。
 </p>
 
 <div class="english">

@@ -794,6 +794,33 @@ addaddr(Sym *s, Sym *t)
 }
 
 vlong
+setaddrplus(Sym *s, vlong off, Sym *t, int32 add)
+{
+	Reloc *r;
+
+	if(s->type == 0)
+		s->type = SDATA;
+	s->reachable = 1;
+	if(off+PtrSize > s->size) {
+		s->size = off + PtrSize;
+		symgrow(s, s->size);
+	}
+	r = addrel(s);
+	r->sym = t;
+	r->off = off;
+	r->siz = PtrSize;
+	r->type = D_ADDR;
+	r->add = add;
+	return off;
+}
+
+vlong
+setaddr(Sym *s, vlong off, Sym *t)
+{
+	return setaddrplus(s, off, t, 0);
+}
+
+vlong
 addsize(Sym *s, Sym *t)
 {
 	vlong i;
@@ -831,7 +858,9 @@ dosymtype(void)
 static int32
 alignsymsize(int32 s)
 {
-	if(s >= PtrSize)
+	if(s >= 8)
+		s = rnd(s, 8);
+	else if(s >= PtrSize)
 		s = rnd(s, PtrSize);
 	else if(s > 2)
 		s = rnd(s, 4);
@@ -1054,6 +1083,7 @@ dodata(void)
 		datsize += rnd(s->size, PtrSize);
 	}
 	sect->len = datsize - sect->vaddr;
+	datsize = rnd(datsize, PtrSize);
 
 	/* gcdata */
 	sect = addsection(&segtext, ".gcdata", 04);

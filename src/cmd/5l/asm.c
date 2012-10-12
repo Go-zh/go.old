@@ -38,6 +38,7 @@
 static Prog *PP;
 
 char linuxdynld[] = "/lib/ld-linux.so.3"; // 2 for OABI, 3 for EABI
+char freebsddynld[] = "/usr/libexec/ld-elf.so.1";
 
 int32
 entryvalue(void)
@@ -78,6 +79,7 @@ enum {
 	ElfStrGnuVersionR,
 	ElfStrNoteNetbsdIdent,
 	ElfStrNoteOpenbsdIdent,
+	ElfStrNoteBuildInfo,
 	ElfStrNoPtrData,
 	ElfStrNoPtrBss,
 	NElfStr
@@ -344,13 +346,16 @@ addpltsym(Sym *s)
 	if(iself) {
 		plt = lookup(".plt", 0);
 		got = lookup(".got.plt", 0);
-		rel = lookup(".rel", 0);
+		rel = lookup(".rel.plt", 0);
 		if(plt->size == 0)
 			elfsetupplt();
 		
 		// .got entry
 		s->got = got->size;
-		adduint32(got, 0);
+		// In theory, all GOT should point to the first PLT entry,
+		// Linux/ARM's dynamic linker will do that for us, but FreeBSD/ARM's
+		// dynamic linker won't, so we'd better do it ourselves.
+		addaddrplus(got, plt, 0);
 
 		// .plt entry, this depends on the .got entry
 		s->plt = plt->size;
@@ -519,6 +524,8 @@ doelf(void)
 		elfstr[ElfStrNoteNetbsdIdent] = addstring(shstrtab, ".note.netbsd.ident");
 	if(HEADTYPE == Hopenbsd)
 		elfstr[ElfStrNoteOpenbsdIdent] = addstring(shstrtab, ".note.openbsd.ident");
+	if(buildinfolen > 0)
+		elfstr[ElfStrNoteBuildInfo] = addstring(shstrtab, ".note.gnu.build-id");
 	addstring(shstrtab, ".rodata");
 	addstring(shstrtab, ".gcdata");
 	addstring(shstrtab, ".gcbss");
@@ -665,7 +672,7 @@ asmb(void)
 	int a, dynsym;
 	uint32 fo, symo, startva, resoff;
 	ElfEhdr *eh;
-	ElfPhdr *ph, *pph;
+	ElfPhdr *ph, *pph, *pnote;
 	ElfShdr *sh;
 	Section *sect;
 	int o;
@@ -696,11 +703,13 @@ asmb(void)
 		/* !debug['d'] causes extra sections before the .text section */
 		elftextsh = 2;
 		if(!debug['d']) {
-			elftextsh += 9;
+			elftextsh += 10;
 			if(elfverneed)
 				elftextsh += 2;
 		}
 		if(HEADTYPE == Hnetbsd || HEADTYPE == Hopenbsd)
+			elftextsh += 1;
+		if(buildinfolen > 0)
 			elftextsh += 1;
 	}
 
@@ -755,6 +764,9 @@ asmb(void)
 	Bflush(&bso);
 	cseek(0L);
 	switch(HEADTYPE) {
+	default:
+		if(iself)
+			goto Elfput;
 	case Hnoheader:	/* no header */
 		break;
 	case Hrisc:	/* aif for risc os */
@@ -815,7 +827,7 @@ asmb(void)
 		lputl(0xe3300000);		/* nop */
 		lputl(0xe3300000);		/* nop */
 		break;
-	case Hlinux:
+	Elfput:
 		/* elf arm */
 		eh = getElfEhdr();
 		fo = HEADR;
@@ -851,8 +863,16 @@ asmb(void)
 			sh->type = SHT_PROGBITS;
 			sh->flags = SHF_ALLOC;
 			sh->addralign = 1;
-			if(interpreter == nil)
-				interpreter = linuxdynld;
+			if(interpreter == nil) {
+				switch(HEADTYPE) {
+				case Hlinux:
+					interpreter = linuxdynld;
+					break;
+				case Hfreebsd:
+					interpreter = freebsddynld;
+					break;
+				}
+			}
 			resoff -= elfinterp(sh, startva, resoff, interpreter);
 
 			ph = newElfPhdr();
@@ -861,6 +881,7 @@ asmb(void)
 			phsh(ph, sh);
 		}
 
+		pnote = nil;
 		if(HEADTYPE == Hnetbsd || HEADTYPE == Hopenbsd) {
 			sh = nil;
 			switch(HEADTYPE) {
@@ -874,10 +895,22 @@ asmb(void)
 				break;
 			}
 
-			ph = newElfPhdr();
-			ph->type = PT_NOTE;
-			ph->flags = PF_R;
-			phsh(ph, sh);
+			pnote = newElfPhdr();
+			pnote->type = PT_NOTE;
+			pnote->flags = PF_R;
+			phsh(pnote, sh);
+		}
+
+		if(buildinfolen > 0) {
+			sh = newElfShdr(elfstr[ElfStrNoteBuildInfo]);
+			resoff -= elfbuildinfo(sh, startva, resoff);
+
+			if(pnote == nil) {
+				pnote = newElfPhdr();
+				pnote->type = PT_NOTE;
+				pnote->flags = PF_R;
+			}
+			phsh(pnote, sh);
 		}
 
 		elfphload(&segtext);
@@ -886,6 +919,31 @@ asmb(void)
 		/* Dynamic linking sections */
 		if(!debug['d']) {	/* -d suppresses dynamic loader format */
 			/* S headers for dynamic linking */
+			dynsym = eh->shnum;
+			sh = newElfShdr(elfstr[ElfStrDynsym]);
+			sh->type = SHT_DYNSYM;
+			sh->flags = SHF_ALLOC;
+			sh->entsize = ELF32SYMSIZE;
+			sh->addralign = 4;
+			sh->link = dynsym+1;	// dynstr
+			// sh->info = index of first non-local symbol (number of local symbols)
+			shsym(sh, lookup(".dynsym", 0));
+
+			sh = newElfShdr(elfstr[ElfStrDynstr]);
+			sh->type = SHT_STRTAB;
+			sh->flags = SHF_ALLOC;
+			sh->addralign = 1;
+			shsym(sh, lookup(".dynstr", 0));
+
+			sh = newElfShdr(elfstr[ElfStrRelPlt]);
+			sh->type = SHT_REL;
+			sh->flags = SHF_ALLOC;
+			sh->entsize = ELF32RELSIZE;
+			sh->addralign = 4;
+			sh->link = dynsym;
+			sh->info = eh->shnum;	// .plt
+			shsym(sh, lookup(".rel.plt", 0));
+
 			// ARM ELF needs .plt to be placed before .got
 			sh = newElfShdr(elfstr[ElfStrPlt]);
 			sh->type = SHT_PROGBITS;
@@ -907,22 +965,6 @@ asmb(void)
 			sh->entsize = 4;
 			sh->addralign = 4;
 			shsym(sh, lookup(".got", 0));
-
-			dynsym = eh->shnum;
-			sh = newElfShdr(elfstr[ElfStrDynsym]);
-			sh->type = SHT_DYNSYM;
-			sh->flags = SHF_ALLOC;
-			sh->entsize = ELF32SYMSIZE;
-			sh->addralign = 4;
-			sh->link = dynsym+1;	// dynstr
-			// sh->info = index of first non-local symbol (number of local symbols)
-			shsym(sh, lookup(".dynsym", 0));
-
-			sh = newElfShdr(elfstr[ElfStrDynstr]);
-			sh->type = SHT_STRTAB;
-			sh->flags = SHF_ALLOC;
-			sh->addralign = 1;
-			shsym(sh, lookup(".dynstr", 0));
 
 			if(elfverneed) {
 				sh = newElfShdr(elfstr[ElfStrGnuVersion]);
@@ -1029,6 +1071,11 @@ asmb(void)
 		eh->ident[EI_CLASS] = ELFCLASS32;
 		eh->ident[EI_DATA] = ELFDATA2LSB;
 		eh->ident[EI_VERSION] = EV_CURRENT;
+		switch(HEADTYPE) {
+		case Hfreebsd:
+			eh->ident[EI_OSABI] = ELFOSABI_FREEBSD;
+			break;
+		}
 
 		eh->type = ET_EXEC;
 		eh->machine = EM_ARM;
@@ -1050,6 +1097,8 @@ asmb(void)
 			a += elfwritenetbsdsig(elfstr[ElfStrNoteNetbsdIdent]);
 		if(HEADTYPE == Hopenbsd)
 			a += elfwriteopenbsdsig(elfstr[ElfStrNoteOpenbsdIdent]);
+		if(buildinfolen > 0)
+			a += elfwritebuildinfo(elfstr[ElfStrNoteBuildInfo]);
 		if(a > ELFRESERVE)	
 			diag("ELFRESERVE too small: %d > %d", a, ELFRESERVE);
 		break;
