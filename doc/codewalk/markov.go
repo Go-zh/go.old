@@ -183,6 +183,7 @@ func main() {
 	c.Build(os.Stdin)             // Build chains from standard input.
 	text := c.Generate(*numWords) // Generate text.
 	fmt.Println(text)             // Write text to standard output.
+}
 */
 
 func main() {
