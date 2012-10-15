@@ -65,7 +65,7 @@ type strategy func(score) action
 
 // stayAtK returns a strategy that rolls until thisTurn is at least k, then stays.
 
-// strategy 返回一个策略，该策略继续掷骰直到这一轮 thisTurn 至少为 k，然后继续停留。
+// strategy 返回一个策略，该策略继续掷骰直到这一轮 thisTurn 至少为 k，然后停留。
 func stayAtK(k int) strategy {
 	return func(s score) action {
 		if s.thisTurn >= k {
