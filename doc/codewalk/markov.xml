@@ -473,7 +473,7 @@ p[len(p)-1] = suffix
 </step>
 </div>
 
-<step title="命令行标记" src="doc/codewalk/markov.go:/Register command-line flags/,/prefixLen/">
+<step title="命令行标记" src="doc/codewalk/markov.go:/寄存命令行/,/prefixLen/">
 	为了让调整前缀及生成文本长度变得容易，我们使用 <code><a href="/pkg/flag/">flag</a></code>
 	包来解析命令行标记。
 	<br/><br/>

@@ -50,7 +50,7 @@
 </step>
 </div>
 
-<step title="游戏概览" src="doc/codewalk/pig.go:/\/\/ A score/,/thisTurn int\n}/">
+<step title="游戏概览" src="doc/codewalk/pig.go:/\/\/ 总分/,/thisTurn int\n}/">
 	Pig是由两个玩家掷6面骰子的游戏。在每一轮中，你可能掷骰或停留。
 	<ul>
 		<li>如果你掷出了1，就会失去你在这轮中的所有点数，并交由你的对手玩。
@@ -81,7 +81,7 @@
 </step>
 </div>
 
-<step title="用户定义函数类型" src="doc/codewalk/pig.go:/\/\/ An action/,/bool\)/">
+<step title="用户定义函数类型" src="doc/codewalk/pig.go:/\/\/ action/,/bool\)/">
 	在Go中，函数可以像其它值那样到处传递。一个函数的类型签名描述了其实参与返回值的类型。
 	<br/><br/>
 
@@ -104,7 +104,7 @@
 </step>
 </div>
 
-<step title="多返回值" src="doc/codewalk/pig.go:/\/\/ roll returns/,/true\n}/">
+<step title="多返回值" src="doc/codewalk/pig.go:/\/\/ roll 返回/,/true\n}/">
 	Go的函数可以返回多个值。
 	<br/><br/>
 
@@ -123,7 +123,7 @@
 </step>
 </div>
 
-<step title="高阶函数" src="doc/codewalk/pig.go:/\/\/ A strategy/,/action\n/">
+<step title="高阶函数" src="doc/codewalk/pig.go:/\/\/ strategy/,/action\n/">
 	一个函数能够将其它函数作为实参和返回值。
 	<br/><br/>
 
@@ -165,7 +165,7 @@
 </step>
 </div>
 
-<step title="模拟游戏" src="doc/codewalk/pig.go:/\/\/ play/,/currentPlayer\n}/">
+<step title="模拟游戏" src="doc/codewalk/pig.go:/\/\/ play 模拟/,/currentPlayer\n}/">
 	我们这样来模拟一场Pig游戏：通过调用一个 <code>action</code> 来更新
 	<code>score</code>，直到一个玩家达到100点为止。每一个 <code>action</code>
 	都通过调用与当前玩家相关联的 <code>strategy</code> 函数来确定。
@@ -178,7 +178,7 @@
 </step>
 </div>
 
-<step title="模拟一场比赛" src="doc/codewalk/pig.go:/\/\/ roundRobin/,/gamesPerStrategy\n}/">
+<step title="模拟一场比赛" src="doc/codewalk/pig.go:/\/\/ roundRobin 模拟/,/gamesPerStrategy\n}/">
 	<code>roundRobin</code> 函数模拟一场比赛并记录输赢。每一个策略与其它策略互相比
 	<code>gamesPerSeries</code> 次。
 </step>
@@ -190,7 +190,7 @@
 </step>
 </div>
 
-<step title="变参函数声明" src="doc/codewalk/pig.go:/\/\/ ratioS/,/string {/">
+<step title="变参函数声明" src="doc/codewalk/pig.go:/\/\/ ratioString 接受/,/string {/">
 	像 <code>ratioString</code> 这样的变参函数接受数量可变的实参。
 	这些参数实参在该函数中可作为一个切片使用。
 </step>
@@ -208,10 +208,10 @@
 </div>
 
 <step title="模拟的结果" src="doc/codewalk/pig.go:/func main/,/\n}/">
-	<code>main</code> 函数定义了100个底本策略，模拟一场比赛，并打印出每一个策略的输/赢记录。
+	<code>main</code> 函数定义了100个基本策略，模拟一场比赛，并打印出每一个策略的输/赢记录。
 	<br/><br/>
 
-	在这些策略中，停留25次最好，不过
+	在这些策略中，最好是停留了25次，不过
 	<a href="http://www.google.com/search?q=optimal+play+pig">Pig的最佳策略</a>
 	则更加复杂。
 </step>

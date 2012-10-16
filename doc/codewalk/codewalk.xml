@@ -1,47 +1,92 @@
+<!--
 <codewalk title="How to Write a Codewalk">
+-->
 
+<codewalk title="如何编写代码漫步">
+
+<div class="english">
 <step title="Introduction" src="doc/codewalk/codewalk.xml">
 	A codewalk is a guided tour through a piece of code.
 	It consists of a sequence of steps, each typically explaining
 	a highlighted section of code.
 	<br/><br/>
-	
+
 	The <a href="/cmd/godoc">godoc</a> web server translates
 	an XML file like the one in the main window pane into the HTML
 	page that you're viewing now.
 	<br/><br/>
-	
+
 	The codewalk with URL path <code>/doc/codewalk/</code><i>name</i>
 	is loaded from the input file <code>$GOROOT/doc/codewalk/</code><i>name</i><code>.xml</code>.
 	<br/><br/>
-	
+
 	This codewalk explains how to write a codewalk by examining
 	its own source code,
 	<code><a href="/doc/codewalk/codewalk.xml">$GOROOT/doc/codewalk/codewalk.xml</a></code>,
-	shown in the main window pane to the left.	
+	shown in the main window pane to the left.
+</step>
+</div>
+
+<step title="前言" src="doc/codewalk/codewalk.xml">
+	代码漫步就是贯穿一篇代码的指导教程，它由一系列的步骤构成。
+	其中的每一步都高亮并讲解了一节代码。
+	<br/><br/>
+
+	<a href="/cmd/godoc">godoc</a> Web服务器会将像主窗格中这样的XML
+	文件翻译为你现在正在阅览的这样的HTML页面。
+	<br/><br/>
+
+	代码漫步及其URL路径 <code>/doc/codewalk/</code><i>名称</i> 加载自输入的文件
+	<code>$GOROOT/doc/codewalk/</code><i>名称</i><code>.xml</code>。
+	<br/><br/>
+
+	本代码漫步通过测验其自身的源码讲解了如何编写一个代码漫步，
+	<code><a href="/doc/codewalk/codewalk.xml">$GOROOT/doc/codewalk/codewalk.xml</a></code>
+	显示在左边的主窗格中。
 </step>
 
+<div class="english">
 <step title="Title" src="doc/codewalk/codewalk.xml:/title=/">
 	The codewalk input file is an XML file containing a single
 	<code>&lt;codewalk&gt;</code> element.
 	That element's <code>title</code> attribute gives the title
 	that is used both on the codewalk page and in the codewalk list.
 </step>
+</div>
 
+<step title="标题" src='doc/codewalk/codewalk.xml:/title="如何/'>
+	代码漫步的输入文件时一个XML文件，它包含一个单一的 <code>&lt;codewalk&gt;</code>
+	元素。该元素的 <code>title</code> 属性为代码漫步页面和代码漫步列表赋予了标题。
+</step>
+
+<div class="english">
 <step title="Steps" src="doc/codewalk/codewalk.xml:/&lt;step/,/step&gt;/">
-	Each step in the codewalk is a <code>&lt;step&gt;</code> element 
+	Each step in the codewalk is a <code>&lt;step&gt;</code> element
 	nested inside the main <code>&lt;codewalk&gt;</code>.
 	The step element's <code>title</code> attribute gives the step's title,
 	which is shown in a shaded bar above the main step text.
 	The element's <code>src</code> attribute specifies the source
-	code to show in the main window pane and, optionally, a range of 
+	code to show in the main window pane and, optionally, a range of
 	lines to highlight.
 	<br/><br/>
-	
+
 	The first step in this codewalk does not highlight any lines:
 	its <code>src</code> is just a file name.
 </step>
+</div>
 
+<step title="步骤" src="doc/codewalk/codewalk.xml:/前言/,/step&gt;/">
+	代码漫步中的每一个步骤都是嵌套在主 <code>&lt;codewalk&gt;</code> 中的
+	<code>&lt;step&gt;</code> 元素。
+	<code>&lt;step&gt;</code> 元素的 <code>title</code> 属性为该步骤赋予了标题，
+	它显示在主步骤文本上方的阴影条中。
+	该元素的 <code>src</code> 属性指定了在主窗格中显示的源码，以及可选的行高亮范围。
+	<br/><br/>
+
+	此代码漫步中的第一步并不高亮任何行：它的 <code>src</code> 就是一个文件名。
+</step>
+
+<div class="english">
 <step title="Specifiying a source line" src='doc/codewalk/codewalk.xml:/title="Title"/'>
 	The most complex part of the codewalk specification is
 	saying what lines to highlight.
@@ -56,13 +101,31 @@
 	<i>filename</i><code>:</code><i>address</i>,
 	where <i>address</i> is an address in the syntax used by the text editors <i>sam</i> and <i>acme</i>.
 	<br/><br/>
-	
+
 	The simplest address is a single regular expression.
 	The highlighted line in the main window pane shows that the
 	address for the &ldquo;Title&rdquo; step was <code>/title=/</code>,
 	which matches the first instance of that <a href="/pkg/regexp">regular expression</a> (<code>title=</code>) in the file.
 </step>
+</div>
 
+<step title="指定一个源码行" src='doc/codewalk/codewalk.xml:/title="标题"/'>
+	代码漫步规范中最复杂的一部分就是说明需要高亮什么行。
+	不像一般的使用行号，代码漫步使用地址语法让通过内容来描述匹配变得可能。
+	就算文件被编辑后，描述性地址也能继续引用文件中正确的部分。
+	<br/><br/>
+
+	要指定一行源代码，请使用 <i>文件名</i><code>:</code><i>地址</i> 形式的
+	<code>src</code> 属性，其中 <i>地址</i> 是文本编辑器 <i>sam</i> 和 <i>acme</i>
+	使用的地址语法。
+	<br/><br/>
+
+	最简单的地址就是单一的正则表达式。在“标题”一步中主窗格显示高亮的行的地址为
+	<code>/title="如何/</code>，它在此文件中为该<a href="/pkg/regexp">正则表达式</a>
+	（<code>title="如何</code>）匹配的第一个实例。
+</step>
+
+<div class="english">
 <step title="Specifying a source range" src='doc/codewalk/codewalk.xml:/title="Steps"/'>
 	To highlight a range of source lines, the simplest address to use is
 	a pair of regular expressions
@@ -70,11 +133,11 @@
 	The highlight begins with the line containing the first match for <i>regexp1</i>
 	and ends with the line containing the first match for <i>regexp2</i>
 	after the end of the match for <i>regexp1</i>.
-	Ignoring the HTML quoting, 
+	Ignoring the HTML quoting,
 	The line containing the first match for <i>regexp1</i> will be the first one highlighted,
 	and the line containing the first match for <i>regexp2</i>.
 	<br/><br/>
-	
+
 	The address <code>/&lt;step/,/step&gt;/</code> looks for the first instance of
 	<code>&lt;step</code> in the file, and then starting after that point,
 	looks for the first instance of <code>step&gt;</code>.
@@ -82,7 +145,23 @@
 	Note that the <code>&lt;</code> and <code>&gt;</code> had to be written
 	using XML escapes in order to be valid XML.
 </step>
+</div>
 
+<step title="指定一个源码范围" src='doc/codewalk/codewalk.xml:/title="步骤"/'>
+	要高亮一定范围的源码行，最简单的地址就是使用一对正则表达式
+	<code>/</code><i>regexp1</i><code>/,/</code><i>regexp2</i><code>/</code>。
+	该高亮开始于包含第一个<i>regexp1</i>匹配的行，终止于<i>regexp1</i>匹配后，
+	第一个<i>regexp2</i>匹配的行。忽略HTML引用，包含<i>regexp1</i>匹配的第一个行将是第一个被高亮的，
+	而包含<i>regexp2</i>匹配的第一个行将是最后一个。
+	<br/><br/>
+
+	地址 <code>/<i>前言</i>/,/step&gt;</code> 在本文件中查找第一个 <code>/<i>前言</i>/</code>
+	的实例，接着从此处往后，找到第一个 <code>/step&gt;/</code>的实例。
+	（点击上面的“步骤”这一步查看高亮的作用。）请注意 <code>&lt;</code> 和
+	<code>&gt;</code> 必使用XML转义来保证它是有效的XML。
+</step>
+
+<div class="english">
 <step title="Advanced addressing" src="doc/codewalk/codewalk.xml:/Advanced/,/step&gt;/">
 	The <code>/</code><i>regexp</i><code>/</code>
  	and <code>/</code><i>regexp1</i><code>/,/</code><i>regexp2</i><code>/</code>
@@ -118,7 +197,42 @@
 	    <td>From the left of <i>a1</i> to the right of <i>a2</i> (default <code>0,$</code>).</td></tr>
 	</table>
 </step>
+</div>
 
+<step title="高级寻址" src="doc/codewalk/codewalk.xml:/高级/,/step&gt;/">
+	<code>/</code><i>regexp</i><code>/</code> 和
+	<code>/</code><i>regexp1</i><code>/,/</code><i>regexp2</i><code>/</code>
+	的形式能够满足大多数情况。
+	<br/><br/>
 
-	
+	完整的地址语法在此列表中进行了概述（表II的一个引述摘录自
+	<a href="http://plan9.bell-labs.com/sys/doc/sam/sam.html">文本编辑器 <code>sam</code></a>）：
+
+	<br/><br/>
+
+	<table>
+	<tr><td colspan="2"><b>简单地址</b></td></tr>
+	<tr><td><code>#</code><i>n</i></td>
+	    <td>字符<i>n</i>后面为空字符串</td></tr>
+	<tr><td><i>n</i></td>
+	    <td>行号 <i>n</i></td></tr>
+	<tr><td><code>/</code><i>regexp</i><code>/</code></td>
+	    <td>从第一个匹配的正则表达式往后</td></tr>
+	<!-- 还不支持？
+	<tr><td><code>–/</code><i>regexp</i><code>/</code></td>
+	    <td>从第一个匹配的正则表达式往前</td></tr>
+	-->
+	<tr><td><code>$</code></td>
+	    <td>文件末的null字符串</td></tr>
+
+	<tr><td colspan="2"><b>混合地址</b></td></tr>
+	<tr><td><i>a1</i><code>+</code><i>a2</i></td>
+	    <td>地址 <i>a2</i> 的求值始于 <i>a1</i> 的右侧</td></tr>
+	<tr><td><i>a1</i><code>-</code><i>a2</i></td>
+	    <td>地址 <i>a2</i> 的求值按反方向始于 <i>a1</i> 的左侧</td></tr>
+	<tr><td><i>a1</i><code>,</code><i>a2</i></td>
+	    <td>从 <i>a1</i> 的左侧到 <i>a2</i> 的右侧（默认为 <code>0,$</code>）。</td></tr>
+	</table>
+</step>
+
 </codewalk>

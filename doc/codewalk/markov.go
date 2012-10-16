@@ -170,6 +170,20 @@ func (c *Chain) Generate(n int) string {
 	return strings.Join(words, " ")
 }
 
+func main() {
+	// 寄存命令行标记。
+	numWords := flag.Int("words", 100, "maximum number of words to print")
+	prefixLen := flag.Int("prefix", 2, "prefix length in words")
+
+	flag.Parse()                     // 解析命令行标记。
+	rand.Seed(time.Now().UnixNano()) // 设置随机数生成器的种子。
+
+	c := NewChain(*prefixLen)     // 初始化一个新的 Chain。
+	c.Build(os.Stdin)             // 从标准输入中构建链。
+	text := c.Generate(*numWords) // 生成文本。
+	fmt.Println(text)             // 将文本写入标准输出。
+}
+
 /*
 func main() {
 	// Register command-line flags.
@@ -185,17 +199,3 @@ func main() {
 	fmt.Println(text)             // Write text to standard output.
 }
 */
-
-func main() {
-	// 寄存命令行标记。
-	numWords := flag.Int("words", 100, "maximum number of words to print")
-	prefixLen := flag.Int("prefix", 2, "prefix length in words")
-
-	flag.Parse()                     // 解析命令行标记。
-	rand.Seed(time.Now().UnixNano()) // 设置随机数生成器的种子。
-
-	c := NewChain(*prefixLen)     // 初始化一个新的 Chain。
-	c.Build(os.Stdin)             // 从标准输入中构建链。
-	text := c.Generate(*numWords) // 生成文本。
-	fmt.Println(text)             // 将文本写入标准输出。
-}
