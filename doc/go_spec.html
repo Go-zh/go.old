@@ -1,12 +1,12 @@
 <!--{
 	"Title": "Go编程语言规范",
-	"Subtitle": "版本：2012年10月10日 || 译者：Oling Cat <olingcat@gmail.com>",
+	"Subtitle": "版本：2012年10月12日 || 译者：Oling Cat <olingcat@gmail.com>",
 	"Path": "/ref/spec"
 }-->
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of October 10, 2012",
+	"Subtitle": "Version of October 12, 2012",
 	"Path": "/ref/spec"
 }-->
 
@@ -9160,6 +9160,7 @@ are in scope within the literal, the deferred function may access and modify
 the result parameters before they are returned.
 If the deferred function has any return values, they are discarded when
 the function completes.
+(See also the section on <a href="#Handling_panics">handling panics</a>.)
 </p>
 
 <pre>
@@ -9189,6 +9190,7 @@ func f() (result int) {
 例如，若被推迟的函数为<a href="#函数字面">函数字面</a>，而其外围函数在其作用域中的函数字面内拥有
 <a href="#函数类型">已命名结果形参</a>，则被推迟的函数可在该结果形参被返回前访问并更改。
 若被推迟函数拥有任何返回值，则它们会在该函数完成时丢弃。
+（另请参阅<a href="#恐慌处理">恐慌处理</a>）一节。
 </p>
 
 <pre>
@@ -9792,10 +9794,13 @@ func recover() interface{}
 When a function <code>F</code> calls <code>panic</code>, normal
 execution of <code>F</code> stops immediately.  Any functions whose
 execution was <a href="#Defer_statements">deferred</a> by the
-invocation of <code>F</code> are run in the usual way, and then
-<code>F</code> returns to its caller.  To the caller, <code>F</code>
+invocation of <code>F</code> are immediately run in the usual way,
+but with the current values of any result parameters, and then
+<code>F</code> returns to its caller without executing the rest of
+the function.  To the caller, <code>F</code>
 then behaves like a call to <code>panic</code>, terminating its own
-execution and running deferred functions.  This continues until all
+execution and running deferred functions in the same manner.
+This continues until all
 functions in the goroutine have ceased execution, in reverse order.
 At that point, the program is
 terminated and the error condition is reported, including the value of
@@ -9806,12 +9811,12 @@ called <i>panicking</i>.
 
 <p>
 当函数 <code>F</code> 调用 <code>panic</code>时，<code>F</code> 的正常执行就立刻停止。
-任何函数的执行都会被通常方式运行的 <code>F</code> 调用<a href="#Defer语句">推迟</a>，
-然后 <code>F</code> 返回给其调用者。对于调用者，<code>F</code> 的行为如同 <code>panic</code>
-的一个调用，终止其自己的执行并运行被推迟的函数。这会持续到所有Go程中的函数都按相反顺序停止执行。
+被 <code>F</code> 的请求<a href="#Defer语句">推迟</a>的任何函数执行都会以通常方式立即运行，
+但不带任何结果形参的当前值，然后 <code>F</code> 返回给其调用者，而不执行该函数剩余的部分。
+对于其调用者，<code>F</code> 的行为如同 <code>panic</code> 的一个调用，
+终止其自身的执行并以相同的方式运行被推迟的函数。这会持续到所有Go程中的函数都按相反顺序停止执行后。
 到那时，该程序将被终止，而该错误条件会被报告，包括该 <code>panic</code> 的实参值。
-此终止序列称为<i>恐慌状态
-</i>。
+此终止序列称为<i>恐慌过程</i>。
 </p>
 
 <pre>
@@ -9835,14 +9840,12 @@ was <code>nil</code>, <code>recover</code> returns <code>nil</code>.
 </div>
 
 <p>
-<code>recover</code> 函数允许程序管理恐慌Go程的行为。在<i>已推迟函数中</i>（但不是任何被它调用的函数）
-执行 <code>recover</code> 调用会通过正常执行来停止恐慌状态
-序列，并检索传递至 <code>panic</code>
-调用的错误值。若 <code>recover</code> 在已推迟函数之外被调用，它将不会停止恐慌状态
-序列。在此情况下，
-或当Go程不为恐慌状态
-时，或提供给 <code>panic</code> 的实参为 <code>nil</code> 时，则
-<code>recover</code> 将返回 <code>nil</code>。
+<code>recover</code> 函数允许程序管理恐慌过程Go程的行为。在<i>已推迟函数</i>
+（而不是任何被它调用的函数）中，执行 <code>recover</code> 调用会通过正常执行来停止恐慌过程
+序列，并检索传递至 <code>panic</code> 调用的错误值。若 <code>recover</code>
+在已推迟函数之外被调用，它将不会停止恐慌过程序列。在此情况下，或当Go程不为恐慌过程
+时，或提供给 <code>panic</code> 的实参为 <code>nil</code> 时，
+<code>recover</code> 就会返回 <code>nil</code>。
 </p>
 
 <div class="english">
