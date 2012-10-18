@@ -109,7 +109,7 @@ map[string][]string{
 </step>
 </div>
 
-<step title="Chain 结构体" src="doc/codewalk/markov.go:/type Chain/,/}/">
+<step title="Chain 结构体" src="doc/codewalk/markov.go:/type Chain/,/\n}/">
 	该链表的完整状态由其自身以及前缀的单词数构成。<code>Chain</code> 结构体
 	则存储了这些数据。
 </step>
