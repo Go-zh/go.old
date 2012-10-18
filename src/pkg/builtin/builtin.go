@@ -18,7 +18,7 @@ package builtin
 
 // bool is the set of boolean values, true and false.
 
-// bool 为布尔值的集合，即 true 与 false。
+// bool 为布尔值的集合，即 true 和 false。
 type bool bool
 
 // uint8 is the set of all unsigned 8-bit integers.
@@ -186,8 +186,8 @@ type ComplexType complex64
 //	slice = append(slice, elem1, elem2)
 //	slice = append(slice, anotherSlice...)
 
-// append 内建函数用于将元素追加到切片的末尾之后。若它有足够的容量，
-// 其目标即为重新切片以适应新的元素。若否，则会分配一个新的基本数组。
+// append 内建函数用于将元素追加到切片的末尾。
+// 若它有足够的容量，其目标就会重新切片以适应新的元素。否则，就会分配一个新的基本数组。
 // append 返回更新后的切片。因此必须存储追加后的结果，通常为包含该切片自身的变量：
 //	slice = append(slice, elem1, elem2)
 //	slice = append(slice, anotherSlice...)
@@ -198,11 +198,18 @@ func append(slice []Type, elems ...Type) []Type
 // string to a slice of bytes.) The source and destination may overlap. Copy
 // returns the number of elements copied, which will be the minimum of
 // len(src) and len(dst).
+
+// copy 内建函数用于将元素从来源切片复制到目标切片中。
+// （一种特例是，它也能将字节从字符串复制到字节切片中。）来源和目标可以重叠。
+// copy 返回被复制的元素数量，它将是 len(src) 和 len(dst) 中较小的那个。
 func copy(dst, src []Type) int
 
 // The delete built-in function deletes the element with the specified key
 // (m[key]) from the map. If there is no such element, delete is a no-op.
 // If m is nil, delete panics.
+
+// delete 内建函数用于按照指定的键将元素从映射中删除。
+// 若无此元素，delete 即为空操作；若 m 为 nil，delete 就会引发恐慌。
 func delete(m map[Type]Type1, key Type)
 
 // The len built-in function returns the length of v, according to its type:
@@ -212,6 +219,13 @@ func delete(m map[Type]Type1, key Type)
 //	String: the number of bytes in v.
 //	Channel: the number of elements queued (unread) in the channel buffer;
 //	if v is nil, len(v) is zero.
+
+// len 内建函数用于返回 v 的长度，这取决于具体类型：
+//	数组：v 中元素的数量。
+//	数组指针：*v 中元素的数量（即使 v 为 nil）。
+//	切片或映射：v 中元素的数量；若 v 为 nil，len(v) 即为零。
+//	字符串：v 中字节的数量。
+//	信道：信道缓存中队列（未读取）元素的数量；若 v 为 nil，len(v) 即为零。
 func len(v Type) int
 
 // The cap built-in function returns the capacity of v, according to its type:
@@ -221,6 +235,12 @@ func len(v Type) int
 //	if v is nil, cap(v) is zero.
 //	Channel: the channel buffer capacity, in units of elements;
 //	if v is nil, cap(v) is zero.
+
+// cap 内建函数用于返回 v 的容量，这取决于具体类型：
+//	数组：v 中元素的数量（与 len(v) 相同）。
+//	数组指针：*v 中元素的数量（与 len(v) 相同）。
+//	切片：在重新切片时，切片能够达到的最大长度；若 v 为 nil，len(v) 即为零。
+//	信道：按照元素的单元，相应信道缓存的容量；若 v 为 nil，len(v) 即为零。
 func cap(v Type) int
 
 // The make built-in function allocates and initializes an object of type
@@ -239,11 +259,24 @@ func cap(v Type) int
 //	Channel: The channel's buffer is initialized with the specified
 //	buffer capacity. If zero, or the size is omitted, the channel is
 //	unbuffered.
+
+// make 内建函数用于分配并初始化一个类型为切片、映射、或（仅仅为）信道的对象。
+// 与 new 相同的是，其第一个实参为类型，而非值。不同的是，make 的返回类型
+// 与其参数相同，而非指向它的指针。其具体结果取决于具体的类型：
+//	切片：size 指定了其长度。该切片的容量等于其长度。第二个整数实参可用于指定
+//		不同的容量；它必须不小于其长度，因此 make([]int, 0, 10) 会分配一个长度为0，
+//		容量为10的切片。
+//	映射：初始分配的创建取决于 size，但产生的映射长度为0。size 可以省略，这种情况下
+//		就会分配一个小的起始大小。
+//	信道：信道的缓存根据指定的缓存容量初始化。若 size 为零或被省略，该信道即为无缓存的。
 func make(Type, size IntegerType) Type
 
 // The new built-in function allocates memory. The first argument is a type,
 // not a value, and the value returned is a pointer to a newly
 // allocated zero value of that type.
+
+// new 内建函数用于分配内存。
+// 其第一个实参为类型，而非值，其返回值为指向该类型的新分配的零值的指针。
 func new(Type) *Type
 
 // The complex built-in function constructs a complex value from two
@@ -251,15 +284,25 @@ func new(Type) *Type
 // size, either float32 or float64 (or assignable to them), and the return
 // value will be the corresponding complex type (complex64 for float32,
 // complex128 for float64).
+
+// complex 内建函数用于将两个浮点数值构造成一个复数值。
+// 其实部和虚部的大小必须相同，即 float32 或 float64（或可赋予它们的），其返回值
+// 即为对应的复数类型（complex64 对应 float32，complex128 对应 float64）。
 func complex(r, i FloatType) ComplexType
 
 // The real built-in function returns the real part of the complex number c.
 // The return value will be floating point type corresponding to the type of c.
+
+// real 内建函数用于返回复数 c 的实部。
+// 其返回值为对应于 c 类型的浮点数。
 func real(c ComplexType) FloatType
 
 // The imag built-in function returns the imaginary part of the complex
 // number c. The return value will be floating point type corresponding to
 // the type of c.
+
+// imag 内建函数用于返回复数 c 的虚部。
+// 其返回值为对应于 c 类型的浮点数。
 func imag(c ComplexType) FloatType
 
 // The close built-in function closes a channel, which must be either
@@ -270,6 +313,13 @@ func imag(c ComplexType) FloatType
 // blocking, returning the zero value for the channel element. The form
 //	x, ok := <-c
 // will also set ok to false for a closed channel.
+
+// close 内建函数用于关闭信道，该信道必须为双向的或只发送的。
+// 它应当只由发送者执行，而不应由接收者执行，其效果是在最后发送的值被接收后停止该信道。
+// 在最后一个值从已关闭的信道 c 中被接收后，任何从 c 的接收操作都会无阻塞成功，
+// 它会返回该信道元素类型的零值。对于已关闭的信道，形式
+//	x, ok := <-c
+// 还会将 ok 置为 false。
 func close(c chan<- Type)
 
 // The panic built-in function stops normal execution of the current
@@ -283,6 +333,13 @@ func close(c chan<- Type)
 // including the value of the argument to panic. This termination sequence
 // is called panicking and can be controlled by the built-in function
 // recover.
+
+// panic 内建函数用于停止当前Go程的正常执行。
+// 当函数 F 调用 panic 时，F 的正常执行就会立刻停止。任何由 F 推迟的函数执行都会
+// 按照一般的方式运行，接着 F 返回给其调用者。对于其调用者 G，F 的请求行为如同
+// 对 panic 的调用，即终止 G 的执行并运行任何被推迟的函数。这会持续到该Go程
+// 中所有函数都按相反的顺序停止执行之后。此时，该程序会被终止，而错误情况会被报告，
+// 包括引发该恐慌的实参值。此终止序列称为恐慌过程，并可通过内建函数 recover 控制。
 func panic(v interface{})
 
 // The recover built-in function allows a program to manage behavior of a
@@ -294,10 +351,19 @@ func panic(v interface{})
 // panicking, or if the argument supplied to panic was nil, recover returns
 // nil. Thus the return value from recover reports whether the goroutine is
 // panicking.
+
+// recover 内建函数允许程序管理恐慌过程中的Go程。
+// 在已推迟函数（而不是任何被它调用的函数）中，执行 recover 调用会通过恢复正常的执行
+// 并取回传至 panic 调用的错误值来停止该恐慌过程序列。若 recover 在已推迟函数之外被调用，
+// 它将不会停止恐慌过程序列。在此情况下，或当该Go程不在恐慌过程中时，或提供给 panic
+// 的实参为 nil 时，recover 就会返回 nil。因此 recover 的返回值就报告了该Go程是否
+// 在恐慌过程中。
 func recover() interface{}
 
 // The error built-in interface type is the conventional interface for
 // representing an error condition, with the nil value representing no error.
+
+// error 内建接口类型是表示错误情况的约定接口，nil 值即表示没有错误。
 type error interface {
 	Error() string
 }

@@ -2044,8 +2044,8 @@ struct {
 </p>
 
 <pre>
-// 一个对应于时间戳协议缓冲区的结构.
-// 标注字符串定义了协议缓冲区的字段号.
+// 一个对应于时间戳协议缓存的结构.
+// 标注字符串定义了协议缓存的字段号.
 struct {
 	microsec  uint64 "field 1"
 	serverIP6 uint64 "field 2"
@@ -2632,8 +2632,8 @@ A <code>nil</code> channel is never ready for communication.
 </div>
 
 <p>
-容量根据元素的数量设置信道中缓冲区的大小。若容量大于零，则信道是异步的：
-若缓冲区未满（发送）或非空（接收），则通信操作无阻塞成功，且元素在发送序列中被接收。
+容量根据元素的数量设置信道中缓存的大小。若容量大于零，则信道是异步的：
+若缓存未满（发送）或非空（接收），则通信操作无阻塞成功，且元素在发送序列中被接收。
 若容量为零或无，则只有当发送者和接收者都做好准备时通信才会成功。
 <code>nil</code> 信道永远不会准备好通信。
 </p>
@@ -7488,8 +7488,8 @@ A send on a <code>nil</code> channel blocks forever.
 
 <p>
 信道与值表达式均在通信开始前求值。通信会阻塞，直到发送可继续进行。
-若接收者已就绪，在无缓冲区信道上发送可继续进行。
-若缓冲区中有空间，在有缓冲区信道上发送可继续进行。
+若接收者已就绪，在无缓存信道上发送可继续进行。
+若缓存中有空间，在有缓存信道上发送可继续进行。
 在已关闭信道上进行发送会引发一个<a href="#运行时恐慌">运行时恐慌</a>。
 在 <code>nil</code> 信道上进行发送将永远阻塞。
 </p>
@@ -9323,11 +9323,11 @@ len(s)    string type      字符串的字节长度。
           [n]T, *[n]T      数组长度（== n）
           []T              切片长度
           map[K]T          映射长度（已定义键的数量）
-          chan T           信道缓冲区中元素队列的长度
+          chan T           信道缓存中元素队列的长度
 
 cap(s)    [n]T, *[n]T      数组长度（== n）
           []T              切片容量
-          chan T           信道缓冲区容量
+          chan T           信道缓存容量
 </pre>
 
 <div class="english">
@@ -9478,7 +9478,7 @@ make(T)          map        类型为T的映射
 make(T, n)       map        类型为T，初始空间为n个元素的映射
 
 make(T)          channel    类型为T的同步信道
-make(T, n)       channel    类型为T，缓冲区大小为n的异步信道
+make(T, n)       channel    类型为T，缓存大小为n的异步信道
 </pre>
 
 <div class="english">
@@ -9506,7 +9506,7 @@ m := make(map[string]int, 100)  // map with initial space for 100 elements
 <pre>
 s := make([]int, 10, 100)       // len(s) == 10，cap(s) == 100 的切片
 s := make([]int, 10)            // len(s) == cap(s) == 10 的切片
-c := make(chan int, 10)         // 缓冲区大小为10的信道
+c := make(chan int, 10)         // 缓存大小为10的信道
 m := make(map[string]int, 100)  // 初始空间为100个元素的映射
 </pre>
 
@@ -9780,8 +9780,9 @@ and program-defined error conditions.
 </p>
 </div>
 
-<p> 两个内建函数 <code>panic</code> 与 <code>recover</code>，
-用来协助报告并处理<a href="#运行时恐慌">运行时恐慌</a>与程序定义的错误条件。
+<p>
+内建函数 <code>panic</code> 和 <code>recover</code>
+用于协助报告并处理<a href="#运行时恐慌">运行时恐慌</a>以及由程序定义的错误情况。
 </p>
 
 <pre class="grammar">
@@ -9810,12 +9811,12 @@ called <i>panicking</i>.
 </div>
 
 <p>
-当函数 <code>F</code> 调用 <code>panic</code>时，<code>F</code> 的正常执行就立刻停止。
-被 <code>F</code> 的请求<a href="#Defer语句">推迟</a>的任何函数执行都会以通常方式立即运行，
-但不带任何结果形参的当前值，然后 <code>F</code> 返回给其调用者，而不执行该函数剩余的部分。
-对于其调用者，<code>F</code> 的行为如同 <code>panic</code> 的一个调用，
-终止其自身的执行并以相同的方式运行被推迟的函数。这会持续到所有Go程中的函数都按相反顺序停止执行后。
-到那时，该程序将被终止，而该错误条件会被报告，包括该 <code>panic</code> 的实参值。
+当函数 <code>F</code> 调用 <code>panic</code>时，<code>F</code> 的正常执行就会立刻停止。
+由 <code>F</code> 请求<a href="#Defer语句">推迟</a>的任何函数执行都会以通常方式立刻运行，
+但不带任何结果形参的当前值，然后 <code>F</code> 返回给其调用者，且不执行该函数剩余的部分。
+对于其调用者，<code>F</code> 的行为如同对 <code>panic</code> 的调用，即终止其自身的执行，
+并以相同的方式运行被推迟的函数。这会持续到该Go程中所有函数都按相反顺序停止执行之后。
+到那时，该程序将被终止，而该错误情况会被报告，包括引发 <code>panic</code> 的实参值。
 此终止序列称为<i>恐慌过程</i>。
 </p>
 
@@ -9841,11 +9842,11 @@ was <code>nil</code>, <code>recover</code> returns <code>nil</code>.
 
 <p>
 <code>recover</code> 函数允许程序管理恐慌过程Go程的行为。在<i>已推迟函数</i>
-（而不是任何被它调用的函数）中，执行 <code>recover</code> 调用会通过正常执行来停止恐慌过程
-序列，并检索传递至 <code>panic</code> 调用的错误值。若 <code>recover</code>
-在已推迟函数之外被调用，它将不会停止恐慌过程序列。在此情况下，或当Go程不为恐慌过程
-时，或提供给 <code>panic</code> 的实参为 <code>nil</code> 时，
-<code>recover</code> 就会返回 <code>nil</code>。
+（而不是任何被它调用的函数）中，执行 <code>recover</code> 调用会通过恢复正常执行，
+并取回传递至 <code>panic</code> 调用的错误值来停止恐慌过程序列。若 <code>recover</code>
+在已推迟函数之外被调用，它将不会停止恐慌过程序列。在此情况下，或当Go程不在恐慌过程中时，
+或提供给 <code>panic</code> 的实参为 <code>nil</code> 时，<code>recover</code>
+就会返回 <code>nil</code>。
 </p>
 
 <div class="english">
