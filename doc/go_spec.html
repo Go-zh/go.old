@@ -1,6 +1,6 @@
 <!--{
 	"Title": "Go编程语言规范",
-	"Subtitle": "版本：2012年10月12日 || 译者：Oling Cat <olingcat@gmail.com>",
+	"Subtitle": "版本：2012年10月17日 || 译者：Oling Cat <olingcat@gmail.com>",
 	"Path": "/ref/spec"
 }-->
 
@@ -4884,7 +4884,22 @@ where <code>A</code> is an <a href="#Array_types">array type</a>:
 	<li><code>a[x]</code> is the array element at index <code>x</code> and the type of
 	  <code>a[x]</code> is the element type of <code>A</code></li>
 </ul>
+</div>
 
+<p>
+对于<a href="#数组类型">数组类型</a> <code>A</code> 或 <code>*A</code> 的 <code>a</code>：
+</p>
+<ul>
+	<li><code>x</code> 必须为整数值；若 <code>0 &lt;= x &lt; len(a)</code>，
+		它即在<i>界内</i>，否则即为<i>越界</i></li>
+	<li><a href="#常量">常量</a>下标必在界内</li>
+	<li>若 <code>a</code> 为 <code>nil</code> 或 <code>x</code> 在运行时越界，
+		就会引发一个<a href="#运行时恐慌">运行时恐慌</a></li>
+	<li><code>a[x]</code> 是下标为 <code>x</code> 的数组元素且
+		<code>a[x]</code> 的类型为 <code>A</code> 的元素类型</li>
+</ul>
+
+<div class="english">
 <p>
 For <code>a</code> of type <code>S</code> where <code>S</code> is a <a href="#Slice_types">slice type</a>:
 </p>
@@ -4900,15 +4915,17 @@ For <code>a</code> of type <code>S</code> where <code>S</code> is a <a href="#Sl
 </div>
 
 <p>
-对于类型为<a href="#数组类型">数组类型</a> <code>A</code> 或 <code>*A</code> 的 <code>a</code>，
-或对于类型为<a href="#切片类型">切片类型</a> <code>S</code> 的 <code>a</code>：
+For <code>a</code> of type <code>S</code> where <code>S</code> is a <a href="#Slice_types">slice type</a>:
+对于<a href="#切片类型">切片类型</a> <code>S</code> 的 <code>a</code>：
 </p>
 <ul>
-	<li><code>x</code> 必须为整数值且 <code>0 &lt;= x &lt; len(a)</code></li>
-	<li><code>a[x]</code> 为下标 <code>x</code> 的数组元素且
-	  <code>a[x]</code> 的类型为 <code>A</code> 的元素类型</li>
-	<li>若 <code>a</code> 为 <code>nil</code> 或下标 <code>x</code> 超出范围，
-	就会出现一个<a href="#运行时恐慌">运行时恐慌</a></li>
+	<li><code>x</code> 必须为整数值；若 <code>0 &lt;= x &lt; len(a)</code>，它即在<i>界内</i>
+		否即为<i>越界</i></li>
+	<li><a href="#常量">常量</a>下标必为非负值</li>
+	<li>若该切片为 <code>nil</code> 或 <code>x</code> 在运行时越界，
+		就会引发一个<a href="#运行时恐慌">运行时恐慌</a></li>
+	<li><code>a[x]</code> 是下标为 <code>x</code> 的切片元素且
+	  <code>a[x]</code> 的类型为 <code>S</code> 的元素类型</li>
 </ul>
 
 <div class="english">
@@ -4933,12 +4950,11 @@ where <code>T</code> is a <a href="#String_types">string type</a>:
 对于类型为<a href="#字符串类型">字符串类型</a> <code>T</code> 的 <code>a</code>：
 </p>
 <ul>
-	<li><code>x</code> 必须为整数值且 <code>0 &lt;= x &lt; len(a)</code></li>
-	<li><code>a[x]</code> 为下标 <code>x</code> 的字节且
-	  <code>a[x]</code> 的类型为 <code>byte</code></li>
+	<li><code>x</code> 必须为整数值；若 <code>0 &lt;= x &lt; len(a)</code>，它即在<i>界内</i></li>
+	<li><a href="#常量">常量</a>下标必为非负值，且若字符串 <code>a</code> 也为常量，它也必在界内。</li>
+	<li>若 <code>x</code> 超出范围，就会出现一个<a href="#运行时恐慌">运行时恐慌</a></li>
+	<li><code>a[x]</code> 为下标 <code>x</code> 的字节且 <code>a[x]</code> 的类型为 <code>byte</code></li>
 	<li><code>a[x]</code> 不可赋值</li>
-	<li>若下标 <code>x</code> 超出范围，
-	就会出现一个<a href="#运行时恐慌">运行时恐慌</a></li>
 </ul>
 
 <div class="english">
@@ -5120,8 +5136,11 @@ or if the indices are out of range at run time, a <a href="#Run_time_panics">run
 </div>
 
 <p>
-对于数组或字符串，下标 <code>low</code> 和 <code>high</code> 必须满足
-0 &lt;= <code>low</code> &lt;= <code>high</code> &lt;= 长度；对于切片，其上界为容量而非长度。
+对于数组或字符串，若 <code>0 &lt;= <code>low</code> &lt;= <code>high</code> &lt;= len(a)</code>
+下标 <code>low</code> 和 <code>high</code> 即在<i>界内</i>，否则即在<code>界外</code>。
+对于切片，其上界为该切片的容量 <code>cap(a)</code> 而非长度。<a href="#常量表达式">常量</a>下标必为非负值，
+且若其下标也为常量，它们必定满足 <code>low &lt;= high</code>。若 <code>a</code> 为
+<code>nil</code> 或其下标在运行时越界，就会引发一个<a href="#运行时恐慌">运行时恐慌</a>。
 </p>
 
 <div class="english">

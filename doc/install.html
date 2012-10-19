@@ -88,6 +88,7 @@ proceeding. If your OS or architecture is not on the list, it's possible that
 <tr><td>Linux 2.6.23 or later with glibc</td> <td>amd64, 386, arm</td> <td>CentOS/RHEL 5.x not supported; no binary distribution for ARM yet</td></tr>
 <tr><td>Mac OS X 10.6/10.7</td> <td>amd64, 386</td> <td>use the gcc<sup>&#8224;</sup> that comes with Xcode<sup>&#8225;</sup></td></tr>
 <tr><td>Windows 2000 or later</td> <td>amd64, 386</td> <td>use mingw gcc<sup>&#8224;</sup>; cygwin or msys is not needed</td></tr>
+<tr><td>NetBSD 6 or later</td> <td>amd64, 386</td> <td></td></tr>
 </table>
 
 <p>
@@ -111,6 +112,7 @@ Downloads preferences panel.
 <tr><td>Linux 2.6.23或更新版本配合glibc</td> <td>amd64, 386, arm</td> <td>CentOS/RHEL 5.x不支持；还没有ARM的二进制发行版</td></tr>
 <tr><td>Mac OS X 10.6/10.7</td> <td>amd64, 386</td> <td>使用Xcode<sup>&#8225;</sup>自带的gcc<sup>&#8224;</sup></td></tr>
 <tr><td>Windows 2000或更新版本</td> <td>amd64, 386</td> <td>使用mingw gcc<sup>&#8224;</sup>，无需cygwin或msys</td></tr>
+<tr><td>NetBSD 6 或更新</td> <td>amd64, 386</td> <td></td></tr>
 </table>
 
 <p>
@@ -218,10 +220,10 @@ Windows用户应当阅读<a href="#环境变量">在Windows下设置环境变量
 </p>
 
 <div class="english">
-<h3 id="freebsd_linux">FreeBSD, Linux, and Mac OS X tarballs</h3>
+<h3 id="bsd_linux">FreeBSD, Linux, Mac OS X and NetBSD tarballs</h3>
 </div>
 
-<h3 id="freebsd与linux">FreeBSD、Linux与Mac OS X压缩包</h3>
+<h3 id="bsd与linux">FreeBSD、Linux与Mac OS X压缩包</h3>
 
 <div class="english">
 <p>
@@ -240,14 +242,14 @@ rm -r /usr/local/go
 
 <div class="english">
 <p>
-Extract <a href="http://code.google.com/p/go/downloads/list?q=OpSys-FreeBSD+OR+OpSys-Linux+OR+OpSys-OSX+Type-Archive">the archive</a>
+Extract <a href="http://code.google.com/p/go/downloads/list?q=OpSys-FreeBSD+OR+OpSys-Linux+OR+OpSys-OSX+OR+OpSys-NetBSD+Type-Archive">the archive</a>
 into <code>/usr/local</code>, creating a Go tree in <code>/usr/local/go</code>.
 For example:
 </p>
 </div>
 
 <p>
-将<a href="http://code.google.com/p/go/downloads/list?q=OpSys-FreeBSD+OR+OpSys-Linux+OR+OpSys-OSX+AND+Type-Archive">此压缩包</a>提取到
+将<a href="http://code.google.com/p/go/downloads/list?q=OpSys-FreeBSD+OR+OpSys-Linux+OR+OpSys-OSX+OR+OpSys-NetBSD+Type-Archive">此压缩包</a>提取到
 <code>/usr/local</code> 目录，在 <code>/usr/local/go</code> 中创建Go目录树。例如：
 </p>
 
