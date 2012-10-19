@@ -2564,7 +2564,7 @@ no need for forward declarations or a header file.
 </div>
 
 <p>
-把所有源文件都放进与它们自己的包相同的目录中去。源文件可随意从不同的文件中引用条目，
+把所有源文件都放进与它们自己的包相同的目录中去。源文件可随意从不同的文件中引用项，
 而无需提前声明或头文件。
 </p>
 
@@ -2934,7 +2934,7 @@ func main() {
 <pre>
 import "unused"
 
-// 此声明标记了从包中导入的被引用的条目。
+// 此声明标记了从包中导入的被引用的项。
 var _ = unused.Item  // TODO：在提交前删除它！
 
 func main() {

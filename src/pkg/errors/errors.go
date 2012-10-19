@@ -3,14 +3,20 @@
 // license that can be found in the LICENSE file.
 
 // Package errors implements functions to manipulate errors.
+
+// error 包实现了用于处理错误的函数。
 package errors
 
 // New returns an error that formats as the given text.
+
+// New 返回一个给定文本格式的错误。
 func New(text string) error {
 	return &errorString{text}
 }
 
 // errorString is a trivial implementation of error.
+
+// errorString 是 error 的一个琐碎实现。
 type errorString struct {
 	s string
 }

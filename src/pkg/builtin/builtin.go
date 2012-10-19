@@ -11,7 +11,7 @@
 
 /*
 	builtin 包为Go的预声明标识符提供了文档。
-	此处记录的条目实际上并不在 buildin 包中，但此处对它们的描述允许 godoc
+	此处记录的项目实际上并不在 buildin 包中，但此处对它们的描述允许 godoc
 	为该语言的特殊标识符提供文档。
 */
 package builtin
@@ -186,7 +186,7 @@ type ComplexType complex64
 //	slice = append(slice, elem1, elem2)
 //	slice = append(slice, anotherSlice...)
 
-// append 内建函数用于将元素追加到切片的末尾。
+// append 内建函数将元素追加到切片的末尾。
 // 若它有足够的容量，其目标就会重新切片以适应新的元素。否则，就会分配一个新的基本数组。
 // append 返回更新后的切片。因此必须存储追加后的结果，通常为包含该切片自身的变量：
 //	slice = append(slice, elem1, elem2)
@@ -199,7 +199,7 @@ func append(slice []Type, elems ...Type) []Type
 // returns the number of elements copied, which will be the minimum of
 // len(src) and len(dst).
 
-// copy 内建函数用于将元素从来源切片复制到目标切片中。
+// copy 内建函数将元素从来源切片复制到目标切片中。
 // （一种特例是，它也能将字节从字符串复制到字节切片中。）来源和目标可以重叠。
 // copy 返回被复制的元素数量，它将是 len(src) 和 len(dst) 中较小的那个。
 func copy(dst, src []Type) int
@@ -208,7 +208,7 @@ func copy(dst, src []Type) int
 // (m[key]) from the map. If there is no such element, delete is a no-op.
 // If m is nil, delete panics.
 
-// delete 内建函数用于按照指定的键将元素从映射中删除。
+// delete 内建函数按照指定的键将元素从映射中删除。
 // 若无此元素，delete 即为空操作；若 m 为 nil，delete 就会引发恐慌。
 func delete(m map[Type]Type1, key Type)
 
@@ -220,7 +220,7 @@ func delete(m map[Type]Type1, key Type)
 //	Channel: the number of elements queued (unread) in the channel buffer;
 //	if v is nil, len(v) is zero.
 
-// len 内建函数用于返回 v 的长度，这取决于具体类型：
+// len 内建函数返回 v 的长度，这取决于具体类型：
 //	数组：v 中元素的数量。
 //	数组指针：*v 中元素的数量（即使 v 为 nil）。
 //	切片或映射：v 中元素的数量；若 v 为 nil，len(v) 即为零。
@@ -236,7 +236,7 @@ func len(v Type) int
 //	Channel: the channel buffer capacity, in units of elements;
 //	if v is nil, cap(v) is zero.
 
-// cap 内建函数用于返回 v 的容量，这取决于具体类型：
+// cap 内建函数返回 v 的容量，这取决于具体类型：
 //	数组：v 中元素的数量（与 len(v) 相同）。
 //	数组指针：*v 中元素的数量（与 len(v) 相同）。
 //	切片：在重新切片时，切片能够达到的最大长度；若 v 为 nil，len(v) 即为零。
@@ -260,10 +260,10 @@ func cap(v Type) int
 //	buffer capacity. If zero, or the size is omitted, the channel is
 //	unbuffered.
 
-// make 内建函数用于分配并初始化一个类型为切片、映射、或（仅仅为）信道的对象。
+// make 内建函数分配并初始化一个类型为切片、映射、或（仅仅为）信道的对象。
 // 与 new 相同的是，其第一个实参为类型，而非值。不同的是，make 的返回类型
 // 与其参数相同，而非指向它的指针。其具体结果取决于具体的类型：
-//	切片：size 指定了其长度。该切片的容量等于其长度。第二个整数实参可用于指定
+//	切片：size 指定了其长度。该切片的容量等于其长度。第二个整数实参可用来指定
 //		不同的容量；它必须不小于其长度，因此 make([]int, 0, 10) 会分配一个长度为0，
 //		容量为10的切片。
 //	映射：初始分配的创建取决于 size，但产生的映射长度为0。size 可以省略，这种情况下
@@ -275,7 +275,7 @@ func make(Type, size IntegerType) Type
 // not a value, and the value returned is a pointer to a newly
 // allocated zero value of that type.
 
-// new 内建函数用于分配内存。
+// new 内建函数分配内存。
 // 其第一个实参为类型，而非值，其返回值为指向该类型的新分配的零值的指针。
 func new(Type) *Type
 
@@ -285,7 +285,7 @@ func new(Type) *Type
 // value will be the corresponding complex type (complex64 for float32,
 // complex128 for float64).
 
-// complex 内建函数用于将两个浮点数值构造成一个复数值。
+// complex 内建函数将两个浮点数值构造成一个复数值。
 // 其实部和虚部的大小必须相同，即 float32 或 float64（或可赋予它们的），其返回值
 // 即为对应的复数类型（complex64 对应 float32，complex128 对应 float64）。
 func complex(r, i FloatType) ComplexType
@@ -293,7 +293,7 @@ func complex(r, i FloatType) ComplexType
 // The real built-in function returns the real part of the complex number c.
 // The return value will be floating point type corresponding to the type of c.
 
-// real 内建函数用于返回复数 c 的实部。
+// real 内建函数返回复数 c 的实部。
 // 其返回值为对应于 c 类型的浮点数。
 func real(c ComplexType) FloatType
 
@@ -301,7 +301,7 @@ func real(c ComplexType) FloatType
 // number c. The return value will be floating point type corresponding to
 // the type of c.
 
-// imag 内建函数用于返回复数 c 的虚部。
+// imag 内建函数返回复数 c 的虚部。
 // 其返回值为对应于 c 类型的浮点数。
 func imag(c ComplexType) FloatType
 
@@ -314,7 +314,7 @@ func imag(c ComplexType) FloatType
 //	x, ok := <-c
 // will also set ok to false for a closed channel.
 
-// close 内建函数用于关闭信道，该信道必须为双向的或只发送的。
+// close 内建函数关闭信道，该信道必须为双向的或只发送的。
 // 它应当只由发送者执行，而不应由接收者执行，其效果是在最后发送的值被接收后停止该信道。
 // 在最后一个值从已关闭的信道 c 中被接收后，任何从 c 的接收操作都会无阻塞成功，
 // 它会返回该信道元素类型的零值。对于已关闭的信道，形式
@@ -334,7 +334,7 @@ func close(c chan<- Type)
 // is called panicking and can be controlled by the built-in function
 // recover.
 
-// panic 内建函数用于停止当前Go程的正常执行。
+// panic 内建函数停止当前Go程的正常执行。
 // 当函数 F 调用 panic 时，F 的正常执行就会立刻停止。任何由 F 推迟的函数执行都会
 // 按照一般的方式运行，接着 F 返回给其调用者。对于其调用者 G，F 的请求行为如同
 // 对 panic 的调用，即终止 G 的执行并运行任何被推迟的函数。这会持续到该Go程

@@ -296,7 +296,7 @@ quality of the documentation <code>godoc</code> produces.
 
 <p>
 <code>godoc</code> 既是一个程序，又是一个Web服务器，它对Go的源码进行处理，提取包中的文档内容。
-出现在顶级声明之前且中间没有新行的注释，将与该声明一起被提取出来，作为该条目的解释性文本。
+出现在顶级声明之前且中间没有新行的注释，将与该声明一起被提取出来，作为该项的解释性文本。
 这些注释的内容和样式决定了 <code>godoc</code> 生成的文档质量。
 </p>
 
@@ -497,7 +497,7 @@ such as the fact that a set of variables is protected by a mutex.
 </div>
 
 <p>
-即便是对于私有名称，也可通过成组声明来表明条目之间的关系，例如实际上由互斥体保护的一组变量。
+即便是对于私有名称，也可通过成组声明来表明项之间的关系，例如实际上由互斥体保护的一组变量。
 </p>
 
 <pre>
@@ -1200,7 +1200,7 @@ If you only need the first item in the range (the key or index), drop the second
 </div>
 
 <p>
-如果你只需要该遍历中的第一个条目（键或下标），去掉第二个就行了：
+如果你只需要该遍历中的第一个项（键或下标），去掉第二个就行了：
 </p>
 
 <pre>
@@ -1218,7 +1218,7 @@ If you only need the second item in the range (the value), use the <em>blank ide
 </div>
 
 <p>
-如果你只需要该遍历中的第二个条目（值），请使用<em>空白标识符</em>，即一个下划线来丢弃第一个：
+如果你只需要该遍历中的第二个项（值），请使用<em>空白标识符</em>，即一个下划线来丢弃第一个：
 </p>
 
 <pre>
@@ -1882,7 +1882,7 @@ Go有两种内存分配原语，即内建函数 <code>new</code> 和 <code>make<
 它们所做的事情不同，所应用到的类型也不同，这可能引起混淆，但规则却很简单。
 让我们先讨论 <code>new</code>。它是一个用来分配内存的函数，但不像其它语言中同名的操作，
 它不会<em>初始化</em>内存，只会将内存<em>清零</em>。<code>new(T)</code>
-会为一个类型为 <code>T</code> 的新条目分配已清零的存储空间并返回其地址，
+会为一个类型为 <code>T</code> 的新项分配已清零的存储空间并返回其地址，
 也就是一个类型为 <code>*T</code> 的值。用Go的术语来说，它返回一个指向类型为
 <code>T</code> 的新分配零值的指针。
 </p>
@@ -2563,9 +2563,9 @@ test it by simple indexing.
 </div>
 
 <p>
-如果试图使用一个不存在的键来获取映射值，就会返回在该映射对应该条目类型的零值。
+如果试图使用一个不存在的键来获取映射值，就会返回在该映射对应该项类型的零值。
 例如，若映射包含整数，查找一个不存在的键将返回 <code>0</code>。一个集合可使用一个值类型为
-<code>bool</code> 的映射来实现。通过将该映射中的条目置为 <code>true</code>
+<code>bool</code> 的映射来实现。通过将该映射中的项置为 <code>true</code>
 来将值放入集合中，然后通过简单的索引对齐进行测试。
 </p>
 
