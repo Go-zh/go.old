@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
   <ShortName>godoc</ShortName>
+  <!--
   <Description>The Go Programming Language</Description>
+  -->
+  <Description>Go编程语言</Description>
   <Tags>go golang</Tags>
   <Contact />
   <Url type="text/html" template="{{.BaseURL}}/search?q={searchTerms}" />

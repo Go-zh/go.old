@@ -10,6 +10,8 @@ import (
 )
 
 // MyError is an error implementation that includes a time and message.
+
+// MyError 是一个包含了一个时间和消息的错误实现。
 type MyError struct {
 	When time.Time
 	What string
@@ -31,4 +33,5 @@ func Example() {
 		fmt.Println(err)
 	}
 	// Output: 1989-03-15 22:30:00 +0000 UTC: the file system has gone away
+	// 输出: 1989-03-15 22:30:00 +0000 UTC: the file system has gone away
 }

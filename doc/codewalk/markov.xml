@@ -4,14 +4,26 @@ Use of this source code is governed by a BSD-style
 license that can be found in the LICENSE file.
 -->
 
+<!--
 <codewalk title="Generating arbitrary text: a Markov chain algorithm">
+-->
 
+<codewalk title="生成任意文本：一个马尔可夫链算法">
+
+<div class="english">
 <step title="Introduction" src="doc/codewalk/markov.go:/Generating/,/line\./">
 	This codewalk describes a program that generates random text using
 	a Markov chain algorithm. The package comment describes the algorithm
 	and the operation of the program. Please read it before continuing.
 </step>
+</div>
 
+<step title="前言" src="doc/codewalk/markov.go:/生成/,/指定。/">
+	这段代码漫步描述了一个使用马尔可夫链算法生成任意文本的程序。包注释则描述了
+	该算法以及此程序的操作。请在继续学习前阅读它。
+</step>
+
+<div class="english">
 <step title="Modeling Markov chains" src="doc/codewalk/markov.go:/	chain/">
 	A chain consists of a prefix and a suffix. Each prefix is a set
 	number of words, while a suffix is a single word.
@@ -51,14 +63,59 @@ Prefix               Map key
 []string{"I", "am"}  "I am"
 </pre>
 </step>
+</div>
 
+<step title="模拟马尔可夫链" src="doc/codewalk/markov.go:/	chain/">
+	一个链由一个前缀和一个后缀构成。每一个前缀都是几个单词的一个集合，
+	而一个后缀就是一个单词。一个前缀可拥有任意数量的后缀。为了模拟这些数据，
+	我们需要使用一个 <code>map[string][]string</code>。每个键都是一个
+	（<code>string</code> 类型的）前缀，其值则是一些后缀的列表
+	（类型是一个字符串切片，即 <code>[]string</code>）。
+	<br/><br/>
+	下面是用这种数据结构对包注释中的例子表单进行的模拟：
+<pre>
+map[string][]string{
+	" ":          {"I"},
+	" I":         {"am"},
+	"I am":       {"a", "not"},
+	"a free":     {"man!"},
+	"am a":       {"free"},
+	"am not":     {"a"},
+	"a number!":  {"I"},
+	"number! I":  {"am"},
+	"not a":      {"number!"},
+}
+</pre>
+	由于每个前缀都是由多个单词构成的，我们需要将前缀作为单一的 <code>string</code>
+	存储在映射中。将前缀作为 <code>[]string</code> 类型似乎更加自然，不过我们
+	并不能在映射中这样做，因为映射的键类型必须实现了相等性（而切片则并未实现）。
+	<br/><br/>
+	因此，在我们的大部分代码中，我们会把前缀模拟成一个 <code>[]string</code>，
+	并将字符串连同空格一起加入到其中来生成映射键：
+	<pre>
+前缀                 映射键
+
+[]string{"", ""}     " "
+[]string{"", "I"}    " I"
+[]string{"I", "am"}  "I am"
+</pre>
+</step>
+
+<div class="english">
 <step title="The Chain struct" src="doc/codewalk/markov.go:/type Chain/,/}/">
 	The complete state of the chain table consists of the table itself and
 	the word length of the prefixes. The <code>Chain</code> struct stores
 	this data.
 </step>
+</div>
 
-<step title="The NewChain constructor function" src="doc/codewalk/markov.go:/func New/,/\n}/">
+<step title="Chain 结构体" src="doc/codewalk/markov.go:/type Chain/,/\n}/">
+	该链表的完整状态由其自身以及前缀的单词数构成。<code>Chain</code> 结构体
+	则存储了这些数据。
+</step>
+
+<div class="english">
+<step title="The NewChain constructor function" src="doc/codewalk/markov.go:/func New/,/}/">
 	The <code>Chain</code> struct has two unexported fields (those that
 	do not begin with an upper case character), and so we write a
 	<code>NewChain</code> constructor function that initializes the
@@ -75,7 +132,22 @@ Prefix               Map key
 	those fields. Also, structuring <code>Chain</code> like this means we
 	could easily move it into its own package at some later date.
 </step>
+</div>
 
+<step title="NewChain 构造函数" src="doc/codewalk/markov.go:/func New/,/\n}/">
+	<code>Chain</code> 结构体拥有两个未导出字段（它们以小写字符开头），
+	因此我们编写了用 <code>make</code> 初始化 <code>chain</code> 映射并设置
+	<code>prefixLen</code> 字段的构造函数 <code>NewChain</code>。
+	<br/><br/>
+	该构造函数在这种只有一个包（<code>main</code>）的程序中并不是十分必要的，
+	在已导出的和未导出的字段之间只有一点儿实际的区别。当我们想要构造一个新的
+	<code>Chain</code> 时，我们可以简单地将该函数的内容直接写出来。
+	不过使用这些未导出字段是一种好的习惯，它清晰地表明了只有 <code>Chain</code>
+	的方法及其构造函数才能访问这些字段。此外，像这样构造 <code>Chain</code>
+	也就意味着我们在以后能够很容易地将它变成它自己的包。
+</step>
+
+<div class="english">
 <step title="The Prefix type" src="doc/codewalk/markov.go:/type Prefix/">
 	Since we'll be working with prefixes often, we define a
 	<code>Prefix</code> type with the concrete type <code>[]string</code>.
@@ -84,7 +156,17 @@ Prefix               Map key
 	Also, in Go we can define methods on any named type (not just structs),
 	so we can add methods that operate on <code>Prefix</code> if we need to.
 </step>
+</div>
 
+<step title="Prefix 类型" src="doc/codewalk/markov.go:/type Prefix/">
+	由于我们会经常用到前缀，因此我们定义了一个实际类型为 <code>[]string</code>
+	的 <code>Prefix</code> 类型。定义一个清晰的已命名类型能够让我们在使用前缀时更加明确，
+	而不仅仅是一个 <code>[]string</code>。此外，在Go中我们可以为任何已命名的类型
+	定义方法（而不只是结构体），因此只要我们需要，就能够为 <code>Prefix</code>
+	添加方法。
+</step>
+
+<div class="english">
 <step title="The String method" src="doc/codewalk/markov.go:/func[^\n]+String/,/}/">
 	The first method we define on <code>Prefix</code> is
 	<code>String</code>. It returns a <code>string</code> representation
@@ -92,7 +174,15 @@ Prefix               Map key
 	spaces. We will use this method to generate keys when working with
 	the chain map.
 </step>
+</div>
 
+<step title="String 方法" src="doc/codewalk/markov.go:/func[^\n]+String/,/}/">
+	我们为 <code>Prefix</code> 定义的第一个方法是 <code>String</code>。
+	它通过将切片元素连同空格一起加入到字符串中来返回一个 <code>Prefix</code>
+	的 <code>string</code> 类型的表示。我们将使用此方法来生成链映射的键。
+</step>
+
+<div class="english">
 <step title="Building the chain" src="doc/codewalk/markov.go:/func[^\n]+Build/,/\n}/">
 	The <code>Build</code> method reads text from an <code>io.Reader</code>
 	and parses it into prefixes and suffixes that are stored in the
@@ -108,7 +198,21 @@ Prefix               Map key
 	<code>Read</code> method returns <code>io.EOF</code> (end of file)
 	or some other read error occurs.
 </step>
+</div>
 
+<step title="构建链" src="doc/codewalk/markov.go:/func[^\n]+Build/,/\n}/">
+	<code>Build</code> 方法从一个 <code>io.Reader</code> 中读取文本并将它解析为存储在
+	<code>Chain</code> 中的前缀和后缀。
+	<br/><br/>
+	<code><a href="/pkg/io/#Reader">io.Reader</a></code> 是一个在标准库和其它 Go
+	代码中广泛使用的接口。我们的代码使用 <code><a href="/pkg/fmt/#Fscan">fmt.Fscan</a></code>
+	函数，它从一个 <code>io.Reader</code> 中读取由空格分隔的值。
+	<br/><br/>
+	一旦 <code>Reader</code> 的 <code>Read</code> 方法返回 <code>io.EOF</code>
+	（文件结束符）或产生一些其它的读取错误时，<code>Build</code> 方法就会返回。
+</step>
+
+<div class="english">
 <step title="Buffering the input" src="doc/codewalk/markov.go:/bufio\.NewReader/">
 	This function does many small reads, which can be inefficient for some
 	<code>Readers</code>. For efficiency we wrap the provided
@@ -116,7 +220,15 @@ Prefix               Map key
 	<code><a href="/pkg/bufio/">bufio.NewReader</a></code> to create a
 	new <code>io.Reader</code> that provides buffering.
 </step>
+</div>
 
+<step title="缓存输入" src="doc/codewalk/markov.go:/bufio\.NewReader/">
+	该函数可进行一些小的读取，这对于一些 <code>Reader</code> 来说是低效的。
+	为了效率，我们可以用 <code><a href="/pkg/bufio/">bufio.NewReader</a></code>
+	来对 <code>io.Reader</code> 进行包装，以此创建一个提供缓存的新 <code>io.Reader</code>。
+</step>
+
+<div class="english">
 <step title="The Prefix variable" src="doc/codewalk/markov.go:/make\(Prefix/">
 	At the top of the function we make a <code>Prefix</code> slice
 	<code>p</code> using the <code>Chain</code>'s <code>prefixLen</code>
@@ -124,7 +236,15 @@ Prefix               Map key
 	We'll use this variable to hold the current prefix and mutate it with
 	each new word we encounter.
 </step>
+</div>
 
+<step title="Prefix 变量" src="doc/codewalk/markov.go:/make\(Prefix/">
+	在此函数的顶部，我们创建了一个 <code>Prefix</code> 切片 <code>p</code>，并使用
+	<code>Chain</code> 的 <code>prefixLen</code> 字段作为其长度。我们会使用此变量来保存当前前缀，
+	并在我们遇到的每一个新单词时改变它。
+</step>
+
+<div class="english">
 <step title="Scanning words" src="doc/codewalk/markov.go:/var s string/,/\n		}/">
 	In our loop we read words from the <code>Reader</code> into a
 	<code>string</code> variable <code>s</code> using
@@ -137,7 +257,20 @@ Prefix               Map key
 	value (in our case, a single string). In either case we just want to
 	stop scanning, so we <code>break</code> out of the loop.
 </step>
+</div>
 
+<step title="扫描单词" src="doc/codewalk/markov.go:/var s string/,/\n		}/">
+	在我们的循环中，我们用 <code>fmt.Fscan</code> 从 <code>Reader</code> 将单词读取至
+	<code>string</code> 类型的变量 <code>s</code> 中。由于 <code>Fscan</code>
+	使用空格来分隔每一个输入的值，因此每一次调用都只会产生一个单词（包括标点符号），
+	那正是我们所需要的。
+	<br/><br/>
+	如果 <code>Fscan</code> 遇到了一个读取错误（比如 <code>io.EOF</code>）
+	或无法扫描到所需要的值（在我们的例子中，就是一个单词的字符串），那么它就会返回一个错误。
+	无论出现哪种情况，我们都只需停止扫描，用 <code>break</code> 跳出循环即可。
+</step>
+
+<div class="english">
 <step title="Adding a prefix and suffix to the chain" src="doc/codewalk/markov.go:/	key/,/key\], s\)">
 	The word stored in <code>s</code> is a new suffix. We add the new
 	prefix/suffix combination to the <code>chain</code> map by computing
@@ -157,7 +290,24 @@ Prefix               Map key
 	in general see the
 	<a href="/doc/articles/slices_usage_and_internals.html">Slices: usage and internals</a> article.
 </step>
+</div>
 
+<step title="将前缀和后缀添加到链中" src="doc/codewalk/markov.go:/	key/,/key\], s\)">
+	存储在 <code>s</code> 中的单词为新的后缀。我们通过 <code>p.String</code>
+	计算出 <code>chain</code> 的映射键来将新的前缀/后缀组合添加到该映射中，
+	并将该后缀追加到存储在该键下的该切片中。
+	<br/><br/>
+	内建函数 <code>append</code> 用于将元素追加到一个切片后面，并在必要时分配新的存储。
+	当提供的切片为 <code>nil</code> 时，<code>append</code> 会分配一个新的切片。
+	这种行为对我们的映射语义来说十分方便：检索一个未设置的键时会返回该值类型的零值，
+	而 <code>[]string</code> 类型的零值为 <code>nil</code>。当我们的程序遇到一个新的前缀时
+	（在该映射中产生一个 <code>nil</code> 值），<code>append</code> 就会分配一个新的切片。
+	<br/><br/>
+	更多有关 <code>append</code>
+	函数与普通切片的信息见《<a href="/doc/articles/slices_usage_and_internals.html">切片：用法和本质</a>》一文。
+</step>
+
+<div class="english">
 <step title="Pushing the suffix onto the prefix" src="doc/codewalk/markov.go:/p\.Shift/">
 	Before reading the next word our algorithm requires us to drop the
 	first word from the prefix and push the current suffix onto the prefix.
@@ -173,7 +323,23 @@ p == Prefix{"am", "not"}</pre>
 	the code to perform this mutation of the slice inside a method on
 	<code>Prefix</code> named <code>Shift</code>.
 </step>
+</div>
 
+<step title="将后缀转为前缀" src="doc/codewalk/markov.go:/p\.Shift/">
+	在读取下一个单词之前，我们的算法需要我们从前缀中去掉第一个单词，并将当前后缀移到前缀后面。
+	<br/><br/>
+	在此状态下
+	<pre>
+p == Prefix{"I", "am"}
+s == "not" </pre>
+	<code>p</code> 的新值将为
+	<pre>
+p == Prefix{"am", "not"}</pre>
+	此操作过程还需要生成文本，因此我们用 <code>Prefix</code> 的名为 <code>Shift</code>
+	的方法来完成该切片的改变。
+</step>
+
+<div class="english">
 <step title="The Shift method" src="doc/codewalk/markov.go:/func[^\n]+Shift/,/\n}/">
 	The <code>Shift</code> method uses the built-in <code>copy</code>
 	function to copy the last len(p)-1 elements of <code>p</code> to
@@ -190,7 +356,24 @@ copy(p, p[:1])
 p[len(p)-1] = suffix
 // p == Prefix{"am", "not"}</pre>
 </step>
+</div>
 
+<step title="Shift 方法" src="doc/codewalk/markov.go:/func[^\n]+Shift/,/\n}/">
+	<code>Shift</code> 方法使用内建函数 <code>copy</code> 来将 <code>p</code>
+	的最后 <code>len(p)-1</code> 个元素复制到该切片的开头，其实也就是将下标为1的元素移到左边
+	（如果你考虑将0作为最左边的下标的话）。
+	<pre>
+p := Prefix{"I", "am"}
+copy(p, p[:1])
+// p == Prefix{"am", "am"}</pre>
+	接着我们将指定的 <code>word</code> 赋予该切片的最后一个下标：
+	<pre>
+// suffix == "not"
+p[len(p)-1] = suffix
+// p == Prefix{"am", "not"}</pre>
+</step>
+
+<div class="english">
 <step title="Generating text" src="doc/codewalk/markov.go:/func[^\n]+Generate/,/\n}/">
 	The <code>Generate</code> method is similar to <code>Build</code>
 	except that instead of reading words from a <code>Reader</code>
@@ -200,7 +383,17 @@ p[len(p)-1] = suffix
 	<code>Generate</code> uses a conditional for loop to generate
 	up to <code>n</code> words.
 </step>
+</div>
 
+<step title="生成文本" src="doc/codewalk/markov.go:/func[^\n]+Generate/,/\n}/">
+	<code>Generate</code> 方法类似于 <code>Build</code>，但它并不是从一个
+	<code>Reader</code> 中读取单词并将它们存储到一个映射中，而是从该映射中读取单词，
+	并将它们追加到一个切片（<code>words</code>）后面。
+	<br/><br/>
+	<code>Generate</code> 使用一个有条件的for循环来产生 <code>n</code> 个单词。
+</step>
+
+<div class="english">
 <step title="Getting potential suffixes" src="doc/codewalk/markov.go:/choices/,/}\n/">
 	At each iteration of the loop we retrieve a list of potential suffixes
 	for the current prefix. We access the <code>chain</code> map at key
@@ -212,7 +405,19 @@ p[len(p)-1] = suffix
 	in that case, <code>choices</code> will be <code>nil</code> and the
 	length of a <code>nil</code> slice is zero.
 </step>
+</div>
 
+<step title="获取潜在的后缀" src="doc/codewalk/markov.go:/choices/,/}\n/">
+	随着该循环的每一次迭代，我们为当前前缀检索出了一个潜在的后缀列表。我们访问
+	<code>chain</code> 映射的 <code>p.String</code> 键，并将其内容赋予 <code>choices</code>。
+	<br/><br/>
+	若<code>len(choices)</code> 为零，也就是当该前缀没有的潜在后缀时，
+	我们就中断并跳出该循环。若该键并不存在于该映射中，此测试也能正常工作：
+	在这种情况下，<code>choices</code> 会是 <code>nil</code>，而 <code>nil</code>
+	切片的长度为零。
+</step>
+
+<div class="english">
 <step title="Choosing a suffix at random" src="doc/codewalk/markov.go:/next := choices/,/Shift/">
 	To choose a suffix we use the
 	<code><a href="/pkg/math/rand/#Intn">rand.Intn</a></code> function.
@@ -226,13 +431,34 @@ p[len(p)-1] = suffix
 	Next, we <code>Shift</code> the new suffix onto the prefix just as
 	we did in the <code>Build</code> method.
 </step>
+</div>
 
+<step title="随机选择一个后缀" src="doc/codewalk/markov.go:/next := choices/,/Shift/">
+	为了选择一个后缀，我们需要使用 <code><a href="/pkg/math/rand/#Intn">rand.Intn</a></code>
+	函数。它返回一个不超过（也不包含）给定值的整数。将 <code>len(choices)</code>
+	传递给它，我们就能得到一个随机的，不超过该列表全长的下标。
+	<br/><br/>
+	我们使用该下标来挑选我们新的后缀，将它赋予 <code>next</code> 并将它追加到
+	<code>words</code> 切片之后。
+	<br/><br/>
+	接着，我们用 <code>Shift</code> 将新后缀转为前缀，就像我们在 <code>Build</code>
+	方法中做的那样。
+</step>
+
+<div class="english">
 <step title="Returning the generated text" src="doc/codewalk/markov.go:/Join\(words/">
 	Before returning the generated text as a string, we use the
 	<code>strings.Join</code> function to join the elements of
 	the <code>words</code> slice together, separated by spaces.
 </step>
+</div>
 
+<step title="返回生成的文本" src="doc/codewalk/markov.go:/Join\(words/">
+	在将生成的文本作为字符串返回前，我们使用了 <code>strings.Join</code> 方法来将
+	<code>words</code> 切片的元素加到一起，并用空格分隔。
+</step>
+
+<div class="english">
 <step title="Command-line flags" src="doc/codewalk/markov.go:/Register command-line flags/,/prefixLen/">
 	To make it easy to tweak the prefix and generated text lengths we
 	use the <code><a href="/pkg/flag/">flag</a></code> package to parse
@@ -245,7 +471,18 @@ p[len(p)-1] = suffix
 	user-supplied value (or the default value if the flag was omitted on
 	the command-line).
 </step>
+</div>
 
+<step title="命令行标记" src="doc/codewalk/markov.go:/寄存命令行/,/prefixLen/">
+	为了让调整前缀及生成文本长度变得容易，我们使用 <code><a href="/pkg/flag/">flag</a></code>
+	包来解析命令行标记。
+	<br/><br/>
+	这些对 <code>flag.Int</code> 的调用会使用 <code>flag</code> 包寄存新的标记。
+	<code>Int</code> 的实参分别为标记名、默认值以及对它的描述。<code>Int</code>
+	函数返回指向一个整数的指针，该证书将包含用户提供的值（若该标记在命令行中省略，则为默认值）。
+</step>
+
+<div class="english">
 <step title="Program set up" src="doc/codewalk/markov.go:/flag.Parse/,/rand.Seed/">
 	The <code>main</code> function begins by parsing the command-line
 	flags with <code>flag.Parse</code> and seeding the <code>rand</code>
@@ -255,7 +492,16 @@ p[len(p)-1] = suffix
 	<code>flag.Parse</code> function will print an informative usage
 	message and terminate the program.
 </step>
+</div>
 
+<step title="程序准备" src="doc/codewalk/markov.go:/flag.Parse/,/rand.Seed/">
+	<code>main</code> 函数首先用 <code>flag.Parse</code> 来解析命令行标记，
+	并以当前时间作为 <code>rand</code> 包中随机数生成器的种子。
+	<br/><br/>
+	如果用户提供的命令行标记无效，<code>flag.Parse</code> 函数就会打印出其用法信息并结束该程序。
+</step>
+
+<div class="english">
 <step title="Creating and building a new Chain" src="doc/codewalk/markov.go:/c := NewChain/,/c\.Build/">
 	To create the new <code>Chain</code> we call <code>NewChain</code>
 	with the value of the <code>prefix</code> flag.
@@ -264,7 +510,17 @@ p[len(p)-1] = suffix
 	<code>os.Stdin</code> (which implements <code>io.Reader</code>) so
 	that it will read its input from standard input.
 </step>
+</div>
 
+<step title="创建并构建一个新的 Chain" src="doc/codewalk/markov.go:/c := NewChain/,/c\.Build/">
+	为了创建新的 <code>Chain</code>，我们以 <code>prefix</code> 标记的值调用了
+	<code>NewChain</code>。
+	<br/><br/>
+	为了构建该链，我们以 <code>os.Stdin</code>（它实现了 <code>io.Reader</code>）调用了
+	<code>Build</code>，它将从标准输入中读取其输入。
+</step>
+
+<div class="english">
 <step title="Generating and printing text" src="doc/codewalk/markov.go:/c\.Generate/,/fmt.Println/">
 	Finally, to generate text we call <code>Generate</code> with
 	the value of the <code>words</code> flag and assigning the result
@@ -273,7 +529,16 @@ p[len(p)-1] = suffix
 	Then we call <code>fmt.Println</code> to write the text to standard
 	output, followed by a carriage return.
 </step>
+</div>
 
+<step title="生成并打印文本" src="doc/codewalk/markov.go:/c\.Generate/,/fmt.Println/">
+	最后，为了生成文本，我们以 <code>words</code> 标记的值调用了 <code>Generate</code>，
+	并将其结果赋予变量 <code>text</code>。
+	<br/><br/>
+	接着我们调用 <code>fmt.Println</code> 来将文本写入到标准输出，后面跟着个回车。
+</step>
+
+<div class="english">
 <step title="Using this program" src="doc/codewalk/markov.go">
 	To use this program, first build it with the
 	<a href="/cmd/go/">go</a> command:
@@ -294,7 +559,28 @@ This is the go directory (the one containing this README).
 $ ./markov -prefix=1 -words=10 &lt; $GOROOT/README
 This is the variable if you have just untarred a</pre>
 </step>
+</div>
 
+<step title="使用此程序" src="doc/codewalk/markov.go">
+	要使用此程序，首先就要用<a href="/cmd/go/">go</a>命令来构建它：
+	<pre>
+$ go build markov.go</pre>
+	接着用管道来传给它一些输入的文本：
+	<pre>
+$ echo "a man a plan a canal panama" \
+	| ./markov -prefix=1
+a plan a man a plan a canal panama</pre>
+	以下是使用Go发行版的README文件作为源资料来生成一些文本的结果：
+	<pre>
+$ ./markov -words=10 &lt; $GOROOT/README
+This is the source code repository for the Go source
+$ ./markov -prefix=1 -words=10 &lt; $GOROOT/README
+This is the go directory (the one containing this README).
+$ ./markov -prefix=1 -words=10 &lt; $GOROOT/README
+This is the variable if you have just untarred a</pre>
+</step>
+
+<div class="english">
 <step title="An exercise for the reader" src="doc/codewalk/markov.go">
 	The <code>Generate</code> function does a lot of allocations when it
 	builds the <code>words</code> slice. As an exercise, modify it to
@@ -302,6 +588,14 @@ This is the variable if you have just untarred a</pre>
 	generated text with <code>Fprint</code>.
 	Aside from being more efficient this makes <code>Generate</code>
 	more symmetrical to <code>Build</code>.
+</step>
+</div>
+
+<step title="一个读取器的练习" src="doc/codewalk/markov.go">
+	当 <code>Generate</code> 函数在构建 <code>words</code> 切片时进行了大量的分配。
+	作为一个练习，请将它修改为接受一个 <code>io.Writer</code>，并用 <code>Fprint</code>
+	递增地将生成的文本写出来。这除了能让 <code>Generate</code> 更高效外，
+	还能让它更均匀地用 <code>Build</code> 来进行构建。
 </step>
 
 </codewalk>
