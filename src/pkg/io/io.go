@@ -11,7 +11,7 @@
 // various implementations, unless otherwise informed clients should not
 // assume they are safe for parallel execution.
 
-// io 包为I/O基原提供了基础的接口。
+// io 包为I/O基原提供了基础的接口.
 // 它主要的工作就是为这些基原的已有实现进行包装，从 os 包中的那些，到抽象了功能的
 // 共享公共接口，加上一些其它相关的基原。
 //
@@ -303,6 +303,10 @@ type WriterAt interface {
 //
 // ReadByte reads and returns the next byte from the input.
 // If no byte is available, err will be set.
+
+// ByteReader 接口包装了 ReadByte 方法。
+//
+// ReadByte 从输入中读取并返回下一个字节。若没有字节可用，就会设置 err。
 type ByteReader interface {
 	ReadByte() (c byte, err error)
 }
@@ -314,6 +318,11 @@ type ByteReader interface {
 // as the previous call to ReadByte.
 // It may be an error to call UnreadByte twice without an intervening
 // call to ReadByte.
+
+// ByteScanner 接口将 UnreadByte 方法添加到基本的 ReadByte 方法。
+//
+// UnreadByte 使下一次调用 ReadByte 返回的字节与上一次调用 ReadByte 返回的相同。
+// 调用 UnreadByte 两次而中间没有调用 ReadByte 的话就会返回错误。
 type ByteScanner interface {
 	ByteReader
 	UnreadByte() error

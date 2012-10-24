@@ -4,7 +4,7 @@
 
 // Package errors implements functions to manipulate errors.
 
-// error 包实现了用于处理错误的函数。
+// error 包实现了用于错误处理的函数。
 package errors
 
 // New returns an error that formats as the given text.
@@ -16,7 +16,7 @@ func New(text string) error {
 
 // errorString is a trivial implementation of error.
 
-// errorString 是 error 的一个琐碎实现。
+// errorString 是 error 的一个琐碎的实现。
 type errorString struct {
 	s string
 }

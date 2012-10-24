@@ -7,7 +7,7 @@
 */
 
 /*
-	unsafe 包含有关于Go程序类型安全的所有操作。
+	unsafe 包含有关于Go程序类型安全的所有操作.
 */
 package unsafe
 

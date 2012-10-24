@@ -41,7 +41,6 @@ func ExampleNew() {
 		fmt.Print(err)
 	}
 	// Output: emit macho dwarf: elf header corrupted
-	// 输出：emit macho dwarf: elf header corrupted
 }
 
 // The fmt package's Errorf function lets us use the package's formatting
@@ -55,5 +54,4 @@ func ExampleNew_errorf() {
 		fmt.Print(err)
 	}
 	// Output: user "bimmler" (id 17) not found
-	// 输出：user "bimmler" (id 17) not found
 }
