@@ -518,6 +518,8 @@ symfmt(Fmt *fp, Sym *s)
 				return fmtprint(fp, "%s.%s", s->pkg->name, s->name);	// dcommontype, typehash
 			return fmtprint(fp, "%s.%s", s->pkg->prefix, s->name);	// (methodsym), typesym, weaksym
 		case FExp:
+			if(s->name && s->name[0] == '.')
+				fatal("exporting synthetic symbol %s", s->name);
 			if(s->pkg != builtinpkg)
 				return fmtprint(fp, "@\"%Z\".%s", s->pkg->path, s->name);
 		}
@@ -713,9 +715,13 @@ typefmt(Fmt *fp, Type *t)
 	case TFIELD:
 		if(!(fp->flags&FmtShort)) {
 			s = t->sym;
+
 			// Take the name from the original, lest we substituted it with .anon%d
-			if (t->nname && (fmtmode == FErr || fmtmode == FExp))
-				s = t->nname->orig->sym;
+			if ((fmtmode == FErr || fmtmode == FExp) && t->nname != N)
+				if(t->nname->orig != N)
+					s = t->nname->orig->sym;
+				else 
+					s = S;
 			
 			if(s != S && !t->embedded) {
 				if(fp->flags&FmtLong)
@@ -1161,7 +1167,7 @@ exprfmt(Fmt *f, Node *n, int prec)
 	case OCOMPLIT:
 		if(fmtmode == FErr)
 			return fmtstrcpy(f, "composite literal");
-		return fmtprint(f, "%N{ %,H }", n->right, n->list);
+		return fmtprint(f, "(%N{ %,H })", n->right, n->list);
 
 	case OPTRLIT:
 		if(fmtmode == FExp && n->left->implicit)
@@ -1172,8 +1178,8 @@ exprfmt(Fmt *f, Node *n, int prec)
 		if(fmtmode == FExp) {   // requires special handling of field names
 			if(n->implicit)
 				fmtstrcpy(f, "{");
-			else 
-				fmtprint(f, "%T{", n->type);
+			else
+				fmtprint(f, "(%T{", n->type);
 			for(l=n->list; l; l=l->next) {
 				// another special case: if n->left is an embedded field of builtin type,
 				// it needs to be non-qualified.  Can't figure that out in %S, so do it here
@@ -1190,6 +1196,8 @@ exprfmt(Fmt *f, Node *n, int prec)
 				else
 					fmtstrcpy(f, " ");
 			}
+			if(!n->implicit)
+				return fmtstrcpy(f, "})");
 			return fmtstrcpy(f, "}");
 		}
 		// fallthrough
@@ -1200,7 +1208,7 @@ exprfmt(Fmt *f, Node *n, int prec)
 			return fmtprint(f, "%T literal", n->type);
 		if(fmtmode == FExp && n->implicit)
 			return fmtprint(f, "{ %,H }", n->list);
-		return fmtprint(f, "%T{ %,H }", n->type, n->list);
+		return fmtprint(f, "(%T{ %,H })", n->type, n->list);
 
 	case OKEY:
 		if(n->left && n->right)

@@ -90,7 +90,7 @@ main(int argc, char *argv[])
 	INITENTRY = 0;
 	nuxiinit();
 	
-	p = getenv("GOARM");
+	p = getgoarm();
 	if(p != nil)
 		goarm = atoi(p);
 	else
@@ -688,7 +688,7 @@ loop:
 			sprint(literal, "$%ux", ieeedtof(&p->from.ieee));
 			s = lookup(literal, 0);
 			if(s->type == 0) {
-				s->type = SBSS;
+				s->type = SRODATA;
 				adduint32(s, ieeedtof(&p->from.ieee));
 				s->reachable = 0;
 			}
@@ -710,7 +710,7 @@ loop:
 				p->from.ieee.l, p->from.ieee.h);
 			s = lookup(literal, 0);
 			if(s->type == 0) {
-				s->type = SBSS;
+				s->type = SRODATA;
 				adduint32(s, p->from.ieee.l);
 				adduint32(s, p->from.ieee.h);
 				s->reachable = 0;

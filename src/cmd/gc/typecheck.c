@@ -245,6 +245,12 @@ callrecv(Node *n)
 	case OCALLINTER:
 	case OCALLFUNC:
 	case ORECV:
+	case OCAP:
+	case OLEN:
+	case OCOPY:
+	case ONEW:
+	case OAPPEND:
+	case ODELETE:
 		return 1;
 	}
 
@@ -390,8 +396,10 @@ reswitch:
 			if(t->bound < 0) {
 				yyerror("array bound must be non-negative");
 				goto error;
-			} else
-				overflow(v, types[TINT]);
+			} else if(doesoverflow(v, types[TINT])) {
+				yyerror("array bound is too large"); 
+				goto error;
+			}
 		}
 		typecheck(&r, Etype);
 		if(r->type == T)
@@ -474,7 +482,7 @@ reswitch:
 			n->left = N;
 			goto ret;
 		}
-		if(!isptr[t->etype]) {
+		if((top & Erv) && !isptr[t->etype]) {
 			yyerror("invalid indirect of %lN", n->left);
 			goto error;
 		}
@@ -2572,7 +2580,6 @@ typecheckas2(Node *n)
 			goto common;
 		case ORECV:
 			n->op = OAS2RECV;
-			n->right = n->rlist->n;
 			goto common;
 		case ODOTTYPE:
 			n->op = OAS2DOTTYPE;

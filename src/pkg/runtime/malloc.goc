@@ -19,7 +19,7 @@ package runtime
 #pragma dataflag 16 /* mark mheap as 'no pointers', hiding from garbage collector */
 MHeap runtime·mheap;
 
-extern MStats mstats;	// defined in extern.go
+extern MStats mstats;	// defined in zruntime_def_$GOOS_$GOARCH.go
 
 extern volatile intgo runtime·MemProfileRate;
 
@@ -706,6 +706,27 @@ runtime·new(Type *typ, uint8 *ret)
 	}
 
 	FLUSH(&ret);
+}
+
+// same as runtime·new, but callable from C
+void*
+runtime·cnew(Type *typ)
+{
+	uint32 flag;
+	void *ret;
+
+	if(raceenabled)
+		m->racepc = runtime·getcallerpc(&typ);
+	flag = typ->kind&KindNoPointers ? FlagNoPointers : 0;
+	ret = runtime·mallocgc(typ->size, flag, 1, 1);
+
+	if(UseSpanType && !flag) {
+		if(false) {
+			runtime·printf("new %S: %p\n", *typ->string, ret);
+		}
+		runtime·settype(ret, (uintptr)typ | TypeInfo_SingleObject);
+	}
+	return ret;
 }
 
 void*
