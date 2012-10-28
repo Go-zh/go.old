@@ -406,7 +406,7 @@ fold long lines, and so on.
 </div>
 
 <p>
-注释无需进行额外的格式化，如星号突出等。生成的输出甚至可能无法以等宽字体显示，
+注释无需进行额外的格式化，如用星号来突出等。生成的输出甚至可能无法以等宽字体显示，
 因此不要依赖于空格对齐，<code>godoc</code> 和 <code>gofmt</code> 一样，
 会自动处理这些文档。注释是不会被解析的纯文本，因此像HTML或其它类似于
 <code>_this_</code> 的东西将按照<b>原样</b>输出，因此不应使用它们。根据上下文，
@@ -424,7 +424,7 @@ have a doc comment.
 </div>
 
 <p>
-在包中，任何放在顶级声明前面的注释都将作为该声明的<i>文档注释</i>。
+在包中，任何放在顶级声明前面的注释都将作为该声明的<b>文档注释</b>。
 在程序中，每个已导出（首字母大写）的名称都应该有文档注释。
 </p>
 
@@ -438,8 +438,8 @@ starts with the name being declared.
 </div>
 
 <p>
-文档注释最好为完整的句子，这样它就能适用于各种自动化的展示。第一句应当为一个单句的摘要，
-并以被声明的东西开头。
+文档注释最好是完整的句子，这样它就能适用于各种自动化的展示。
+第一句应当以被声明的东西开头，并且为一句摘要。
 </p>
 
 <div class="english">
@@ -528,11 +528,10 @@ in Go programs.
 </div>
 
 <p>
-命名在Go中与在其他语言中一样重要。在某些情况下，它们甚至会对语义有影响：
+Go中的命名与其它语言中的一样重要。在某些情况下，它们甚至会影响语义：
 例如，一个名称在包外的可见性就由其首个字符是否为大写字母来决定。
 因此有必要花点时间来讨论Go程序中的命名约定。
 </p>
-
 
 <div class="english">
 <h3 id="package-names">Package names</h3>
@@ -580,9 +579,9 @@ determines just which package is being used.
 这也就意味着包应该好好地命名：其名称应该简洁明了而易于理解。按照惯例，
 包应当以小写的单个单词来命名，且不应使用下划线或大小写混合。<code>err</code>
 的命名就是出于简短考虑的，因为任何使用你的包的人都会键入该名称。
-不必担心它会与<i>已有的</i>东西冲突。包的名称是唯一需要导入的默认名称，
+不必担心它会与<b>已有的东西</b>冲突。包名就是导入时所需的唯一默认名称，
 它并不需要在所有源码上都是唯一的，即便在少数发生冲突的情况下，
-也可选择一个不同的名字导入该包以便于局部地使用。
+也可为导入的包选择一个不同的名字来局部地使用。
 不论如何，由于可通过文件名判定使用的是哪个包，因此不会产生混淆。
 </p>
 
@@ -598,7 +597,7 @@ not <code>encoding_base64</code> and not <code>encodingBase64</code>.
 
 <p>
 另一个约定就是包名应为其源码目录的基本名称。在 <code>src/pkg/encoding/base64</code>
-中的包应作为 <code>"encoding/base64"</code> 被导入，而其包名应为 <code>base64</code>，
+中的包应作为 <code>"encoding/base64"</code> 导入，其包名应为 <code>base64</code>，
 而非 <code>encoding_base64</code> 或 <code>encodingBase64</code>。
 </p>
 
@@ -626,14 +625,14 @@ Use the package structure to help you choose good names.
 </div>
 
 <p>
-包的导入者会使用该包的包名来引用其内容（<code>import .</code> 往往只用于测试或其他特殊情况，
+包的导入者会使用该包的包名来引用其内容（<code>import .</code> 往往只用于测试或其它特殊情况，
 若非必要，应尽量避免使用），因此包中的已导出名称便可以此来避免冲突。例如，<code>bufio</code>
 包中的缓存读取器类型叫做 <code>Reader</code> 而非 <code>BufReader</code>，因为用户看到的其实是
 <code>bufio.Reader</code>，这是个清楚而简洁的名称。此外，由于被导入的实体总是通过它们的包名来确定，
-因此 <code>bufio.Reader</code> 就不会与 <code>io.Reader</code> 发生冲突。同样，
-创建了 <code>ring.Ring</code> 的新实例的函数——这就是Go中的<em>构造器</em>——一般会称之为
+因此 <code>bufio.Reader</code> 就不会与 <code>io.Reader</code> 发生冲突。同样，用于创建
+<code>ring.Ring</code> 的新实例的函数（这就是Go中的<strong>构造器</strong>）一般会称之为
 <code>NewRing</code>，但由于 <code>Ring</code> 是该包所导出的唯一类型，且该包也叫
-<code>ring</code>，因此它可以只成为 <code>New</code>，它跟在包的后面，就像
+<code>ring</code>，因此它可以只叫做 <code>New</code>，它跟在包的后面，就像
 <code>ring.New</code>。使用包结构可以帮助你选择好的名称。
 </p>
 
@@ -652,7 +651,7 @@ into the name.
 <p>
 另一个简短的例子是 <code>once.Do</code>。<code>once.Do(setup)</code> 读起来很好，
 将它写作 <code>once.DoOrWaitUntilDone(setup)</code> 也不会更好。
-长的名称并不会自动使事情变得更有可读性。如果该名称所代表的东西比较复杂而微妙，
+长的名称并不会自动让东西变得更有可读性。如果该名称所代表的东西比较复杂而微妙，
 通常更好的方法是编写一个有帮助的文档注释，而不是将所有信息都放到名称当中。
 </p>
 
