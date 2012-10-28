@@ -306,7 +306,7 @@ type WriterAt interface {
 
 // ByteReader 接口包装了 ReadByte 方法。
 //
-// ReadByte 从输入中读取并返回下一个字节。若没有字节可用，就会设置 err。
+// ReadByte 从输入中读取并返回下一个字节。若没有字节可用，就会置为 err。
 type ByteReader interface {
 	ReadByte() (c byte, err error)
 }
@@ -333,6 +333,11 @@ type ByteScanner interface {
 // ReadRune reads a single UTF-8 encoded Unicode character
 // and returns the rune and its size in bytes. If no character is
 // available, err will be set.
+
+// RuneReader 接口包装了 ReadRune 方法。
+//
+// ReadRune 读取单个用UTF-8编码的Unicode字符，并返回该符文及其字节大小。
+// 若没有字符可用，就会置为 err。
 type RuneReader interface {
 	ReadRune() (r rune, size int, err error)
 }
@@ -344,18 +349,28 @@ type RuneReader interface {
 // as the previous call to ReadRune.
 // It may be an error to call UnreadRune twice without an intervening
 // call to ReadRune.
+
+// RuneScanner 接口将 UnreadRune 方法添加到基本的 ReadRune 方法。
+//
+// UnreadRune 使下一次调用 ReadRune 返回的符文与上一次调用 ReadRune 返回的相同。
+// 调用 UnreadRune 两次而中间没有调用 ReadRune 的话就会返回错误。
 type RuneScanner interface {
 	RuneReader
 	UnreadRune() error
 }
 
 // stringWriter is the interface that wraps the WriteString method.
+
+// stringWriter 接口包装了 WriteString 方法。
 type stringWriter interface {
 	WriteString(s string) (n int, err error)
 }
 
 // WriteString writes the contents of the string s to w, which accepts an array of bytes.
 // If w already implements a WriteString method, it is invoked directly.
+
+// WriteString 将字符串 s 的内容写入 w 中，它接受一个字节数组。
+// 若 w 已经实现了 WriteString 方法，就可以直接调用它。
 func WriteString(w Writer, s string) (n int, err error) {
 	if sw, ok := w.(stringWriter); ok {
 		return sw.WriteString(s)
@@ -369,6 +384,11 @@ func WriteString(w Writer, s string) (n int, err error) {
 // If an EOF happens after reading fewer than min bytes,
 // ReadAtLeast returns ErrUnexpectedEOF.
 // If min is greater than the length of buf, ReadAtLeast returns ErrShortBuffer.
+
+// ReadAtLeast 将 r 读取到 buf 中，直到读了最少 min 个字节为止。
+// 它返回复制的字节数，如果读取的字节较少，还会返回一个错误。若没有读取字节，
+// 错误就只是 EOF。如果一个 EOF 发生在读取了少于 min 个字节之后，ReadAtLeast
+// 就会返回 ErrUnexpectedEOF。若 min 大于 buf 的长度，ReadAtLeast 就会返回 ErrShortBuffer。
 func ReadAtLeast(r Reader, buf []byte, min int) (n int, err error) {
 	if len(buf) < min {
 		return 0, ErrShortBuffer
@@ -393,6 +413,11 @@ func ReadAtLeast(r Reader, buf []byte, min int) (n int, err error) {
 // The error is EOF only if no bytes were read.
 // If an EOF happens after reading some but not all the bytes,
 // ReadFull returns ErrUnexpectedEOF.
+
+// ReadFull 精确地从 r 中将 len(buf) 个字节读取到 buf 中。
+// 它返回复制的字节数，如果读取的字节较少，还会返回一个错误。若没有读取字节，
+// 错误就只是 EOF。如果一个 EOF 发生在读取了一些但不是所有的字节后，ReadFull
+// 就会返回 ErrUnexpectedEOF。
 func ReadFull(r Reader, buf []byte) (n int, err error) {
 	return ReadAtLeast(r, buf, len(buf))
 }
@@ -405,13 +430,22 @@ func ReadFull(r Reader, buf []byte) (n int, err error) {
 //
 // If dst implements the ReaderFrom interface,
 // the copy is implemented using it.
+
+// CopyN 将 n 个字节从 src 复制到 dst。
+// 它返回复制的字节数以及在复制时遇到的最早的错误。由于 Read
+// 可以返回要求的全部数量及一个错误（包括 EOF），因此 CopyN 也能。
+//
+// 若 dst 实现了 ReaderFrom 接口，复制操作也就会使用它来实现。
 func CopyN(dst Writer, src Reader, n int64) (written int64, err error) {
 	// If the writer has a ReadFrom method, use it to do the copy.
 	// Avoids a buffer allocation and a copy.
+	// 若该写入器拥有 ReadFrom 方法，就使用它来进行复制。
+	// 避免一个缓存分配和一个副本。
 	if rt, ok := dst.(ReaderFrom); ok {
 		written, err = rt.ReadFrom(LimitReader(src, n))
 		if written < n && err == nil {
 			// rt stopped early; must have been EOF.
+			// rt 过早停止；必须为 EOF。
 			err = EOF
 		}
 		return
@@ -457,13 +491,26 @@ func CopyN(dst Writer, src Reader, n int64) (written int64, err error) {
 // the copy is implemented by calling dst.ReadFrom(src).
 // Otherwise, if src implements the WriterTo interface,
 // the copy is implemented by calling src.WriteTo(dst).
+
+// Copy 将 src 复制到 dst，直到在 src 上到达 EOF 或发生错误。
+// 它返回复制的字节数，如果有的话，还会返回在复制时遇到的第一个错误。
+//
+// 成功的 Copy 返回 err == nil，而非 err == EOF。由于 Copy 被定义为从 src
+// 读取直到 EOF 为止，因此它不会将来自 Read 的 EOF 当做错误来报告。
+//
+// 若 dst 实现了 ReaderFrom 接口，其复制操作可通过调用 dst.ReadFrom(src)
+// 实现。此外，若 dst 实现了 WriterTo 接口，其复制操作可通过调用
+// src.WriteTo(dst) 实现。
 func Copy(dst Writer, src Reader) (written int64, err error) {
 	// If the writer has a ReadFrom method, use it to do the copy.
 	// Avoids an allocation and a copy.
+	// 若该读取器拥有 ReadFrom 方法，就使用它来进行复制。
+	// 避免一个分配和一个副本。
 	if rt, ok := dst.(ReaderFrom); ok {
 		return rt.ReadFrom(src)
 	}
 	// Similarly, if the reader has a WriteTo method, use it to do the copy.
+	// 类似地，若该读取器拥有 WriteTo 方法，就使用它来进行复制。
 	if wt, ok := src.(WriterTo); ok {
 		return wt.WriteTo(dst)
 	}
@@ -498,6 +545,8 @@ func Copy(dst Writer, src Reader) (written int64, err error) {
 // LimitReader returns a Reader that reads from r
 // but stops with EOF after n bytes.
 // The underlying implementation is a *LimitedReader.
+
+//
 func LimitReader(r Reader, n int64) Reader { return &LimitedReader{r, n} }
 
 // A LimitedReader reads from R but limits the amount of
