@@ -11,12 +11,12 @@
 // various implementations, unless otherwise informed clients should not
 // assume they are safe for parallel execution.
 
-// io 包为I/O基原提供了基础的接口.
-// 它主要的工作就是为这些基原的已有实现进行包装，从 os 包中的那些，到抽象了功能的
-// 共享公共接口，加上一些其它相关的基原。
+// io 包为I/O基元提供了基础的接口.
+// 它主要包装了这些基元的已有实现，如 os 包中的那些，抽象成函数性的共享公共接口，
+// 加上一些其它相关的基元。
 //
-// 由于这些接口和基原包装了低级操作的各种实现，除非另行通知，否则客户端不应假定
-// 它们对于并行执行是安全的。
+// 由于这些接口和基元以不同的实现包装了低级操作，因此除非另行通知，
+// 否则客户不应假定它们对于并行执行是安全的。
 package io
 
 import (
@@ -546,15 +546,19 @@ func Copy(dst Writer, src Reader) (written int64, err error) {
 // but stops with EOF after n bytes.
 // The underlying implementation is a *LimitedReader.
 
-//
+// LimitReader 返回一个 Reader，它从 r 中读取 n 个字节后以 EOF 停止。
+// 其基本实现为 *LimitedReader。
 func LimitReader(r Reader, n int64) Reader { return &LimitedReader{r, n} }
 
 // A LimitedReader reads from R but limits the amount of
 // data returned to just N bytes. Each call to Read
 // updates N to reflect the new amount remaining.
+
+// LimitedReader 从 R 读取但将返回的数据量限制为 N 字节。每调用一次 Read
+// 都将更新 N 来反射新的剩余数量。
 type LimitedReader struct {
-	R Reader // underlying reader
-	N int64  // max bytes remaining
+	R Reader // underlying reader   // 基本读取器
+	N int64  // max bytes remaining // 最大剩余字节
 }
 
 func (l *LimitedReader) Read(p []byte) (n int, err error) {
@@ -571,12 +575,17 @@ func (l *LimitedReader) Read(p []byte) (n int, err error) {
 
 // NewSectionReader returns a SectionReader that reads from r
 // starting at offset off and stops with EOF after n bytes.
+
+// NewSectionReader 返回一个 SectionReader，它从
+// r 中的偏移量 off 处读取 n 个字节后以 EOF 停止。
 func NewSectionReader(r ReaderAt, off int64, n int64) *SectionReader {
 	return &SectionReader{r, off, off, off + n}
 }
 
 // SectionReader implements Read, Seek, and ReadAt on a section
 // of an underlying ReaderAt.
+
+// SectionReader 在基本 ReaderAt 的片段上实现了Read、Seek和ReadAt。
 type SectionReader struct {
 	r     ReaderAt
 	base  int64
@@ -629,6 +638,8 @@ func (s *SectionReader) ReadAt(p []byte, off int64) (n int, err error) {
 }
 
 // Size returns the size of the section in bytes.
+
+// Size 返回片段的字节数。
 func (s *SectionReader) Size() int64 { return s.limit - s.base }
 
 // TeeReader returns a Reader that writes to w what it reads from r.
@@ -636,6 +647,10 @@ func (s *SectionReader) Size() int64 { return s.limit - s.base }
 // corresponding writes to w.  There is no internal buffering -
 // the write must complete before the read completes.
 // Any error encountered while writing is reported as a read error.
+
+// TeeReader 返回一个 Reader，它将从 r 中读到的东西写入 w 中。
+// 所有经由它处理的从 r 的读取都匹配于对应的对 w 的写入。它没有内部缓存，
+// 即写入必须在读取完成前完成。任何在写入时遇到的错误都将作为读取错误来报告。
 func TeeReader(r Reader, w Writer) Reader {
 	return &teeReader{r, w}
 }

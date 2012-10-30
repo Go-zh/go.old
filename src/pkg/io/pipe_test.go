@@ -23,6 +23,8 @@ func checkWrite(t *testing.T, w Writer, data []byte, c chan int) {
 }
 
 // Test a single read/write pair.
+
+// 测试单独的读/写对。
 func TestPipe1(t *testing.T) {
 	c := make(chan int)
 	r, w := Pipe()
@@ -55,6 +57,8 @@ func reader(t *testing.T, r Reader, c chan int) {
 }
 
 // Test a sequence of read/write pairs.
+
+// 测试一连串的读/写对。
 func TestPipe2(t *testing.T) {
 	c := make(chan int)
 	r, w := Pipe()
@@ -87,6 +91,8 @@ type pipeReturn struct {
 }
 
 // Test a large write that requires multiple reads to satisfy.
+
+// 测试一个大型的写入操作，它需要多个读取操作来满足。
 func writer(w WriteCloser, buf []byte, c chan pipeReturn) {
 	n, err := w.Write(buf)
 	w.Close()
@@ -110,6 +116,7 @@ func TestPipe3(t *testing.T) {
 		}
 
 		// only final two reads should be short - 1 byte, then 0
+		// 只有最后两个读取应当为 短的 - 1个字节，然后为0
 		expect := n
 		if n == 128 {
 			expect = 1
@@ -139,6 +146,7 @@ func TestPipe3(t *testing.T) {
 }
 
 // Test read after/before writer close.
+// 测试读取前/后写入器的关闭。
 
 type closer interface {
 	CloseWithError(error) error
@@ -207,6 +215,8 @@ func TestPipeReadClose(t *testing.T) {
 }
 
 // Test close on Read side during Read.
+
+// 测试在 Read 时关闭 Read 端。
 func TestPipeReadClose2(t *testing.T) {
 	c := make(chan int, 1)
 	r, _ := Pipe()
@@ -219,6 +229,7 @@ func TestPipeReadClose2(t *testing.T) {
 }
 
 // Test write after/before reader close.
+// 测试写入前/后读取器的关闭。
 
 func TestPipeWriteClose(t *testing.T) {
 	for _, tt := range pipeTests {

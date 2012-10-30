@@ -15,6 +15,7 @@ func (mr *multiReader) Read(p []byte) (n int, err error) {
 			if err == EOF {
 				// Don't return EOF yet. There may be more bytes
 				// in the remaining readers.
+				// 还不能返回 EOF。剩下的读取器中可能还有更多字节。
 				err = nil
 			}
 			return
@@ -27,6 +28,9 @@ func (mr *multiReader) Read(p []byte) (n int, err error) {
 // MultiReader returns a Reader that's the logical concatenation of
 // the provided input readers.  They're read sequentially.  Once all
 // inputs are drained, Read will return EOF.
+
+// MultiReader 返回一个 Reader，它是提供的输入 readers 的逻辑拼接。
+// 它们按顺序读取。一旦所有的输入被耗尽，Read 就会返回 EOF。
 func MultiReader(readers ...Reader) Reader {
 	return &multiReader{readers}
 }
@@ -51,6 +55,8 @@ func (t *multiWriter) Write(p []byte) (n int, err error) {
 
 // MultiWriter creates a writer that duplicates its writes to all the
 // provided writers, similar to the Unix tee(1) command.
+
+// MultiWriter 创建一个 Writer，它将其写入复制到所有提供的 writers 中，类似于Unix的tee(1)命令。
 func MultiWriter(writers ...Writer) Writer {
 	return &multiWriter{writers}
 }
