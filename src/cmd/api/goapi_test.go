@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -70,6 +71,71 @@ func TestGolden(t *testing.T) {
 
 		for _, feature := range w.Features() {
 			t.Errorf("package %s: extra feature not in golden file: %q", fi.Name(), feature)
+		}
+	}
+}
+
+func TestCompareAPI(t *testing.T) {
+	tests := []struct {
+		name                                    string
+		features, required, optional, exception []string
+		ok                                      bool   // want
+		out                                     string // want
+	}{
+		{
+			name:     "feature added",
+			features: []string{"A", "B", "C", "D", "E", "F"},
+			required: []string{"B", "D"},
+			ok:       true,
+			out:      "+A\n+C\n+E\n+F\n",
+		},
+		{
+			name:     "feature removed",
+			features: []string{"C", "A"},
+			required: []string{"A", "B", "C"},
+			ok:       false,
+			out:      "-B\n",
+		},
+		{
+			name:     "feature added then removed",
+			features: []string{"A", "C"},
+			optional: []string{"B"},
+			required: []string{"A", "C"},
+			ok:       true,
+			out:      "±B\n",
+		},
+		{
+			name:      "exception removal",
+			required:  []string{"A", "B", "C"},
+			features:  []string{"A", "C"},
+			exception: []string{"B"},
+			ok:        true,
+			out:       "~B\n",
+		},
+		{
+			// http://golang.org/issue/4303
+			name: "contexts reconverging",
+			required: []string{
+				"A",
+				"pkg syscall (darwin-386), type RawSockaddrInet6 struct",
+				"pkg syscall (darwin-amd64), type RawSockaddrInet6 struct",
+			},
+			features: []string{
+				"A",
+				"pkg syscall, type RawSockaddrInet6 struct",
+			},
+			ok:  true,
+			out: "+pkg syscall, type RawSockaddrInet6 struct\n",
+		},
+	}
+	for _, tt := range tests {
+		buf := new(bytes.Buffer)
+		gotok := compareAPI(buf, tt.features, tt.required, tt.optional, tt.exception)
+		if gotok != tt.ok {
+			t.Errorf("%s: ok = %v; want %v", tt.name, gotok, tt.ok)
+		}
+		if got := buf.String(); got != tt.out {
+			t.Errorf("%s: output differs\nGOT:\n%s\nWANT:\n%s", tt.name, got, tt.out)
 		}
 	}
 }

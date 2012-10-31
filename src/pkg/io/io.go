@@ -328,6 +328,13 @@ type ByteScanner interface {
 	UnreadByte() error
 }
 
+// ByteWriter is the interface that wraps the WriteByte method.
+
+// ByteWriter 接口包装了 WriteByte 方法。
+type ByteWriter interface {
+	WriteByte(c byte) error
+}
+
 // RuneReader is the interface that wraps the ReadRune method.
 //
 // ReadRune reads a single UTF-8 encoded Unicode character
