@@ -1,12 +1,12 @@
 <!--{
 	"Title": "Go编程语言规范",
-	"Subtitle": "版本：2012年10月19日 || 译者：Oling Cat <olingcat@gmail.com>",
+	"Subtitle": "版本：2012年10月31日 || 译者：Oling Cat <olingcat@gmail.com>",
 	"Path": "/ref/spec"
 }-->
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of October 19, 2012",
+	"Subtitle": "Version of October 31, 2012",
 	"Path": "/ref/spec"
 }-->
 
@@ -267,7 +267,7 @@ Unicode数字 = /* 类型为“十进制数字”的Unicode码点 */ .
 
 <div class="english">
 <p>
-In <a href="http://www.unicode.org/versions/Unicode6.0.0/">The Unicode Standard 6.0</a>,
+In <a href="http://www.unicode.org/versions/Unicode6.2.0/">The Unicode Standard 6.2</a>,
 Section 4.5 "General Category"
 defines a set of character categories.  Go treats
 those characters in category Lu, Ll, Lt, Lm, or Lo as Unicode letters,
@@ -276,7 +276,7 @@ and those in category Nd as Unicode digits.
 </div>
 
 <p>
-在<a href="http://www.unicode.org/versions/Unicode6.0.0/">Unicode标准6.0</a>，
+在<a href="http://www.unicode.org/versions/Unicode6.2.0/">Unicode标准6.2</a>，
 章节4.5 “一般类别” 中定义了字符集类别。
 其中类别Lu，Ll，Lt，Lm及Lo被视为Unicode字母，类别Nd被视为Unicode数字。
 </p>
@@ -4197,18 +4197,18 @@ For struct literals the following rules apply:
 <ul>
 	<li>A key must be a field name declared in the LiteralType.
 	</li>
-	<li>A literal that does not contain any keys must
+	<li>An element list that does not contain any keys must
 	    list an element for each struct field in the
 	    order in which the fields are declared.
 	</li>
 	<li>If any element has a key, every element must have a key.
 	</li>
-	<li>A literal that contains keys does not need to
+	<li>An element list that contains keys does not need to
 	    have an element for each struct field. Omitted fields
 	    get the zero value for that field.
 	</li>
 	<li>A literal may omit the element list; such a literal evaluates
-		to the zero value for its type.
+	    to the zero value for its type.
 	</li>
 	<li>It is an error to specify an element for a non-exported
 	    field of a struct belonging to a different package.
@@ -4223,15 +4223,15 @@ For struct literals the following rules apply:
 <ul>
 	<li>键必须为字面类型中声明的字段名。</li>
 
-	<li>不包含任何键的字面必须按字段的声明顺序列出每个结构字段的元素。</li>
+	<li>不包含任何键的元素列表必须按字段的声明顺序列出每个结构字段的元素。</li>
 
 	<li>若其中任何一个元素有键，那么每个元素都必须有键。</li>
 
-	<li>包含键的字面无需每个结构字段都有元素。被忽略的字段会获得零值</li>
+	<li>包含键的元素列表无需每个结构字段都有元素。被忽略的字段会获得零值</li>
 
 	<li>字面可忽略元素列表；这样的字面对其类型求值为零值。</li>
 
-	<li>为属于不同包的结构的非已导出字段指定一个元素会产生一个错误。</li>
+	<li>为属于不同包的结构的未导出字段指定一个元素会产生一个错误。</li>
 </ul>
 
 <div class="english">
