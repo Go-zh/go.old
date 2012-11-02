@@ -84,6 +84,7 @@ int	gen_as_init(Node*);
  * cgen.c
  */
 void	agen(Node*, Node*);
+void	agenr(Node*, Node*, Node*);
 void	igen(Node*, Node*, Node*);
 vlong	fieldoffset(Type*, Node*);
 void	sgen(Node*, Node*, int64);
@@ -125,6 +126,7 @@ void	sudoclean(void);
 int	sudoaddable(int, Node*, Addr*);
 void	afunclit(Addr*);
 void	nodfconst(Node*, Type*, Mpflt*);
+void	gtrack(Sym*);
 
 /*
  * cplx.c
