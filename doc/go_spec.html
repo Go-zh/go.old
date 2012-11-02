@@ -260,9 +260,9 @@ unicode_digit  = /* a Unicode code point classified as "Decimal Digit" */ .
 
 <pre class="ebnf">
 换行符      = /* Unicode码点 U+000A */ .
-Unicode字符 = /* 除newline以外的任意Unicode码点 */ .
-Unicode字母 = /* 类型为“字母”的Unicode码点 */ .
-Unicode数字 = /* 类型为“十进制数字”的Unicode码点 */ .
+unicode字符 = /* 除newline以外的任意Unicode码点 */ .
+unicode字母 = /* 类型为“字母”的Unicode码点 */ .
+unicode数字 = /* 类型为“十进制数字”的Unicode码点 */ .
 </pre>
 
 <div class="english">
@@ -303,7 +303,7 @@ hex_digit     = "0" … "9" | "A" … "F" | "a" … "f" .
 下划线字符<code>_</code>（U+005F）被视为一个字母。
 </p>
 <pre class="ebnf">
-字母         = Unicode字母 | "_" .
+字母         = unicode字母 | "_" .
 十进制数字   = "0" … "9" .
 八进制数字   = "0" … "7" .
 十六进制数字 = "0" … "9" | "A" … "F" | "a" … "f" .
@@ -531,7 +531,7 @@ identifier = letter { letter | unicode_digit } .
 标识符的第一个字符必须是字母。
 </p>
 <pre class="ebnf">
-标识符 = 字母 { 字母 | Unicode数字 } .
+标识符 = 字母 { 字母 | unicode数字 } .
 </pre>
 <pre>
 a
@@ -891,8 +891,8 @@ escaped_char     = `\` ( "a" | "b" | "f" | "n" | "r" | "t" | "v" | `\` | "'" | `
 在符文字面中，所有其它以反斜杠开始的序列都是非法的。
 </p>
 <pre class="ebnf">
-字符字面       = "'" ( Unicode值 | 字节值 ) "'" .
-Unicode值      = Unicode字符 | 小Unicode值 | 大Unicode值 | 转义字符 .
+字符字面       = "'" ( unicode值 | 字节值 ) "'" .
+unicode值      = unicode字符 | 小Unicode值 | 大Unicode值 | 转义字符 .
 字节值         = 八进制字节值 | 十六进制字节值 .
 八进制字节值   = `\` 八进制数字 八进制数字 八进制数字 .
 十六进制字节值 = `\` "x" 十六进制数字 十六进制数字 .
@@ -1015,8 +1015,8 @@ interpreted_string_lit = `"` { unicode_value | byte_value } `"` .
 
 <pre class="ebnf">
 字符串字面     = 原始字符串字面 | 解译字符串字面 .
-原始字符串字面 = "`" { Unicode字符 | 换行符 } "`" .
-解译字符串字面 = `"` { Unicode值 | 字节值 } `"` .
+原始字符串字面 = "`" { unicode字符 | 换行符 } "`" .
+解译字符串字面 = `"` { unicode值 | 字节值 } `"` .
 </pre>
 
 <pre>
