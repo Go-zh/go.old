@@ -1,12 +1,12 @@
 <!--{
 	"Title": "Go编程语言规范",
-	"Subtitle": "版本：2012年10月31日 || 译者：Oling Cat <olingcat@gmail.com>",
+	"Subtitle": "版本：2012年11月1日 || 译者：Oling Cat <olingcat@gmail.com>",
 	"Path": "/ref/spec"
 }-->
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of October 31, 2012",
+	"Subtitle": "Version of November 1, 2012",
 	"Path": "/ref/spec"
 }-->
 
@@ -8798,8 +8798,10 @@ select {}  // 永远阻塞
 
 <div class="english">
 <p>
-A "return" statement terminates execution of the containing function
-and optionally provides a result value or values to the caller.
+A "return" statement in a function <code>F</code> terminates the execution
+of <code>F</code>, and optionally provides one or more result values.
+Any functions <a href="#Defer_statements">deferred</a> by <code>F</code>
+are executed before <code>F</code> returns to its caller.
 </p>
 
 <pre class="ebnf">
@@ -8808,7 +8810,9 @@ ReturnStmt = "return" [ ExpressionList ] .
 </div>
 
 <p>
-"return"语句终止包含函数的执行，并向调用者提供可选的返回值。
+函数 <code>F</code> 中的“return”语句终止 <code>F</code> 的执行，并可选地提供一个或多个返回值。
+任何被 <code>F</code> <a href="#Defer语句">推迟</a>的函数会在 <code>F</code>
+返回给其调用者前执行。
 </p>
 
 <pre class="ebnf">
@@ -8934,12 +8938,16 @@ func (devnull) Write(p []byte) (n int, _ error) {
 
 <div class="english">
 <p>
-Regardless of how they are declared, all the result values are initialized to the zero values for their type (§<a href="#The_zero_value">The zero value</a>) upon entry to the function.
+Regardless of how they are declared, all the result values are initialized to the zero
+values for their type (§<a href="#The_zero_value">The zero value</a>) upon entry to the
+function. A "return" statement that specifies results sets the result parameters before
+any deferred functions are executed.
 </p>
 </div>
 
 <p>
 无论它们如何声明，在进入该函数时，所有的返回值都会被初始化为该类型的零值（§<a href="#零值">零值</a>）。
+指定了结果的“return”语句会在任何被推迟的函数执行前设置结果形参。
 </p>
 
 <!--
@@ -8988,7 +8996,8 @@ Break语句 = "break" [ 标签 ] .
 If there is a label, it must be that of an enclosing
 "for", "switch" or "select" statement, and that is the one whose execution
 terminates
-(§<a href="#For_statements">For statements</a>, §<a href="#Switch_statements">Switch statements</a>, §<a href="#Select_statements">Select statements</a>).
+(§<a href="#For_statements">For statements</a>, §<a href="#Switch_statements">Switch statements</a>,
+§<a href="#Select_statements">Select statements</a>).
 </p>
 </div>
 
@@ -9184,8 +9193,11 @@ Fallthrough语句 = "fallthrough" .
 
 <div class="english">
 <p>
-A "defer" statement invokes a function whose execution is deferred to the moment
-the surrounding function returns.
+A "defer" statement invokes a function whose execution is deferred
+to the moment the surrounding function returns, either because the
+surrounding function executed a <a href="#Return_statements">return statement</a>,
+reached the end of its <a href="#Function_declarations">function body</a>,
+or because the corresponding goroutine is <a href="#Handling_panics">panicking</a>.
 </p>
 
 <pre class="ebnf">
@@ -9194,7 +9206,9 @@ DeferStmt = "defer" Expression .
 </div>
 
 <p>
-"defer"语句调用的函数将被推迟到其外围函数返回时执行。
+"defer"语句调用的函数将被推迟到其外围函数返回时执行，不论是因为该外围函数执行了
+<a href="#Return语句">return 语句</a>，到达了其<a href="#函数声明">函数体</a>的末尾，
+还是因为其对应的Go程进入了<a href="#恐慌处理">恐慌过程</a>。
 </p>
 
 <pre class="ebnf">
@@ -9207,13 +9221,14 @@ The expression must be a function or method call.
 Each time the "defer" statement
 executes, the function value and parameters to the call are
 <a href="#Calls">evaluated as usual</a>
-and saved anew but the
-actual function is not invoked.
-Instead, deferred calls are executed in LIFO order
-immediately before the surrounding function returns,
-after the return values, if any, have been evaluated and assigned
-to the result parameters, but before they
-are returned to the caller. For instance, if the deferred function is
+and saved anew but the actual function body is not executed.
+Instead, deferred functions are executed immediately before
+the surrounding function returns, in the reverse order
+they were deferred.
+</p>
+
+<p>
+For instance, if the deferred function is
 a <a href="#Function_literals">function literal</a> and the surrounding
 function has <a href="#Function_types">named result parameters</a> that
 are in scope within the literal, the deferred function may access and modify
@@ -9244,9 +9259,11 @@ func f() (result int) {
 
 <p>
 该表达必须为一个函数或方法调用。"defer"语句每执行一次，它所调用的函数值与形参就会
-<a href="#函数与方法的调用">像平时一样求值</a>并重新保存，但实际的函数并不会被调用。
-取而代之的是，在外围的函数返回前，延迟的调用会按照后进先出的顺序立即执行，
-在该调用返回值后，如果还有需要求值并赋予结果形参的，则会在它们返回给调用者之前求值。
+<a href="#函数与方法的调用">像平时一样求值</a>并重新保存，但实际的函数提并不会被执行。
+取而代之的是，在外围的函数返回前，被推迟的函数会按照它们被推迟的相反顺序立即执行。
+</p>
+
+<p>
 例如，若被推迟的函数为<a href="#函数字面">函数字面</a>，而其外围函数在其作用域中的函数字面内拥有
 <a href="#函数类型">已命名结果形参</a>，则被推迟的函数可在该结果形参被返回前访问并更改。
 若被推迟函数拥有任何返回值，则它们会在该函数完成时丢弃。
@@ -9857,29 +9874,24 @@ func recover() interface{}
 
 <div class="english">
 <p>
-When a function <code>F</code> calls <code>panic</code>, normal
-execution of <code>F</code> stops immediately.  Any functions whose
-execution was <a href="#Defer_statements">deferred</a> by the
-invocation of <code>F</code> are immediately run in the usual way,
-but with the current values of any result parameters, and then
-<code>F</code> returns to its caller without executing the rest of
-the function.  To the caller, <code>F</code>
-then behaves like a call to <code>panic</code>, terminating its own
-execution and running deferred functions in the same manner.
-This continues until all
-functions in the goroutine have ceased execution, in reverse order.
-At that point, the program is
-terminated and the error condition is reported, including the value of
-the argument to <code>panic</code>.  This termination sequence is
-called <i>panicking</i>.
+A <code>panic</code> call in a function <code>F</code> terminates the execution
+of <code>F</code>.
+Any functions <a href="#Defer_statements">deferred</a> by <code>F</code>
+are executed before <code>F</code> returns to its caller. To the caller,
+the call of <code>F</code> then behaves itself like a call to <code>panic</code>,
+terminating its own execution and running deferred functions in the same manner.
+This continues until all functions in the goroutine have ceased execution,
+in reverse order. At that point, the program is terminated and the error
+condition is reported, including the value of the argument to <code>panic</code>.
+This termination sequence is called <i>panicking</i>.
 </p>
 </div>
 
 <p>
-当函数 <code>F</code> 调用 <code>panic</code>时，<code>F</code> 的正常执行就会立刻停止。
-由 <code>F</code> 请求<a href="#Defer语句">推迟</a>的任何函数执行都会以通常方式立刻运行，
-但不带任何结果形参的当前值，然后 <code>F</code> 返回给其调用者，且不执行该函数剩余的部分。
-对于其调用者，<code>F</code> 的行为如同对 <code>panic</code> 的调用，即终止其自身的执行，
+函数 <code>F</code> 中的 <code>panic</code> 调用会终止 <code>F</code> 的执行。
+任何被 <code>F</code> <a href="#Defer语句">推迟</a>函数都会在 <code>F</code>
+返回给其调用者前执行，且不执行该函数剩余的部分。对于其调用者，<code>F</code>
+的调用行为自身如同对 <code>panic</code> 的调用，即终止其自身的执行，
 并以相同的方式运行被推迟的函数。这会持续到该Go程中所有函数都按相反顺序停止执行之后。
 到那时，该程序将被终止，而该错误情况会被报告，包括引发 <code>panic</code> 的实参值。
 此终止序列称为<i>恐慌过程</i>。
