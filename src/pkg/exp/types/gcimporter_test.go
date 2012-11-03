@@ -119,7 +119,7 @@ var importedObjectTests = []struct {
 	typ  string
 }{
 	{"unsafe.Pointer", ast.Typ, "Pointer"},
-	{"math.Pi", ast.Con, "basicType"}, // TODO(gri) need to complete BasicType
+	{"math.Pi", ast.Con, "untyped float"},
 	{"io.Reader", ast.Typ, "interface{Read(p []byte) (n int, err error)}"},
 	{"io.ReadWriter", ast.Typ, "interface{Read(p []byte) (n int, err error); Write(p []byte) (n int, err error)}"},
 	{"math.Sin", ast.Fun, "func(x float64) (_ float64)"},
@@ -145,7 +145,7 @@ func TestGcImportedTypes(t *testing.T) {
 		if obj.Kind != test.kind {
 			t.Errorf("%s: got kind = %q; want %q", test.name, obj.Kind, test.kind)
 		}
-		typ := TypeString(Underlying(obj.Type.(Type)))
+		typ := typeString(underlying(obj.Type.(Type)))
 		if typ != test.typ {
 			t.Errorf("%s: got type = %q; want %q", test.name, typ, test.typ)
 		}

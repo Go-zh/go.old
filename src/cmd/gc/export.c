@@ -119,6 +119,17 @@ reexportdep(Node *n)
 		}
 		break;
 
+	case ODCL:
+		// Local variables in the bodies need their type.
+		t = n->left->type;
+		if(t != types[t->etype] && t != idealbool && t != idealstring) {
+			if(isptr[t->etype])
+				t = t->type;
+			if (t && t->sym && t->sym->def && t->sym->pkg != localpkg  && t->sym->pkg != builtinpkg) {
+				exportlist = list(exportlist, t->sym->def);
+			}
+		}
+		break;
 
 	case OLITERAL:
 		t = n->type;
@@ -267,6 +278,8 @@ dumpexporttype(Type *t)
 			// currently that can leave unresolved ONONAMEs in import-dot-ed packages in the wrong package
 			if(debug['l'] < 2)
 				typecheckinl(f->type->nname);
+			if(f->nointerface)
+				Bprint(bout, "\t//go:nointerface\n");
 			Bprint(bout, "\tfunc (%#T) %#hhS%#hT { %#H }\n", getthisx(f->type)->type, f->sym, f->type, f->type->nname->inl);
 			reexportdeplist(f->type->nname->inl);
 		} else

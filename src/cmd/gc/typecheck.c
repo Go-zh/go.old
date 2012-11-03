@@ -817,9 +817,18 @@ reswitch:
 
 		case TARRAY:
 			defaultlit(&n->right, T);
-			if(n->right->type != T && !isint[n->right->type->etype])
-				yyerror("non-integer array index %N", n->right);
 			n->type = t->type;
+			if(n->right->type != T && !isint[n->right->type->etype]) {
+				yyerror("non-integer array index %N", n->right);
+				break;
+			}
+			if(n->right->op == OLITERAL) {
+			       	if(mpgetfix(n->right->val.u.xval) < 0) {
+					why = isfixedarray(t) ? "array" : "slice";
+					yyerror("invalid %s index %N (index must be non-negative)", why, n->right);
+				} else if(isfixedarray(t) && t->bound > 0 && mpgetfix(n->right->val.u.xval) >= t->bound)
+					yyerror("invalid array index %N (out of bounds for %d-element array)", n->right, t->bound);
+			}
 			break;
 
 		case TMAP:
@@ -912,6 +921,8 @@ reswitch:
 				yyerror("invalid slice index %N (type %T)", n->right->left, t);
 				goto error;
 			}
+			if(n->right->left->op == OLITERAL && mpgetfix(n->right->left->val.u.xval) < 0)
+				yyerror("invalid slice index %N (index must be non-negative)", n->right->left);
 		}
 		if(n->right->right != N) {
 			if((t = n->right->right->type) == T)
@@ -920,6 +931,8 @@ reswitch:
 				yyerror("invalid slice index %N (type %T)", n->right->right, t);
 				goto error;
 			}
+			if(n->right->right->op == OLITERAL && mpgetfix(n->right->right->val.u.xval) < 0)
+				yyerror("invalid slice index %N (index must be non-negative)", n->right->right);
 		}
 		l = n->left;
 		if((t = l->type) == T)
@@ -1820,6 +1833,7 @@ lookdot(Node *n, Type *t, int dostrcmp)
 			fatal("lookdot badwidth %T %p", f1, f1);
 		n->xoffset = f1->width;
 		n->type = f1->type;
+		n->paramfld = f1;
 		if(t->etype == TINTER) {
 			if(isptr[n->left->type->etype]) {
 				n->left = nod(OIND, n->left, N);	// implicitstar
@@ -2624,7 +2638,7 @@ typecheckfunc(Node *n)
 	t->nname = n->nname;
 	rcvr = getthisx(t)->type;
 	if(rcvr != nil && n->shortname != N && !isblank(n->shortname))
-		addmethod(n->shortname->sym, t, 1);
+		addmethod(n->shortname->sym, t, 1, n->nname->nointerface);
 }
 
 static void

@@ -33,6 +33,7 @@ racewalk(Node *fn)
 {
 	int i;
 	Node *nd;
+	Node *nodpc;
 	char s[1024];
 
 	if(myimportpath) {
@@ -42,18 +43,26 @@ racewalk(Node *fn)
 		}
 	}
 
-	// TODO(dvyukov): ideally this should be:
-	// racefuncenter(getreturnaddress())
-	// because it's much more costly to obtain from runtime library.
-	nd = mkcall("racefuncenter", T, nil);
-	fn->enter = list(fn->enter, nd);
+	// nodpc is the PC of the caller as extracted by
+	// getcallerpc. We use -widthptr(FP) for x86.
+	// BUG: this will not work on arm.
+	nodpc = nod(OXXX, nil, nil);
+	*nodpc = *nodfp;
+	nodpc->type = types[TUINTPTR];
+	nodpc->xoffset = -widthptr;
+	nd = mkcall("racefuncenter", T, nil, nodpc);
+	fn->enter = concat(list1(nd), fn->enter);
 	nd = mkcall("racefuncexit", T, nil);
-	fn->exit = list(fn->exit, nd); // works fine if (!fn->exit)
+	fn->exit = list(fn->exit, nd);
 	racewalklist(curfn->nbody, nil);
 
 	if(debug['W']) {
 		snprint(s, sizeof(s), "after racewalk %S", curfn->nname->sym);
 		dumplist(s, curfn->nbody);
+		snprint(s, sizeof(s), "after walk %S", curfn->nname->sym);
+		dumplist(s, curfn->nbody);
+		snprint(s, sizeof(s), "enter %S", curfn->nname->sym);
+		dumplist(s, curfn->enter);
 	}
 }
 
@@ -79,6 +88,7 @@ static void
 racewalknode(Node **np, NodeList **init, int wr, int skip)
 {
 	Node *n, *n1;
+	NodeList *fini;
 
 	n = *np;
 
@@ -88,6 +98,8 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 		print("op=%s, left=[ %N ], right=[ %N ], right's type=%T, n's type=%T, n's class=%d\n",
 			opnames[n->op], n->left, n->right, n->right ? n->right->type : nil, n->type, n->class);
 	setlineno(n);
+
+	racewalklist(n->ninit, nil);
 
 	switch(n->op) {
 	default:
@@ -100,14 +112,33 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 	case OAS2RECV:
 	case OAS2FUNC:
 	case OAS2MAPR:
-		racewalklist(n->ninit, init);
 		racewalknode(&n->left, init, 1, 0);
 		racewalknode(&n->right, init, 0, 0);
 		goto ret;
 
 	case OBLOCK:
-		// leads to crashes.
-		//racewalklist(n->list, nil);
+		if(n->list == nil)
+			goto ret;
+
+		switch(n->list->n->op) {
+		case OCALLFUNC:
+		case OCALLMETH:
+		case OCALLINTER:
+			// Blocks are used for multiple return function calls.
+			// x, y := f() becomes BLOCK{CALL f, AS x [SP+0], AS y [SP+n]}
+			// We don't want to instrument between the statements because it will
+			// smash the results.
+			racewalknode(&n->list->n, &n->ninit, 0, 0);
+			fini = nil;
+			racewalklist(n->list->next, &fini);
+			n->list = concat(n->list, fini);
+			break;
+
+		default:
+			// Ordinary block, for loop initialization or inlined bodies.
+			racewalklist(n->list, nil);
+			break;
+		}
 		goto ret;
 
 	case ODEFER:
@@ -115,7 +146,6 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 		goto ret;
 
 	case OFOR:
-		racewalklist(n->ninit, nil);
 		if(n->ntest != N)
 			racewalklist(n->ntest->ninit, nil);
 		racewalknode(&n->nincr, init, wr, 0);
@@ -123,7 +153,6 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 		goto ret;
 
 	case OIF:
-		racewalklist(n->ninit, nil);
 		racewalknode(&n->ntest, &n->ninit, wr, 0);
 		racewalklist(n->nbody, nil);
 		racewalklist(n->nelse, nil);
@@ -140,7 +169,6 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 
 	case OCALLFUNC:
 		racewalknode(&n->left, init, 0, 0);
-		racewalklist(n->ninit, init);
 		racewalklist(n->list, init);
 		goto ret;
 
@@ -159,16 +187,14 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 		goto ret;
 
 	case OSWITCH:
-		racewalklist(n->ninit, nil);
 		if(n->ntest->op == OTYPESW)
-			// don't bother, we have static typization
+			// TODO(dvyukov): the expression can contain calls or reads.
 			return;
 		racewalknode(&n->ntest, &n->ninit, 0, 0);
 		racewalklist(n->nbody, nil);
 		goto ret;
 
 	case OEMPTY:
-		racewalklist(n->ninit, nil);
 		goto ret;
 
 	case ONOT:
@@ -274,7 +300,6 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 	case OSLICE:
 	case OSLICEARR:
 		// Seems to only lead to double instrumentation.
-		//racewalklist(n->ninit, init);
 		//racewalknode(&n->left, init, 0, 0);
 		//racewalklist(n->list, init);
 		goto ret;
@@ -369,7 +394,7 @@ callinstr(Node *n, NodeList **init, int wr, int skip)
 	if(n->op == ONAME) {
 		if(n->sym != S) {
 			if(n->sym->name != nil) {
-				if(strncmp(n->sym->name, "_", sizeof("_")-1) == 0)
+				if(strcmp(n->sym->name, "_") == 0)
 					return 0;
 				if(strncmp(n->sym->name, "autotmp_", sizeof("autotmp_")-1) == 0)
 					return 0;
@@ -381,7 +406,7 @@ callinstr(Node *n, NodeList **init, int wr, int skip)
 	if(t->etype == TSTRUCT) {
 		res = 0;
 		for(t1=t->type; t1; t1=t1->down) {
-			if(t1->sym && strncmp(t1->sym->name, "_", sizeof("_")-1)) {
+			if(t1->sym && strcmp(t1->sym->name, "_")) {
 				n = treecopy(n);
 				f = nod(OXDOT, n, newname(t1->sym));
 				if(callinstr(f, init, wr, 0)) {
