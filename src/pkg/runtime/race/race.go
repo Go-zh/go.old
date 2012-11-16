@@ -5,6 +5,8 @@
 // +build race,linux,amd64 race,darwin,amd64
 
 // Package race provides low-level facilities for data race detection.
+
+// race 包为数据竞争检测提供了低级功能。
 package race
 
 /*
