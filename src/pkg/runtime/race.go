@@ -6,6 +6,7 @@
 
 // Public race detection API, present iff build with -race.
 
+// 公共的竞争检测API，当且仅当使用 -race 构建时才会出现。
 package runtime
 
 import (
@@ -13,9 +14,13 @@ import (
 )
 
 // RaceDisable disables handling of race events in the current goroutine.
+
+// RaceDisable 关闭当前Go程中竞争事件的处理。
 func RaceDisable()
 
 // RaceEnable re-enables handling of race events in the current goroutine.
+
+// RaceEnable 重新开启当前Go程中竞争事件的处理。
 func RaceEnable()
 
 func RaceAcquire(addr unsafe.Pointer)
