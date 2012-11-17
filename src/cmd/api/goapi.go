@@ -290,10 +290,11 @@ type pkgSymbol struct {
 	symbol string // "RoundTripper"
 }
 
+var fset = token.NewFileSet()
+
 type Walker struct {
 	context         *build.Context
 	root            string
-	fset            *token.FileSet
 	scope           []string
 	features        map[string]bool // set
 	lastConstType   string
@@ -310,7 +311,6 @@ type Walker struct {
 
 func NewWalker() *Walker {
 	return &Walker{
-		fset:            token.NewFileSet(),
 		features:        make(map[string]bool),
 		packageState:    make(map[string]loadState),
 		interfaces:      make(map[pkgSymbol]*ast.InterfaceType),
@@ -330,20 +330,6 @@ const (
 	loading
 	loaded
 )
-
-// hardCodedConstantType is a hack until the type checker is sufficient for our needs.
-// Rather than litter the code with unnecessary type annotations, we'll hard-code
-// the cases we can't handle yet.
-func (w *Walker) hardCodedConstantType(name string) (typ string, ok bool) {
-	switch w.scope[0] {
-	case "pkg syscall":
-		switch name {
-		case "darwinAMD64":
-			return "bool", true
-		}
-	}
-	return "", false
-}
 
 func (w *Walker) Features() (fs []string) {
 	for f := range w.features {
@@ -400,7 +386,7 @@ func (w *Walker) WalkPackage(name string) {
 
 	files := append(append([]string{}, info.GoFiles...), info.CgoFiles...)
 	for _, file := range files {
-		f, err := parser.ParseFile(w.fset, filepath.Join(dir, file), nil, 0)
+		f, err := parser.ParseFile(fset, filepath.Join(dir, file), nil, 0)
 		if err != nil {
 			log.Fatalf("error parsing package %s, file %s: %v", name, file, err)
 		}
@@ -535,7 +521,7 @@ func (w *Walker) walkFile(file *ast.File) {
 			// Ignore. Handled in subsequent pass, by go/doc.
 		default:
 			log.Printf("unhandled %T, %#v\n", di, di)
-			printer.Fprint(os.Stderr, w.fset, di)
+			printer.Fprint(os.Stderr, fset, di)
 			os.Stderr.Write([]byte("\n"))
 		}
 	}
@@ -596,6 +582,10 @@ func (w *Walker) constValueType(vi interface{}) (string, error) {
 		}
 		return constDepPrefix + v.Name, nil
 	case *ast.BinaryExpr:
+		switch v.Op {
+		case token.EQL, token.LSS, token.GTR, token.NOT, token.NEQ, token.LEQ, token.GEQ:
+			return "bool", nil
+		}
 		left, err := w.constValueType(v.X)
 		if err != nil {
 			return "", err
@@ -768,12 +758,7 @@ func (w *Walker) walkConst(vs *ast.ValueSpec) {
 				var err error
 				litType, err = w.constValueType(vs.Values[0])
 				if err != nil {
-					if t, ok := w.hardCodedConstantType(ident.Name); ok {
-						litType = t
-						err = nil
-					} else {
-						log.Fatalf("unknown kind in const %q (%T): %v", ident.Name, vs.Values[0], err)
-					}
+					log.Fatalf("unknown kind in const %q (%T): %v", ident.Name, vs.Values[0], err)
 				}
 			}
 		}
@@ -850,7 +835,7 @@ func (w *Walker) nodeString(node interface{}) string {
 		return ""
 	}
 	var b bytes.Buffer
-	printer.Fprint(&b, w.fset, node)
+	printer.Fprint(&b, fset, node)
 	return b.String()
 }
 
@@ -859,7 +844,7 @@ func (w *Walker) nodeDebug(node interface{}) string {
 		return ""
 	}
 	var b bytes.Buffer
-	ast.Fprint(&b, w.fset, node, nil)
+	ast.Fprint(&b, fset, node, nil)
 	return b.String()
 }
 

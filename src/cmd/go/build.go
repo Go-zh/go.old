@@ -62,7 +62,8 @@ The build flags are shared by the build, install, run, and test commands:
 		print the commands.
 	-race
 		enable data race detection.
-		Currently supported only on linux/amd64 and darwin/amd64.
+		Currently supported only on linux/amd64,
+		darwin/amd64 and windows/amd64.
 
 	-ccflags 'arg list'
 		arguments to pass on each 5c, 6c, or 8c compiler invocation
@@ -876,6 +877,9 @@ func (b *builder) includeArgs(flag string, all []*action) []string {
 				dir = filepath.Join(dir, "gccgo")
 			} else {
 				dir = filepath.Join(dir, goos+"_"+goarch)
+				if buildRace {
+					dir += "_race"
+				}
 			}
 			inc = append(inc, flag, dir)
 		}
@@ -1538,6 +1542,8 @@ func envList(key string) []string {
 
 var cgoRe = regexp.MustCompile(`[/\\:]`)
 
+var cgoLibGccFile string
+
 func (b *builder) cgo(p *Package, cgoExe, obj string, gccfiles []string) (outGo, outObj []string, err error) {
 	if goos != toolGOOS {
 		return nil, nil, errors.New("cannot use cgo when compiling for a different operating system")
@@ -1627,16 +1633,19 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, gccfiles []string) (outGo,
 			bareLDFLAGS = append(bareLDFLAGS, f)
 		}
 	}
-	libgcc, err := b.libgcc(p)
-	if err != nil {
-		return nil, nil, err
+	if cgoLibGccFile == "" {
+		var err error
+		cgoLibGccFile, err = b.libgcc(p)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	var staticLibs []string
 	if goos == "windows" {
 		// libmingw32 and libmingwex might also use libgcc, so libgcc must come last
-		staticLibs = []string{"-lmingwex", "-lmingw32", libgcc}
+		staticLibs = []string{"-lmingwex", "-lmingw32", cgoLibGccFile}
 	} else {
-		staticLibs = []string{libgcc}
+		staticLibs = []string{cgoLibGccFile}
 	}
 
 	for _, cfile := range cfiles {
@@ -1832,8 +1841,8 @@ func raceInit() {
 	if !buildRace {
 		return
 	}
-	if goarch != "amd64" || goos != "linux" && goos != "darwin" {
-		fmt.Fprintf(os.Stderr, "go %s: -race is only supported on linux/amd64 and darwin/amd64\n", flag.Args()[0])
+	if goarch != "amd64" || goos != "linux" && goos != "darwin" && goos != "windows" {
+		fmt.Fprintf(os.Stderr, "go %s: -race is only supported on linux/amd64, darwin/amd64 and windows/amd64\n", flag.Args()[0])
 		os.Exit(2)
 	}
 	buildGcflags = append(buildGcflags, "-b")

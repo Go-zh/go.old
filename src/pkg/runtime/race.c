@@ -11,6 +11,7 @@
 #include "race.h"
 
 void runtime∕race·Initialize(void);
+void runtime∕race·MapShadow(void *addr, uintptr size);
 void runtime∕race·Finalize(void);
 void runtime∕race·FinalizerGoroutine(int32);
 void runtime∕race·Read(int32 goid, void *addr, void *pc);
@@ -33,8 +34,16 @@ static bool onstack(uintptr argp);
 void
 runtime·raceinit(void)
 {
+	uintptr sz;
+
 	m->racecall = true;
 	runtime∕race·Initialize();
+	sz = (byte*)&runtime·mheap - noptrdata;
+	if(sz)
+		runtime∕race·MapShadow(noptrdata, sz);
+	sz = enoptrbss - (byte*)(&runtime·mheap+1);
+	if(sz)
+		runtime∕race·MapShadow(&runtime·mheap+1, sz);
 	m->racecall = false;
 }
 
@@ -46,7 +55,17 @@ runtime·racefini(void)
 	m->racecall = false;
 }
 
+void
+runtime·racemapshadow(void *addr, uintptr size)
+{
+	m->racecall = true;
+	runtime∕race·MapShadow(addr, size);
+	m->racecall = false;
+}
+
 // Called from instrumented code.
+// If we split stack, getcallerpc() can return runtime·lessstack().
+#pragma textflag 7
 void
 runtime·racewrite(uintptr addr)
 {
@@ -58,6 +77,8 @@ runtime·racewrite(uintptr addr)
 }
 
 // Called from instrumented code.
+// If we split stack, getcallerpc() can return runtime·lessstack().
+#pragma textflag 7
 void
 runtime·raceread(uintptr addr)
 {
@@ -69,12 +90,16 @@ runtime·raceread(uintptr addr)
 }
 
 // Called from instrumented code.
+#pragma textflag 7
 void
 runtime·racefuncenter(uintptr pc)
 {
 	// If the caller PC is lessstack, use slower runtime·callers
 	// to walk across the stack split to find the real caller.
-	if(pc == (uintptr)runtime·lessstack)
+	// Same thing if the PC is on the heap, which should be a
+	// closure trampoline.
+	if(pc == (uintptr)runtime·lessstack ||
+		(pc >= (uintptr)runtime·mheap.arena_start && pc < (uintptr)runtime·mheap.arena_used))
 		runtime·callers(2, &pc, 1);
 
 	m->racecall = true;
@@ -83,6 +108,7 @@ runtime·racefuncenter(uintptr pc)
 }
 
 // Called from instrumented code.
+#pragma textflag 7
 void
 runtime·racefuncexit(void)
 {
@@ -233,6 +259,22 @@ void runtime·RaceSemacquire(uint32 *s)
 void runtime·RaceSemrelease(uint32 *s)
 {
 	runtime·semrelease(s);
+}
+
+// func RaceRead(addr unsafe.Pointer)
+#pragma textflag 7
+void
+runtime·RaceRead(void *addr)
+{
+	runtime·racereadpc(addr, runtime·getcallerpc(&addr));
+}
+
+// func RaceWrite(addr unsafe.Pointer)
+#pragma textflag 7
+void
+runtime·RaceWrite(void *addr)
+{
+	runtime·racewritepc(addr, runtime·getcallerpc(&addr));
 }
 
 // func RaceDisable()

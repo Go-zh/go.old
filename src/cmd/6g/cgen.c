@@ -566,6 +566,7 @@ agenr(Node *n, Node *a, Node *res)
 	Type *t;
 	uint32 w;
 	uint64 v;
+	int freelen;
 
 	if(debug['g']) {
 		dump("\nagenr-n", n);
@@ -575,7 +576,23 @@ agenr(Node *n, Node *a, Node *res)
 	nr = n->right;
 
 	switch(n->op) {
+	case ODOT:
+	case ODOTPTR:
+	case OCALLFUNC:
+	case OCALLMETH:
+	case OCALLINTER:
+		igen(n, &n1, res);
+		regalloc(a, types[tptr], &n1);
+		agen(&n1, a);
+		regfree(&n1);
+		break;
+
+	case OIND:
+		cgenr(n->left, a, res);
+		break;
+
 	case OINDEX:
+		freelen = 0;
 		w = n->type->width;
 		// Generate the non-addressable child first.
 		if(nr->addable)
@@ -587,6 +604,7 @@ agenr(Node *n, Node *a, Node *res)
 					agenr(nl, &n3, res);
 				} else {
 					igen(nl, &nlen, res);
+					freelen = 1;
 					nlen.type = types[tptr];
 					nlen.xoffset += Array_array;
 					regalloc(&n3, types[tptr], res);
@@ -612,6 +630,7 @@ agenr(Node *n, Node *a, Node *res)
 					nl = &tmp2;
 				}
 				igen(nl, &nlen, res);
+				freelen = 1;
 				nlen.type = types[tptr];
 				nlen.xoffset += Array_array;
 				regalloc(&n3, types[tptr], res);
@@ -651,7 +670,14 @@ agenr(Node *n, Node *a, Node *res)
 			if(isslice(nl->type) || nl->type->etype == TSTRING) {
 				if(!debug['B'] && !n->bounded) {
 					nodconst(&n2, types[simtype[TUINT]], v);
-					gins(optoas(OCMP, types[simtype[TUINT]]), &nlen, &n2);
+					if(smallintconst(nr)) {
+						gins(optoas(OCMP, types[simtype[TUINT]]), &nlen, &n2);
+					} else {
+						regalloc(&tmp, types[simtype[TUINT]], N);
+						gmove(&n2, &tmp);
+						gins(optoas(OCMP, types[simtype[TUINT]]), &nlen, &tmp);
+						regfree(&tmp);
+					}
 					p1 = gbranch(optoas(OGT, types[simtype[TUINT]]), T, +1);
 					ginscall(panicindex, -1);
 					patch(p1, pc);
@@ -690,6 +716,12 @@ agenr(Node *n, Node *a, Node *res)
 				}
 			} else {
 				nodconst(&nlen, t, nl->type->bound);
+				if(!smallintconst(&nlen)) {
+					regalloc(&n5, t, N);
+					gmove(&nlen, &n5);
+					nlen = n5;
+					freelen = 1;
+				}
 			}
 			gins(optoas(OCMP, t), &n2, &nlen);
 			p1 = gbranch(optoas(OLT, t), T, +1);
@@ -721,7 +753,7 @@ agenr(Node *n, Node *a, Node *res)
 	indexdone:
 		*a = n3;
 		regfree(&n2);
-		if(!isconst(nl, CTSTR) && !isfixedarray(nl->type))
+		if(freelen)
 			regfree(&nlen);
 		break;
 
@@ -1292,7 +1324,7 @@ stkof(Node *n)
 void
 sgen(Node *n, Node *ns, int64 w)
 {
-	Node nodl, nodr, oldl, oldr, cx, oldcx, tmp;
+	Node nodl, nodr, nodsi, noddi, cx, oldcx, tmp;
 	int32 c, q, odst, osrc;
 
 	if(debug['g']) {
@@ -1336,22 +1368,18 @@ sgen(Node *n, Node *ns, int64 w)
 	}
 
 	if(n->ullman >= ns->ullman) {
-		savex(D_SI, &nodr, &oldr, N, types[tptr]);
-		agen(n, &nodr);
-
-		regalloc(&nodr, types[tptr], &nodr);	// mark nodr as live
-		savex(D_DI, &nodl, &oldl, N, types[tptr]);
-		agen(ns, &nodl);
-		regfree(&nodr);
+		agenr(n, &nodr, N);
+		agenr(ns, &nodl, N);
 	} else {
-		savex(D_DI, &nodl, &oldl, N, types[tptr]);
-		agen(ns, &nodl);
-
-		regalloc(&nodl, types[tptr], &nodl);	// mark nodl as live
-		savex(D_SI, &nodr, &oldr, N, types[tptr]);
-		agen(n, &nodr);
-		regfree(&nodl);
+		agenr(ns, &nodl, N);
+		agenr(n, &nodr, N);
 	}
+	nodreg(&noddi, types[tptr], D_DI);
+	nodreg(&nodsi, types[tptr], D_SI);
+	gmove(&nodl, &noddi);
+	gmove(&nodr, &nodsi);
+	regfree(&nodl);
+	regfree(&nodr);
 
 	c = w % 8;	// bytes
 	q = w / 8;	// quads
@@ -1408,9 +1436,6 @@ sgen(Node *n, Node *ns, int64 w)
 		}
 	}
 
-
-	restx(&nodl, &oldl);
-	restx(&nodr, &oldr);
 	restx(&cx, &oldcx);
 }
 
@@ -1433,6 +1458,8 @@ cadable(Node *n)
 /*
  * copy a composite value by moving its individual components.
  * Slices, strings and interfaces are supported.
+ * Small structs or arrays with elements of basic type are
+ * also supported.
  * nr is N when assigning a zero value.
  * return 1 if can do, 0 if cant.
  */
@@ -1440,7 +1467,10 @@ int
 componentgen(Node *nr, Node *nl)
 {
 	Node nodl, nodr;
+	Type *t;
 	int freel, freer;
+	vlong fldcount;
+	vlong loffset, roffset;
 
 	freel = 0;
 	freer = 0;
@@ -1450,8 +1480,33 @@ componentgen(Node *nr, Node *nl)
 		goto no;
 
 	case TARRAY:
-		if(!isslice(nl->type))
+		t = nl->type;
+
+		// Slices are ok.
+		if(isslice(t))
+			break;
+		// Small arrays are ok.
+		if(t->bound > 0 && t->bound <= 3 && !isfat(t->type))
+			break;
+
+		goto no;
+
+	case TSTRUCT:
+		// Small structs with non-fat types are ok.
+		// Zero-sized structs are treated separately elsewhere.
+		fldcount = 0;
+		for(t=nl->type->type; t; t=t->down) {
+			if(isfat(t->type))
+				goto no;
+			if(t->etype != TFIELD)
+				fatal("componentgen: not a TFIELD: %lT", t);
+			fldcount++;
+		}
+		if(fldcount == 0 || fldcount > 3)
 			goto no;
+
+		break;
+
 	case TSTRING:
 	case TINTER:
 		break;
@@ -1475,6 +1530,23 @@ componentgen(Node *nr, Node *nl)
 
 	switch(nl->type->etype) {
 	case TARRAY:
+		// componentgen for arrays.
+		t = nl->type;
+		if(!isslice(t)) {
+			nodl.type = t->type;
+			nodr.type = nodl.type;
+			for(fldcount=0; fldcount < t->bound; fldcount++) {
+				if(nr == N)
+					clearslim(&nodl);
+				else
+					gmove(&nodr, &nodl);
+				nodl.xoffset += t->type->width;
+				nodr.xoffset += t->type->width;
+			}
+			goto yes;
+		}
+
+		// componentgen for slices.
 		nodl.xoffset += Array_array;
 		nodl.type = ptrto(nl->type->type);
 
@@ -1551,6 +1623,23 @@ componentgen(Node *nr, Node *nl)
 			nodconst(&nodr, nodl.type, 0);
 		gmove(&nodr, &nodl);
 
+		goto yes;
+
+	case TSTRUCT:
+		loffset = nodl.xoffset;
+		roffset = nodr.xoffset;
+		for(t=nl->type->type; t; t=t->down) {
+			nodl.xoffset = loffset + t->width;
+			nodl.type = t->type;
+
+			if(nr == N)
+				clearslim(&nodl);
+			else {
+				nodr.xoffset = roffset + t->width;
+				nodr.type = nodl.type;
+				gmove(&nodr, &nodl);
+			}
+		}
 		goto yes;
 	}
 

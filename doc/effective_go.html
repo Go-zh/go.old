@@ -3324,9 +3324,9 @@ initializer can be a general expression computed at run time.
 
 <pre>
 var (
-    HOME = os.Getenv("HOME")
-    USER = os.Getenv("USER")
-    GOROOT = os.Getenv("GOROOT")
+    home   = os.Getenv("HOME")
+    user   = os.Getenv("USER")
+    goRoot = os.Getenv("GOROOT")
 )
 </pre>
 
@@ -3371,34 +3371,34 @@ correctness of the program state before real execution begins.
 <div class="english">
 <pre>
 func init() {
-    if USER == "" {
+    if user == "" {
         log.Fatal("$USER not set")
     }
-    if HOME == "" {
-        HOME = "/home/" + USER
+    if home == "" {
+        home = "/home/" + user
     }
-    if GOROOT == "" {
-        GOROOT = HOME + "/go"
+    if goRoot == "" {
+        goRoot = home + "/go"
     }
-    // GOROOT may be overridden by --goroot flag on command line.
-    flag.StringVar(&amp;GOROOT, "goroot", GOROOT, "Go root directory")
+    // goRoot may be overridden by --goroot flag on command line.
+    flag.StringVar(&amp;goRoot, "goroot", goRoot, "Go root directory")
 }
 </pre>
 </div>
 
 <pre>
 func init() {
-    if USER == "" {
+    if user == "" {
         log.Fatal("$USER not set")
     }
-    if HOME == "" {
-        HOME = "/home/" + USER
+    if home == "" {
+        home = "/home/" + user
     }
-    if GOROOT == "" {
-        GOROOT = HOME + "/go"
+    if goRoot == "" {
+        goRoot = home + "/go"
     }
-    // GOROOT 可在命令行中通过 --goroot 标记覆盖。
-    flag.StringVar(&amp;GOROOT, "goroot", GOROOT, "Go root directory")
+    // goRoot 可在命令行中通过 --goroot 标记覆盖。
+    flag.StringVar(&amp;goRoot, "goroot", goRoot, "Go root directory")
 }
 </pre>
 

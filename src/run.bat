@@ -52,6 +52,15 @@ go test sync -short -timeout=120s -cpu=10
 if errorlevel 1 goto fail
 echo.
 
+if not "%GOHOSTOS%-%GOOS%-%GOARCH%-%CGO_ENABLED%" == "windows-windows-amd64-1" goto norace
+echo # Testing race detector.
+go test -race -i flag
+if errorlevel 1 goto fail
+go test -race -short flag
+if errorlevel 1 goto fail
+echo.
+:norace
+
 echo # ..\misc\dashboard\builder ..\misc\goplay
 go build ..\misc\dashboard\builder ..\misc\goplay
 if errorlevel 1 goto fail
@@ -87,14 +96,21 @@ echo.
 
 :: TODO: The other tests in run.bash.
 
+
+set OLDGOMAXPROCS=%GOMAXPROCS%
+
 echo # ..\test
 cd ..\test
 set FAIL=0
+set GOMAXPROCS=
 go run run.go
 if errorlevel 1 set FAIL=1
 cd ..\src
 echo.
 if %FAIL%==1 goto fail
+
+set GOMAXPROCS=%OLDGOMAXPROCS%
+set OLDGOMAXPROCS=
 
 echo # Checking API compatibility.
 go tool api -c ..\api\go1.txt -next ..\api\next.txt -except ..\api\except.txt

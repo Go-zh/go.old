@@ -15,16 +15,18 @@
 #include <u.h>
 #include <libc.h>
 #include "go.h"
-#include "opnames.h"
 
 // TODO(dvyukov): do not instrument initialization as writes:
 // a := make([]int, 10)
 
 static void racewalklist(NodeList *l, NodeList **init);
 static void racewalknode(Node **np, NodeList **init, int wr, int skip);
-static int callinstr(Node *n, NodeList **init, int wr, int skip);
+static int callinstr(Node **n, NodeList **init, int wr, int skip);
 static Node* uintptraddr(Node *n);
 static Node* basenod(Node *n);
+static void foreach(Node *n, void(*f)(Node*, void*), void *c);
+static void hascallspred(Node *n, void *c);
+static Node* detachexpr(Node *n, NodeList **init);
 
 static const char *omitPkgs[] = {"runtime", "runtime/race", "sync", "sync/atomic"};
 
@@ -43,6 +45,10 @@ racewalk(Node *fn)
 		}
 	}
 
+	racewalklist(fn->nbody, nil);
+	// nothing interesting for race detector in fn->enter
+	racewalklist(fn->exit, nil);
+
 	// nodpc is the PC of the caller as extracted by
 	// getcallerpc. We use -widthptr(FP) for x86.
 	// BUG: this will not work on arm.
@@ -54,15 +60,14 @@ racewalk(Node *fn)
 	fn->enter = concat(list1(nd), fn->enter);
 	nd = mkcall("racefuncexit", T, nil);
 	fn->exit = list(fn->exit, nd);
-	racewalklist(curfn->nbody, nil);
 
 	if(debug['W']) {
-		snprint(s, sizeof(s), "after racewalk %S", curfn->nname->sym);
-		dumplist(s, curfn->nbody);
-		snprint(s, sizeof(s), "after walk %S", curfn->nname->sym);
-		dumplist(s, curfn->nbody);
-		snprint(s, sizeof(s), "enter %S", curfn->nname->sym);
-		dumplist(s, curfn->enter);
+		snprint(s, sizeof(s), "after racewalk %S", fn->nname->sym);
+		dumplist(s, fn->nbody);
+		snprint(s, sizeof(s), "enter %S", fn->nname->sym);
+		dumplist(s, fn->enter);
+		snprint(s, sizeof(s), "exit %S", fn->nname->sym);
+		dumplist(s, fn->exit);
 	}
 }
 
@@ -88,16 +93,19 @@ static void
 racewalknode(Node **np, NodeList **init, int wr, int skip)
 {
 	Node *n, *n1;
+	NodeList *l;
 	NodeList *fini;
 
 	n = *np;
 
 	if(n == N)
 		return;
-	if(0)
-		print("op=%s, left=[ %N ], right=[ %N ], right's type=%T, n's type=%T, n's class=%d\n",
-			opnames[n->op], n->left, n->right, n->right ? n->right->type : nil, n->type, n->class);
+
+	if(debug['w'] > 1)
+		dump("racewalk-before", n);
 	setlineno(n);
+	if(init == nil || init == &n->ninit)
+		fatal("racewalk: bad init list");
 
 	racewalklist(n->ninit, nil);
 
@@ -145,56 +153,22 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 		racewalknode(&n->left, init, 0, 0);
 		goto ret;
 
-	case OFOR:
-		if(n->ntest != N)
-			racewalklist(n->ntest->ninit, nil);
-		racewalknode(&n->nincr, init, wr, 0);
-		racewalklist(n->nbody, nil);
-		goto ret;
-
-	case OIF:
-		racewalknode(&n->ntest, &n->ninit, wr, 0);
-		racewalklist(n->nbody, nil);
-		racewalklist(n->nelse, nil);
-		goto ret;
-
 	case OPROC:
 		racewalknode(&n->left, init, 0, 0);
 		goto ret;
 
 	case OCALLINTER:
 		racewalknode(&n->left, init, 0, 0);
-		racewalklist(n->list, init);
 		goto ret;
 
 	case OCALLFUNC:
 		racewalknode(&n->left, init, 0, 0);
-		racewalklist(n->list, init);
-		goto ret;
-
-	case OCALLMETH:
-		racewalklist(n->list, init);
-		goto ret;
-
-	case ORETURN:
-		racewalklist(n->list, nil);
-		goto ret;
-
-	case OSELECT:
-		// n->nlist is nil by now because this code
-		// is running after walkselect
-		racewalklist(n->nbody, nil);
 		goto ret;
 
 	case OSWITCH:
 		if(n->ntest->op == OTYPESW)
 			// TODO(dvyukov): the expression can contain calls or reads.
 			return;
-		racewalknode(&n->ntest, &n->ninit, 0, 0);
-		racewalklist(n->nbody, nil);
-		goto ret;
-
-	case OEMPTY:
 		goto ret;
 
 	case ONOT:
@@ -210,18 +184,18 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 		goto ret;
 
 	case ODOT:
-		callinstr(n, init, wr, skip);
 		racewalknode(&n->left, init, 0, 1);
+		callinstr(&n, init, wr, skip);
 		goto ret;
 
 	case ODOTPTR: // dst = (*x).f with implicit *; otherwise it's ODOT+OIND
-		callinstr(n, init, wr, skip);
 		racewalknode(&n->left, init, 0, 0);
+		callinstr(&n, init, wr, skip);
 		goto ret;
 
 	case OIND: // *p
-		callinstr(n, init, wr, skip);
 		racewalknode(&n->left, init, 0, 0);
+		callinstr(&n, init, wr, skip);
 		goto ret;
 
 	case OLEN:
@@ -237,7 +211,7 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 			n1 = nod(OIND, n1, N);
 			n1 = nod(OIND, n1, N);
 			typecheck(&n1, Erv);
-			callinstr(n1, init, 0, skip);
+			callinstr(&n1, init, 0, skip);
 			*/
 		}
 		goto ret;
@@ -271,7 +245,7 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 		goto ret;
 
 	case ONAME:
-		callinstr(n, init, wr, skip);
+		callinstr(&n, init, wr, skip);
 		goto ret;
 
 	case OCONV:
@@ -290,22 +264,26 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 		goto ret;
 
 	case OINDEX:
-		if(n->left->type->etype != TSTRING)
-			callinstr(n, init, wr, skip);
 		if(!isfixedarray(n->left->type))
 			racewalknode(&n->left, init, 0, 0);
 		racewalknode(&n->right, init, 0, 0);
+		if(n->left->type->etype != TSTRING)
+			callinstr(&n, init, wr, skip);
 		goto ret;
 
 	case OSLICE:
 	case OSLICEARR:
 		// Seems to only lead to double instrumentation.
 		//racewalknode(&n->left, init, 0, 0);
-		//racewalklist(n->list, init);
 		goto ret;
 
 	case OADDR:
 		racewalknode(&n->left, init, 0, 1);
+		goto ret;
+
+	case OEFACE:
+		racewalknode(&n->left, init, 0, 0);
+		racewalknode(&n->right, init, 0, 0);
 		goto ret;
 
 	// should not appear in AST by now
@@ -318,13 +296,24 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 	case OCASE:
 	case OPANIC:
 	case ORECOVER:
+	case OCONVIFACE:
 		yyerror("racewalk: %O must be lowered by now", n->op);
+		goto ret;
+
+	// just do generic traversal
+	case OFOR:
+	case OIF:
+	case OCALLMETH:
+	case ORETURN:
+	case OSELECT:
+	case OEMPTY:
 		goto ret;
 
 	// does not require instrumentation
 	case OINDEXMAP:  // implemented in runtime
-	case OPRINT:  // don't bother instrumenting it
-	case OPRINTN:  // don't bother instrumenting it
+	case OPRINT:     // don't bother instrumenting it
+	case OPRINTN:    // don't bother instrumenting it
+	case OPARAM:     // it appears only in fn->exit to copy heap params back
 		goto ret;
 
 	// unimplemented
@@ -348,7 +337,6 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 	case OCLOSURE:
 	case ODOTTYPE:
 	case ODOTTYPE2:
-	case OCONVIFACE:
 	case OCALL:
 	case OBREAK:
 	case ODCL:
@@ -365,7 +353,6 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 	case OINDREG:
 	case OCOM:
 	case ODOTMETH:
-	case OEFACE:
 	case OITAB:
 	case OEXTEND:
 	case OHMUL:
@@ -375,41 +362,75 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 	}
 
 ret:
+	if(n->op != OBLOCK)  // OBLOCK is handled above in a special way.
+		racewalklist(n->list, init);
+	l = nil;
+	racewalknode(&n->ntest, &l, 0, 0);
+	n->ninit = concat(n->ninit, l);
+	l = nil;
+	racewalknode(&n->nincr, &l, 0, 0);
+	n->ninit = concat(n->ninit, l);
+	racewalklist(n->nbody, nil);
+	racewalklist(n->nelse, nil);
+	racewalklist(n->rlist, nil);
+
 	*np = n;
 }
 
 static int
-callinstr(Node *n, NodeList **init, int wr, int skip)
+isartificial(Node *n)
 {
-	Node *f, *b;
-	Type *t, *t1;
-	int class, res;
+	// compiler-emitted artificial things that we do not want to instrument,
+	// cant' possibly participate in a data race.
+	if(n->op == ONAME && n->sym != S && n->sym->name != nil) {
+		if(strcmp(n->sym->name, "_") == 0)
+			return 1;
+		// autotmp's are always local
+		if(strncmp(n->sym->name, "autotmp_", sizeof("autotmp_")-1) == 0)
+			return 1;
+		// statictmp's are read-only
+		if(strncmp(n->sym->name, "statictmp_", sizeof("statictmp_")-1) == 0)
+			return 1;
+		// go.itab is accessed only by the compiler and runtime (assume safe)
+		if(n->sym->pkg && n->sym->pkg->name && strcmp(n->sym->pkg->name, "go.itab") == 0)
+			return 1;
+	}
+	return 0;
+}
 
-	//print("callinstr for %N [ %s ] etype=%d class=%d\n",
-	//	  n, opnames[n->op], n->type ? n->type->etype : -1, n->class);
+static int
+callinstr(Node **np, NodeList **init, int wr, int skip)
+{
+	Node *f, *b, *n;
+	Type *t, *t1;
+	int class, res, hascalls;
+
+	n = *np;
+	//print("callinstr for %+N [ %O ] etype=%d class=%d\n",
+	//	  n, n->op, n->type ? n->type->etype : -1, n->class);
 
 	if(skip || n->type == T || n->type->etype >= TIDEAL)
 		return 0;
 	t = n->type;
-	if(n->op == ONAME) {
-		if(n->sym != S) {
-			if(n->sym->name != nil) {
-				if(strcmp(n->sym->name, "_") == 0)
-					return 0;
-				if(strncmp(n->sym->name, "autotmp_", sizeof("autotmp_")-1) == 0)
-					return 0;
-				if(strncmp(n->sym->name, "statictmp_", sizeof("statictmp_")-1) == 0)
-					return 0;
-			}
-		}
-	}
+	if(isartificial(n))
+		return 0;
 	if(t->etype == TSTRUCT) {
+		// PARAMs w/o PHEAP are not interesting.
+		if(n->class == PPARAM || n->class == PPARAMOUT)
+			return 0;
 		res = 0;
+		hascalls = 0;
+		foreach(n, hascallspred, &hascalls);
+		if(hascalls) {
+			n = detachexpr(n, init);
+			*np = n;
+		}
 		for(t1=t->type; t1; t1=t1->down) {
 			if(t1->sym && strcmp(t1->sym->name, "_")) {
 				n = treecopy(n);
 				f = nod(OXDOT, n, newname(t1->sym));
-				if(callinstr(f, init, wr, 0)) {
+				f->type = t1;
+				if(callinstr(&f, init, wr, 0)) {
 					typecheck(&f, Erv);
 					res = 1;
 				}
@@ -419,6 +440,9 @@ callinstr(Node *n, NodeList **init, int wr, int skip)
 	}
 
 	b = basenod(n);
+	// it skips e.g. stores to ... parameter array
+	if(isartificial(b))
+		return 0;
 	class = b->class;
 	// BUG: we _may_ want to instrument PAUTO sometimes
 	// e.g. if we've got a local variable/method receiver
@@ -426,6 +450,12 @@ callinstr(Node *n, NodeList **init, int wr, int skip)
 	// the heap or not is impossible to know at compile time
 	if((class&PHEAP) || class == PPARAMREF || class == PEXTERN
 		|| b->type->etype == TARRAY || b->op == ODOTPTR || b->op == OIND || b->op == OXDOT) {
+		hascalls = 0;
+		foreach(n, hascallspred, &hascalls);
+		if(hascalls) {
+			n = detachexpr(n, init);
+			*np = n;
+		}
 		n = treecopy(n);
 		f = mkcall(wr ? "racewrite" : "raceread", T, nil, uintptraddr(n));
 		//typecheck(&f, Etop);
@@ -450,7 +480,7 @@ static Node*
 basenod(Node *n)
 {
 	for(;;) {
-		if(n->op == ODOT || n->op == OPAREN) {
+		if(n->op == ODOT || n->op == OXDOT || n->op == OCONVNOP || n->op == OCONV || n->op == OPAREN) {
 			n = n->left;
 			continue;
 		}
@@ -461,4 +491,61 @@ basenod(Node *n)
 		break;
 	}
 	return n;
+}
+
+static Node*
+detachexpr(Node *n, NodeList **init)
+{
+	Node *addr, *as, *ind, *l;
+
+	addr = nod(OADDR, n, N);
+	l = temp(ptrto(n->type));
+	as = nod(OAS, l, addr);
+	typecheck(&as, Etop);
+	walkexpr(&as, init);
+	*init = list(*init, as);
+	ind = nod(OIND, l, N);
+	typecheck(&ind, Erv);
+	walkexpr(&ind, init);
+	return ind;
+}
+
+static void
+foreachnode(Node *n, void(*f)(Node*, void*), void *c)
+{
+	if(n)
+		f(n, c);
+}
+
+static void
+foreachlist(NodeList *l, void(*f)(Node*, void*), void *c)
+{
+	for(; l; l = l->next)
+		foreachnode(l->n, f, c);
+}
+
+static void
+foreach(Node *n, void(*f)(Node*, void*), void *c)
+{
+	foreachlist(n->ninit, f, c);
+	foreachnode(n->left, f, c);
+	foreachnode(n->right, f, c);
+	foreachlist(n->list, f, c);
+	foreachnode(n->ntest, f, c);
+	foreachnode(n->nincr, f, c);
+	foreachlist(n->nbody, f, c);
+	foreachlist(n->nelse, f, c);
+	foreachlist(n->rlist, f, c);
+}
+
+static void
+hascallspred(Node *n, void *c)
+{
+	switch(n->op) {
+	case OCALL:
+	case OCALLFUNC:
+	case OCALLMETH:
+	case OCALLINTER:
+		(*(int*)c)++;
+	}
 }
