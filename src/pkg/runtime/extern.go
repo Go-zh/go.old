@@ -10,7 +10,7 @@
 */
 
 /*
-	runtime 包包含了与Go的运行时系统进行交互的操作，例如控制Go程的函数.
+	runtime 包含有和Go的运行时系统进行交互的操作，例如用于控制Go程的函数.
 	它也包括用于 reflect 包的低级类型信息；运行时类型系统的可编程接口见 reflect 文档。
 */
 package runtime
@@ -18,8 +18,8 @@ package runtime
 // Gosched yields the processor, allowing other goroutines to run.  It does not
 // suspend the current goroutine, so execution resumes automatically.
 
-// Gosched 用于产生进程，以允许其它Go程运行。
-// 它并不会暂停当前Go程，因此其执行会自动恢复。
+// Gosched 使当前Go程放弃处理器以让其它Go程运行。
+// 它不会挂起当前Go程，因而它会自动继续执行。
 func Gosched()
 
 // Goexit terminates the goroutine that calls it.  No other goroutine is affected.
@@ -36,9 +36,9 @@ func Goexit()
 // program counter, file name, and line number within the file of the corresponding
 // call.  The boolean ok is false if it was not possible to recover the information.
 
-// Caller 报告关于调用Go程的栈上的函数请求的文件和行号信息。
-// skip 实参为占用的栈帧数，用0来标识出 Caller 的调用者。（由于历史原因，skip
-// 的意思在 Caller 和 Callers 中并不相同。）返回值报告程序的计数器，
+// Caller 报告关于调用Go程的栈上的函数调用的文件和行号信息。
+// 实参 skip 为占用的栈帧数，若为0则表示 Caller 的调用者。（由于历史原因，skip
+// 的意思在 Caller 和 Callers 中并不相同。）返回值报告程序计数器，
 // 文件名及对应调用的文件中的行号。若无法获得信息，布尔值 ok 即为 false。
 func Caller(skip int) (pc uintptr, file string, line int, ok bool)
 
@@ -48,9 +48,9 @@ func Caller(skip int) (pc uintptr, file string, line int, ok bool)
 // 1 identifying the caller of Callers.
 // It returns the number of entries written to pc.
 
-// Callers 将切片 pc 用调用的Go程栈上函数请求的程序计数器来填满。
-// 实参 skip 为开始在 pc 中记录之前所要跳过的栈帧，若为0则表示该栈帧为 Callers 自身，
-// 它返回写入到 pc 中的条目数。
+// Callers 把调用它的函数Go程栈上的程序计数器填入切片 pc 中。
+// 实参 skip 为开始在 pc 中记录之前所要跳过的栈帧数，若为0则表示 Callers 自身的栈帧，
+// 若为1则表示 Callers 的调用者。它返回写入到 pc 中的项数。
 func Callers(skip int, pc []uintptr) int
 
 type Func struct { // Keep in sync with runtime.h:struct Func // 与 runtime.h:struct Func 保持同步
@@ -87,8 +87,8 @@ func (f *Func) Entry() uintptr { return f.entry }
 // The result will not be accurate if pc is not a program
 // counter within f.
 
-// FileLine 返回与程序计数器 pc 相应的源码文件名和行号。
-// 若 pc 不是 f 中的程序计数器，其结果将不确定。
+// FileLine 返回与程序计数器 pc 对应的源码文件名和行号。
+// 若 pc 不是 f 中的程序计数器，其结果将视不确定的。
 func (f *Func) FileLine(pc uintptr) (file string, line int) {
 	return funcline_go(f, pc)
 }
@@ -100,7 +100,7 @@ func funcline_go(*Func, uintptr) (string, int)
 
 // mid returns the current os thread (m) id.
 
-// mid 返回当前os线程的(m)id。
+// mid 返回当前OS线程的(m)id。
 func mid() uint32
 
 // SetFinalizer sets the finalizer associated with x to f.
@@ -142,16 +142,16 @@ func mid() uint32
 // If a finalizer must run for a long time, it should do so by starting
 // a new goroutine.
 
-// SetFinalizer 设置将 x 关联至 f 的终结器。
+// SetFinalizer 通过设置终结器来将 x 与 f 相关联。
 // 当垃圾收集器找到一个无法访问的块及与其相关联的终结器时，就会清理该关联，
 // 并在一个单独的Go程中运行f(x)。这会使 x 再次变得可访问，但现在没有了相关联的终结器。
 // 假设 SetFinalizer 未被再次调用，当下一次垃圾收集器发现 x 无法访问时，就会释放 x。
 //
 // SetFinalizer(x, nil) 会清理任何与 x 相关联的终结器。
 //
-// 实参 x 必须为指向一个对象的指针，该对象通过调用新的或获取一个复合字面地址来分配。
-// 实参 f 必须为一个函数，该函数获取一个 x 的类型的单一实参，并拥有可任意忽略的返回值。
-// 只要这些条件有一个不满足，SetFinalizer 就会终止该程序。
+// 实参 x 必须是一个对象的指针，该对象通过调用新的或获取一个复合字面地址来分配。
+// 实参 f 必须是一个函数，该函数获取一个 x 的类型的单一实参，并拥有可任意忽略的返回值。
+// 只要这些条件有一个不满足，SetFinalizer 就会跳过该程序。
 //
 // 终结器按照依赖顺序运行：若 A 指向 B，则二者都有终结器，当只有 A 的终结器运行时，
 // 它们才无法访问；一旦 A 被释放，则 B 的终结器便可运行。若循环依赖的结构包含块及其终结器，
@@ -165,6 +165,7 @@ func mid() uint32
 //
 // 一个程序的单个Go程会按顺序运行所有的终结器。若某个终结器需要长时间运行，
 // 它应当通过开始一个新的Go程来继续。
+// TODO: 仍需校对及语句优化
 func SetFinalizer(x, f interface{})
 
 func getgoroot() string
@@ -190,8 +191,8 @@ func GOROOT() string {
 // at the time of the build.
 
 // Version 返回Go目录树的版本字符串。
-// 它一般是一个序列数字，也可能是一个类似于"release.2010-03-04"的发行标注。
-// 随后的 + 号表示该源码树在构建时有本地的修改。
+// 它一般是一个序列数字，也可能是一个类似于 "release.2010-03-04" 的发行标注。
+// 随后的 + 号表示该源码树在构建时进行了本地的修改。
 func Version() string {
 	return theVersion
 }
@@ -200,7 +201,7 @@ func Version() string {
 // one of darwin, freebsd, linux, and so on.
 
 // GOOS 为所运行程序的目标操作系统：
-// darwin、freebsd、linux等等之一。
+// darwin、freebsd或linux等等。
 const GOOS string = theGoos
 
 // GOARCH is the running program's architecture target:

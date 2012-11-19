@@ -6,6 +6,9 @@
 // by the pprof visualization tool.
 // For more information about pprof, see
 // http://code.google.com/p/google-perftools/.
+
+// pprof 包按照可视化工具 pprof 所要求的格式写出运行时分析数据.
+// 更多有关 pprof 的信息见 http://code.google.com/p/google-perftools/。
 package pprof
 
 import (
@@ -45,6 +48,8 @@ import (
 // the StartCPUProfile and StopCPUProfile functions, because it streams
 // output to a writer during profiling.
 //
+
+// Profile 为
 type Profile struct {
 	name  string
 	mu    sync.Mutex

@@ -35,8 +35,6 @@ func (t T) method() []byte {
 */
 
 /*
-	The traceback should look something like this, modulo line numbers and hex constants.
-	Don't worry much about the base levels, but check the ones in our own package.
 	回溯信息看起来应该是这样的，模数行号以及二进制内容。
 	不要担心有太多基础层面的信息，只要检查我们自己包中的那个就行了。
 
