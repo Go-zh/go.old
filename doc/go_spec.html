@@ -6,7 +6,7 @@
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of November 17, 2012",
+	"Subtitle": "Version of November 26, 2012",
 	"Path": "/ref/spec"
 }-->
 
@@ -3012,7 +3012,7 @@ Go is lexically scoped using blocks:
 	    or function (but not method) declared at top level (outside any
 	    function) is the package block.</li>
 
-	<li>The scope of an imported package identifier is the file block
+	<li>The scope of the package name of an imported package is the file block
 	    of the file containing the import declaration.</li>
 
 	<li>The scope of an identifier denoting a function parameter or
@@ -4817,9 +4817,9 @@ p.z   // (*p).z
 p.y   // ((*p).T1).y
 p.x   // (*(*p).T0).x
 
-p.M2  // (*p).M2
-p.M1  // ((*p).T1).M1
-p.M0  // ((*p).T0).M0
+p.M2()  // (*p).M2()
+p.M1()  // ((*p).T1).M1()
+p.M0()  // ((*p).T0).M0()
 </pre>
 
 

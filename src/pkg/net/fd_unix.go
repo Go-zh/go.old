@@ -423,8 +423,15 @@ func (fd *netFD) Read(p []byte) (n int, err error) {
 	}
 	defer fd.decref()
 	for {
+		if fd.rdeadline > 0 {
+			if time.Now().UnixNano() >= fd.rdeadline {
+				err = errTimeout
+				break
+			}
+		}
 		n, err = syscall.Read(int(fd.sysfd), p)
 		if err == syscall.EAGAIN {
+			n = 0
 			err = errTimeout
 			if fd.rdeadline >= 0 {
 				if err = fd.pollServer.WaitRead(fd); err == nil {
@@ -453,8 +460,15 @@ func (fd *netFD) ReadFrom(p []byte) (n int, sa syscall.Sockaddr, err error) {
 	}
 	defer fd.decref()
 	for {
+		if fd.rdeadline > 0 {
+			if time.Now().UnixNano() >= fd.rdeadline {
+				err = errTimeout
+				break
+			}
+		}
 		n, sa, err = syscall.Recvfrom(fd.sysfd, p, 0)
 		if err == syscall.EAGAIN {
+			n = 0
 			err = errTimeout
 			if fd.rdeadline >= 0 {
 				if err = fd.pollServer.WaitRead(fd); err == nil {
@@ -481,8 +495,15 @@ func (fd *netFD) ReadMsg(p []byte, oob []byte) (n, oobn, flags int, sa syscall.S
 	}
 	defer fd.decref()
 	for {
+		if fd.rdeadline > 0 {
+			if time.Now().UnixNano() >= fd.rdeadline {
+				err = errTimeout
+				break
+			}
+		}
 		n, oobn, flags, sa, err = syscall.Recvmsg(fd.sysfd, p, oob, 0)
 		if err == syscall.EAGAIN {
+			n = 0
 			err = errTimeout
 			if fd.rdeadline >= 0 {
 				if err = fd.pollServer.WaitRead(fd); err == nil {
@@ -509,13 +530,15 @@ func (fd *netFD) Write(p []byte) (int, error) {
 		return 0, err
 	}
 	defer fd.decref()
-	if fd.sysfile == nil {
-		return 0, syscall.EINVAL
-	}
-
 	var err error
 	nn := 0
 	for {
+		if fd.wdeadline > 0 {
+			if time.Now().UnixNano() >= fd.wdeadline {
+				err = errTimeout
+				break
+			}
+		}
 		var n int
 		n, err = syscall.Write(int(fd.sysfd), p[nn:])
 		if n > 0 {
@@ -555,6 +578,12 @@ func (fd *netFD) WriteTo(p []byte, sa syscall.Sockaddr) (n int, err error) {
 	}
 	defer fd.decref()
 	for {
+		if fd.wdeadline > 0 {
+			if time.Now().UnixNano() >= fd.wdeadline {
+				err = errTimeout
+				break
+			}
+		}
 		err = syscall.Sendto(fd.sysfd, p, 0, sa)
 		if err == syscall.EAGAIN {
 			err = errTimeout
@@ -582,6 +611,12 @@ func (fd *netFD) WriteMsg(p []byte, oob []byte, sa syscall.Sockaddr) (n int, oob
 	}
 	defer fd.decref()
 	for {
+		if fd.wdeadline > 0 {
+			if time.Now().UnixNano() >= fd.wdeadline {
+				err = errTimeout
+				break
+			}
+		}
 		err = syscall.Sendmsg(fd.sysfd, p, oob, sa, 0)
 		if err == syscall.EAGAIN {
 			err = errTimeout

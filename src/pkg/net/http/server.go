@@ -11,7 +11,6 @@ package http
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -21,7 +20,7 @@ import (
 	"net"
 	"net/url"
 	"path"
-	"runtime/debug"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -127,7 +126,7 @@ type response struct {
 
 	// requestBodyLimitHit is set by requestTooLarge when
 	// maxBytesReader hits its max size. It is checked in
-	// WriteHeader, to make sure we don't consume the the
+	// WriteHeader, to make sure we don't consume the
 	// remaining request body to try to advance to the next HTTP
 	// request. Instead, when this is set, we stop reading
 	// subsequent requests on this connection and stop reading
@@ -171,16 +170,23 @@ func (w *response) ReadFrom(src io.Reader) (n int64, err error) {
 // noLimit is an effective infinite upper bound for io.LimitedReader
 const noLimit int64 = (1 << 63) - 1
 
+// debugServerConnections controls whether all server connections are wrapped
+// with a verbose logging wrapper.
+const debugServerConnections = false
+
 // Create new connection from rwc.
 func (srv *Server) newConn(rwc net.Conn) (c *conn, err error) {
 	c = new(conn)
 	c.remoteAddr = rwc.RemoteAddr().String()
 	c.server = srv
 	c.rwc = rwc
+	if debugServerConnections {
+		c.rwc = newLoggingConn("server", c.rwc)
+	}
 	c.body = make([]byte, sniffLen)
-	c.lr = io.LimitReader(rwc, noLimit).(*io.LimitedReader)
+	c.lr = io.LimitReader(c.rwc, noLimit).(*io.LimitedReader)
 	br := bufio.NewReader(c.lr)
-	bw := bufio.NewWriter(rwc)
+	bw := bufio.NewWriter(c.rwc)
 	c.buf = bufio.NewReadWriter(br, bw)
 	return c, nil
 }
@@ -496,7 +502,7 @@ func (w *response) Write(data []byte) (n int, err error) {
 	// then there would be fewer chunk headers.
 	// On the other hand, it would make hijacking more difficult.
 	if w.chunking {
-		fmt.Fprintf(w.conn.buf, "%x\r\n", len(data)) // TODO(rsc): use strconv not fmt
+		fmt.Fprintf(w.conn.buf, "%x\r\n", len(data))
 	}
 	n, err = w.conn.buf.Write(data)
 	if err == nil && w.chunking {
@@ -610,10 +616,10 @@ func (c *conn) serve() {
 			return
 		}
 
-		var buf bytes.Buffer
-		fmt.Fprintf(&buf, "http: panic serving %v: %v\n", c.remoteAddr, err)
-		buf.Write(debug.Stack())
-		log.Print(buf.String())
+		const size = 4096
+		buf := make([]byte, size)
+		buf = buf[:runtime.Stack(buf, false)]
+		log.Printf("http: panic serving %v: %v\n%s", c.remoteAddr, err, buf)
 
 		if c.rwc != nil { // may be nil if connection hijacked
 			c.rwc.Close()
@@ -1309,4 +1315,46 @@ func (tw *timeoutWriter) WriteHeader(code int) {
 	tw.wroteHeader = true
 	tw.mu.Unlock()
 	tw.w.WriteHeader(code)
+}
+
+// loggingConn is used for debugging.
+type loggingConn struct {
+	name string
+	net.Conn
+}
+
+var (
+	uniqNameMu   sync.Mutex
+	uniqNameNext = make(map[string]int)
+)
+
+func newLoggingConn(baseName string, c net.Conn) net.Conn {
+	uniqNameMu.Lock()
+	defer uniqNameMu.Unlock()
+	uniqNameNext[baseName]++
+	return &loggingConn{
+		name: fmt.Sprintf("%s-%d", baseName, uniqNameNext[baseName]),
+		Conn: c,
+	}
+}
+
+func (c *loggingConn) Write(p []byte) (n int, err error) {
+	log.Printf("%s.Write(%d) = ....", c.name, len(p))
+	n, err = c.Conn.Write(p)
+	log.Printf("%s.Write(%d) = %d, %v", c.name, len(p), n, err)
+	return
+}
+
+func (c *loggingConn) Read(p []byte) (n int, err error) {
+	log.Printf("%s.Read(%d) = ....", c.name, len(p))
+	n, err = c.Conn.Read(p)
+	log.Printf("%s.Read(%d) = %d, %v", c.name, len(p), n, err)
+	return
+}
+
+func (c *loggingConn) Close() (err error) {
+	log.Printf("%s.Close() = ...", c.name)
+	err = c.Conn.Close()
+	log.Printf("%s.Close() = %v", c.name, err)
+	return
 }
