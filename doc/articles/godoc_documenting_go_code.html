@@ -1,8 +1,14 @@
 <!--{
+"Title": "Godoc：编写Go代码文档",
+"Template": true
+}-->
+
+<!--{
 "Title": "Godoc: documenting Go code",
 "Template": true
 }-->
 
+<div class="english">
 <p>
 The Go project takes documentation seriously. Documentation is a huge part of
 making software accessible and maintainable. Of course it must be well-written
@@ -11,14 +17,29 @@ should be coupled to the code itself so the documentation evolves along with the
 code. The easier it is for programmers to produce good documentation, the better
 for everyone.
 </p>
+</div>
 
+<p>
+Go项目非常重视文档，它是保持软件可理解、可维护的重要部分。文档当然要写得好而精确，
+但也必须易于编写并维护。理想状态下，它应当和代码本身紧密结合，与代码一同演化。
+这有利于程序员编写出良好的、适合所有人的文档。
+</p>
+
+<div class="english">
 <p>
 To that end, we have developed the <a href="/cmd/godoc/">godoc</a> documentation
 tool. This article describes godoc's approach to documentation, and explains how
 you can use our conventions and tools to write good documentation for your own
 projects.
 </p>
+</div>
 
+<p>
+为此，我们开发了 <a href="/cmd/godoc/">godoc</a> 文档工具。本文描述了 godoc
+对待文档的方法，并说明了如何通过我们的约定和工具来为你的项目编写良好的文档。
+</p>
+
+<div class="english">
 <p>
 Godoc parses Go source code - including comments - and produces documentation as
 HTML or plain text. The end result is documentation tightly coupled with the
@@ -26,6 +47,25 @@ code it documents. For example, through godoc's web interface you can navigate
 from a function's <a href="/pkg/strings/#HasPrefix">documentation</a> to its
 <a href="/src/pkg/strings/strings.go?#L312">implementation</a> with one click.
 </p>
+</div>
+
+<p>
+Godoc 解析Go源码（包括注释）并产生HTML或纯文本格式的文档。其最终结果是文档与代码紧密耦合。
+例如，通过 godoc 的Web界面，你只需单击便可从某个函数的<a href="/pkg/strings/#HasPrefix">文档</a>
+导航到它的<a href="/src/pkg/strings/strings.go?#L312">实现</a>。
+</p>
+
+<div class="english">
+<p>
+Godoc is conceptually related to Python's
+<a href="http://www.python.org/dev/peps/pep-0257/">Docstring</a> and Java's
+<a href="http://www.oracle.com/technetwork/java/javase/documentation/index-jsp-135444.html">Javadoc</a>,
+but its design is simpler. The comments read by godoc are not language
+constructs (as with Docstring) nor must they have their own machine-readable
+syntax (as with Javadoc). Godoc comments are just good comments, the sort you
+would want to read even if godoc didn't exist.
+</p>
+</div>
 
 <p>
 Godoc is conceptually related to Python's
@@ -35,6 +75,11 @@ but its design is simpler. The comments read by godoc are not language
 constructs (as with Docstring) nor must they have their own machine-readable
 syntax (as with Javadoc). Godoc comments are just good comments, the sort you
 would want to read even if godoc didn't exist.
+Godoc的理念同Python的<a href="http://www.python.org/dev/peps/pep-0257/">Docstring</a>
+和Java的<a href="http://www.oracle.com/technetwork/java/javase/documentation/index-jsp-135444.html">Javadoc</a>
+类似，但它的设计更加简单。由 godoc 读取的注释既不是（像Docstring那样的）语言结构，
+也不需要（像Javadoc那样的）它们自己机器可读的语法。Godoc注释仅仅好的代码注释而已，
+它的本质使得即使没有godoc你也可以读。
 </p>
 
 <p>

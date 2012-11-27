@@ -49,7 +49,17 @@ import (
 // output to a writer during profiling.
 //
 
-// Profile 为
+// Profile 是一个栈跟踪的集合，它显示了引导特定事件实例的调用序列，例如分配。
+// 包可以创建并维护它们自己的分析，它一般用于跟踪必须被显式关闭的资源，例如文件或网络连接。
+//
+// 一个 Profile 的方法可被多个Go程同时调用。
+//
+// 每个 Profile 都有唯一的名称。有些 Profile 是预定义的：
+//
+//	goroutine    - 所有当前Go程的栈跟踪
+//	heap         - 所有堆分配的采样
+//	threadcreate - 引导了新OS的线程创建的栈跟踪
+//	block        - 引导了同步原语中阻塞的栈跟踪
 type Profile struct {
 	name  string
 	mu    sync.Mutex
@@ -59,6 +69,8 @@ type Profile struct {
 }
 
 // profiles records all registered profiles.
+
+// profiles 记录所有已注册的分析。
 var profiles struct {
 	mu sync.Mutex
 	m  map[string]*Profile
@@ -109,6 +121,10 @@ func unlockProfiles() {
 // If a profile with that name already exists, NewProfile panics.
 // The convention is to use a 'import/path.' prefix to create
 // separate name spaces for each package.
+
+// NewProfile 以给定的名称创建一个新的分析。
+// 若拥有该名称的分析已存在，NewProfile 就会引起恐慌。
+// 约定使用一个 'import/path' 导入路径前缀来为每个包创建单独的命名空间。
 func NewProfile(name string) *Profile {
 	lockProfiles()
 	defer unlockProfiles()
@@ -127,6 +143,8 @@ func NewProfile(name string) *Profile {
 }
 
 // Lookup returns the profile with the given name, or nil if no such profile exists.
+
+// Lookup 返回给定名称的分析，若不存在该分析，则返回 nil。
 func Lookup(name string) *Profile {
 	lockProfiles()
 	defer unlockProfiles()
@@ -134,6 +152,8 @@ func Lookup(name string) *Profile {
 }
 
 // Profiles returns a slice of all the known profiles, sorted by name.
+
+// Profiles 返回所有已知分析的切片，按名称排序。
 func Profiles() []*Profile {
 	lockProfiles()
 	defer unlockProfiles()
@@ -154,11 +174,15 @@ func (x byName) Swap(i, j int)      { x[i], x[j] = x[j], x[i] }
 func (x byName) Less(i, j int) bool { return x[i].name < x[j].name }
 
 // Name returns this profile's name, which can be passed to Lookup to reobtain the profile.
+
+// Name 返回该分析的名称，它可被传入 Lookup 来重新获取该分析。
 func (p *Profile) Name() string {
 	return p.name
 }
 
 // Count returns the number of execution stacks currently in the profile.
+
+// Count 返回该分析中当前执行栈的数量。
 func (p *Profile) Count() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -172,6 +196,24 @@ func (p *Profile) Count() int {
 // Add stores value in an internal map, so value must be suitable for use as
 // a map key and will not be garbage collected until the corresponding
 // call to Remove.  Add panics if the profile already contains a stack for value.
+//
+// The skip parameter has the same meaning as runtime.Caller's skip
+// and controls where the stack trace begins.  Passing skip=0 begins the
+// trace in the function calling Add.  For example, given this
+// execution stack:
+//
+//	Add
+//	called from rpc.NewClient
+//	called from mypkg.Run
+//	called from main.main
+//
+// Passing skip=0 begins the stack trace at the call to Add inside rpc.NewClient.
+// Passing skip=1 begins the stack trace at the call to NewClient inside mypkg.Run.
+//
+
+// Add 将当前与值相关联的执行栈添加到该分析中。
+// Add 在一个内部映射中存储值，因此值必须适于用作映射键，且在对应的 Remove
+// 调用之前不会被垃圾收集。若分析已经包含了值的栈，Add 就会引发恐慌。
 //
 // The skip parameter has the same meaning as runtime.Caller's skip
 // and controls where the stack trace begins.  Passing skip=0 begins the

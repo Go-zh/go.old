@@ -11,7 +11,7 @@
 
 /*
 	runtime 包含有和Go的运行时系统进行交互的操作，例如用于控制Go程的函数.
-	它也包括用于 reflect 包的低级类型信息；运行时类型系统的可编程接口见 reflect 文档。
+	它也包括用于 reflect 包的底层类型信息；运行时类型系统的可编程接口见 reflect 文档。
 */
 package runtime
 
@@ -79,7 +79,7 @@ func (f *Func) Name() string { return f.name }
 
 // Entry returns the entry address of the function.
 
-// Entry 返回该函数的条目地址。
+// Entry 返回该项函数的地址。
 func (f *Func) Entry() uintptr { return f.entry }
 
 // FileLine returns the file name and line number of the
@@ -88,7 +88,7 @@ func (f *Func) Entry() uintptr { return f.entry }
 // counter within f.
 
 // FileLine 返回与程序计数器 pc 对应的源码文件名和行号。
-// 若 pc 不是 f 中的程序计数器，其结果将视不确定的。
+// 若 pc 不是 f 中的程序计数器，其结果将是不确定的。
 func (f *Func) FileLine(pc uintptr) (file string, line int) {
 	return funcline_go(f, pc)
 }
@@ -142,9 +142,9 @@ func mid() uint32
 // If a finalizer must run for a long time, it should do so by starting
 // a new goroutine.
 
-// SetFinalizer 通过设置终结器来将 x 与 f 相关联。
+// SetFinalizer 为 f 设置与 x 相关联的终结器。
 // 当垃圾收集器找到一个无法访问的块及与其相关联的终结器时，就会清理该关联，
-// 并在一个单独的Go程中运行f(x)。这会使 x 再次变得可访问，但现在没有了相关联的终结器。
+// 并在一个独立的Go程中运行f(x)。这会使 x 再次变得可访问，但现在没有了相关联的终结器。
 // 假设 SetFinalizer 未被再次调用，当下一次垃圾收集器发现 x 无法访问时，就会释放 x。
 //
 // SetFinalizer(x, nil) 会清理任何与 x 相关联的终结器。

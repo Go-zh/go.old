@@ -65,9 +65,14 @@ func NumGoroutine() int
 // possible in the execution of the program (for example,
 // at the beginning of main).
 
-// MemProfileRate 用于控制在内存分析中记录并报告的内存分配部分。
-// 该分析器的目的是对每 MemProfileRate 个已分配的字节的一个分配进行平均采样。
-// TODO: 待译
+// MemProfileRate 用于控制内存分析中记录并报告的内存分配。
+// 对于一个分配，平均每分配 MemProfileRate 个字节，该分析器就收集一份样本。
+//
+// 要在分析中包括每一次分配阻塞，需将 MemProfileRate 置为1；
+// 要完全关闭分析，需将 MemProfileRate 置为0。
+//
+// 此内存分析工具假定在程序的整个生命周期中，分析速率为常量且等于当前值。
+// 该程序在执行过程中，应当尽早修改内存分析速率，且只修改一次（例如，在 main 的开始处）。
 var MemProfileRate int = 512 * 1024
 
 // A MemProfileRecord describes the live objects allocated
@@ -140,7 +145,7 @@ type StackRecord struct {
 // Stack returns the stack trace associated with the record,
 // a prefix of r.Stack0.
 
-// Stack 返回关联至此记录的栈跟踪信息，即即 r.Stack0 的前缀。
+// Stack 返回关联至此记录的栈跟踪信息，即 r.Stack0 的前缀。
 func (r *StackRecord) Stack() []uintptr {
 	for i, v := range r.Stack0 {
 		if v == 0 {
@@ -216,11 +221,10 @@ func SetCPUProfileRate(hz int)
 // To include every blocking event in the profile, pass rate = 1.
 // To turn off profiling entirely, pass rate <= 0.
 
-// SetBlockProfileRate 控制在阻塞分析报告中的Go程阻塞事件的部分。
-// 该分析器的目的是对一个阻塞事件每次阻塞所花费的纳秒数取平均值。
+// SetBlockProfileRate 用于控制在阻塞分析中报告的Go程阻塞事件。
+// 对于一个阻塞事件，平均每阻塞 rate 纳秒，该分析器就采集一份样本。
 //
-// 要在分析中包括每一个阻塞事件，需传入 rate = 1。要完全关闭分析，需传入 rate <= 0。
-// TODO: 待校对
+// 要在分析中包括每一个阻塞事件，需传入 rate = 1；要完全关闭分析，需传入 rate <= 0。
 func SetBlockProfileRate(rate int)
 
 // BlockProfileRecord describes blocking events originated

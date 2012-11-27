@@ -12,6 +12,6 @@ package runtime
 //
 
 // Compiler 为构建了可运行二进制文件的编译工具链。已知的工具链为：
-// go       code.google.com/p/go 上的 5g/6g/8g 编译器套件。
-// gccgo    gccgo 前端，GCC编译器条件的一部分。
+//	go       code.google.com/p/go 上的 5g/6g/8g 编译器套件。
+//	gccgo    gccgo前端，GCC编译器条件的一部分。
 const Compiler = "gc"

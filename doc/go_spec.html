@@ -7105,7 +7105,8 @@ const Φ = iota*1i - 1/1i   //            (untyped complex constant)
 const a = 2 + 3.0          // a == 5.0   （无类型化浮点数常量）
 const b = 15 / 4           // b == 3     （无类型化整数常量）
 const c = 15 / 4.0         // c == 3.75  （无类型化浮点数常量）
-const Θ float64 = 3/2      // Θ == 1.5   （类型为float64）
+const Θ float64 = 3/2      // Θ == 1.0   (类型为float64，3/2 是整数除法)
+const Π float64 = 3/2.     // Π == 1.5   (类型为float64，3/2. 是浮点数除法)
 const d = 1 &lt;&lt; 3.0         // d == 8     （无类型化整数常量）
 const e = 1.0 &lt;&lt; 3         // e == 8     （无类型化整数常量）
 const f = int32(1) &lt;&lt; 33   // f == 0     （类型为int32）
