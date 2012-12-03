@@ -25,12 +25,14 @@ func TestCPUProfile(t *testing.T) {
 		vers := string(out)
 		t.Logf("uname -a: %v", vers)
 		// Lion uses "Darwin Kernel Version 11".
+		// Lion 使用 "Darwin Kernel Version 11"。
 		if strings.Contains(vers, "Darwin Kernel Version 10") && strings.Contains(vers, "RELEASE_X86_64") {
 			t.Logf("skipping test on known-broken kernel (64-bit Leopard / Snow Leopard)")
 			return
 		}
 	case "plan9":
 		// unimplemented
+		// 还未实现
 		return
 	}
 
@@ -42,12 +44,15 @@ func TestCPUProfile(t *testing.T) {
 	// This loop takes about a quarter second on a 2 GHz laptop.
 	// We only need to get one 100 Hz clock tick, so we've got
 	// a 25x safety buffer.
+	// 此循环在2GHz的笔记本上大概要用四分之一秒。我们只需要一个100Hz的时钟周期，
+	// 因此我们就得到了安全25倍的缓存。
 	for i := 0; i < 1000; i++ {
 		crc32.ChecksumIEEE(buf)
 	}
 	StopCPUProfile()
 
 	// Convert []byte to []uintptr.
+	// 将 []byte 转换为 []uintptr。
 	bytes := prof.Bytes()
 	l := len(bytes) / int(unsafe.Sizeof(uintptr(0)))
 	val := *(*[]uintptr)(unsafe.Pointer(&bytes))
@@ -67,6 +72,7 @@ func TestCPUProfile(t *testing.T) {
 	}
 
 	// Check that profile is well formed and contains ChecksumIEEE.
+	// 检查分析报告的形式是否符合格式 ChecksumIEEE.
 	found := false
 	for len(val) > 0 {
 		if len(val) < 2 || val[0] < 1 || val[1] < 1 || uintptr(len(val)) < 2+val[1] {

@@ -65,14 +65,14 @@ func NumGoroutine() int
 // possible in the execution of the program (for example,
 // at the beginning of main).
 
-// MemProfileRate 用于控制内存分析中记录并报告的内存分配。
+// MemProfileRate 用于控制内存分析报告中记录并报告的内存分配。
 // 对于一个分配，平均每分配 MemProfileRate 个字节，该分析器就收集一份样本。
 //
-// 要在分析中包括每一次分配阻塞，需将 MemProfileRate 置为1；
+// 要在分析报告中包括每一次分配阻塞，需将 MemProfileRate 置为1；
 // 要完全关闭分析，需将 MemProfileRate 置为0。
 //
 // 此内存分析工具假定在程序的整个生命周期中，分析速率为常量且等于当前值。
-// 该程序在执行过程中，应当尽早修改内存分析速率，且只修改一次（例如，在 main 的开始处）。
+// 程序在执行过程中，应当尽早修改内存分析速率，且只修改一次（例如，在 main 的开始处）。
 var MemProfileRate int = 512 * 1024
 
 // A MemProfileRecord describes the live objects allocated
@@ -123,11 +123,11 @@ func (r *MemProfileRecord) Stack() []uintptr {
 // the testing package's -test.memprofile flag instead
 // of calling MemProfile directly.
 
-// MemProfile 返回当前内存分析中的记录数 n。
-// 若 len(p) >= n，MemProfile 就会将此分析赋值到 p 中并返回 n, true。
+// MemProfile 返回当前内存分析报告中的记录数 n。
+// 若 len(p) >= n，MemProfile 就会将此分析报告复制到 p 中并返回 n, true。
 // 若 len(p) < n，MemProfile 则不会更改 p，而只返回 n, false。
 //
-// 若 inuseZero 为 true，该分析就会包含分配记录，其中 r.AllocBytes > 0，
+// 若 inuseZero 为 true，该分析报告就会包含分配记录，其中 r.AllocBytes > 0，
 // 而 r.AllocBytes == r.FreeBytes。这些位置的内存已经分配，但它们都会释放回运行时。
 //
 // 大多数客户端应当使用 runtime/pprof 包或 testing 包的 -test.memprofile 标记，
@@ -162,8 +162,8 @@ func (r *StackRecord) Stack() []uintptr {
 // Most clients should use the runtime/pprof package instead
 // of calling ThreadCreateProfile directly.
 
-// ThreadCreateProfile 返回线程创建分析中的记录数 n。
-// 若 len(p) >= n，ThreadCreateProfile 就会将此分析赋值到 p 中并返回 n, true。
+// ThreadCreateProfile 返回线程创建分析报告中的记录数 n。
+// 若 len(p) >= n，ThreadCreateProfile 就会将此分析报告复制到 p 中并返回 n, true。
 // 若 len(p) < n，ThreadCreateProfile 则不会更改 p，而只返回 n, false。
 //
 // 大多数客户端应当使用 runtime/pprof 包，而非直接调用 ThreadCreateProfile。
@@ -176,8 +176,8 @@ func ThreadCreateProfile(p []StackRecord) (n int, ok bool)
 // Most clients should use the runtime/pprof package instead
 // of calling GoroutineProfile directly.
 
-// GoroutineProfile 返回活动Go程栈分析中的记录数 n。
-// 若 len(p) >= n，GoroutineProfile 就会将此分析赋值到 p 中并返回 n, true。
+// GoroutineProfile 返回活动Go程栈分析报告中的记录数 n。
+// 若 len(p) >= n，GoroutineProfile 就会将此分析报告复制到 p 中并返回 n, true。
 // 若 len(p) < n，GoroutineProfile 则不会更改 p，而只返回 n, false。
 //
 // 大多数客户端应当使用 runtime/pprof 包，而非直接调用 GoroutineProfile。
@@ -193,7 +193,7 @@ func GoroutineProfile(p []StackRecord) (n int, ok bool)
 // CPUProfile directly.
 
 // CPUProfile 返回下一个CPU栈跟踪数据的二进制字节片，它会阻塞直到数据可用。
-// 若分析关闭且所有积累的分析数据而它已被返回，CPUProfile 就会返回 nil。
+// 若分析已经关闭且所有积累的分析数据这时已被返回，CPUProfile 就会返回 nil。
 // 调用者必须在再次调用 CPUProfile 前保存返回的数据。
 //
 // 大多数客户端应当使用 runtime/pprof 包或 testing 包的 -test.memprofile 标记，
@@ -210,7 +210,7 @@ func CPUProfile() []byte
 
 // SetCPUProfileRate 将 hz 置为CPU分析频率每秒的抽样。
 // 若 hz <= 0，SetCPUProfileRate 就会关闭分析。
-// 若分析器为打开状态，其频率在它第一次关闭之前就无法更改。
+// 若分析器为开启状态，其频率在它第一次关闭之前就无法更改。
 //
 // 大多数客户端应当使用 runtime/pprof 包或 testing 包的 -test.memprofile 标记，
 // 而非直接调用 SetCPUProfileRate。
@@ -226,7 +226,7 @@ func SetCPUProfileRate(hz int)
 // SetBlockProfileRate 用于控制在阻塞分析中报告的Go程阻塞事件。
 // 对于一个阻塞事件，平均每阻塞 rate 纳秒，该分析器就采集一份样本。
 //
-// 要在分析中包括每一个阻塞事件，需传入 rate = 1；要完全关闭分析，需传入 rate <= 0。
+// 要在分析报告中包括每一个阻塞事件，需传入 rate = 1；要完全关闭分析，需传入 rate <= 0。
 func SetBlockProfileRate(rate int)
 
 // BlockProfileRecord describes blocking events originated
@@ -249,7 +249,7 @@ type BlockProfileRecord struct {
 
 // BlockProfile 返回
 // GoroutineProfile 返回当前阻塞分析中的记录数 n。
-// 若 len(p) >= n，BlockProfile 就会将此分析赋值到 p 中并返回 n, true。
+// 若 len(p) >= n，BlockProfile 就会将此分析报告复制到 p 中并返回 n, true。
 // 若 len(p) < n，BlockProfile 则不会更改 p，而只返回 n, false。
 //
 // 大多数客户端应当使用 runtime/pprof 包或 testing 包的 -test.memprofile 标记，
