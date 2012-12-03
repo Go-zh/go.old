@@ -68,20 +68,14 @@ would want to read even if godoc didn't exist.
 </div>
 
 <p>
-Godoc is conceptually related to Python's
-<a href="http://www.python.org/dev/peps/pep-0257/">Docstring</a> and Java's
-<a href="http://www.oracle.com/technetwork/java/javase/documentation/index-jsp-135444.html">Javadoc</a>,
-but its design is simpler. The comments read by godoc are not language
-constructs (as with Docstring) nor must they have their own machine-readable
-syntax (as with Javadoc). Godoc comments are just good comments, the sort you
-would want to read even if godoc didn't exist.
 Godoc的理念同Python的<a href="http://www.python.org/dev/peps/pep-0257/">Docstring</a>
 和Java的<a href="http://www.oracle.com/technetwork/java/javase/documentation/index-jsp-135444.html">Javadoc</a>
-类似，但它的设计更加简单。由 godoc 读取的注释既不是（像Docstring那样的）语言结构，
-也不需要（像Javadoc那样的）它们自己机器可读的语法。Godoc注释仅仅好的代码注释而已，
-它的本质使得即使没有godoc你也可以读。
+类似，但它的设计更加简单。Godoc读取的注释既不需要语言的结构（例如Docstring），
+也无需它们特有的机器可读的语法（如Javadoc）。Godoc注释就是好的代码注释，
+它的这种本质让你即便在没有godoc的情况下也能轻松阅读。
 </p>
 
+<div class="english">
 <p>
 The convention is simple: to document a type, variable, constant, function, or
 even a package, write a regular comment directly preceding its declaration, with
@@ -90,9 +84,18 @@ alongside the item it documents. For example, this is the documentation for the
 <code>fmt</code> package's <a href="/pkg/fmt/#Fprint"><code>Fprint</code></a>
 function:
 </p>
+</div>
+
+<p>
+它的约定很简单：若要为类型、变量、常量、函数或包编写文档，只需直接在它们的声明前，
+编写普通的注释就可以了，注释和代码之间不要有空行。Godoc会将该注释作为文本文档，
+显示在该条目旁边。例如，以下就是 <code>fmt</code> 包中
+<a href="/pkg/fmt/#Fprint"><code>Fprint</code></a> 函数的文档：
+</p>
 
 {{code "/src/pkg/fmt/print.go" `/Fprint formats using the default/` `/func Fprint/`}}
 
+<div class="english">
 <p>
 Notice this comment is a complete sentence that begins with the name of the
 element it describes. This important convention allows us to generate
@@ -100,15 +103,30 @@ documentation in a variety of formats, from plain text to HTML to UNIX man
 pages, and makes it read better when tools truncate it for brevity, such as when
 they extract the first line or sentence.
 </p>
+</div>
 
+<p>
+注意，此注释是一个完整的句子，它以所要描述的元素名开头。这个重要的约定能，
+让我们以多种格式生成文档，从纯文本到HTML再到Unix手册页面。当工具为了简洁而截断文档，
+比如要提取第一行或第一句时，也能让它读起来更好。
+</p>
+
+<div class="english">
 <p>
 Comments on package declarations should provide general package documentation.
 These comments can be short, like the <a href="/pkg/sort/"><code>sort</code></a>
 package's brief description:
 </p>
+</div>
+
+<p>
+包声明前的注释应当提供概括性的包文档。这些注释可以像
+<a href="/pkg/sort/"><code>sort</code></a> 包的描述一样简短：
+</p>
 
 {{code "/src/pkg/sort/sort.go" `/Package sort provides/` `/package sort/`}}
 
+<div class="english">
 <p>
 They can also be detailed like the <a href="/pkg/encoding/gob/">gob package</a>'s
 overview. That package uses another convention for packages
@@ -116,12 +134,26 @@ that need large amounts of introductory documentation: the package comment is
 placed in its own file, <a href="/src/pkg/encoding/gob/doc.go">doc.go</a>, which
 contains only those comments and a package clause.
 </p>
+</div>
 
+<p>
+也可以像 <a href="/pkg/encoding/gob/"><code>gob</code></a> 包的概述一样详细。
+由于该包需要大量介绍性文档，因此它使用了另一个约定：该包的注释被放在其自己的文件
+<a href="/src/pkg/encoding/gob/doc.go">doc.go</a> 中，该文件只包含那些注释和一个包子句。
+</p>
+
+<div class="english">
 <p>
 When writing package comments of any size, keep in mind that their first
 sentence will appear in godoc's <a href="/pkg/">package list</a>.
 </p>
+</div>
 
+<p>
+在编写任何大小的包注释时，请注意它们的第一句会出现在godoc的<a href="/pkg/">包列表</a>中。
+</p>
+
+<div class="english">
 <p>
 Comments that are not adjacent to a top-level declaration are omitted from
 godoc's output, with one notable exception. Top-level comments that begin with
@@ -130,11 +162,32 @@ the "Bugs” section of the package documentation. The "who” part should be th
 user name of someone who could provide more information. For example, this is a
 known issue from the <a href="/pkg/bytes/#bugs">bytes package</a>:
 </p>
+</div>
 
+<p>
+Comments that are not adjacent to a top-level declaration are omitted from
+godoc's output, with one notable exception. Top-level comments that begin with
+the word <code>"BUG(who)”</code> are recognized as known bugs, and included in
+the "Bugs” section of the package documentation. The "who” part should be the
+user name of someone who could provide more information. For example, this is a
+known issue from the <a href="/pkg/bytes/#bugs">bytes package</a>:
+没挨着顶级声明的注释会从godoc的输出中省略，不过有一个例外。以 <code>"BUG(who)”</code>
+开头的顶级注释会被识别为已知bug，并包含在该包文档的“缺陷”一节中。“who”
+应当为能够提供更多信息的人的用户名。例如，下面是 <a href="/pkg/bytes/#bugs"><code>bytes</code></a>
+包中的一个已知问题：
+</p>
+
+<div class="english">
 <pre>
 // BUG(r): The rule Title uses for word boundaries does not handle Unicode punctuation properly.
 </pre>
+</div>
 
+<pre>
+// BUG(r): 用于单词分界的Title规则并不能正确处理Unicode标点符号。
+</pre>
+
+<div class="english">
 <p>
 Godoc treats executable commands somewhat differently. Instead of inspecting the
 command source code, it looks for a Go source file belonging to the special
@@ -143,12 +196,26 @@ used as the command's documentation. For example, see the
 <a href="/cmd/godoc/">godoc documentation</a> and its corresponding
 <a href="/src/cmd/godoc/doc.go">doc.go</a> file.
 </p>
+</div>
 
+<p>
+Godoc对待可执行命令则有所不同。它并不从命令的源码中检索，而是从属于特殊包
+“documentation”的Go源码中查找。“package documentation”子句前的注释会用作该命令的文档。
+例如，<a href="/cmd/godoc/">godoc文档</a>及与其对应的<a href="/src/cmd/godoc/doc.go">doc.go</a>文件。
+</p>
+
+<div class="english">
 <p>
 There are a few formatting rules that Godoc uses when converting comments to
 HTML:
 </p>
+</div>
 
+<p>
+在Godoc将注释转换为HTML时遵循几条格式规则：
+</p>
+
+<div class="english">
 <ul>
 <li>
 Subsequent lines of text are considered part of the same paragraph; you must
@@ -162,17 +229,44 @@ Pre-formatted text must be indented relative to the surrounding comment text
 URLs will be converted to HTML links; no special markup is necessary.
 </li>
 </ul>
+</div>
 
+<ul>
+<li>
+跟在一行后面的文本行被视作同一段的一部分，你必须留一个空行来分段。
+</li>
+<li>
+相对于周围的注释文本，预格式化文本必须缩进
+（例子见gob的<a href="/src/pkg/encoding/gob/doc.go">doc.go</a>文件）。
+</li>
+<li>
+URL会直接被转换为HTML连接，而无需特别的标记。
+</li>
+</ul>
+
+<div class="english">
 <p>
 Note that none of these rules requires you to do anything out of the ordinary.
 </p>
+</div>
 
+<p>
+注意这些规则无需你做任何特别的使。
+</p>
+
+<div class="english">
 <p>
 In fact, the best thing about godoc's minimal approach is how easy it is to use.
 As a result, a lot of Go code, including all of the standard library, already
 follows the conventions.
 </p>
+</div>
 
+<p>
+由于godoc的最小化方式非常简单易用，因此大量的Go代码，包括所有的标准库都已经遵循此约定了。
+</p>
+
+<div class="english">
 <p>
 Your own code can present good documentation just by having comments as
 described above. Any Go packages installed inside <code>$GOROOT/src/pkg</code>
@@ -181,4 +275,13 @@ command-line and HTTP interfaces, and you can specify additional paths for
 indexing via the <code>-path</code> flag or just by running <code>"godoc ."</code>
 in the source directory. See the <a href="/cmd/godoc/">godoc documentation</a>
 for more details.
+</p>
+</div>
+
+<p>
+你自己的代码只需按照上面描述的注释方法，就能展示出很好的文档。任何安装在
+<code>$GOROOT/src/pkg</code> 中的Go包和任何的 <code>GOPATH</code> 工作空间，
+都可以通过godoc的命令行和HTTP界面来访问，你也可以通过 <code>-path</code>
+标记为索引指定附加的路径，或者直接在源码目录下运行 <code>"godoc ."</code>。
+更多详情见<a href="/cmd/godoc/">godoc文档</a>。
 </p>
