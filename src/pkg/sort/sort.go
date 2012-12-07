@@ -78,7 +78,7 @@ func heapSort(data Interface, a, b int) {
 	hi := b - a
 
 	// Build heap with greatest element at top.
-	// 以最大元素为顶建立堆
+	// 以最大元素为顶建立堆 
 	for i := (hi - 1) / 2; i >= 0; i-- {
 		siftDown(data, i, hi, first)
 	}
