@@ -32,6 +32,7 @@ func doTestParallelReaders(numReaders, gomaxprocs int) {
 		go parallelReader(&m, clocked, cunlock, cdone)
 	}
 	// Wait for all parallel RLock()s to succeed.
+	// 等待所有并行的 RLock() 成功。
 	for i := 0; i < numReaders; i++ {
 		<-clocked
 	}
@@ -39,6 +40,7 @@ func doTestParallelReaders(numReaders, gomaxprocs int) {
 		cunlock <- true
 	}
 	// Wait for the goroutines to finish.
+	// 等待Go程结束。
 	for i := 0; i < numReaders; i++ {
 		<-cdone
 	}
@@ -84,6 +86,7 @@ func writer(rwm *RWMutex, num_iterations int, activity *int32, cdone chan bool) 
 func HammerRWMutex(gomaxprocs, numReaders, num_iterations int) {
 	runtime.GOMAXPROCS(gomaxprocs)
 	// Number of active readers + 10000 * number of active writers.
+	// 活动读取器数 + 10000 * 活动写入器数。
 	var activity int32
 	var rwm RWMutex
 	cdone := make(chan bool)
@@ -97,6 +100,7 @@ func HammerRWMutex(gomaxprocs, numReaders, num_iterations int) {
 		go reader(&rwm, num_iterations, &activity, cdone)
 	}
 	// Wait for the 2 writers and all readers to finish.
+	// 等待这2个写入器和所有读取器结束。
 	for i := 0; i < 2+numReaders; i++ {
 		<-cdone
 	}

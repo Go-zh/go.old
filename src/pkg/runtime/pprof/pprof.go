@@ -461,7 +461,7 @@ func writeHeap(w io.Writer, debug int) error {
 	// and also try again if we're very unlucky.
 	// The loop should only execute one iteration in the common case.
 	// 找出这里有多少记录（MemProfile(nil, true)），为它们分配一些记录，并获取数据。
-	// 这里个问题——在两次调用之间可能会添加更多记录——因此为安全起见，
+	// 这里有个竞争——在两次调用之间可能会添加更多记录——因此为安全起见，
 	// 我们分配了额外的记录，如果不走运的话可以再试一次。
 	// 此循环在一般情况下应当只执行一次迭代。
 	var p []runtime.MemProfileRecord
@@ -627,7 +627,7 @@ func writeRuntimeProfile(w io.Writer, debug int, name string, fetch func([]runti
 	// and also try again if we're very unlucky.
 	// The loop should only execute one iteration in the common case.
 	// 找出这里有多少记录（fetch(nil)），为它们分配一些记录，并获取数据。
-	// 这里有个问题——在两次调用之间可能会添加更多记录——因此为安全起见，
+	// 这里有个竞争——在两次调用之间可能会添加更多记录——因此为安全起见，
 	// 我们分配了额外的记录，如果不走运的话可以再试一次。
 	// 此循环在一般情况下应当只执行一次迭代。
 	var p []runtime.StackRecord

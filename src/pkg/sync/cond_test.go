@@ -24,7 +24,7 @@ func TestCondSignal(t *testing.T) {
 		}()
 	}
 	for i := 0; i < n; i++ {
-		<-running // Wait for everyone to run.
+		<-running // Wait for everyone to run. // 等待任何一个开始运行。
 	}
 	for n > 0 {
 		select {
@@ -35,7 +35,7 @@ func TestCondSignal(t *testing.T) {
 		m.Lock()
 		c.Signal()
 		m.Unlock()
-		<-awake // Will deadlock if no goroutine wakes up
+		<-awake // Will deadlock if no goroutine wakes up // 若没有Go程醒来就会死锁。
 		select {
 		case <-awake:
 			t.Fatal("too many goroutines awake")
@@ -93,7 +93,7 @@ func TestCondBroadcast(t *testing.T) {
 	}
 	for i := 0; i < n; i++ {
 		for i := 0; i < n; i++ {
-			<-running // Will deadlock unless n are running.
+			<-running // Will deadlock unless n are running. // 除非 n 在运行，否则就会死锁。
 		}
 		if i == n-1 {
 			m.Lock()

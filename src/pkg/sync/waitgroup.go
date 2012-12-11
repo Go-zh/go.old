@@ -14,6 +14,10 @@ import (
 // goroutines to wait for.  Then each of the goroutines
 // runs and calls Done when finished.  At the same time,
 // Wait can be used to block until all goroutines have finished.
+
+// WaitGroup 等待一组Go程的结束。
+// 主Go程调用 Add 来设置等待的Go程数。然后该组中的每个Go程都会运行，并在结束时调用
+// Done。同时，Wait 可被用于阻塞，直到所有Go程都结束。
 type WaitGroup struct {
 	m       Mutex
 	counter int32
@@ -33,9 +37,24 @@ type WaitGroup struct {
 // G3: go G4()
 // G3: Wait() // G1 still hasn't run, G3 finds sema == 1, unblocked! Bug.
 
+// WaitGroup 每当旧的信号被释放时，就会创建一个新的信号。这是为了避免以下竞争：
+//
+// G1: Add(1)
+// G1: go G2()
+// G1: Wait() // 在 Unlock() 之后 Semacquire() 之前进行上下文切换。
+// G2: Done() // 释放信号：sema == 1，waiters == 0。G1 还不会被运行。
+// G3: Wait() // 发现 counter == 0，waiters == 0，不会阻塞。
+// G3: Add(1) // 使 counter == 1，waiters == 0。
+// G3: go G4()
+// G3: Wait() // G1 仍然没有运行，但 G3 发现 sema == 1，就解阻了！Bug。
+
 // Add adds delta, which may be negative, to the WaitGroup counter.
 // If the counter becomes zero, all goroutines blocked on Wait() are released.
 // If the counter goes negative, Add panics.
+
+// Add 添加 delta，对于 WaitGroup 的 counter 来说，它可能为负数。
+// 若 counter 变为零，在 Wait() 被释放后所有Go程就会阻塞。
+// 若 counter 变为负数，Add 就会引发恐慌。
 func (wg *WaitGroup) Add(delta int) {
 	if raceenabled {
 		raceReleaseMerge(unsafe.Pointer(wg))
@@ -59,11 +78,15 @@ func (wg *WaitGroup) Add(delta int) {
 }
 
 // Done decrements the WaitGroup counter.
+
+// Done 递减 WaitGroup 的 counter。
 func (wg *WaitGroup) Done() {
 	wg.Add(-1)
 }
 
 // Wait blocks until the WaitGroup counter is zero.
+
+// Wait 阻塞 WaitGroup 直到其 counter 为零。
 func (wg *WaitGroup) Wait() {
 	if raceenabled {
 		raceDisable()
@@ -80,7 +103,8 @@ func (wg *WaitGroup) Wait() {
 	// This code is racing with the unlocked path in Add above.
 	// The code above modifies counter and then reads waiters.
 	// We must modify waiters and then read counter (the opposite order)
-	// to avoid missing an Add.
+	// 此代码与上面 Add 中的解锁路径竞争。上面的代码修改 counter 然后读取 waiters。
+	// 我们必须修改 waiters 然后读取 counter（按相反顺序）来避免失去一次 Add。
 	if atomic.LoadInt32(&wg.counter) == 0 {
 		atomic.AddInt32(&wg.waiters, -1)
 		if raceenabled {
