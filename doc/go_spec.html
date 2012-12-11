@@ -2715,9 +2715,9 @@ literal structure and corresponding components have identical types. In detail:
 </div>
 
 <p>
-若两个已命名类型的类型名源自相同的<a href="#类型声明">类型声明</a>。
-一个已命名类型和一个未命名类型总不相同。若两个未命名类型其相应的类型字面相同，那么它们的类型相同，
-即，它们的字面结构是否相同且其相应的组件类型是否相同。细节详述：
+若两个已命名类型的类型名源自相同的<a href="#类型声明">类型实现</a>，它们就是相同的。
+一个已命名类型和一个未命名类型总不相同。若两个未命名类型其相应的类型字面相同，
+那么它们的类型相同，即，它们的字面结构是否相同且其相应的组件类型是否相同。细节详述：
 </p>
 
 <ul>
@@ -5750,7 +5750,7 @@ to strings. All other arithmetic operators apply to integers only.
 &amp;    按位与          integers
 |    按位或          integers
 ^    按位异或        integers
-&amp;^   位清除（同或）  integers
+&amp;^   位清除（与非）  integers
 
 &lt;&lt;   向左移位        integer &lt;&lt; unsigned integer
 &gt;&gt;   向右移位        integer &gt;&gt; unsigned integer
