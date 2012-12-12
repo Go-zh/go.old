@@ -1296,13 +1296,13 @@ tnum:
 			if(cp == lexbuf+2)
 				yyerror("malformed hex constant");
 			if(c == 'p')
-				goto casep;
+				goto caseep;
 			goto ncu;
 		}
 	}
 
 	if(c == 'p')	// 0p begins floating point zero
-		goto casep;
+		goto caseep;
 
 	c1 = 0;
 	for(;;) {
@@ -1320,7 +1320,7 @@ tnum:
 	if(c == '.')
 		goto casedot;
 	if(c == 'e' || c == 'E')
-		goto casee;
+		goto caseep;
 	if(c == 'i')
 		goto casei;
 	if(c1)
@@ -1330,10 +1330,8 @@ tnum:
 dc:
 	if(c == '.')
 		goto casedot;
-	if(c == 'e' || c == 'E')
-		goto casee;
-	if(c == 'p' || c == 'P')
-		goto casep;
+	if(c == 'e' || c == 'E' || c == 'p' || c == 'P')
+		goto caseep;
 	if(c == 'i')
 		goto casei;
 
@@ -1369,29 +1367,8 @@ casedot:
 	if(c != 'e' && c != 'E')
 		goto caseout;
 
-casee:
-	*cp++ = 'e';
-	c = getc();
-	if(c == '+' || c == '-') {
-		*cp++ = c;
-		c = getc();
-	}
-	if(!yy_isdigit(c))
-		yyerror("malformed fp constant exponent");
-	while(yy_isdigit(c)) {
-		if(cp+10 >= ep) {
-			yyerror("identifier too long");
-			errorexit();
-		}
-		*cp++ = c;
-		c = getc();
-	}
-	if(c == 'i')
-		goto casei;
-	goto caseout;
-
-casep:
-	*cp++ = 'p';
+caseep:
+	*cp++ = c;
 	c = getc();
 	if(c == '+' || c == '-') {
 		*cp++ = c;
@@ -2016,8 +1993,10 @@ lexfini(void)
 		s->lexical = lex;
 
 		etype = syms[i].etype;
-		if(etype != Txxx && (etype != TANY || debug['A']) && s->def == N)
+		if(etype != Txxx && (etype != TANY || debug['A']) && s->def == N) {
 			s->def = typenod(types[etype]);
+			s->origpkg = builtinpkg;
+		}
 
 		etype = syms[i].op;
 		if(etype != OXXX && s->def == N) {
@@ -2025,54 +2004,68 @@ lexfini(void)
 			s->def->sym = s;
 			s->def->etype = etype;
 			s->def->builtin = 1;
+			s->origpkg = builtinpkg;
 		}
 	}
 
+	// backend-specific builtin types (e.g. int).
 	for(i=0; typedefs[i].name; i++) {
 		s = lookup(typedefs[i].name);
-		if(s->def == N)
+		if(s->def == N) {
 			s->def = typenod(types[typedefs[i].etype]);
+			s->origpkg = builtinpkg;
+		}
 	}
 
 	// there's only so much table-driven we can handle.
 	// these are special cases.
 	s = lookup("byte");
-	if(s->def == N)
+	if(s->def == N) {
 		s->def = typenod(bytetype);
-	
+		s->origpkg = builtinpkg;
+	}
+
 	s = lookup("error");
-	if(s->def == N)
+	if(s->def == N) {
 		s->def = typenod(errortype);
+		s->origpkg = builtinpkg;
+	}
 
 	s = lookup("rune");
-	if(s->def == N)
+	if(s->def == N) {
 		s->def = typenod(runetype);
+		s->origpkg = builtinpkg;
+	}
 
 	s = lookup("nil");
 	if(s->def == N) {
 		v.ctype = CTNIL;
 		s->def = nodlit(v);
 		s->def->sym = s;
+		s->origpkg = builtinpkg;
 	}
-	
+
 	s = lookup("iota");
 	if(s->def == N) {
 		s->def = nod(OIOTA, N, N);
 		s->def->sym = s;
+		s->origpkg = builtinpkg;
 	}
 
 	s = lookup("true");
 	if(s->def == N) {
 		s->def = nodbool(1);
 		s->def->sym = s;
+		s->origpkg = builtinpkg;
 	}
 
 	s = lookup("false");
 	if(s->def == N) {
 		s->def = nodbool(0);
 		s->def->sym = s;
+		s->origpkg = builtinpkg;
 	}
-	
+
 	nodfp = nod(ONAME, N, N);
 	nodfp->type = types[TINT32];
 	nodfp->xoffset = 0;

@@ -521,7 +521,7 @@ ret:
  * returns Prog* to patch to panic call.
  */
 Prog*
-cgenindex(Node *n, Node *res)
+cgenindex(Node *n, Node *res, int bounded)
 {
 	Node tmp, lo, hi, zero, n1, n2;
 
@@ -534,7 +534,7 @@ cgenindex(Node *n, Node *res)
 	cgen(n, &tmp);
 	split64(&tmp, &lo, &hi);
 	gmove(&lo, res);
-	if(debug['B']) {
+	if(bounded) {
 		splitclean();
 		return nil;
 	}
@@ -559,7 +559,6 @@ agen(Node *n, Node *res)
 {
 	Node *nl;
 	Node n1, n2, n3;
-	Prog *p1;
 	int r;
 
 	if(debug['g']) {
@@ -704,10 +703,13 @@ agen(Node *n, Node *res)
 			if(nl->type->type->width >= unmappedzero) {
 				regalloc(&n1, types[tptr], N);
 				gmove(res, &n1);
-				p1 = gins(AMOVW, &n1, &n1);
-				p1->from.type = D_OREG;
-				p1->from.offset = 0;
+				regalloc(&n2, types[TUINT8], &n1);
+				n1.op = OINDREG;
+				n1.type = types[TUINT8];
+				n1.xoffset = 0;
+				gmove(&n1, &n2);
 				regfree(&n1);
+				regfree(&n2);
 			}
 			nodconst(&n1, types[TINT32], n->xoffset);
 			regalloc(&n2, n1.type, N);
@@ -737,8 +739,7 @@ ret:
 void
 igen(Node *n, Node *a, Node *res)
 {
-	Node n1;
-	Prog *p1;
+	Node n1, n2;
 	int r;
 
 	if(debug['g']) {
@@ -785,10 +786,13 @@ igen(Node *n, Node *a, Node *res)
 			if(n->left->type->type->width >= unmappedzero) {
 				regalloc(&n1, types[tptr], N);
 				gmove(a, &n1);
-				p1 = gins(AMOVW, &n1, &n1);
-				p1->from.type = D_OREG;
-				p1->from.offset = 0;
+				regalloc(&n2, types[TUINT8], &n1);
+				n1.op = OINDREG;
+				n1.type = types[TUINT8];
+				n1.xoffset = 0;
+				gmove(&n1, &n2);
 				regfree(&n1);
+				regfree(&n2);
 			}
 		}
 		a->op = OINDREG;
@@ -889,6 +893,7 @@ agenr(Node *n, Node *a, Node *res)
 	Prog *p1, *p2;
 	uint32 w;
 	uint64 v;
+	int bounded;
 
 	if(debug['g'])
 		dump("agenr-n", n);
@@ -915,13 +920,14 @@ agenr(Node *n, Node *a, Node *res)
 	case OINDEX:
 		p2 = nil;  // to be patched to panicindex.
 		w = n->type->width;
+		bounded = debug['B'] || n->bounded;
 		if(nr->addable) {
 			if(!isconst(nr, CTINT))
 				tempname(&tmp, types[TINT32]);
 			if(!isconst(nl, CTSTR))
 				agenr(nl, &n3, res);
 			if(!isconst(nr, CTINT)) {
-				p2 = cgenindex(nr, &tmp);
+				p2 = cgenindex(nr, &tmp, bounded);
 				regalloc(&n1, tmp.type, N);
 				gmove(&tmp, &n1);
 			}
@@ -929,7 +935,7 @@ agenr(Node *n, Node *a, Node *res)
 		if(nl->addable) {
 			if(!isconst(nr, CTINT)) {
 				tempname(&tmp, types[TINT32]);
-				p2 = cgenindex(nr, &tmp);
+				p2 = cgenindex(nr, &tmp, bounded);
 				regalloc(&n1, tmp.type, N);
 				gmove(&tmp, &n1);
 			}
@@ -938,7 +944,7 @@ agenr(Node *n, Node *a, Node *res)
 			}
 		} else {
 			tempname(&tmp, types[TINT32]);
-			p2 = cgenindex(nr, &tmp);
+			p2 = cgenindex(nr, &tmp, bounded);
 			nr = &tmp;
 			if(!isconst(nl, CTSTR))
 				agenr(nl, &n3, res);
@@ -955,10 +961,13 @@ agenr(Node *n, Node *a, Node *res)
 		if(isfixedarray(nl->type) && nl->type->width >= unmappedzero) {
 			regalloc(&n4, types[tptr], N);
 			gmove(&n3, &n4);
-			p1 = gins(AMOVW, &n4, &n4);
-			p1->from.type = D_OREG;
-			p1->from.offset = 0;
+			regalloc(&tmp, types[TUINT8], &n4);
+			n4.op = OINDREG;
+			n4.type = types[TUINT8];
+			n4.xoffset = 0;
+			gmove(&n4, &tmp);
 			regfree(&n4);
+			regfree(&tmp);
 		}
 
 		// constant index

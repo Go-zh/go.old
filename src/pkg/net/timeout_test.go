@@ -332,6 +332,7 @@ func TestReadWriteDeadline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListenTCP on :0: %v", err)
 	}
+	defer ln.Close()
 
 	lnquit := make(chan bool)
 
@@ -410,16 +411,7 @@ func testVariousDeadlines(t *testing.T, maxProcs int) {
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(maxProcs))
 	ln := newLocalListener(t)
 	defer ln.Close()
-	donec := make(chan struct{})
-	defer close(donec)
-
-	testsDone := func() bool {
-		select {
-		case <-donec:
-			return true
-		}
-		return false
-	}
+	acceptc := make(chan error, 1)
 
 	// The server, with no timeouts of its own, sending bytes to clients
 	// as fast as it can.
@@ -428,9 +420,7 @@ func testVariousDeadlines(t *testing.T, maxProcs int) {
 		for {
 			c, err := ln.Accept()
 			if err != nil {
-				if !testsDone() {
-					t.Fatalf("Accept: %v", err)
-				}
+				acceptc <- err
 				return
 			}
 			go func() {
@@ -504,6 +494,8 @@ func testVariousDeadlines(t *testing.T, maxProcs int) {
 			select {
 			case res := <-servec:
 				t.Logf("for %v: server in %v wrote %d, %v", name, res.d, res.n, res.err)
+			case err := <-acceptc:
+				t.Fatalf("for %v: server Accept = %v", name, err)
 			case <-time.After(tooLong):
 				t.Fatalf("for %v, timeout waiting for server to finish writing", name)
 			}
@@ -588,8 +580,10 @@ func TestProlongTimeout(t *testing.T) {
 
 	ln := newLocalListener(t)
 	defer ln.Close()
+	connected := make(chan bool)
 	go func() {
 		s, err := ln.Accept()
+		connected <- true
 		if err != nil {
 			t.Fatalf("ln.Accept: %v", err)
 		}
@@ -619,6 +613,7 @@ func TestProlongTimeout(t *testing.T) {
 		t.Fatalf("DialTCP: %v", err)
 	}
 	defer c.Close()
+	<-connected
 	for i := 0; i < 1024; i++ {
 		var buf [1]byte
 		c.Write(buf[:])

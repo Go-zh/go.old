@@ -12,6 +12,7 @@ import (
 	"go/ast"
 	"go/build"
 	"go/doc"
+	"go/format"
 	"go/printer"
 	"go/token"
 	"io"
@@ -356,10 +357,8 @@ func example_htmlFunc(funcName string, examples []*doc.Example, fset *token.File
 		// (use tabs, no comment highlight, etc).
 		play := ""
 		if eg.Play != nil && *showPlayground {
-			ast.SortImports(fset, eg.Play)
 			var buf bytes.Buffer
-			err := (&printer.Config{Mode: printer.TabIndent, Tabwidth: 8}).Fprint(&buf, fset, eg.Play)
-			if err != nil {
+			if err := format.Node(&buf, fset, eg.Play); err != nil {
 				log.Print(err)
 			} else {
 				play = buf.String()
@@ -854,12 +853,12 @@ type docServer struct {
 
 // fsReadDir implements ReadDir for the go/build package.
 func fsReadDir(dir string) ([]os.FileInfo, error) {
-	return fs.ReadDir(dir)
+	return fs.ReadDir(filepath.ToSlash(dir))
 }
 
 // fsOpenFile implements OpenFile for the go/build package.
 func fsOpenFile(name string) (r io.ReadCloser, err error) {
-	data, err := ReadFile(fs, name)
+	data, err := ReadFile(fs, filepath.ToSlash(name))
 	if err != nil {
 		return nil, err
 	}
