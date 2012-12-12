@@ -24,16 +24,16 @@
 			<dd><a href="#pkg-overview" class="overviewLink">Overview</a></dd>
 			-->
 			<dd><a href="#pkg-overview" class="overviewLink">概述</a></dd>
+			<!--
+			<dd><a href="#pkg-index" class="indexLink">Index</a></dd>
+			-->
+			<dd><a href="#pkg-index" class="indexLink">索引</a></dd>
 			{{if $.Examples}}
 				<!--
 				<dd><a href="#pkg-examples" class="examplesLink">Examples</a></dd>
 				-->
 				<dd><a href="#pkg-examples" class="examplesLink">示例</a></dd>
 			{{end}}
-			<!--
-			<dd><a href="#pkg-index" class="indexLink">Index</a></dd>
-			-->
-			<dd><a href="#pkg-index" class="indexLink">索引</a></dd>
 			{{if $.Dirs}}
 				<!--
 				<dd><a href="#pkg-subdirectories">Subdirectories</a></dd>
@@ -60,28 +60,6 @@
 			</div>
 		</div>
 		{{example_html "" $.Examples $.FSet}}
-
-		{{if $.Examples}}
-		<div id="pkg-examples" class="toggleVisible">
-			<div class="collapsed">
-				<!--
-				<h2 class="toggleButton" title="Click to show Examples section">Examples ▹</h2>
-				-->
-				<h2 class="toggleButton" title="点击显示“示例”一节">示例 ▹</h2>
-			</div>
-			<div class="expanded">
-				<!--
-				<h2 class="toggleButton" title="Click to hide Examples section">Examples ▾</h2>
-				-->
-				<h2 class="toggleButton" title="点击隐藏“示例”一节">示例 ▾</h2>
-				<dl>
-				{{range $.Examples}}
-				<dd><a class="exampleLink" href="#example_{{.Name}}">{{example_name .Name}}</a></dd>
-				{{end}}
-				</dl>
-			</div>
-		</div>
-		{{end}}
 
 		<div id="pkg-index" class="toggleVisible">
 		<div class="collapsed">
@@ -136,6 +114,20 @@
 			{{end}}
 			</dl>
 			</div><!-- #manual-nav -->
+
+		{{if $.Examples}}
+		<div id="pkg-examples">
+			<!--
+			<h4>Examples</h4>
+			-->
+			<h4>示例</h4>
+			<dl>
+			{{range $.Examples}}
+			<dd><a class="exampleLink" href="#example_{{.Name}}">{{example_name .Name}}</a></dd>
+			{{end}}
+			</dl>
+		</div>
+		{{end}}
 
 		{{with .Filenames}}
 			<!--

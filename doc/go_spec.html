@@ -1,12 +1,12 @@
 <!--{
 	"Title": "Go编程语言规范",
-	"Subtitle": "版本：2012年11月26日 || 译者：Oling Cat <olingcat@gmail.com>",
+	"Subtitle": "版本：2012年12月10日 || 译者：Oling Cat <olingcat@gmail.com>",
 	"Path": "/ref/spec"
 }-->
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of November 26, 2012",
+	"Subtitle": "Version of December 10, 2012",
 	"Path": "/ref/spec"
 }-->
 
@@ -1588,8 +1588,8 @@ The predeclared string type is <code>string</code>.
 The length of a string <code>s</code> (its size in bytes) can be discovered using
 the built-in function <a href="#Length_and_capacity"><code>len</code></a>.
 The length is a compile-time constant if the string is a constant.
-A string's bytes can be accessed by integer indices 0 through
-<code>len(s)-1</code> (§<a href="#Indexes">Indexes</a>).
+A string's bytes can be accessed by integer <a href="#Index_expressions">indices</a>
+0 through <code>len(s)-1</code>.
 It is illegal to take the address of such an element; if
 <code>s[i]</code> is the <code>i</code>'th byte of a
 string, <code>&amp;s[i]</code> is invalid.
@@ -1599,7 +1599,7 @@ string, <code>&amp;s[i]</code> is invalid.
 <p>
 字符串 <code>s</code> 的长度（即其字节大小）可使用内建函数
 <a href="#长度与容量"><code>len</code></a> 获取。若该字符串为常量，则其长度即为编译时常量。
-字符串的字节可通过整数下标0至 <code>len(s)-1</code> 访问（§<a href="#下标">下标</a>）。
+字符串的字节可通过整数（§<a href="#下标">下标</a>）0 至 <code>len(s)-1</code> 访问。
 获取这样一个元素的地址是非法的；若 <code>s[i]</code> 为字符串的第 <code>i</code>
 个字节，<code>&amp;s[i]</code> 就是无效的。
 </p>
@@ -1642,8 +1642,8 @@ The length is part of the array's type and must be a
 <a href="#Constant_expressions">constant expression</a> that evaluates to a non-negative
 integer value.  The length of array <code>a</code> can be discovered
 using the built-in function <a href="#Length_and_capacity"><code>len</code></a>.
-The elements can be indexed by integer
-indices 0 through <code>len(a)-1</code> (§<a href="#Indexes">Indexes</a>).
+The elements can be addressed by integer r <a href="#Index_expressions">indices</a>
+0 through <code>len(a)-1</code>.
 Array types are always one-dimensional but may be composed to form
 multi-dimensional types.
 </p>
@@ -1660,7 +1660,7 @@ multi-dimensional types.
 <p>
 长度是数组类型的一部分，且必须是求值结果为非负整数值的<a href="#常量表达式">常量表达式</a>。
 数组 <code>a</code> 的长度可使用内建函数 <a href="#长度与容量"><code>len</code></a>获取，
-其元素可通过整数下标 0 到 <code>len(a)-1</code> 索引（§<a href="#下标">下标</a>）。
+其元素可通过整数（§<a href="#下标表达式">下标</a>） 0 到 <code>len(a)-1</code> 寻址。
 数组类型总是一维的，但可组合构成多维的类型。
 </p>
 
@@ -1705,8 +1705,8 @@ SliceType = "[" "]" ElementType .
 Like arrays, slices are indexable and have a length.  The length of a
 slice <code>s</code> can be discovered by the built-in function
 <a href="#Length_and_capacity"><code>len</code></a>; unlike with arrays it may change during
-execution.  The elements can be addressed by integer indices 0
-through <code>len(s)-1</code> (§<a href="#Indexes">Indexes</a>).  The slice index of a
+execution.  The elements can be addressed by integer <a href="#Index_expressions">indices</a>
+0 through <code>len(s)-1</code>.  The slice index of a
 given element may be less than the index of the same element in the
 underlying array.
 </p>
@@ -1715,7 +1715,7 @@ underlying array.
 <p>
 类似于数组，切片是可索引的且拥有一个长度。切片 <code>s</code> 的长度可通过内建函数
 <a href="#长度与容量"><code>len</code></a>获取；不同于数组的是，切片可在执行过程中被改变，
-其元素可通过整数下标 0 到 <code>len(s)-1</code> 寻址（§<a href="#下标">下标</a>）。
+其元素可通过整数（§<a href="#下标表达式">下标</a>） 0 到 <code>len(s)-1</code> 寻址。
 给定元素的切片下标可能小于它在其基本数组中的下标。
 </p>
 
@@ -2023,7 +2023,7 @@ promoted methods are included in the method set of the struct as follows:
 A field declaration may be followed by an optional string literal <i>tag</i>,
 which becomes an attribute for all the fields in the corresponding
 field declaration. The tags are made
-visible through a <a href="#Package_unsafe">reflection interface</a>
+visible through a <a href="/pkg/reflect/#StructTag">reflection interface</a>
 but are otherwise ignored.
 </p>
 
@@ -2040,7 +2040,7 @@ struct {
 
 <p>
 字段声明可后跟一个可选的字符串字面 <i>标注</i>，成为所有相应字段声明中字段的属性。
-标注可通过 <a href="#包unsafe">反射接口</a> 获得，否则就会被忽略。
+标注可通过 <a href="/pkg/reflect/#StructTag">反射接口</a> 获得，否则就会被忽略。
 </p>
 
 <pre>
@@ -2127,8 +2127,11 @@ ParameterDecl  = [ IdentifierList ] [ "..." ] Type .
 <p>
 Within a list of parameters or results, the names (IdentifierList)
 must either all be present or all be absent. If present, each name
-stands for one item (parameter or result) of the specified type; if absent, each
-type stands for one item of that type.  Parameter and result
+stands for one item (parameter or result) of the specified type and
+all non-<a href="#Blank_identifier">blank</a> names in the signature
+must be <a href="#Uniqueness_of_identifiers">unique</a>.
+If absent, each type stands for one item of that type.
+Parameter and result
 lists are always parenthesized except that if there is exactly
 one unnamed result it may be written as an unparenthesized type.
 </p>
@@ -2136,7 +2139,8 @@ one unnamed result it may be written as an unparenthesized type.
 
 <p>
 在形参或结果的列表中，其名称（标识符列表）必须都存在或都不存在。
-若存在，则每个名称代表一个指定类型的项（形参或结果），
+若存在，则每个名称代表一个指定类型的项（形参或结果），所有在签名中的非
+<a href="#空白标识符">空白</a>名称必须是<a href="#标识符的唯一性">唯一</a>的。
 若不存在，则每个类型代表一个此类型的项。若恰好有一个未命名的值，它可能写作一个不加括号的类型，
 除此之外，形参和结果的列表总是在括号中。
 </p>
@@ -2474,7 +2478,7 @@ For a map <code>m</code>, it can be discovered using the
 built-in function <a href="#Length_and_capacity"><code>len</code></a>
 and may change during execution. Elements may be added during execution
 using <a href="#Assignments">assignments</a> and retrieved with
-<a href="#Indexes">index</a> expressions; they may be removed with the
+<a href="#Index_expressions">index expressions</a>; they may be removed with the
 <a href="#Deletion_of_map_elements"><code>delete</code></a> built-in function.
 </p>
 </div>
@@ -2483,7 +2487,7 @@ using <a href="#Assignments">assignments</a> and retrieved with
 元素的数量称为长度。
 对于映射 <code>m</code>，其长度可使用内建函数 <a href="#长度与容量"><code>len</code></a>
 获取并可在执行时更改。元素可在执行时使用<a href="#赋值">赋值</a>来添加并通过
-<a href="#索引">索引</a> 表达式来检索；它们也可通过内建函数
+<a href="#下标表达式">下标表达式</a> 来检索；它们也可通过内建函数
 <a href="#映射元素的删除"><code>delete</code></a> 删除。
 </p>
 
@@ -3015,8 +3019,8 @@ Go is lexically scoped using blocks:
 	<li>The scope of the package name of an imported package is the file block
 	    of the file containing the import declaration.</li>
 
-	<li>The scope of an identifier denoting a function parameter or
-	    result variable is the function body.</li>
+	<li>The scope of an identifier denoting a method receiver, function parameter,
+	    or result variable is the function body.</li>
 
 	<li>The scope of a constant or variable identifier declared
 	    inside a function begins at the end of the ConstSpec or VarSpec
@@ -3041,7 +3045,7 @@ Go使用块表示词法作用域：
 
 	<li>已导入包的包名作用域为包含该导入声明的文件块。</li>
 
-	<li>表示函数形参或返回值变量的标识符其作用域为该函数体。</li>
+	<li>表示方法接收器、函数形参或返回值变量的标识符，其作用域为该函数体。</li>
 
 	<li>在函数中声明为常量或变量的标识符，其作用域始于该函数中具体常量实现或变量实现
 		（ShortVarDecl表示短变量声明）的结尾，止于最内部包含块的结尾。</li>
@@ -3927,16 +3931,27 @@ is visible only within selectors for that type.
 
 <div class="english">
 <p>
-For a base type, the non-<a href="#Blank_identifier">blank</a> names of
-methods bound to it must be <a href="#Uniqueness_of_identifiers">unique</a>.
+A non-<a href="#Blank_identifier">blank</a> receiver identifier must be
+<a href="#Uniqueness_of_identifiers">unique</a> in the method signature.
+If the receiver's value is not referenced inside the body of the method,
+its identifier may be omitted in the declaration. The same applies in
+general to parameters of functions and methods.
+</p>
+
+<p>
+For a base type, the non-blank names of methods bound to it must be unique.
 If the base type is a <a href="#Struct_types">struct type</a>,
 the non-blank method and field names must be distinct.
 </p>
 </div>
 
 <p>
-对于基础类型，方法绑定至该类型的非<a href="#空白标识符">空白</a>名必须
-<a href="#标识符的唯一性">唯一</a>。
+非<a href="#空白标识符">空白</a>接收器的标识符在该方法签名中必须是唯一的。
+若该接收器的值并未在该方法体中引用，其标识符可在声明中省略。这同样适用于一般函数或方法的形参。
+</p>
+
+<p>
+对于基础类型，方法绑定至该类型的非空白名称必须唯一。
 若其基础类型为<a href="#结构类型">结构类型</a>，则非空白方法与字段名不能相同。
 </p>
 
@@ -3972,19 +3987,6 @@ to the base type <code>Point</code>.
 <p>
 将接收者类型为 <code>*Point</code> 的方法 <code>Length</code>
 和 <code>Scale</code> 绑定至基础类型 <code>Point</code>。
-</p>
-
-<div class="english">
-<p>
-If the receiver's value is not referenced inside the body of the method,
-its identifier may be omitted in the declaration. The same applies in
-general to parameters of functions and methods.
-</p>
-</div>
-
-<p>
-若该接收者的值在该方法体中未被引用，它的标识符会在该声明中被忽略。
-这同样适用于一般的函数和方法的形参。
 </p>
 
 <div class="english">
@@ -4175,7 +4177,7 @@ The types of the expressions must be <a href="#Assignability">assignable</a>
 to the respective field, element, and key types of the LiteralType;
 there is no additional conversion.
 The key is interpreted as a field name for struct literals,
-an index expression for array and slice literals, and a key for map literals.
+an index for array and slice literals, and a key for map literals.
 For map literals, all elements must have a key. It is an error
 to specify multiple elements with the same field name or
 constant key value.
@@ -4185,7 +4187,7 @@ constant key value.
 <p>
 字面类型必须为结构、数组、切片或映射类型（语法规则强制实施此约束，除非该类型作为类型名给定）。
 表达式的类型对于其各自的字段、元素以及该字面类型的键类型必须为<a href="#可赋值性">可赋值</a>的，
-即没有附加转换。作为结构字面的字段名，即数组和切片的索引表达式以及映射字面的键，其键是可解译的。
+即没有附加转换。作为结构字面的字段名，即数组和切片的下标以及映射字面的键，其键是可解译的。
 对于映射字面，所有元素都必须有键。指定多个具有相同字段名或常量键值的元素会产生一个错误。
 </p>
 
@@ -4837,10 +4839,10 @@ TODO: 详述接收者会发生什么事。
 
 
 <div class="english">
-<h3 id="Indexes">Indexes</h3>
+<h3 id="Index_expressions">Index expressions</h3>
 </div>
 
-<h3 id="下标">下标</h3>
+<h3 id="下标表达式">下标表达式</h3>
 
 <div class="english">
 <p>
@@ -4866,7 +4868,7 @@ rules apply:
 </div>
 
 <p>
-的主表达式表示数组、切片、字符串或映射 <code>a</code> 的元素通过 <code>x</code> 索引。
+的主表达式表示数组、切片、字符串或映射 <code>a</code> 的元素通过 <code>x</code> 检索。
 值 <code>x</code> 称为 <i>下标</i> 或 <i>映射键</i>。以下规则适用于其对应的类型：
 </p>
 
@@ -5062,7 +5064,7 @@ a[low : high]
 
 <div class="english">
 <p>
-constructs a substring or slice. The index expressions <code>low</code> and
+constructs a substring or slice. The indices <code>low</code> and
 <code>high</code> select which elements appear in the result. The result has
 indices starting at 0 and length equal to
 <code>high</code>&nbsp;-&nbsp;<code>low</code>.
@@ -5071,7 +5073,7 @@ After slicing the array <code>a</code>
 </div>
 
 <p>
-会构造一个字串或切片。下标表达式 <code>low</code> 和 <code>high</code> 则选出哪些元素出现在结果中。
+会构造一个字串或切片。下标 <code>low</code> 和 <code>high</code> 则选出哪些元素出现在结果中。
 该结果的下标起始于 0 且长度等于 <code>high</code>&nbsp;-&nbsp;<code>low</code>。
 在切下数组 <code>a</code>
 </p>
@@ -5099,7 +5101,7 @@ s[2] == 4
 
 <div class="english">
 <p>
-For convenience, any of the index expressions may be omitted. A missing <code>low</code>
+For convenience, any of the indices may be omitted. A missing <code>low</code>
 index defaults to zero; a missing <code>high</code> index defaults to the length of the
 sliced operand:
 </p>
@@ -5112,7 +5114,7 @@ a[:]   // same as a[0 : len(a)]
 </div>
 
 <p>
-为方便起见，任何下标表达式都可省略。略去的 <code>low</code> 下标默认为零；
+为方便起见，任何下标都可省略。略去的 <code>low</code> 下标默认为零；
 略去的 <code>high</code> 下标默认为已切下的操作数的长度：
 </p>
 
@@ -5197,15 +5199,20 @@ The notation <code>x.(T)</code> is called a <i>type assertion</i>.
 More precisely, if <code>T</code> is not an interface type, <code>x.(T)</code> asserts
 that the dynamic type of <code>x</code> is <a href="#Type_identity">identical</a>
 to the type <code>T</code>.
+In this case, <code>T</code> must <a href="#Method_sets">implement</a> the (interface) type of <code>x</code>;
+otherwise the type assertion is invalid since it is not possible for <code>x</code>
+to store a value of type <code>T</code>.
 If <code>T</code> is an interface type, <code>x.(T)</code> asserts that the dynamic type
-of <code>x</code> implements the interface <code>T</code> (§<a href="#Interface_types">Interface types</a>).
+of <code>x</code> implements the interface <code>T</code>.
 </p>
 </div>
 
 <p>
 更确切地说，若 <code>T</code> 为非接口类型，<code>x.(T)</code> 断言 <code>x</code> 的动态类型
-与 <code>T</code><a href="#类型标识">相同</a>。若 <code>T</code> 为接口类型，<code>x.(T)</code>
-则断言<code>x</code> 的动态类型实现了接口 <code>T</code>（§<a href="#接口类型">接口类型</a>）。
+与 <code>T</code><a href="#类型标识">相同</a>。在此情况下，<code>T</code>
+必须<a href="#方法集">实现</a> <code>x</code> 的（接口）类型，除非其类型断言由于无法为
+<code>x</code> 存储类型为 <code>T</code> 的值而无效。若 <code>T</code> 为接口类型，
+<code>x.(T)</code> 则断言 <code>x</code> 的动态类型实现了接口 <code>T</code>。
 </p>
 
 <div class="english">
@@ -5217,13 +5224,33 @@ In other words, even though the dynamic type of <code>x</code>
 is known only at run time, the type of <code>x.(T)</code> is
 known to be <code>T</code> in a correct program.
 </p>
+
+<pre>
+var x interface{} = 7  // x has dynamic type int and value 7
+i := x.(int)           // i has type int and value 7
+
+type I interface { m() }
+var y I
+s := y.(string)        // illegal: string does not implement I (missing method m)
+r := y.(io.Reader)     // r has type io.Reader and y must implement both I and io.Reader
+</pre>
 </div>
 
 <p>
 若该类型断言成立，该表达式的值即为存储于 <code>x</code> 中的值，且其类型为 <code>T</code>。若该类型断言不成立，
-就会出现一个<a href="#运行时恐慌">运行时恐慌</a>。换句话说，即使 <code>x</code> 的动态类型只能在运行时可知，
-在正确的程序中，<code>x.(T)</code> 的类型也可知为 <code>T</code>。
+就会出现一个<a href="#运行时恐慌">运行时恐慌</a>。换句话说，即使 <code>x</code>
+的动态类型只能在运行时可知，在正确的程序中，<code>x.(T)</code> 的类型也可知为 <code>T</code>。
 </p>
+
+<pre>
+var x interface{} = 7  // x 拥有动态类型 int 与值 7
+i := x.(int)           // i 拥有类型 int 与值 7
+
+type I interface { m() }
+var y I
+s := y.(string)        // 非法：string 没有实现 I（缺少方法 m）
+r := y.(io.Reader)     // r 拥有 类型 io.Reader 且 y 必须同时实现了 I 和 io.Reader
+</pre>
 
 <div class="english">
 <p>
@@ -5249,7 +5276,7 @@ otherwise, the expression returns <code>(Z, false)</code> where <code>Z</code>
 is the <a href="#The_zero_value">zero value</a> for type <code>T</code>.
 No run-time panic occurs in this case.
 The type assertion in this construct thus acts like a function call
-returning a value and a boolean indicating success.  (§<a href="#Assignments">Assignments</a>)
+returning a value and a boolean indicating success.
 </p>
 </div>
 
@@ -5257,7 +5284,7 @@ returning a value and a boolean indicating success.  (§<a href="#Assignments">A
 的形式用于赋值或初始化，该断言的结果即为类型为 <code>(T, bool)</code> 的值对。
 若该断言成立，该表达式返回值对 <code>(x.(T), true)</code>；否则，该表达式返回 <code>(Z, false)</code>，
 其中 <code>Z</code> 为类型为 <code>T</code> 的<a href="#零值">零值</a>。此种情况不会产生运行时恐慌。
-类型断言在这种构造中，其行为类似于函数调用返回一个值与一个布尔值以表示成功。（§<a href="#赋值">赋值</a>）
+类型断言在这种构造中，其行为类似于函数调用返回一个值与一个布尔值以表示成功。
 </p>
 
 
@@ -6305,8 +6332,9 @@ will cause a <a href="#Run_time_panics">run-time panic</a>.
 <p>
 For an operand <code>ch</code> of <a href="#Channel_types">channel type</a>,
 the value of the receive operation <code>&lt;-ch</code> is the value received
-from the channel <code>ch</code>. The type of the value is the element type of
-the channel. The expression blocks until a value is available.
+from the channel <code>ch</code>. The channel direction must permit receive operations,
+and the type of the receive operation is the element type ofthe channel.
+The expression blocks until a value is available.
 Receiving from a <code>nil</code> channel blocks forever.
 Receiving from a <a href="#Close">closed</a> channel always succeeds,
 immediately returning the element type's <a href="#The_zero_value">zero
@@ -6322,8 +6350,9 @@ f(&lt;-ch)
 </div>
 
 <p>
-对于<a href="#信道类型">信道类型</a>的操作数 <code>ch</code>，接收操作符 <code>&lt;-ch</code> 的值即为从信道
-<code>ch</code> 接收的值。该值的类型即为该信道的元素类型。该值前的表达式块是有效的。
+对于<a href="#信道类型">信道类型</a>的操作数 <code>ch</code>，接收操作符
+<code>&lt;-ch</code> 的值即为从信道 <code>ch</code> 接收的值。该信道的方向必须允许接收操作，
+且该接收操作的类型即为该信道的元素类型。该值前的表达式块是有效的。
 从 <code>nil</code> 信道接收将永远阻塞。从<a href="#关闭">已关闭</a>的信道接收将总是成功，
 它会立刻返回其元素类型的<a href="#零值">零值</a>
 </p>
@@ -6398,7 +6427,7 @@ argument that is the receiver of the method.
 
 <pre class="ebnf">
 MethodExpr    = ReceiverType "." MethodName .
-ReceiverType  = TypeName | "(" "*" TypeName ")" .
+ReceiverType  = TypeName | "(" "*" TypeName ")" | "(" ReceiverType ")" .
 </pre>
 </div>
 
@@ -6409,7 +6438,7 @@ ReceiverType  = TypeName | "(" "*" TypeName ")" .
 
 <pre class="ebnf">
 方法表达式 = 接收者类型 "." 方法名 .
-接收者类型 = 类型名 | "(" "*" 类型名 ")" .
+接收者类型 = 类型名 | "(" "*" 类型名 ")" | "(" 接收者类型 ")" .
 </pre>
 
 <div class="english">
@@ -6476,18 +6505,20 @@ func(tv T, a int) int
 <div class="english">
 <p>
 That function may be called normally with an explicit receiver, so
-these three invocations are equivalent:
+these five invocations are equivalent:
 </p>
 </div>
 
 <p>
-该函数可通过显式的接收者正常调用，因此以下三个调用是等价的：
+该函数可通过显式的接收者正常调用，因此以下五个调用是等价的：
 </p>
 
 <pre>
 t.Mv(7)
 T.Mv(t, 7)
-f := T.Mv; f(t, 7)
+(T).Mv(t, 7)
+f1 := T.Mv; f1(t, 7)
+f2 := (T).Mv; f2(t, 7)
 </pre>
 
 <div class="english">
@@ -7516,8 +7547,9 @@ len("foo")  // 若len为内建函数即为非法
 <div class="english">
 <p>
 A send statement sends a value on a channel.
-The channel expression must be of <a href="#Channel_types">channel type</a>
-and the type of the value must be <a href="#Assignability">assignable</a>
+The channel expression must be of <a href="#Channel_types">channel type</a>,
+the channel direction must permit send operations,
+and the type of the value to be sent must be <a href="#Assignability">assignable</a>
 to the channel's element type.
 </p>
 
@@ -7529,7 +7561,7 @@ Channel  = Expression .
 
 <p>
 发送语句在信道上发送值。信道表达式必须为<a href="#信道类型">信道类型</a>，
-且该值的类型必须<a href="#可赋值性">可赋予</a>该信道的元素类型。
+信道的方向必须允许发送操作，且被发送的值的类型必须<a href="#可赋值性">可赋予</a>该信道的元素类型。
 </p>
 
 <pre class="ebnf">
@@ -7746,7 +7778,7 @@ operand on the left.
 <div class="english">
 <p>
 The assignment proceeds in two phases.
-First, the operands of <a href="#Indexes">index expressions</a>
+First, the operands of <a href="#Index_expressions">index expressions</a>
 and <a href="#Address_operators">pointer indirections</a>
 (including implicit pointer indirections in <a href="#Selectors">selectors</a>)
 on the left and the expressions on the right are all
@@ -7782,7 +7814,7 @@ for i, x[i] = range x {  // set i, x[2] = 0, x[0]
 </div>
 
 <p>
-首先，左边的<a href="#下标">下标表达式</a>与<a href="#地址操作符">指针间接寻址</a>的操作数
+首先，左边的<a href="#下标表达式">下标表达式</a>与<a href="#地址操作符">指针间接寻址</a>的操作数
 （包括<a href="#选择者">选择者</a>中隐式的指针间接寻址）和右边的表达式都会<a href="#求值顺序">按通常顺序求值</a>。
 其次，赋值会按照从左到右的顺序进行。
 </p>
@@ -8054,9 +8086,20 @@ case x == 4: f3()
 A type switch compares types rather than values. It is otherwise similar
 to an expression switch. It is marked by a special switch expression that
 has the form of a <a href="#Type_assertions">type assertion</a>
-using the reserved word <code>type</code> rather than an actual type.
-Cases then match literal types against the dynamic type of the expression
-in the type assertion.
+using the reserved word <code>type</code> rather than an actual type:
+</p>
+
+<pre>
+switch x.(type) {
+// cases
+}
+</pre>
+
+<p>
+Cases then match actual types <code>T</code> against the dynamic type of the
+expression <code>x</code>. As with type assertions, <code>x</code> must be of
+<a href="#Interface_types">interface type</a>, and each non-interface type
+<code>T</code> listed in a case must implement the type of <code>x</code>.
 </p>
 
 <pre class="ebnf">
@@ -8070,8 +8113,19 @@ TypeList        = Type { "," Type } .
 
 <p>
 类型选择比较类型而非值。它与表达式选择并不相似。它被一个特殊的switch表达式标记，
-该表达式为使用保留字 <code>type</code> 而非实际类型的<a href="#类型断言">类型断言</a>的形式。
-此时的case针对此类型断言中表达式的动态类型来匹配字面类型。
+该表达式为使用保留字 <code>type</code> 而非实际类型的<a href="#类型断言">类型断言</a>的形式：
+</p>
+
+<pre>
+switch x.(type) {
+// cases
+}
+</pre>
+
+<p>
+此时的case针对表达式 <code>x</code> 的动态类型匹配实际的类型 <code>T</code>。
+就像类型断言一样，<code>x</code> 必须为<a href="#接口类型">接口类型</a>，
+而每一个在case中列出的非接口类型 <code>T</code> 必须实现了 <code>x</code> 的类型。
 </p>
 
 <pre class="ebnf">
@@ -8123,17 +8177,17 @@ the following type switch:
 <pre>
 switch i := x.(type) {
 case nil:
-	printString("x is nil")
+	printString("x is nil")                // type of i is type of x (interface{})
 case int:
-	printInt(i)  // i is an int
+	printInt(i)                            // type of i is int
 case float64:
-	printFloat64(i)  // i is a float64
+	printFloat64(i)                        // type of i is float64
 case func(int) float64:
-	printFunction(i)  // i is a function
+	printFunction(i)                       // type of i is func(int) float64
 case bool, string:
-	printString("type is bool or string")  // i is an interface{}
+	printString("type is bool or string")  // type of i is type of x (interface{})
 default:
-	printString("don't know the type")
+	printString("don't know the type")     // type of i is type of x (interface{})
 }
 </pre>
 
@@ -8144,22 +8198,23 @@ could be rewritten:
 <pre>
 v := x  // x is evaluated exactly once
 if v == nil {
+	i := v                                 // type of i is type of x (interface{})
 	printString("x is nil")
 } else if i, isInt := v.(int); isInt {
-	printInt(i)  // i is an int
+	printInt(i)                            // type of i is int
 } else if i, isFloat64 := v.(float64); isFloat64 {
-	printFloat64(i)  // i is a float64
+	printFloat64(i)                        // type of i is float64
 } else if i, isFunc := v.(func(int) float64); isFunc {
-	printFunction(i)  // i is a function
+	printFunction(i)                       // type of i is func(int) float64
 } else {
-	i1, isBool := v.(bool)
-	i2, isString := v.(string)
+	_, isBool := v.(bool)
+	_, isString := v.(string)
 	if isBool || isString {
-		i := v
-		printString("type is bool or string")  // i is an interface{}
+		i := v                         // type of i is type of x (interface{})
+		printString("type is bool or string")
 	} else {
-		i := v
-		printString("don't know the type")  // i is an interface{}
+		i := v                         // type of i is type of x (interface{})
+		printString("don't know the type")
 	}
 }
 </pre>
@@ -8172,17 +8227,17 @@ if v == nil {
 <pre>
 switch i := x.(type) {
 case nil:
-	printString("x is nil")
+	printString("x is nil")                // i 的类型为 x 的类型（interface{}）
 case int:
-	printInt(i)  // i的类型为int
+	printInt(i)                            // i 的类型为 int
 case float64:
-	printFloat64(i)  // i的类型为float64
+	printFloat64(i)                        // i 的类型为 float64
 case func(int) float64:
-	printFunction(i)  // i的类型为function
+	printFunction(i)                       // i 的类型为 func(int) float64
 case bool, string:
-	printString("type is bool or string")  // i的类型为interface{}
+	printString("type is bool or string")  // i 的类型为 x 的类型（interface{}）
 default:
-	printString("don't know the type")
+	printString("don't know the type")     // i 的类型为 x 的类型（interface{}）
 }
 </pre>
 
@@ -8191,24 +8246,25 @@ default:
 </p>
 
 <pre>
-v := x  // x只被求值一次
+v := x  // x 只被求值一次
 if v == nil {
+	i := v                                 // i 的类型为 x 的类型（interface{}）
 	printString("x is nil")
 } else if i, isInt := v.(int); isInt {
-	printInt(i)  // i的类型为int
+	printInt(i)                            // i 的类型为 int
 } else if i, isFloat64 := v.(float64); isFloat64 {
-	printFloat64(i)  // i的类型为float64
+	printFloat64(i)                        // i 的类型为 float64
 } else if i, isFunc := v.(func(int) float64); isFunc {
-	printFunction(i)  // i的类型为function
+	printFunction(i)                       // i 的类型为 func(int) float64
 } else {
-	i1, isBool := v.(bool)
-	i2, isString := v.(string)
+	_, isBool := v.(bool)
+	_, isString := v.(string)
 	if isBool || isString {
-		i := v
-		printString("type is bool or string")  // i的类型为interface{}
+		i := v                         // i 的类型为 x 的类型（interface{}）
+		printString("type is bool or string")
 	} else {
-		i := v
-		printString("don't know the type")  // i的类型为interface{}
+		i := v                         // i 的类型为 x 的类型（interface{}）
+		printString("don't know the type")
 	}
 }
 </pre>
@@ -8370,20 +8426,22 @@ Range子句 = 表达式 [ "," 表达式 ] ( "=" | ":=" ) "range" 表达式 .
 <div class="english">
 <p>
 The expression on the right in the "range" clause is called the <i>range expression</i>,
-which may be an array, pointer to an array, slice, string, map, or channel.
+which may be an array, pointer to an array, slice, string, map, or channel permitting
+<a href="#Receive_operator">receive operations</a>.
 As with an assignment, the operands on the left must be
 <a href="#Address_operators">addressable</a> or map index expressions; they
 denote the iteration variables. If the range expression is a channel, only
-one iteration variable is permitted, otherwise there may be one or two.
-If the second iteration variable is the <a href="#Blank_identifier">blank identifier</a>,
+one iteration variable is permitted, otherwise there may be one or two. In the latter case,
+if the second iteration variable is the <a href="#Blank_identifier">blank identifier</a>,
 the range clause is equivalent to the same clause with only the first variable present.
 </p>
 </div>
 
 <p>
-"range"子句右边的表达式称为<i>range表达式</i>，它可以是一个数组、数组指针、切片、字符串、映射或信道。
-就赋值来说，左边的操作数必须为<a href="#地址操作符">可寻址的</a>或映射下标表达式；它们表示迭代变量。
-若range表达式为信道，则只允有一个迭代变量，否则可为一个或两个。若第二个迭代变量为
+"range"子句右边的表达式称为<i>range表达式</i>，它可以是一个允许<a href="#接收操作符">接受操作</a>
+的数组、数组指针、切片、字符串、映射或信道。就赋值来说，左边的操作数必须为
+<a href="#地址操作符">可寻址的</a>或映射下标表达式；它们表示迭代变量。若range表达式为信道，
+则只允有一个迭代变量，否则可为一个或两个。在后一种情况下，若第二个迭代变量为
 <a href="#空白标识符">空白标识符</a>，则range子句等价于只存在第一个变量的相同子句。
 </p>
 
@@ -8402,7 +8460,7 @@ Range expression                          1st value          2nd value (if 2nd v
 array or slice  a  [n]E, *[n]E, or []E    index    i  int    a[i]       E
 string          s  string type            index    i  int    see below  rune
 map             m  map[K]V                key      k  K      m[k]       V
-channel         c  chan E                 element  e  E
+channel         c  chan E, <-chan E       element  e  E
 </pre>
 
 <ol>
@@ -8589,7 +8647,7 @@ for w := range ch {
 
 <div class="english">
 <p>
-A "go" statement starts the execution of a function or method call
+A "go" statement starts the execution of a function call
 as an independent concurrent thread of control, or <i>goroutine</i>,
 within the same address space.
 </p>
@@ -8600,7 +8658,7 @@ GoStmt = "go" Expression .
 </div>
 
 <p>
-"go"语句将函数或方法调用的执行作为控制独立的并发线程或相同地址空间中的<i>Go程</i>来启动。
+"go"语句将函数调用的执行作为控制独立的并发线程或相同地址空间中的<i>Go程</i>来启动。
 </p>
 
 <pre class="ebnf">
@@ -8609,7 +8667,16 @@ Go语句 = "go" 表达式 .
 
 <div class="english">
 <p>
-The expression must be a call.
+The expression must be a function or method call; it cannot be parenthesized.
+Calls of built-in functions are restricted as for
+<a href="#Expression_statements">expression statements</a>.
+</p>
+
+<p>
+表达式必须为一个函数或方法调用，它不能被括号括住。内建函数调用被限制为<a href="#表达式语句">表达式语句</a>。
+</p>
+
+<p>
 The function value and parameters are
 <a href="#Calls">evaluated as usual</a>
 in the calling goroutine, but
@@ -8624,7 +8691,7 @@ function completes.
 </div>
 
 <p>
-该表达式必须为一个调用。在调用Go程中，函数值与形参<a href="#函数与方法的调用">按照惯例求值</a>，
+在调用Go程中，函数值与形参<a href="#函数与方法的调用">按照惯例求值</a>，
 但不像一般的调用，程序的执行并不等待已被调用的函数完成。取而代之，该函数在一个新的Go程中独立执行。
 当该函数终止后，其Go程也将终止。若该函数拥有任何返回值，它们将在该函数完成后被丢弃。
 </p>
@@ -8683,7 +8750,8 @@ If any of the resulting operations can proceed, one of those is
 chosen and the corresponding communication and statements are
 evaluated.  Otherwise, if there is a default case, that executes;
 if there is no default case, the statement blocks until one of the communications can
-complete.
+complete. There can be at most one default case and it may appear anywhere in the
+"select" statement.
 If there are no cases with non-<code>nil</code> channels,
 the statement blocks forever.
 Even if the statement blocks,
@@ -8697,8 +8765,9 @@ upon entering the select statement.
 信道表达式连同任何出现在发送语句右侧的表达式均按照从上到下的顺序求值。信道可能为 <code>nil</code>，
 它等价于select语句中不存在该case，若是一个发送操作，其表达式仍将被求值。
 若有任何由此产生的操作可以进行，则选择其中之一，且相应的通信和语句将被求值。否则，若有默认case，
-则执行；若没有默认case，则该语句将阻塞直到其中一个通信完成。信道的case，该语句将永远阻塞。
-即使该语句阻塞，当进入select语句时，信道与发送表达式也只会被求值一次。
+则执行；若没有默认case，则该语句将阻塞直到其中一个通信完成。默认case最多只能出现一次，
+且它可以出现在 "select" 语句中的任何地方。若没有非 <code>nil</code> 信道的case，
+该语句将永远阻塞。即使该语句阻塞，当进入select语句时，信道与发送表达式也只会被求值一次。
 </p>
 
 <div class="english">
@@ -8872,7 +8941,7 @@ func complexF2() (re float64, im float64) {
 </pre>
 	</li>
 	<li>The expression list may be empty if the function's result
-		type specifies names for its result parameters (§<a href="#Function_types">Function Types</a>).
+		type specifies names for its result parameters (§<a href="#Function_types">Function types</a>).
 		The result parameters act as ordinary local variables
 		and the function may assign values to them as necessary.
 		The "return" statement returns the values of these variables.
@@ -9219,7 +9288,12 @@ Defer语句 = "defer" 表达式 .
 
 <div class="english">
 <p>
-The expression must be a function or method call.
+The expression must be a function or method call; it cannot be parenthesized.
+Calls of built-in functions are restricted as for
+<a href="#Expression_statements">expression statements</a>.
+</p>
+
+<p>
 Each time the "defer" statement
 executes, the function value and parameters to the call are
 <a href="#Calls">evaluated as usual</a>
@@ -9260,7 +9334,11 @@ func f() (result int) {
 </div>
 
 <p>
-该表达必须为一个函数或方法调用。"defer"语句每执行一次，它所调用的函数值与形参就会
+该表达必须为一个函数或方法调用，它不能被括号括住。内建函数调用被限制为<a href="#表达式语句">表达式语句</a>。
+</p>
+
+<p>
+"defer"语句每执行一次，它所调用的函数值与形参就会
 <a href="#函数与方法的调用">像平时一样求值</a>并重新保存，但实际的函数提并不会被执行。
 取而代之的是，在外围的函数返回前，被推迟的函数会按照它们被推迟的相反顺序立即执行。
 </p>
@@ -9319,7 +9397,7 @@ they cannot be used as function values.
 
 <pre class="ebnf">
 BuiltinCall = identifier "(" [ BuiltinArgs [ "," ] ] ")" .
-BuiltinArgs = Type [ "," ExpressionList ] | ExpressionList .
+BuiltinArgs = Type [ "," ArgumentList ] | ArgumentList .
 </pre>
 </div>
 
@@ -9329,7 +9407,7 @@ BuiltinArgs = Type [ "," ExpressionList ] | ExpressionList .
 
 <pre class="ebnf">
 内建调用 = 标识符 "(" [ 内建实参 [ "," ] ] ")" .
-内建实参 = 类型 [ "," 表达式列表 ] | 表达式列表 .
+内建实参 = 类型 [ "," 实参列表 ] | 实参列表 .
 </pre>
 
 <div class="english">
