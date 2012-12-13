@@ -18,7 +18,12 @@ import (
 // Otherwise (if we use RaceWrite()) we will report races
 // between atomic operations (false positives).
 
-var mtx uint32 = 1 // same for all
+// 我们用原子性操作内的 runtime.RaceRead() 来捕获原子性操作和非原子性操作之间的竞争。
+// 它也会捕获 Mutex.Lock() 和互斥锁覆盖（mu = Mutex{}）之间的竞争。由于我们只用
+// RaceRead()，我们不会捕获非原子性载入的竞争。否则（假如我们使用RaceWrite()），
+// 我们就会报告原子性操作之间的竞争（误报）。
+
+var mtx uint32 = 1 // same for all  // 所有的都一样
 
 func CompareAndSwapInt32(val *int32, old, new int32) bool {
 	return CompareAndSwapUint32((*uint32)(unsafe.Pointer(val)), uint32(old), uint32(new))
