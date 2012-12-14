@@ -193,4 +193,179 @@
 	methods to a reader without that capability, use
 	bufio.NewReader.
 */
+
+/*
+	fmt 包实现了格式化I/O函数，类似于C的 printf 和 scanf.
+	格式“占位符”衍生自C，但比C更简单。
+
+
+	打印
+
+	占位符：
+
+	一般：
+		%v	相应值的默认格式。在打印结构体时，“加号”标记（%+v）会添加字段名
+		%#v	相应值的Go语法表示
+		%T	相应值的类型的Go语法表示
+		%%	字面上的百分号，并非值的占位符
+
+	布尔：
+		%t	单词 true 或 false。
+	整数：
+		%b	二进制表示
+		%c	相应Unicode码点所表示的字符
+		%d	十进制表示
+		%o	八进制表示
+		%q	单引号围绕的字符字面值，由Go语法安全地转义
+		%x	十六进制表示，字母形式为小写 a-f
+		%X	十六进制表示，字母形式为大写 A-F
+		%U	Unicode格式：U+1234，等同于 "U+%04X"
+	浮点数与复数的构成部分：
+		%b	无小数部分的，指数为二的幂的科学计数法，与 strconv.FormatFloat
+			的 'b' 转换格式一致。例如 -123456p-78
+		%e	科学计数法，例如 -1234.456e+78
+		%E	科学计数法，例如 -1234.456E+78
+		%f	有小数点而无指数，例如 123.456
+		%g	根据情况选择 %e 或 %f 以产生更紧凑的（无末尾的0）输出
+		%G	根据情况选择 %E 或 %f 以产生更紧凑的（无末尾的0）输出
+	字符串与字节切片：
+		%s	字符串或切片的无解译字节
+		%q	双引号围绕的字符串，由Go语法安全地转义
+		%x	十六进制，小写字母，每字节两个字符
+		%X	十六进制，大写字母，每字节两个字符
+	Pointer:
+		%p	十六进制表示，前缀 0x
+
+	这里没有 'u' 标记。若整数为无符号类型，他们就会被打印成无符号的。类似地，
+	这里也不需要指定操作数的大小（int8，int64）。
+
+	宽度与精度的控制格式以Unicode码点为单位。（这点与C的 printf 不同，
+	它以字节数为单位。）二者或其中之一均可用字符 '*' 来代替，
+	此时它们的值由紧随其后的操作数确定，该操作数的类型必须为 int。
+
+	对数值而言，宽度为该数值占用区域的最小宽度；精度为小数点之后的位数。
+	但对于 %g/%G 而言，精度为所有数字的总数。例如，对于123.45，格式 %6.2f
+	会打印123.45，而 %.4g 会打印123.5。%e 和 %f 的默认精度为6；但对于 %g 而言，
+	它的默认精度为确定该值所必须的最小位数。
+
+	对于字符串而言，宽度为输出的最小字符数，如果必要的话会填充空格；
+	而精度为输出的最大字符数，如果必要的话会直接截断。
+
+	其它标记：
+		+	总打印数值的正负号；对于%q（%+q）保证只输出ASCII编码的字符。
+		-	在右侧而非左侧填充空格（左对齐该区域）
+		#	切换格式：为八进制添加前导 0（%#o），为十六进制添加前导 0x（%#x）或
+			0X（%#X），为 %p（%#p）去掉前导 0x；如果可能的话，%q（%#q）会打印原始
+			（即反引号围绕的）字符串；如果是可打印字符，%U（%#U）会写出该字符的
+			Unicode 编码形式（如字符 x 会被打印成 U+0078 'x'）。
+		' '	（空格）为数值中省略的正负号留出空白（% d）；
+			以十六进制（% x, % X）打印字符串或切片时，在字节之间用空格隔开
+		0	填充前导的0而非空格
+
+	对于每一个 Printf 类的函数，都有一个 Print 函数，该函数不接受任何格式化，
+	它等价于对每一个操作数都应用 %v。另一个变参函数 Println 会在操作数之间插入空白，
+	并在末尾追加一个换行符。
+
+	不考虑占位符的话，如果操作数是接口值，就会使用其内部的具体值，而非接口本身。
+	因此：
+		var i interface{} = 23
+		fmt.Printf("%v\n", i)
+	会打印 23。
+
+	若一个操作数实现了 Formatter 接口，该接口就能更好地用于控制格式化。
+
+	若其格式（它对于 Println 等函数是隐式的 %v）对于字符串是有效的
+	（%s %q %v %x %X），以下两条规则也适用：
+
+	1. 若一个操作数实现了 error 接口，Error 方法就能将该对象转换为字符串，
+	随后会根据占位符的需要进行格式化。
+
+	2. 若一个操作数实现了 String() string 方法，该方法能将该对象转换为字符串，
+	随后会根据占位符的需要进行格式化。
+
+	为避免以下这里递归的情况：
+		type X string
+		func (x X) String() string { return Sprintf("<%s>", x) }
+	需要在递归前转换该值：
+		func (x X) String() string { return Sprintf("<%s>", string(x)) }
+
+	格式化错误：
+
+	如果给占位符提供了无效的实参（例如将一个字符串提供给 %d），
+	所生成的字符串会包含该问题的描述，如下例所示：
+
+		类型错误或占位符未知：%!verb(type=value)
+			Printf("%d", hi):          %!d(string=hi)
+		实参太多：%!(EXTRA type=value)
+			Printf("hi", "guys"):      hi%!(EXTRA string=guys)
+		实参太少： %!verb(MISSING)
+			Printf("hi%d"):            hi %!d(MISSING)
+		宽度或精度不是int类型: %!(BADWIDTH) 或 %!(BADPREC)
+			Printf("%*s", 4.5, "hi"):  %!(BADWIDTH)hi
+			Printf("%.*s", 4.5, "hi"): %!(BADPREC)hi
+
+	所有错误都始于“%!”，有时紧跟着单个字符（占位符），并以小括号括住的描述结尾。
+
+
+	Scanning
+
+	An analogous set of functions scans formatted text to yield
+	values.  Scan, Scanf and Scanln read from os.Stdin; Fscan,
+	Fscanf and Fscanln read from a specified io.Reader; Sscan,
+	Sscanf and Sscanln read from an argument string.  Scanln,
+	Fscanln and Sscanln stop scanning at a newline and require that
+	the items be followed by one; Scanf, Fscanf and Sscanf require
+	newlines in the input to match newlines in the format; the other
+	routines treat newlines as spaces.
+
+	Scanf, Fscanf, and Sscanf parse the arguments according to a
+	format string, analogous to that of Printf.  For example, %x
+	will scan an integer as a hexadecimal number, and %v will scan
+	the default representation format for the value.
+
+	The formats behave analogously to those of Printf with the
+	following exceptions:
+
+		%p is not implemented
+		%T is not implemented
+		%e %E %f %F %g %G are all equivalent and scan any floating point or complex value
+		%s and %v on strings scan a space-delimited token
+		Flags # and + are not implemented.
+
+	The familiar base-setting prefixes 0 (octal) and 0x
+	(hexadecimal) are accepted when scanning integers without a
+	format or with the %v verb.
+
+	Width is interpreted in the input text (%5s means at most
+	five runes of input will be read to scan a string) but there
+	is no syntax for scanning with a precision (no %5.2f, just
+	%5f).
+
+	When scanning with a format, all non-empty runs of space
+	characters (except newline) are equivalent to a single
+	space in both the format and the input.  With that proviso,
+	text in the format string must match the input text; scanning
+	stops if it does not, with the return value of the function
+	indicating the number of arguments scanned.
+
+	In all the scanning functions, if an operand implements method
+	Scan (that is, it implements the Scanner interface) that
+	method will be used to scan the text for that operand.  Also,
+	if the number of arguments scanned is less than the number of
+	arguments provided, an error is returned.
+
+	All arguments to be scanned must be either pointers to basic
+	types or implementations of the Scanner interface.
+
+	Note: Fscan etc. can read one character (rune) past the input
+	they return, which means that a loop calling a scan routine
+	may skip some of the input.  This is usually a problem only
+	when there is no space between input values.  If the reader
+	provided to Fscan implements ReadRune, that method will be used
+	to read characters.  If the reader also implements UnreadRune,
+	that method will be used to save the character and successive
+	calls will not lose data.  To attach ReadRune and UnreadRune
+	methods to a reader without that capability, use
+	bufio.NewReader.
+*/
 package fmt
