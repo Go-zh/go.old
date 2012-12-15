@@ -220,7 +220,7 @@
 		%x	十六进制表示，字母形式为小写 a-f
 		%X	十六进制表示，字母形式为大写 A-F
 		%U	Unicode格式：U+1234，等同于 "U+%04X"
-	浮点数与复数的构成部分：
+	浮点数及其复合构成：
 		%b	无小数部分的，指数为二的幂的科学计数法，与 strconv.FormatFloat
 			的 'b' 转换格式一致。例如 -123456p-78
 		%e	科学计数法，例如 -1234.456e+78
@@ -233,15 +233,15 @@
 		%q	双引号围绕的字符串，由Go语法安全地转义
 		%x	十六进制，小写字母，每字节两个字符
 		%X	十六进制，大写字母，每字节两个字符
-	Pointer:
+	指针：
 		%p	十六进制表示，前缀 0x
 
 	这里没有 'u' 标记。若整数为无符号类型，他们就会被打印成无符号的。类似地，
 	这里也不需要指定操作数的大小（int8，int64）。
 
 	宽度与精度的控制格式以Unicode码点为单位。（这点与C的 printf 不同，
-	它以字节数为单位。）二者或其中之一均可用字符 '*' 来代替，
-	此时它们的值由紧随其后的操作数确定，该操作数的类型必须为 int。
+	它以字节数为单位。）二者或其中之一均可用字符 '*' 表示，
+	此时它们的值会从下一个操作数中获取，该操作数的类型必须为 int。
 
 	对数值而言，宽度为该数值占用区域的最小宽度；精度为小数点之后的位数。
 	但对于 %g/%G 而言，精度为所有数字的总数。例如，对于123.45，格式 %6.2f
@@ -283,7 +283,7 @@
 	2. 若一个操作数实现了 String() string 方法，该方法能将该对象转换为字符串，
 	随后会根据占位符的需要进行格式化。
 
-	为避免以下这里递归的情况：
+	为避免以下这类递归的情况：
 		type X string
 		func (x X) String() string { return Sprintf("<%s>", x) }
 	需要在递归前转换该值：
@@ -307,55 +307,39 @@
 	所有错误都始于“%!”，有时紧跟着单个字符（占位符），并以小括号括住的描述结尾。
 
 
-	Scanning
+	扫描
 
-	An analogous set of functions scans formatted text to yield
-	values.  Scan, Scanf and Scanln read from os.Stdin; Fscan,
-	Fscanf and Fscanln read from a specified io.Reader; Sscan,
-	Sscanf and Sscanln read from an argument string.  Scanln,
-	Fscanln and Sscanln stop scanning at a newline and require that
-	the items be followed by one; Scanf, Fscanf and Sscanf require
-	newlines in the input to match newlines in the format; the other
-	routines treat newlines as spaces.
+	一组类似的函数通过扫描已格式化的文本来产生值。Scan、Scanf 和 Scanln 从
+	os.Stdin 中读取；Fscan、Fscanf 和 Fscanln 从指定的 io.Reader 中读取；
+	Sscan、Sscanf 和 Sscanln 从实参字符串中读取。Scanln、Fscanln 和 Sscanln
+	在换行符处停止扫描，且需要条目逐条排列；Scanf、Fscanf 和 Sscanf
+	需要输入换行符来匹配格式中的换行符；其它例程则将换行符视为空格。
 
-	Scanf, Fscanf, and Sscanf parse the arguments according to a
-	format string, analogous to that of Printf.  For example, %x
-	will scan an integer as a hexadecimal number, and %v will scan
-	the default representation format for the value.
+	Scanf、Fscanf 和 Sscanf 根据格式字符串解析实参，类似于 Printf。例如，%x
+	会将一个整数扫描为十六进制数，而 %v 则会扫描该值的默认表现格式。
 
-	The formats behave analogously to those of Printf with the
-	following exceptions:
+	格式化行为类似于 Printf，但也有如下例外：
 
-		%p is not implemented
-		%T is not implemented
-		%e %E %f %F %g %G are all equivalent and scan any floating point or complex value
-		%s and %v on strings scan a space-delimited token
-		Flags # and + are not implemented.
+		%p 没有实现
+		%T 没有实现
+		%e %E %f %F %g %G 都完全等价，且可扫描任何浮点数或复合数值
+		%s 和 %v 在扫描字符串时会将其中的空格作为分隔符
+		标记 # 和 + 没有实现
 
-	The familiar base-setting prefixes 0 (octal) and 0x
-	(hexadecimal) are accepted when scanning integers without a
-	format or with the %v verb.
+	在或使用 %v 占位符扫描整数时，可接受友好的进制前缀0（八进制）和0x（十六进制）。
 
-	Width is interpreted in the input text (%5s means at most
-	five runes of input will be read to scan a string) but there
-	is no syntax for scanning with a precision (no %5.2f, just
-	%5f).
+	宽度被解释为输入的文本（%5s 意为最多从输入中读取5个符文来扫描成字符串），
+	而扫描函数则没有精度的语法（没有 %5.2f，只有 %5f）。
 
-	When scanning with a format, all non-empty runs of space
-	characters (except newline) are equivalent to a single
-	space in both the format and the input.  With that proviso,
-	text in the format string must match the input text; scanning
-	stops if it does not, with the return value of the function
-	indicating the number of arguments scanned.
+	当以某种格式进行扫描时，无论在格式中还是在输入中，所有非空的空白字符
+	（除换行符外）都等价于单个空格。由于这种限制，格式字符串文本必须匹配输入的文本，
+	如果不匹配，扫描过程就会停止，并返回已扫描实参的数量。
 
-	In all the scanning functions, if an operand implements method
-	Scan (that is, it implements the Scanner interface) that
-	method will be used to scan the text for that operand.  Also,
-	if the number of arguments scanned is less than the number of
-	arguments provided, an error is returned.
+	在所有的扫描参数中，若一个操作数实现了 Scan 方法（即它实现了 Scanner 接口），
+	该操作数将使用该方法扫描其文本。此外，若已扫描实参的数量少于提供的实参数量，
+	就会返回一个错误。
 
-	All arguments to be scanned must be either pointers to basic
-	types or implementations of the Scanner interface.
+	所有需要被扫描的实参都必须是基本类型或 Scanner 接口的实现。
 
 	Note: Fscan etc. can read one character (rune) past the input
 	they return, which means that a loop calling a scan routine
@@ -367,5 +351,11 @@
 	calls will not lose data.  To attach ReadRune and UnreadRune
 	methods to a reader without that capability, use
 	bufio.NewReader.
+	注意：Fscan 等函数可从它们已返回的输入中跳过某个字符（符文），这就意味着，
+	循环调用一个扫描例程可能会从输入中跳过一些东西。
+	一般只有在输入的值之间没有空白符时才会出现这种问题。若提供给 Fscan
+	的读取器实现了 ReadRune，就会用该方法读取字符。若此读取器还实现了 UnreadRune
+	方法，就会用该方法保存字符，而连续的调用将不会丢失数据。若要为没有 ReadRune
+	和 UnreadRune 方法的读取器加上这些功能，需使用 bufio.NewReader。
 */
 package fmt
