@@ -5,7 +5,7 @@
 // Package sort provides primitives for sorting slices and user-defined
 // collections.
 
-// sort包为切片和用户自定义集合提供了操作基元
+// sort 包为切片及用户定义的集合的排序操作提供了原语.
 package sort
 
 import "math"
@@ -14,20 +14,18 @@ import "math"
 // sorted by the routines in this package.  The methods require that the
 // elements of the collection be enumerated by an integer index.
 
-// 任何类型，确切的说为集合，必须实现 sort.Interface 接口，
-// 才能使用本包内的方法进行排序. 该接口内的方法要求
-// 集合内的元素是以整形作为索引排列
+// 任何实现了 sort.Interface 的类型（一般为集合），均可使用该包中的方法进行排序。
+// 这些方法需要集合内列出的元素索引为整数。
 type Interface interface {
 	// Len is the number of elements in the collection.
-	// Len返回集合内元素总数
+	// Len 为集合内元素的总数
 	Len() int
 	// Less returns whether the element with index i should sort
 	// before the element with index j.
-	// Less 返回以i为索引的元素是否比
-	// 以j为索引的元素小
+	// Less 返回索引为 i 的元素是否应排在索引为 j 的元素之前。
 	Less(i, j int) bool
 	// Swap swaps the elements with indexes i and j.
-	// Swap 交换元素以i与j作为索引的元素
+	// Swap 交换索引为 i 和 j 的元素
 	Swap(i, j int)
 }
 
@@ -52,7 +50,7 @@ func insertionSort(data Interface, a, b int) {
 // siftDown implements the heap property on data[lo, hi).
 // first is an offset into the array where the root of the heap lies.
 
-// siftDown 对数组data[lo, hi) 进行堆排序
+// siftDown 为 data[lo, hi) 实现了堆的性质。
 // 第一个参数(lo),是数组起始偏移量，将作为堆排序的根节点
 func siftDown(data Interface, lo, hi, first int) {
 	root := lo
@@ -78,13 +76,13 @@ func heapSort(data Interface, a, b int) {
 	hi := b - a
 
 	// Build heap with greatest element at top.
-	// 以最大元素为顶建立堆 
+	// 以最大元素为顶建堆
 	for i := (hi - 1) / 2; i >= 0; i-- {
 		siftDown(data, i, hi, first)
 	}
 
 	// Pop elements, largest first, into end of data.
-	// 取出元素，从大到小的顺序，从后向前依次追加到数组data
+	// 弹出元素，从大到小的顺序，从后向前依次追加到数组data
 	for i := hi - 1; i >= 0; i-- {
 		data.Swap(first, first+i)
 		siftDown(data, lo, i, first)
@@ -97,7 +95,8 @@ func heapSort(data Interface, a, b int) {
 // ``Engineering a Sort Function,'' SP&E November 1993.
 
 // medianOfThree moves the median of the three values data[a], data[b], data[c] into data[a].
-// 取三元素中值 将 data[a], data[b], data[c] 三个值的中值交换到 data[a]
+
+// medianOfThree 将 data[a]、data[b] 和 data[c] 三个值的中值交换到 data[a]。
 func medianOfThree(data Interface, a, b, c int) {
 	m0 := b
 	m1 := a
@@ -152,7 +151,7 @@ func doPivot(data Interface, lo, hi int) (midlo, midhi int) {
 	//	data[b <= i < c] is unexamined
 	//	data[c <= i < d] > pivot
 	//	data[d <= i < hi] = pivot
-	// 
+	//
 	// 当b与c相遇，可以将 "= pivot" 的部分
 	// 交换到切片的中间
 	pivot := lo
@@ -254,7 +253,7 @@ func IsSorted(data Interface) bool {
 
 // IntSlice attaches the methods of Interface to []int, sorting in increasing order.
 
-// IntSlice 针对 []int 实现接口的方法，以升序排序 
+// IntSlice 针对 []int 实现接口的方法，以升序排序
 type IntSlice []int
 
 func (p IntSlice) Len() int           { return len(p) }
@@ -268,7 +267,7 @@ func (p IntSlice) Sort() { Sort(p) }
 
 // Float64Slice attaches the methods of Interface to []float64, sorting in increasing order.
 
-// Float64Slice 针对 []float6 实现接口的方法，以升序排序 
+// Float64Slice 针对 []float6 实现接口的方法，以升序排序
 type Float64Slice []float64
 
 func (p Float64Slice) Len() int           { return len(p) }
@@ -282,7 +281,7 @@ func (p Float64Slice) Sort() { Sort(p) }
 
 // StringSlice attaches the methods of Interface to []string, sorting in increasing order.
 
-// StringSlice 针对  []string 实现接口的方法，以升序排序 
+// StringSlice 针对  []string 实现接口的方法，以升序排序
 type StringSlice []string
 
 func (p StringSlice) Len() int           { return len(p) }
