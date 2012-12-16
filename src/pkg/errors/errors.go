@@ -4,7 +4,7 @@
 
 // Package errors implements functions to manipulate errors.
 
-// error 包实现了用于错误处理的函数。
+// error 包实现了用于错误处理的函数.
 package errors
 
 // New returns an error that formats as the given text.
