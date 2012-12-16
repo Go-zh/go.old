@@ -312,8 +312,8 @@
 	一组类似的函数通过扫描已格式化的文本来产生值。Scan、Scanf 和 Scanln 从
 	os.Stdin 中读取；Fscan、Fscanf 和 Fscanln 从指定的 io.Reader 中读取；
 	Sscan、Sscanf 和 Sscanln 从实参字符串中读取。Scanln、Fscanln 和 Sscanln
-	在换行符处停止扫描，且需要条目逐条排列；Scanf、Fscanf 和 Sscanf
-	需要输入换行符来匹配格式中的换行符；其它例程则将换行符视为空格。
+	在换行符处停止扫描，且需要条目紧随换行符之后；Scanf、Fscanf 和 Sscanf
+	需要输入换行符来匹配格式中的换行符；其它函数则将换行符视为空格。
 
 	Scanf、Fscanf 和 Sscanf 根据格式字符串解析实参，类似于 Printf。例如，%x
 	会将一个整数扫描为十六进制数，而 %v 则会扫描该值的默认表现格式。
@@ -331,31 +331,20 @@
 	宽度被解释为输入的文本（%5s 意为最多从输入中读取5个符文来扫描成字符串），
 	而扫描函数则没有精度的语法（没有 %5.2f，只有 %5f）。
 
-	当以某种格式进行扫描时，无论在格式中还是在输入中，所有非空的空白字符
+	当以某种格式进行扫描时，无论在格式中还是在输入中，所有非空的连续空白字符
 	（除换行符外）都等价于单个空格。由于这种限制，格式字符串文本必须匹配输入的文本，
-	如果不匹配，扫描过程就会停止，并返回已扫描实参的数量。
+	如果不匹配，扫描过程就会停止，并返回已扫描的实参数。
 
 	在所有的扫描参数中，若一个操作数实现了 Scan 方法（即它实现了 Scanner 接口），
-	该操作数将使用该方法扫描其文本。此外，若已扫描实参的数量少于提供的实参数量，
+	该操作数将使用该方法扫描其文本。此外，若已扫描的实参数少于所提供的实参数，
 	就会返回一个错误。
 
 	所有需要被扫描的实参都必须是基本类型或 Scanner 接口的实现。
 
-	Note: Fscan etc. can read one character (rune) past the input
-	they return, which means that a loop calling a scan routine
-	may skip some of the input.  This is usually a problem only
-	when there is no space between input values.  If the reader
-	provided to Fscan implements ReadRune, that method will be used
-	to read characters.  If the reader also implements UnreadRune,
-	that method will be used to save the character and successive
-	calls will not lose data.  To attach ReadRune and UnreadRune
-	methods to a reader without that capability, use
-	bufio.NewReader.
-	注意：Fscan 等函数可从它们已返回的输入中跳过某个字符（符文），这就意味着，
-	循环调用一个扫描例程可能会从输入中跳过一些东西。
-	一般只有在输入的值之间没有空白符时才会出现这种问题。若提供给 Fscan
-	的读取器实现了 ReadRune，就会用该方法读取字符。若此读取器还实现了 UnreadRune
-	方法，就会用该方法保存字符，而连续的调用将不会丢失数据。若要为没有 ReadRune
-	和 UnreadRune 方法的读取器加上这些功能，需使用 bufio.NewReader。
+	注意：Fscan 等函数会从输入中多读取一个字符（符文），因此，如果循环调用扫描函数，
+	可能会跳过输入中的某些数据。一般只有在输入的数据中没有空白符时该问题才会出现。
+	若提供给 Fscan 的读取器实现了 ReadRune，就会用该方法读取字符。若此读取器还实现了
+	UnreadRune 方法，就会用该方法保存字符，而连续的调用将不会丢失数据。若要为没有
+	ReadRune 和 UnreadRune 方法的读取器加上这些功能，需使用 bufio.NewReader。
 */
 package fmt
