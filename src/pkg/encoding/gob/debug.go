@@ -13,6 +13,8 @@ package gob
 // To enable the Debug function, delete the +build ignore line above and do
 //	go install
 
+// 此文件通常不应该在gob包中包含。这个文件只是用来调试自身的包而使用的。
+
 import (
 	"bytes"
 	"fmt"
