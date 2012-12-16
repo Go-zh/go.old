@@ -206,11 +206,11 @@ func append(slice []Type, elems ...Type) []Type
 func copy(dst, src []Type) int
 
 // The delete built-in function deletes the element with the specified key
-// (m[key]) from the map. If there is no such element, delete is a no-op.
-// If m is nil, delete panics.
+// (m[key]) from the map. If m is nil or there is no such element, delete
+// is a no-op.
 
 // delete 内建函数按照指定的键将元素从映射中删除。
-// 若无此元素，delete 即为空操作；若 m 为 nil，delete 就会引发恐慌。
+// 若 m 为 nil 或无此元素，delete 即为空操作。
 func delete(m map[Type]Type1, key Type)
 
 // The len built-in function returns the length of v, according to its type:
