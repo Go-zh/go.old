@@ -73,9 +73,13 @@ import (
 )
 
 // ErrHelp is the error returned if the flag -help is invoked but no such flag is defined.
+
+// ErrHelp的使用场景是：标签 -help被调用，切没有定义help标签。
 var ErrHelp = errors.New("flag: help requested")
 
 // -- bool Value
+
+// -- bool值
 type boolValue bool
 
 func newBoolValue(val bool, p *bool) *boolValue {
@@ -92,6 +96,8 @@ func (b *boolValue) Set(s string) error {
 func (b *boolValue) String() string { return fmt.Sprintf("%v", *b) }
 
 // -- int Value
+
+// -- int值
 type intValue int
 
 func newIntValue(val int, p *int) *intValue {
@@ -108,6 +114,8 @@ func (i *intValue) Set(s string) error {
 func (i *intValue) String() string { return fmt.Sprintf("%v", *i) }
 
 // -- int64 Value
+
+// -- int64值
 type int64Value int64
 
 func newInt64Value(val int64, p *int64) *int64Value {
@@ -124,6 +132,8 @@ func (i *int64Value) Set(s string) error {
 func (i *int64Value) String() string { return fmt.Sprintf("%v", *i) }
 
 // -- uint Value
+
+// -- uint值
 type uintValue uint
 
 func newUintValue(val uint, p *uint) *uintValue {
@@ -140,6 +150,8 @@ func (i *uintValue) Set(s string) error {
 func (i *uintValue) String() string { return fmt.Sprintf("%v", *i) }
 
 // -- uint64 Value
+
+// -- uint64值
 type uint64Value uint64
 
 func newUint64Value(val uint64, p *uint64) *uint64Value {
@@ -156,6 +168,8 @@ func (i *uint64Value) Set(s string) error {
 func (i *uint64Value) String() string { return fmt.Sprintf("%v", *i) }
 
 // -- string Value
+
+// -- string值
 type stringValue string
 
 func newStringValue(val string, p *string) *stringValue {
@@ -171,6 +185,8 @@ func (s *stringValue) Set(val string) error {
 func (s *stringValue) String() string { return fmt.Sprintf("%s", *s) }
 
 // -- float64 Value
+
+// -- float64值
 type float64Value float64
 
 func newFloat64Value(val float64, p *float64) *float64Value {
@@ -187,6 +203,8 @@ func (f *float64Value) Set(s string) error {
 func (f *float64Value) String() string { return fmt.Sprintf("%v", *f) }
 
 // -- time.Duration Value
+
+// -- time.Duration值
 type durationValue time.Duration
 
 func newDurationValue(val time.Duration, p *time.Duration) *durationValue {
@@ -204,12 +222,17 @@ func (d *durationValue) String() string { return (*time.Duration)(d).String() }
 
 // Value is the interface to the dynamic value stored in a flag.
 // (The default value is represented as a string.)
+
+// Value是标签对应的动态值的具体存储需要实现的接口。
+// （默认值是以string值来代表的）
 type Value interface {
 	String() string
 	Set(string) error
 }
 
 // ErrorHandling defines how to handle flag parsing errors.
+
+// ErrorHandling定义了如何处理标签解析的错误
 type ErrorHandling int
 
 const (
@@ -219,31 +242,40 @@ const (
 )
 
 // A FlagSet represents a set of defined flags.
+
+// FlagSet是已经定义好的标签的集合
 type FlagSet struct {
 	// Usage is the function called when an error occurs while parsing flags.
 	// The field is a function (not a method) that may be changed to point to
 	// a custom error handler.
+
+	// 当解析标签出现错误的时候，Usage就会被调用。这个字段是一个函数（不是一个方法），它可以指向
+	// 用户自己定义的错误处理函数。
 	Usage func()
 
 	name          string
 	parsed        bool
 	actual        map[string]*Flag
 	formal        map[string]*Flag
-	args          []string // arguments after flags
-	exitOnError   bool     // does the program exit if there's an error?
+	args          []string // arguments after flags  // flags后面的参数
+	exitOnError   bool     // does the program exit if there's an error?  // 是否当错误发生的时候，程序会退出？
 	errorHandling ErrorHandling
-	output        io.Writer // nil means stderr; use out() accessor
+	output        io.Writer // nil means stderr; use out() accessor  // nil代表控制台输出，使用out()来访问这个字段
 }
 
 // A Flag represents the state of a flag.
+
+// Flag表示标签的状态
 type Flag struct {
-	Name     string // name as it appears on command line
-	Usage    string // help message
-	Value    Value  // value as set
-	DefValue string // default value (as text); for usage message
+	Name     string // name as it appears on command line  // 标签在命令行显示的名字
+	Usage    string // help message  // 帮助信息
+	Value    Value  // value as set  // 标签的值
+	DefValue string // default value (as text); for usage message  // 默认值（文本格式）；这也是一个用法的信息说明
 }
 
 // sortFlags returns the flags as a slice in lexicographical sorted order.
+
+// sortFlags返回按字典顺序排序的slice类型的标签集合。
 func sortFlags(flags map[string]*Flag) []*Flag {
 	list := make(sort.StringSlice, len(flags))
 	i := 0
@@ -268,12 +300,18 @@ func (f *FlagSet) out() io.Writer {
 
 // SetOutput sets the destination for usage and error messages.
 // If output is nil, os.Stderr is used.
+
+// SetOutput设置了用法和错误信息的输出目的地。
+// 如果output是nil，输出目的地就会使用os.Stderr。
 func (f *FlagSet) SetOutput(output io.Writer) {
 	f.output = output
 }
 
 // VisitAll visits the flags in lexicographical order, calling fn for each.
 // It visits all flags, even those not set.
+
+// VisitAll按照字典顺序遍历标签，并且对每个标签调用fn。
+// 这个函数会遍历所有标签，包括哪些没有定义的标签。
 func (f *FlagSet) VisitAll(fn func(*Flag)) {
 	for _, flag := range sortFlags(f.formal) {
 		fn(flag)
@@ -282,12 +320,18 @@ func (f *FlagSet) VisitAll(fn func(*Flag)) {
 
 // VisitAll visits the command-line flags in lexicographical order, calling
 // fn for each.  It visits all flags, even those not set.
+
+// VisitAll按照字典顺序遍历控制台标签，并且对每个标签调用fn。
+// 这个函数会遍历所有标签，包括哪些没有定义的标签。
 func VisitAll(fn func(*Flag)) {
 	commandLine.VisitAll(fn)
 }
 
 // Visit visits the flags in lexicographical order, calling fn for each.
 // It visits only those flags that have been set.
+
+// Visit按照字典顺序遍历标签，并且对每个标签调用fn。
+// 这个函数只遍历定义过的标签。
 func (f *FlagSet) Visit(fn func(*Flag)) {
 	for _, flag := range sortFlags(f.actual) {
 		fn(flag)
@@ -296,22 +340,31 @@ func (f *FlagSet) Visit(fn func(*Flag)) {
 
 // Visit visits the command-line flags in lexicographical order, calling fn
 // for each.  It visits only those flags that have been set.
+
+// Visit按照字典顺序遍历命令行标签，并且对每个标签调用fn。
+// 这个函数只遍历定义过的标签。
 func Visit(fn func(*Flag)) {
 	commandLine.Visit(fn)
 }
 
 // Lookup returns the Flag structure of the named flag, returning nil if none exists.
+
+// Lookup返回已经命名过的标签，如果标签不存在的话，返回nil。
 func (f *FlagSet) Lookup(name string) *Flag {
 	return f.formal[name]
 }
 
 // Lookup returns the Flag structure of the named command-line flag,
 // returning nil if none exists.
+
+// Lookup返回命令行已经命名过的标签，如果标签不存在的话，返回nil。
 func Lookup(name string) *Flag {
 	return commandLine.formal[name]
 }
 
 // Set sets the value of the named flag.
+
+// Set设置命名过的标签的值
 func (f *FlagSet) Set(name, value string) error {
 	flag, ok := f.formal[name]
 	if !ok {
@@ -329,12 +382,17 @@ func (f *FlagSet) Set(name, value string) error {
 }
 
 // Set sets the value of the named command-line flag.
+
+// Set设置命令行中已经命名过的标签的值。
 func Set(name, value string) error {
 	return commandLine.Set(name, value)
 }
 
 // PrintDefaults prints, to standard error unless configured
 // otherwise, the default values of all defined flags in the set.
+
+// 除非有特别配置，否则PrintDefault会将内容输出到标准输出控制台中。
+// PrintDefault会输出集合中所有定义好的标签的默认信息
 func (f *FlagSet) PrintDefaults() {
 	f.VisitAll(func(flag *Flag) {
 		format := "  -%s=%s: %s\n"
@@ -347,11 +405,15 @@ func (f *FlagSet) PrintDefaults() {
 }
 
 // PrintDefaults prints to standard error the default values of all defined command-line flags.
+
+// PrintDefaults打印出标准错误，就是所有命令行中定义好的标签的默认信息。
 func PrintDefaults() {
 	commandLine.PrintDefaults()
 }
 
 // defaultUsage is the default function to print a usage message.
+
+// defaultUsage是打印出用法的默认方法。
 func defaultUsage(f *FlagSet) {
 	fmt.Fprintf(f.out(), "Usage of %s:\n", f.name)
 	f.PrintDefaults()
