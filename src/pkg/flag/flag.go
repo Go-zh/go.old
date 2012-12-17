@@ -66,7 +66,7 @@
 
 	使用：
 
-	定义标签需要使用flag.String(),Bool(),Int()等方法
+	定义标签需要使用flag.String(),Bool(),Int()等方法。
 
 	下面的代码定义了一个interger标签，标签名是flagname，标签解析的结果存放在ip指针（*int）指向的值中
 		import "flag"
