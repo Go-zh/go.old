@@ -60,6 +60,55 @@
 	analogous to the top-level functions for the command-line
 	flag set.
 */
+
+/*
+	flag 包实现命令行标签解析
+
+	使用：
+
+	定义标签需要使用flag.String(),Bool(),Int()等方法
+
+	下面的代码定义了一个interger标签，标签名是flagname，标签解析的结果存放在ip指针（*int）指向的值中
+		import "flag"
+		var ip = flag.Int("flagname", 1234, "help message for flagname")
+	你还可以选择使用Var()函数将标签绑定到一个变量中
+		var flagvar int
+		func init() {
+			flag.IntVar(&flagvar, "flagname", 1234, "help message for flagname")
+		}
+	你也可以传入自定义类型的标签，只要标签满足对应的值接口（接收指针指向的接收者）。像下面代码一样将定义标签
+		flag.Var(&flagVal, "name", "help message for flagname")
+	这样的标签，默认值就是自定义类型的初始值。
+
+	所有的标签都定义好了，就可以调用
+		flag.Parse()
+	来解析命令行并传入到定义好的参数了。
+
+	标签可以被用来直接使用。如果你直接使用标签（没有绑定变量），那他们都是指针类型。如果你将他们绑定到变量上，他们就是值类型。
+		fmt.Println("ip has value ", *ip)
+		fmt.Println("flagvar has value ", flagvar)
+
+	在解析之后，标签对应的参数可以从flag.Args()返回的slice中获取到，也可以使用flag.Arg(i)来获取单个参数。
+	参数列的索引是从0到flag.NArg()-1。
+
+	命令行标签格式：
+		-flag
+		-flag=x
+		-flag x  // 只有非boolean标签能这么用
+	减号可以使用一个或者两个，效果是一样的。
+	上面最后一种方式不能被boolean类型的标签使用。因为当有个文件的名字是0或者false这样的词的话，下面的命令
+		cmd -x *
+	的原意会被改变。你必须使用-flag=false的方式来解析boolean标签。
+
+	一个标签的解析会在下次出现第一个非标签参数（“-”就是一个非标签参数）的时候停止，或者是在终止符号“--”的时候停止。
+
+	Interger标签接受如1234，0664，0x1234和负数这样的值。
+	Boolean标签接受1，0，t，f，true，false，TRUE，FALSE，True，False。
+	Duration标签接受任何可被time.ParseDuration解析的值。
+
+	默认的命令行标签是由最高层的函数来控制的。FlagSet类型允许每个包定义独立的标签集合，例如在命令行接口中实现子命令。
+	FlagSet的方法就是模拟使用最高层函数来控制命令行标签集的行为的。
+*/
 package flag
 
 import (
