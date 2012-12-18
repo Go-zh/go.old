@@ -71,24 +71,24 @@
 	下面的代码定义了一个interger标签，标签名是flagname，标签解析的结果存放在ip指针（*int）指向的值中
 		import "flag"
 		var ip = flag.Int("flagname", 1234, "help message for flagname")
-	你还可以选择使用Var()函数将标签绑定到一个变量中
+	你还可以选择使用Var()函数将标签绑定到指定变量中
 		var flagvar int
 		func init() {
 			flag.IntVar(&flagvar, "flagname", 1234, "help message for flagname")
 		}
-	你也可以传入自定义类型的标签，只要标签满足对应的值接口（接收指针指向的接收者）。像下面代码一样将定义标签
+	你也可以传入自定义类型的标签，只要标签满足对应的值接口（接收指针指向的接收者）。像下面代码一样定义标签
 		flag.Var(&flagVal, "name", "help message for flagname")
 	这样的标签，默认值就是自定义类型的初始值。
 
 	所有的标签都定义好了，就可以调用
 		flag.Parse()
-	来解析命令行并传入到定义好的参数了。
+	来解析命令行参数并传入到定义好的标签了。
 
 	标签可以被用来直接使用。如果你直接使用标签（没有绑定变量），那他们都是指针类型。如果你将他们绑定到变量上，他们就是值类型。
 		fmt.Println("ip has value ", *ip)
 		fmt.Println("flagvar has value ", flagvar)
 
-	在解析之后，标签对应的参数可以从flag.Args()返回的slice中获取到，也可以使用flag.Arg(i)来获取单个参数。
+	在解析之后，标签对应的参数可以从flag.Args()获取到，它返回的slice，也可以使用flag.Arg(i)来获取单个参数。
 	参数列的索引是从0到flag.NArg()-1。
 
 	命令行标签格式：
@@ -123,7 +123,7 @@ import (
 
 // ErrHelp is the error returned if the flag -help is invoked but no such flag is defined.
 
-// ErrHelp的使用场景是：标签 -help被调用，且没有定义help标签。
+// ErrHelp的使用场景是：标签 -help被调用，但没有定义help标签。
 var ErrHelp = errors.New("flag: help requested")
 
 // -- bool Value
@@ -272,8 +272,8 @@ func (d *durationValue) String() string { return (*time.Duration)(d).String() }
 // Value is the interface to the dynamic value stored in a flag.
 // (The default value is represented as a string.)
 
-// Value是标签对应的动态值的具体存储需要实现的接口。
-// （默认值是以string值来代表的）
+// Value接口是定义了标签对应的具体的参数值。
+// （默认值是string类型）
 type Value interface {
 	String() string
 	Set(string) error
@@ -360,7 +360,7 @@ func (f *FlagSet) SetOutput(output io.Writer) {
 // It visits all flags, even those not set.
 
 // VisitAll按照字典顺序遍历标签，并且对每个标签调用fn。
-// 这个函数会遍历所有标签，包括哪些没有定义的标签。
+// 这个函数会遍历所有标签，包括那些没有定义的标签。
 func (f *FlagSet) VisitAll(fn func(*Flag)) {
 	for _, flag := range sortFlags(f.formal) {
 		fn(flag)
@@ -371,7 +371,7 @@ func (f *FlagSet) VisitAll(fn func(*Flag)) {
 // fn for each.  It visits all flags, even those not set.
 
 // VisitAll按照字典顺序遍历控制台标签，并且对每个标签调用fn。
-// 这个函数会遍历所有标签，包括哪些没有定义的标签。
+// 这个函数会遍历所有标签，包括那些没有定义的标签。
 func VisitAll(fn func(*Flag)) {
 	commandLine.VisitAll(fn)
 }
@@ -398,7 +398,7 @@ func Visit(fn func(*Flag)) {
 
 // Lookup returns the Flag structure of the named flag, returning nil if none exists.
 
-// Lookup返回已经命名过的标签，如果标签不存在的话，返回nil。
+// Lookup返回已经定义过的标签，如果标签不存在的话，返回nil。
 func (f *FlagSet) Lookup(name string) *Flag {
 	return f.formal[name]
 }
@@ -406,14 +406,14 @@ func (f *FlagSet) Lookup(name string) *Flag {
 // Lookup returns the Flag structure of the named command-line flag,
 // returning nil if none exists.
 
-// Lookup返回命令行已经命名过的标签，如果标签不存在的话，返回nil。
+// Lookup返回命令行已经定义过的标签，如果标签不存在的话，返回nil。
 func Lookup(name string) *Flag {
 	return commandLine.formal[name]
 }
 
 // Set sets the value of the named flag.
 
-// Set设置命名过的标签的值
+// Set设置定义过的标签的值
 func (f *FlagSet) Set(name, value string) error {
 	flag, ok := f.formal[name]
 	if !ok {
@@ -432,7 +432,7 @@ func (f *FlagSet) Set(name, value string) error {
 
 // Set sets the value of the named command-line flag.
 
-// Set设置命令行中已经命名过的标签的值。
+// Set设置命令行中已经定义过的标签的值。
 func Set(name, value string) error {
 	return commandLine.Set(name, value)
 }
@@ -472,7 +472,7 @@ func defaultUsage(f *FlagSet) {
 // because it serves (via godoc flag Usage) as the example
 // for how to write your own usage function.
 
-// 注意：Usage并不是只能使用defaultUsage（或者是命令行版本的defaultUsage）
+// 注意：Usage并不是只能使用自带的defaultUsage（或者是命令行版本的defaultUsage）
 // 你可以看例子（godoc的flag使用）了解如何写你自己的usage函数。
 
 // Usage prints to standard error a usage message documenting all defined command-line flags.
@@ -487,12 +487,12 @@ var Usage = func() {
 
 // NFlag returns the number of flags that have been set.
 
-// NFlag返回设置过的标签的数量。
+// NFlag返回解析过的标签的数量。
 func (f *FlagSet) NFlag() int { return len(f.actual) }
 
 // NFlag returns the number of command-line flags that have been set.
 
-// NFlag返回设置过的命令行标签的数量。
+// NFlag返回解析过的命令行标签的数量。
 func NFlag() int { return len(commandLine.actual) }
 
 // Arg returns the i'th argument.  Arg(0) is the first remaining argument
@@ -845,8 +845,8 @@ func Duration(name string, value time.Duration, usage string) *time.Duration {
 // of strings by giving the slice the methods of Value; in particular, Set would
 // decompose the comma-separated string into the slice.
 
-// Var定义了一个有指定名字，和用法说明的标签。标签的类型和值是由第一个参数指定的，这个参数
-// 是Value类型，并且是用户自定义的Value接口实现。例如，调用者可以定义一种标签，这种标签会把
+// Var定义了一个有指定名字和用法说明的标签。标签的类型和值是由第一个参数指定的，这个参数
+// 是Value类型，并且是用户自定义的实现了Value接口的类型。举个例子，调用者可以定义一种标签，这种标签会把
 // 逗号分隔的字符串变成字符串slice，并提供出这种转换的方法。这样，Set（FlagSet）就会将逗号分隔
 // 的字符串转换成为slice。
 func (f *FlagSet) Var(value Value, name string, usage string) {
@@ -871,8 +871,8 @@ func (f *FlagSet) Var(value Value, name string, usage string) {
 // of strings by giving the slice the methods of Value; in particular, Set would
 // decompose the comma-separated string into the slice.
 
-// Var定义了一个有指定名字，和用法说明的标签。标签的类型和值是由第一个参数指定的，这个参数
-// 是Value类型，并且是用户自定义的Value接口实现。例如，调用者可以定义一种标签，这种标签会把
+// Var定义了一个有指定名字和用法说明的标签。标签的类型和值是由第一个参数指定的，这个参数
+// 是Value类型，并且是用户自定义的实现了Value接口的类型。举个例子，调用者可以定义一种标签，这种标签会把
 // 逗号分隔的字符串变成字符串slice，并提供出这种转换的方法。这样，Set（FlagSet）就会将逗号分隔
 // 的字符串转换成为slice。
 func Var(value Value, name string, usage string) {
@@ -893,7 +893,7 @@ func (f *FlagSet) failf(format string, a ...interface{}) error {
 // usage calls the Usage method for the flag set, or the usage function if
 // the flag set is commandLine.
 
-// 如果有FlagSet的话，usage调用FlagSet的Usage方法。否则，当flag set是命令行的话，调用命令行的usage函数
+// 如果有FlagSet的话，usage调用FlagSet的Usage方法。否则，当flag set是命令行的话，调用命令行的usage函数。
 func (f *FlagSet) usage() {
 	if f == commandLine {
 		Usage()
@@ -1041,7 +1041,7 @@ var commandLine = NewFlagSet(os.Args[0], ExitOnError)
 // NewFlagSet returns a new, empty flag set with the specified name and
 // error handling property.
 
-// NewFlagSet通过设置一个特定的名字和错误处理属性，返回一个新的，空的标签集合。
+// NewFlagSet通过设置一个特定的名字和错误处理属性，返回一个新的，空的FlagSet。
 func NewFlagSet(name string, errorHandling ErrorHandling) *FlagSet {
 	f := &FlagSet{
 		name:          name,
