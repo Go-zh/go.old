@@ -70,7 +70,7 @@ would want to read even if godoc didn't exist.
 <p>
 Godoc的理念同Python的<a href="http://www.python.org/dev/peps/pep-0257/">Docstring</a>
 和Java的<a href="http://www.oracle.com/technetwork/java/javase/documentation/index-jsp-135444.html">Javadoc</a>
-类似，但它的设计更加简单。Godoc读取的注释既不需要语言的结构（例如Docstring），
+类似，不过它的设计却更加简单。Godoc读取的注释既不需要语言的结构（例如Docstring），
 也无需它们特有的机器可读的语法（如Javadoc）。Godoc注释就是好的代码注释，
 它的这种本质让你即便在没有godoc的情况下也能轻松阅读。
 </p>
@@ -165,15 +165,9 @@ known issue from the <a href="/pkg/bytes/#bugs"><code>bytes</code></a> package:
 </div>
 
 <p>
-Comments that are not adjacent to a top-level declaration are omitted from
-godoc's output, with one notable exception. Top-level comments that begin with
-the word <code>"BUG(who)”</code> are recognized as known bugs, and included in
-the "Bugs” section of the package documentation. The "who” part should be the
-user name of someone who could provide more information. For example, this is a
-known issue from the <a href="/pkg/bytes/#bugs">bytes package</a>:
-没挨着顶级声明的注释会从godoc的输出中省略，不过有一个例外。以 <code>"BUG(who)”</code>
-开头的顶级注释会被识别为已知bug，并包含在该包文档的“缺陷"一节中。“who”
-应当为能够提供更多信息的人的用户名。例如，下面是 <a href="/pkg/bytes/#bugs"><code>bytes</code></a>
+没挨着顶级声明的注释会从godoc的输出中忽略，不过有一个例外。以 <code>"BUG(who)”</code>
+开头的顶级注释会被识别为已知Bug，并包含在该包文档的“缺陷"一节中。“who”
+是能够提供更多信息的人。例如，下面是 <a href="/pkg/bytes/#bugs"><code>bytes</code></a>
 包中的一个已知问题：
 </p>
 
