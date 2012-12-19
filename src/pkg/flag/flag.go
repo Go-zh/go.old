@@ -62,33 +62,33 @@
 */
 
 /*
-	flag 包实现命令行标签解析
+	flag 包实现命令行标签解析.
 
 	使用：
 
-	定义标签需要使用flag.String(),Bool(),Int()等方法
+	定义标签需要使用flag.String(),Bool(),Int()等方法。
 
 	下面的代码定义了一个interger标签，标签名是flagname，标签解析的结果存放在ip指针（*int）指向的值中
 		import "flag"
 		var ip = flag.Int("flagname", 1234, "help message for flagname")
-	你还可以选择使用Var()函数将标签绑定到一个变量中
+	你还可以选择使用Var()函数将标签绑定到指定变量中
 		var flagvar int
 		func init() {
 			flag.IntVar(&flagvar, "flagname", 1234, "help message for flagname")
 		}
-	你也可以传入自定义类型的标签，只要标签满足对应的值接口（接收指针指向的接收者）。像下面代码一样将定义标签
+	你也可以传入自定义类型的标签，只要标签满足对应的值接口（接收指针指向的接收者）。像下面代码一样定义标签
 		flag.Var(&flagVal, "name", "help message for flagname")
 	这样的标签，默认值就是自定义类型的初始值。
 
 	所有的标签都定义好了，就可以调用
 		flag.Parse()
-	来解析命令行并传入到定义好的参数了。
+	来解析命令行参数并传入到定义好的标签了。
 
 	标签可以被用来直接使用。如果你直接使用标签（没有绑定变量），那他们都是指针类型。如果你将他们绑定到变量上，他们就是值类型。
 		fmt.Println("ip has value ", *ip)
 		fmt.Println("flagvar has value ", flagvar)
 
-	在解析之后，标签对应的参数可以从flag.Args()返回的slice中获取到，也可以使用flag.Arg(i)来获取单个参数。
+	在解析之后，标签对应的参数可以从flag.Args()获取到，它返回的slice，也可以使用flag.Arg(i)来获取单个参数。
 	参数列的索引是从0到flag.NArg()-1。
 
 	命令行标签格式：
@@ -123,7 +123,7 @@ import (
 
 // ErrHelp is the error returned if the flag -help is invoked but no such flag is defined.
 
-// ErrHelp的使用场景是：标签 -help被调用，切没有定义help标签。
+// ErrHelp的使用场景是：标签 -help被调用，但没有定义help标签。
 var ErrHelp = errors.New("flag: help requested")
 
 // -- bool Value
@@ -272,8 +272,8 @@ func (d *durationValue) String() string { return (*time.Duration)(d).String() }
 // Value is the interface to the dynamic value stored in a flag.
 // (The default value is represented as a string.)
 
-// Value是标签对应的动态值的具体存储需要实现的接口。
-// （默认值是以string值来代表的）
+// Value接口是定义了标签对应的具体的参数值。
+// （默认值是string类型）
 type Value interface {
 	String() string
 	Set(string) error
@@ -360,7 +360,7 @@ func (f *FlagSet) SetOutput(output io.Writer) {
 // It visits all flags, even those not set.
 
 // VisitAll按照字典顺序遍历标签，并且对每个标签调用fn。
-// 这个函数会遍历所有标签，包括哪些没有定义的标签。
+// 这个函数会遍历所有标签，包括那些没有定义的标签。
 func (f *FlagSet) VisitAll(fn func(*Flag)) {
 	for _, flag := range sortFlags(f.formal) {
 		fn(flag)
@@ -371,7 +371,7 @@ func (f *FlagSet) VisitAll(fn func(*Flag)) {
 // fn for each.  It visits all flags, even those not set.
 
 // VisitAll按照字典顺序遍历控制台标签，并且对每个标签调用fn。
-// 这个函数会遍历所有标签，包括哪些没有定义的标签。
+// 这个函数会遍历所有标签，包括那些没有定义的标签。
 func VisitAll(fn func(*Flag)) {
 	commandLine.VisitAll(fn)
 }
@@ -398,7 +398,7 @@ func Visit(fn func(*Flag)) {
 
 // Lookup returns the Flag structure of the named flag, returning nil if none exists.
 
-// Lookup返回已经命名过的标签，如果标签不存在的话，返回nil。
+// Lookup返回已经定义过的标签，如果标签不存在的话，返回nil。
 func (f *FlagSet) Lookup(name string) *Flag {
 	return f.formal[name]
 }
@@ -406,14 +406,14 @@ func (f *FlagSet) Lookup(name string) *Flag {
 // Lookup returns the Flag structure of the named command-line flag,
 // returning nil if none exists.
 
-// Lookup返回命令行已经命名过的标签，如果标签不存在的话，返回nil。
+// Lookup返回命令行已经定义过的标签，如果标签不存在的话，返回nil。
 func Lookup(name string) *Flag {
 	return commandLine.formal[name]
 }
 
 // Set sets the value of the named flag.
 
-// Set设置命名过的标签的值
+// Set设置定义过的标签的值
 func (f *FlagSet) Set(name, value string) error {
 	flag, ok := f.formal[name]
 	if !ok {
@@ -432,7 +432,7 @@ func (f *FlagSet) Set(name, value string) error {
 
 // Set sets the value of the named command-line flag.
 
-// Set设置命令行中已经命名过的标签的值。
+// Set设置命令行中已经定义过的标签的值。
 func Set(name, value string) error {
 	return commandLine.Set(name, value)
 }
@@ -472,21 +472,33 @@ func defaultUsage(f *FlagSet) {
 // because it serves (via godoc flag Usage) as the example
 // for how to write your own usage function.
 
+// 注意：Usage并不是只能使用自带的defaultUsage（或者是命令行版本的defaultUsage）
+// 你可以看例子（godoc的flag使用）了解如何写你自己的usage函数。
+
 // Usage prints to standard error a usage message documenting all defined command-line flags.
 // The function is a variable that may be changed to point to a custom function.
+
+// Usage打印出标准的错误信息，包含所有定义过的命令行标签说明。
+// 这个函数赋值到一个变量上去，当然也可以将这个变量指向到自定义的函数。
 var Usage = func() {
 	fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 	PrintDefaults()
 }
 
 // NFlag returns the number of flags that have been set.
+
+// NFlag返回解析过的标签的数量。
 func (f *FlagSet) NFlag() int { return len(f.actual) }
 
 // NFlag returns the number of command-line flags that have been set.
+
+// NFlag返回解析过的命令行标签的数量。
 func NFlag() int { return len(commandLine.actual) }
 
 // Arg returns the i'th argument.  Arg(0) is the first remaining argument
 // after flags have been processed.
+
+// Arg返回第i个参数。当有标签被解析之后，Arg(0)就成为了保留参数。
 func (f *FlagSet) Arg(i int) string {
 	if i < 0 || i >= len(f.args) {
 		return ""
@@ -496,36 +508,55 @@ func (f *FlagSet) Arg(i int) string {
 
 // Arg returns the i'th command-line argument.  Arg(0) is the first remaining argument
 // after flags have been processed.
+
+// Arg返回第i个命令行参数。当有标签被解析之后，Arg(0)就成为了保留参数。
 func Arg(i int) string {
 	return commandLine.Arg(i)
 }
 
 // NArg is the number of arguments remaining after flags have been processed.
+
+// 在标签被解析之后，NArg就返回解析后参数的个数。
 func (f *FlagSet) NArg() int { return len(f.args) }
 
 // NArg is the number of arguments remaining after flags have been processed.
+
+// 在命令行标签被解析之后，NArg就返回解析后参数的个数。
 func NArg() int { return len(commandLine.args) }
 
 // Args returns the non-flag arguments.
+
+// Args返回非标签的参数。
 func (f *FlagSet) Args() []string { return f.args }
 
 // Args returns the non-flag command-line arguments.
+
+// Args返回非标签的命令行参数。
 func Args() []string { return commandLine.args }
 
 // BoolVar defines a bool flag with specified name, default value, and usage string.
 // The argument p points to a bool variable in which to store the value of the flag.
+
+// BoolVar定义了一个有指定名字，默认值，和用法说明的标签。
+// 参数p指向一个存储标签值的bool变量。
 func (f *FlagSet) BoolVar(p *bool, name string, value bool, usage string) {
 	f.Var(newBoolValue(value, p), name, usage)
 }
 
 // BoolVar defines a bool flag with specified name, default value, and usage string.
 // The argument p points to a bool variable in which to store the value of the flag.
+
+// BoolVar定义了一个有指定名字，默认值，和用法说明的bool标签。
+// 参数p指向一个存储标签解析值的bool变量。
 func BoolVar(p *bool, name string, value bool, usage string) {
 	commandLine.Var(newBoolValue(value, p), name, usage)
 }
 
 // Bool defines a bool flag with specified name, default value, and usage string.
 // The return value is the address of a bool variable that stores the value of the flag.
+
+// Bool定义了一个有指定名字，默认值，和用法说明的bool标签。
+// 返回值是一个存储标签解析值的bool变量地址。
 func (f *FlagSet) Bool(name string, value bool, usage string) *bool {
 	p := new(bool)
 	f.BoolVar(p, name, value, usage)
@@ -534,24 +565,36 @@ func (f *FlagSet) Bool(name string, value bool, usage string) *bool {
 
 // Bool defines a bool flag with specified name, default value, and usage string.
 // The return value is the address of a bool variable that stores the value of the flag.
+
+// Bool定义了一个有指定名字，默认值，和用法说明的bool标签。
+// 返回值是一个存储标签解析值的bool变量地址。
 func Bool(name string, value bool, usage string) *bool {
 	return commandLine.Bool(name, value, usage)
 }
 
 // IntVar defines an int flag with specified name, default value, and usage string.
 // The argument p points to an int variable in which to store the value of the flag.
+
+// IntVar定义了一个有指定名字，默认值，和用法说明的int标签。
+// 参数p指向一个存储标签解析值的int变量。
 func (f *FlagSet) IntVar(p *int, name string, value int, usage string) {
 	f.Var(newIntValue(value, p), name, usage)
 }
 
 // IntVar defines an int flag with specified name, default value, and usage string.
 // The argument p points to an int variable in which to store the value of the flag.
+
+// IntVar定义了一个有指定名字，默认值，和用法说明的int标签。
+// 参数p指向一个存储标签解析值的int变量。
 func IntVar(p *int, name string, value int, usage string) {
 	commandLine.Var(newIntValue(value, p), name, usage)
 }
 
 // Int defines an int flag with specified name, default value, and usage string.
 // The return value is the address of an int variable that stores the value of the flag.
+
+// Int定义了一个有指定名字，默认值，和用法说明的int标签。
+// 返回值是一个存储标签解析值的int变量地址。
 func (f *FlagSet) Int(name string, value int, usage string) *int {
 	p := new(int)
 	f.IntVar(p, name, value, usage)
@@ -560,24 +603,36 @@ func (f *FlagSet) Int(name string, value int, usage string) *int {
 
 // Int defines an int flag with specified name, default value, and usage string.
 // The return value is the address of an int variable that stores the value of the flag.
+
+// Int定义了一个有指定名字，默认值，和用法说明的int标签。
+// 返回值是一个存储标签解析值的int变量地址。
 func Int(name string, value int, usage string) *int {
 	return commandLine.Int(name, value, usage)
 }
 
 // Int64Var defines an int64 flag with specified name, default value, and usage string.
 // The argument p points to an int64 variable in which to store the value of the flag.
+
+// Int64Var定义了一个有指定名字，默认值，和用法说明的int64标签。
+// 参数p指向一个存储标签解析值的int64变量。
 func (f *FlagSet) Int64Var(p *int64, name string, value int64, usage string) {
 	f.Var(newInt64Value(value, p), name, usage)
 }
 
 // Int64Var defines an int64 flag with specified name, default value, and usage string.
 // The argument p points to an int64 variable in which to store the value of the flag.
+
+// Int64Var定义了一个有指定名字，默认值，和用法说明的int64标签。
+// 参数p指向一个存储标签解析值的int64变量。
 func Int64Var(p *int64, name string, value int64, usage string) {
 	commandLine.Var(newInt64Value(value, p), name, usage)
 }
 
 // Int64 defines an int64 flag with specified name, default value, and usage string.
 // The return value is the address of an int64 variable that stores the value of the flag.
+
+// Int64定义了一个有指定名字，默认值，和用法说明的int64标签。
+// 返回值是一个存储标签解析值的int64变量地址。
 func (f *FlagSet) Int64(name string, value int64, usage string) *int64 {
 	p := new(int64)
 	f.Int64Var(p, name, value, usage)
@@ -586,24 +641,36 @@ func (f *FlagSet) Int64(name string, value int64, usage string) *int64 {
 
 // Int64 defines an int64 flag with specified name, default value, and usage string.
 // The return value is the address of an int64 variable that stores the value of the flag.
+
+// Int64定义了一个有指定名字，默认值，和用法说明的int64标签。
+// 返回值是一个存储标签解析值的int64变量地址。
 func Int64(name string, value int64, usage string) *int64 {
 	return commandLine.Int64(name, value, usage)
 }
 
 // UintVar defines a uint flag with specified name, default value, and usage string.
 // The argument p points to a uint variable in which to store the value of the flag.
+
+// UintVar定义了一个有指定名字，默认值，和用法说明的uint标签。
+// 参数p指向一个存储标签解析值的uint变量。
 func (f *FlagSet) UintVar(p *uint, name string, value uint, usage string) {
 	f.Var(newUintValue(value, p), name, usage)
 }
 
 // UintVar defines a uint flag with specified name, default value, and usage string.
 // The argument p points to a uint  variable in which to store the value of the flag.
+
+// UintVar定义了一个有指定名字，默认值，和用法说明的uint标签。
+// 参数p指向一个存储标签解析值的uint变量。
 func UintVar(p *uint, name string, value uint, usage string) {
 	commandLine.Var(newUintValue(value, p), name, usage)
 }
 
 // Uint defines a uint flag with specified name, default value, and usage string.
 // The return value is the address of a uint  variable that stores the value of the flag.
+
+// Uint定义了一个有指定名字，默认值，和用法说明的uint标签。
+// 返回值是一个存储标签解析值的uint变量地址。
 func (f *FlagSet) Uint(name string, value uint, usage string) *uint {
 	p := new(uint)
 	f.UintVar(p, name, value, usage)
@@ -612,24 +679,36 @@ func (f *FlagSet) Uint(name string, value uint, usage string) *uint {
 
 // Uint defines a uint flag with specified name, default value, and usage string.
 // The return value is the address of a uint  variable that stores the value of the flag.
+
+// Uint定义了一个有指定名字，默认值，和用法说明的uint标签。
+// 返回值是一个存储标签解析值的uint变量地址。
 func Uint(name string, value uint, usage string) *uint {
 	return commandLine.Uint(name, value, usage)
 }
 
 // Uint64Var defines a uint64 flag with specified name, default value, and usage string.
 // The argument p points to a uint64 variable in which to store the value of the flag.
+
+// Uint64Var定义了一个有指定名字，默认值，和用法说明的uint64标签。
+// 参数p指向一个存储标签解析值的uint64变量。
 func (f *FlagSet) Uint64Var(p *uint64, name string, value uint64, usage string) {
 	f.Var(newUint64Value(value, p), name, usage)
 }
 
 // Uint64Var defines a uint64 flag with specified name, default value, and usage string.
 // The argument p points to a uint64 variable in which to store the value of the flag.
+
+// Uint64Var定义了一个有指定名字，默认值，和用法说明的uint64标签。
+// 参数p指向一个存储标签解析值的uint64变量。
 func Uint64Var(p *uint64, name string, value uint64, usage string) {
 	commandLine.Var(newUint64Value(value, p), name, usage)
 }
 
 // Uint64 defines a uint64 flag with specified name, default value, and usage string.
 // The return value is the address of a uint64 variable that stores the value of the flag.
+
+// Uint64定义了一个有指定名字，默认值，和用法说明的uint64标签。
+// 返回值是一个存储标签解析值的uint64变量地址。
 func (f *FlagSet) Uint64(name string, value uint64, usage string) *uint64 {
 	p := new(uint64)
 	f.Uint64Var(p, name, value, usage)
@@ -638,24 +717,36 @@ func (f *FlagSet) Uint64(name string, value uint64, usage string) *uint64 {
 
 // Uint64 defines a uint64 flag with specified name, default value, and usage string.
 // The return value is the address of a uint64 variable that stores the value of the flag.
+
+// Uint64定义了一个有指定名字，默认值，和用法说明的uint64标签。
+// 返回值是一个存储标签解析值的uint64变量地址。
 func Uint64(name string, value uint64, usage string) *uint64 {
 	return commandLine.Uint64(name, value, usage)
 }
 
 // StringVar defines a string flag with specified name, default value, and usage string.
 // The argument p points to a string variable in which to store the value of the flag.
+
+// StringVar定义了一个有指定名字，默认值，和用法说明的string标签。
+// 参数p指向一个存储标签解析值的string变量。
 func (f *FlagSet) StringVar(p *string, name string, value string, usage string) {
 	f.Var(newStringValue(value, p), name, usage)
 }
 
 // StringVar defines a string flag with specified name, default value, and usage string.
 // The argument p points to a string variable in which to store the value of the flag.
+
+// StringVar定义了一个有指定名字，默认值，和用法说明的string标签。
+// 参数p指向一个存储标签解析值的string变量。
 func StringVar(p *string, name string, value string, usage string) {
 	commandLine.Var(newStringValue(value, p), name, usage)
 }
 
 // String defines a string flag with specified name, default value, and usage string.
 // The return value is the address of a string variable that stores the value of the flag.
+
+// String定义了一个有指定名字，默认值，和用法说明的string标签。
+// 返回值是一个存储标签解析值的string变量地址。
 func (f *FlagSet) String(name string, value string, usage string) *string {
 	p := new(string)
 	f.StringVar(p, name, value, usage)
@@ -664,24 +755,36 @@ func (f *FlagSet) String(name string, value string, usage string) *string {
 
 // String defines a string flag with specified name, default value, and usage string.
 // The return value is the address of a string variable that stores the value of the flag.
+
+// String定义了一个有指定名字，默认值，和用法说明的string标签。
+// 返回值是一个存储标签解析值的string变量地址。
 func String(name string, value string, usage string) *string {
 	return commandLine.String(name, value, usage)
 }
 
 // Float64Var defines a float64 flag with specified name, default value, and usage string.
 // The argument p points to a float64 variable in which to store the value of the flag.
+
+// Float64Var定义了一个有指定名字，默认值，和用法说明的float64标签。
+// 参数p指向一个存储标签解析值的float64变量。
 func (f *FlagSet) Float64Var(p *float64, name string, value float64, usage string) {
 	f.Var(newFloat64Value(value, p), name, usage)
 }
 
 // Float64Var defines a float64 flag with specified name, default value, and usage string.
 // The argument p points to a float64 variable in which to store the value of the flag.
+
+// Float64Var定义了一个有指定名字，默认值，和用法说明的float64标签。
+// 参数p指向一个存储标签解析值的float64变量。
 func Float64Var(p *float64, name string, value float64, usage string) {
 	commandLine.Var(newFloat64Value(value, p), name, usage)
 }
 
 // Float64 defines a float64 flag with specified name, default value, and usage string.
 // The return value is the address of a float64 variable that stores the value of the flag.
+
+// Float64定义了一个有指定名字，默认值，和用法说明的float64标签。
+// 返回值是一个存储标签解析值的float64变量地址。
 func (f *FlagSet) Float64(name string, value float64, usage string) *float64 {
 	p := new(float64)
 	f.Float64Var(p, name, value, usage)
@@ -690,24 +793,36 @@ func (f *FlagSet) Float64(name string, value float64, usage string) *float64 {
 
 // Float64 defines a float64 flag with specified name, default value, and usage string.
 // The return value is the address of a float64 variable that stores the value of the flag.
+
+// Float64定义了一个有指定名字，默认值，和用法说明的float64标签。
+// 返回值是一个存储标签解析值的float64变量地址。
 func Float64(name string, value float64, usage string) *float64 {
 	return commandLine.Float64(name, value, usage)
 }
 
 // DurationVar defines a time.Duration flag with specified name, default value, and usage string.
 // The argument p points to a time.Duration variable in which to store the value of the flag.
+
+// DurationVar定义了一个有指定名字，默认值，和用法说明的time.Duration标签。
+// 参数p指向一个存储标签解析值的time.Duration变量。
 func (f *FlagSet) DurationVar(p *time.Duration, name string, value time.Duration, usage string) {
 	f.Var(newDurationValue(value, p), name, usage)
 }
 
 // DurationVar defines a time.Duration flag with specified name, default value, and usage string.
 // The argument p points to a time.Duration variable in which to store the value of the flag.
+
+// DurationVar定义了一个有指定名字，默认值，和用法说明的time.Duration标签。
+// 参数p指向一个存储标签解析值的time.Duration变量。
 func DurationVar(p *time.Duration, name string, value time.Duration, usage string) {
 	commandLine.Var(newDurationValue(value, p), name, usage)
 }
 
 // Duration defines a time.Duration flag with specified name, default value, and usage string.
 // The return value is the address of a time.Duration variable that stores the value of the flag.
+
+// Duration定义了一个有指定名字，默认值，和用法说明的time.Duration标签。
+// 返回值是一个存储标签解析值的time.Duration变量地址。
 func (f *FlagSet) Duration(name string, value time.Duration, usage string) *time.Duration {
 	p := new(time.Duration)
 	f.DurationVar(p, name, value, usage)
@@ -716,6 +831,9 @@ func (f *FlagSet) Duration(name string, value time.Duration, usage string) *time
 
 // Duration defines a time.Duration flag with specified name, default value, and usage string.
 // The return value is the address of a time.Duration variable that stores the value of the flag.
+
+// Duration定义了一个有指定名字，默认值，和用法说明的time.Duration标签。
+// 返回值是一个存储标签解析值的time.Duration变量地址。
 func Duration(name string, value time.Duration, usage string) *time.Duration {
 	return commandLine.Duration(name, value, usage)
 }
@@ -726,6 +844,11 @@ func Duration(name string, value time.Duration, usage string) *time.Duration {
 // caller could create a flag that turns a comma-separated string into a slice
 // of strings by giving the slice the methods of Value; in particular, Set would
 // decompose the comma-separated string into the slice.
+
+// Var定义了一个有指定名字和用法说明的标签。标签的类型和值是由第一个参数指定的，这个参数
+// 是Value类型，并且是用户自定义的实现了Value接口的类型。举个例子，调用者可以定义一种标签，这种标签会把
+// 逗号分隔的字符串变成字符串slice，并提供出这种转换的方法。这样，Set（FlagSet）就会将逗号分隔
+// 的字符串转换成为slice。
 func (f *FlagSet) Var(value Value, name string, usage string) {
 	// Remember the default value as a string; it won't change.
 	flag := &Flag{name, usage, value, value.String()}
@@ -747,12 +870,19 @@ func (f *FlagSet) Var(value Value, name string, usage string) {
 // caller could create a flag that turns a comma-separated string into a slice
 // of strings by giving the slice the methods of Value; in particular, Set would
 // decompose the comma-separated string into the slice.
+
+// Var定义了一个有指定名字和用法说明的标签。标签的类型和值是由第一个参数指定的，这个参数
+// 是Value类型，并且是用户自定义的实现了Value接口的类型。举个例子，调用者可以定义一种标签，这种标签会把
+// 逗号分隔的字符串变成字符串slice，并提供出这种转换的方法。这样，Set（FlagSet）就会将逗号分隔
+// 的字符串转换成为slice。
 func Var(value Value, name string, usage string) {
 	commandLine.Var(value, name, usage)
 }
 
 // failf prints to standard error a formatted error and usage message and
 // returns the error.
+
+// failf输出错误信息，包含格式错误和用法，并且返回error
 func (f *FlagSet) failf(format string, a ...interface{}) error {
 	err := fmt.Errorf(format, a...)
 	fmt.Fprintln(f.out(), err)
@@ -762,6 +892,8 @@ func (f *FlagSet) failf(format string, a ...interface{}) error {
 
 // usage calls the Usage method for the flag set, or the usage function if
 // the flag set is commandLine.
+
+// 如果有FlagSet的话，usage调用FlagSet的Usage方法。否则，当flag set是命令行的话，调用命令行的usage函数。
 func (f *FlagSet) usage() {
 	if f == commandLine {
 		Usage()
@@ -773,6 +905,8 @@ func (f *FlagSet) usage() {
 }
 
 // parseOne parses one flag. It returns whether a flag was seen.
+
+// parseOne解析一个标签，它返回是否这个标签能解析。
 func (f *FlagSet) parseOne() (bool, error) {
 	if len(f.args) == 0 {
 		return false, nil
@@ -798,7 +932,7 @@ func (f *FlagSet) parseOne() (bool, error) {
 	f.args = f.args[1:]
 	has_value := false
 	value := ""
-	for i := 1; i < len(name); i++ { // equals cannot be first
+	for i := 1; i < len(name); i++ { // equals cannot be first 
 		if name[i] == '=' {
 			value = name[i+1:]
 			has_value = true
@@ -848,6 +982,10 @@ func (f *FlagSet) parseOne() (bool, error) {
 // include the command name.  Must be called after all flags in the FlagSet
 // are defined and before flags are accessed by the program.
 // The return value will be ErrHelp if -help was set but not defined.
+
+// Parse从参数列表中解析定义的标签，这个参数列表并不包含执行的命令名字。
+// 这个方法调用时间点必须在FlagSet的所有标签都定义之后，程序访问这些标签之前。
+// 当-help标签没有定义却被调用了的时候，这个方法返回ErrHelp。
 func (f *FlagSet) Parse(arguments []string) error {
 	f.parsed = true
 	f.args = arguments
@@ -872,27 +1010,38 @@ func (f *FlagSet) Parse(arguments []string) error {
 }
 
 // Parsed reports whether f.Parse has been called.
+
+// Parsed返回是否f.Parse已经被调用过。
 func (f *FlagSet) Parsed() bool {
 	return f.parsed
 }
 
 // Parse parses the command-line flags from os.Args[1:].  Must be called
 // after all flags are defined and before flags are accessed by the program.
+
+// Parse从参数os.Args[1:]中解析命令行标签。
+// 这个方法调用时间点必须在FlagSet的所有标签都定义之后，程序访问这些标签之前。
 func Parse() {
 	// Ignore errors; commandLine is set for ExitOnError.
 	commandLine.Parse(os.Args[1:])
 }
 
 // Parsed returns true if the command-line flags have been parsed.
+
+// Parsed 返回是否命令行标签已经被解析过。
 func Parsed() bool {
 	return commandLine.Parsed()
 }
 
 // The default set of command-line flags, parsed from os.Args.
+
+// 默认的命令行标签集合，被os.Args解析。
 var commandLine = NewFlagSet(os.Args[0], ExitOnError)
 
 // NewFlagSet returns a new, empty flag set with the specified name and
 // error handling property.
+
+// NewFlagSet通过设置一个特定的名字和错误处理属性，返回一个新的，空的FlagSet。
 func NewFlagSet(name string, errorHandling ErrorHandling) *FlagSet {
 	f := &FlagSet{
 		name:          name,
@@ -904,6 +1053,9 @@ func NewFlagSet(name string, errorHandling ErrorHandling) *FlagSet {
 // Init sets the name and error handling property for a flag set.
 // By default, the zero FlagSet uses an empty name and the
 // ContinueOnError error handling policy.
+
+// Init设置名字和错误处理标签集合的属性。
+// 空标签集合默认使用一个空名字和ContinueOnError的错误处理属性。
 func (f *FlagSet) Init(name string, errorHandling ErrorHandling) {
 	f.name = name
 	f.errorHandling = errorHandling
