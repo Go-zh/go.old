@@ -88,8 +88,8 @@ func (g G) GoString() string {
 }
 
 type S struct {
-	F F // a struct field that Formats
-	G G // a struct field that GoStrings
+	F F // a struct field that Formats   // Format 方法的结构字段
+	G G // a struct field that GoStrings // GoString 方法的结构字段
 }
 
 type SI struct {
@@ -97,6 +97,8 @@ type SI struct {
 }
 
 // A type with a String method with pointer receiver for testing %p
+
+// P 为用于测试 %p 的类型，该类型有带指针接收者的 String 方法
 type P int
 
 var pValue P
@@ -117,6 +119,7 @@ var fmttests = []struct {
 	{"%t", true, "true"},
 
 	// basic string
+	// 基本字符串
 	{"%s", "abc", "abc"},
 	{"%x", "abc", "616263"},
 	{"%x", "xyz", "78797a"},
@@ -124,6 +127,7 @@ var fmttests = []struct {
 	{"%q", "abc", `"abc"`},
 
 	// basic bytes
+	// 基本字节
 	{"%s", []byte("abc"), "abc"},
 	{"%x", []byte("abc"), "616263"},
 	{"% x", []byte("abc\xff"), "61 62 63 ff"},
@@ -137,6 +141,7 @@ var fmttests = []struct {
 	{"%q", []byte("abc"), `"abc"`},
 
 	// escaped strings
+	// 转义字符串
 	{"%#q", `abc`, "`abc`"},
 	{"%#q", `"`, "`\"`"},
 	{"1 %#q", `\n`, "1 `\\n`"},
@@ -149,6 +154,7 @@ var fmttests = []struct {
 	{"%q", "\U0010ffff", `"\U0010ffff"`},
 
 	// escaped characters
+	// 转义字符
 	{"%q", 'x', `'x'`},
 	{"%q", 0, `'\x00'`},
 	{"%q", '\n', `'\n'`},
@@ -162,6 +168,7 @@ var fmttests = []struct {
 	{"%+q", "\u263a", `"\u263a"`},
 
 	// width
+	// 宽度
 	{"%5s", "abc", "  abc"},
 	{"%2s", "\u263a", " ☺"},
 	{"%-5s", "abc", "abc  "},
@@ -178,6 +185,7 @@ var fmttests = []struct {
 	{"%10.1q", "日本語日本語", `       "日"`},
 
 	// integers
+	// 整数
 	{"%d", 12345, "12345"},
 	{"%d", -12345, "-12345"},
 	{"%10d", 12345, "     12345"},
@@ -197,6 +205,7 @@ var fmttests = []struct {
 	{"%.d", 0, ""},
 
 	// unicode format
+	// Unicode格式
 	{"%U", 0x1, "U+0001"},
 	{"%U", uint(0x1), "U+0001"},
 	{"%.8U", 0x2, "U+00000002"},
@@ -212,6 +221,7 @@ var fmttests = []struct {
 	{"%#U", '\u263a', `U+263A '☺'`},
 
 	// floats
+	// 浮点数
 	{"%+.3e", 0.0, "+0.000e+00"},
 	{"%+.3e", 1.0, "+1.000e+00"},
 	{"%+.3f", -1.0, "-1.000"},
@@ -224,6 +234,7 @@ var fmttests = []struct {
 	{"% .3g", 1.0, " 1"},
 
 	// complex values
+	// 复数
 	{"%+.3e", 0i, "(+0.000e+00+0.000e+00i)"},
 	{"%+.3f", 0i, "(+0.000+0.000i)"},
 	{"%+.3g", 0i, "(+0+0i)"},
@@ -244,10 +255,12 @@ var fmttests = []struct {
 	{"%+.3g", complex128(1 + 2i), "(+1+2i)"},
 
 	// erroneous formats
+	// 错误的的格式
 	{"", 2, "%!(EXTRA int=2)"},
 	{"%d", "hello", "%!d(string=hello)"},
 
 	// old test/fmt_test.go
+	// 旧版 test/fmt_test.go
 	{"%d", 1234, "1234"},
 	{"%d", -1234, "-1234"},
 	{"%d", uint(1234), "1234"},
@@ -330,39 +343,46 @@ var fmttests = []struct {
 	{"%20g", math.NaN(), "                 NaN"},
 
 	// arrays
+	// 数组
 	{"%v", array, "[1 2 3 4 5]"},
 	{"%v", iarray, "[1 hello 2.5 <nil>]"},
 	{"%v", &array, "&[1 2 3 4 5]"},
 	{"%v", &iarray, "&[1 hello 2.5 <nil>]"},
 
 	// slices
+	// 切片
 	{"%v", slice, "[1 2 3 4 5]"},
 	{"%v", islice, "[1 hello 2.5 <nil>]"},
 	{"%v", &slice, "&[1 2 3 4 5]"},
 	{"%v", &islice, "&[1 hello 2.5 <nil>]"},
 
 	// complexes with %v
+	// 复数的 %v 格式
 	{"%v", 1 + 2i, "(1+2i)"},
 	{"%v", complex64(1 + 2i), "(1+2i)"},
 	{"%v", complex128(1 + 2i), "(1+2i)"},
 
 	// structs
+	// 结构体
 	{"%v", A{1, 2, "a", []int{1, 2}}, `{1 2 a [1 2]}`},
 	{"%+v", A{1, 2, "a", []int{1, 2}}, `{i:1 j:2 s:a x:[1 2]}`},
 
 	// +v on structs with Stringable items
+	// 拥有可 String 化条目的结构体的 +v 格式
 	{"%+v", B{1, 2}, `{I:<1> j:2}`},
 	{"%+v", C{1, B{2, 3}}, `{i:1 B:{I:<2> j:3}}`},
 
 	// other formats on Stringable items
+	// 可 String 化条目的其它格式
 	{"%s", I(23), `<23>`},
 	{"%q", I(23), `"<23>"`},
 	{"%x", I(23), `3c32333e`},
 	{"%#x", I(23), `0x3c0x320x330x3e`},
 	{"%# x", I(23), `0x3c 0x32 0x33 0x3e`},
-	{"%d", I(23), `23`}, // Stringer applies only to string formats.
+	{"%d", I(23), `23`}, // Stringer applies only to string formats. // Stringer 只适用于字符串格式。
 
 	// go syntax
+	// go 语法
 	{"%#v", A{1, 2, "a", []int{1, 2}}, `fmt_test.A{i:1, j:0x2, s:"a", x:[]int{1, 2}}`},
 	{"%#v", &b, "(*uint8)(0xPTR)"},
 	{"%#v", TestFmtInterface, "(func(*testing.T))(0xPTR)"},
@@ -384,6 +404,7 @@ var fmttests = []struct {
 	{"%#v", "foo", `"foo"`},
 
 	// slices with other formats
+	// 切片的其它格式
 	{"%#x", []int{1, 2, 15}, `[0x1 0x2 0xf]`},
 	{"%x", []int{1, 2, 15}, `[1 2 f]`},
 	{"%d", []int{1, 2, 15}, `[1 2 15]`},
@@ -391,6 +412,7 @@ var fmttests = []struct {
 	{"%q", []string{"a", "b"}, `["a" "b"]`},
 
 	// renamings
+	// 类型重命名测试
 	{"%v", renamedBool(true), "true"},
 	{"%d", renamedBool(true), "%!d(fmt_test.renamedBool=true)"},
 	{"%o", renamedInt(8), "10"},
@@ -413,11 +435,13 @@ var fmttests = []struct {
 	{"%v", renamedComplex128(4 - 3i), "(4-3i)"},
 
 	// Formatter
+	// Format 测试
 	{"%x", F(1), "<x=F(1)>"},
 	{"%x", G(2), "2"},
 	{"%+v", S{F(4), G(5)}, "{F:<v=F(4)> G:5}"},
 
 	// GoStringer
+	// GoString 测试
 	{"%#v", G(6), "GoString(6)"},
 	{"%#v", S{F(7), G(8)}, "fmt_test.S{F:<v=F(7)>, G:GoString(8)}"},
 
@@ -429,35 +453,41 @@ var fmttests = []struct {
 
 	// %p
 	{"p0=%p", new(int), "p0=0xPTR"},
-	{"p1=%s", &pValue, "p1=String(p)"}, // String method...
-	{"p2=%p", &pValue, "p2=0xPTR"},     // ... not called with %p
+	{"p1=%s", &pValue, "p1=String(p)"}, // String method...       // String 方法...
+	{"p2=%p", &pValue, "p2=0xPTR"},     // ... not called with %p // ...在使用 %p 时不会调用
 	{"p3=%p", (*int)(nil), "p3=0x0"},
 	{"p4=%#p", new(int), "p4=PTR"},
 
 	// %p on non-pointers
+	// %p 作用于非指针类型
 	{"%p", make(chan int), "0xPTR"},
 	{"%p", make(map[int]int), "0xPTR"},
 	{"%p", make([]int, 1), "0xPTR"},
-	{"%p", 27, "%!p(int=27)"}, // not a pointer at all
+	{"%p", 27, "%!p(int=27)"}, // not a pointer at all // 根本就不是指针
 
 	// %q on pointers
+	// %q 作用于指针类型
 	{"%q", (*int)(nil), "%!q(*int=<nil>)"},
 	{"%q", new(int), "%!q(*int=0xPTR)"},
 
 	// %v on pointers formats 0 as <nil>
+	// %v 作用于指针，会将0格式化为 <nil>
 	{"%v", (*int)(nil), "<nil>"},
 	{"%v", new(int), "0xPTR"},
 
 	// %d etc. pointers use specified base.
+	// %d 等对指针应用具体的基数（进制）。
 	{"%d", new(int), "PTR_d"},
 	{"%o", new(int), "PTR_o"},
 	{"%x", new(int), "PTR_x"},
 
 	// %d on Stringer should give integer if possible
+	// %d 作用于 Stringer 时，如果可能的话应当返回整数
 	{"%s", time.Time{}.Month(), "January"},
 	{"%d", time.Time{}.Month(), "1"},
 
 	// erroneous things
+	// 错误的的格式化对象
 	{"%s %", "hello", "hello %!(NOVERB)"},
 	{"%s %.2", "hello", "hello %!(NOVERB)"},
 	{"%d", "hello", "%!d(string=hello)"},
@@ -472,13 +502,19 @@ var fmttests = []struct {
 	// be fetched directly, the lookup fails and returns a
 	// zero reflect.Value, which formats as <nil>.
 	// This test is just to check that it shows the two NaNs at all.
+	//
+	// 会显示“<nil>”是因为映射首先会获取键的列表，接着查找每一个键。由于 NaN
+	// 可作为映射键但不能被直接获取，因此查找会失败并返回一个 reflect.Value
+	// 的零值，它会被格式化为 <nil>。此测试只会检查它是否会显示两个 NaN。
 	{"%v", map[float64]int{math.NaN(): 1, math.NaN(): 2}, "map[NaN:<nil> NaN:<nil>]"},
 
 	// Used to crash because nByte didn't allow for a sign.
+	// 用于崩溃测试，因为 nByte 不接受正负号。
 	{"%b", int64(-1 << 63), "-1000000000000000000000000000000000000000000000000000000000000000"},
 
 	// Complex fmt used to leave the plus flag set for future entries in the array
 	// causing +2+0i and +3+0i instead of 2+0i and 3+0i.
+	// 复数格式化用于在数组中为将来的条目留下加号，以产生 +2+0i 和 +3+0i 而非 2+0i 和 3+0i
 	{"%v", []complex64{1, 2, 3}, "[(1+0i) (2+0i) (3+0i)]"},
 	{"%v", []complex128{1, 2, 3}, "[(1+0i) (2+0i) (3+0i)]"},
 }
@@ -512,6 +548,7 @@ func TestSprintf(t *testing.T) {
 			if _, ok := tt.val.(string); ok {
 				// Don't requote the already-quoted strings.
 				// It's too confusing to read the errors.
+				// 不要给已经加上引号的字符串再加一次引号，这样错误读起来会很困扰的。
 				t.Errorf("Sprintf(%q, %q) = <%s> want <%s>", tt.fmt, tt.val, s, tt.out)
 			} else {
 				t.Errorf("Sprintf(%q, %v) = %q want %q", tt.fmt, tt.val, s, tt.out)
@@ -578,6 +615,7 @@ var mallocTest = []struct {
 	{1, `Sprintf("%x %x")`, func() { Sprintf("%x %x", 7, 112) }},
 	// For %g we use a float32, not float64, to guarantee passing the argument
 	// does not need to allocate memory to store the result in a pointer-sized word.
+	// 对于 %g，我们使用 float32 而非 float64，以此保证传入的实参无需分配内存以存储指针大小的字值。
 	{2, `Sprintf("%g")`, func() { Sprintf("%g", float32(3.14159)) }},
 	{0, `Fprintf(buf, "%x %x %x")`, func() { mallocBuf.Reset(); Fprintf(&mallocBuf, "%x %x %x", 7, 8, 9) }},
 	{1, `Fprintf(buf, "%s")`, func() { mallocBuf.Reset(); Fprintf(&mallocBuf, "%s", "hello") }},
@@ -675,6 +713,8 @@ func TestStructPrinter(t *testing.T) {
 }
 
 // Check map printing using substrings so we don't depend on the print order.
+
+// 用子字符串来检查映射的打印，因此我们无需依赖打印顺序。
 func presentInMap(s string, a []string, t *testing.T) {
 	for i := 0; i < len(a); i++ {
 		loc := strings.Index(s, a[i])
@@ -682,6 +722,7 @@ func presentInMap(s string, a []string, t *testing.T) {
 			t.Errorf("map print: expected to find %q in %q", a[i], s)
 		}
 		// make sure the match ends here
+		// 确保已经匹配到结尾
 		loc += len(a[i])
 		if loc >= len(s) || (s[loc] != ' ' && s[loc] != ']') {
 			t.Errorf("map print: %q not properly terminated in %q", a[i], s)
@@ -717,6 +758,9 @@ func TestEmptyMap(t *testing.T) {
 
 // Check that Sprint (and hence Print, Fprint) puts spaces in the right places,
 // that is, between arg pairs in which neither is a string.
+
+// 检查 Sprint（同时也就检查了 Print 和 Fprint）是否将空格放到了正确的位置，
+// 即，除字符串外的实参对之间。
 func TestBlank(t *testing.T) {
 	got := Sprint("<", 1, ">:", 1, 2, 3, "!")
 	expect := "<1>:1 2 3!"
@@ -727,6 +771,9 @@ func TestBlank(t *testing.T) {
 
 // Check that Sprintln (and hence Println, Fprintln) puts spaces in the right places,
 // that is, between all arg pairs.
+
+// 检查 Sprintln（同时也就检查了 Println 和 Fprintln）是否将空格放到了正确的位置，
+// 即，所有的实参对之间。
 func TestBlankln(t *testing.T) {
 	got := Sprintln("<", 1, ">:", 1, 2, 3, "!")
 	expect := "< 1 >: 1 2 3 !\n"
@@ -736,6 +783,8 @@ func TestBlankln(t *testing.T) {
 }
 
 // Check Formatter with Sprint, Sprintln, Sprintf
+
+// 用 Sprint、Sprintln 和 Sprintf 检查 Formatter
 func TestFormatterPrintln(t *testing.T) {
 	f := F(1)
 	expect := "<v=F(1)>\n"
@@ -767,6 +816,7 @@ var startests = []struct {
 	{"%-*d", args(4, 42), "42  "},
 
 	// erroneous
+	// 错误的
 	{"%*d", args(nil, 42), "%!(BADWIDTH)42"},
 	{"%.*d", args(nil, 42), "%!(BADPREC)42"},
 	{"%*d", args(5, "foo"), "%!d(string=  foo)"},
@@ -785,26 +835,36 @@ func TestWidthAndPrecision(t *testing.T) {
 }
 
 // A type that panics in String.
+
+// 在 String 中恐慌的类型。
 type Panic struct {
 	message interface{}
 }
 
 // Value receiver.
+
+// 值接收者。
 func (p Panic) GoString() string {
 	panic(p.message)
 }
 
 // Value receiver.
+
+// 值接收者。
 func (p Panic) String() string {
 	panic(p.message)
 }
 
 // A type that panics in Format.
+
+// 在 Format 中恐慌的类型。
 type PanicF struct {
 	message interface{}
 }
 
 // Value receiver.
+
+// 值接收者。
 func (p PanicF) Format(f State, c rune) {
 	panic(p.message)
 }
@@ -815,15 +875,15 @@ var panictests = []struct {
 	out string
 }{
 	// String
-	{"%s", (*Panic)(nil), "<nil>"}, // nil pointer special case
+	{"%s", (*Panic)(nil), "<nil>"}, // nil pointer special case // 空指针的特殊情况
 	{"%s", Panic{io.ErrUnexpectedEOF}, "%s(PANIC=unexpected EOF)"},
 	{"%s", Panic{3}, "%s(PANIC=3)"},
 	// GoString
-	{"%#v", (*Panic)(nil), "<nil>"}, // nil pointer special case
+	{"%#v", (*Panic)(nil), "<nil>"}, // nil pointer special case // 空指针的特殊情况
 	{"%#v", Panic{io.ErrUnexpectedEOF}, "%v(PANIC=unexpected EOF)"},
 	{"%#v", Panic{3}, "%v(PANIC=3)"},
 	// Format
-	{"%s", (*PanicF)(nil), "<nil>"}, // nil pointer special case
+	{"%s", (*PanicF)(nil), "<nil>"}, // nil pointer special case // 空指针的特殊情况
 	{"%s", PanicF{io.ErrUnexpectedEOF}, "%s(PANIC=unexpected EOF)"},
 	{"%s", PanicF{3}, "%s(PANIC=3)"},
 }
@@ -838,6 +898,8 @@ func TestPanics(t *testing.T) {
 }
 
 // Test that erroneous String routine doesn't cause fatal recursion.
+
+// 测试错误的 String 程序是否会产生致命的递归。
 var recurCount = 0
 
 type Recur struct {
@@ -853,6 +915,9 @@ func (r Recur) String() string {
 	// This will call badVerb. Before the fix, that would cause us to recur into
 	// this routine to print %!p(value). Now we don't call the user's method
 	// during an error.
+	//
+	// 这样会调用 badVerb。在修复之前，它会让我们重复此程序来打印 %!p(value)。
+	// 现在我们在发生错误时不会调用用户的方法了。
 	return Sprintf("recur@%p value: %d", r, r.i)
 }
 
@@ -874,6 +939,7 @@ func TestBadVerbRecursion(t *testing.T) {
 func TestIsSpace(t *testing.T) {
 	// This tests the internal isSpace function.
 	// IsSpace = isSpace is defined in export_test.go.
+	// 它用来测试内部的 isSpace 函数。IsSpace = isSpace 在 export_test.go 中定义。
 	for i := rune(0); i <= unicode.MaxRune; i++ {
 		if IsSpace(i) != unicode.IsSpace(i) {
 			t.Errorf("isSpace(%U) = %v, want %v", i, IsSpace(i), unicode.IsSpace(i))
