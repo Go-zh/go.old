@@ -9,7 +9,7 @@ import (
 	. "fmt"
 	"io"
 	"math"
-	"runtime" // for the malloc count test only
+	"runtime" // for the malloc count test only // 只用于 malloc 计数
 	"strings"
 	"testing"
 	"time"
