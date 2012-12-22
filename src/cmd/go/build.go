@@ -62,8 +62,7 @@ The build flags are shared by the build, install, run, and test commands:
 		print the commands.
 	-race
 		enable data race detection.
-		Currently supported only on linux/amd64,
-		darwin/amd64 and windows/amd64.
+		Supported only on linux/amd64, darwin/amd64 and windows/amd64.
 
 	-ccflags 'arg list'
 		arguments to pass on each 5c, 6c, or 8c compiler invocation
@@ -189,6 +188,21 @@ func runBuild(cmd *Command, args []string) {
 	if len(pkgs) == 1 && pkgs[0].Name == "main" && *buildO == "" {
 		_, *buildO = path.Split(pkgs[0].ImportPath)
 		*buildO += exeSuffix
+	}
+
+	// sanity check some often mis-used options
+	switch buildContext.Compiler {
+	case "gccgo":
+		if len(buildGcflags) != 0 {
+			fmt.Println("go build: when using gccgo toolchain, please pass compiler flags using -gccgoflags, not -gcflags")
+		}
+		if len(buildLdflags) != 0 {
+			fmt.Println("go build: when using gccgo toolchain, please pass linker flags using -gccgoflags, not -ldflags")
+		}
+	case "gc":
+		if len(buildGccgoflags) != 0 {
+			fmt.Println("go build: when using gc toolchain, please pass compile flags using -gcflags, and linker flags using -ldflags")
+		}
 	}
 
 	if *buildO != "" {
@@ -1451,7 +1465,7 @@ func (tools gccgcToolchain) ld(b *builder, p *Package, out string, allactions []
 	if usesCgo && goos == "linux" {
 		ldflags = append(ldflags, "-Wl,-E")
 	}
-	return b.run(".", p.ImportPath, "gccgo", "-o", out, buildGccgoflags, ofiles, "-Wl,-(", ldflags, "-Wl,-)")
+	return b.run(".", p.ImportPath, "gccgo", "-o", out, ofiles, "-Wl,-(", ldflags, "-Wl,-)", buildGccgoflags)
 }
 
 func (gccgcToolchain) cc(b *builder, p *Package, objdir, ofile, cfile string) error {

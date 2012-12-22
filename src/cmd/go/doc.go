@@ -76,7 +76,12 @@ The build flags are shared by the build, install, run, and test commands:
 		do not delete it when exiting.
 	-x
 		print the commands.
+	-race
+		enable data race detection.
+		Supported only on linux/amd64, darwin/amd64 and windows/amd64.
 
+	-ccflags 'arg list'
+		arguments to pass on each 5c, 6c, or 8c compiler invocation
 	-compiler name
 		name of compiler to use, as in runtime.Compiler (gccgo or gc)
 	-gccgoflags 'arg list'
@@ -121,6 +126,7 @@ source directories corresponding to the import paths:
 	DIR(.exe)        from go build
 	DIR.test(.exe)   from go test -c
 	MAINFILE(.exe)   from go build MAINFILE.go
+	*.so             from SWIG
 
 In the list, DIR represents the final path element of the
 directory, and MAINFILE is the base name of any Go source
@@ -276,10 +282,10 @@ The default output shows the package import path:
     code.google.com/p/goauth2/oauth
     code.google.com/p/sqlite
 
-The -f flag specifies an alternate format for the list,
-using the syntax of package template.  The default output
-is equivalent to -f '{{.ImportPath}}'.  The struct
-being passed to the template is:
+The -f flag specifies an alternate format for the list, using the
+syntax of package template.  The default output is equivalent to -f
+'{{.ImportPath}}'.  One extra template function is available, "join",
+which calls strings.Join. The struct being passed to the template is:
 
     type Package struct {
         Dir        string // directory containing package sources
@@ -625,7 +631,7 @@ The meta tag has the form:
 
 	<meta name="go-import" content="import-prefix vcs repo-root">
 
-The import-prefix is the import path correponding to the repository
+The import-prefix is the import path corresponding to the repository
 root. It must be a prefix or an exact match of the package being
 fetched with "go get". If it's not an exact match, another http
 request is made at the prefix to verify the <meta> tags match.
@@ -679,6 +685,9 @@ directory containing the package sources, has its own flags:
 	    Run benchmarks matching the regular expression.
 	    By default, no benchmarks run.
 
+	-test.benchmem
+	    Print memory allocation statistics for benchmarks.
+
 	-test.cpuprofile cpu.out
 	    Write a CPU profile to the specified file before exiting.
 
@@ -693,6 +702,18 @@ directory containing the package sources, has its own flags:
 	    and set the environment variable GOGC=off to disable the
 	    garbage collector, provided the test can run in the available
 	    memory without garbage collection.
+
+	-test.blockprofile block.out
+	    Write a goroutine blocking profile to the specified file
+	    when all tests are complete.
+
+	-test.blockprofilerate n
+	    Control the detail provided in goroutine blocking profiles by setting
+	    runtime.BlockProfileRate to n.  See 'godoc runtime BlockProfileRate'.
+	    The profiler aims to sample, on average, one blocking event every
+	    n nanoseconds the program spends blocked.  By default,
+	    if -test.blockprofile is set without this flag, all blocking events
+	    are recorded, equivalent to -test.blockprofilerate=1.
 
 	-test.parallel n
 	    Allow parallel execution of test functions that call t.Parallel.
