@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // This file implements binary search.
-// 该文件实现二分查找
+// 此文件实现了二分查找。
 
 package sort
 
@@ -58,9 +58,9 @@ package sort
 //	}
 //
 
-// Search 使用二分查找，找出并返回
-// 满足在范围[0,n)内，f取值为真的最小索引i，如果在范围[0, n)上，
-// f(i) == true 成立则 f(i+1) == true 也成立. 就是说，Search 要求
+// Search 使用二分查找，在区间 [0,n) 中寻找并返回满足 f(i) 为 true 的最小索引 i，
+// 若在区间 [0, n) 内 f(i) == true 成立，则 f(i+1) == true 也成立。就是说，Search
+// 要求
 // f 函数的取值 对于当i在范围 [0, n)中的前某一部分序列（或不存在）取值为false时
 // 对范围剩下的一部分取值为true; Search返回
 // 第一个取值为真的索引. 如果该索引不存在，Search 返回 n
@@ -86,7 +86,7 @@ package sort
 //	x := 23
 //	i := sort.Search(len(data), func(i int) bool { return data[i] >= x })
 //	if i < len(data) && data[i] == x {
-//		// x 在 data[i] 中 
+//		// x 在 data[i] 中
 //	} else {
 //		// x 不在data中
 //		// 但i可以作为x的插入索引
@@ -105,20 +105,64 @@ package sort
 //		fmt.Printf("Your number is %d.\n", answer)
 //	}
 //
+
+// Search 使用二分查找法在 [0, n) 中寻找并返回满足 f(i) == true 的最小索引 i，
+// 假定该索引在区间 [0, n) 内，则 f(i) == true 就蕴含了 f(i+1) == true。
+// 也就是说，Search 要求 f 对于输入区间 [0, n) （可能为空）的前一部分为 false，
+// 而对于剩余（可能为空）的部分为 true；Search 返回第一个 f 为 true 时的索引 i。
+// 若该索引不存在，Search 就返回 n。（注意，“未找到”的返回值并不像 strings.Index
+// 这类函数一样返回 -1）。Search 仅当 i 在区间 [0, n) 内时才调用 f(i)。
+//
+// Search 常用于在一个已排序的，可索引的数据结构中寻找索引为 i 的值 x，例如数组或切片。
+// 这种情况下，实参 f，一般是一个闭包，会捕获所要搜索的值，以及索引并排序该数据结构的方式。
+//
+// 例如，给定一个以升序排列的切片数据，调用
+//	Search(len(data), func(i int) bool { return data[i] >= 23 })
+// 会返回满足 data[i] >= 23 的最小索引 i。若调用者想要判断 23 是否在此切片中，
+// 就必须单独测试 data[i] == 23 的值。
+//
+// 搜索降以序排列的数据，需使用 <= 操作符，而非 >= 操作符。
+//
+// 补全上面的例子, 以下代码试图从以升序排列的整数切片中寻找值 x 的索引：
+//
+//	x := 23
+//	i := sort.Search(len(data), func(i int) bool { return data[i] >= x })
+//	if i < len(data) && data[i] == x {
+//		// x 为 data[i]
+//	} else {
+//		// x 不在 data 中，但 i 可作为它的索引插入。
+//	}
+//
+// 还有个更有趣的例子，此程序会猜你所想的数字：
+//
+//	func GuessingGame() {
+//		var s string
+//		fmt.Printf("Pick an integer from 0 to 100.\n")
+//		answer := sort.Search(100, func(i int) bool {
+//			fmt.Printf("Is your number <= %d? ", i)
+//			fmt.Scanf("%s", &s)
+//			return s != "" && s[0] == 'y'
+//		})
+//		fmt.Printf("Your number is %d.\n", answer)
+//	}
+//
 func Search(n int, f func(int) bool) int {
 	// Define f(-1) == false and f(n) == true.
 	// Invariant: f(i-1) == false, f(j) == true.
+	// 定义 f(-1) == false 且 f(n) == true。
+	// 不变式：f(i-1) == false，f(j) == true。
 	i, j := 0, n
 	for i < j {
-		h := i + (j-i)/2 // avoid overflow when computing h // 避免计算h的时候溢出
+		h := i + (j-i)/2 // avoid overflow when computing h // 避免计算 h 时溢出
 		// i ≤ h < j
 		if !f(h) {
-			i = h + 1 // preserves f(i-1) == false
+			i = h + 1 // preserves f(i-1) == false // 保持 f(i-1) == false
 		} else {
-			j = h // preserves f(j) == true
+			j = h // preserves f(j) == true // 保持 f(j) == true
 		}
 	}
 	// i == j, f(i-1) == false, and f(j) (= f(i)) == true  =>  answer is i.
+	// i == j，f(i-1) == false 且 f(j) (= f(i)) == true  =>  结果为 i。
 	return i
 }
 

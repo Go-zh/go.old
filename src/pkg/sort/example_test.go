@@ -10,7 +10,7 @@ import (
 )
 
 func ExampleInts() {
-	s := []int{5, 2, 6, 3, 1, 4} // unsorted
+	s := []int{5, 2, 6, 3, 1, 4} // unsorted // 未排序
 	sort.Ints(s)
 	fmt.Println(s)
 	// Output: [1 2 3 4 5 6]

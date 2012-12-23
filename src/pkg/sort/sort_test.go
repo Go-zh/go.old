@@ -154,7 +154,7 @@ type testingData struct {
 	desc    string
 	t       *testing.T
 	data    []int
-	maxswap int // number of swaps allowed
+	maxswap int // number of swaps allowed // 允许交换的最大数
 	nswap   int
 }
 
@@ -251,6 +251,7 @@ func testBentleyMcIlroy(t *testing.T, sort func(Interface)) {
 						}
 						// Ints is known to be correct
 						// because mode Sort runs after mode _Copy.
+						// Ints 已知是正确的，因为 mode Sort 运行在 mode _Copy 之后。
 						Ints(mdata)
 					case _Dither:
 						for i := 0; i < n; i++ {
@@ -270,6 +271,13 @@ func testBentleyMcIlroy(t *testing.T, sort func(Interface)) {
 					// In go, we don't have to be so paranoid: since the only
 					// mutating method Sort can call is TestingData.swap,
 					// it suffices here just to check that the final slice is sorted.
+					//
+					// 如果我们要测试C语言版的qsort，就必须创建一个该切片的副本，
+					// 由我们自己手动将它排序，然后针对它进行比较，以确保该快排算法
+					// 只是对该数据进行了排序，而不是（比如）用零将它覆盖掉。
+					//
+					// 但是在Go中，我们不必这么多疑：由于改变 Sort 方法的调用只有
+					// TestingData.swap，因此它在这里的作用只是检查最终的切片是否已排序。
 					if !IntsAreSorted(mdata) {
 						t.Errorf("%s: ints not sorted", desc)
 						t.Errorf("\t%v", mdata)
@@ -291,6 +299,9 @@ func TestHeapsortBM(t *testing.T) {
 
 // This is based on the "antiquicksort" implementation by M. Douglas McIlroy.
 // See http://www.cs.dartmouth.edu/~doug/mdmspe.pdf for more info.
+
+// 此程序基于 M. Douglas McIlroy 实现的“反快速排序算法”，更多详情见
+// http://www.cs.dartmouth.edu/~doug/mdmspe.pdf
 type adversaryTestingData struct {
 	data      []int
 	keys      map[int]int
@@ -334,5 +345,5 @@ func TestAdversary(t *testing.T) {
 	}
 
 	d := &adversaryTestingData{data, make(map[int]int), 0}
-	Sort(d) // This should degenerate to heapsort.
+	Sort(d) // This should degenerate to heapsort. // 这会让堆排序测试最坏情况
 }

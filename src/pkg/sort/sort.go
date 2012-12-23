@@ -253,7 +253,7 @@ func IsSorted(data Interface) bool {
 
 // IntSlice attaches the methods of Interface to []int, sorting in increasing order.
 
-// IntSlice 针对 []int 实现接口的方法，以升序排序。
+// IntSlice 针对 []int 实现接口的方法，以升序排列。
 type IntSlice []int
 
 func (p IntSlice) Len() int           { return len(p) }
@@ -267,7 +267,7 @@ func (p IntSlice) Sort() { Sort(p) }
 
 // Float64Slice attaches the methods of Interface to []float64, sorting in increasing order.
 
-// Float64Slice 针对 []float6 实现接口的方法，以升序排序。
+// Float64Slice 针对 []float6 实现接口的方法，以升序排列。
 type Float64Slice []float64
 
 func (p Float64Slice) Len() int           { return len(p) }
@@ -281,7 +281,7 @@ func (p Float64Slice) Sort() { Sort(p) }
 
 // StringSlice attaches the methods of Interface to []string, sorting in increasing order.
 
-// StringSlice 针对  []string 实现接口的方法，以升序排序。
+// StringSlice 针对  []string 实现接口的方法，以升序排列。
 type StringSlice []string
 
 func (p StringSlice) Len() int           { return len(p) }
@@ -298,30 +298,30 @@ func (p StringSlice) Sort() { Sort(p) }
 
 // Ints sorts a slice of ints in increasing order.
 
-//Ints 以升序排序 int 切片。
+//Ints 以升序排列 int 切片。
 func Ints(a []int) { Sort(IntSlice(a)) }
 
 // Float64s sorts a slice of float64s in increasing order.
 
-// Float64s 以升序排序 float64 切片
+// Float64s 以升序排列 float64 切片
 func Float64s(a []float64) { Sort(Float64Slice(a)) }
 
 // Strings sorts a slice of strings in increasing order.
 
-// Strings 以升序排序 string 切片。
+// Strings 以升序排列 string 切片。
 func Strings(a []string) { Sort(StringSlice(a)) }
 
 // IntsAreSorted tests whether a slice of ints is sorted in increasing order.
 
-// IntsAreSorted 判断 int 切片是否已经按升序排序。
+// IntsAreSorted 判断 int 切片是否已经按升序排列。
 func IntsAreSorted(a []int) bool { return IsSorted(IntSlice(a)) }
 
 // Float64sAreSorted tests whether a slice of float64s is sorted in increasing order.
 
-// Float64sAreSorted 判断 float64 切片是否已经按升序排序。
+// Float64sAreSorted 判断 float64 切片是否已经按升序排列。
 func Float64sAreSorted(a []float64) bool { return IsSorted(Float64Slice(a)) }
 
 // StringsAreSorted tests whether a slice of strings is sorted in increasing order.
 
-// StringsAreSorted 判断 string 切片是否已经按升序排序。
+// StringsAreSorted 判断 string 切片是否已经按升序排列。
 func StringsAreSorted(a []string) bool { return IsSorted(StringSlice(a)) }
