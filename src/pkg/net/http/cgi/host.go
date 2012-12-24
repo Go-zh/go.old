@@ -5,6 +5,8 @@
 // This file implements the host side of CGI (being the webserver
 // parent process).
 
+// 这个文件实现了CGI的宿主方（就是web服务器的父进程一方）
+
 // Package cgi implements CGI (Common Gateway Interface) as specified
 // in RFC 3875.
 //
@@ -12,6 +14,11 @@
 // request, which is typically less efficient than using a
 // long-running server.  This package is intended primarily for
 // compatibility with existing systems.
+
+// cgi包实现了RFC3875协议描述的CGI（公共网关接口）。
+//
+// 使用CGI就意味开启一个新进程来处理每个请求，这种方法当然比长运行的CGI服务进程的方式低效些。
+// 这个包主要用来和现有的web系统进行交互。
 package cgi
 
 import (
@@ -43,20 +50,26 @@ var osDefaultInheritEnv = map[string][]string{
 }
 
 // Handler runs an executable in a subprocess with a CGI environment.
+
+// Handler会在子进程中创建一个CGI环境来运行可执行程序。
 type Handler struct {
-	Path string // path to the CGI executable
-	Root string // root URI prefix of handler or empty for "/"
+	Path string // path to the CGI executable  // CGI可执行程序的地址
+	Root string // root URI prefix of handler or empty for "/"  // URI的前缀ROOT部分，如果是empty的话就代表“/”
 
 	// Dir specifies the CGI executable's working directory.
 	// If Dir is empty, the base directory of Path is used.
 	// If Path has no base directory, the current working
 	// directory is used.
+
+	// Dir说明CGI可执行脚本运行所在的工作路径。
+	// 如果Dir为空，Path参数指的文件所在的路径就会被使用。
+	// 如果Path没有路径，那么Dir就会使用当前的执行目录。
 	Dir string
 
-	Env        []string    // extra environment variables to set, if any, as "key=value"
-	InheritEnv []string    // environment variables to inherit from host, as "key"
-	Logger     *log.Logger // optional log for errors or nil to use log.Print
-	Args       []string    // optional arguments to pass to child process
+	Env        []string    // extra environment variables to set, if any, as "key=value"  // 需要额外设置的环境变量，如果有的话，形如“key=value”
+	InheritEnv []string    // environment variables to inherit from host, as "key" // 需要继承自宿主的环境变量，形如“key”
+	Logger     *log.Logger // optional log for errors or nil to use log.Print  // 可选。错误的日志处理器，如果是nil的话就默认使用log.Print
+	Args       []string    // optional arguments to pass to child process  // 可选。给子进程传递的附加参数。
 
 	// PathLocationHandler specifies the root http Handler that
 	// should handle internal redirects when the CGI process
@@ -66,11 +79,23 @@ type Handler struct {
 	//
 	// If nil, a CGI response with a local URI path is instead sent
 	// back to the client and not redirected internally.
+
+	// PathLocationHandler是http Handler，它说明的是在CGI进程返回的Location header信息是以“/”开头的时候（location是在RFC 3875 § 6.3.2），
+	// 根目录应当如何处理内部的重定向规则。这个值可以是http.DefaultServeMux。
+	//
+	// 如果为空，一个带有本地URI路径的CGI回复会立刻返回给客户端，并且没有进行任何的内部重定向。
 	PathLocationHandler http.Handler
 }
 
 // removeLeadingDuplicates remove leading duplicate in environments.
 // It's possible to override environment like following.
+//    cgi.Handler{
+//      ...
+//      Env: []string{"SCRIPT_FILENAME=foo.php"},
+//    }
+
+// removeLeadingDuplicates将重复的环境变量删除。
+// 所以你可以想下面这样来设置环境变量。
 //    cgi.Handler{
 //      ...
 //      Env: []string{"SCRIPT_FILENAME=foo.php"},
