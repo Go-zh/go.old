@@ -25,12 +25,16 @@ func (s Organs) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
 // ByName implements sort.Interface by providing Less and using the Len and
 // Swap methods of the embedded Organs value.
+
+// ByName 通过提供 Less 方法并使用嵌入式 Organs 值的 Len 和 Swap 方法实现了 sort.Interface。
 type ByName struct{ Organs }
 
 func (s ByName) Less(i, j int) bool { return s.Organs[i].Name < s.Organs[j].Name }
 
 // ByWeight implements sort.Interface by providing Less and using the Len and
 // Swap methods of the embedded Organs value.
+
+// ByWeight 通过提供 Less 方法并使用嵌入式 Organs 值的 Len 和 Swap 方法实现了 sort.Interface。
 type ByWeight struct{ Organs }
 
 func (s ByWeight) Less(i, j int) bool { return s.Organs[i].Weight < s.Organs[j].Weight }

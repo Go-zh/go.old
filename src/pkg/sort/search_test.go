@@ -59,6 +59,9 @@ func TestSearch(t *testing.T) {
 // log2 computes the binary logarithm of x, rounded up to the next integer.
 // (log2(0) == 0, log2(1) == 0, log2(2) == 1, log2(3) == 2, etc.)
 //
+
+// log2 计算以2为底 x 的对数，向上取整至下一个整数。
+// （log2(0) == 0、log2(1) == 0、log2(2) == 1、log2(3) == 2 等等。）
 func log2(x int) int {
 	n := 0
 	for p := 1; p < x; p += p {
@@ -92,6 +95,7 @@ func TestSearchEfficiency(t *testing.T) {
 }
 
 // Smoke tests for convenience wrappers - not comprehensive.
+// 针对便捷性封装进行的冒烟测试——还不全面。
 
 var fdata = []float64{0: -3.14, 1: 0, 2: 1, 3: 2, 4: 1000.7}
 var sdata = []string{0: "f", 1: "foo", 2: "foobar", 3: "x"}
@@ -120,6 +124,9 @@ func TestSearchWrappers(t *testing.T) {
 // Abstract exhaustive test: all sizes up to 100,
 // all possible return values.  If there are any small
 // corner cases, this test exercises them.
+
+// 抽象的穷竭性测试：所有100以下的大小，所有可能的返回值。
+// 如果有任何一点极端情况，本测试就会检测它们。
 func TestSearchExhaustive(t *testing.T) {
 	for size := 0; size <= 100; size++ {
 		for targ := 0; targ <= size; targ++ {

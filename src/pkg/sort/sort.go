@@ -249,7 +249,7 @@ func IsSorted(data Interface) bool {
 }
 
 // Convenience types for common cases
-// 针对一般情况约定的类型
+// 针对一般情况的便捷性类型
 
 // IntSlice attaches the methods of Interface to []int, sorting in increasing order.
 
@@ -262,7 +262,7 @@ func (p IntSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 // Sort is a convenience method.
 
-// Sort 是约定的方法
+// Sort 为便捷性方法
 func (p IntSlice) Sort() { Sort(p) }
 
 // Float64Slice attaches the methods of Interface to []float64, sorting in increasing order.
@@ -276,7 +276,7 @@ func (p Float64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 // Sort is a convenience method.
 
-// Sort 是约定的方法
+// Sort 为便捷性方法
 func (p Float64Slice) Sort() { Sort(p) }
 
 // StringSlice attaches the methods of Interface to []string, sorting in increasing order.
@@ -290,11 +290,11 @@ func (p StringSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 // Sort is a convenience method.
 
-// Sort 是约定的方法
+// Sort 为便捷性方法
 func (p StringSlice) Sort() { Sort(p) }
 
 // Convenience wrappers for common cases
-// 针对一般情况约定的封装
+// 针对一般情况的便捷性封装
 
 // Ints sorts a slice of ints in increasing order.
 
