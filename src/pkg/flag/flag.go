@@ -280,16 +280,16 @@ func (d *durationValue) String() string { return (*time.Duration)(d).String() }
 
 // Value is the interface to the dynamic value stored in a flag.
 // (The default value is represented as a string.)
-<<<<<<< local
-
-// Value接口是定义了标签对应的具体的参数值。
-// （默认值是string类型）
-=======
 //
 // If a Value has an IsBoolFlag() bool method returning true,
 // the command-line parser makes -name equivalent to -name=true
 // rather than using the next command-line argument.
->>>>>>> other
+
+// Value接口是定义了标签对应的具体的参数值。
+// （默认值是string类型）
+//
+// 若 Value 拥有 IsBoolFlag() bool 方法返回 ture，则命令行解析器会使 -name 等价于
+// -name=true，而非使用下一个命令行实参。
 type Value interface {
 	String() string
 	Set(string) error
@@ -948,7 +948,7 @@ func (f *FlagSet) parseOne() (bool, error) {
 	f.args = f.args[1:]
 	has_value := false
 	value := ""
-	for i := 1; i < len(name); i++ { // equals cannot be first 
+	for i := 1; i < len(name); i++ { // equals cannot be first
 		if name[i] == '=' {
 			value = name[i+1:]
 			has_value = true
