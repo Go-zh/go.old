@@ -6,7 +6,6 @@
 // process.
 
 // 这个文件从子进程的角度实现了CGI.
-
 package cgi
 
 import (
@@ -30,7 +29,7 @@ import (
 // The returned Request's Body is populated, if applicable.
 
 // Request()函数返回当前系统环境下的HTTP请求。这个函数假设当前的程序是跑在一个CGI环境下的WebServer中。
-// 返回的Request的Body字段是可有可无的，如果有的话才会返回回来，否则body就是空。
+// 返回的Request的Body字段是可有可无的，如果有的话才会返回回来，如果Body没有内容的话，这个字段就是空。
 func Request() (*http.Request, error) {
 	r, err := RequestFromMap(envMap(os.Environ()))
 	if err != nil {
@@ -55,8 +54,8 @@ func envMap(env []string) map[string]string {
 // RequestFromMap creates an http.Request from CGI variables.
 // The returned Request's Body field is not populated.
 
-// RequestFromMap从CGI的变量中提取出来http.Request。
-// 返回的Request的Body字段是不返回的。
+// RequestFromMap从CGI的变量中提取出http.Request结构。
+// 返回的Request的Body字段是不会为空的。
 func RequestFromMap(params map[string]string) (*http.Request, error) {
 	r := new(http.Request)
 	r.Method = params["REQUEST_METHOD"]

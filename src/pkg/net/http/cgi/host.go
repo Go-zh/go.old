@@ -5,7 +5,7 @@
 // This file implements the host side of CGI (being the webserver
 // parent process).
 
-// 这个文件实现了CGI的宿主方（就是web服务器的父进程一方）
+// 这个文件实现了CGI的宿主方（就是web服务器的父进程一方）.
 
 // Package cgi implements CGI (Common Gateway Interface) as specified
 // in RFC 3875.
@@ -17,7 +17,7 @@
 
 // cgi包实现了RFC3875协议描述的CGI（公共网关接口）。
 //
-// 使用CGI就意味开启一个新进程来处理每个请求，这种方法当然比长运行的CGI服务进程的方式低效些。
+// 使用CGI就意味开启一个新进程来处理每个请求，这种方法当然比持久运行的服务进程的方式低效些。
 // 这个包主要用来和现有的web系统进行交互。
 package cgi
 
@@ -53,8 +53,8 @@ var osDefaultInheritEnv = map[string][]string{
 
 // Handler会在子进程中创建一个CGI环境来运行可执行程序。
 type Handler struct {
-	Path string // path to the CGI executable  // CGI可执行程序的地址
-	Root string // root URI prefix of handler or empty for "/"  // URI的前缀ROOT部分，如果是empty的话就代表“/”
+	Path string // path to the CGI executable  // CGI可执行脚本的地址
+	Root string // root URI prefix of handler or empty for "/"  // URI的前缀ROOT部分，如果为空的话就代表“/”
 
 	// Dir specifies the CGI executable's working directory.
 	// If Dir is empty, the base directory of Path is used.
