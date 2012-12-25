@@ -857,7 +857,7 @@ func (p Panic) String() string {
 
 // A type that panics in Format.
 
-// 在 Format 中恐慌的类型。
+// 在 Format 中引发恐慌的类型。
 type PanicF struct {
 	message interface{}
 }
