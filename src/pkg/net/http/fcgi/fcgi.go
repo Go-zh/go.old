@@ -5,10 +5,16 @@
 // Package fcgi implements the FastCGI protocol.
 // Currently only the responder role is supported.
 // The protocol is defined at http://www.fastcgi.com/drupal/node/6?q=node/22
+
+// fcgi包实现了FastCGI协议.
+// 当前只提供了FastCGI的响应服务端。
+// 这个协议定义文档是：http://www.fastcgi.com/drupal/node/6?q=node/22
 package fcgi
 
 // This file defines the raw protocol and some utilities used by the child and
 // the host.
+
+// 这个文件定义了原生的协议和一些可以被子进程和宿主进程使用的功能。
 
 import (
 	"bufio"
@@ -20,6 +26,9 @@ import (
 )
 
 // recType is a record type, as defined by
+// http://www.fastcgi.com/devkit/doc/fcgi-spec.html#S8
+
+// recType是一个record结构，结构定义文档是在：
 // http://www.fastcgi.com/devkit/doc/fcgi-spec.html#S8
 type recType uint8
 
@@ -38,15 +47,17 @@ const (
 )
 
 // keep the connection between web-server and responder open after request
+
+// web服务器和响应服务端在请求之后是否保持连接
 const flagKeepConn = 1
 
 const (
-	maxWrite = 65535 // maximum record body
+	maxWrite = 65535 // maximum record body  // record的body最大容量
 	maxPad   = 255
 )
 
 const (
-	roleResponder = iota + 1 // only Responders are implemented.
+	roleResponder = iota + 1 // only Responders are implemented.  // 是否只是实现了相应服务端
 	roleAuthorizer
 	roleFilter
 )
@@ -86,6 +97,9 @@ func (br *beginRequest) read(content []byte) error {
 
 // for padding so we don't have to allocate all the time
 // not synchronized because we don't care what the contents are
+
+// 这个结构是填充符的，因此我们并不需要在每次使用的时候都分配。
+// 由于我们并不在乎填充符中的内容，所以这个这个结构可能是不同步的。
 var pad [maxPad]byte
 
 func (h *header) init(recType recType, reqId uint16, contentLength int) {
@@ -97,6 +111,8 @@ func (h *header) init(recType recType, reqId uint16, contentLength int) {
 }
 
 // conn sends records over rwc
+
+// conn通过rwc属性发送records
 type conn struct {
 	mutex sync.Mutex
 	rwc   io.ReadWriteCloser
@@ -140,6 +156,8 @@ func (r *record) content() []byte {
 }
 
 // writeRecord writes and sends a single record.
+
+// writeRecord记录和发送单一的record。
 func (c *conn) writeRecord(recType recType, reqId uint16, b []byte) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -225,6 +243,8 @@ func encodeSize(b []byte, size uint32) int {
 
 // bufWriter encapsulates bufio.Writer but also closes the underlying stream when
 // Closed.
+
+// bufWriter封装了bufio.Writer, 当它关闭它的时候，底层的bufio.Writer也会关闭。
 type bufWriter struct {
 	closer io.Closer
 	*bufio.Writer
@@ -246,6 +266,9 @@ func newWriter(c *conn, recType recType, reqId uint16) *bufWriter {
 
 // streamWriter abstracts out the separation of a stream into discrete records.
 // It only writes maxWrite bytes at a time.
+
+// streamWriter将数据流抽象出来分配到多个单独的records中。
+// 它一次性只会写maxWrite个字节
 type streamWriter struct {
 	c       *conn
 	recType recType
@@ -270,5 +293,7 @@ func (w *streamWriter) Write(p []byte) (int, error) {
 
 func (w *streamWriter) Close() error {
 	// send empty record to close the stream
+
+	// 发送空record来关闭数据流
 	return w.c.writeRecord(w.recType, w.reqId, nil)
 }

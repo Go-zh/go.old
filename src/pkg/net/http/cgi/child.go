@@ -5,6 +5,7 @@
 // This file implements CGI from the perspective of a child
 // process.
 
+// 这个文件从子进程的角度实现了CGI.
 package cgi
 
 import (
@@ -26,6 +27,9 @@ import (
 // environment. This assumes the current program is being run
 // by a web server in a CGI environment.
 // The returned Request's Body is populated, if applicable.
+
+// Request()函数返回当前系统环境下的HTTP请求。这个函数假设当前的程序是跑在一个CGI环境下的WebServer中。
+// 返回的Request的Body字段是可有可无的，如果有的话才会返回回来，如果Body没有内容的话，这个字段就是空。
 func Request() (*http.Request, error) {
 	r, err := RequestFromMap(envMap(os.Environ()))
 	if err != nil {
@@ -49,6 +53,9 @@ func envMap(env []string) map[string]string {
 
 // RequestFromMap creates an http.Request from CGI variables.
 // The returned Request's Body field is not populated.
+
+// RequestFromMap从CGI的变量中提取出http.Request结构。
+// 返回的Request的Body字段是不会为空的。
 func RequestFromMap(params map[string]string) (*http.Request, error) {
 	r := new(http.Request)
 	r.Method = params["REQUEST_METHOD"]
@@ -130,6 +137,9 @@ func RequestFromMap(params map[string]string) (*http.Request, error) {
 // request, if any. If there's no current CGI environment
 // an error is returned. The provided handler may be nil to use
 // http.DefaultServeMux.
+
+// Serve使用提供的Handler来处理当前的CGI请求。如果CGI环境配置不正确的话，会返回一个error。
+// 如果提供的Hanlder是nil的话，程序就会使用http.DefaultServeMux。
 func Serve(handler http.Handler) error {
 	req, err := Request()
 	if err != nil {

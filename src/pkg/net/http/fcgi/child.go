@@ -6,6 +6,8 @@ package fcgi
 
 // This file implements FastCGI from the perspective of a child process.
 
+// 这个文件从子进程的角度实现了FastCGI。
+
 import (
 	"errors"
 	"fmt"
@@ -19,6 +21,8 @@ import (
 
 // request holds the state for an in-progress request. As soon as it's complete,
 // it's converted to an http.Request.
+
+// request保持着正在执行的请求的状态。当请求结束的时候，它就会转变成http.Request。
 type request struct {
 	pw        *io.PipeWriter
 	reqId     uint16
@@ -39,6 +43,8 @@ func newRequest(reqId uint16, flags uint8) *request {
 }
 
 // parseParams reads an encoded []byte into Params.
+
+// parseParams将编码的[]byte转变成各个参数。
 func (r *request) parseParams() {
 	text := r.rawParams
 	r.rawParams = nil
@@ -62,6 +68,8 @@ func (r *request) parseParams() {
 }
 
 // response implements http.ResponseWriter.
+
+// response实现了http.ResponseWriter。
 type response struct {
 	req         *request
 	header      http.Header
@@ -247,6 +255,11 @@ func (c *child) serveRequest(req *request, body io.ReadCloser) {
 // to reply to them.
 // If l is nil, Serve accepts connections from os.Stdin.
 // If handler is nil, http.DefaultServeMux is used.
+
+// Serve在l监听器中接受传递进来的FastCGI连接，为每个请求创建了一个新的goroutine。
+// goroutine读取请求，然后调用handler来回复。
+// 如果l是nil，Serve会从os.Stdin接收连接。
+// 如果handler是nil，默认使用http.DefaultServeMux。
 func Serve(l net.Listener, handler http.Handler) error {
 	if l == nil {
 		var err error
