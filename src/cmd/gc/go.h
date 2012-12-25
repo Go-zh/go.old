@@ -937,7 +937,7 @@ EXTERN	int	funcdepth;
 EXTERN	int	typecheckok;
 EXTERN	int	compiling_runtime;
 EXTERN	int	compiling_wrappers;
-EXTERN	int	zerostack_enabled;
+EXTERN	int	pure_go;
 
 EXTERN	int	nointerface;
 EXTERN	int	fieldtrack_enabled;
@@ -1093,7 +1093,6 @@ void	genlist(NodeList *l);
 Node*	sysfunc(char *name);
 void	tempname(Node *n, Type *t);
 Node*	temp(Type*);
-void	clearstk(void);
 
 /*
  *	init.c

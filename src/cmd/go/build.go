@@ -1321,6 +1321,21 @@ func (gcToolchain) gc(b *builder, p *Package, obj string, importArgs []string, g
 		gcargs = append(gcargs, "-+")
 	}
 
+	// If we're giving the compiler the entire package (no C etc files), tell it that,
+	// so that it can give good error messages about forward declarations.
+	// Exceptions: a few standard packages have forward declarations for
+	// pieces supplied behind-the-scenes by package runtime.
+	extFiles := len(p.CgoFiles) + len(p.CFiles) + len(p.SFiles) + len(p.SysoFiles) + len(p.SwigFiles) + len(p.SwigCXXFiles)
+	if p.Standard {
+		switch p.ImportPath {
+		case "os", "runtime/pprof", "sync", "time":
+			extFiles++
+		}
+	}
+	if extFiles == 0 {
+		gcargs = append(gcargs, "-=")
+	}
+
 	args := stringList(tool(archChar+"g"), "-o", ofile, buildGcflags, gcargs, "-D", p.localPrefix, importArgs)
 	for _, f := range gofiles {
 		args = append(args, mkAbs(p.Dir, f))

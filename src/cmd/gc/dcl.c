@@ -188,6 +188,9 @@ declare(Node *n, int ctxt)
 	if(importpkg == nil && !typecheckok && s->pkg != localpkg)
 		yyerror("cannot declare name %S", s);
 
+	if(ctxt == PEXTERN && strcmp(s->name, "init") == 0)
+		yyerror("cannot declare init - must be func", s);
+
 	gen = 0;
 	if(ctxt == PEXTERN) {
 		externdcl = list(externdcl, n);
@@ -1013,6 +1016,9 @@ embedded(Sym *s)
 
 	if(exportname(name))
 		n = newname(lookup(name));
+	else if(s->pkg == builtinpkg && importpkg != nil)
+		// The name of embedded builtins during imports belongs to importpkg.
+		n = newname(pkglookup(name, importpkg));
 	else
 		n = newname(pkglookup(name, s->pkg));
 	n = nod(ODCLFIELD, n, oldname(s));

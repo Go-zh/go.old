@@ -144,6 +144,15 @@ func (b *boolValue) Set(s string) error {
 
 func (b *boolValue) String() string { return fmt.Sprintf("%v", *b) }
 
+func (b *boolValue) IsBoolFlag() bool { return true }
+
+// optional interface to indicate boolean flags that can be
+// supplied without "=value" text
+type boolFlag interface {
+	Value
+	IsBoolFlag() bool
+}
+
 // -- int Value
 
 // -- int值
@@ -271,9 +280,16 @@ func (d *durationValue) String() string { return (*time.Duration)(d).String() }
 
 // Value is the interface to the dynamic value stored in a flag.
 // (The default value is represented as a string.)
+<<<<<<< local
 
 // Value接口是定义了标签对应的具体的参数值。
 // （默认值是string类型）
+=======
+//
+// If a Value has an IsBoolFlag() bool method returning true,
+// the command-line parser makes -name equivalent to -name=true
+// rather than using the next command-line argument.
+>>>>>>> other
 type Value interface {
 	String() string
 	Set(string) error
@@ -949,7 +965,7 @@ func (f *FlagSet) parseOne() (bool, error) {
 		}
 		return false, f.failf("flag provided but not defined: -%s", name)
 	}
-	if fv, ok := flag.Value.(*boolValue); ok { // special case: doesn't need an arg
+	if fv, ok := flag.Value.(boolFlag); ok && fv.IsBoolFlag() { // special case: doesn't need an arg
 		if has_value {
 			if err := fv.Set(value); err != nil {
 				return false, f.failf("invalid boolean value %q for  -%s: %v", value, name, err)

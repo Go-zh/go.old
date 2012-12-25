@@ -33,10 +33,14 @@ func PrintStack() {
 // For each routine, it includes the source line information and PC value,
 // then attempts to discover, for Go functions, the calling function or
 // method and the text of the line containing the invocation.
+//
+// This function is deprecated. Use package runtime's Stack instead.
 
 // Stack 返回格式化的Go程调用的栈跟踪信息。
 // 对于每一个例程，它包括来源行的信息和 PC 值，然后尝试获取，对于Go函数，
 // 则是调用的函数或方法及其包含请求的行的文本。
+//
+// 此函数并不赞成使用。请使用 runtime 包中的 Stack 代替。
 func Stack() []byte {
 	return stack()
 }
