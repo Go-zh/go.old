@@ -288,8 +288,8 @@ func (d *durationValue) String() string { return (*time.Duration)(d).String() }
 // Value接口是定义了标签对应的具体的参数值。
 // （默认值是string类型）
 //
-// 若 Value 拥有 IsBoolFlag() bool 方法返回 ture，则命令行解析器会使 -name 等价于
-// -name=true，而非使用下一个命令行实参。
+// 若 Value 拥有的 IsBoolFlag() bool 方法返回 ture，则命令行解析器会使 -name
+// 等价于 -name=true，而非使用下一个命令行实参。
 type Value interface {
 	String() string
 	Set(string) error
