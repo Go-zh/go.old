@@ -86,6 +86,8 @@ type FloatTest struct {
 }
 
 // Xs accepts any non-empty run of the verb character
+
+// Xs 接受任何非空的一系列占位符
 type Xs string
 
 func (x *Xs) Scan(state ScanState, verb rune) error {
@@ -105,6 +107,8 @@ var xVal Xs
 
 // IntString accepts an integer followed immediately by a string.
 // It tests the embedding of a scan within a scan.
+
+// IntSting 接受一个整数紧跟一个字符串。它用于在一次扫描中测试扫描的插入。
 type IntString struct {
 	i int
 	s string
@@ -127,6 +131,9 @@ var intStringVal IntString
 
 // myStringReader implements Read but not ReadRune, allowing us to test our readRune wrapper
 // type that creates something that can read runes given only Read().
+
+// myStringReader 实现了 Read 而未实现 ReadRune，以此允许我们测试 readRune
+// 封装类型，该类型会创建一些只能被 Read() 读取的符文。
 type myStringReader struct {
 	r *strings.Reader
 }
@@ -140,9 +147,9 @@ func newReader(s string) *myStringReader {
 }
 
 var scanTests = []ScanTest{
-	// Basic types
-	{"T\n", &boolVal, true},  // boolean test vals toggle to be sure they are written
-	{"F\n", &boolVal, false}, // restored to zero value
+	// Basic types // 基本类型
+	{"T\n", &boolVal, true},  // boolean test vals toggle to be sure they are written // 布尔测试值以确认它们被写入
+	{"F\n", &boolVal, false}, // restored to zero value // 恢复为零值
 	{"21\n", &intVal, 21},
 	{"0\n", &intVal, 0},
 	{"000\n", &intVal, 0},
@@ -193,6 +200,7 @@ var scanTests = []ScanTest{
 	{"hello\n", &stringVal, "hello"},
 
 	// Renamed types
+	// 重命名类型
 	{"true\n", &renamedBoolVal, renamedBool(true)},
 	{"F\n", &renamedBoolVal, renamedBool(false)},
 	{"101\n", &renamedIntVal, renamedInt(101)},
@@ -212,11 +220,13 @@ var scanTests = []ScanTest{
 	{"115\n", &renamedBytesVal, renamedBytes([]byte("115"))},
 
 	// Custom scanners.
+	// 定制的扫描器。
 	{"  vvv ", &xVal, Xs("vvv")},
 	{" 1234hello", &intStringVal, IntString{1234, "hello"}},
 
 	// Fixed bugs
-	{"2147483648\n", &int64Val, int64(2147483648)}, // was: integer overflow
+	// 修复缺陷。
+	{"2147483648\n", &int64Val, int64(2147483648)}, // was: integer overflow // 曾经会整数溢出
 }
 
 var scanfTests = []ScanfTest{
@@ -250,18 +260,21 @@ var scanfTests = []ScanfTest{
 	{"%U", "U+4567\n", &uintVal, uint(0x4567)},
 
 	// Strings
+	// 字符串
 	{"%s", "using-%s\n", &stringVal, "using-%s"},
 	{"%x", "7573696e672d2578\n", &stringVal, "using-%x"},
 	{"%q", `"quoted\twith\\do\u0075bl\x65s"` + "\n", &stringVal, "quoted\twith\\doubles"},
 	{"%q", "`quoted with backs`\n", &stringVal, "quoted with backs"},
 
 	// Byte slices
+	// 字节切片
 	{"%s", "bytes-%s\n", &bytesVal, []byte("bytes-%s")},
 	{"%x", "62797465732d2578\n", &bytesVal, []byte("bytes-%x")},
 	{"%q", `"bytes\rwith\vdo\u0075bl\x65s"` + "\n", &bytesVal, []byte("bytes\rwith\vdoubles")},
 	{"%q", "`bytes with backs`\n", &bytesVal, []byte("bytes with backs")},
 
 	// Renamed types
+	// 重命名类型
 	{"%v\n", "true\n", &renamedBoolVal, renamedBool(true)},
 	{"%t\n", "F\n", &renamedBoolVal, renamedBool(false)},
 	{"%v", "101\n", &renamedIntVal, renamedInt(101)},
@@ -286,19 +299,24 @@ var scanfTests = []ScanfTest{
 	{"%g", "-11.+7e+1i", &renamedComplex128Val, renamedComplex128(-11. + 7e+1i)},
 
 	// Interesting formats
+	// 有趣的格式
 	{"here is\tthe value:%d", "here is   the\tvalue:118\n", &intVal, 118},
 	{"%% %%:%d", "% %:119\n", &intVal, 119},
 
 	// Corner cases
+	// 极端情况
 	{"%x", "FFFFFFFF\n", &uint32Val, uint32(0xFFFFFFFF)},
 
 	// Custom scanner.
+	// 定制扫描器。
 	{"%s", "  sss ", &xVal, Xs("sss")},
 	{"%2s", "sssss", &xVal, Xs("ss")},
 
 	// Fixed bugs
-	{"%d\n", "27\n", &intVal, 27},  // ok
-	{"%d\n", "28 \n", &intVal, 28}, // was: "unexpected newline"
+	// 修复缺陷
+	{"%d\n", "27\n", &intVal, 27},  // ok // 原来就正确，作对比
+	{"%d\n", "28 \n", &intVal, 28}, // was: "unexpected newline" // 曾经会出现“unexpected newline”
+	// 曾经会出现“EOF”；0 曾被作为进制前缀且不会被计入
 	{"%v", "0", &intVal, 0},        // was: "EOF"; 0 was taken as base prefix and not counted.
 	{"%v", "0", &uintVal, uint(0)}, // was: "EOF"; 0 was taken as base prefix and not counted.
 }
@@ -339,10 +357,12 @@ var multiTests = []ScanfMultiTest{
 	{"%c%c%c", "2\u50c2X", args(&r1, &r2, &r3), args('2', '\u50c2', 'X'), ""},
 
 	// Custom scanners.
+	// 定制扫描器。
 	{"%e%f", "eefffff", args(&x, &y), args(Xs("ee"), Xs("fffff")), ""},
 	{"%4v%s", "12abcd", args(&z, &s), args(IntString{12, "ab"}, "cd"), ""},
 
 	// Errors
+	// 错误测试
 	{"%t", "23 18", args(&i), nil, "bad verb"},
 	{"%d %d %d", "23 18", args(&i, &j), args(23, 18), "too few operands"},
 	{"%d %d", "23 18 27", args(&i, &j, &k), args(23, 18), "too many operands"},
@@ -350,9 +370,11 @@ var multiTests = []ScanfMultiTest{
 	{"X%d", "10X", args(&intVal), nil, "input does not match format"},
 
 	// Bad UTF-8: should see every byte.
+	// 错误的UTF-8：应检查所有的字节。
 	{"%c%c%c", "\xc2X\xc2", args(&r1, &r2, &r3), args(utf8.RuneError, 'X', utf8.RuneError), ""},
 
 	// Fixed bugs
+	// 修复缺陷
 	{"%v%v", "FALSE23", args(&truth, &i), args(false, 23), ""},
 }
 
@@ -378,6 +400,7 @@ func testScan(name string, t *testing.T, scan func(r io.Reader, a ...interface{}
 			continue
 		}
 		// The incoming value may be a pointer
+		// 引入的值可能为指针
 		v := reflect.ValueOf(test.in)
 		if p := v; p.Kind() == reflect.Ptr {
 			v = p.Elem()
@@ -417,6 +440,7 @@ func TestScanf(t *testing.T) {
 			continue
 		}
 		// The incoming value may be a pointer
+		// 引入的值可能为指针
 		v := reflect.ValueOf(test.in)
 		if p := v; p.Kind() == reflect.Ptr {
 			v = p.Elem()
@@ -430,6 +454,7 @@ func TestScanf(t *testing.T) {
 
 func TestScanOverflow(t *testing.T) {
 	// different machines and different types report errors with different strings.
+	// 不同的机器与不同的类型会以不同的字符串报告错误。
 	re := regexp.MustCompile("overflow|too large|out of range|not representable")
 	for _, test := range overflowTests {
 		_, err := Sscan(test.text, test.in)
@@ -519,6 +544,7 @@ func testScanfMulti(name string, t *testing.T) {
 			continue
 		}
 		// Convert the slice of pointers into a slice of values
+		// 将指针切片转换为值切片
 		resultVal := reflect.MakeSlice(sliceType, n, n)
 		for i := 0; i < n; i++ {
 			v := reflect.ValueOf(test.in[i]).Elem()
@@ -565,6 +591,8 @@ func TestScanMultiple(t *testing.T) {
 }
 
 // Empty strings are not valid input when scanning a string.
+
+// 当扫描字符串时，空字符串为无效输入。
 func TestScanEmpty(t *testing.T) {
 	var s1, s2 string
 	n, err := Sscan("abc", &s1, &s2)
@@ -585,6 +613,7 @@ func TestScanEmpty(t *testing.T) {
 		t.Error("Sscan <empty> expected error; got none")
 	}
 	// Quoted empty string is OK.
+	// 但被引号围绕的空字符串可以。
 	n, err = Sscanf(`""`, "%q", &s1)
 	if n != 1 {
 		t.Errorf("Sscanf count error: expected 1: got %d", n)
@@ -627,6 +656,8 @@ func TestScanlnWithMiddleNewline(t *testing.T) {
 }
 
 // Special Reader that counts reads at end of file.
+
+// 在读到文件末时对读取进行计数的特殊 Reader。
 type eofCounter struct {
 	reader   *strings.Reader
 	eofCount int
@@ -642,6 +673,8 @@ func (ec *eofCounter) Read(b []byte) (n int, err error) {
 
 // Verify that when we scan, we see at most EOF once per call to a Scan function,
 // and then only when it's really an EOF
+
+// 验证当我们在扫描时，每一个 Scan 函数的调用最多只会遇到一个 EOF，且它是真正的 EOF。
 func TestEOF(t *testing.T) {
 	ec := &eofCounter{strings.NewReader("123\n"), 0}
 	var a int
@@ -654,7 +687,7 @@ func TestEOF(t *testing.T) {
 	}
 	if ec.eofCount != 0 {
 		t.Error("expected zero EOFs", ec.eofCount)
-		ec.eofCount = 0 // reset for next test
+		ec.eofCount = 0 // reset for next test // 为下一次测试进行重置
 	}
 	n, err = Fscanln(ec, &a)
 	if err == nil {
@@ -670,6 +703,9 @@ func TestEOF(t *testing.T) {
 
 // Verify that we see an EOF error if we run out of input.
 // This was a buglet: we used to get "expected integer".
+
+// 验证若我们用完输入后，会遇到一个 EOF 错误。
+// 这原来是个小缺陷：我们曾遇到过“expected integer”的问题。
 func TestEOFAtEndOfInput(t *testing.T) {
 	var i, j int
 	n, err := Sscanf("23", "%d %d", &i, &j)
@@ -731,6 +767,8 @@ func TestEOFAllTypes(t *testing.T) {
 }
 
 // Verify that, at least when using bufio, successive calls to Fscan do not lose runes.
+
+// 验证至少在使用 bufio 时，连续的 Fscan 调用不会丢失符文。
 func TestUnreadRuneWithBufio(t *testing.T) {
 	r := bufio.NewReader(strings.NewReader("123αb"))
 	var i int
@@ -755,6 +793,9 @@ type TwoLines string
 
 // Attempt to read two lines into the object.  Scanln should prevent this
 // because it stops at newline; Scan and Scanf should be fine.
+
+// 尝试将两行读取到对象中。Scanln 应当会阻止它，因为她会在换行符处停止；
+// 而 Scan 和 Scanf 应该可以。
 func (t *TwoLines) Scan(state ScanState, verb rune) error {
 	chars := make([]rune, 0, 100)
 	for nlCount := 0; nlCount < 2; {
@@ -774,6 +815,7 @@ func (t *TwoLines) Scan(state ScanState, verb rune) error {
 func TestMultiLine(t *testing.T) {
 	input := "abc\ndef\n"
 	// Sscan should work
+	// Sscan 应当工作
 	var tscan TwoLines
 	n, err := Sscan(input, &tscan)
 	if n != 1 {
@@ -786,6 +828,7 @@ func TestMultiLine(t *testing.T) {
 		t.Errorf("Sscan: expected %q; got %q", input, tscan)
 	}
 	// Sscanf should work
+	// Sscanf 应当工作
 	var tscanf TwoLines
 	n, err = Sscanf(input, "%s", &tscanf)
 	if n != 1 {
@@ -798,6 +841,7 @@ func TestMultiLine(t *testing.T) {
 		t.Errorf("Sscanf: expected %q; got %q", input, tscanf)
 	}
 	// Sscanln should not work
+	// Sscanln 不应工作
 	var tscanln TwoLines
 	n, err = Sscanln(input, &tscanln)
 	if n != 0 {
@@ -812,6 +856,9 @@ func TestMultiLine(t *testing.T) {
 
 // simpleReader is a strings.Reader that implements only Read, not ReadRune.
 // Good for testing readahead.
+
+// simpleReader 是个只实现了 Read 而未实现 ReadRune 的 strings.Reader。
+// 用于预读测试。
 type simpleReader struct {
 	sr *strings.Reader
 }
@@ -821,6 +868,8 @@ func (s *simpleReader) Read(b []byte) (n int, err error) {
 }
 
 // Test that Fscanf does not read past newline. Issue 3481.
+
+// 测试 Fscanf 是否会跳过换行符读取。问题 3481。
 func TestLineByLineFscanf(t *testing.T) {
 	r := &simpleReader{strings.NewReader("1\n2\n")}
 	var i, j int
@@ -840,6 +889,9 @@ func TestLineByLineFscanf(t *testing.T) {
 // RecursiveInt accepts a string matching %d.%d.%d....
 // and parses it into a linked list.
 // It allows us to benchmark recursive descent style scanners.
+
+// RecursiveInt 接受一个匹配 %d.%d.%d... 的字符串并将它解析为一串列表。
+// 它允许我们对下行风格的扫描器进行基准测试。
 type RecursiveInt struct {
 	i    int
 	next *RecursiveInt
@@ -865,6 +917,8 @@ func (r *RecursiveInt) Scan(state ScanState, verb rune) (err error) {
 // Perform the same scanning task as RecursiveInt.Scan
 // but without recurring through scanner, so we can compare
 // performance more directly.
+
+// 与 RecursiveInt.Scan 执行相同的扫描任务，但不会循环通过扫描器，因此我们更直接地比较性能。
 func scanInts(r *RecursiveInt, b *bytes.Buffer) (err error) {
 	r.next = nil
 	_, err = Fscan(b, &r.i)
@@ -908,6 +962,8 @@ func TestScanInts(t *testing.T) {
 
 // 800 is small enough to not overflow the stack when using gccgo on a
 // platform that does not support split stack.
+
+// 在不支持分离栈的平台上使用gccgo时，800 足够小，不会造成栈的溢出。
 const intCount = 800
 
 func testScanInts(t *testing.T, scan func(*RecursiveInt, *bytes.Buffer) error) {
