@@ -1,16 +1,22 @@
 Goals of the sql and sql/driver packages:
+存在sql和sql/driver包的目的是：
 
 * Provide a generic database API for a variety of SQL or SQL-like
   databases.  There currently exist Go libraries for SQLite, MySQL,
   and Postgres, but all with a very different feel, and often
   a non-Go-like feel.
+* 为各种的SQL或者类SQL数据库提供一个通用的数据库API。当前也已经有很多Go的SQLite库，Mysql库，
+  Postgres库了，但是它们都是另外一种非Go风格的代码。
 
 * Feel like Go.
+* 这两个包有go风格。
 
 * Care mostly about the common cases. Common SQL should be portable.
   SQL edge cases or db-specific extensions can be detected and
   conditionally used by the application.  It is a non-goal to care
   about every particular db's extension or quirk.
+* 这两个包关注的是通用的情形。通用的SQL是清晰简单的。一些SQL的边界情况或者特定的数据库扩展会被检测出来，
+  然后应用再决定是否使用这些特定功能。我们的目的并不是为了覆盖到那些特别的数据库扩展或者奇怪的情况。
 
 * Separate out the basic implementation of a database driver
   (implementing the sql/driver interfaces) vs the implementation
@@ -19,14 +25,22 @@ Goals of the sql and sql/driver packages:
 
   User Code ---> sql package (concrete types) ---> sql/driver (interfaces)
   Database Driver -> sql (to register) + sql/driver (implement interfaces)
+* 请将基本的数据库驱动的实现（实现了sql/driver接口）和用户级别的类型和方法区分清楚。
+  流程应该是：
+
+  用户代码 ---> sql包（定义的类型） ---> sql/driver（接口）
+  数据库驱动 -> sql（注册使用） + sql/driver（实现了接口）
 
 * Make type casting/conversions consistent between all drivers. To
   achieve this, most of the conversions are done in the db package,
   not in each driver. The drivers then only have to deal with a
   smaller set of types.
+* 为了能更好的在各种驱动中完成类型的转化的统一性，许多转换我们都放在db包中做，而不是在每个驱动中做。
+  这样，驱动需要处理的类型就少了。
 
 * Be flexible with type conversions, but be paranoid about silent
   truncation or other loss of precision.
+* 这两个包有更灵活的类型转换。而不是使用那种默认类型转化，从而可能导致丢失数据精确性。
 
 * Handle concurrency well.  Users shouldn't need to care about the
   database's per-connection thread safety issues (or lack thereof),
@@ -34,13 +48,21 @@ Goals of the sql and sql/driver packages:
   The 'db' package should deal with that bookkeeping as needed.  Given
   an *sql.DB, it should be possible to share that instance between
   multiple goroutines, without any extra synchronization.
+* 很好的进行了并发处理。用户并不需要担心数据库的预连接的安全问题（或者是其他的问题），
+  也不需要去管理他们自己的连接池了。db包已经处理了连接的记录。生成一个*sql.DB，
+  就能在多个goroutine之间共享这个实例了，而不需要额外的并发操作。
 
 * Push complexity, where necessary, down into the sql+driver packages,
   rather than exposing it to users. Said otherwise, the sql package
   should expose an ideal database that's not finnicky about how it's
   accessed, even if that's not true.
+* 这两个包已经将一些必要的sql中的复杂的操作放到sql+driver包中了，
+  而不是将它暴露给用户。换句话说，使用一个理想的数据库包应该并不需要关心它是如何访问的，
+  即使访问失败。
 
 * Provide optional interfaces in sql/driver for drivers to implement
   for special cases or fastpaths.  But the only party that knows about
   those is the sql package.  To user code, some stuff just might start
   working or start working slightly faster.
+* sql/driver包提供可选的接口给驱动来实现特殊的用例和特殊的绑定。但是唯一一方知道这些的是sql包。
+  从用户的代码角度来说，这样会使得一些功能更快更好地启动运行。

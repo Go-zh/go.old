@@ -4,6 +4,8 @@
 
 // Type conversions for Scan.
 
+// Scan的时候进行的类型转换。
+
 package sql
 
 import (
@@ -18,6 +20,10 @@ import (
 // Stmt.Query into driver Values.
 //
 // The statement si may be nil, if no statement is available.
+
+// driverArgs 将Stmt.Exec和Stmt.Query的调用参数转换成为driver中定义的值。
+//
+// statement是可能为空，如果没有statement的话。
 func driverArgs(si driver.Stmt, args []interface{}) ([]driver.Value, error) {
 	dargs := make([]driver.Value, len(args))
 	cc, ok := si.(driver.ColumnConverter)
@@ -74,6 +80,10 @@ func driverArgs(si driver.Stmt, args []interface{}) ([]driver.Value, error) {
 // convertAssign copies to dest the value in src, converting it if possible.
 // An error is returned if the copy would result in loss of information.
 // dest should be a pointer type.
+
+// convertAssign 将值从src中拷贝到dest中，并且进行转换。
+// 如果转换过程中出现数据信息的丢失，就会返回error。
+// dest应该是一个类型指针。
 func convertAssign(dest, src interface{}) error {
 	// Common cases, without reflect.  Fall through.
 	switch s := src.(type) {
