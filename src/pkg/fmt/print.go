@@ -383,8 +383,12 @@ func getField(v reflect.Value, i int) reflect.Value {
 	return val
 }
 
+<<<<<<< local
 // Convert ASCII to integer.  n is 0 (and got is false) if no number present.
 // 将 ASCII 转换为整数。若不存在数字，则 num 为 0（且isnum 为false）。
+=======
+// parsenum converts ASCII to integer.  num is 0 (and isnum is false) if no number present.
+>>>>>>> other
 func parsenum(s string, start, end int) (num int, isnum bool, newi int) {
 	if start >= end {
 		return 0, false, end
@@ -1253,8 +1257,12 @@ func (p *pp) doPrint(a []interface{}, addspace, addnewline bool) {
 	prevString := false
 	for fieldnum := 0; fieldnum < len(a); fieldnum++ {
 		p.fmt.clearflags()
+<<<<<<< local
 		// always add spaces if we're doing println
 		// 若我们执行 Println 就总是添加空格
+=======
+		// always add spaces if we're doing Println
+>>>>>>> other
 		field := a[fieldnum]
 		if fieldnum > 0 {
 			isString := field != nil && reflect.TypeOf(field).Kind() == reflect.String
