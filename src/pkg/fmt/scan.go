@@ -838,9 +838,9 @@ func (s *ss) scanUint(verb rune, bitSize int) uint64 {
 // floatToken returns the floating-point number starting here, no longer than swid
 // if the width is specified. It's not rigorous about syntax because it doesn't check that
 // we have at least some digits, but Atof will do that.
+
 // floatToken 返回从此处开始的浮点数，若宽度已指定，就不会比 s.wid 更长。
-// 它对语法并不严格，因为它不会检查我们有没有数字，但 Atof 就会。
-// TODO: 因原注释较旧，暂未完成翻译。
+// 它对语法并不严格，因为它不会检查我们有没有数字，不过 convertFloat 会检查它的。
 func (s *ss) floatToken() string {
 	s.buf = s.buf[:0]
 	// NaN?              // 非数值？
@@ -910,8 +910,7 @@ func (s *ss) convertFloat(str string, n int) float64 {
 	if p := indexRune(str, 'p'); p >= 0 {
 		// Atof doesn't handle power-of-2 exponents,
 		// but they're easy to evaluate.
-		// Atof 不会处理2的幂的指数，但他们很容易求值。
-		// TODO: 因原注释较旧，暂未完成翻译。
+		// ParseFloat 不会处理2的幂的指数，但它们很容易求值。
 		f, err := strconv.ParseFloat(str[:p], n)
 		if err != nil {
 			// Put full string into error.
@@ -943,8 +942,10 @@ func (s *ss) convertFloat(str string, n int) float64 {
 // The atof argument is a type-specific reader for the underlying type.
 // If we're reading complex64, atof will parse float32s and convert them
 // to float64's to avoid reproducing this code for each complex type.
+
 // convertComplex 将下一个标记转换为 complex128 值。
-// TODO: 因原注释较旧，暂未完成翻译。
+// 若我们读取到 complex64，convertFloat 会将它解析成 float32 并转换为 float64，
+// 以此避免为每个复数类型重复此代码。
 func (s *ss) scanComplex(verb rune, n int) complex128 {
 	if !s.okVerb(verb, floatVerbs, "complex") {
 		return 0
