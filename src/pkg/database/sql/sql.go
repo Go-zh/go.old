@@ -4,6 +4,8 @@
 
 // Package sql provides a generic interface around SQL (or SQL-like)
 // databases.
+
+// sql包提供通用的SQL数据库（或者类SQL）接口。
 package sql
 
 import (
@@ -19,6 +21,9 @@ var drivers = make(map[string]driver.Driver)
 // Register makes a database driver available by the provided name.
 // If Register is called twice with the same name or if driver is nil,
 // it panics.
+
+// Register使得数据库驱动可以使用事先定义好的名字使用。
+// 如果使用同样的名字注册，或者是注册的的sql驱动是空的，Register会panic。
 func Register(name string, driver driver.Driver) {
 	if driver == nil {
 		panic("sql: Register driver is nil")
@@ -32,6 +37,9 @@ func Register(name string, driver driver.Driver) {
 // RawBytes is a byte slice that holds a reference to memory owned by
 // the database itself. After a Scan into a RawBytes, the slice is only
 // valid until the next call to Next, Scan, or Close.
+
+// RawBytes是一个字节数组，它是由数据库自己维护的一个内存空间。
+// 当一个Scan被放入到RawBytes中之后，你下次调用Next，Scan或者Close就可以获取到slice了。
 type RawBytes []byte
 
 // NullString represents a string that may be null.
@@ -47,12 +55,27 @@ type RawBytes []byte
 //     // NULL value
 //  }
 //
+
+// NullString代表一个可空的string。
+// NUllString实现了Scanner接口，所以它可以被当做scan的目标变量使用:
+//
+//  var s NullString
+//  err := db.QueryRow("SELECT name FROM foo WHERE id=?", id).Scan(&s)
+//  ...
+//  if s.Valid {
+//     // use s.String
+//  } else {
+//     // NULL value
+//  }
+//
 type NullString struct {
 	String string
-	Valid  bool // Valid is true if String is not NULL
+	Valid  bool // Valid is true if String is not NULL  // 如果String不是空，则Valid为true
 }
 
 // Scan implements the Scanner interface.
+
+// Scan实现了Scanner接口。
 func (ns *NullString) Scan(value interface{}) error {
 	if value == nil {
 		ns.String, ns.Valid = "", false
@@ -63,6 +86,8 @@ func (ns *NullString) Scan(value interface{}) error {
 }
 
 // Value implements the driver Valuer interface.
+
+// Value实现了driver Valuer接口。
 func (ns NullString) Value() (driver.Value, error) {
 	if !ns.Valid {
 		return nil, nil
@@ -73,12 +98,17 @@ func (ns NullString) Value() (driver.Value, error) {
 // NullInt64 represents an int64 that may be null.
 // NullInt64 implements the Scanner interface so
 // it can be used as a scan destination, similar to NullString.
+
+// NullInt64代表了可空的int64类型。
+// NullInt64实现了Scanner接口，所以它和NullString一样可以被当做scan的目标变量。
 type NullInt64 struct {
 	Int64 int64
 	Valid bool // Valid is true if Int64 is not NULL
 }
 
 // Scan implements the Scanner interface.
+
+// Scan实现了Scaner接口。
 func (n *NullInt64) Scan(value interface{}) error {
 	if value == nil {
 		n.Int64, n.Valid = 0, false
@@ -89,6 +119,8 @@ func (n *NullInt64) Scan(value interface{}) error {
 }
 
 // Value implements the driver Valuer interface.
+
+// Value实现了driver Valuer接口。
 func (n NullInt64) Value() (driver.Value, error) {
 	if !n.Valid {
 		return nil, nil
@@ -99,12 +131,17 @@ func (n NullInt64) Value() (driver.Value, error) {
 // NullFloat64 represents a float64 that may be null.
 // NullFloat64 implements the Scanner interface so
 // it can be used as a scan destination, similar to NullString.
+
+// NullFloat64代表了可空的float64类型。
+// NullFloat64实现了Scanner接口，所以它和NullString一样可以被当做scan的目标变量。
 type NullFloat64 struct {
 	Float64 float64
-	Valid   bool // Valid is true if Float64 is not NULL
+	Valid   bool // Valid is true if Float64 is not NULL  // 如果Float64非空，Valid就为true。
 }
 
 // Scan implements the Scanner interface.
+
+// Scan实现了Scanner接口。
 func (n *NullFloat64) Scan(value interface{}) error {
 	if value == nil {
 		n.Float64, n.Valid = 0, false
@@ -115,6 +152,8 @@ func (n *NullFloat64) Scan(value interface{}) error {
 }
 
 // Value implements the driver Valuer interface.
+
+// Value实现了driver的Valuer接口。
 func (n NullFloat64) Value() (driver.Value, error) {
 	if !n.Valid {
 		return nil, nil
@@ -125,12 +164,17 @@ func (n NullFloat64) Value() (driver.Value, error) {
 // NullBool represents a bool that may be null.
 // NullBool implements the Scanner interface so
 // it can be used as a scan destination, similar to NullString.
+
+// NullBool代表了可空的bool类型。
+// NullBool实现了Scanner接口，所以它和NullString一样可以被当做scan的目标变量。
 type NullBool struct {
 	Bool  bool
-	Valid bool // Valid is true if Bool is not NULL
+	Valid bool // Valid is true if Bool is not NULL  // 如果Bool非空，Valid就为true
 }
 
 // Scan implements the Scanner interface.
+
+// Scan实现了Scanner接口。
 func (n *NullBool) Scan(value interface{}) error {
 	if value == nil {
 		n.Bool, n.Valid = false, false
@@ -141,6 +185,8 @@ func (n *NullBool) Scan(value interface{}) error {
 }
 
 // Value implements the driver Valuer interface.
+
+// Value实现了driver的Valuer接口。
 func (n NullBool) Value() (driver.Value, error) {
 	if !n.Valid {
 		return nil, nil
@@ -149,6 +195,8 @@ func (n NullBool) Value() (driver.Value, error) {
 }
 
 // Scanner is an interface used by Scan.
+
+// Scanner是被Scan使用的接口。
 type Scanner interface {
 	// Scan assigns a value from a database driver.
 	//
@@ -165,12 +213,29 @@ type Scanner interface {
 	//
 	// An error should be returned if the value can not be stored
 	// without loss of information.
+
+	// Scan从数据库驱动中设置一个值。
+	//
+	// src值可以是下面限定的集中类型之一:
+	//
+	//    int64
+	//    float64
+	//    bool
+	//    []byte
+	//    string
+	//    time.Time
+	//    nil - for NULL values
+	//
+	// 如果数据只有通过丢失信息才能存储下来，这个方法就会返回error。
 	Scan(src interface{}) error
 }
 
 // ErrNoRows is returned by Scan when QueryRow doesn't return a
 // row. In such a case, QueryRow returns a placeholder *Row value that
 // defers this error until a Scan.
+
+// ErrNoRows是QueryRow的时候，当没有返回任何数据，Scan会返回的错误。
+// 在这种情况下，QueryRow会返回一个*Row的标示符，直到调用Scan的时候才返回这个error。
 var ErrNoRows = errors.New("sql: no rows in result set")
 
 // DB is a database handle. It's safe for concurrent use by multiple
@@ -185,11 +250,18 @@ var ErrNoRows = errors.New("sql: no rows in result set")
 // DB.Open is called, the returned Tx is bound to a single isolated
 // connection. Once Tx.Commit or Tx.Rollback is called, that
 // connection is returned to DB's idle connection pool.
+
+// DB是一个数据库处理器。它能很安全地被多个goroutines并发调用。
+//
+// 如果对应的数据库驱动有连接和会话状态的概念，sql包就能自动管理创建和释放连接，其中包括
+// 管理一个自由连接池。如果有观察会话状态的需求的话，有两种方法。多个goroutine不共用一个
+// *DB，或者在事物中创建和监控所有的状态。一旦DB.Open被调用，返回的Tx是绑定在一个独立的连接
+// 上的。当Tx.Commit或者Tx.Rollback被调用，连接就会返回到DB的闲置连接池。
 type DB struct {
 	driver driver.Driver
 	dsn    string
 
-	mu       sync.Mutex // protects freeConn and closed
+	mu       sync.Mutex // protects freeConn and closed // 用来保护freeConn和closed属性的
 	freeConn []driver.Conn
 	closed   bool
 }
@@ -200,6 +272,11 @@ type DB struct {
 //
 // Most users will open a database via a driver-specific connection
 // helper function that returns a *DB.
+
+// Open打开一个数据库，这个数据库是由其驱动名称和驱动制定的数据源信息打开的，这个数据源信息通常
+// 是由至少一个数据库名字和连接信息组成的。
+//
+// 多数用户通过指定的驱动连接辅助函数来打开一个数据库。打开数据库之后会返回*DB。
 func Open(driverName, dataSourceName string) (*DB, error) {
 	driver, ok := drivers[driverName]
 	if !ok {
@@ -209,6 +286,8 @@ func Open(driverName, dataSourceName string) (*DB, error) {
 }
 
 // Close closes the database, releasing any open resources.
+
+// Close关闭数据库，释放一些使用中的资源。
 func (db *DB) Close() error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -232,6 +311,8 @@ func (db *DB) maxIdleConns() int {
 }
 
 // conn returns a newly-opened or cached driver.Conn
+
+// conn返回新创建的，或者是缓存住的driver.Conn。
 func (db *DB) conn() (driver.Conn, error) {
 	db.mu.Lock()
 	if db.closed {
@@ -263,10 +344,15 @@ func (db *DB) connIfFree(wanted driver.Conn) (conn driver.Conn, ok bool) {
 }
 
 // putConnHook is a hook for testing.
+
+// putConnHook是一个测试使用的钩子。
 var putConnHook func(*DB, driver.Conn)
 
 // putConn adds a connection to the db's free pool.
 // err is optionally the last error that occurred on this connection.
+
+// putConn将连接加入到数据库的空置池中。
+// error是连接过程中最后遇到的错误。
 func (db *DB) putConn(c driver.Conn, err error) {
 	if err == driver.ErrBadConn {
 		// Don't reuse bad connections.
@@ -288,6 +374,8 @@ func (db *DB) putConn(c driver.Conn, err error) {
 }
 
 // Prepare creates a prepared statement for later execution.
+
+// Prepare为后面的执行操作事先定义了声明。
 func (db *DB) Prepare(query string) (*Stmt, error) {
 	var stmt *Stmt
 	var err error
@@ -328,6 +416,8 @@ func (db *DB) prepare(query string) (stmt *Stmt, err error) {
 }
 
 // Exec executes a query without returning any rows.
+
+// Exec执行query操作，而没有返回任何行。
 func (db *DB) Exec(query string, args ...interface{}) (Result, error) {
 	var res Result
 	var err error
@@ -382,6 +472,8 @@ func (db *DB) exec(query string, args []interface{}) (res Result, err error) {
 }
 
 // Query executes a query that returns rows, typically a SELECT.
+
+// Query执行了一个有返回行的查询操作，比如SELECT。
 func (db *DB) Query(query string, args ...interface{}) (*Rows, error) {
 	stmt, err := db.Prepare(query)
 	if err != nil {
