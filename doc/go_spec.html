@@ -2732,7 +2732,7 @@ literal structure and corresponding components have identical types. In detail:
 	<li>若两个结构类型其字段序列相同，相应字段名相同，类型相同，标注相同，那么它们的类型相同。
 		两个匿名字段其名字被认为相同。出自不同包的小写字段名总不相同。</li>
 
-	<li>若两个指针类型其基本类型相同，那么它们的类型相同。</li>
+	<li>若两个指针类型其基础类型相同，那么它们的类型相同。</li>
 
 	<li>若两个函数类型其形参个数相同，返回值相同，相应形参类型相同，返回值类型相同，
 		两函数都可变或都不可变，那么它们的类型相同。形参和返回值名无需匹配。</li>
@@ -3570,7 +3570,7 @@ func (m *Mutex) Unlock()  { /* Unlock实现*/ }
 // NewMutex和Mutex拥有相同的组成，但它的方法集为空.
 type NewMutex Mutex
 
-// PtrMutex的<a href="#指针类型">基本类型</a>的方法集保持不变.
+// PtrMutex的<a href="#指针类型">基础类型</a>的方法集保持不变.
 // 但PtrMutex的方法集为空.
 type PtrMutex *Mutex
 
