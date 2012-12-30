@@ -491,6 +491,9 @@ func (db *DB) Query(query string, args ...interface{}) (*Rows, error) {
 // QueryRow executes a query that is expected to return at most one row.
 // QueryRow always return a non-nil value. Errors are deferred until
 // Row's Scan method is called.
+
+// QueryRow执行一个至多只返回一行记录的查询操作。
+// QueryRow总是返回一个非空值。Error只会在调用行的Scan方法的时候才返回。
 func (db *DB) QueryRow(query string, args ...interface{}) *Row {
 	rows, err := db.Query(query, args...)
 	return &Row{rows: rows, err: err}
@@ -498,6 +501,8 @@ func (db *DB) QueryRow(query string, args ...interface{}) *Row {
 
 // Begin starts a transaction. The isolation level is dependent on
 // the driver.
+
+// Begin开始一个事务。事务的隔离级别是由驱动决定的。
 func (db *DB) Begin() (*Tx, error) {
 	var tx *Tx
 	var err error
@@ -528,6 +533,8 @@ func (db *DB) begin() (tx *Tx, err error) {
 }
 
 // Driver returns the database's underlying driver.
+
+// Driver返回了数据库的底层驱动。
 func (db *DB) Driver() driver.Driver {
 	return db.driver
 }
@@ -538,21 +545,34 @@ func (db *DB) Driver() driver.Driver {
 //
 // After a call to Commit or Rollback, all operations on the
 // transaction fail with ErrTxDone.
+
+// Tx代表运行中的数据库事务。
+// 
+// 必须调用Commit或者Rollback来结束事务。
+//
+// 在调用Commit或者Rollback之后，所有后续对事务的操作就会返回ErrTxDone。
 type Tx struct {
 	db *DB
 
 	// ci is owned exclusively until Commit or Rollback, at which point
 	// it's returned with putConn.
+
+	// ci会一直有值，直到Commit或者Rollback被调用以后。在释放ci的时候，它会被putConn调用返回。
 	ci  driver.Conn
 	txi driver.Tx
 
 	// cimu is held while somebody is using ci (between grabConn
 	// and releaseConn)
+
+	// 当某人使用ci的时候，cimu就会被持有了（在grabConn之后releaseConn之前的时间段内）
 	cimu sync.Mutex
 
 	// done transitions from false to true exactly once, on Commit
 	// or Rollback. once done, all operations fail with
 	// ErrTxDone.
+
+	// 一旦Commit或者Rollback，done这个事务标示就会从false值置为true。
+	// 一旦这个标志位设置为true，所有事务的操作都会失败并返回ErrTxDone。
 	done bool
 }
 
@@ -581,6 +601,8 @@ func (tx *Tx) releaseConn() {
 }
 
 // Commit commits the transaction.
+
+// Commit提交事务。
 func (tx *Tx) Commit() error {
 	if tx.done {
 		return ErrTxDone
@@ -590,6 +612,8 @@ func (tx *Tx) Commit() error {
 }
 
 // Rollback aborts the transaction.
+
+// Rollback回滚事务。
 func (tx *Tx) Rollback() error {
 	if tx.done {
 		return ErrTxDone
@@ -604,6 +628,12 @@ func (tx *Tx) Rollback() error {
 // be used once the transaction has been committed or rolled back.
 //
 // To use an existing prepared statement on this transaction, see Tx.Stmt.
+
+// Prepare在一个事务中定义了一个操作的声明。
+//
+// 这里定义的声明操作一旦事务被调用了commited或者rollback之后就不能使用了。
+//
+// 关于如何使用定义好的操作声明，请参考Tx.Stmt。
 func (tx *Tx) Prepare(query string) (*Stmt, error) {
 	// TODO(bradfitz): We could be more efficient here and either
 	// provide a method to take an existing Stmt (created on
@@ -647,6 +677,15 @@ func (tx *Tx) Prepare(query string) (*Stmt, error) {
 //  tx, err := db.Begin()
 //  ...
 //  res, err := tx.Stmt(updateMoney).Exec(123.45, 98293203)
+
+// Stmt从一个已有的声明中返回指定事务的声明。
+//
+// 例子:
+//  updateMoney, err := db.Prepare("UPDATE balance SET money=money+? WHERE id=?")
+//  ...
+//  tx, err := db.Begin()
+//  ...
+//  res, err := tx.Stmt(updateMoney).Exec(123.45, 98293203)
 func (tx *Tx) Stmt(stmt *Stmt) *Stmt {
 	// TODO(bradfitz): optimize this. Currently this re-prepares
 	// each time.  This is fine for now to illustrate the API but
@@ -673,6 +712,9 @@ func (tx *Tx) Stmt(stmt *Stmt) *Stmt {
 
 // Exec executes a query that doesn't return rows.
 // For example: an INSERT and UPDATE.
+
+// Exec执行不返回任何行的操作。
+// 例如：INSERT和UPDATE操作。
 func (tx *Tx) Exec(query string, args ...interface{}) (Result, error) {
 	ci, err := tx.grabConn()
 	if err != nil {
@@ -713,6 +755,8 @@ func (tx *Tx) Exec(query string, args ...interface{}) (Result, error) {
 }
 
 // Query executes a query that returns rows, typically a SELECT.
+
+// Query执行哪些返回行的查询操作，比如SELECT。
 func (tx *Tx) Query(query string, args ...interface{}) (*Rows, error) {
 	if tx.done {
 		return nil, ErrTxDone
@@ -733,40 +777,56 @@ func (tx *Tx) Query(query string, args ...interface{}) (*Rows, error) {
 // QueryRow executes a query that is expected to return at most one row.
 // QueryRow always return a non-nil value. Errors are deferred until
 // Row's Scan method is called.
+
+// QueryRow执行的查询至多返回一行数据。
+// QueryRow总是返回非空值。只有当执行行的Scan方法的时候，才会返回Error。
 func (tx *Tx) QueryRow(query string, args ...interface{}) *Row {
 	rows, err := tx.Query(query, args...)
 	return &Row{rows: rows, err: err}
 }
 
 // connStmt is a prepared statement on a particular connection.
+
+// connStmt代表在某个连接上定义好的声明。
 type connStmt struct {
 	ci driver.Conn
 	si driver.Stmt
 }
 
 // Stmt is a prepared statement. Stmt is safe for concurrent use by multiple goroutines.
+
+// Stmt是定义好的声明。多个goroutine并发使用Stmt是安全的。
 type Stmt struct {
 	// Immutable:
-	db        *DB    // where we came from
-	query     string // that created the Stmt
-	stickyErr error  // if non-nil, this error is returned for all operations
+
+	// 不变的数据：
+	db        *DB    // where we came from	// 数据从哪里来
+	query     string // that created the Stmt	// 什么样的查询建立了这个Stmt
+	stickyErr error  // if non-nil, this error is returned for all operations  // 如果是非空的话，所有操作都会返回这个错误。
 
 	// If in a transaction, else both nil:
+
+	// 只有在事务中，者两个值才都非空，其他情况下都是空的：
 	tx   *Tx
 	txsi driver.Stmt
 
-	mu     sync.Mutex // protects the rest of the fields
+	mu     sync.Mutex // protects the rest of the fields // 保护其他字段
 	closed bool
 
 	// css is a list of underlying driver statement interfaces
 	// that are valid on particular connections.  This is only
 	// used if tx == nil and one is found that has idle
 	// connections.  If tx != nil, txsi is always used.
+
+	// css是一个底层驱动的声明接口的数组，它只对特定的连接有效。只有当tx == nil的时候才使用，
+	// 它是从在空闲连接池中获取的。如果tx != nil，就会使用txsi。
 	css []connStmt
 }
 
 // Exec executes a prepared statement with the given arguments and
 // returns a Result summarizing the effect of the statement.
+
+// Exec根据给出的参数执行定义好的声明，并返回Result来显示执行的结果。
 func (s *Stmt) Exec(args ...interface{}) (Result, error) {
 	_, releaseConn, si, err := s.connStmt()
 	if err != nil {
@@ -777,6 +837,8 @@ func (s *Stmt) Exec(args ...interface{}) (Result, error) {
 	// -1 means the driver doesn't know how to count the number of
 	// placeholders, so we won't sanity check input here and instead let the
 	// driver deal with errors.
+
+	// -1意味着驱动不知道如何计算占位符的数量，所以在这里，我们并不检查输入，而是让驱动自己来处理错误。
 	if want := si.NumInput(); want != -1 && len(args) != want {
 		return nil, fmt.Errorf("sql: expected %d arguments, got %d", want, len(args))
 	}
@@ -796,6 +858,9 @@ func (s *Stmt) Exec(args ...interface{}) (Result, error) {
 // connStmt returns a free driver connection on which to execute the
 // statement, a function to call to release the connection, and a
 // statement bound to that connection.
+
+// connStmt返回空闲的驱动连接，这个连接是用来执行这个声明的，并且同时定义一个函数来释放连接，
+// 定义一个声明绑定连接。
 func (s *Stmt) connStmt() (ci driver.Conn, releaseConn func(error), si driver.Stmt, err error) {
 	if err = s.stickyErr; err != nil {
 		return
@@ -809,9 +874,11 @@ func (s *Stmt) connStmt() (ci driver.Conn, releaseConn func(error), si driver.St
 
 	// In a transaction, we always use the connection that the
 	// transaction was created on.
+
+	// 在事务中，我们总是使用事务创建的连接。
 	if s.tx != nil {
 		s.mu.Unlock()
-		ci, err = s.tx.grabConn() // blocks, waiting for the connection.
+		ci, err = s.tx.grabConn() // blocks, waiting for the connection. // 阻塞，等待连接。
 		if err != nil {
 			return
 		}
