@@ -928,6 +928,8 @@ func (s *Stmt) connStmt() (ci driver.Conn, releaseConn func(error), si driver.St
 
 // Query executes a prepared query statement with the given arguments
 // and returns the query results as a *Rows.
+
+// Query根据传递的参数执行一个声明的查询操作，然后以*Rows的结果返回查询结果。
 func (s *Stmt) Query(args ...interface{}) (*Rows, error) {
 	ci, releaseConn, si, err := s.connStmt()
 	if err != nil {
@@ -973,6 +975,16 @@ func (s *Stmt) Query(args ...interface{}) (*Rows, error) {
 //
 //  var name string
 //  err := nameByUseridStmt.QueryRow(id).Scan(&name)
+
+// QueryRow根据传递的参数执行一个声明的查询操作。如果在执行声明过程中发生了错误，
+// 这个error就会在Scan返回的*Row的时候返回，而这个*Row永远不会是nil。
+// 如果查询没有任何行数据，*Row的Scan操作就会返回ErrNoRows。
+// 否则，*Rows的Scan操作就会返回第一行数据，并且忽略其他行。
+//
+// Example usage:
+//
+//  var name string
+//  err := nameByUseridStmt.QueryRow(id).Scan(&name)
 func (s *Stmt) QueryRow(args ...interface{}) *Row {
 	rows, err := s.Query(args...)
 	if err != nil {
@@ -982,6 +994,8 @@ func (s *Stmt) QueryRow(args ...interface{}) *Row {
 }
 
 // Close closes the statement.
+
+// 关闭声明。
 func (s *Stmt) Close() error {
 	if s.stickyErr != nil {
 		return s.stickyErr
@@ -1023,22 +1037,39 @@ func (s *Stmt) Close() error {
 //     }
 //     err = rows.Err() // get any error encountered during iteration
 //     ...
+
+// Rows代表查询的结果。它的指针最初指向结果集的第一行数据，需要使用Next来进一步操作。
+//
+//     rows, err := db.Query("SELECT ...")
+//     ...
+//     for rows.Next() {
+//         var id int
+//         var name string
+//         err = rows.Scan(&id, &name)
+//         ...
+//     }
+//     err = rows.Err() // get any error encountered during iteration
+//     ...
 type Rows struct {
 	db          *DB
-	ci          driver.Conn // owned; must call putconn when closed to release
+	ci          driver.Conn // owned; must call putconn when closed to release // 已经存在的连接；当释放连接的时候必须调用putconn
 	releaseConn func(error)
 	rowsi       driver.Rows
 
 	closed    bool
 	lastcols  []driver.Value
 	lasterr   error
-	closeStmt *Stmt // if non-nil, statement to Close on close
+	closeStmt *Stmt // if non-nil, statement to Close on close  // 如果非空，这些声明会在close调用的时候关闭。
 }
 
 // Next prepares the next result row for reading with the Scan method.
 // It returns true on success, false if there is no next result row.
 // Every call to Scan, even the first one, must be preceded by a call
 // to Next.
+
+// Next获取下一行的数据以便给Scan调用。
+// 在成功的时候返回true，在没有下一行数据的时候返回false。
+// 每次调用来Scan获取数据，甚至是第一行数据，都需要调用Next来处理。
 func (rs *Rows) Next() bool {
 	if rs.closed {
 		return false
@@ -1057,6 +1088,8 @@ func (rs *Rows) Next() bool {
 }
 
 // Err returns the error, if any, that was encountered during iteration.
+
+// Err返回错误。如果有错误的话，就会在循环过程中捕获到。
 func (rs *Rows) Err() error {
 	if rs.lasterr == io.EOF {
 		return nil
@@ -1067,6 +1100,9 @@ func (rs *Rows) Err() error {
 // Columns returns the column names.
 // Columns returns an error if the rows are closed, or if the rows
 // are from QueryRow and there was a deferred error.
+
+// Columns返回列名字。
+// 当rows设置了closed，Columns方法会返回error。
 func (rs *Rows) Columns() ([]string, error) {
 	if rs.closed {
 		return nil, errors.New("sql: Rows are closed")
@@ -1089,6 +1125,15 @@ func (rs *Rows) Columns() ([]string, error) {
 // If an argument has type *interface{}, Scan copies the value
 // provided by the underlying driver without conversion. If the value
 // is of type []byte, a copy is made and the caller owns the result.
+
+// Scan将当前行的列输出到dest指向的目标值中。
+//
+// 如果有个参数是*[]byte的类型，Scan在这个参数里面存放的是相关数据的拷贝。
+// 这个拷贝是调用函数的人所拥有的，并且可以随时被修改和存取。这个拷贝能避免使用*RawBytes；
+// 关于这个类型的使用限制请参考文档。
+//
+// 如果有个参数是*interface{}类型，Scan会将底层驱动提供的这个值不做任何转换直接拷贝返回。
+// 如果值是[]byte类型，Scan就会返回一份拷贝，并且调用者获得返回结果。
 func (rs *Rows) Scan(dest ...interface{}) error {
 	if rs.closed {
 		return errors.New("sql: Rows closed")
@@ -1132,6 +1177,9 @@ func (rs *Rows) Scan(dest ...interface{}) error {
 // Close closes the Rows, preventing further enumeration. If the
 // end is encountered, the Rows are closed automatically. Close
 // is idempotent.
+
+// Close关闭Rows，就禁止了进一步的枚举使用。如果遍历过程结束了，Rows就会自动关闭了。
+// 关闭是非常重要的。
 func (rs *Rows) Close() error {
 	if rs.closed {
 		return nil
@@ -1146,9 +1194,13 @@ func (rs *Rows) Close() error {
 }
 
 // Row is the result of calling QueryRow to select a single row.
+
+// Row是调用QueryRow的结果，代表了查询操作的一行数据。
 type Row struct {
 	// One of these two will be non-nil:
-	err  error // deferred error for easy chaining
+
+	// 这两个中的一个必须是非空：
+	err  error // deferred error for easy chaining  // 将error保存从而延迟返回，这样能保证Row链表的简易实现
 	rows *Rows
 }
 
@@ -1156,6 +1208,10 @@ type Row struct {
 // pointed at by dest.  If more than one row matches the query,
 // Scan uses the first row and discards the rest.  If no row matches
 // the query, Scan returns ErrNoRows.
+
+// Scan将符合的行的对应列拷贝到dest指的对应值中。
+// 如果多于一个的行满足查询条件，Scan使用第一行，而忽略其他行。
+// 如果没有行满足查询条件，Scan返回ErrNoRows。
 func (r *Row) Scan(dest ...interface{}) error {
 	if r.err != nil {
 		return r.err
@@ -1193,6 +1249,8 @@ func (r *Row) Scan(dest ...interface{}) error {
 }
 
 // A Result summarizes an executed SQL command.
+
+// 一个Result结构代表了一个执行过的SQL命令。
 type Result interface {
 	LastInsertId() (int64, error)
 	RowsAffected() (int64, error)
