@@ -1,15 +1,32 @@
 <!--{
+	"title": "关于Go命令"
+}-->
+
+<!--{
 	"title": "About the go command"
 }-->
 
+<div class="english">
 <p>The Go distribution includes a command, named
 "<code><a href="/cmd/go/">go</a></code>", that
 automates the downloading, building, installation, and testing of Go packages
 and commands.  This document talks about why we wrote a new command, what it
 is, what it's not, and how to use it.</p>
+</div>
 
+<p>
+Go发行版中包含了一个名为“<code><a href="/cmd/go/">go</a></code>”的命令，
+它可以自动地下载、构建、安装并测试Go包和命令。
+本文档讨论了我们为要何编写这个新的命令，它是什么，它不是什么，以及它怎么用。
+</p>
+
+<div class="english">
 <h2>Motivation</h2>
+</div>
 
+<h2>起因</h2>
+
+<div class="english">
 <p>You might have seen early Go talks in which Rob Pike jokes that the idea
 for Go arose while waiting for a large Google server to compile.  That
 really was the motivation for Go: to build a language that worked well
@@ -19,13 +36,30 @@ express dependencies between code libraries clearly, hence the package
 grouping and the explicit import blocks.  It was also clear from the
 start that you might want arbitrary syntax for describing the code
 being imported; this is why import paths are string literals.</p>
+</div>
 
+<p>
+或许你已经看过早期关于Go的讨论了，Rob Pike在其中调侃了他在等待编译大型Google服务时，
+对Go产生的想法。那正是此事的起因：创造一种语言，它能很好地构建Google编写并运行的大型软件。
+显然，该语言从一开始就必须能清楚地表达出代码库之间的依赖，因此包必须进行分组，
+而块必须显式地导入。同样，你大概也想用简单的语法来描述代码的导入，
+这就是导入路径为字符串字面的原因。
+</p>
+
+<div class="english">
 <p>An explicit goal for Go from the beginning was to be able to build Go
 code using only the information found in the source itself, not
 needing to write a makefile or one of the many modern replacements for
 makefiles.  If Go needed a configuration file to explain how to build
 your program, then Go would have failed.</p>
+</div>
 
+<p>
+Go最初的明确目标之一，就是只用源码中的信息来构建Go代码，而无需编写 makefile
+之类的东西。假如Go需要配置文件来解释如何构建你的程序，那它就算失败了。
+</p>
+
+<div class="english">
 <p>At first, there was no Go compiler, and the initial development
 focused on building one and then building libraries for it. For
 expedience, we postponed the automation of building Go code by using
@@ -33,14 +67,34 @@ make and writing makefiles.  When compiling a single package involved
 multiple invocations of the Go compiler, we even used a program to
 write the makefiles for us.  You can find it if you dig through the
 repository history.</p>
+</div>
 
+<p>
+一开始，我们并没有Go编译器，因此最初的开发都集中在编译器和库的构建上。
+为简便起见，我们使用了make并编写了makefile，因此推迟了Go代码的自动构建工具。
+在编译一个包时，需要多次调用Go编译器，我们甚至用了一个程序来编写makefile。
+如果你追溯代码仓库的历史，就会发现它们。
+</p>
+
+<div class="english">
 <p>The purpose of the new go command is our return to this ideal, that Go
 programs should compile without configuration or additional effort on
 the part of the developer beyond writing the necessary import
 statements.</p>
+</div>
 
+<p>
+新的go命令就是对我们期望的回馈。Go程序的编译应当无需配置，或者除必要的导入语句外，
+不让开发者再做额外的事情。
+</p>
+
+<div class="english">
 <h2>Configuration versus convention</h2>
+</div>
 
+<h2>配置 vs. 约定</h2>
+
+<div class="english">
 <p>The way to achieve the simplicity of a configuration-free system is to
 establish conventions. The system works only to the extent that those conventions
 are followed. When we first launched Go, many people published packages that
@@ -56,45 +110,102 @@ that each directory in a source tree corresponds to a single package; and
 fourth, that the package is built using only information in the source code.
 Today, the vast majority of packages follow these conventions.
 The Go ecosystem is simpler and more powerful as a result.</p>
+</div>
 
+<p>
+为了实现无配置系统的这种简单性，我们需要建立约定。该系统只能在约定的范围内工作。
+当我们第一次启动Go时，为了使用它，人们发布的包必须已经安装在某个地方，有某个名字，
+使用某些构建工具。这很容易理解：毕竟大多数语言都是这样的。这些年来，我们一直在提醒人们
+<code>goinstall</code> 命令（现在由<a href="/cmd/go/#Download_and_install_packages_and_dependencies"><code>go get</code></a>所代替）
+及其约定：第一，导入路径源自源码的URL；第二，本地文件系统中存储源码的位置源自导入路径；
+第三，源码树中的每个目录都对应于单个包；第四，包只通过源码中的信息构建。
+今天，绝大多数的包都已遵循这些约定。最后的结果就是，Go的生态系统变得更简单，更强大了。
+</p>
+
+<div class="english">
 <p>We received many requests to allow a makefile in a package directory to
 provide just a little extra configuration beyond what's in the source code.
 But that would have introduced new rules. Because we did not accede to such
 requests, we were able to write the go command and eliminate our use of make
 or any other build system.</p>
+</div>
 
+<p>
+我们曾收到过一些请求，就是允许包目录中有 makefile，以提供一些源码之外的扩展配置，
+但这会引入新的规则。由于我们没有同意，所以就编写了go命令，消除了对make或其它构建系统的使用。
+</p>
+
+<div class="english">
 <p>It is important to understand that the go command is not a general
 build tool. It cannot be configured and it does not attempt to build
 anything but Go packages.  These are important simplifying
 assumptions: they simplify not only the implementation but also, more
 important, the use of the tool itself.</p>
+</div>
 
+<p>
+你要明白，go命令并不是一般的构建工具。它不能被配置，也不会试图构建Go包以外的东西，
+这就是简化的重要前提：它们不仅简化了实现，还简化了工具本身的使用，这是很重要的。
+</p>
+
+<div class="english">
 <h2>Go's conventions</h2>
+</div>
 
+<h2>Go的约定</h2>
+
+<div class="english">
 <p>The <code>go</code> command requires that code adheres to a few key,
 well-established conventions.</p>
+</div>
 
+<p>
+<code>go</code> 命令要求代码遵循一些已经确立的约定。
+</p>
+
+<div class="english">
 <p>First, the import path is derived in an known way from the URL of the
 source code.  For Bitbucket, GitHub, Google Code, and Launchpad, the
 root directory of the repository is identified by the repository's
 main URL, without the <code>http://</code> prefix.  Subdirectories are named by
 adding to that path.  For example, the supplemental networking
 libraries for Go are obtained by running</p>
+</div>
+
+<p>
+第一，导入路径源自源码的URL。对于Bitbucket、GitHub、Google Code和Launchpad来说，
+其代码仓库的根目录由该仓库的主URL确定，无需 <code>http://</code> 前缀。
+子目录名附加在该路径之后。例如Go补充的网络库可通过运行
+</p>
 
 <pre>
 hg clone http://code.google.com/p/go.net
 </pre>
 
+<div class="english">
 <p>and thus the import path for the root directory of that repository is
 "<code>code.google.com/p/go.net</code>".  The websocket package is stored in a
 subdirectory, so its import path is
 "<code>code.google.com/p/go.net/websocket</code>".</p>
+</div>
 
+<p>
+获得，因此该仓库根目录的导入路径为“<code>code.google.com/p/go.net</code>”。websocket
+包存储在子目录中，因此它的导入路径为“<code>code.google.com/p/go.net/websocket</code>”。</p>
+
+<div class="english">
 <p>These paths are on the long side, but in exchange we get an
 automatically managed name space for import paths and the ability for
 a tool like the go command to look at an unfamiliar import path and
 deduce where to obtain the source code.</p>
+</div>
 
+<p>
+我们用很长的路径，为导入路径换得了名字空间的自动管理，并能让go命令这类工具，
+根据不常见的导入路径推断出从哪获得源码。
+</p>
+
+<div class="english">
 <p>Second, the place to store sources in the local file system is derived
 in a known way from the import path.  Specifically, the first choice
 is <code>$GOPATH/src/&lt;import-path&gt;</code>.  If <code>$GOPATH</code> is
@@ -103,7 +214,16 @@ standard Go packages, in <code>$GOROOT/src/pkg/&lt;import-path&gt;</code>.
 If <code>$GOPATH</code> is set to a list of paths, the go command tries
 <code>&lt;dir&gt;/src/&lt;import-path&gt;</code> for each of the directories in
 that list.</p>
+</div>
 
+<p>
+第二，本地文件系统中存储源码的位置源自导入路径。特别地，首选路径为
+<code>$GOPATH/src/&lt;导入路径&gt;</code>。若 <code>$GOPATH</code> 未设置，
+go命令会回到标准Go包存储源码的地方，即 <code>$GOROOT/src/pkg/&lt;导入路径&gt;</code>。
+若 <code>$GOPATH</code> 设置了多个路径，go命令就会尝试这些目录的每一个
+<code>&lt;目录&gt;/src/&lt;导入路径&gt;</code>。</p>
+
+<div class="english">
 <p>Each of those trees contains, by convention, a top-level directory named
 "<code>bin</code>", for holding compiled executables, and a top-level directory
 named "<code>pkg</code>", for holding compiled packages that can be imported,
@@ -111,11 +231,28 @@ and the "<code>src</code>" directory, for holding package source files.
 Imposing this structure lets us keep each of these directory trees
 self-contained: the compiled form and the sources are always near each
 other.</p>
+</div>
 
+<p>
+按照约定，这些树中都含有：
+一个名为“<code>bin</code>”的顶层目录，存放已编译的可执行文件；
+一个名为“<code>pkg</code>”的顶层目录，存放已编译且可导入的可执行文件；
+一个名为“<code>src</code>”的顶层目录，存放包的源码。
+利用这种结构，我们可以让这些目录树自己包含源码的已编译形式，且源码总是和它们呆在一起。
+</p>
+
+<div class="english">
 <p>These naming conventions also let us work in the reverse direction,
 from a directory name to its import path. This mapping is important
 for many of the go command's subcommands, as we'll see below.</p>
+</div>
 
+<p>
+这些命名约定也能让我们以相反的方向工作，即从目录名得出它的导入路径。
+这种映射对于go命令的一些子命令十分重要，稍后我们就会看到。
+</p>
+
+<div class="english">
 <p>Third, each directory in a source tree corresponds to a single
 package. By restricting a directory to a single package, we don't have
 to create hybrid import paths that specify first the directory and
@@ -125,7 +262,17 @@ fundamental Go unit&mdash;the package&mdash;to file system structure means
 that file system tools become Go package tools.  Copying, moving, or
 deleting a package corresponds to copying, moving, or deleting a
 directory.</p>
+</div>
 
+<p>
+第三，源码树中的每个目录都对应于单个包。通过将一个目录限定为单个包，
+我们无需先指定目录，再从该目录中指定包来创建混合的导入路径了。此外，
+大部分文件管理工具和用户界面，都是将目录作为基本工作单元的。
+将基本的Go单元—包—同化为文件系统的结构，也就意味着文件系统工具成了Go包的工具。
+复制、移动或删除一个包就对应于复制、移动或删除一个目录。
+</p>
+
+<div class="english">
 <p>Fourth, each package is built using only the information present in
 the source files.  This makes it much more likely that the tool will
 be able to adapt to changing build environments and conditions. For
@@ -133,9 +280,20 @@ example, if we allowed extra configuration such as compiler flags or
 command line recipes, then that configuration would need to be updated
 each time the build tools changed; it would also be inherently tied
 to the use of a specific tool chain.</p>
+</div>
 
+<p>
+第四，包只通过源码中的信息构建。这会让它更容易适应构建环境和条件的改变。
+例如，若我们允许额外的配置（如编译器标志或命令行选项等），那么每当构建工具被更改后，
+相应的配置也需要更新；它天生还会绑定至特定的工具链。</p>
+
+<div class="english">
 <h2>Getting started with the go command</h2>
+</div>
 
+<h2>go 命令基础</h2>
+
+<div class="english">
 <p>Finally, a quick tour of how to use the go command, to supplement
 the information in <a href="/doc/code.html">How to Write Go Code</a>,
 which you might want to read first.  Assuming you want
@@ -146,10 +304,26 @@ list of directories, but by far the most common usage should be to set it to a
 single directory.  In particular, you do not need a separate entry in
 <code>$GOPATH</code> for each of your projects.  One <code>$GOPATH</code> can
 support many projects.</p>
+</div>
 
+<p>
+最后，这里有一份如何使用go命令的快速指南，它补充了<a href="/doc/code.html">如何编写Go代码</a>
+中的信息，你可能会想先读一下它。假如你想将你的源码从Go发行版的源码树中分离，
+那么第一步就是设置 <code>$GOPATH</code>，go 命令需要的全局配置之一。
+<code>$GOPATH</code> 可以是一个目录的列表。但现在最一般的用法就是将它设为单个目录。
+特别地，你需要在 <code>$GOPATH</code> 中为你的每一个项目分隔条目。一个
+<code>$GOPATH</code> 可支持多个项目。</p>
+
+<div class="english">
 <p>Here’s an example.  Let’s say we decide to keep our Go code in the directory
 <code>$HOME/mygo</code>.  We need to create that directory and set
 <code>$GOPATH</code> accordingly.</p>
+</div>
+
+<p>
+举个例子。假设我们决定把Go代码保存在 <code>$HOME/mygo</code> 中。我们需要创建这个目录，
+并设置相应的 <code>$GOPATH</code>。
+</p>
 
 <pre>
 $ mkdir $HOME/mygo
@@ -157,10 +331,17 @@ $ export GOPATH=$HOME/mygo
 $
 </pre>
 
+<div class="english">
 <p>Into this directory, we now add some source code.  Suppose we want to use
 the indexing library from the codesearch project along with a left-leaning
 red-black tree.  We can install both with the "<code>go get</code>"
 subcommand:</p>
+</div>
+
+<p>
+进入此目录后，我们就可以添加一些源码了。假设我们想要使用codesearch项目中的索引包，
+以及一个左倾红黑树包。我们可以用“<code>go get</code>”子命令安装二者：
+</p>
 
 <pre>
 $ go get code.google.com/p/codesearch/index
@@ -168,12 +349,21 @@ $ go get github.com/petar/GoLLRB/llrb
 $
 </pre>
 
+<div class="english">
 <p>Both of these projects are now downloaded and installed into our
 <code>$GOPATH</code> directory. The one tree now contains the two directories
 <code>src/code.google.com/p/codesearch/index/</code> and
 <code>src/github.com/petar/GoLLRB/llrb/</code>, along with the compiled
 packages (in <code>pkg/</code>) for those libraries and their dependencies.</p>
+</div>
 
+<p>
+这两个包现在已被下载并安装到我们的 <code>$GOPATH</code> 目录中了。该目录树现在包含了
+<code>src/code.google.com/p/codesearch/index/</code> 和
+<code>src/github.com/petar/GoLLRB/llrb/</code> 这两个目录，以及那些库和依赖的已编译包
+（在 <code>pkg/</code> 中)</p>
+
+<div class="english">
 <p>Because we used version control systems (Mercurial and Git) to check
 out the sources, the source tree also contains the other files in the
 corresponding repositories, such as related packages. The "<code>go list</code>"
@@ -181,6 +371,14 @@ subcommand lists the import paths corresponding to its arguments, and
 the pattern "<code>./...</code>" means start in the current directory
 ("<code>./</code>") and find all packages below that directory
 ("<code>...</code>"):</p>
+</div>
+
+<p>
+由于我们使用了版本控制系统（Mercurial与Git等）来检出源码，
+因此该源码树也会包含对应代码仓库中的其它文件。例如相关的包。
+“<code>go list</code>”子命令会列出其对应实参的导入路径，而模式“<code>./...</code>”
+意为从当前目录（“<code>./</code>”）开始，查找该目录下的所有包（“<code>...</code>”）：
+</p>
 
 <pre>
 $ go list ./...
@@ -195,7 +393,13 @@ github.com/petar/GoLLRB/llrb
 $
 </pre>
 
+<div class="english">
 <p>We can also test those packages:</p>
+</div>
+
+<p>
+我们也可以测试这些包：
+</p>
 
 <pre>
 $ go test ./...
@@ -210,8 +414,14 @@ ok      github.com/petar/GoLLRB/llrb             0.231s
 $
 </pre>
 
+<div class="english">
 <p>If a go subcommand is invoked with no paths listed, it operates on the
 current directory:</p>
+</div>
+
+<p>
+若go的子命令未指定路径列表，它就会在当前目录下进行操作：
+</p>
 
 <pre>
 $ cd $GOPATH/src/code.google.com/p/codesearch/regexp
@@ -230,11 +440,20 @@ $ go install
 $
 </pre>
 
+<div class="english">
 <p>That "<code>go install</code>" subcommand installs the latest copy of the
 package into the pkg directory. Because the go command can analyze the
 dependency graph, "<code>go install</code>" also installs any packages that
 this package imports but that are out of date, recursively.</p>
+</div>
 
+<p>
+“<code>go install</code>”子命令会将包的最新副本安装到pkg目录中。由于 go
+命令会分析依赖关系，因此，除非该包导入的其它包已过期，否则 “<code>go install</code>”
+也会递归地根据依赖关系安装它们。
+</p>
+
+<div class="english">
 <p>Notice that "<code>go install</code>" was able to determine the name of the
 import path for the package in the current directory, because of the convention
 for directory naming.  It would be a little more convenient if we could pick
@@ -242,12 +461,32 @@ the name of the directory where we kept source code, and we probably wouldn't
 pick such a long name, but that ability would require additional configuration
 and complexity in the tool. Typing an extra directory name or two is a small
 price to pay for the increased simplicity and power.</p>
+</div>
 
+<p>
+注意，由于对目录命名的约定，原来的“<code>go install</code>”可以为当前目录中的包指定导入路径名。
+如果我们能选择保存源码的目录，可能会提供一些方便，而我们应该不会选择太长的名称，
+但这会增加该工具的复杂性，且需要附加的设置。因此，只需多输入一两个目录名这样很小的代价，
+就能增强该工具的简单性和能力。
+</p>
+
+<div class="english">
 <p>As the example shows, it’s fine to work with packages from many different
 projects at once within a single <code>$GOPATH</code> root directory.</p>
+</div>
 
+<p>
+正如上例所示，对于多个不同项目中的包来说，只用单个 <code>$GOPATH</code>
+根目录就能完全胜任。
+</p>
+
+<div class="english">
 <h2>Limitations</h2>
+</div>
 
+<h2>限制</h2>
+
+<div class="english">
 <p>As mentioned above, the go command is not a general-purpose build
 tool. In particular, it does not have any facility for generating Go
 source files during a build.  Instead, if you want to use a tool like
@@ -258,8 +497,28 @@ into your repository. This is more work for you, the package author,
 but it is significantly less work for your users, who can use
 "<code>go get</code>" without needing to obtain and build
 any additional tools.</p>
+</div>
 
+<p>
+正如前面所述，go命令并不是个通用的构建工具。特别是它没有任何在构建期间生成Go代码的能力。
+取而代之，如果你想要使用一个类似yacc或协议缓存编译器的工具，就需要编写一个makefile
+（或为你选择的构建工具编写一个配置文件）来生成Go文件，然后将生成的源文件签入你的代码仓库中。
+这会让你（包的作者）做更多工作，但它也确实会为你的用户减少许多工作，他们只需使用
+“<code>go get</code>”而无需获取并构建任何附加的工具。
+</p>
+
+<div class="english">
 <h2>More information</h2>
+</div>
 
+<h2>更多信息</h2>
+
+<div class="english">
 <p>For more information, read <a href="/doc/code.html">How to Write Go Code</a>
 and see the <a href="/cmd/go/">go command documentation</a>.</p>
+</div>
+
+<p>
+更多信息请参阅<a href="/doc/code.html">如何编写Go代码</a>，
+并查看<a href="/cmd/go/">go命令文档</a>。
+</p>
