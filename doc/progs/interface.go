@@ -22,12 +22,12 @@ var j MyInt
 
 // STOP OMIT
 
-// Reader is the interface that wraps the basic Read method.
+// Reader 接口封装了基本的 Read 方法。
 type Reader interface {
 	Read(p []byte) (n int, err error)
 }
 
-// Writer is the interface that wraps the basic Write method.
+// Writer 接口封装了基本的 Write 方法。
 type Writer interface {
 	Write(p []byte) (n int, err error)
 }
@@ -39,7 +39,7 @@ func readers() { // OMIT
 	r = os.Stdin
 	r = bufio.NewReader(r)
 	r = new(bytes.Buffer)
-	// and so on
+	// 等等……
 	// STOP OMIT
 }
 

@@ -1,15 +1,28 @@
 <!--{
+	"Title": "反射法则",
+	"Template": true
+}-->
+
+<!--{
 	"Title": "The Laws of Reflection",
 	"Template": true
 }-->
 
+<div class="english">
 <p>
 Reflection in computing is the
 ability of a program to examine its own structure, particularly
 through types; it's a form of metaprogramming. It's also a great
 source of confusion.
 </p>
+</div>
 
+<p>
+在计算过程中，反射是程序检查其自身结构，特别是类型的一种能力。
+它是元编程的一种形式，同时也是造成混乱的主要来源。
+</p>
+
+<div class="english">
 <p>
 In this article we attempt to clarify things by explaining how
 reflection works in Go. Each language's reflection model is
@@ -17,23 +30,49 @@ different (and many languages don't support it at all), but
 this article is about Go, so for the rest of this article the word
 "reflection" should be taken to mean "reflection in Go".
 </p>
+</div>
 
+<p>
+在本文中，我们试图解释反射在Go中如何工作，以澄清某些事情。每一种语言的反模型都不同
+（甚至许多语言根本不支持反射），不过这篇文章是关于Go的，因此在接下来的内容中，
+“反射”一词应看做“Go中的反射”。
+</p>
+
+<div class="english">
 <p><b>Types and interfaces</b></p>
+</div>
 
+<p><b>类型与接口</b></p>
+
+<div class="english">
 <p>
 Because reflection builds on the type system, let's start with a
 refresher about types in Go.
 </p>
+</div>
 
+<p>
+由于反射建立在类型系统之上，就让我们从复习Go中的类型开始吧。
+</p>
+
+<div class="english">
 <p>
 Go is statically typed. Every variable has a static type, that is,
 exactly one type known and fixed at compile time: <code>int</code>,
 <code>float32</code>, <code>*MyType</code>, <code>[]byte</code>,
 and so on. If we declare
 </p>
+</div>
+
+<p>
+Go是静态类型的，每个变量都有一种静态类型。换言之，它们都有一种已知的类型，
+并且在编译时就确定下来了。比如 <code>int</code>、<code>float32</code>、<code>*MyType</code>
+或 <code>[]byte</code> 等等。如果我们定义了
+</p>
 
 {{code "/doc/progs/interface.go" `/type MyInt/` `/STOP/`}}
 
+<div class="english">
 <p>
 then <code>i</code> has type <code>int</code> and <code>j</code>
 has type <code>MyInt</code>. The variables <code>i</code> and
@@ -41,7 +80,15 @@ has type <code>MyInt</code>. The variables <code>i</code> and
 the same underlying type, they cannot be assigned to one another
 without a conversion.
 </p>
+</div>
 
+<p>
+那么 <code>i</code> 的类型为 <code>int</code>，而 <code>j</code> 的类型为
+<code>MyInt</code>。尽管变量 <code>i</code> 和 <code>j</code> 拥有相同的基本类型，
+但它们的静态类型仍然不同，因此在它们未经转换前是不能相互赋值的。
+</p>
+
+<div class="english">
 <p>
 One important category of type is interface types, which represent
 fixed sets of methods. An interface variable can store any concrete
@@ -51,9 +98,18 @@ interface's methods. A well-known pair of examples is
 <code>Reader</code> and <code>Writer</code> from the
 <a href="/pkg/io/">io package</a>:
 </p>
+</div>
 
-{{code "/doc/progs/interface.go" `/// Reader/` `/STOP/`}}
+<p>
+在类型中，有一种重要的类别就是接口类型，它表示一个确定的方法集。只要某个具体值
+（非接口）实现了某个接口中的方法，该接口类型的变量就能存储它。一对众所周知的例子就是
+<code>io.Reader</code> 和 <code>io.Writer</code>，即
+<a href="/pkg/io/"><code>io</code></a> 包中的 <code>Reader</code> 和 <code>Writer</code> 类型：
+</p>
 
+{{code "/doc/progs/interface.go" `/// Reader 接口/` `/STOP/`}}
+
+<div class="english">
 <p>
 Any type that implements a <code>Read</code> (or
 <code>Write</code>) method with this signature is said to implement
@@ -62,29 +118,58 @@ purposes of this discussion, that means that a variable of type
 <code>io.Reader</code> can hold any value whose type has a
 <code>Read</code> method:
 </p>
+</div>
+
+<p>
+任何实现了 <code>Read</code>（或 <code>Write</code>）方法及其签名的类型，
+同时也就实现了 <code>io.Reader</code>（或 <code>io.Writer</code>）接口。
+就此而言，若某个值的类型拥有 <code>Read</code> 方法，<code>io.Reader</code> 类型的变量就能保存它：
+</p>
 
 {{code "/doc/progs/interface.go" `/func readers/` `/STOP/`}}
 
+<div class="english">
 <p>
 It's important to be clear that whatever concrete value
 <code>r</code> may hold, <code>r</code>'s type is always
 <code>io.Reader</code>: Go is statically typed and the static type
-of <code>r</code> is <code>io.Reader</code>.</p>
+of <code>r</code> is <code>io.Reader</code>.
+</p>
+</div>
 
+<p>
+有件事一定要明确，即无论 <code>r</code> 保存了什么具体的值，<code>r</code>
+的类型总是 <code>io.Reader</code>：Go是静态类型的，而 <code>r</code> 的静态类型为
+<code>io.Reader</code>。
+</p>
+
+<div class="english">
 <p>
 An extremely important example of an interface type is the empty
 interface:
+</p>
+</div>
+
+<p>
+一个非常重要的例子就是空接口：
 </p>
 
 <pre>
 interface{}
 </pre>
 
+<div class="english">
 <p>
 It represents the empty set of methods and is satisfied by any
 value at all, since any value has zero or more methods.
 </p>
+</div>
 
+<p>
+它表示空方法集。由于任何值都有零或多个方法，因此任何值都满足它。
+</p>
+
+<div class="english">
 <p>
 Some people say that Go's interfaces are dynamically typed, but
 that is misleading. They are statically typed: a variable of
@@ -92,21 +177,47 @@ interface type always has the same static type, and even though at
 run time the value stored in the interface variable may change
 type, that value will always satisfy the interface.
 </p>
+</div>
 
+<p>
+有人说Go的接口是动态类型的，不过这是种误解。它们确实是静态类型的：
+接口类型的变量总有着相同的静态类型，就算存储在其中的值的类型在运行时可能会改变，
+它也总是满足该接口。
+</p>
+
+<div class="english">
 <p>
 We need to be precise about all this because reflection and
 interfaces are closely related.
 </p>
+</div>
 
+<p>
+对于所有的这些，我们都必须严谨对待，因为反射和接口密切相关。
+</p>
+
+<div class="english">
 <p><b>The representation of an interface</b></p>
+</div>
 
+<p><b>接口的表示</b></p>
+
+<div class="english">
 <p>
 Russ Cox has written a
 <a href="http://research.swtch.com/2009/12/go-data-structures-interfaces.html">detailed blog post</a>
 about the representation of interface values in Go. It's not necessary to
 repeat the full story here, but a simplified summary is in order.
 </p>
+</div>
 
+<p>
+Russ Cox写过一篇关于
+<a href="http://research.swtch.com/2009/12/go-data-structures-interfaces.html">Go中接口值的表示</a>
+的文章，我们就不在此赘述了。不过简单概括一下还是很有必要的。
+</p>
+
+<div class="english">
 <p>
 A variable of interface type stores a pair: the concrete value
 assigned to the variable, and that value's type descriptor.
@@ -114,9 +225,17 @@ To be more precise, the value is the underlying concrete data item
 that implements the interface and the type describes the full type
 of that item. For instance, after
 </p>
+</div>
+
+<p>
+接口类型的变量存储了一对内容：赋予该变量的具体值，以及该值的类型描述符。
+更准确地说，其值是实现了该接口的具体数据条目，而其类型则描述了该条目的完整类型。
+例如，在执行
+</p>
 
 {{code "/doc/progs/interface.go" `/func typeAssertions/` `/STOP/`}}
 
+<div class="english">
 <p>
 <code>r</code> contains, schematically, the (value, type) pair,
 (<code>tty</code>, <code>*os.File</code>). Notice that the type
@@ -126,9 +245,19 @@ only to the <code>Read</code> method, the value inside carries all
 the type information about that value. That's why we can do things
 like this:
 </p>
+</div>
+
+<p>
+之后，如果按形式来描述，那么 <code>r</code> 就包含了 (值, 类型) 对，即
+(<code>tty</code>, <code>*os.File</code>)。注意，类型 <code>*os.File</code>
+还实现了除 <code>Read</code> 以外的其它方法：尽管该接口值只提供了访问
+<code>Read</code> 方法的能力，但其内部却携带了有关该值的所有类型信息。
+这就是我们可以这样做的原因：
+</p>
 
 {{code "/doc/progs/interface.go" `/var w io.Writer/` `/STOP/`}}
 
+<div class="english">
 <p>
 The expression in this assignment is a type assertion; what it
 asserts is that the item inside <code>r</code> also implements
@@ -140,20 +269,43 @@ determines what methods may be invoked with an interface variable,
 even though the concrete value inside may have a larger set of
 methods.
 </p>
+</div>
 
 <p>
+在此赋值语句中的表达式是一个类型断言：它断言 <code>r</code> 内的条目同时也实现了
+<code>io.Writer</code>，因此我们可以将它赋予 <code>w</code>。
+赋值后，<code>w</code> 将会包含一对 (<code>tty</code>, <code>*os.File</code>)。
+这与保存在 <code>r</code> 中的一致。接口的静态类型决定了哪些方法可通过接口变量调用，
+即便其内部具体的值可能有更大的方法集。
+</p>
+
+<div class="english">
+<p>
 Continuing, we can do this:
+</p>
+</div>
+
+<p>
+接着，我们可以这样做：
 </p>
 
 {{code "/doc/progs/interface.go" `/var empty interface{}/` `/STOP/`}}
 
+<div class="english">
 <p>
 and our empty interface value <code>e</code> will again contain
 that same pair, (<code>tty</code>, <code>*os.File</code>). That's
 handy: an empty interface can hold any value and contains all the
 information we could ever need about that value.
 </p>
+</div>
 
+<p>
+而我们的空接口值 <code>e</code> 也将再次包含同样的一对 (<code>tty</code>,
+<code>*os.File</code>)。这很方便：空接口可保存任何值，并包含关于该值的所有信息。
+</p>
+
+<div class="english">
 <p>
 (We don't need a type assertion here because it's known statically
 that <code>w</code> satisfies the empty interface. In the example
@@ -162,22 +314,50 @@ where we moved a value from a <code>Reader</code> to a
 assertion because <code>Writer</code>'s methods are not a
 subset of <code>Reader</code>'s.)
 </p>
+</div>
 
+<p>
+（在这里我们无需类型断言，因为 <code>w</code> 肯定是满足空接口的。在本例中，
+我们将一个值从 <code>Reader</code> 变成了 <code>Writer</code>，由于
+<code>Writer</code> 的方法并非 <code>Reader</code>
+的子集，因此我们必须显式地使用类型断言。）
+</p>
+
+<div class="english">
 <p>
 One important detail is that the pair inside an interface always
 has the form (value, concrete type) and cannot have the form
 (value, interface type). Interfaces do not hold interface
 values.
 </p>
+</div>
 
+<p>
+一个很重要的细节，就是接口内部的对总是 (值, 具体类型) 的形式，而不会是 (值, 接口类型)
+的形式。接口不能保存接口值。
+</p>
+
+<div class="english">
 <p>
 Now we're ready to reflect.
 </p>
+</div>
 
+<p>
+现在我们准备好反射了。
+</p>
+
+<div class="english">
 <p><b>The first law of reflection</b></p>
 
 <p><b>1. Reflection goes from interface value to reflection object.</b></p>
+</div>
 
+<p><b>反射法则之——</b></p>
+
+<p><b>1. 从接口值可反射出反射对象。</b></p>
+
+<div class="english">
 <p>
 At the basic level, reflection is just a mechanism to examine the
 type and value pair stored inside an interface variable. To get
@@ -194,21 +374,46 @@ to the <code>reflect.Type</code>, but let's keep the
 <code>Value</code> and <code>Type</code> concepts separate for
 now.)
 </p>
+</div>
 
 <p>
+从基本层面上看，反射只是一种检查存储在接口变量中的“类型-值对”的机制。从头来说，
+在 <a href="/pkg/reflect/"><code>reflect</code></a> 中我们需要了解两种类型：
+<a href="/pkg/reflect/#Type"><code>Type</code></a> 和
+<a href="/pkg/reflect/#Value"><code>Value</code></a>，这两种类型可用来访问接口变量的内容。
+还有两个简单的函数，叫做 <code>reflect.TypeOf</code> 和 <code>reflect.ValueOf</code>，
+它们用于接口值中分别获取<code>reflect.Type</code> 和 <code>reflect.Value</code>。
+（同样，从 <code>reflect.Value</code> 也能很容易地获取 <code>reflect.Type</code>，
+不过让我们先保持 <code>Value</code> 和 <code>Type</code> 概念的独立性吧。
+</p>
+
+<div class="english">
+<p>
 Let's start with <code>TypeOf</code>:
+</p>
+</div>
+
+<p>
+我们先从 <code>TypeOf</code> 开始：
 </p>
 
 {{code "/doc/progs/interface2.go" `/package main/` `/STOP main/`}}
 
+<div class="english">
 <p>
 This program prints
+</p>
+</div>
+
+<p>
+此程序会打印出
 </p>
 
 <pre>
 type: float64
 </pre>
 
+<div class="english">
 <p>
 You might be wondering where the interface is here, since the program looks
 like it's passing the <code>float64</code> variable <code>x</code>, not an
@@ -216,35 +421,71 @@ interface value, to <code>reflect.TypeOf</code>. But it's there; as
 <a href="/pkg/reflect/#Type.TypeOf">godoc reports</a>, the signature of
 <code>reflect.TypeOf</code> includes an empty interface:
 </p>
+</div>
 
+<p>
+你可能会问接口在哪，因为该程序看起来只是向 <code>reflect.TypeOf</code> 传递了一个
+<code>float64</code> 类型的变量 <code>x</code>，而不是一个接口值。但它就在那，
+正如 <a href="/pkg/reflect/#Type.TypeOf">godoc所显示的那样</a>，<code>reflect.TypeOf</code>
+的签名包含了一个空接口：
+</p>
+
+<div class="english">
 <pre>
 // TypeOf returns the reflection Type of the value in the interface{}.
 func TypeOf(i interface{}) Type
 </pre>
+</div>
 
+<pre>
+// TypeOf 返回 interface{} 中的值的反射类型 Type。
+func TypeOf(i interface{}) Type
+</pre>
+
+<div class="english">
 <p>
 When we call <code>reflect.TypeOf(x)</code>, <code>x</code> is
 first stored in an empty interface, which is then passed as the
 argument; <code>reflect.TypeOf</code> unpacks that empty interface
 to recover the type information.
 </p>
+</div>
 
+<p>
+当我们调用 <code>reflect.TypeOf(x)</code> 时，<code>x</code> 首先会被存储在一个空接口中，
+然后它会作为实参被传入；<code>reflect.TypeOf</code> 通过解包该空接口来还原其类型信息。
+</p>
+
+<div class="english">
 <p>
 The <code>reflect.ValueOf</code> function, of course, recovers the
 value (from here on we'll elide the boilerplate and focus just on
 the executable code):
 </p>
+</div>
+
+<p>
+当然，<code>reflect.ValueOf</code> 函数也会还原它的值（从这里开始，
+我们会略过那些概念示例，而只关注于可执行的代码）：
+</p>
 
 {{code "/doc/progs/interface2.go" `/START f9/` `/STOP/`}}
 
+<div class="english">
 <p>
 prints
+</p>
+</div>
+
+<p>
+会打印出
 </p>
 
 <pre>
 value: &lt;float64 Value&gt;
 </pre>
 
+<div class="english">
 <p>
 Both <code>reflect.Type</code> and <code>reflect.Value</code> have
 lots of methods to let us examine and manipulate them. One
@@ -258,11 +499,28 @@ on. Also methods on <code>Value</code> with names like
 <code>Int</code> and <code>Float</code> let us grab values (as
 <code>int64</code> and <code>float64</code>) stored inside:
 </p>
+</div>
+
+<p>
+<code>reflect.Type</code> 和 <code>reflect.Value</code> 都有许多方法来让我们检测并操作它们。
+一个重要的例子就是 <code>Value</code> 拥有一个 <code>Type</code> 方法，它会返回
+<code>reflect.Value</code> 的 <code>Type</code>。另外就是 <code>Type</code>
+和 <code>Value</code> 都有一个 <code>Kind</code> 方法，它会返回一个常量来表明条目的类型：
+<code>Uint</code>、<code>Float64</code> 或 <code>Slice</code>等等。同样，<code>Value</code>
+拥有像 <code>Int</code> 和 <code>Float</code> 这样的方法来让我们获取存储在内部的值
+（作为 <code>int64</code> 和 <code>float64</code>）:
+</p>
 
 {{code "/doc/progs/interface2.go" `/START f1/` `/STOP/`}}
 
+<div class="english">
 <p>
 prints
+</p>
+</div>
+
+<p>
+会打印出
 </p>
 
 <pre>
@@ -271,13 +529,25 @@ kind is float64: true
 value: 3.4
 </pre>
 
+<div class="english">
 <p>
 There are also methods like <code>SetInt</code> and
 <code>SetFloat</code> but to use them we need to understand
 settability, the subject of the third law of reflection, discussed
 below.
 </p>
+</div>
 
+<p>
+There are also methods like <code>SetInt</code> and
+<code>SetFloat</code> but to use them we need to understand
+settability, the subject of the third law of reflection, discussed
+below.
+同样还有 <code>SetInt</code> 和 <code>SetFloat</code> 这样的方法，不过在使用它们之前，
+我们需要理解其可设置性，该主题会在后面的第三条反射法则中讨论。
+</p>
+
+<div class="english">
 <p>
 The reflection library has a couple of properties worth singling
 out. First, to keep the API simple, the "getter" and "setter"
@@ -288,18 +558,35 @@ instance. That is, the <code>Int</code> method of
 <code>SetInt</code> value takes an <code>int64</code>; it may be
 necessary to convert to the actual type involved:
 </p>
+</div>
+
+<p>
+反射库有几点特性值得一提。首先，为了让API保持简单，<code>Value</code>
+的“获取者”和“设置者”方法会在能够保存其值的最大类型上进行操作：例如 <code>int64</code>
+就能用于所有的带符号整数。也就是说，<code>Value</code> 的 <code>Int</code> 方法会返回
+<code>int64</code> 类型的值，而 <code>SetInt</code> 会接受 <code>int64</code>
+类型的值；因此该值可能需要转换为它所涉及到的实际类型：
+</p>
 
 {{code "/doc/progs/interface2.go" `/START f2/` `/STOP/`}}
 
+<div class="english">
 <p>
 The second property is that the <code>Kind</code> of a reflection
 object describes the underlying type, not the static type. If a
 reflection object contains a value of a user-defined integer type,
 as in
 </p>
+</div>
+
+<p>
+第二个特性就是反射对象的 <code>Kind</code> 描述了其基本类型，而给静态类型。
+若反射对象包含了用户定义的整数类型的值，比如
+</p>
 
 {{code "/doc/progs/interface2.go" `/START f3/` `/STOP/`}}
 
+<div class="english">
 <p>
 the <code>Kind</code> of <code>v</code> is still
 <code>reflect.Int</code>, even though the static type of
@@ -307,40 +594,87 @@ the <code>Kind</code> of <code>v</code> is still
 other words, the <code>Kind</code> cannot discriminate an int from
 a <code>MyInt</code> even though the <code>Type</code> can.
 </p>
+</div>
 
+<p>
+那么 <code>v</code> 的 <code>Kind</code> 仍为 <code>reflect.Int</code>，尽管
+<code>x</code> 的静态类型为 <code>MyInt</code> 而非 <code>int</code>。换句话说，
+<code>Kind</code> 无法区分 <code>int</code> 和 <code>MyInt</code>，而
+<code>Type</code> 则可以。
+</p>
+
+<div class="english">
 <p><b>The second law of reflection</b></p>
 
 <p><b>2. Reflection goes from reflection object to interface
 value.</b></p>
+</div>
 
+<p><b>反射法则之——</b></p>
+
+<p><b>2. 从反射对象可反射出接口值。</b></p>
+
+<div class="english">
 <p>
 Like physical reflection, reflection in Go generates its own
 inverse.
 </p>
+</div>
 
+<p>
+如同物理中的反射那样，Go中的反射也会产生它自己的镜像。
+</p>
+
+<div class="english">
 <p>
 Given a <code>reflect.Value</code> we can recover an interface
 value using the <code>Interface</code> method; in effect the method
 packs the type and value information back into an interface
 representation and returns the result:
 </p>
+</div>
 
+<p>
+给定一个 <code>reflect.Value</code>，我们可以使用 <code>Interface</code>
+方法还原其接口值；在效果上，该方法会将类型与值的信息打包成接口表示，并返回其结果：
+</p>
+
+<div class="english">
 <pre>
 // Interface returns v's value as an interface{}.
 func (v Value) Interface() interface{}
 </pre>
+</div>
 
+<pre>
+// Interface 将 v 的值返回成 interface{}。
+func (v Value) Interface() interface{}
+</pre>
+
+<div class="english">
 <p>
 As a consequence we can say
+</p>
+</div>
+
+<p>
+因此，我们可以通过
 </p>
 
 {{code "/doc/progs/interface2.go" `/START f3b/` `/STOP/`}}
 
+<div class="english">
 <p>
 to print the <code>float64</code> value represented by the
 reflection object <code>v</code>.
 </p>
+</div>
 
+<p>
+打印出反射对象 <code>v</code> 所表示的 <code>float64</code> 值。
+</p>
+
+<div class="english">
 <p>
 We can do even better, though. The arguments to
 <code>fmt.Println</code>, <code>fmt.Printf</code> and so on are all
@@ -351,94 +685,187 @@ of a <code>reflect.Value</code> correctly is to pass the result of
 the <code>Interface</code> method to the formatted print
 routine:
 </p>
+</div>
+
+<p>
+不过我们可以做得更好。<code>fmt.Println</code> 与 <code>fmt.Printf</code>
+等都会将实参作为空接口值传递，它们会被包 <code>fmt</code> 进行内部解包，
+就像我们刚做的那样。因此，正确地打印出 <code>reflect.Value</code> 内容的方法就是
+将 <code>Interface</code> 方法的结果传至格式化打印功能：
+</p>
 
 {{code "/doc/progs/interface2.go" `/START f3c/` `/STOP/`}}
 
+<div class="english">
 <p>
 (Why not <code>fmt.Println(v)</code>? Because <code>v</code> is a
 <code>reflect.Value</code>; we want the concrete value it holds.)
 Since our value is a <code>float64</code>, we can even use a
 floating-point format if we want:
 </p>
+</div>
+
+<p>
+（为什么不是 <code>fmt.Println(v)</code>？因为 <code>v</code> 是个
+<code>reflect.Value</code>，而我们想要的是它保存的具体值。）由于值的类型是
+<code>float64</code>，如果需要的话，我们甚至可以使用浮点数格式化：
+</p>
 
 {{code "/doc/progs/interface2.go" `/START f3d/` `/STOP/`}}
 
+<div class="english">
 <p>
 and get in this case
+</p>
+</div>
+
+<p>
+然后就会得到
 </p>
 
 <pre>
 3.4e+00
 </pre>
 
+<div class="english">
 <p>
 Again, there's no need to type-assert the result of
 <code>v.Interface()</code> to <code>float64</code>; the empty
 interface value has the concrete value's type information inside
 and <code>Printf</code> will recover it.
 </p>
+</div>
 
+<p>
+再次强调，这里无需将 <code>v.Interface()</code> 的结果类型断言为 <code>float64</code>，
+因为空接口值中拥有具体值的类型信息，而 <code>Printf</code> 则会将它还原。
+</p>
+
+<div class="english">
 <p>
 In short, the <code>Interface</code> method is the inverse of the
 <code>ValueOf</code> function, except that its result is always of
 static type <code>interface{}</code>.
 </p>
+</div>
 
+<p>
+简单来说，<code>Interface</code> 方法就是 <code>ValueOf</code> 函数的镜像，
+不过其结果总是静态类型 <code>interface{}</code>。
+</p>
+
+<div class="english">
 <p>
 Reiterating: Reflection goes from interface values to reflection
 objects and back again.
 </p>
+</div>
 
+<p>
+重申一遍：从接口值可反射出反射对象，反之亦可。
+</p>
+
+<div class="english">
 <p><b>The third law of reflection</b></p>
 
 <p><b>3. To modify a reflection object, the value must be settable.</b></p>
+</div>
 
+<p><b>反射法则之——</b></p>
+
+<p><b>3. 要修改反射对象，其值必须可设置。</b></p>
+
+<div class="english">
 <p>
 The third law is the most subtle and confusing, but it's easy
 enough to understand if we start from first principles.
 </p>
+</div>
 
 <p>
+第三条法则是最微妙而令人困惑的，但如果我们从第一条法则开始，还是很容易理解的。
+</p>
+
+<div class="english">
+<p>
 Here is some code that does not work, but is worth studying.
+</p>
+</div>
+
+<p>
+这些代码虽然不能工作，但很值得学习。
 </p>
 
 {{code "/doc/progs/interface2.go" `/START f4/` `/STOP/`}}
 
+<div class="english">
 <p>
 If you run this code, it will panic with the cryptic message
+</p>
+</div>
+
+<p>
+如果你运行这段代码，它就会报出神秘的恐慌信息：
 </p>
 
 <pre>
 panic: reflect.Value.SetFloat using unaddressable value
 </pre>
 
+<div class="english">
 <p>
 The problem is not that the value <code>7.1</code> is not
 addressable; it's that <code>v</code> is not settable. Settability
 is a property of a reflection <code>Value</code>, and not all
 reflection <code>Values</code> have it.
 </p>
+</div>
 
+<p>
+其问题的根源不在于值 <code>7.1</code> 能不能寻址，而在于 <code>v</code> 不可设置。
+可设置性是反射值 <code>Value</code> 的一种属性，而且并不是所有的反射值都拥有它。
+</p>
+
+<div class="english">
 <p>
 The <code>CanSet</code> method of <code>Value</code> reports the
 settability of a <code>Value</code>; in our case,
 </p>
+</div>
+
+<p>
+<code>Value</code> 的 <code>CanSet</code> 方法会报告 <code>Value</code> 的可设置性。
+在我们的例子中，
+</p>
 
 {{code "/doc/progs/interface2.go" `/START f5/` `/STOP/`}}
 
+<div class="english">
 <p>
 prints
+</p>
+</div>
+
+<p>
+会打印出
 </p>
 
 <pre>
 settability of v: false
 </pre>
 
+<div class="english">
 <p>
 It is an error to call a <code>Set</code> method on an non-settable
 <code>Value</code>. But what is settability?
 </p>
+</div>
 
+<p>
+对不可设置的 <code>Value</code> 调用 <code>Set</code> 方法会产生错误，但什么是可设置性呢？
+</p>
+
+<div class="english">
 <p>
 Settability is a bit like addressability, but stricter. It's the
 property that a reflection object can modify the actual storage
@@ -446,9 +873,16 @@ that was used to create the reflection object. Settability is
 determined by whether the reflection object holds the original
 item. When we say
 </p>
+</div>
+
+<p>
+可设置性有点像可寻址性，不过它更加严格。它是反射对象能否修改其创建之初的真实值的一种属性。
+可设置性决定了反射对象是否保存原始条目。当我们执行
+</p>
 
 {{code "/doc/progs/interface2.go" `/START f6/` `/STOP/`}}
 
+<div class="english">
 <p>
 we pass a <em>copy</em> of <code>x</code> to
 <code>reflect.ValueOf</code>, so the interface value created as the
@@ -456,9 +890,17 @@ argument to <code>reflect.ValueOf</code> is a <em>copy</em> of
 <code>x</code>, not <code>x</code> itself. Thus, if the
 statement
 </p>
+</div>
+
+<p>
+后，就将 <code>x</code> 的一份<b>副本</b>传入了 <code>reflect.ValueOf</code>，
+因此该接口值也就作为传递给 <code>reflect.ValueOf</code> 的实参创建了一份
+<code>x</code> 的<b>副本</b>，而非 <code>x</code> 本身。因此，假如语句
+</p>
 
 {{code "/doc/progs/interface2.go" `/START f6b/` `/STOP/`}}
 
+<div class="english">
 <p>
 were allowed to succeed, it would not update <code>x</code>, even
 though <code>v</code> looks like it was created from
@@ -468,45 +910,90 @@ be unaffected. That would be confusing and useless, so it is
 illegal, and settability is the property used to avoid this
 issue.
 </p>
+</div>
 
+<p>
+能够成功执行，它也无法更新 <code>x</code>，即便 <code>v</code> 看起来创建自
+<code>x</code>。就算它能够更新存储在该反射值中的 <code>x</code> 的副本，<code>x</code>
+本身也不会受影响。这是令人困惑且毫无用处的，因此它是非法的。
+而可设置性就是用于避免此类问题的属性。
+</p>
+
+<div class="english">
 <p>
 If this seems bizarre, it's not. It's actually a familiar situation
 in unusual garb. Think of passing <code>x</code> to a
 function:
+</p>
+</div>
+
+<p>
+这看起来很奇怪，事实却并非如此。它其实就是藏在奇特外表下的一种常见情况。
+考虑将 <code>x</code> 传递给一个函数：
 </p>
 
 <pre>
 f(x)
 </pre>
 
+<div class="english">
 <p>
 We would not expect <code>f</code> to be able to modify
 <code>x</code> because we passed a copy of <code>x</code>'s value,
 not <code>x</code> itself. If we want <code>f</code> to modify
 <code>x</code> directly we must pass our function the address of
-<code>x</code> (that is, a pointer to <code>x</code>):</p>
+<code>x</code> (that is, a pointer to <code>x</code>):
+</p>
+</div>
+
+<p>
+我们并不期望 <code>f</code> 能修改 <code>x</code>，因为我们传入的是值 <code>x</code>
+的副本，而非 <code>x</code> 本身。如果我们想让 <code>f</code> 直接修改
+<code>x</code>，就必须向该函数传入 <code>x</code> 的地址（即指向 <code>x</code>
+的指针）：
+</p>
 
 <p>
 <code>f(&amp;x)</code>
 </p>
 
+<div class="english">
 <p>
 This is straightforward and familiar, and reflection works the same
 way. If we want to modify <code>x</code> by reflection, we must
 give the reflection library a pointer to the value we want to
 modify.
 </p>
+</div>
 
+<p>
+这即熟悉又简单，反射也是以相同的方式工作的。如果我们想要通过反射修改
+<code>x</code>，就必须向反射库提供要修改的值的指针。
+</p>
+
+<div class="english">
 <p>
 Let's do that. First we initialize <code>x</code> as usual
 and then create a reflection value that points to it, called
 <code>p</code>.
 </p>
+</div>
+
+<p>
+让我们试试吧。首先像平时那样初始化 <code>x</code>，接着创建指向它的反射值，叫做
+<code>p</code>。
+</p>
 
 {{code "/doc/progs/interface2.go" `/START f7/` `/STOP/`}}
 
+<div class="english">
 <p>
 The output so far is
+</p>
+</div>
+
+<p>
+这样会输出
 </p>
 
 <pre>
@@ -514,6 +1001,7 @@ type of p: *float64
 settability of p: false
 </pre>
 
+<div class="english">
 <p>
 The reflection object <code>p</code> isn't settable, but it's not
 <code>p</code> we want to set, it's (in effect) <code>*p</code>. To
@@ -522,28 +1010,55 @@ method of <code>Value</code>, which indirects through the pointer,
 and save the result in a reflection <code>Value</code> called
 <code>v</code>:
 </p>
+</div>
+
+<p>
+反射对象 <code>p</code> 并不是可设置的，不过我们也不想设置 <code>p</code>，
+而（实际上）是 <code>*p</code>。为获得 <code>p</code> 指向的内容，我们调用
+<code>Value</code> 的 <code>Elem</code> 方法，它会间接通过指针，并将结构保存到叫做
+<code>v</code> 的反射值 <code>Value</code> 中：
+</p>
 
 {{code "/doc/progs/interface2.go" `/START f7b/` `/STOP/`}}
 
+<div class="english">
 <p>
 Now <code>v</code> is a settable reflection object, as the output
 demonstrates,
+</p>
+</div>
+
+<p>
+现在 <code>v</code> 是可设置的反射对象，如输出所示：
 </p>
 
 <pre>
 settability of v: true
 </pre>
 
+<div class="english">
 <p>
 and since it represents <code>x</code>, we are finally able to use
 <code>v.SetFloat</code> to modify the value of
 <code>x</code>:
 </p>
+</div>
+
+<p>
+由于它代表 <code>x</code>，因此最终我们可使用 <code>v.SetFloat</code> 来修改
+<code>x</code> 的值：
+</p>
 
 {{code "/doc/progs/interface2.go" `/START f7c/` `/STOP/`}}
 
+<div class="english">
 <p>
 The output, as expected, is
+</p>
+</div>
+
+<p>
+并得到期望的输出：
 </p>
 
 <pre>
@@ -551,6 +1066,7 @@ The output, as expected, is
 7.1
 </pre>
 
+<div class="english">
 <p>
 Reflection can be hard to understand but it's doing exactly what
 the language does, albeit through reflection <code>Types</code> and
@@ -558,9 +1074,25 @@ the language does, albeit through reflection <code>Types</code> and
 mind that reflection Values need the address of something in order
 to modify what they represent.
 </p>
+</div>
 
+<p>
+Reflection can be hard to understand but it's doing exactly what
+the language does, albeit through reflection <code>Types</code> and
+<code>Values</code> that can disguise what's going on. Just keep in
+mind that reflection Values need the address of something in order
+to modify what they represent.
+反射可能很难理解，但语言做了它应该做的，尽管反射类型 <code>Types</code> 和值
+<code>Values</code> 隐藏了发生的事情。只要记得反射值需要某些东西的地址来修改它所代表的东西。
+</p>
+
+<div class="english">
 <p><b>Structs</b></p>
+</div>
 
+<p><b>结构体</b></p>
+
+<div class="english">
 <p>
 In our previous example <code>v</code> wasn't a pointer itself, it
 was just derived from one. A common way for this situation to arise
@@ -568,7 +1100,15 @@ is when using reflection to modify the fields of a structure. As
 long as we have the address of the structure, we can modify its
 fields.
 </p>
+</div>
 
+<p>
+在我们前面的例子中，<code>v</code> 本身并不是指针，它只是从一个指针中获取的。
+在使用反射修改结构体的字段时，这种情况经常出现。即，当我们有结构体的地址时，
+就能修改它的字段。
+</p>
+
+<div class="english">
 <p>
 Here's a simple example that analyzes a struct value, <code>t</code>. We create
 the reflection object with the address of the struct because we'll want to
@@ -578,11 +1118,25 @@ the fields using straightforward method calls
 Note that we extract the names of the fields from the struct type, but the
 fields themselves are regular <code>reflect.Value</code> objects.
 </p>
+</div>
+
+<p>
+下面这个简单的例子分析了结构体类型的值 <code>t</code>。我们从它的地址创建了反射对象，
+因为待会儿要修改它。接着我们将 <code>typeOfT</code> 设置为它的类型，
+然后以直白的方法调用遍历其字段（详见<a href="/pkg/reflect/">reflect</a>包）。
+注意，我们从该结构体类型中提取了其字段名，但字段本身是一般的 <code>reflect.Value</code> 对象。
+</p>
 
 {{code "/doc/progs/interface2.go" `/START f8/` `/STOP/`}}
 
+<div class="english">
 <p>
 The output of this program is
+</p>
+</div>
+
+<p>
+此程序的输出为：
 </p>
 
 <pre>
@@ -590,41 +1144,79 @@ The output of this program is
 1: B string = skidoo
 </pre>
 
+<div class="english">
 <p>
 There's one more point about settability introduced in
 passing here: the field names of <code>T</code> are upper case
 (exported) because only exported fields of a struct are
 settable.
 </p>
+</div>
 
+<p>
+这里还有一个关于可设置性的要点：<code>T</code> 的字段名必须大写（已导出），
+因为只有已导出的字段才是可设置的。
+</p>
+
+<div class="english">
 <p>
 Because <code>s</code> contains a settable reflection object, we
 can modify the fields of the structure.
 </p>
+</div>
+
+<p>
+由于 <code>s</code> 包含了可设置的反射对象，因此我们可以修改该结构体的字段：
+</p>
 
 {{code "/doc/progs/interface2.go" `/START f8b/` `/STOP/`}}
 
+<div class="english">
 <p>
 And here's the result:
+</p>
+</div>
+
+<p>
+其结果为：
 </p>
 
 <pre>
 t is now {77 Sunset Strip}
 </pre>
 
+<div class="english">
 <p>
 If we modified the program so that <code>s</code> was created from
 <code>t</code>, not <code>&amp;t</code>, the calls to
 <code>SetInt</code> and <code>SetString</code> would fail as the
 fields of <code>t</code> would not be settable.
 </p>
+</div>
 
+<p>
+若我们将此程序修改为 <code>s</code> 创建自 <code>t</code> 而非
+<code>&amp;t</code>，那么调用 <code>SetInt</code> 和 <code>SetString</code>
+就会失败，因为 <code>t</code> 的字段不可设置。
+</p>
+
+<div class="english">
 <p><b>Conclusion</b></p>
+</div>
 
+<p><b>总结</b></p>
+
+<div class="english">
 <p>
 Here again are the laws of reflection:
 </p>
+</div>
 
+<p>
+再次提示，反射法则如下：
+</p>
+
+<div class="english">
 <ol>
 <li>Reflection goes from interface value to reflection
 object.</li>
@@ -632,14 +1224,29 @@ object.</li>
 value.</li>
 <li>To modify a reflection object, the value must be settable.</li>
 </ol>
+</div>
 
+<ol>
+<li>从接口值可反射出反射对象。</li>
+<li>从反射对象可反射出接口值。</li>
+<li>要修改反射对象，其值必须可设置。</li>
+</ol>
+
+<div class="english">
 <p>
 Once you understand these laws reflection in Go becomes much easier
 to use, although it remains subtle. It's a powerful tool that
 should be used with care and avoided unless strictly
 necessary.
 </p>
+</div>
 
+<p>
+一旦你理解了Go中的这些反射法则，它就会变得更容易使用了，尽管它还是很微妙。
+这是个强大的工具，因此除非有必要，否则应当避免或小心使用。
+</p>
+
+<div class="english">
 <p>
 There's plenty more to reflection that we haven't covered &mdash;
 sending and receiving on channels, allocating memory, using slices
@@ -647,3 +1254,9 @@ and maps, calling methods and functions &mdash; but this post is
 long enough. We'll cover some of those topics in a later
 article.
 </p>
+
+<p>
+还有大量关于反射的内容没有涉及到——信道上的发送和接收、分配内存、使用切片和映射、
+调用方法和函数等——但这篇文章已经够长了，因此这些话题会在以后的文章中逐一讲解。
+</p>
+</div>

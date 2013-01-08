@@ -36,9 +36,9 @@ func f2() {
 	// START f2 OMIT
 	var x uint8 = 'x'
 	v := reflect.ValueOf(x)
-	fmt.Println("type:", v.Type())                            // uint8.
-	fmt.Println("kind is uint8: ", v.Kind() == reflect.Uint8) // true.
-	x = uint8(v.Uint())                                       // v.Uint returns a uint64.
+	fmt.Println("type:", v.Type())                            // uint8。
+	fmt.Println("kind is uint8: ", v.Kind() == reflect.Uint8) // true。
+	x = uint8(v.Uint())                                       // v.Uint 返回一个 uint64。
 	// STOP OMIT
 }
 
@@ -49,7 +49,7 @@ func f3() {
 	v := reflect.ValueOf(x)
 	// STOP OMIT
 	// START f3b OMIT
-	y := v.Interface().(float64) // y will have type float64.
+	y := v.Interface().(float64) // y 将拥有类型 float64。
 	fmt.Println(y)
 	// STOP OMIT
 	// START f3c OMIT
@@ -89,7 +89,7 @@ func f6() {
 func f7() {
 	// START f7 OMIT
 	var x float64 = 3.4
-	p := reflect.ValueOf(&x) // Note: take the address of x.
+	p := reflect.ValueOf(&x) // 注意：获取 x 的地址。
 	fmt.Println("type of p:", p.Type())
 	fmt.Println("settability of p:", p.CanSet())
 	// STOP OMIT
