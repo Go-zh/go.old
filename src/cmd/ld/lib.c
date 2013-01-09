@@ -83,7 +83,7 @@ libinit(void)
 
 	// add goroot to the end of the libdir list.
 	race = "";
-	if(debug['b'])
+	if(flag_race)
 		race = "_race";
 	Lflag(smprint("%s/pkg/%s_%s%s", goroot, goos, goarch, race));
 
@@ -286,7 +286,7 @@ loadlib(void)
 	loadinternal("runtime");
 	if(thechar == '5')
 		loadinternal("math");
-	if(debug['b'])
+	if(flag_race)
 		loadinternal("runtime/race");
 
 	for(i=0; i<libraryp; i++) {
@@ -1500,4 +1500,114 @@ cwrite(void *buf, int n)
 		errorexit();
 	}
 	coutpos += n;
+}
+
+void
+usage(void)
+{
+	fprint(2, "usage: %cl [options] main.%c\n", thechar, thechar);
+	flagprint(2);
+	exits("usage");
+}
+
+void
+setheadtype(char *s)
+{
+	HEADTYPE = headtype(s);
+}
+
+void
+setinterp(char *s)
+{
+	debug['I'] = 1; // denote cmdline interpreter override
+	interpreter = s;
+}
+
+void
+doversion(void)
+{
+	print("%cl version %s\n", thechar, getgoversion());
+	errorexit();
+}
+
+void
+genasmsym(void (*put)(Sym*, char*, int, vlong, vlong, int, Sym*))
+{
+	Auto *a;
+	Sym *s;
+
+	// These symbols won't show up in the first loop below because we
+	// skip STEXT symbols. Normal STEXT symbols are emitted by walking textp.
+	s = lookup("text", 0);
+	if(s->type == STEXT)
+		put(s, s->name, 'T', s->value, s->size, s->version, 0);
+	s = lookup("etext", 0);
+	if(s->type == STEXT)
+		put(s, s->name, 'T', s->value, s->size, s->version, 0);
+
+	for(s=allsym; s!=S; s=s->allsym) {
+		if(s->hide)
+			continue;
+		switch(s->type&SMASK) {
+		case SCONST:
+		case SRODATA:
+		case SSYMTAB:
+		case SPCLNTAB:
+		case SDATA:
+		case SNOPTRDATA:
+		case SELFROSECT:
+		case SMACHOGOT:
+		case STYPE:
+		case SSTRING:
+		case SGOSTRING:
+		case SWINDOWS:
+		case SGCDATA:
+		case SGCBSS:
+			if(!s->reachable)
+				continue;
+			put(s, s->name, 'D', symaddr(s), s->size, s->version, s->gotype);
+			continue;
+
+		case SBSS:
+		case SNOPTRBSS:
+			if(!s->reachable)
+				continue;
+			if(s->np > 0)
+				diag("%s should not be bss (size=%d type=%d special=%d)", s->name, (int)s->np, s->type, s->special);
+			put(s, s->name, 'B', symaddr(s), s->size, s->version, s->gotype);
+			continue;
+
+		case SFILE:
+			put(nil, s->name, 'f', s->value, 0, s->version, 0);
+			continue;
+		}
+	}
+
+	for(s = textp; s != nil; s = s->next) {
+		if(s->text == nil)
+			continue;
+
+		/* filenames first */
+		for(a=s->autom; a; a=a->link)
+			if(a->type == D_FILE)
+				put(nil, a->asym->name, 'z', a->aoffset, 0, 0, 0);
+			else
+			if(a->type == D_FILE1)
+				put(nil, a->asym->name, 'Z', a->aoffset, 0, 0, 0);
+
+		put(s, s->name, 'T', s->value, s->size, s->version, s->gotype);
+
+		/* frame, auto and param after */
+		put(nil, ".frame", 'm', s->text->to.offset+PtrSize, 0, 0, 0);
+
+		for(a=s->autom; a; a=a->link)
+			if(a->type == D_AUTO)
+				put(nil, a->asym->name, 'a', -a->aoffset, 0, 0, a->gotype);
+			else
+			if(a->type == D_PARAM)
+				put(nil, a->asym->name, 'p', a->aoffset, 0, 0, a->gotype);
+	}
+	if(debug['v'] || debug['n'])
+		Bprint(&bso, "symsize = %ud\n", symsize);
+	Bflush(&bso);
 }

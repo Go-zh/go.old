@@ -150,14 +150,14 @@ relocsym(Sym *s)
 	int32 i, off, siz, fl;
 	vlong o;
 	uchar *cast;
-	
+
 	cursym = s;
 	memset(&p, 0, sizeof p);
 	for(r=s->r; r<s->r+s->nr; r++) {
 		off = r->off;
 		siz = r->siz;
-		if(off < 0 || off+(siz&~Rbig) > s->np) {
-			diag("%s: invalid relocation %d+%d not in [%d,%d)", s->name, off, siz&~Rbig, 0, s->np);
+		if(off < 0 || off+siz > s->np) {
+			diag("%s: invalid relocation %d+%d not in [%d,%d)", s->name, off, siz, 0, s->np);
 			continue;
 		}
 		if(r->sym != S && (r->sym->type & SMASK == 0 || r->sym->type & SMASK == SXREF)) {
@@ -198,20 +198,6 @@ relocsym(Sym *s)
 		default:
 			cursym = s;
 			diag("bad reloc size %#ux for %s", siz, r->sym->name);
-		case 4 + Rbig:
-			fl = o;
-			s->p[off] = fl>>24;
-			s->p[off+1] = fl>>16;
-			s->p[off+2] = fl>>8;
-			s->p[off+3] = fl;
-			break;
-		case 4 + Rlittle:
-			fl = o;
-			s->p[off] = fl;
-			s->p[off+1] = fl>>8;
-			s->p[off+2] = fl>>16;
-			s->p[off+3] = fl>>24;
-			break;
 		case 4:
 			fl = o;
 			cast = (uchar*)&fl;
@@ -223,7 +209,7 @@ relocsym(Sym *s)
 			for(i=0; i<8; i++)
 				s->p[off+i] = cast[inuxi8[i]];
 			break;
-		}		
+		}
 	}
 }
 
@@ -231,7 +217,7 @@ void
 reloc(void)
 {
 	Sym *s;
-	
+
 	if(debug['v'])
 		Bprint(&bso, "%5.2f reloc\n", cputime());
 	Bflush(&bso);
@@ -246,10 +232,10 @@ void
 dynrelocsym(Sym *s)
 {
 	Reloc *r;
-	
+
 	if(HEADTYPE == Hwindows) {
 		Sym *rel, *targ;
-		
+
 		rel = lookup(".rel", 0);
 		if(s == rel)
 			return;
@@ -259,7 +245,7 @@ dynrelocsym(Sym *s)
 				targ->plt = rel->size;
 				r->sym = rel;
 				r->add = targ->plt;
-				
+
 				// jmp *addr
 				if(thechar == '8') {
 					adduint8(rel, 0xff);
@@ -291,7 +277,7 @@ void
 dynreloc(void)
 {
 	Sym *s;
-	
+
 	// -d supresses dynamic loader format, so we may as well not
 	// compute these sections or mark their symbols as reachable.
 	if(debug['d'] && HEADTYPE != Hwindows)
@@ -364,12 +350,12 @@ savedata(Sym *s, Prog *p, char *pn)
 			break;
 		}
 		break;
-	
+
 	case D_SCONST:
 		for(i=0; i<siz; i++)
 			s->p[off+i] = p->to.scon[i];
 		break;
-	
+
 	case D_CONST:
 		if(p->to.sym)
 			goto Addr;
@@ -450,12 +436,12 @@ blk(Sym *start, int32 addr, int32 size)
 			errorexit();
 		}
 	}
-	
+
 	for(; addr < eaddr; addr++)
 		cput(0);
 	cflush();
 }
-			
+
 void
 codeblk(int32 addr, int32 size)
 {
@@ -498,7 +484,7 @@ codeblk(int32 addr, int32 size)
 			Bprint(&bso, "%.6llux\t%-20s | foreign text\n", (vlong)addr, sym->name);
 			n = sym->size;
 			q = sym->p;
-			
+
 			while(n >= 16) {
 				Bprint(&bso, "%.6ux\t%-20.16I\n", addr, q);
 				addr += 16;
@@ -510,7 +496,7 @@ codeblk(int32 addr, int32 size)
 			addr += n;
 			continue;
 		}
-			
+
 		Bprint(&bso, "%.6llux\t%-20s | %P\n", (vlong)sym->value, sym->name, p);
 		for(p = p->link; p != P; p = p->link) {
 			if(p->link != P)
@@ -532,7 +518,7 @@ codeblk(int32 addr, int32 size)
 	}
 	Bflush(&bso);
 }
-			
+
 void
 datblk(int32 addr, int32 size)
 {
@@ -595,7 +581,7 @@ addstrdata(char *name, char *value)
 {
 	Sym *s, *sp;
 	char *p;
-	
+
 	p = smprint("%s.str", name);
 	sp = lookup(p, 0);
 	free(p);
@@ -775,7 +761,7 @@ addpcrelplus(Sym *s, Sym *t, int32 add)
 {
 	vlong i;
 	Reloc *r;
-	
+
 	if(s->type == 0)
 		s->type = SDATA;
 	s->reachable = 1;
@@ -972,7 +958,7 @@ dodata(void)
 	 * symbol, which is itself data.
 	 */
 	dynreloc();
-	
+
 	/* some symbols may no longer belong in datap (Mach-O) */
 	for(l=&datap; (s=*l) != nil; ) {
 		if(s->type <= STEXT || SXREF <= s->type)
@@ -996,7 +982,8 @@ dodata(void)
 
 	/* skip symbols belonging to segtext */
 	s = datap;
-	for(; s != nil && s->type < SELFSECT; s = s->next);
+	for(; s != nil && s->type < SELFSECT; s = s->next)
+		;
 
 	/* writable ELF sections */
 	datsize = 0;
@@ -1005,6 +992,7 @@ dodata(void)
 		if(s->align != 0)
 			datsize = rnd(datsize, s->align);
 		sect->vaddr = datsize;
+		s->sect = sect;
 		s->type = SDATA;
 		s->value = datsize;
 		datsize += rnd(s->size, PtrSize);
@@ -1014,7 +1002,10 @@ dodata(void)
 	/* pointer-free data */
 	sect = addsection(&segdata, ".noptrdata", 06);
 	sect->vaddr = datsize;
+	lookup("noptrdata", 0)->sect = sect;
+	lookup("enoptrdata", 0)->sect = sect;
 	for(; s != nil && s->type < SDATA; s = s->next) {
+		s->sect = sect;
 		s->type = SDATA;
 		t = alignsymsize(s->size);
 		datsize = aligndatsize(datsize, s);
@@ -1027,7 +1018,10 @@ dodata(void)
 	/* data */
 	sect = addsection(&segdata, ".data", 06);
 	sect->vaddr = datsize;
+	lookup("data", 0)->sect = sect;
+	lookup("edata", 0)->sect = sect;
 	for(; s != nil && s->type < SBSS; s = s->next) {
+		s->sect = sect;
 		s->type = SDATA;
 		t = alignsymsize(s->size);
 		datsize = aligndatsize(datsize, s);
@@ -1044,7 +1038,10 @@ dodata(void)
 	/* bss */
 	sect = addsection(&segdata, ".bss", 06);
 	sect->vaddr = datsize;
+	lookup("bss", 0)->sect = sect;
+	lookup("ebss", 0)->sect = sect;
 	for(; s != nil && s->type < SNOPTRBSS; s = s->next) {
+		s->sect = sect;
 		t = alignsymsize(s->size);
 		datsize = aligndatsize(datsize, s);
 		s->value = datsize;
@@ -1060,26 +1057,33 @@ dodata(void)
 	/* pointer-free bss */
 	sect = addsection(&segdata, ".noptrbss", 06);
 	sect->vaddr = datsize;
+	lookup("noptrbss", 0)->sect = sect;
+	lookup("enoptrbss", 0)->sect = sect;
 	for(; s != nil; s = s->next) {
 		if(s->type > SNOPTRBSS) {
 			cursym = s;
 			diag("unexpected symbol type %d", s->type);
 		}
+		s->sect = sect;
 		t = alignsymsize(s->size);
 		datsize = aligndatsize(datsize, s);
 		s->value = datsize;
 		datsize += t;
 	}
 	sect->len = datsize - sect->vaddr;
+	lookup("end", 0)->sect = sect;
 
 	/* we finished segdata, begin segtext */
 
 	/* read-only data */
 	sect = addsection(&segtext, ".rodata", 04);
 	sect->vaddr = 0;
+	lookup("rodata", 0)->sect = sect;
+	lookup("erodata", 0)->sect = sect;
 	datsize = 0;
 	s = datap;
 	for(; s != nil && s->type < STYPELINK; s = s->next) {
+		s->sect = sect;
 		if(s->align != 0)
 			datsize = rnd(datsize, s->align);
 		s->type = SRODATA;
@@ -1092,18 +1096,24 @@ dodata(void)
 	/* type */
 	sect = addsection(&segtext, ".typelink", 04);
 	sect->vaddr = datsize;
+	lookup("typelink", 0)->sect = sect;
+	lookup("etypelink", 0)->sect = sect;
 	for(; s != nil && s->type == STYPELINK; s = s->next) {
+		s->sect = sect;
 		s->type = SRODATA;
 		s->value = datsize;
 		datsize += s->size;
 	}
 	sect->len = datsize - sect->vaddr;
 	datsize = rnd(datsize, PtrSize);
-	
+
 	/* gcdata */
 	sect = addsection(&segtext, ".gcdata", 04);
 	sect->vaddr = datsize;
+	lookup("gcdata", 0)->sect = sect;
+	lookup("egcdata", 0)->sect = sect;
 	for(; s != nil && s->type == SGCDATA; s = s->next) {
+		s->sect = sect;
 		s->type = SRODATA;
 		s->value = datsize;
 		datsize += s->size;
@@ -1114,7 +1124,10 @@ dodata(void)
 	/* gcbss */
 	sect = addsection(&segtext, ".gcbss", 04);
 	sect->vaddr = datsize;
+	lookup("gcbss", 0)->sect = sect;
+	lookup("egcbss", 0)->sect = sect;
 	for(; s != nil && s->type == SGCBSS; s = s->next) {
+		s->sect = sect;
 		s->type = SRODATA;
 		s->value = datsize;
 		datsize += s->size;
@@ -1125,7 +1138,10 @@ dodata(void)
 	/* gosymtab */
 	sect = addsection(&segtext, ".gosymtab", 04);
 	sect->vaddr = datsize;
+	lookup("symtab", 0)->sect = sect;
+	lookup("esymtab", 0)->sect = sect;
 	for(; s != nil && s->type < SPCLNTAB; s = s->next) {
+		s->sect = sect;
 		s->type = SRODATA;
 		s->value = datsize;
 		datsize += s->size;
@@ -1136,7 +1152,10 @@ dodata(void)
 	/* gopclntab */
 	sect = addsection(&segtext, ".gopclntab", 04);
 	sect->vaddr = datsize;
+	lookup("pclntab", 0)->sect = sect;
+	lookup("epclntab", 0)->sect = sect;
 	for(; s != nil && s->type < SELFROSECT; s = s->next) {
+		s->sect = sect;
 		s->type = SRODATA;
 		s->value = datsize;
 		datsize += s->size;
@@ -1150,6 +1169,7 @@ dodata(void)
 		if(s->align != 0)
 			datsize = rnd(datsize, s->align);
 		sect->vaddr = datsize;
+		s->sect = sect;
 		s->type = SRODATA;
 		s->value = datsize;
 		datsize += rnd(s->size, PtrSize);
@@ -1169,12 +1189,15 @@ textaddress(void)
 	addsection(&segtext, ".text", 05);
 
 	// Assign PCs in text segment.
-	// Could parallelize, by assigning to text 
+	// Could parallelize, by assigning to text
 	// and then letting threads copy down, but probably not worth it.
 	sect = segtext.sect;
+	lookup("text", 0)->sect = sect;
+	lookup("etext", 0)->sect = sect;
 	va = INITTEXT;
 	sect->vaddr = va;
 	for(sym = textp; sym != nil; sym = sym->next) {
+		sym->sect = sect;
 		if(sym->type & SSUB)
 			continue;
 		if(sym->align != 0)
@@ -1192,7 +1215,7 @@ textaddress(void)
 		}
 		va += sym->size;
 	}
-	
+
 	// Align end of code so that rodata starts aligned.
 	// 128 bytes is likely overkill but definitely cheap.
 	va = rnd(va, 128);
@@ -1267,7 +1290,7 @@ address(void)
 		for(sub = sym->sub; sub != nil; sub = sub->sub)
 			sub->value += sym->value;
 	}
-	
+
 	xdefine("text", STEXT, text->vaddr);
 	xdefine("etext", STEXT, text->vaddr + text->len);
 	xdefine("rodata", SRODATA, rodata->vaddr);

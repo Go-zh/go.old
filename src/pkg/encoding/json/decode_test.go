@@ -422,7 +422,7 @@ func TestUnmarshalMarshal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Marshal: %v", err)
 	}
-	if bytes.Compare(jsonBig, b) != 0 {
+	if !bytes.Equal(jsonBig, b) {
 		t.Errorf("Marshal jsonBig")
 		diff(t, b, jsonBig)
 		return
@@ -474,7 +474,7 @@ func TestLargeByteSlice(t *testing.T) {
 	if err := Unmarshal(b, &s1); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
 	}
-	if bytes.Compare(s0, s1) != 0 {
+	if !bytes.Equal(s0, s1) {
 		t.Errorf("Marshal large byte slice")
 		diff(t, s0, s1)
 	}
@@ -999,4 +999,29 @@ func TestUnmarshalNulls(t *testing.T) {
 
 		t.Errorf("Unmarshal of null values affected primitives")
 	}
+}
+
+func TestStringKind(t *testing.T) {
+	type stringKind string
+	type aMap map[stringKind]int
+
+	var m1, m2 map[stringKind]int
+	m1 = map[stringKind]int{
+		"foo": 42,
+	}
+
+	data, err := Marshal(m1)
+	if err != nil {
+		t.Errorf("Unexpected error marshalling: %v", err)
+	}
+
+	err = Unmarshal(data, &m2)
+	if err != nil {
+		t.Errorf("Unexpected error unmarshalling: %v", err)
+	}
+
+	if !reflect.DeepEqual(m1, m2) {
+		t.Error("Items should be equal after encoding and then decoding")
+	}
+
 }

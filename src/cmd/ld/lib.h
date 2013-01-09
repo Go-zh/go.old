@@ -31,7 +31,7 @@
 enum
 {
 	Sxxx,
-	
+
 	/* order here is order in output file */
 	STEXT,
 	SMACHOPLT,
@@ -105,6 +105,7 @@ struct Section
 	uvlong	len;
 	Section	*next;	// in segment list
 	Segment	*seg;
+	struct Elf64_Shdr *elfsect;
 };
 
 extern	char	symname[];
@@ -133,7 +134,10 @@ EXTERN	char*	thestring;
 EXTERN	int	ndynexp;
 EXTERN	int	havedynamic;
 EXTERN	int	iscgo;
+EXTERN	int	elfglobalsymndx;
+EXTERN	int	flag_race;
 EXTERN	char*	tracksym;
+EXTERN	char*	interpreter;
 
 EXTERN	Segment	segtext;
 EXTERN	Segment	segdata;
@@ -222,6 +226,9 @@ void	dostkcheck(void);
 void	undef(void);
 void	doweak(void);
 void	setpersrc(Sym*);
+void	doversion(void);
+void	usage(void);
+void	setinterp(char*);
 
 int	pathchar(void);
 void*	mal(uint32);
@@ -245,12 +252,6 @@ struct Endian
 };
 
 extern Endian be, le;
-
-// relocation size bits
-enum {
-	Rbig = 128,
-	Rlittle = 64,
-};
 
 /* set by call to mywhatsys() */
 extern	char*	goroot;
@@ -295,6 +296,7 @@ EXTERN	char*	headstring;
 extern	Header	headers[];
 
 int	headtype(char*);
+void	setheadtype(char*);
 
 int	Yconv(Fmt*);
 

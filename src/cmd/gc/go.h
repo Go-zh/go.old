@@ -841,7 +841,7 @@ EXTERN	int	safemode;
 EXTERN	char	namebuf[NSYMB];
 EXTERN	char	lexbuf[NSYMB];
 EXTERN	char	litbuf[NSYMB];
-EXTERN	char	debug[256];
+EXTERN	int	debug[256];
 EXTERN	Sym*	hash[NHASH];
 EXTERN	Sym*	importmyname;	// my name for package
 EXTERN	Pkg*	localpkg;	// package being compiled
@@ -928,6 +928,7 @@ EXTERN	Node*	nblank;
 
 extern	int	thechar;
 extern	char*	thestring;
+EXTERN	int  	use_sse;
 
 EXTERN	char*	hunk;
 EXTERN	int32	nhunk;
@@ -938,6 +939,7 @@ EXTERN	int	typecheckok;
 EXTERN	int	compiling_runtime;
 EXTERN	int	compiling_wrappers;
 EXTERN	int	pure_go;
+EXTERN	int	flag_race;
 
 EXTERN	int	nointerface;
 EXTERN	int	fieldtrack_enabled;
@@ -1375,6 +1377,7 @@ void	walkexprlistsafe(NodeList *l, NodeList **init);
 void	walkstmt(Node **np);
 void	walkstmtlist(NodeList *l);
 Node*	conv(Node*, Type*);
+int	candiscard(Node*);
 
 /*
  *	arch-specific ggen.c/gsubr.c/gobj.c/pgen.c

@@ -408,18 +408,13 @@ func (p *gcParser) parseField() *Field {
 func (p *gcParser) parseStructType() Type {
 	var fields []*Field
 
-	parseField := func() {
-		fields = append(fields, p.parseField())
-	}
-
 	p.expectKeyword("struct")
 	p.expect('{')
-	if p.tok != '}' {
-		parseField()
-		for p.tok == ';' {
-			p.next()
-			parseField()
+	for p.tok != '}' {
+		if len(fields) > 0 {
+			p.expect(';')
 		}
+		fields = append(fields, p.parseField())
 	}
 	p.expect('}')
 
@@ -428,7 +423,7 @@ func (p *gcParser) parseStructType() Type {
 
 // Parameter = ( identifier | "?" ) [ "..." ] Type [ string_lit ] .
 //
-func (p *gcParser) parseParameter() (par *ast.Object, isVariadic bool) {
+func (p *gcParser) parseParameter() (par *Var, isVariadic bool) {
 	name := p.parseName()
 	if name == "" {
 		name = "_" // cannot access unnamed identifiers
@@ -437,21 +432,24 @@ func (p *gcParser) parseParameter() (par *ast.Object, isVariadic bool) {
 		p.expectSpecial("...")
 		isVariadic = true
 	}
-	ptyp := p.parseType()
+	typ := p.parseType()
 	// ignore argument tag (e.g. "noescape")
 	if p.tok == scanner.String {
 		p.next()
 	}
-	par = ast.NewObj(ast.Var, name)
-	par.Type = ptyp
+	par = &Var{name, typ}
 	return
 }
 
 // Parameters    = "(" [ ParameterList ] ")" .
 // ParameterList = { Parameter "," } Parameter .
 //
-func (p *gcParser) parseParameters() (list []*ast.Object, isVariadic bool) {
-	parseParameter := func() {
+func (p *gcParser) parseParameters() (list []*Var, isVariadic bool) {
+	p.expect('(')
+	for p.tok != ')' {
+		if len(list) > 0 {
+			p.expect(',')
+		}
 		par, variadic := p.parseParameter()
 		list = append(list, par)
 		if variadic {
@@ -459,15 +457,6 @@ func (p *gcParser) parseParameters() (list []*ast.Object, isVariadic bool) {
 				p.error("... not on final argument")
 			}
 			isVariadic = true
-		}
-	}
-
-	p.expect('(')
-	if p.tok != ')' {
-		parseParameter()
-		for p.tok == ',' {
-			p.next()
-			parseParameter()
 		}
 	}
 	p.expect(')')
@@ -482,13 +471,11 @@ func (p *gcParser) parseSignature() *Signature {
 	params, isVariadic := p.parseParameters()
 
 	// optional result type
-	var results []*ast.Object
+	var results []*Var
 	switch p.tok {
 	case scanner.Ident, '[', '*', '<', '@':
 		// single, unnamed result
-		result := ast.NewObj(ast.Var, "_")
-		result.Type = p.parseType()
-		results = []*ast.Object{result}
+		results = []*Var{{"", p.parseType()}}
 	case '(':
 		// named or multiple result(s)
 		var variadic bool
@@ -512,20 +499,15 @@ func (p *gcParser) parseSignature() *Signature {
 func (p *gcParser) parseInterfaceType() Type {
 	var methods []*Method
 
-	parseMethod := func() {
+	p.expectKeyword("interface")
+	p.expect('{')
+	for p.tok != '}' {
+		if len(methods) > 0 {
+			p.expect(';')
+		}
 		name := p.parseName()
 		typ := p.parseSignature()
 		methods = append(methods, &Method{name, typ})
-	}
-
-	p.expectKeyword("interface")
-	p.expect('{')
-	if p.tok != '}' {
-		parseMethod()
-		for p.tok == ';' {
-			p.next()
-			parseMethod()
-		}
 	}
 	p.expect('}')
 
@@ -784,9 +766,10 @@ func (p *gcParser) parseVarDecl() {
 // Func = Signature [ Body ] .
 // Body = "{" ... "}" .
 //
-func (p *gcParser) parseFunc(scope *ast.Scope, name string) {
+func (p *gcParser) parseFunc(scope *ast.Scope, name string) *Signature {
 	obj := p.declare(scope, ast.Fun, name)
-	obj.Type = p.parseSignature()
+	sig := p.parseSignature()
+	obj.Type = sig
 	if p.tok == '{' {
 		p.next()
 		for i := 1; i > 0; p.next() {
@@ -798,6 +781,7 @@ func (p *gcParser) parseFunc(scope *ast.Scope, name string) {
 			}
 		}
 	}
+	return sig
 }
 
 // MethodDecl = "func" Receiver Name Func .
@@ -827,7 +811,8 @@ func (p *gcParser) parseMethodDecl() {
 
 	// declare method in base type scope
 	name := p.parseName() // unexported method names in imports are qualified with their package.
-	p.parseFunc(scope, name)
+	sig := p.parseFunc(scope, name)
+	sig.Recv = recv
 }
 
 // FuncDecl = "func" ExportedName Func .

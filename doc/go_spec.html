@@ -6,7 +6,7 @@
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of December 10, 2012",
+	"Subtitle": "Version of January 7, 2013",
 	"Path": "/ref/spec"
 }-->
 
@@ -856,7 +856,7 @@ After a backslash, certain single-character escapes represent special values:
 All other sequences starting with a backslash are illegal inside rune literals.
 </p>
 <pre class="ebnf">
-char_lit         = "'" ( unicode_value | byte_value ) "'" .
+rune_lit         = "'" ( unicode_value | byte_value ) "'" .
 unicode_value    = unicode_char | little_u_value | big_u_value | escaped_char .
 byte_value       = octal_byte_value | hex_byte_value .
 octal_byte_value = `\` octal_digit octal_digit octal_digit .
@@ -891,7 +891,7 @@ escaped_char     = `\` ( "a" | "b" | "f" | "n" | "r" | "t" | "v" | `\` | "'" | `
 在符文字面中，所有其它以反斜杠开始的序列都是非法的。
 </p>
 <pre class="ebnf">
-字符字面       = "'" ( unicode值 | 字节值 ) "'" .
+符文字面       = "'" ( unicode值 | 字节值 ) "'" .
 unicode值      = unicode字符 | 小Unicode值 | 大Unicode值 | 转义字符 .
 字节值         = 八进制字节值 | 十六进制字节值 .
 八进制字节值   = `\` 八进制数字 八进制数字 八进制数字 .
@@ -1660,7 +1660,7 @@ multi-dimensional types.
 <p>
 长度是数组类型的一部分，其求值结果必须可表示为 <code>int</code> 类型的非负<a href="#常量">常量</a>。
 数组 <code>a</code> 的长度可使用内建函数 <a href="#长度与容量"><code>len</code></a>获取，
-其元素可通过整数（§<a href="#下标表达式">下标</a>） 0 到 <code>len(a)-1</code> 寻址。
+其元素可通过整数<a href="#下标表达式">下标</a> 0 到 <code>len(a)-1</code> 寻址。
 数组类型总是一维的，但可组合构成多维的类型。
 </p>
 
@@ -4053,7 +4053,7 @@ or a parenthesized expression.
 <pre class="ebnf">
 Operand    = Literal | OperandName| MethodExpr | "(" Expression ")" .
 Literal    = BasicLit | CompositeLit | FunctionLit .
-BasicLit   = int_lit | float_lit | imaginary_lit | char_lit | string_lit .
+BasicLit   = int_lit | float_lit | imaginary_lit | rune_lit | string_lit .
 OperandName = identifier | QualifiedIdent.
 </pre>
 </div>
@@ -4067,7 +4067,7 @@ OperandName = identifier | QualifiedIdent.
 <pre class="ebnf">
 操作数   = 字面 | 操作数名 | 方法表达式 | "(" 表达式 ")" .
 字面     = 基本字面 | 复合字面 | 函数字面 .
-基本字面 = 整数字面 | 浮点数字面 | 虚数字面 | 字符字面 | 字符串字面 .
+基本字面 = 整数字面 | 浮点数字面 | 虚数字面 | 符文字面 | 字符串字面 .
 操作数名 = 标识符 | 限定标识符.
 </pre>
 
@@ -4874,6 +4874,27 @@ rules apply:
 
 <div class="english">
 <p>
+If <code>a</code> is not a map:
+</p>
+<ul>
+	<li>the index <code>x</code> must be an integer value; it is <i>in range</i> if <code>0 &lt;= x &lt; len(a)</code>,
+	    otherwise it is <i>out of range</i></li>
+	<li>a <a href="#Constants">constant</a> index must be non-negative
+	     and representable by a value of type <code>int</code>
+</ul>
+</div>
+
+<p>
+若 <code>a</code> 并非一个映射：
+</p>
+<ul>
+	<li>下标 <code>x</code> 必须为整数值；若 <code>0 &lt;= x &lt; len(a)</code>
+		则该下标在<i>界内</i>，否则即为<i>越界</i></li>
+	<li>a <a href="#常量">常量</a>下标必须为可表示成 <code>int</code> 类型的值</li>
+</ul>
+
+<div class="english">
+<p>
 For <code>a</code> of type <code>A</code> or <code>*A</code>
 where <code>A</code> is an <a href="#Array_types">array type</a>:
 </p>
@@ -4881,8 +4902,6 @@ where <code>A</code> is an <a href="#Array_types">array type</a>:
 	<li>a <a href="#Constants">constant</a> index must be in range</li>
 	<li>if <code>a</code> is <code>nil</code> or if <code>x</code> is out of range at run time,
 	    a <a href="#Run_time_panics">run-time panic</a> occurs</li>
-	<li><code>a[x]</code> is the array element at index <code>x</code> and the type of
-	  <code>a[x]</code> is the element type of <code>A</code></li>
 </ul>
 </div>
 
@@ -4893,8 +4912,6 @@ where <code>A</code> is an <a href="#Array_types">array type</a>:
 	<li><a href="#常量">常量</a>下标必在界内</li>
 	<li>若 <code>a</code> 为 <code>nil</code> 或 <code>x</code> 在运行时越界，
 		就会引发一个<a href="#运行时恐慌">运行时恐慌</a></li>
-	<li><code>a[x]</code> 是下标为 <code>x</code> 的数组元素且
-		<code>a[x]</code> 的类型为 <code>A</code> 的元素类型</li>
 </ul>
 
 <div class="english">
@@ -4913,13 +4930,10 @@ For <code>a</code> of type <code>S</code> where <code>S</code> is a <a href="#Sl
 对于<a href="#切片类型">切片类型</a> <code>S</code> 的 <code>a</code>：
 </p>
 <ul>
-	<li><code>x</code> 必须为整数值；若 <code>0 &lt;= x &lt; len(a)</code>，它即在<i>界内</i>
-		否即为<i>越界</i></li>
-	<li><a href="#常量">常量</a>下标必为非负值</li>
-	<li>若该切片为 <code>nil</code> 或 <code>x</code> 在运行时越界，
+	<li>若该切片为 <code>nil</code>，或 <code>x</code> 在运行时越界，
 		就会引发一个<a href="#运行时恐慌">运行时恐慌</a></li>
 	<li><code>a[x]</code> 是下标为 <code>x</code> 的切片元素且
-	  <code>a[x]</code> 的类型为 <code>S</code> 的元素类型</li>
+		<code>a[x]</code> 的类型为 <code>S</code> 的元素类型</li>
 </ul>
 
 <div class="english">
@@ -5863,7 +5877,7 @@ int64    -9223372036854775808
 <p>
 If the divisor is a <a href="#Constants">constant</a>, it must not be zero.
 If the divisor is zero at run time, a <a href="#Run_time_panics">run-time panic</a> occurs.
-If the dividend is positive and the divisor is a constant power of 2,
+If the dividend is non-negative and the divisor is a constant power of 2,
 the division may be replaced by a right shift, and computing the remainder may
 be replaced by a bitwise AND operation:
 </p>
@@ -5871,7 +5885,7 @@ be replaced by a bitwise AND operation:
 
 <p>
 若被除数为<a href="#常量">常量</a>，则它必不为零。若被除数在运行时为零，
-就会出现一个<a href="#运行时恐慌">运行时恐慌</a>。若被除数为正，且除数为2的常量次幂，
+就会出现一个<a href="#运行时恐慌">运行时恐慌</a>。若被除数为非负数，且除数为2的常量次幂，
 则该除法可被向右移位取代，且计算其余数可被按位“与”操作取代：
 </p>
 
@@ -6279,6 +6293,7 @@ that is, either a variable, pointer indirection, or slice indexing
 operation; or a field selector of an addressable struct operand;
 or an array indexing operation of an addressable array.
 As an exception to the addressability requirement, <code>x</code> may also be a
+(possibly parenthesized)
 <a href="#Composite_literals">composite literal</a>.
 </p>
 </div>
@@ -6287,7 +6302,7 @@ As an exception to the addressability requirement, <code>x</code> may also be a
 对于类型为 <code>T</code> 的操作数 <code>x</code>，地址操作符 <code>&amp;x</code> 将生成一个类型为
 <code>*T</code> 的指针指向 <code>x</code>。操作数必须<i>可寻址</i>，即，变量、间接指针、切片索引操作，
 或可寻址结构操作数的字段选择者，或可寻址数组的数组索引操作均不可寻址。作为可寻址性需求的例外，
-<code>x</code> 也可为 <a href="#复合字面">复合字面</a>.
+<code>x</code> 也可为（可能带有括号的）<a href="#复合字面">复合字面</a>.
 </p>
 
 <div class="english">
@@ -6309,6 +6324,7 @@ will cause a <a href="#Run_time_panics">run-time panic</a>.
 <pre>
 &amp;x
 &amp;a[f(2)]
+&amp;Point{2, 3}
 *p
 *pf(x)
 </pre>
@@ -7179,8 +7195,8 @@ by any predeclared type in the language. The following are legal declarations:
 </p>
 
 <pre>
-const Huge = 1 &lt;&lt; 100
-const Four int8 = Huge &gt;&gt; 98
+const Huge = 1 &lt;&lt; 100         // Huge == 1267650600228229401496703205376  (untyped integer constant)
+const Four int8 = Huge &gt;&gt; 98  // Four == 4                                (type int8)
 </pre>
 
 <div class="english">
@@ -7194,7 +7210,6 @@ The divisor of a constant division or remainder operation must not be zero:
 </div>
 
 <p>
-The divisor of a constant division or remainder operation must not be zero:
 常量除法或求余的除数必不能为零：
 </p>
 
@@ -7211,9 +7226,9 @@ of the constant type. The following constant expressions are illegal:
 <pre>
 uint(-1)     // -1 cannot be represented as a uint
 int(3.14)    // 3.14 cannot be represented as an int
-int64(Huge)  // 1&lt;&lt;100 cannot be represented as an int64
-Four * 300   // 300 cannot be represented as an int8
-Four * 100   // 400 cannot be represented as an int8
+int64(Huge)  // 1267650600228229401496703205376 cannot be represented as an int64
+Four * 300   // operand 300 cannot be represented as an int8 (type of Four)
+Four * 100   // product 400 cannot be represented as an int8 (type of Four)
 </pre>
 </div>
 
@@ -7224,9 +7239,9 @@ Four * 100   // 400 cannot be represented as an int8
 <pre>
 uint(-1)     // -1 无法表示为 uint
 int(3.14)    // 3.14 无法表示为 int
-int64(Huge)  // 1&lt;&lt;100 无法表示为 int64
-Four * 300   // 300 无法表示为 int8
-Four * 100   // 400 无法表示为 int8
+int64(Huge)  // 1267650600228229401496703205376 无法表示为 int64
+Four * 300   // 操作数 300 无法表示为 int8（Four 的类型）
+Four * 100   // 其结果 400 无法表示为 int8（Four 的类型）
 </pre>
 
 <div class="english">
@@ -7238,7 +7253,7 @@ and -1 for signed and untyped constants.
 
 <pre>
 ^1         // untyped integer constant, equal to -2
-uint8(^1)  // error, same as uint8(-2), out of range
+uint8(^1)  // illegal: same as uint8(-2), -2 cannot be represented as a uint8
 ^uint8(1)  // typed uint8 constant, same as 0xFF ^ uint8(1) = uint8(0xFE)
 int8(^1)   // same as int8(-2)
 ^int8(1)   // same as -1 ^ int8(1) = -2
@@ -7252,7 +7267,7 @@ int8(^1)   // same as int8(-2)
 
 <pre>
 ^1         // 无类型化整数常量，等于-2
-uint8(^1)  // 错误，等价于uint8(-2)，超出范围
+uint8(^1)  // 非法，等价于 uint8(-2)，-2无法表示为 uint8
 ^uint8(1)  // 类型化uint8常量，等价于0xFF ^ uint8(1) = uint8(0xFE)
 int8(^1)   // 等价于int8(-2)
 ^int8(1)   // 等价于-1 ^ int8(1) = -2
@@ -9633,8 +9648,8 @@ make(T, n)       channel    类型为T，缓存大小为n的异步信道
 <div class="english">
 <p>
 The size arguments <code>n</code> and <code>m</code> must be integer values.
-A <a href="#Constants">constant</a> size argument must be non-negative and representable by a value of type
-<code>int</code>.
+A <a href="#Constants">constant</a> size argument must be non-negative and
+representable by a value of type <code>int</code>.
 If both <code>n</code> and <code>m</code> are provided and are constant, then
 <code>n</code> must be no larger than <code>m</code>.
 If <code>n</code> is negative or larger than <code>m</code> at run time,

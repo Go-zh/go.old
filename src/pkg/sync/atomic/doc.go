@@ -65,9 +65,12 @@ import (
 	"unsafe"
 )
 
-// BUG(rsc): On ARM, the 64-bit functions use instructions unavailable before ARM 11.
+// BUG(rsc): On x86-32, the 64-bit functions use instructions unavailable before the Pentium MMX.
 //
-// On x86-32, the 64-bit functions use instructions unavailable before the Pentium MMX.
+// On both ARM and x86-32, it is the caller's responsibility to arrange for 64-bit
+// alignment of 64-bit words accessed atomically. The first word in a global
+// variable or in an allocated struct or slice can be relied upon to be
+// 64-bit aligned.
 
 // BUG(rsc): 在ARM上，64位函数使用的指令在ARM 11之前不可用。
 //

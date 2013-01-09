@@ -82,10 +82,14 @@ putelfsyment(int off, vlong addr, vlong size, int info, int shndx, int other)
 	}
 }
 
+static int numelfsym = 1; // 0 is reserved
+static int elfbind;
+
 static void
 putelfsym(Sym *x, char *s, int t, vlong addr, vlong size, int ver, Sym *go)
 {
-	int bind, type, shndx, off;
+	int bind, type, off;
+	Sym *xo;
 
 	USED(go);
 	switch(t) {
@@ -93,25 +97,37 @@ putelfsym(Sym *x, char *s, int t, vlong addr, vlong size, int ver, Sym *go)
 		return;
 	case 'T':
 		type = STT_FUNC;
-		shndx = elftextsh + 0;
 		break;
 	case 'D':
 		type = STT_OBJECT;
-		if((x->type&SMASK) == SRODATA)
-			shndx = elftextsh + 1;
-		else
-			shndx = elftextsh + 2;
 		break;
 	case 'B':
 		type = STT_OBJECT;
-		shndx = elftextsh + 3;
 		break;
 	}
-	// TODO(minux): we need to place all STB_LOCAL precede all STB_GLOBAL and
-	// STB_WEAK symbols in the symbol table
+	xo = x;
+	while(xo->outer != nil)
+		xo = xo->outer;
+	if(xo->sect == nil) {
+		cursym = x;
+		diag("missing section in putelfsym");
+		return;
+	}
+	if(xo->sect->elfsect == nil) {
+		cursym = x;
+		diag("missing ELF section in putelfsym");
+		return;
+	}
+
+	// One pass for each binding: STB_LOCAL, STB_GLOBAL,
+	// maybe one day STB_WEAK.
 	bind = (ver || (x->type & SHIDDEN)) ? STB_LOCAL : STB_GLOBAL;
+	if(bind != elfbind)
+		return;
+
 	off = putelfstr(s);
-	putelfsyment(off, addr, size, (bind<<4)|(type&0xf), shndx, (x->type & SHIDDEN) ? 2 : 0);
+	putelfsyment(off, addr, size, (bind<<4)|(type&0xf), xo->sect->elfsect->shnum, (x->type & SHIDDEN) ? 2 : 0);
+	x->elfsym = numelfsym++;
 }
 
 void
@@ -119,6 +135,12 @@ asmelfsym(void)
 {
 	// the first symbol entry is reserved
 	putelfsyment(0, 0, 0, (STB_LOCAL<<4)|STT_NOTYPE, 0, 0);
+
+	elfbind = STB_LOCAL;
+	genasmsym(putelfsym);
+
+	elfbind = STB_GLOBAL;
+	elfglobalsymndx = numelfsym;
 	genasmsym(putelfsym);
 }
 
@@ -199,7 +221,7 @@ static void
 slputb(int32 v)
 {
 	uchar *p;
-	
+
 	symgrow(symt, symt->size+4);
 	p = symt->p + symt->size;
 	*p++ = v>>24;
@@ -208,6 +230,22 @@ slputb(int32 v)
 	*p = v;
 	symt->size += 4;
 }
+
+static void
+slputl(int32 v)
+{
+	uchar *p;
+
+	symgrow(symt, symt->size+4);
+	p = symt->p + symt->size;
+	*p++ = v;
+	*p++ = v>>8;
+	*p++ = v>>16;
+	*p = v>>24;
+	symt->size += 4;
+}
+
+static void (*slput)(int32);
 
 void
 wputl(ushort w)
@@ -269,15 +307,24 @@ putsymb(Sym *s, char *name, int t, vlong v, vlong size, int ver, Sym *typ)
 //		l = 8;
 	if(s != nil) {
 		rel = addrel(symt);
-		rel->siz = l + Rbig;
+		rel->siz = l;
 		rel->sym = s;
 		rel->type = D_ADDR;
 		rel->off = symt->size;
 		v = 0;
-	}	
-	if(l == 8)
-		slputb(v>>32);
-	slputb(v);
+	}
+
+	if(l == 8) {
+		if(slput == slputl) {
+			slputl(v);
+			slputl(v>>32);
+		} else {
+			slputb(v>>32);
+			slputb(v);
+		}
+	} else
+		slput(v);
+
 	if(ver)
 		t += 'a' - 'A';
 	scput(t+0x80);			/* 0x80 is variable length */
@@ -306,8 +353,8 @@ putsymb(Sym *s, char *name, int t, vlong v, vlong size, int ver, Sym *typ)
 		rel->off = symt->size;
 	}
 	if(l == 8)
-		slputb(0);
-	slputb(0);
+		slput(0);
+	slput(0);
 
 	if(debug['n']) {
 		if(t == 'z' || t == 'Z') {
@@ -329,8 +376,7 @@ putsymb(Sym *s, char *name, int t, vlong v, vlong size, int ver, Sym *typ)
 void
 symtab(void)
 {
-	Sym *s;
-
+	Sym *s, *symtype, *symtypelink, *symgostring;
 	dosymtype();
 
 	// Define these so that they'll get put into the symbol table.
@@ -356,23 +402,27 @@ symtab(void)
 	xdefine("end", SBSS, 0);
 	xdefine("epclntab", SRODATA, 0);
 	xdefine("esymtab", SRODATA, 0);
-	
+
 	// pseudo-symbols to mark locations of type, string, and go string data.
 	s = lookup("type.*", 0);
 	s->type = STYPE;
 	s->size = 0;
 	s->reachable = 1;
+	symtype = s;
 
 	s = lookup("go.string.*", 0);
 	s->type = SGOSTRING;
 	s->size = 0;
 	s->reachable = 1;
+	symgostring = s;
+	
+	symtypelink = lookup("typelink", 0);
 
 	symt = lookup("symtab", 0);
 	symt->type = SSYMTAB;
 	symt->size = 0;
 	symt->reachable = 1;
-	
+
 	// assign specific types so that they sort together.
 	// within a type they sort by size, so the .* symbols
 	// just defined above will be first.
@@ -383,18 +433,41 @@ symtab(void)
 		if(strncmp(s->name, "type.", 5) == 0) {
 			s->type = STYPE;
 			s->hide = 1;
+			s->outer = symtype;
 		}
 		if(strncmp(s->name, "go.typelink.", 12) == 0) {
 			s->type = STYPELINK;
 			s->hide = 1;
+			s->outer = symtypelink;
 		}
 		if(strncmp(s->name, "go.string.", 10) == 0) {
 			s->type = SGOSTRING;
 			s->hide = 1;
+			s->outer = symgostring;
 		}
 	}
 
 	if(debug['s'])
 		return;
+
+	switch(thechar) {
+	default:
+		diag("unknown architecture %c", thechar);
+		errorexit();
+	case '5':
+	case '6':
+	case '8':
+		// magic entry to denote little-endian symbol table
+		slputl(0xfffffffe);
+		scput(0);
+		scput(0);
+		slput = slputl;
+		break;
+	case 'v':
+		// big-endian (in case one comes along)
+		slput = slputb;
+		break;
+	}
+
 	genasmsym(putsymb);
 }
