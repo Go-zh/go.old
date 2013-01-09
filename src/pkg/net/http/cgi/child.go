@@ -6,6 +6,7 @@
 // process.
 
 // 这个文件从子进程的角度实现了CGI.
+
 package cgi
 
 import (

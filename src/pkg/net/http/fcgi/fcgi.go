@@ -6,7 +6,7 @@
 // Currently only the responder role is supported.
 // The protocol is defined at http://www.fastcgi.com/drupal/node/6?q=node/22
 
-// fcgi包实现了FastCGI协议.
+// fcgi 包实现了FastCGI协议.
 // 当前只提供了FastCGI的响应服务端。
 // 这个协议定义文档是：http://www.fastcgi.com/drupal/node/6?q=node/22
 package fcgi

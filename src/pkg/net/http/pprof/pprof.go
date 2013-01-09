@@ -42,7 +42,7 @@
 //	http://blog.golang.org/2011/06/profiling-go-programs.html
 //
 
-// pprof包通过提供HTTP服务返回runtime的统计数据，这个数据是以pprof可视化工具规定的返回格式返回的。
+// pprof 包通过提供HTTP服务返回runtime的统计数据，这个数据是以pprof可视化工具规定的返回格式返回的.
 // 了解更多的pprof的知识，请参考：http://code.google.com/p/google-perftools/。
 //
 // 导入这个包就会在HTTP服务端的handlers注册这个包自己的处理器。
