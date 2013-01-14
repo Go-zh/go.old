@@ -1,8 +1,14 @@
 <!--{
+"Title": "数据一坨",
+"Template": true
+}-->
+
+<!--{
 "Title": "Gobs of data",
 "Template": true
 }-->
 
+<div class="english">
 <p>
 To transmit a data structure across a network or to store it in a file, it must
 be encoded and then decoded again. There are many encodings available, of
@@ -12,7 +18,17 @@ course: <a href="http://www.json.org/">JSON</a>,
 And now there's another, provided by Go's <a href="/pkg/encoding/gob/">gob</a>
 package.
 </p>
+</div>
 
+<p>
+为了在网络上传输数据结构，或将它存储在文件中，就必须对它进行编码，然后再次解码。
+当然，现在有很多种可用的编码格式：<a href="http://www.json.org/">JSON</a>、
+<a href="http://www.w3.org/XML/">XML</a>、Google的
+<a href="http://code.google.com/p/protobuf">协议缓存</a>等等。
+现在又多了一种，由Go的<a href="/pkg/encoding/gob/">gob</a>所提供。
+</p>
+
+<div class="english">
 <p>
 Why define a new encoding? It's a lot of work and redundant at that. Why not
 just use one of the existing formats? Well, for one thing, we do! Go has
@@ -22,27 +38,63 @@ a separate repository but it's one of the most frequently downloaded). And for
 many purposes, including communicating with tools and systems written in other
 languages, they're the right choice.
 </p>
+</div>
 
+<p>
+为什么要定义新的编码？这要做许多繁复的工作。为什么不用一种既有的格式？呃..
+无论如何，我们已经这样做了！Go拥有的<a href="/pkg/">包</a>支持所有前面提到的编码格式
+（<a href="http://code.google.com/p/goprotobuf">协议缓存包</a>在独立的代码仓库中，
+但它却是下载最多的包之一）。而且在多数情况下，包括与其它语言编写的工具和系统进行通信，
+它们都是不错的选择。
+</p>
+
+<div class="english">
 <p>
 But for a Go-specific environment, such as communicating between two servers
 written in Go, there's an opportunity to build something much easier to use and
 possibly more efficient.
 </p>
+</div>
 
+<p>
+不过在特定于Go的环境下，例如在两个用Go编写的服务之间通信时，就需要某些东西来让它变得更易用，
+甚至可能更高效。
+</p>
+
+<div class="english">
 <p>
 Gobs work with the language in a way that an externally-defined,
 language-independent encoding cannot. At the same time, there are lessons to be
 learned from the existing systems.
 </p>
+</div>
 
+<p>
+Gob与Go协同工作的方式，是外部定义的、同语言无关的编码格式做不到的。
+同时，它也从既有的系统中吸取了很多教训。
+</p>
+
+<div class="english">
 <p>
 <b>Goals</b>
 </p>
+</div>
 
+<p>
+<b>目的</b>
+</p>
+
+<div class="english">
 <p>
 The gob package was designed with a number of goals in mind.
 </p>
+</div>
 
+<p>
+Gob包是为达到很多目的而设计的。
+</p>
+
+<div class="english">
 <p>
 First, and most obvious, it had to be very easy to use. First, because Go has
 reflection, there is no need for a separate interface definition language or
@@ -51,13 +103,29 @@ to figure out how to encode and decode it. On the other hand, this approach
 means that gobs will never work as well with other languages, but that's OK:
 gobs are unashamedly Go-centric.
 </p>
+</div>
 
+<p>
+首先，同时也最明显的，就是它非常易用。一方面，由于Go拥有反射机制，
+也就没必要用单独的接口来定义语言或“协议编译器”了。数据结构本身的编解码问题，
+就应该完全由该包解决。另一方面，这种方式也就意味着Gob无法同其它语言很好地工作，
+不过这没什么问题：Gob就是完全以Go为中心的。
+</p>
+
+<div class="english">
 <p>
 Efficiency is also important. Textual representations, exemplified by XML and
 JSON, are too slow to put at the center of an efficient communications network.
 A binary encoding is necessary.
 </p>
+</div>
 
+<p>
+效率问题也很重要。像XML和JSON这种以文本表示的编码，对于高效通信网络来说简直太慢了。
+因此二进制编码是必须的。
+</p>
+
+<div class="english">
 <p>
 Gob streams must be self-describing. Each gob stream, read from the beginning,
 contains sufficient information that the entire stream can be parsed by an
@@ -65,23 +133,50 @@ agent that knows nothing a priori about its contents. This property means that
 you will always be able to decode a gob stream stored in a file, even long
 after you've forgotten what data it represents.
 </p>
+</div>
 
+<p>
+Gob流必须有自描述性。每个Gob流，从开始读取时就包含了足够的信息，终端可在对其内容
+一无所知的前提下进行解析。这种特性也就意味着，即便你忘记了存储在文件中的Gob流代表什么，
+也总能对它进行解码。
+</p>
+
+<div class="english">
 <p>
 There were also some things to learn from our experiences with Google protocol
 buffers.
 </p>
+</div>
 
+<p>
+同样，还有从Google协议缓存中获得的经验。
+</p>
+
+<div class="english">
 <p>
 <b>Protocol buffer misfeatures</b>
 </p>
+</div>
 
+<p>
+<b>协议缓存的缺陷</b>
+</p>
+
+<div class="english">
 <p>
 Protocol buffers had a major effect on the design of gobs, but have three
 features that were deliberately avoided. (Leaving aside the property that
 protocol buffers aren't self-describing: if you don't know the data definition
 used to encode a protocol buffer, you might not be able to parse it.)
 </p>
+</div>
 
+<p>
+协议缓存对Gob的设计产生了重要的音响，不过有三个特性被谨慎地避开了。
+（暂且不说协议缓存不是自描述性的：如果你不知道协议缓存在编码时的数据定义，也就无法解析它。）
+</p>
+
+<div class="english">
 <p>
 First, protocol buffers only work on the data type we call a struct in Go. You
 can't encode an integer or array at the top level, only a struct with fields
@@ -89,7 +184,15 @@ inside it. That seems a pointless restriction, at least in Go. If all you want
 to send is an array of integers, why should you have to put it into a
 struct first?
 </p>
+</div>
 
+<p>
+首先，协议缓存仅能在Go的结构体这种数据类型上工作。你不能在顶层编码一个整数或数组，
+而只能将它作为字段置于结构体内。至少在Go中，这个限制似乎没什么意义。
+如果你只想发送整数数组，为何要先将它放到结构体中呢？
+</p>
+
+<div class="english">
 <p>
 Next, a protocol buffer definition may specify that fields <code>T.x</code> and
 <code>T.y</code> are required to be present whenever a value of type
@@ -103,7 +206,19 @@ encoding at all.  (Protocol buffers also have optional fields. But if we don't
 have required fields, all fields are optional and that's that. There will be
 more to say about optional fields a little later.)
 </p>
+</div>
 
+<p>
+其次，对于一个类型为 <code>T</code> 的值，无论它已被编码还是解码，协议缓存定义所指定的字段
+<code>T.x</code> 和 <code>T.y</code> 都必须存在。尽管它看起来是个好主意，但代价却是高昂的，
+因为编解码器无论在编码时还是解码时，都必须单独维护一个数据结构，以报告必须的字段是否丢失。
+这同样会有遗留的问题。一段时间后，某人可能想修改数据定义，以移除一个必须的字段，
+但这可能会导致正在接收此数据的客户端崩溃。因此在编码时，最好就没有它们。
+（协议缓存也有可选的字段。但如果我们没有必须字段，那么所有的字段都会是可选的。
+稍后还会针对可选字段进行一些讨论。）
+</p>
+
+<div class="english">
 <p>
 The third protocol buffer misfeature is default values. If a protocol buffer
 omits the value for a "defaulted" field, then the decoded structure behaves as
@@ -118,16 +233,40 @@ decided to leave them out of gobs and fall back to Go's trivial but effective
 defaulting rule: unless you set something otherwise, it has the "zero value"
 for that type - and it doesn't need to be transmitted.
 </p>
+</div>
 
+<p>
+协议缓存的第三个缺陷就是默认值。如果协议缓存忽略了某个“默认的”字段值，
+那么解码后的结构就像该字段被设置了该值一样。当你用getter和setter方法来控制字段的访问时，
+它是个非常不错的主意，但是当容器只是个纯粹的普通结构体时，就很难清晰地处理它了。
+必须字段的实现也同样诡异：默认值在哪里定义？它们都是什么类型？（是UTF-8文本？还是无解译字节？
+它在浮点数中有几位？）尽管看起来很简单，但协议缓存对它们的设计和实现还是有些复杂。
+我们决定让它们远离Gob，然后回到Go那种琐碎但很有效的默认规则上：除非你设置了一些内容，
+否则它就是其类型的“零值”——而这个无需传输。
+</p>
+
+<div class="english">
 <p>
 So gobs end up looking like a sort of generalized, simplified protocol buffer.
 How do they work?
 </p>
+</div>
 
+<p>
+因此Gob最终看起来就是个更加通用，更加简单的协议缓存。那它又是如何工作的呢？
+</p>
+
+<div class="english">
 <p>
 <b>Values</b>
 </p>
+</div>
 
+<p>
+<b>值</b>
+</p>
+
+<div class="english">
 <p>
 The encoded gob data isn't about <code>int8</code>s and <code>uint16</code>s.
 Instead, somewhat analogous to constants in Go, its integer values are abstract,
@@ -145,7 +284,22 @@ it doesn't fit, an error results.) This decoupling from the size of the variable
 gives some flexibility to the encoding: we can expand the type of the integer
 variable as the software evolves, but still be able to decode old data.
 </p>
+</div>
 
+<p>
+编码后的Gob数据并不是一串 <code>int8</code> 或 <code>uint16</code>，它看起来更像Go中的常量。
+无论是有符号的还是无符号的，其整数值都是抽象的，无大小定义的数字。当你对一个
+<code>int8</code> 进行编码时，其值会被转换为无大小定义的变长整数。当你对一个
+<code>int64</code> 进行编码时也同样如此。（有符号与无符号是区别对待的，
+但无大小定义的规则也同样适用于无符号值。）若二者的值均为 7，它们在线上的发送是相同的。
+当接收者解码该值后，就会把它放入接收者的变量中，该变量可以是任意整数类型。
+因此，编码者可能发送了一个来自 <code>int8</code> 类型的 7，而接收者可能将它存储在
+<code>int64</code> 里。这没有问：毕竟该值会一直与整数匹配。（若不匹配，则会产生错误。）
+在变量的大小上进行解耦为编码提供了一些灵活性：我们可以随着软件的演化扩展整数类型，
+但仍旧可解码原来的数据。
+</p>
+
+<div class="english">
 <p>
 This flexibility also applies to pointers. Before transmission, all pointers are
 flattened. Values of type <code>int8</code>, <code>*int8</code>,
@@ -154,25 +308,55 @@ integer value, which may then be stored in <code>int</code> of any size, or
 <code>*int</code>, or <code>******int</code>, etc. Again, this allows for
 flexibility.
 </p>
+</div>
 
+<p>
+这种灵活性对指针同样适用。在传输前，所有的指针都会被“压平”。类型为
+<code>int8</code>、<code>*int8</code>、<code>**int8</code>、<code>****int8</code>
+等等的值都会作为整数值进行传输，该整数可能会被存储在任何大小的
+<code>int</code>、<code>*int</code> 甚至是 <code>******int</code> 等类型中。
+再次强调，这样会更具灵活性。
+</p>
+
+<div class="english">
 <p>
 Flexibility also happens because, when decoding a struct, only those fields
 that are sent by the encoder are stored in the destination. Given the value
 </p>
+</div>
+
+<p>
+另一个体现这种灵活性的是，当解码一个结构体时，只有那些由编码者发送的字段，
+才会被存储到目标中。给定值
+</p>
 
 {{code "/doc/progs/gobs1.go" `/type T/` `/STOP/`}}
 
+<div class="english">
 <p>
 the encoding of <code>t</code> sends only the 7 and 8. Because it's zero, the
 value of <code>Y</code> isn't even sent; there's no need to send a zero value.
 </p>
+</div>
 
 <p>
+<code>t</code> 的编码只会发送7和8。由于 <code>Y</code> 为零，因此无需发送，
+即这里无需发送一个零值。
+</p>
+
+<div class="english">
+<p>
 The receiver could instead decode the value into this structure:
+</p>
+</div>
+
+<p>
+接收者可能转而会将该值解码为这种结构：
 </p>
 
 {{code "/doc/progs/gobs1.go" `/type U/` `/STOP/`}}
 
+<div class="english">
 <p>
 and acquire a value of <code>u</code> with only <code>X</code> set (to the
 address of an <code>int8</code> variable set to 7); the <code>Z</code> field is
@@ -184,7 +368,17 @@ function with the part of the type they recognize. Thus gobs provide the
 important result of optional fields - extensibility - without any additional
 mechanism or notation.
 </p>
+</div>
 
+<p>
+而获取的 <code>u</code> 值中只有 <code>X</code> 被设置（即值为 7 的 <code>int8</code>
+变量的地址）；字段 <code>Z</code> 则被忽略了——你会将它放到哪里？在解码结构体时，
+字段会根据名称及兼容的类型进行匹配，且只有双方都存在的字段才会生效。这种方法巧妙地解决了
+“可选字段”的问题：就算 <code>T</code> 因为添加字段而发生了变化，过期数据的接收者
+也能处理它们识别出的类型。因此Gob为可选字段提供了重要的改进——无需任何附加机制或标识。
+</p>
+
+<div class="english">
 <p>
 From integers we can build all the other types: bytes, strings, arrays, slices,
 maps, even floats. Floating-point values are represented by their IEEE 754
@@ -194,7 +388,16 @@ byte-reversed order because common values of floating-point numbers, such as
 small integers, have a lot of zeros at the low end that we can avoid
 transmitting.
 </p>
+</div>
 
+<p>
+根据整数，我们可以构造出其它所有的类型：字节、字符串、数组、切片、映射甚至浮点数。
+浮点数值是以IEEE 754浮点位的形式表示的，它作为整数存储。只要你知道它们的类型，
+这种方式就能很好地工作。此外，该整数是以逆字节序的形式发送的，因为一般的浮点数值，
+就像一连串小整数，在低位上有很多零我们是不用传输的。
+</p>
+
+<div class="english">
 <p>
 One nice feature of gobs that Go makes possible is that they allow you to define
 your own encoding by having your type satisfy the
@@ -209,11 +412,30 @@ represent special features, enforce constraints, or hide secrets when you
 transmit data. See the <a href="/pkg/encoding/gob/">documentation</a> for
 details.
 </p>
+</div>
 
+<p>
+Gob还有个很不错的特性，就是Go可以让你的类型通过满足
+<a href="/pkg/encoding/gob/#GobEncoder">GobEncoder</a>
+和<a href="/pkg/encoding/gob/#GobDecoder">GobDecoder</a>接口来定义自己的编码，
+这种方式类似于<a href="/pkg/encoding/json/">JSON</a>包的
+<a href="/pkg/encoding/json/#Marshaler">Marshaler</a> 和
+<a href="/pkg/encoding/json/#Unmarshaler">Unmarshaler</a>以及<a href="/pkg/fmt/">fmt</a>
+包的<a href="/pkg/fmt/#Stringer">Stringer</a>接口。这种能力让一些特殊的特性成为可能，
+比如强制约束，或在你传输数据时隐藏秘密。更多详情见<a href="/pkg/encoding/gob/">Gob文档</a>。
+</p>
+
+<div class="english">
 <p>
 <b>Types on the wire</b>
 </p>
+</div>
 
+<p>
+<b>类型的传输</b>
+</p>
+
+<div class="english">
 <p>
 The first time you send a given type, the gob package includes in the data
 stream a description of that type. In fact, what happens is that the encoder is
@@ -223,39 +445,83 @@ of the type description structure, are predefined by the software for
 bootstrapping.) After the type is described, it can be referenced by its type
 number.
 </p>
+</div>
 
+<p>
+在你第一次发送给定的类型时，Gob包就会将该类型的描述包含进数据流中。实际上，
+该编码器是以标准的Gob编码格式进行编码的，它是一种内部的结构，描述了类型并赋予它唯一的编号。
+（基本类型，加上类型描述结构的层次，由软件在引导时定义。）来类型被描述后，
+就可以通过其类型编号来引用了。
+</p>
+
+<div class="english">
 <p>
 Thus when we send our first type <code>T</code>, the gob encoder sends a
 description of <code>T</code> and tags it with a type number, say 127. All
 values, including the first, are then prefixed by that number, so a stream of
 <code>T</code> values looks like:
 </p>
+</div>
+
+<p>
+因此，当我们发送第一个类型 <code>T</code> 时，Gob编码器就会发送 <code>T</code>
+的描述并对其进行编号，如127。所有的值，包括第一个，都会前缀该编号。所以 <code>T</code>
+的数据流看起来就像这样：
+</p>
 
 <pre>
 ("define type id" 127, definition of type T)(127, T value)(127, T value), ...
 </pre>
 
+<div class="english">
 <p>
 These type numbers make it possible to describe recursive types and send values
 of those types. Thus gobs can encode types such as trees:
 </p>
+</div>
 
+<p>
+这些类型编号让描述递归类型，以及发送这些类型的数据成为可能。
+因此，Gob可以对树这样的类型进行编码：
+</p>
+
+<div class="english">
 {{code "/doc/progs/gobs1.go" `/type Node/` `/STOP/`}}
+</div>
 
+<div class="english">
 <p>
 (It's an exercise for the reader to discover how the zero-defaulting rule makes
 this work, even though gobs don't represent pointers.)
 </p>
+</div>
 
+<p>
+（本练习只是为读者展示默认零值的规则是如何工作的，即便Gob中不会出现指针。）
+</p>
+
+<div class="english">
 <p>
 With the type information, a gob stream is fully self-describing except for the
 set of bootstrap types, which is a well-defined starting point.
 </p>
+</div>
 
+<p>
+有了类型信息，Gob流就能完全自描述了。当然，除了那些初始类型，它们一开始就定义好了。
+</p>
+
+<div class="english">
 <p>
 <b>Compiling a machine</b>
 </p>
+</div>
 
+<p>
+<b>编译解释器</b>
+</p>
+
+<div class="english">
 <p>
 The first time you encode a value of a given type, the gob package builds a
 little interpreted machine specific to that data type. It uses reflection on
@@ -267,7 +533,17 @@ approach is taken by the protocol buffer support for Go, whose design was
 influenced by the implementation of gobs.) Subsequent values of the same type
 use the already-compiled machine, so they can be encoded right away.
 </p>
+</div>
 
+<p>
+在你第一次对给定类型的值进行编码时，Gob包会为该数据类型构建一个小型的解释器。
+它通过反射该类型来构造该解释器，不过一旦该解释器构建完毕，它就不再依赖反射了。
+该解释器使用unsafe包与一点技巧来将数据快速转换为已编码的字节。它也可以使用反射来避免unsafe，
+不过会明显变慢。（一个类似的快速方式就是为Go建立协议缓存支持，它的设计也受到了Gob实现的影响。）
+随后相同类型的值就会使用这个已编译好的解释器，因此它们总是可以被正确地解码。
+</p>
+
+<div class="english">
 <p>
 Decoding is similar but harder. When you decode a value, the gob package holds
 a byte slice representing a value of a given encoder-defined type to decode,
@@ -276,11 +552,26 @@ that pair: the gob type sent on the wire crossed with the Go type provided for
 decoding. Once that decoding machine is built, though, it's again a
 reflectionless engine that uses unsafe methods to get maximum speed.
 </p>
+</div>
 
+<p>
+解码过程类似，不过略显复杂。当你在解码一个值时，Gob包会将给定的，编码者定义类型的值，
+保存到字节切片中以供解码，并将解码后的Go值加入到其中。Gob包会为这一过程构建一个解释器：
+在线上发送的Gob类型会为解码而提供Go的类型。一旦该解码器构建完毕，同样会有一个无需反射的，
+使用unsafe包的解码器引擎全速运行。
+</p>
+
+<div class="english">
 <p>
 <b>Use</b>
 </p>
+</div>
 
+<p>
+<b>使用</b>
+</p>
+
+<div class="english">
 <p>
 There's a lot going on under the hood, but the result is an efficient,
 easy-to-use encoding system for transmitting data. Here's a complete example
@@ -288,28 +579,64 @@ showing differing encoded and decoded types. Note how easy it is to send and
 receive values; all you need to do is present values and variables to the
 <a href="/pkg/encoding/gob/">gob package</a> and it does all the work.
 </p>
+</div>
+
+<p>
+在它的引擎盖下面还藏着很多秘密，但结果却是一个高效的、易于使用的、用于数据传输的编码系统。
+这里有个完整的例子，展示了不同的编码和解码类型。注意发送和接受值是多么简单；
+你所要做的一切，就是将值和变量扔给<a href="/pkg/encoding/gob/">gob</a>包，
+然后它就会完成所有的工作。
+</p>
 
 {{code "/doc/progs/gobs2.go" `/package main/` `$`}}
 
+<div class="english">
 <p>
 You can compile and run this example code in the
 <a href="http://play.golang.org/p/_-OJV-rwMq">Go Playground</a>.
 </p>
+</div>
 
+<p>
+你可以在<a href="http://play.golang.org/p/5OuK3ySTkE">Go练习场</a>上编译运行此例子。
+</p>
+
+<div class="english">
 <p>
 The <a href="/pkg/net/rpc/">rpc package</a> builds on gobs to turn this
 encode/decode automation into transport for method calls across the network.
 That's a subject for another article.
 </p>
+</div>
 
+<p>
+<a href="/pkg/net/rpc/">rpc</a>包构建在Gob之上，它将网络上方法调用传输的编码/解码自动化。
+这又是另一篇文章的主题了。
+</p>
+
+<div class="english">
 <p>
 <b>Details</b>
 </p>
+</div>
 
+<p>
+<b>详情</b>
+</p>
+
+<div class="english">
 <p>
 The <a href="/pkg/encoding/gob/">gob package documentation</a>, especially the
 file <a href="/src/pkg/encoding/gob/doc.go">doc.go</a>, expands on many of the
 details described here and includes a full worked example showing how the
 encoding represents data. If you are interested in the innards of the gob
 implementation, that's a good place to start.
+</p>
+</div>
+
+<p>
+<a href="/pkg/encoding/gob/">gob</a>的包文档，特别是
+<a href="/src/pkg/encoding/gob/doc.go">doc.go</a>文件详细解释了本文所述，
+并包含了完整可运行的例子，用来演示如何对数据进行编码。若你对Gob的内部实现很感兴趣，
+这是个不错的起点。
 </p>

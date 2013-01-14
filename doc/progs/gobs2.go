@@ -24,18 +24,17 @@ type Q struct {
 }
 
 func main() {
-	// Initialize the encoder and decoder.  Normally enc and dec would be
-	// bound to network connections and the encoder and decoder would
-	// run in different processes.
-	var network bytes.Buffer        // Stand-in for a network connection
-	enc := gob.NewEncoder(&network) // Will write to network.
-	dec := gob.NewDecoder(&network) // Will read from network.
-	// Encode (send) the value.
+	// 初始化编码器和解码器。通常 enc 和 dec 会被绑定至网络连接，
+	// 而编码器和解码其会在不同的进程中运行。
+	var network bytes.Buffer        // 代替一个网络连接
+	enc := gob.NewEncoder(&network) // 将会写入到网络
+	dec := gob.NewDecoder(&network) // 将会从网络读取
+	// 编码（发送）该值。
 	err := enc.Encode(P{3, 4, 5, "Pythagoras"})
 	if err != nil {
 		log.Fatal("encode error:", err)
 	}
-	// Decode (receive) the value.
+	// 解码（接收）该值。
 	var q Q
 	err = dec.Decode(&q)
 	if err != nil {
