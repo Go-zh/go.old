@@ -1,37 +1,79 @@
 <!--{
+"Title": "Go的声明语法"
+}-->
+
+<!--{
 "Title": "Go's Declaration Syntax"
 }-->
 
+<div class="english">
 <p>
 Newcomers to Go wonder why the declaration syntax is different from the
 tradition established in the C family. In this post we'll compare the
 two approaches and explain why Go's declarations look as they do.
 </p>
+</div>
 
+<p>
+Go的新手可能会奇怪，为什么Go的声明语法不同于传统的C家族。在这篇文章中，
+我们会对这两种方式进行比较，并说明为什么Go的声明看起来是这样的。
+</p>
+
+<div class="english">
 <p>
 <b>C syntax</b>
 </p>
+</div>
 
+<p>
+<b>C的语法</b>
+</p>
+
+<div class="english">
 <p>
 First, let's talk about C syntax. C took an unusual and clever approach
 to declaration syntax. Instead of describing the types with special
 syntax, one writes an expression involving the item being declared, and
 states what type that expression will have. Thus
 </p>
+</div>
+
+<p>
+First, let's talk about C syntax. C took an unusual and clever approach
+to declaration syntax. Instead of describing the types with special
+syntax, one writes an expression involving the item being declared, and
+states what type that expression will have. Thus
+首先，让我们来谈谈C的语法。C的声明语法采用了聪明而不同寻常的方法。
+它并不以特殊的语法来描述类型，而是写一个包含被声明条目的表达式，
+并规定该表达式会拥有何种类型。因此
+</p>
 
 <pre>
 int x;
 </pre>
 
+<div class="english">
 <p>
 declares x to be an int: the expression 'x' will have type int. In
 general, to figure out how to write the type of a new variable, write an
 expression involving that variable that evaluates to a basic type, then
 put the basic type on the left and the expression on the right.
 </p>
+</div>
 
 <p>
+就将 x 声明为 int 类型：表达式“x”将会拥有类型 int。一般来说，为了弄清楚如何写新变量的类型，
+就要写一个可求值为基本类型的，包含该变量的表达式，然后将基本类型放在左侧，而该表达式在右侧。
+</p>
+
+<div class="english">
+<p>
 Thus, the declarations
+</p>
+</div>
+
+<p>
+因此，声明
 </p>
 
 <pre>
@@ -39,15 +81,29 @@ int *p;
 int a[3];
 </pre>
 
+<div class="english">
 <p>
 state that p is a pointer to int because '*p' has type int, and that a
 is an array of ints because a[3] (ignoring the particular index value,
 which is punned to be the size of the array) has type int.
 </p>
+</div>
 
+<p>
+就规定了 p 是一个指向 int 类型的指针，因为“*p”拥有类型 int；而 a 是一个 int
+类型的数组，因为 a[3] 拥有类型 int（暂且忽略特殊的下标值，它同时表明了这是个数组，
+以及该数组的大小）。
+</p>
+
+<div class="english">
 <p>
 What about functions? Originally, C's function declarations wrote the
 types of the arguments outside the parens, like this:
+</p>
+</div>
+
+<p>
+那函数是怎么样的？起初，C的函数声明将实参的类型写在小括号外面，就像这样：
 </p>
 
 <pre>
@@ -57,121 +113,224 @@ int main(argc, argv)
 { /* ... */ }
 </pre>
 
+<div class="english">
 <p>
 Again, we see that main is a function because the expression main(argc,
 argv) returns an int. In modern notation we'd write
+</p>
+</div>
+
+<p>
+同样，我们看到 main 是一个函数，因为表达式 main(argc, argv) 会返回 int 类型的值。
+按照现在的记法，我们写
 </p>
 
 <pre>
 int main(int argc, char *argv[]) { /* ... */ }
 </pre>
 
+<div class="english">
 <p>
 but the basic structure is the same.
 </p>
+</div>
 
+<p>
+但它的基本结构相同。
+</p>
+
+<div class="english">
 <p>
 This is a clever syntactic idea that works well for simple types but can
 get confusing fast. The famous example is declaring a function pointer.
 Follow the rules and you get this:
+</p>
+</div>
+
+<p>
+这个语法的想法很聪明，它对于简单的类型来说行之有效，但很快就造成了混淆。
+著名的例子就是声明一个函数指针。按照上面的规则，你会得到这个：
 </p>
 
 <pre>
 int (*fp)(int a, int b);
 </pre>
 
+<div class="english">
 <p>
 Here, fp is a pointer to a function because if you write the expression
 (*fp)(a, b) you'll call a function that returns int. What if one of fp's
 arguments is itself a function?
+</p>
+</div>
+
+<p>
+在这里，fp 是指向函数的指针，因为假如你写了表达式 (*fp)(a, b) 就会调用一个返回
+int 的函数。那如果 fp 的实参本身还是一个函数又会怎样？
 </p>
 
 <pre>
 int (*fp)(int (*ff)(int x, int y), int b)
 </pre>
 
+<div class="english">
 <p>
 That's starting to get hard to read.
 </p>
+</div>
 
+<p>
+它就开始变得难以阅读了。
+</p>
+
+<div class="english">
 <p>
 Of course, we can leave out the name of the parameters when we declare a
 function, so main can be declared
+</p>
+</div>
+
+<p>
+当然，我们可以在声明函数时去掉形参的名字，因此 main 可以被声明为
 </p>
 
 <pre>
 int main(int, char *[])
 </pre>
 
+<div class="english">
 <p>
 Recall that argv is declared like this,
+</p>
+</div>
+
+<p>
+回想一下，argv 的声明如下：
 </p>
 
 <pre>
 char *argv[]
 </pre>
 
+<div class="english">
 <p>
 so you drop the name from the <em>middle</em> of its declaration to construct
 its type. It's not obvious, though, that you declare something of type
 char *[] by putting its name in the middle.
 </p>
+</div>
 
+<p>
+所以你可以从它的声明<b>中间</b>去掉名字来构造其类型。这并不明显，
+虽然你仍然可以通过将名字放到 char *[] 中来声明某些东西。
+</p>
+
+<div class="english">
 <p>
 And look what happens to fp's declaration if you don't name the
 parameters:
+</p>
+</div>
+
+<p>
+然后看看如果你不对形参命名的话，fp 的声明会如何：
 </p>
 
 <pre>
 int (*fp)(int (*)(int, int), int)
 </pre>
 
+<div class="english">
 <p>
 Not only is it not obvious where to put the name inside
+</p>
+</div>
+
+<p>
+这就不只是把名字放到
 </p>
 
 <pre>
 int (*)(int, int)
 </pre>
 
+<div class="english">
 <p>
 it's not exactly clear that it's a function pointer declaration at all.
 And what if the return type is a function pointer?
+</p>
+</div>
+
+<p>
+中明不明显的问题了。当它是个函数指针的声明时就彻底迷糊了。
+那如果返回类型是个函数指针的话又如何？
 </p>
 
 <pre>
 int (*(*fp)(int (*)(int, int), int))(int, int)
 </pre>
 
+<div class="english">
 <p>
 It's hard even to see that this declaration is about fp.
 </p>
+</div>
 
+<p>
+甚至都看不出来这个声明是关于 fp 的了。
+</p>
+
+<div class="english">
 <p>
 You can construct more elaborate examples but these should illustrate
 some of the difficulties that C's declaration syntax can introduce.
 </p>
+</div>
 
+<p>
+你还可以构造出更复杂的例子，但这足以说明C的声明语法会引入一些困难了。
+</p>
+
+<div class="english">
 <p>
 There's one more point that needs to be made, though. Because type and
 declaration syntax are the same, it can be difficult to parse
 expressions with types in the middle. This is why, for instance, C casts
 always parenthesize the type, as in
 </p>
+</div>
+
+<p>
+不过还有一点要说的。由于类型和声明语法是相同的，因此若表达式中有类型的话，
+也会让解析变得很困难。这就是C的类型转换总是加括号的原因：
+</p>
 
 <pre>
 (int)M_PI
 </pre>
 
+<div class="english">
 <p>
 <b>Go syntax</b>
 </p>
+</div>
 
+<p>
+<b>Go的语法</b>
+</p>
+
+<div class="english">
 <p>
 Languages outside the C family usually use a distinct type syntax in
 declarations. Although it's a separate point, the name usually comes
 first, often followed by a colon. Thus our examples above become
 something like (in a fictional but illustrative language)
+</p>
+</div>
+
+<p>
+C家族外的语言通常在声明中使用一种不同类型的语法。虽然这只是其中一种：名字通常是第一个，
+紧接着一个冒号。因此我们前面的例子（在一个虚构但清晰的语言中）就会变成这样
 </p>
 
 <pre>
@@ -180,10 +339,17 @@ p: pointer to int
 a: array[3] of int
 </pre>
 
+<div class="english">
 <p>
 These declarations are clear, if verbose - you just read them left to
 right. Go takes its cue from here, but in the interests of brevity it
 drops the colon and removes some of the keywords:
+</p>
+</div>
+
+<p>
+这些声明是清晰的，如果啰嗦点说——你只需要从左到右去读就可以了。Go从这里得到了启示，
+但为简洁起见，它去掉了冒号并移除了其中一些关键字：
 </p>
 
 <pre>
@@ -192,80 +358,149 @@ p *int
 a [3]int
 </pre>
 
+<div class="english">
 <p>
 There is no direct correspondence between the look of [3]int and how to
 use a in an expression. (We'll come back to pointers in the next
 section.) You gain clarity at the cost of a separate syntax.
 </p>
+</div>
 
+<p>
+[3]int 的样子与如何在表达式中使用 a 并没有直接的对应关系。
+（我们会在下一节中回到指针上来。）你以独立的语法为代价获得了清晰性。
+</p>
+
+<div class="english">
 <p>
 Now consider functions. Let's transcribe the declaration for main, even
 though the main function in Go takes no arguments:
+</p>
+</div>
+
+<p>
+现在考虑函数。让我们转换 main 的声明，Go中的 main 函数甚至都不需要实参：
 </p>
 
 <pre>
 func main(argc int, argv *[]byte) int
 </pre>
 
+<div class="english">
 <p>
 Superficially that's not much different from C, but it reads well from
 left to right:
 </p>
+</div>
 
+<p>
+乍看之下，这跟C没什么区别，但它从左到右读起来还不错：
+</p>
+
+<div class="english">
 <p>
 <em>function main takes an int and a pointer to a slice of bytes and returns an int.</em>
 </p>
+</div>
 
+<p>
+<em>函数 main 接受一个 int 和一个指向 byte 切片的指针，并返回一个 int。</em>
+</p>
+
+<div class="english">
 <p>
 Drop the parameter names and it's just as clear - they're always first
 so there's no confusion.
+</p>
+</div>
+
+<p>
+去掉形参名，它会更清晰——它们总是第一个，因此不会产生混淆。
 </p>
 
 <pre>
 func main(int, *[]byte) int
 </pre>
 
+<div class="english">
 <p>
 One value of this left-to-right style is how well it works as the types
 become more complex. Here's a declaration of a function variable
 (analogous to a function pointer in C):
+</p>
+</div>
+
+<p>
+这种从左到右风格的价值之一，就是在它作为类型时，就算变得再复杂也能轻松应对。
+以下为函数变量的声明（类似于C中的函数指针）：
 </p>
 
 <pre>
 f func(func(int,int) int, int) int
 </pre>
 
+<div class="english">
 <p>
 Or if f returns a function:
+</p>
+</div>
+
+<p>
+或如果 f 返回一个函数：
 </p>
 
 <pre>
 f func(func(int,int) int, int) func(int, int) int
 </pre>
 
+<div class="english">
 <p>
 It still reads clearly, from left to right, and it's always obvious
 which name is being declared - the name comes first.
 </p>
+</div>
 
+<p>
+它仍然能从左到右清晰地阅读，而且它所声明的名字总是很明显——名字总是第一个。
+</p>
+
+<div class="english">
 <p>
 The distinction between type and expression syntax makes it easy to
 write and invoke closures in Go:
+</p>
+</div>
+
+<p>
+类型和表达式之间的语法不同，让它在Go中更容易编写及调用闭包：
 </p>
 
 <pre>
 sum := func(a, b int) int { return a+b } (3, 4)
 </pre>
 
+<div class="english">
 <p>
 <b>Pointers</b>
 </p>
+</div>
 
+<p>
+<b>指针</b>
+</p>
+
+<div class="english">
 <p>
 Pointers are the exception that proves the rule. Notice that in arrays
 and slices, for instance, Go's type syntax puts the brackets on the left
 of the type but the expression syntax puts them on the right of the
 expression:
+</p>
+</div>
+
+<p>
+指针是检验该规则的一个例外。注意在数组和切片中，Go的类型语法将中括号放在类型的左侧，
+而表达式语法将它们放在该表达式的右侧：
 </p>
 
 <pre>
@@ -273,10 +508,17 @@ var a []int
 x = a[1]
 </pre>
 
+<div class="english">
 <p>
 For familiarity, Go's pointers use the * notation from C, but we could
 not bring ourselves to make a similar reversal for pointer types. Thus
 pointers work like this
+</p>
+</div>
+
+<p>
+为了熟悉性，Go的指针使用了C的 * 标记。但我们不能自己为指针类型做类似的反转。
+因此指针只能像这样工作：
 </p>
 
 <pre>
@@ -284,8 +526,14 @@ var p *int
 x = *p
 </pre>
 
+<div class="english">
 <p>
 We couldn't say
+</p>
+</div>
+
+<p>
+但我们不能这样：
 </p>
 
 <pre>
@@ -293,9 +541,15 @@ var p *int
 x = p*
 </pre>
 
+<div class="english">
 <p>
 because that postfix * would conflate with multiplication. We could have
 used the Pascal ^, for example:
+</p>
+</div>
+
+<p>
+因为后缀的 * 会与乘法合并。当然，我们可以使用Pascal的 ^，例如：
 </p>
 
 <pre>
@@ -303,46 +557,92 @@ var p ^int
 x = p^
 </pre>
 
+<div class="english">
 <p>
 and perhaps we should have (and chosen another operator for xor),
 because the prefix asterisk on both types and expressions complicates
 things in a number of ways. For instance, although one can write
+</p>
+</div>
+
+<p>
+而且可能我们应当这么做（并为异或 xor 选择另一个操作符），
+因为前缀的星号对于类型和表达式来说，会让某些东西复杂化。例如，尽管可以这样写：
 </p>
 
 <pre>
 []int("hi")
 </pre>
 
+<div class="english">
 <p>
 as a conversion, one must parenthesize the type if it starts with a *:
+</p>
+</div>
+
+<p>
+但作为一个约定，如果它以 * 开始的话，类型就必须加括号：
 </p>
 
 <pre>
 (*int)(nil)
 </pre>
 
+<div class="english">
 <p>
 Had we been willing to give up * as pointer syntax, those parentheses
 would be unnecessary.
 </p>
+</div>
 
+<p>
+一旦我们放弃将 * 作为指针语法，那些括号就没必要了。
+</p>
+
+<div class="english">
 <p>
 So Go's pointer syntax is tied to the familiar C form, but those ties
 mean that we cannot break completely from using parentheses to
 disambiguate types and expressions in the grammar.
 </p>
+</div>
 
+<p>
+因此Go的指针语法只是结合了熟悉的C形式，但那些束缚意味着我们不能彻底打破这种现状，
+即使用括号来从语法上消除类型和表达式之间的的歧义。
+</p>
+
+<div class="english">
 <p>
 Overall, though, we believe Go's type syntax is easier to understand
 than C's, especially when things get complicated.
 </p>
+</div>
 
+<p>
+总的来说，我们相信Go的类型语法比C的更容易理解，尤其在事情变得复杂时更是如此。
+</p>
+
+<div class="english">
 <p>
 <b>Notes</b>
 </p>
+</div>
 
+<p>
+<b>注记</b>
+</p>
+
+<div class="english">
 <p>
 Go's declarations read left to right. It's been pointed out that C's
 read in a spiral! See <a href="http://c-faq.com/decl/spiral.anderson.html">
 The "Clockwise/Spiral Rule"</a> by David Anderson.
+</p>
+</div>
+
+<p>
+Go的声明语法是从左到右阅读的。它也指出了C是按螺旋式阅读的！详情见David Anderson的
+<a href="http://c-faq.com/decl/spiral.anderson.html">
+“顺时针/螺旋规则”</a>。
 </p>
