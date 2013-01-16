@@ -33,7 +33,7 @@ func InterfaceExample() {
 		h := len(v) / 2
 		fmt.Println("i swapped by halves is", v[h:]+v[:h])
 	default:
-		// i isn't one of the types above
+		// i 并非以上类型之一
 	}
 
 	// STOP OMIT

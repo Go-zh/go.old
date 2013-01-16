@@ -1,8 +1,14 @@
 <!--{
+"Title": "JSON和Go",
+"Template": true
+}-->
+
+<!--{
 "Title": "JSON and Go",
 "Template": true
 }-->
 
+<div class="english">
 <p>
 JSON (JavaScript Object Notation) is a simple data interchange format.
 Syntactically it resembles the objects and lists of JavaScript. It is most
@@ -11,56 +17,115 @@ running in the browser, but it is used in many other places, too. Its home page,
 <a href="http://json.org">json.org</a>, provides a wonderfully clear and concise
 definition of the standard.
 </p>
+</div>
 
+<p>
+JSON（JavaScript Object Notation）是一种简单的数据交换格式。它在句法上类似于
+JavaScript 的对象和列表。它最常用于Web后端和运行在浏览器中的JavaScript程序之间的通信，
+但它也可在其它地方使用。它的主页 <a href="http://json.org">json.org</a>
+提供了绝妙的清晰而简洁的标准定义。
+</p>
+
+<div class="english">
 <p>
 With the <a href="/pkg/encoding/json/">json package</a> it's a snap to read and
 write JSON data from your Go programs.
 </p>
+</div>
 
+<p>
+<a href="/pkg/encoding/json/">json</a>包可让你的Go程序中快速地读写JSON数据。
+</p>
+
+<div class="english">
 <p>
 <b>Encoding</b>
 </p>
+</div>
 
+<p>
+<b>编码</b>
+</p>
+
+<div class="english">
 <p>
 To encode JSON data we use the
 <a href="/pkg/encoding/json/#Marshal"><code>Marshal</code></a> function.
+</p>
+</div>
+
+<p>
+要编码JSON数据，我们可以使用
+<a href="/pkg/encoding/json/#Marshal"><code>Marshal</code></a> 函数。
 </p>
 
 <pre>
 func Marshal(v interface{}) ([]byte, error)
 </pre>
 
+<div class="english">
 <p>
 Given the Go data structure, <code>Message</code>,
+</p>
+</div>
+
+<p>
+给定Go数据结构 <code>Message</code>，
 </p>
 
 {{code "/doc/progs/json1.go" `/type Message/` `/STOP/`}}
 
+<div class="english">
 <p>
 and an instance of <code>Message</code>
+</p>
+</div>
+
+<p>
+和一个 <code>Message</code> 的实例：
 </p>
 
 {{code "/doc/progs/json1.go" `/m :=/`}}
 
+<div class="english">
 <p>
 we can marshal a JSON-encoded version of m using <code>json.Marshal</code>:
+</p>
+</div>
+
+<p>
+我们可以用 <code>json.Marshal</code> 将 <code>m</code> 编组成以JSON编码的版本：
 </p>
 
 {{code "/doc/progs/json1.go" `/b, err :=/`}}
 
+<div class="english">
 <p>
 If all is well, <code>err</code> will be <code>nil</code> and <code>b</code>
 will be a <code>[]byte</code> containing this JSON data:
+</p>
+</div>
+
+<p>
+如果一切顺利，<code>err</code> 将会是 <code>nil</code> 而 <code>b</code>
+将会是包含以下JSON数据的 <code>[]byte</code>：
 </p>
 
 <pre>
 b == []byte(`{"Name":"Alice","Body":"Hello","Time":1294706395881547000}`)
 </pre>
 
+<div class="english">
 <p>
 Only data structures that can be represented as valid JSON will be encoded:
 </p>
+</div>
 
+<p>
+只有可表示为有效JSON的数据结构才能被编码：
+</p>
+
+<div class="english">
 <ul>
 <li>
 JSON objects only support strings as keys; to encode a Go map type it must be
@@ -79,55 +144,122 @@ Pointers will be encoded as the values they point to (or 'null' if the pointer
 is <code>nil</code>).
 </li>
 </ul>
+</div>
 
+<ul>
+<li>
+JSON对象只支持将字符串作为键；要编码一个Go的映射类型，它的形式必须为
+<code>map[string]T</code>（其中 <code>T</code> 可以是任何json包支持的Go类型）。
+</li>
+<li>
+信道、复数和函数类型不能被编码。
+</li>
+<li>
+循环数据结构不被支持，它会让 <code>Marshal</code> 进入无线循环。
+</li>
+<li>
+指针将被编码为其指向的值（若该指针为 <code>nil</code> 则编码为‘null’）。
+</li>
+</ul>
+
+<div class="english">
 <p>
 The json package only accesses the exported fields of struct types (those that
 begin with an uppercase letter). Therefore only the exported fields of a struct
 will be present in the JSON output.
 </p>
+</div>
 
+<p>
+json包只能访问结构体类型的已导出字段（即以大写字母开头的字段）。
+因此只有结构体的已导出字段才会出现在JSON输出中。
+</p>
+
+<div class="english">
 <p>
 <b>Decoding</b>
 </p>
+</div>
 
+<p>
+<b>解码</b>
+</p>
+
+<div class="english">
 <p>
 To decode JSON data we use the
 <a href="/pkg/encoding/json/#Unmarshal"><code>Unmarshal</code></a> function.
+</p>
+</div>
+
+<p>
+要解码JSON数据，我们可以使用
+<a href="/pkg/encoding/json/#Unmarshal"><code>Unmarshal</code></a> 函数。
 </p>
 
 <pre>
 func Unmarshal(data []byte, v interface{}) error
 </pre>
 
+<div class="english">
 <p>
 We must first create a place where the decoded data will be stored
+</p>
+</div>
+
+<p>
+我们首先要创建一个地方以存储将被解码的数据：
 </p>
 
 {{code "/doc/progs/json1.go" `/var m Message/`}}
 
+<div class="english">
 <p>
 and call <code>json.Unmarshal</code>, passing it a <code>[]byte</code> of JSON
 data and a pointer to <code>m</code>
 </p>
+</div>
+
+<p>
+然后调用 <code>json.Unmarshal</code>，传入一个JSON数据的 <code>[]byte</code>
+以及指向 <code>m</code> 的指针：
+</p>
 
 {{code "/doc/progs/json1.go" `/err := json.Unmarshal/`}}
 
+<div class="english">
 <p>
 If <code>b</code> contains valid JSON that fits in <code>m</code>, after the
 call <code>err</code> will be <code>nil</code> and the data from <code>b</code>
 will have been stored in the struct <code>m</code>, as if by an assignment
 like:
 </p>
+</div>
+
+<p>
+若 <code>b</code> 包含有效的JSON数据且与 <code>m</code> 中的数据相匹配，在调用之后，
+<code>err</code> 将会是 <code>nil</code> 而 <code>b</code> 中的数据将会被存储在
+结构体 <code>m</code> 中，类似于以下这种赋值：
+</p>
 
 {{code "/doc/progs/json1.go" `/m = Message/` `/STOP/`}}
 
+<div class="english">
 <p>
 How does <code>Unmarshal</code> identify the fields in which to store the
 decoded data? For a given JSON key <code>"Foo"</code>, <code>Unmarshal</code>
 will look through the destination struct's fields to find (in order of
 preference):
 </p>
+</div>
 
+<p>
+<code>Unmarshal</code> 是如何识别其中的字段，以存储解码后的数据的？
+对于给定的JSON键 <code>"Foo"</code>，<code>Unmarshal</code> 会（按照优先级顺序）
+遍历目标结构体中的字段以寻找：
+</p>
+
+<div class="english">
 <ul>
 <li>
 An exported field with a tag of <code>`json:"Foo"`</code> (see the
@@ -141,14 +273,36 @@ An exported field named <code>"FOO"</code> or <code>"FoO"</code> or some other
 case-insensitive match of <code>"Foo"</code>.
 </li>
 </ul>
+</div>
 
+<ul>
+<li>
+一个带有 <code>`json:"Foo"`</code> 标注的已导出字段
+（更多有关结构体标注的信息见<a href="/ref/spec#Struct_types">Go语言规范</a>），
+</li>
+<li>
+一个名为 <code>"Foo"</code> 的已导出字段，或
+</li>
+<li>
+一个名为 <code>"FOO"</code> 或 <code>"FoO"</code> 或一些大小写不敏感的，与
+<code>"Foo"</code> 相匹配的字段。
+</li>
+</ul>
+
+<div class="english">
 <p>
 What happens when the structure of the JSON data doesn't exactly match the Go
 type?
 </p>
+</div>
+
+<p>
+当JSON数据结构恰好与Go的类型不匹配时会怎样？
+</p>
 
 {{code "/doc/progs/json1.go" `/"Food":"Pickle"/` `/STOP/`}}
 
+<div class="english">
 <p>
 <code>Unmarshal</code> will decode only the fields that it can find in the
 destination type.  In this case, only the Name field of m will be populated,
@@ -157,45 +311,100 @@ you wish to pick only a few specific fields out of a large JSON blob. It also
 means that any unexported fields in the destination struct will be unaffected
 by <code>Unmarshal</code>.
 </p>
+</div>
 
+<p>
+<code>Unmarshal</code> 只会解码能够在目标类型中找到的字段。在这种情况下，
+只有 <code>m</code> 的 <code>Name</code> 字段会被填入，而 <code>Food</code>
+字段会被忽略。当你只想从大型JSON blob中挑选几个特定的字段时，这种行为非常有用。
+这样就意味着任何目标结构体中的未导出字段都不会受到 <code>Unmarshal</code> 的影响。
+</p>
+
+<div class="english">
 <p>
 But what if you don't know the structure of your JSON data beforehand?
 </p>
+</div>
 
+<p>
+但假如你事先并不知道JSON数据的结构时会怎样？
+</p>
+
+<div class="english">
 <p>
 <b>Generic JSON with interface{}</b>
 </p>
+</div>
 
+<p>
+<b>用 <code>interface{}</code> 对JSON进行泛化</b>
+</p>
+
+<div class="english">
 <p>
 The <code>interface{}</code> (empty interface) type describes an interface with
 zero methods.  Every Go type implements at least zero methods and therefore
 satisfies the empty interface.
 </p>
+</div>
 
 <p>
+<code>interface{}</code>（空接口）类型描述了一个方法数为零的接口。
+任何Go的类型都至少实现了零个接口，因此它满足空接口。
+</p>
+
+<div class="english">
+<p>
 The empty interface serves as a general container type:
+</p>
+</div>
+
+<p>
+空接口可作为通用的容器类型：
 </p>
 
 {{code "/doc/progs/json2.go" `/var i interface{}/` `/STOP/`}}
 
+<div class="english">
 <p>
 A type assertion accesses the underlying concrete type:
+</p>
+</div>
+
+<p>
+类型断言可访问底层的具体类型：
 </p>
 
 {{code "/doc/progs/json2.go" `/r := i/` `/STOP/`}}
 
+<div class="english">
 <p>
 Or, if the underlying type is unknown, a type switch determines the type:
+</p>
+</div>
+
+<p>
+或，如果底层类型未知，类型选择可以确定其类型：
 </p>
 
 {{code "/doc/progs/json2.go" `/switch v/` `/STOP/`}}
 
-
+<div class="english">
+<p>
 The json package uses <code>map[string]interface{}</code> and
 <code>[]interface{}</code> values to store arbitrary JSON objects and arrays;
 it will happily unmarshal any valid JSON blob into a plain
 <code>interface{}</code> value.  The default concrete Go types are:
+</p>
+</div>
 
+<p>
+json包使用 <code>map[string]interface{}</code> 和 <code>[]interface{}</code>
+值来存储任意的JSON对象和序列；将任何有效的JSON blob解组为简单的 <code>interface{}</code>
+值都是很惬意的。默认的具体Go类型为：
+</p>
+
+<div class="english">
 <ul>
 <li>
 <code>bool</code> for JSON booleans,
@@ -210,62 +419,136 @@ it will happily unmarshal any valid JSON blob into a plain
 <code>nil</code> for JSON null.
 </li>
 </ul>
+</div>
 
+<ul>
+<li>
+<code>bool</code> 对应于JSON布尔值，
+</li>
+<li>
+<code>float64</code> 对应于JSON数值，
+</li>
+<li>
+<code>string</code> 对应于JSON字符串，
+</li>
+<li>
+<code>nil</code> 对应于JSON的 null。
+</li>
+</ul>
+
+<div class="english">
 <p>
 <b>Decoding arbitrary data</b>
 </p>
+</div>
 
 <p>
+<b>解码任意数据</b>
+</p>
+
+<div class="english">
+<p>
 Consider this JSON data, stored in the variable <code>b</code>:
+</p>
+</div>
+
+<p>
+考虑此JSON数据，它存储在变量 <code>b</code> 中：
 </p>
 
 {{code "/doc/progs/json3.go" `/b :=/`}}
 
+<div class="english">
 <p>
 Without knowing this data's structure, we can decode it into an
 <code>interface{}</code> value with <code>Unmarshal</code>:
 </p>
+</div>
+
+<p>
+在不知道该数据的结构的情况下，我们可以通过 <code>Unmarshal</code> 将它解码为
+<code>interface{}</code> 值：
+</p>
 
 {{code "/doc/progs/json3.go" `/var f interface/` `/STOP/`}}
 
+<div class="english">
 <p>
 At this point the Go value in <code>f</code> would be a map whose keys are
 strings and whose values are themselves stored as empty interface values:
 </p>
+</div>
+
+<p>
+此时，<code>f</code> 中的Go值是一个映射，其键为字符串，值为它们自身作为空接口存储的值。
+</p>
 
 {{code "/doc/progs/json3.go" `/f = map/` `/STOP/`}}
 
+<div class="english">
 <p>
 To access this data we can use a type assertion to access <code>f</code>'s
 underlying <code>map[string]interface{}</code>:
 </p>
+</div>
+
+<p>
+要访问这些数据，我们可以使用类型断言来访问 <code>f</code> 的底层类型
+<code>map[string]interface{}</code>：
+</p>
 
 {{code "/doc/progs/json3.go" `/m := f/`}}
 
+<div class="english">
 <p>
 We can then iterate through the map with a range statement and use a type switch
 to access its values as their concrete types:
 </p>
+</div>
+
+<p>
+接着，我们可以通过 <code>range</code> 语句来迭代遍历该映射，并通过类型选择，
+将它们的值作为其具体类型来访问：
+</p>
 
 {{code "/doc/progs/json3.go" `/for k, v/` `/STOP/`}}
 
+<div class="english">
 <p>
 In this way you can work with unknown JSON data while still enjoying the
 benefits of type safety.
 </p>
+</div>
 
+<p>
+按照这种方式，你可以用未知的JSON数据来工作，而仍然享有类型安全的好处。
+</p>
+
+<div class="english">
 <p>
 <b>Reference Types</b>
 </p>
+</div>
 
 <p>
+<b>引用类型</b>
+</p>
+
+<div class="english">
+<p>
 Let's define a Go type to contain the data from the previous example:
+</p>
+</div>
+
+<p>
+让我们定义一个包含前面例子中数据的Go类型：
 </p>
 
 {{code "/doc/progs/json4.go" `/type FamilyMember/` `/STOP/`}}
 
 {{code "/doc/progs/json4.go" `/var m FamilyMember/` `/STOP/`}}
 
+<div class="english">
 <p>
 Unmarshaling that data into a <code>FamilyMember</code> value works as
 expected, but if we look closely we can see a remarkable thing has happened.
@@ -276,9 +559,25 @@ populate the <code>Parents</code> field, <code>Unmarshal</code> allocated a new
 slice behind the scenes. This is typical of how <code>Unmarshal</code> works
 with the supported reference types (pointers, slices, and maps).
 </p>
+</div>
 
 <p>
+将该数据解组为 <code>FamilyMember</code> 值如预期一样工作，但如果我们仔细观察，
+就会发现一件值得注意的事情。通过 <code>var</code> 语句，我们分配了一个
+<code>FamilyMember</code> 结构体，接着向 <code>Unmarshal</code> 提供了指向该值的指针。
+但此时 <code>Parents</code> 字段是一个 <code>nil</code> 切片值。在此之后，为了填充
+<code>Parents</code> 字段，<code>Unmarshal</code> 分配了一个新的切片。这就是典型的
+<code>Unmarshal</code> 与支持的引用类型（指针，切片和映射）协同工作的方式。
+</p>
+
+<div class="english">
+<p>
 Consider unmarshaling into this data structure:
+</p>
+</div>
+
+<p>
+考虑解组此数据结构：
 </p>
 
 <pre>
@@ -287,15 +586,29 @@ type Foo struct {
 }
 </pre>
 
+<div class="english">
 <p>
 If there were a <code>Bar</code> field in the JSON object,
 <code>Unmarshal</code> would allocate a new <code>Bar</code> and populate it.
 If not, <code>Bar</code> would be left as a <code>nil</code> pointer.
 </p>
+</div>
 
+<p>
+若该JSON对象中有一个 <code>Bar</code> 字段，<code>Unmarshal</code> 会分配一个新的
+<code>Bar</code> 并填充它。若没有，<code>Bar</code> 就会被留作 <code>nil</code> 指针。
+</p>
+
+<div class="english">
 <p>
 From this a useful pattern arises: if you have an application that receives a
 few distinct message types, you might define "receiver" structure like
+</p>
+</div>
+
+<p>
+这里出现了一种有用的模式：如果你的应用接收几种不同的消息类型，
+你可以定义“接收者”结构，就像这样：
 </p>
 
 <pre>
@@ -305,6 +618,7 @@ type IncomingMessage struct {
 }
 </pre>
 
+<div class="english">
 <p>
 and the sending party can populate the <code>Cmd</code> field and/or the
 <code>Msg</code> field of the top-level JSON object, depending on the type of
@@ -314,11 +628,27 @@ structures present in the JSON data. To know which messages to process, the
 programmer need simply test that either <code>Cmd</code> or <code>Msg</code> is
 not <code>nil</code>.
 </p>
+</div>
 
+<p>
+发送的那边可填充 <code>Cmd</code> 字段，而顶级JSON对象的 <code>Msg</code>
+字段取决于它们想要通信的消息类型。<code>Unmarshal</code> 在将该JSON数据解码为
+<code>IncomingMessage</code> 结构体时，只会分配存在于该JSON数据中的数据接头。
+要想知道哪个消息已被处理，程序员只需简单地测试一下 <code>Cmd</code> 或
+<code>Msg</code> 是否为 <code>nil</code>。
+</p>
+
+<div class="english">
 <p>
 <b>Streaming Encoders and Decoders</b>
 </p>
+</div>
 
+<p>
+<b>流编码器和解码器</b>
+</p>
+
+<div class="english">
 <p>
 The json package provides <code>Decoder</code> and <code>Encoder</code> types
 to support the common operation of reading and writing streams of JSON data.
@@ -326,31 +656,66 @@ The <code>NewDecoder</code> and <code>NewEncoder</code> functions wrap the
 <a href="/pkg/io/#Reader"><code>io.Reader</code></a> and
 <a href="/pkg/io/#Writer"><code>io.Writer</code></a> interface types.
 </p>
+</div>
+
+<p>
+json包提供了 <code>Decoder</code> 和 <code>Encoder</code> 类型，
+以此来支持读写JSON数据流的一般操作。<code>NewDecoder</code> 和 <code>NewEncoder</code>
+函数封装了 <a href="/pkg/io/#Reader"><code>io.Reader</code></a> 和
+<a href="/pkg/io/#Writer"><code>io.Writer</code></a> 接口类型。
+</p>
 
 <pre>
 func NewDecoder(r io.Reader) *Decoder
 func NewEncoder(w io.Writer) *Encoder
 </pre>
 
+<div class="english">
 <p>
 Here's an example program that reads a series of JSON objects from standard
 input, removes all but the <code>Name</code> field from each object, and then
 writes the objects to standard output:
 </p>
+</div>
+
+<p>
+此例子程序从标准输入中读取一系列JSON对象，从每一个对象中移除除了 <code>Name</code>
+字段之外的东西。然后将该对象写入到标准输出：
+</p>
 
 {{code "/doc/progs/json5.go" `/package main/` `$`}}
 
+<div class="english">
 <p>
 Due to the ubiquity of Readers and Writers, these <code>Encoder</code> and
 <code>Decoder</code> types can be used in a broad range of scenarios, such as
 reading and writing to HTTP connections, WebSockets, or files.
 </p>
+</div>
 
+<p>
+就像无处不在的 <code>Reader</code> 和 <code>Writer</code>，这些 <code>Encoder</code>
+和 <code>Decoder</code> 也可用在广泛的情况中，例如读写HTTP连接、WebSockets或文件。
+</p>
+
+<div class="english">
 <p>
 <b>References</b>
 </p>
+</div>
 
+<p>
+<b>参考</b>
+</p>
+
+<div class="english">
 <p>
 For more information see the <a href="/pkg/encoding/json/">json package documentation</a>. For an example usage of
 json see the source files of the <a href="/pkg/net/rpc/jsonrpc/">jsonrpc package</a>.
+</p>
+</div>
+
+<p>
+更多信息见 <a href="/pkg/encoding/json/">json</a> 包文档。更多相关用法的例子见
+<a href="/pkg/net/rpc/jsonrpc/">jsonrpc</a> 包源码。
 </p>
