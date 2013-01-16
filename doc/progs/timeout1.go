@@ -21,9 +21,9 @@ func Timeout() {
 
 	select {
 	case <-ch:
-		// a read from ch has occurred
+		// 从 ch 的读取已发生
 	case <-timeout:
-		// the read from ch has timed out
+		// 从 ch 的读取已超时
 	}
 
 	// STOP OMIT

@@ -25,10 +25,10 @@ type Q struct {
 
 func main() {
 	// 初始化编码器和解码器。通常 enc 和 dec 会被绑定至网络连接，
-	// 而编码器和解码其会在不同的进程中运行。
+	// 而编码器和解码器会在不同的进程中运行。
 	var network bytes.Buffer        // 代替一个网络连接
-	enc := gob.NewEncoder(&network) // 将会写入到网络
-	dec := gob.NewDecoder(&network) // 将会从网络读取
+	enc := gob.NewEncoder(&network) // 将会写入到网络中
+	dec := gob.NewDecoder(&network) // 将会从网络中读取
 	// 编码（发送）该值。
 	err := enc.Encode(P{3, 4, 5, "Pythagoras"})
 	if err != nil {

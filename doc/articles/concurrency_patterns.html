@@ -1,8 +1,14 @@
 <!--{
+"Title": "Go并发模式：超时，继续",
+"Template": true
+}-->
+
+<!--{
 "Title": "Go Concurrency Patterns: Timing out, moving on",
 "Template": true
 }-->
 
+<div class="english">
 <p>
 Concurrent programming has its own idioms. A good example is timeouts. Although
 Go's channels do not support them directly, they are easy to implement. Say we
@@ -10,18 +16,34 @@ want to receive from the channel <code>ch</code>, but want to wait at most one
 second for the value to arrive. We would start by creating a signalling channel
 and launching a goroutine that sleeps before sending on the channel:
 </p>
+</div>
+
+<p>
+并发编程有它自己的特点，超时就是个不错的例子。尽管Go的信道没有直接支持它们，
+但它们却容易实现。假如我们想从信道 <code>ch</code> 中接收某值，但最多只会为它的到达等上一秒。
+我们可以创建一个发送信号的信道并启动一个Go程，在该信道上进行发送前，该Go程会休眠：
+</p>
 
 {{code "/doc/progs/timeout1.go" `/timeout :=/` `/STOP/`}}
 
+<div class="english">
 <p>
 We can then use a <code>select</code> statement to receive from either
 <code>ch</code> or <code>timeout</code>. If nothing arrives on <code>ch</code>
 after one second, the timeout case is selected and the attempt to read from
 <code>ch</code> is abandoned.
 </p>
+</div>
+
+<p>
+接着，我们可以用 <code>select</code> 语句从 <code>ch</code> 或 <code>timeout</code>
+中进行接收。若在一秒后没有东西到达 <code>ch</code>，就会选择 timeout
+的情况，并放弃对 <code>ch</code> 的读取。
+</p>
 
 {{code "/doc/progs/timeout1.go" `/select {/` `/STOP/`}}
 
+<div class="english">
 <p>
 The <code>timeout</code> channel is buffered with space for 1 value, allowing
 the timeout goroutine to send to the channel and then exit. The goroutine
@@ -30,29 +52,61 @@ won't hang around forever if the <code>ch</code> receive happens before the
 timeout is reached. The <code>timeout</code> channel will eventually be
 deallocated by the garbage collector.
 </p>
+</div>
 
+<p>
+<code>timeout</code> 信道拥有1个值的缓存空间，以允许 timeout Go程向该信道进行发送后退出。
+该Go程并不知道（或关心）该值是否已被接收。这就意味着，若 <code>ch</code>
+的接收发生在 timeout 抵达之后，该Go程不会一直等待。<code>timeout</code>
+信道最终会被垃圾收集器重新分配。
+</p>
+
+<div class="english">
 <p>
 (In this example we used <code>time.Sleep</code> to demonstrate the mechanics
 of goroutines and channels. In real programs you should use <code>
 <a href="/pkg/time/#After">time.After</a></code>, a function that returns
 a channel and sends on that channel after the specified duration.)
 </p>
+</div>
 
+<p>
+（在这个例子中，我们通过 <code>time.Sleep</code> 展示了Go程和信道的机制。
+在实际程序中，你应当使用 <code><a href="/pkg/time/#After">time.After</a></code>，
+该函数返回一个信道，并在持续一段指定的时间后在该信道上进行发送。）
+</p>
+
+<div class="english">
 <p>
 Let's look at another variation of this pattern. In this example we have a
 program that reads from multiple replicated databases simultaneously. The
 program needs only one of the answers, and it should accept the answer that
 arrives first.
 </p>
+</div>
 
+<p>
+我们来看看这种模式的另一个变种。在此例中，我们的程序会从多个重复的数据库中同时进行读取。
+该程序只需要一个结果，且它应当接收第一个到达的结果。
+</p>
+
+<div class="english">
 <p>
 The function <code>Query</code> takes a slice of database connections and a
 <code>query</code> string. It queries each of the databases in parallel and
 returns the first response it receives:
 </p>
+</div>
+
+<p>
+<code>Query</code> 函数创建了一个数据库连接的切片和一个 <code>query</code> 字符串。
+它并行地查询每一个数据库，并返回它接收到的第一个反馈：
+</p>
 
 {{code "/doc/progs/timeout2.go" `/func Query/` `/STOP/`}}
 
+
+<div class="english">
 <p>
 In this example, the closure does a non-blocking send, which it achieves by
 using the send operation in <code>select</code> statement with a
@@ -62,7 +116,16 @@ none of the goroutines launched in the loop will hang around. However, if the
 result arrives before the main function has made it to the receive, the send
 could fail since no one is ready.
 </p>
+</div>
 
+<p>
+在这个例子中，该闭包进行了一次非阻塞式的发送，它是通过 <code>select</code>
+语句中的发送操作和 <code>default</code> 情况实现的。若发送不能立即通过，
+就会选择默认的情况。非阻塞式的发送保证了在该循环等待时，不会有Go程启动。
+然而，若其结果在主函数接收它之前到达，由于没有就绪的接收者，该发送操作会失败。
+</p>
+
+<div class="english">
 <p>
 This problem is a textbook example of what is known as a
 <a href="https://en.wikipedia.org/wiki/Race_condition">race condition</a>, but
@@ -72,8 +135,22 @@ guaranteeing that the first send has a place to put the value. This ensures the
 send will always succeed, and the first value to arrive will be retrieved
 regardless of the order of execution.
 </p>
+</div>
 
+<p>
+这个问题是个典型的例子，它被称为<a href="https://zh.wikipedia.org/zh-cn/%E7%AB%9E%E6%80%81%E6%9D%A1%E4%BB%B6">竞态条件</a>，但其解决方法却是微不足道的。
+我们只需确保信道 <code>ch</code> 拥有缓存即可（通过添加缓存长度作为
+<a href="/pkg/builtin/#make">make</a> 的第二个实参），这样能保证第一次发送的值有地方放。
+这也保证了发送总是成功的，且无论执行顺序如何，第一个到达的值总能被取回。
+</p>
+
+<div class="english">
 <p>
 These two examples demonstrate the simplicity with which Go can express complex
 interactions between goroutines.
+</p>
+</div>
+
+<p>
+这两个例子展示了Go能够简单地表达Go程间复杂的相互作用。
 </p>
