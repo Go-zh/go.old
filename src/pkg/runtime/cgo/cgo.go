@@ -30,7 +30,7 @@ import "C"
 
 // Supports _cgo_panic by converting a string constant to an empty
 // interface.
-// 通过将字符串内容转换为空接口来支持 _cgo_panic。
+// 通过将字符串常量转换为空接口来支持 _cgo_panic。
 
 func cgoStringToEface(s string, ret *interface{}) {
 	*ret = s

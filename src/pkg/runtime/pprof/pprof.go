@@ -76,7 +76,7 @@ type Profile struct {
 
 // profiles records all registered profiles.
 
-// profiles 记录所有已注册的分析。
+// profiles 记录所有已寄存的分析。
 var profiles struct {
 	mu sync.Mutex
 	m  map[string]*Profile

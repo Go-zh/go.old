@@ -11,11 +11,11 @@
 // various implementations, unless otherwise informed clients should not
 // assume they are safe for parallel execution.
 
-// io 包为I/O基元提供了基础的接口.
-// 它主要包装了这些基元的已有实现，如 os 包中的那些，抽象成函数性的共享公共接口，
-// 加上一些其它相关的基元。
+// io 包为I/O原语提供了基础的接口.
+// 它主要包装了这些原语的已有实现，如 os 包中的那些，抽象成函数性的共享公共接口，
+// 加上一些其它相关的原语。
 //
-// 由于这些接口和基元以不同的实现包装了低级操作，因此除非另行通知，
+// 由于这些接口和原语以不同的实现包装了低级操作，因此除非另行通知，
 // 否则客户不应假定它们对于并行执行是安全的。
 package io
 
