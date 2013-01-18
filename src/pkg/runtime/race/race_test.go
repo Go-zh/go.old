@@ -10,9 +10,9 @@
 // it merely verifies that if a test is expected to be racy
 // then the race is detected.
 
-// 此程序通过运行该测试，并解析它们的输出来检验竞态检测器。
+// 此程序通过运行该测试，并解析它们的输出来检验竞争检测器。
 // 它不会检查栈的正确性、完整性或其它东西：它只会检验，若该测试按照预期竞争，
-// 那么该竞态就会被检测到。
+// 那么该竞争就会被检测到。
 package race_test
 
 import (
@@ -98,7 +98,7 @@ func nextLine(r *bufio.Reader) (string, error) {
 // the name of the testcase and returns the result of this
 // comparison.
 
-// processLog 验证 ThreadSanitizer 的记录是否包含竞态报告，针对该测试用例的名字
+// processLog 验证 ThreadSanitizer 的记录是否包含竞争报告，针对该测试用例的名字
 // 检查该信息，并返回该比较的结果。
 func processLog(testName string, tsanLog []string) string {
 	if !strings.HasPrefix(testName, "Race") && !strings.HasPrefix(testName, "NoRace") {
@@ -147,7 +147,7 @@ func processLog(testName string, tsanLog []string) string {
 // which includes possible data race reports from ThreadSanitizer.
 
 // runTests 保证了包及其依赖在测试器开启的情况下构建，并返回 'go test'
-// 的输出，它包含了来自 ThreadSanitizer 的可能的数据竞态。
+// 的输出，它包含了来自 ThreadSanitizer 的可能的数据竞争。
 func runTests() ([]byte, error) {
 	tests, err := filepath.Glob("./testdata/*_test.go")
 	if err != nil {
@@ -161,7 +161,7 @@ func runTests() ([]byte, error) {
 	// (the tests are simple and the memory is constantly reused).
 	//
 	// 以下标记关闭了启发式功能，该功能会禁止看起来相同的报告。
-	// 由于该测试会包含大量相同地址上的数据竞态，因此它是必要的（该测试是简单的，
+	// 由于该测试会包含大量相同地址上的数据竞争，因此它是必要的（该测试是简单的，
 	// 内存会不断被重复利用。
 	for _, env := range os.Environ() {
 		if strings.HasPrefix(env, "GOMAXPROCS=") {

@@ -1,18 +1,41 @@
 <!--{
+	"Title": "数据竞争检测器",
+	"Template": true
+}-->
+
+<!--{
 	"Title": "Data Race Detector",
 	"Template": true
 }-->
 
+<div class="english">
 <h2 id="Introduction">Introduction</h2>
+</div>
 
+<h2 id="前言">前言</h2>
+
+<div class="english">
 <p>
 Data races are one of the most common and hardest to debug types of bugs in concurrent systems.  A data race occurs when two goroutines access the same variable concurrently and at least one of the accesses is a write.  See the <a href="/ref/mem">The Go Memory Model</a> for details.
 </p>
+</div>
 
+<p>
+数据竞争是并发系统中最常见，同时也最难处理的Bug类型之一。数据竞争会在两个Go程并发访问同一个变量，
+且至少有一个访问为写入时产生。更多详情见<a href="/ref/mem">Go内存模型</a>。
+</p>
+
+<div class="english">
 <p>
 Here is an example of a data race that can lead to crashes and memory corruption:
 </p>
+</div>
 
+<p>
+这个数据竞争的例子可导致崩溃和内存损坏。
+</p>
+
+<div class="english">
 <pre>
 func main() {
 	c := make(chan bool)
@@ -28,24 +51,71 @@ func main() {
 	}
 }
 </pre>
+</div>
 
+<pre>
+func main() {
+	c := make(chan bool)
+	m := make(map[string]string)
+	go func() {
+		m["1"] = "a"  // 第一个冲突的访问。
+		c &lt;- true
+	}()
+	m["2"] = "b"          // 第二个冲突的访问。
+	&lt;-c
+	for k, v := range m {
+		fmt.Println(k, v)
+	}
+}
+</pre>
+
+<div class="english">
 <h2 id="Usage">Usage</h2>
+</div>
 
+<h2 id="使用">使用</h2>
+
+<div class="english">
 <p>
 Fortunately, Go includes a built-in data race detector.  To use it, add the <code>-race</code> flag to the go command:
 </p>
+</div>
 
+<p>
+幸运的是，Go内建了数据竞争检测器。要使用它，请将 <code>-race</code> 标记添加到 go 命令之后：
+</p>
+
+<div class="english">
 <pre>
 $ go test -race mypkg    // to test the package
 $ go run -race mysrc.go  // to run the source file
 $ go build -race mycmd   // to build the command
 $ go install -race mypkg // to install the package
 </pre>
+</div>
 
+<pre>
+$ go test -race mypkg    // 测试该包
+$ go run -race mysrc.go  // 运行其源文件
+$ go build -race mycmd   // 构建该命令
+$ go install -race mypkg // 安装该包
+</pre>
+
+<div class="english">
 <h2 id="Report_Format">Report Format</h2>
+</div>
 
+<h2 id="报告格式">报告格式</h2>
+
+<div class="english">
 <p>
 When the race detector finds a data race in the program, it prints a report.  The report contains stack traces for conflicting accesses, as well as stacks where the involved goroutines were created.  For example:
+</p>
+</div>
+
+<p>
+当竞争检测器在程序中找到数据竞争时，它会打印出一份报告。该报告包含冲突访问的栈跟踪，
+以及创建相关Go程的栈。例如：
 </p>
 
 <pre>
@@ -83,19 +153,37 @@ Goroutine 184 (running) created at:
       src/pkg/testing/testing.go:301 +0xe8
 </pre>
 
+<div class="english">
 <h2 id="Options">Options</h2>
+</div>
 
+<h2 id="选项">选项</h2>
+
+<div class="english">
 <p>
 The <code>GORACE</code> environment variable sets race detector options.  The format is:
+</p>
+</div>
+
+<p>
+<code>GORACE</code> 环境变量设置了竞争检测的选项。其格式为：
 </p>
 
 <pre>
 GORACE="option1=val1 option2=val2"
 </pre>
 
+<div class="english">
 <p>
 The options are:
 </p>
+</div>
+
+<p>
+其中的选项为：
+</p>
+
+<div class="english">
 <li><code>log_path</code> (default <code>stderr</code>): The race detector writes
 its report to a file named log_path.pid.  The special names <code>stdout</code>
 and <code>stderr</code> cause reports to be written to standard output and
@@ -108,23 +196,66 @@ from all reported file paths, to make reports more concise.</li>
 access history is <code>32K * 2**history_size elements</code>. Increasing this
 value can avoid a "failed to restore the stack" error in reports, but at the
 cost of increased memory usage.</li>
+</div>
 
+<ul>
+<li>
+<code>log_path</code>（默认为 <code>stderr</code>）：竞争检测器会将其报告写入名为
+log_path.pid 的文件中。特殊的名字 <code>stdout</code> 和 <code>stderr</code>
+会将报告分别写入到标准输出和标准错误中。
+</li>
+
+<li>
+<code>exitcode</code>（默认为 <code>66</code>）：当检测到竞争后使用的退出状态。
+</li>
+
+<li>
+<code>strip_path_prefix</code>（默认为 <code>""</code>）：从所有报告文件的路径中去除此前缀，
+让报告更加简洁。
+</li>
+
+<li>
+<code>history_size</code>（默认为<code>1</code>）：每个Go程的内存访问历史为
+<code>32K * 2**history_size</code> 个元素。增加该值可避免在报告中避免
+"failed to restore the stack"（栈恢复失败）的提示，但代价是会增加内存的使用。
+</li>
+</ul>
+
+<div class="english">
 <p>
 Example:
+</p>
+</div>
+
+<p>
+例如：
 </p>
 
 <pre>
 $ GORACE="log_path=/tmp/race/report strip_path_prefix=/my/go/sources/" go test -race
 </pre>
 
+<div class="english">
 <h2 id="Excluding_Tests">Excluding Tests</h2>
+</div>
 
+<h2 id="排除测试">排除测试</h2>
+
+<div class="english">
 <p>
 When you build with <code>-race</code> flag, go command defines additional
 <a href="/pkg/go/build/#Build_Constraints">build tag</a> <code>race</code>.
 You can use it to exclude some code/tests under the race detector. For example:
 </p>
+</div>
 
+<p>
+当你用 <code>-race</code> 标记进行构建时，go命令定义了附加的
+<a href="/pkg/go/build/#Build_Constraints">构建标记</a> <code>race</code>。
+你可以通过它来排除某些竞争检测器下的代码/测试。例如：
+</p>
+
+<div class="english">
 <pre>
 // +build !race
 
@@ -145,9 +276,36 @@ func TestBaz(t *testing.T)  {
 	// ...
 }
 </pre>
+</div>
 
+<pre>
+// +build !race
+
+package foo
+
+// 此测试包含了数据竞争。见123号问题。
+func TestFoo(t *testing.T)  {
+	// ...
+}
+
+// 此测试会因为竞争检测器的超时而失败。
+func TestBar(t *testing.T)  {
+	// ...
+}
+
+// 此测试会在竞争检测器下花费太长时间。
+func TestBaz(t *testing.T)  {
+	// ...
+}
+</pre>
+
+<div class="english">
 <h2 id="How_To_Use">How To Use</h2>
+</div>
 
+<h2 id="如何使用">如何使用</h2>
+
+<div class="english">
 <p>
 To start, run your tests using the race detector (<code>go test -race</code>).
 The race detector only finds races that happen at runtime, so it can't find
@@ -155,15 +313,38 @@ races in code paths that are not executed. If your tests have incomplete coverag
 you may find more races by running a binary built with <code>-race</code> under a realistic
 workload.
 </p>
+</div>
 
+<p>
+首先，使用竞争检测器运行你的测试（<code>go test -race</code>）。
+竞争检测器只会寻找在运行时发生的竞争，因此它不能在未执行的代码路径中寻找竞争。
+若你的测试并未完全覆盖，你可以在实际的工作负载下运行通过 <code>-race</code>
+编译的二进制程序，以此寻找更多的竞争。
+</p>
+
+<div class="english">
 <h2 id="Typical_Data_Races">Typical Data Races</h2>
+</div>
 
+<h2 id="典型的数据竞争">典型的数据竞争</h2>
+
+<div class="english">
 <p>
 Here are some typical data races.  All of them can be detected with the race detector.
 </p>
+</div>
 
+<p>
+以下是一些典型的数据竞争。它们均可通过竞争检测器进行检测。
+</p>
+
+<div class="english">
 <h3 id="Race_on_loop_counter">Race on loop counter</h3>
+</div>
 
+<h3 id="循环计数器中竞争">循环计数器的竞争</h3>
+
+<div class="english">
 <pre>
 func main() {
 	var wg sync.WaitGroup
@@ -177,14 +358,38 @@ func main() {
 	wg.Wait()
 }
 </pre>
+</div>
 
+<pre>
+func main() {
+	var wg sync.WaitGroup
+	wg.Add(5)
+	for i := 0; i < 5; i++ {
+		go func() {
+			fmt.Println(i)  // 你要找的不是“i”。
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+}
+</pre>
+
+<div class="english">
 <p>
 The variable <code>i</code> in the function literal is the same variable used by the loop, so
 the read in the goroutine races with the loop increment. (This program typically
 prints 55555, not 01234.) The program can be fixed by making a copy of the
 variable:
 </p>
+</div>
 
+<p>
+此函数字面中的变量 <code>i</code> 与该循环中使用的是同一个变量，
+因此该Go程中对它的读取与该递增循环产生了竞争。（此程序应该会打印55555，而非01234。）
+此程序可通过创建该变量的副本来修复。
+</p>
+
+<div class="english">
 <pre>
 func main() {
 	var wg sync.WaitGroup
@@ -198,9 +403,29 @@ func main() {
 	wg.Wait()
 }
 </pre>
+</div>
 
+<pre>
+func main() {
+	var wg sync.WaitGroup
+	wg.Add(5)
+	for i := 0; i < 5; i++ {
+		go func(j int) {
+			fmt.Println(j)  // 很好。现在读取的是该循环计数器的局部副本。
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+}
+</pre>
+
+<div class="english">
 <h3 id="Accidentally_shared_variable">Accidentally shared variable</h3>
+</div>
 
+<h3 id="偶然被共享的变量">偶然被共享的变量</h3>
+
+<div class="english">
 <pre>
 // ParallelWrite writes data to file1 and file2, returns the errors.
 func ParallelWrite(data []byte) chan error {
@@ -230,9 +455,46 @@ func ParallelWrite(data []byte) chan error {
 	return res
 }
 </pre>
+</div>
 
+<pre>
+// ParallelWrite 将数据写入 file1 和 file2 中，并返回一个错误。
+func ParallelWrite(data []byte) chan error {
+	res := make(chan error, 2)
+	f1, err := os.Create("file1")
+	if err != nil {
+		res &lt;- err
+	} else {
+		go func() {
+			// 此处的 err 是与主Go程共享的，
+			// 因此该写入操作就会与下面的写入操作产生竞争。
+			_, err = f1.Write(data)
+			res &lt;- err
+			f1.Close()
+		}()
+	}
+	f2, err := os.Create("file2")  // 第二个冲突的对 err 的写入。
+	if err != nil {
+		res &lt;- err
+	} else {
+		go func() {
+			_, err = f2.Write(data)
+			res &lt;- err
+			f2.Close()
+		}()
+	}
+	return res
+}
+</pre>
+
+<div class="english">
 <p>
 The fix is to introduce new variables in the goroutines (note <code>:=</code>):
+</p>
+</div>
+
+<p>
+其解决方案就是在该Go程中引入新的变量（注意 <code>:=</code>）：
 </p>
 
 <pre>
@@ -241,11 +503,22 @@ The fix is to introduce new variables in the goroutines (note <code>:=</code>):
 			_, err := f2.Write(data)
 </pre>
 
+<div class="english">
 <h3 id="Unprotected_global_variable">Unprotected global variable</h3>
+</div>
 
+<h3 id="不受保护的全局变量">不受保护的全局变量</h3>
+
+<div class="english">
 <p>
 If the following code is called from several goroutines, it leads to bad races on the <code>service</code> map.
 Concurrent reads and writes of a map are not safe:
+</p>
+</div>
+
+<p>
+若以下代码在多个Go程中调用，就会导致 <code>service</code> 映射产生非常严重的竞争。
+对一个映射的并发读写是不安全的：
 </p>
 
 <pre>
@@ -260,8 +533,14 @@ func LookupService(name string) net.Addr {
 }
 </pre>
 
+<div class="english">
 <p>
 To make the code safe, protect the accesses with a mutex:
+</p>
+</div>
+
+<p>
+要保证此代码的安全，需通过互斥锁来保护对它的访问：
 </p>
 
 <pre>
@@ -283,12 +562,24 @@ func LookupService(name string) net.Addr {
 }
 </pre>
 
+<div class="english">
 <h3 id="Primitive_unprotected_variable">Primitive unprotected variable</h3>
+</div>
 
+<h3 id="不受保护的基原类型变量">不受保护的基原类型变量</h3>
+
+<div class="english">
 <p>
 Data races can happen on variables of primitive types as well (<code>bool</code>, <code>int</code>, <code>int64</code>), like in the following example:
 </p>
+</div>
 
+<p>
+数据竞争同样会发生在基原类型的变量上（如 <code>bool</code>、<code>int</code>、
+<code>int64</code> 等），就像下面这样：
+</p>
+
+<div class="english">
 <pre>
 type Watchdog struct { last int64 }
 
@@ -309,14 +600,50 @@ func (w *Watchdog) Start() {
 	}()
 }
 </pre>
+</div>
 
+<pre>
+type Watchdog struct { last int64 }
+
+func (w *Watchdog) KeepAlive() {
+	w.last = time.Now().UnixNano()  // 第一个冲突的访问。
+}
+
+func (w *Watchdog) Start() {
+	go func() {
+		for {
+			time.Sleep(time.Second)
+			// 第二个冲突的访问。
+			if w.last < time.Now().Add(-10*time.Second).UnixNano() {
+				fmt.Println("No keepalives for 10 seconds. Dying.")
+				os.Exit(1)
+			}
+		}
+	}()
+}
+</pre>
+
+<div class="english">
 <p>
 Even such &ldquo;innocent&rdquo; data races can lead to hard to debug problems caused by (1) non-atomicity of the memory accesses, (2) interference with compiler optimizations and (3) processor memory access reordering issues.
 </p>
+</div>
 
+<p>
+甚至“无辜”的数据竞争也会导致难以调试的问题：(1) 非原子性的内存访问
+(2) 编译器优化的干扰以及 (3) 进程内存访问的重排序问题。
+</p>
+
+<div class="english">
 <p>
 A typical fix for this race is to use a channel or a mutex.
 To preserve the lock-free behavior, one can also use the <a href="/pkg/sync/atomic"><code>sync/atomic</code></a> package.
+</p>
+</div>
+
+<p>
+对此，典型的解决方案就是使用信道或互斥锁。要保护无锁的行为，一种方法就是使用
+<a href="/pkg/sync/atomic"><code>sync/atomic</code></a> 包。
 </p>
 
 <pre>
@@ -339,15 +666,37 @@ func (w *Watchdog) Start() {
 }
 </pre>
 
+<div class="english">
 <h2 id="Supported_Systems">Supported Systems</h2>
+</div>
 
+<h2 id="支持的系统">支持的系统</h2>
+
+<div class="english">
 <p>
 The race detector runs on <code>darwin/amd64</code>, <code>linux/amd64</code>, and <code>windows/amd64</code>.
 </p>
+</div>
 
+<p>
+竞争检测器可运行在 <code>darwin/amd64</code>、<code>linux/amd64</code> 和
+<code>windows/amd64</code> 上。
+</p>
+
+<div class="english">
 <h2 id="Runtime_Overheads">Runtime Overhead</h2>
+</div>
 
+<h2 id="运行时开销">运行时开销</h2>
+
+<div class="english">
 <p>
 The cost of race detection varies by program, but for a typical program, memory
 usage may increase by 5-10x and execution time by 2-20x.
+</p>
+</div>
+
+<p>
+竞争检测的代价因程序而异，但对于典型的程序，内存的使用会增加5到10倍，
+而执行时间会增加2到20倍。
 </p>
