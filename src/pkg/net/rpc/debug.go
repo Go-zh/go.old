@@ -9,6 +9,11 @@ package rpc
 	Lists services, their methods, and some statistics, still rudimentary.
 */
 
+/*
+	一些HTML介绍在http://machine:port/debug/rpc
+	列出服务，它的方法，和一些初步的统计。
+*/
+
 import (
 	"fmt"
 	"net/http"

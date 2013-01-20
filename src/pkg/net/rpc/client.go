@@ -17,6 +17,8 @@ import (
 
 // ServerError represents an error that has been returned from
 // the remote side of the RPC connection.
+
+// ServerError 代表从远程RPC连接另一端返回的错误
 type ServerError string
 
 func (e ServerError) Error() string {
@@ -26,20 +28,25 @@ func (e ServerError) Error() string {
 var ErrShutdown = errors.New("connection is shut down")
 
 // Call represents an active RPC.
+
+// Call 代表一个活跃的RPC
 type Call struct {
-	ServiceMethod string      // The name of the service and method to call.
-	Args          interface{} // The argument to the function (*struct).
-	Reply         interface{} // The reply from the function (*struct).
-	Error         error       // After completion, the error status.
-	Done          chan *Call  // Strobes when call is complete.
+	ServiceMethod string      // The name of the service and method to call.  // 要调用的服务名字和方法
+	Args          interface{} // The argument to the function (*struct).  // 方法的参数（*struct）
+	Reply         interface{} // The reply from the function (*struct).  // 方法的返回值(*struct)
+	Error         error       // After completion, the error status.  // 完成之后返回的error
+	Done          chan *Call  // Strobes when call is complete.  // 调用完成的信号
 }
 
 // Client represents an RPC Client.
 // There may be multiple outstanding Calls associated
 // with a single Client, and a Client may be used by
 // multiple goroutines simultaneously.
+
+// Client代表一个RPC客户端。
+// 一个客户端可以有多个调用，并且一个客户端可以被多个goroutine同时使用
 type Client struct {
-	mutex    sync.Mutex // protects pending, seq, request
+	mutex    sync.Mutex // protects pending, seq, request  // 保护pending,seq,request
 	sending  sync.Mutex
 	request  Request
 	seq      uint64
@@ -57,6 +64,10 @@ type Client struct {
 // connection. ReadResponseBody may be called with a nil
 // argument to force the body of the response to be read and then
 // discarded.
+
+// ClientCodec实现了客户端一方对RPC会话的写RPC请求，和读RPC回复功能。客户端调用WriterRequest
+// 往连接中写RPC请求，同时调用ReadResponseHeader和ReadResponseBody来读取RPC返回。当结束连接的时候
+// 客户端调用Close。ReadResponseBody可以使用一个nil参数，来读取RPC回复，然后丢弃信息。
 type ClientCodec interface {
 	WriteRequest(*Request, interface{}) error
 	ReadResponseHeader(*Response) error
@@ -224,12 +235,16 @@ func (c *gobClientCodec) Close() error {
 
 // DialHTTP connects to an HTTP RPC server at the specified network address
 // listening on the default HTTP RPC path.
+
+// DialHttp根据制定的网络地址，连接到一个HTTP RPC服务。并且在默认的HTTP RPC路径进行监听。
 func DialHTTP(network, address string) (*Client, error) {
 	return DialHTTPPath(network, address, DefaultRPCPath)
 }
 
 // DialHTTPPath connects to an HTTP RPC server
 // at the specified network address and path.
+
+// DialHTTPPATH根据制定的网络地址和路径连接到一个HTTP RPC服务。
 func DialHTTPPath(network, address, path string) (*Client, error) {
 	var err error
 	conn, err := net.Dial(network, address)
@@ -257,6 +272,8 @@ func DialHTTPPath(network, address, path string) (*Client, error) {
 }
 
 // Dial connects to an RPC server at the specified network address.
+
+// Dial根据指定的网络地址连接到一个RPC服务。
 func Dial(network, address string) (*Client, error) {
 	conn, err := net.Dial(network, address)
 	if err != nil {
@@ -280,6 +297,9 @@ func (client *Client) Close() error {
 // the invocation.  The done channel will signal when the call is complete by returning
 // the same Call object.  If done is nil, Go will allocate a new channel.
 // If non-nil, done must be buffered or Go will deliberately crash.
+
+// Go能异步调用功能。它返回Call结构来代表回调。当调用完成，返回相同的Call对象，done channel就会获取到
+// 信息。如果done是空的话，Go就会分配一个新的channel。如果非空的话，done必须缓冲起来，或者Go会立即崩溃。
 func (client *Client) Go(serviceMethod string, args interface{}, reply interface{}, done chan *Call) *Call {
 	call := new(Call)
 	call.ServiceMethod = serviceMethod
@@ -302,6 +322,8 @@ func (client *Client) Go(serviceMethod string, args interface{}, reply interface
 }
 
 // Call invokes the named function, waits for it to complete, and returns its error status.
+
+// Call调用方法的名字，等待它完成，然后返回成功或失败的error状态。
 func (client *Client) Call(serviceMethod string, args interface{}, reply interface{}) error {
 	call := <-client.Go(serviceMethod, args, reply, make(chan *Call, 1)).Done
 	return call.Error
