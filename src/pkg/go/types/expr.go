@@ -27,7 +27,7 @@ func (check *checker) collectParams(list *ast.FieldList, variadicOk bool) (param
 	if list == nil {
 		return
 	}
-	var last *ast.Object
+	var last *Var
 	for i, field := range list.List {
 		ftype := field.Type
 		if t, _ := ftype.(*ast.Ellipsis); t != nil {
@@ -45,24 +45,24 @@ func (check *checker) collectParams(list *ast.FieldList, variadicOk bool) (param
 		if len(field.Names) > 0 {
 			// named parameter
 			for _, name := range field.Names {
-				obj := name.Obj
-				obj.Type = typ
-				last = obj
-				params = append(params, &Var{obj.Name, typ})
+				par := check.lookup(name).(*Var)
+				par.Type = typ
+				last = par
+				copy := *par
+				params = append(params, &copy)
 			}
 		} else {
 			// anonymous parameter
-			obj := ast.NewObj(ast.Var, "")
-			obj.Type = typ
-			last = obj
-			params = append(params, &Var{obj.Name, typ})
+			par := &Var{Type: typ}
+			last = nil // not accessible inside function
+			params = append(params, par)
 		}
 	}
 	// For a variadic function, change the last parameter's object type
 	// from T to []T (this is the type used inside the function), but
 	// keep the params list unchanged (this is the externally visible type).
-	if isVariadic {
-		last.Type = &Slice{Elt: last.Type.(Type)}
+	if isVariadic && last != nil {
+		last.Type = &Slice{Elt: last.Type}
 	}
 	return
 }
@@ -84,7 +84,7 @@ func (check *checker) collectMethods(list *ast.FieldList) (methods []*Method) {
 				continue
 			}
 			for _, name := range f.Names {
-				methods = append(methods, &Method{name.Name, sig})
+				methods = append(methods, &Method{QualifiedName{check.pkg, name.Name}, sig})
 			}
 		} else {
 			// embedded interface
@@ -137,15 +137,15 @@ func (check *checker) collectFields(list *ast.FieldList, cycleOk bool) (fields [
 		if len(f.Names) > 0 {
 			// named fields
 			for _, name := range f.Names {
-				fields = append(fields, &Field{name.Name, typ, tag, false})
+				fields = append(fields, &Field{QualifiedName{check.pkg, name.Name}, typ, tag, false})
 			}
 		} else {
 			// anonymous field
 			switch t := deref(typ).(type) {
 			case *Basic:
-				fields = append(fields, &Field{t.Name, typ, tag, true})
+				fields = append(fields, &Field{QualifiedName{check.pkg, t.Name}, typ, tag, true})
 			case *NamedType:
-				fields = append(fields, &Field{t.Obj.Name, typ, tag, true})
+				fields = append(fields, &Field{QualifiedName{check.pkg, t.Obj.GetName()}, typ, tag, true})
 			default:
 				if typ != Typ[Invalid] {
 					check.invalidAST(f.Type.Pos(), "anonymous field type %s must be named", typ)
@@ -183,9 +183,6 @@ func (check *checker) unary(x *operand, op token.Token) {
 	case token.AND:
 		// spec: "As an exception to the addressability
 		// requirement x may also be a composite literal."
-		// (The spec doesn't specify whether the literal
-		// can be parenthesized or not, but all compilers
-		// accept parenthesized literals.)
 		if _, ok := unparen(x.expr).(*ast.CompositeLit); ok {
 			x.mode = variable
 		}
@@ -513,8 +510,9 @@ func (check *checker) index(index ast.Expr, length int64, iota int) int64 {
 // For details, see comment in go/parser/parser.go, method parseElement.
 func (check *checker) compositeLitKey(key ast.Expr) {
 	if ident, ok := key.(*ast.Ident); ok && ident.Obj == nil {
-		ident.Obj = check.pkgscope.Lookup(ident.Name)
-		if ident.Obj == nil {
+		if obj := check.pkg.Scope.Lookup(ident.Name); obj != nil {
+			check.register(ident, obj)
+		} else {
 			check.errorf(ident.Pos(), "undeclared name: %s", ident.Name)
 		}
 	}
@@ -588,7 +586,7 @@ func (check *checker) argument(sig *Signature, i int, arg ast.Expr, x *operand, 
 	var z operand
 	z.mode = variable
 	z.expr = nil // TODO(gri) can we do better here? (for good error messages)
-	z.typ = par.Type.(Type)
+	z.typ = par.Type
 
 	if arg != nil {
 		check.expr(x, arg, z.typ, -1)
@@ -660,21 +658,17 @@ func (check *checker) rawExpr(x *operand, e ast.Expr, hint Type, iota int, cycle
 			check.invalidOp(e.Pos(), "cannot use _ as value or type")
 			goto Error
 		}
-		obj := e.Obj
+		obj := check.lookup(e)
 		if obj == nil {
 			goto Error // error was reported before
 		}
-		if obj.Type == nil {
-			check.object(obj, cycleOk)
-		}
-		switch obj.Kind {
-		case ast.Bad:
-			goto Error // error was reported before
-		case ast.Pkg:
+		check.object(obj, cycleOk)
+		switch obj := obj.(type) {
+		case *Package:
 			check.errorf(e.Pos(), "use of package %s not in selector", obj.Name)
 			goto Error
-		case ast.Con:
-			if obj.Data == nil {
+		case *Const:
+			if obj.Val == nil {
 				goto Error // cycle detected
 			}
 			x.mode = constant
@@ -685,24 +679,24 @@ func (check *checker) rawExpr(x *operand, e ast.Expr, hint Type, iota int, cycle
 				}
 				x.val = int64(iota)
 			} else {
-				x.val = obj.Data
+				x.val = obj.Val
 			}
-		case ast.Typ:
+		case *TypeName:
 			x.mode = typexpr
-			if !cycleOk && underlying(obj.Type.(Type)) == nil {
-				check.errorf(obj.Pos(), "illegal cycle in declaration of %s", obj.Name)
+			if !cycleOk && underlying(obj.Type) == nil {
+				check.errorf(obj.spec.Pos(), "illegal cycle in declaration of %s", obj.Name)
 				x.expr = e
 				x.typ = Typ[Invalid]
 				return // don't goto Error - need x.mode == typexpr
 			}
-		case ast.Var:
+		case *Var:
 			x.mode = variable
-		case ast.Fun:
+		case *Func:
 			x.mode = value
 		default:
 			unreachable()
 		}
-		x.typ = obj.Type.(Type)
+		x.typ = obj.GetType()
 
 	case *ast.Ellipsis:
 		// ellipses are handled explicitly where they are legal
@@ -871,30 +865,35 @@ func (check *checker) rawExpr(x *operand, e ast.Expr, hint Type, iota int, cycle
 		// can only appear in qualified identifiers which are mapped to
 		// selector expressions.
 		if ident, ok := e.X.(*ast.Ident); ok {
-			if obj := ident.Obj; obj != nil && obj.Kind == ast.Pkg {
-				exp := obj.Data.(*ast.Scope).Lookup(sel)
+			if pkg, ok := check.lookup(ident).(*Package); ok {
+				exp := pkg.Scope.Lookup(sel)
 				if exp == nil {
 					check.errorf(e.Sel.Pos(), "cannot refer to unexported %s", sel)
 					goto Error
 				}
-				// simplified version of the code for *ast.Idents:
-				// imported objects are always fully initialized
-				switch exp.Kind {
-				case ast.Con:
-					assert(exp.Data != nil)
+				check.register(e.Sel, exp)
+				// Simplified version of the code for *ast.Idents:
+				// - imported packages use types.Scope and types.Objects
+				// - imported objects are always fully initialized
+				switch exp := exp.(type) {
+				case *Const:
+					assert(exp.Val != nil)
 					x.mode = constant
-					x.val = exp.Data
-				case ast.Typ:
+					x.typ = exp.Type
+					x.val = exp.Val
+				case *TypeName:
 					x.mode = typexpr
-				case ast.Var:
+					x.typ = exp.Type
+				case *Var:
 					x.mode = variable
-				case ast.Fun:
+					x.typ = exp.Type
+				case *Func:
 					x.mode = value
+					x.typ = exp.Type
 				default:
 					unreachable()
 				}
 				x.expr = e
-				x.typ = exp.Type.(Type)
 				return
 			}
 		}
@@ -903,7 +902,7 @@ func (check *checker) rawExpr(x *operand, e ast.Expr, hint Type, iota int, cycle
 		if x.mode == invalid {
 			goto Error
 		}
-		mode, typ := lookupField(x.typ, sel)
+		mode, typ := lookupField(x.typ, QualifiedName{check.pkg, sel})
 		if mode == invalid {
 			check.invalidOp(e.Pos(), "%s has no single field or method %s", x, sel)
 			goto Error
@@ -921,7 +920,7 @@ func (check *checker) rawExpr(x *operand, e ast.Expr, hint Type, iota int, cycle
 			// pointer vs non-pointer receivers => typechecker is too lenient
 			x.mode = value
 			x.typ = &Signature{
-				Params:     append([]*Var{{"", x.typ}}, sig.Params...),
+				Params:     append([]*Var{{Type: x.typ}}, sig.Params...),
 				Results:    sig.Results,
 				IsVariadic: sig.IsVariadic,
 			}
@@ -1138,7 +1137,7 @@ func (check *checker) rawExpr(x *operand, e ast.Expr, hint Type, iota int, cycle
 					for i, obj := range t.Values {
 						x.mode = value
 						x.expr = nil // TODO(gri) can we do better here? (for good error messages)
-						x.typ = obj.Type.(Type)
+						x.typ = obj.Type
 						check.argument(sig, i, nil, x, passSlice && i+1 == n)
 					}
 				} else {
@@ -1172,7 +1171,7 @@ func (check *checker) rawExpr(x *operand, e ast.Expr, hint Type, iota int, cycle
 				x.mode = novalue
 			case 1:
 				x.mode = value
-				x.typ = sig.Results[0].Type.(Type)
+				x.typ = sig.Results[0].Type
 			default:
 				x.mode = value
 				x.typ = &Result{Values: sig.Results}

@@ -649,6 +649,16 @@ func (b *builder) do(root *action) {
 	wg.Wait()
 }
 
+// hasString reports whether s appears in the list of strings.
+func hasString(strings []string, s string) bool {
+	for _, t := range strings {
+		if s == t {
+			return true
+		}
+	}
+	return false
+}
+
 // build is the action for building a single package or command.
 func (b *builder) build(a *action) (err error) {
 	defer func() {
@@ -667,6 +677,11 @@ func (b *builder) build(a *action) (err error) {
 
 	if buildV {
 		fmt.Fprintf(os.Stderr, "%s\n", a.p.ImportPath)
+	}
+
+	if a.p.Standard && a.p.ImportPath == "runtime" && buildContext.Compiler == "gc" &&
+		!hasString(a.p.HFiles, "zasm_"+buildContext.GOOS+"_"+buildContext.GOARCH+".h") {
+		return fmt.Errorf("%s/%s must be bootstrapped using make.bash", buildContext.GOOS, buildContext.GOARCH)
 	}
 
 	// Make build directory.
@@ -1404,6 +1419,7 @@ func (gccgcToolchain) gc(b *builder, p *Package, obj string, importArgs []string
 	out := p.Name + ".o"
 	ofile = obj + out
 	gcargs := []string{"-g"}
+	gcargs = append(gcargs, b.gccArchArgs()...)
 	if pkgpath := gccgoPkgpath(p); pkgpath != "" {
 		gcargs = append(gcargs, "-fgo-pkgpath="+pkgpath)
 	}
@@ -1423,6 +1439,7 @@ func (gccgcToolchain) asm(b *builder, p *Package, obj, ofile, sfile string) erro
 	if pkgpath := gccgoCleanPkgpath(p); pkgpath != "" {
 		defs = append(defs, `-D`, `GOPKGPATH="`+pkgpath+`"`)
 	}
+	defs = append(defs, b.gccArchArgs()...)
 	return b.run(p.Dir, p.ImportPath, "gccgo", "-I", obj, "-o", ofile, defs, sfile)
 }
 
@@ -1446,7 +1463,7 @@ func (tools gccgcToolchain) ld(b *builder, p *Package, out string, allactions []
 	// and all LDFLAGS from cgo dependencies.
 	afiles := make(map[*Package]string)
 	sfiles := make(map[*Package][]string)
-	ldflags := []string{}
+	ldflags := b.gccArchArgs()
 	cgoldflags := []string{}
 	usesCgo := false
 	for _, a := range allactions {
@@ -1487,6 +1504,7 @@ func (gccgcToolchain) cc(b *builder, p *Package, objdir, ofile, cfile string) er
 	inc := filepath.Join(goroot, "pkg", fmt.Sprintf("%s_%s", goos, goarch))
 	cfile = mkAbs(p.Dir, cfile)
 	defs := []string{"-D", "GOOS_" + goos, "-D", "GOARCH_" + goarch}
+	defs = append(defs, b.gccArchArgs()...)
 	if pkgpath := gccgoCleanPkgpath(p); pkgpath != "" {
 		defs = append(defs, `-D`, `GOPKGPATH="`+pkgpath+`"`)
 	}
@@ -1547,14 +1565,7 @@ func (b *builder) gccCmd(objdir string) []string {
 	if goos != "windows" {
 		a = append(a, "-fPIC")
 	}
-	switch archChar {
-	case "8":
-		a = append(a, "-m32")
-	case "6":
-		a = append(a, "-m64")
-	case "5":
-		a = append(a, "-marm") // not thumb
-	}
+	a = append(a, b.gccArchArgs()...)
 	// gcc-4.5 and beyond require explicit "-pthread" flag
 	// for multithreading with pthread library.
 	if buildContext.CgoEnabled {
@@ -1574,6 +1585,19 @@ func (b *builder) gccCmd(objdir string) []string {
 	}
 
 	return a
+}
+
+// gccArchArgs returns arguments to pass to gcc based on the architecture.
+func (b *builder) gccArchArgs() []string {
+	switch archChar {
+	case "8":
+		return []string{"-m32"}
+	case "6":
+		return []string{"-m64"}
+	case "5":
+		return []string{"-marm"} // not thumb
+	}
+	return nil
 }
 
 func envList(key string) []string {

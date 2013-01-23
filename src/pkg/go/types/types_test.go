@@ -15,12 +15,13 @@ import (
 
 const filename = "<src>"
 
-func makePkg(t *testing.T, src string) (*ast.Package, error) {
+func makePkg(t *testing.T, src string) (*Package, error) {
 	file, err := parser.ParseFile(fset, filename, src, parser.DeclarationErrors)
 	if err != nil {
 		return nil, err
 	}
-	return Check(fset, map[string]*ast.File{filename: file})
+	pkg, err := Check(fset, []*ast.File{file})
+	return pkg, err
 }
 
 type testEntry struct {
@@ -109,7 +110,7 @@ func TestTypes(t *testing.T) {
 			t.Errorf("%s: %s", src, err)
 			continue
 		}
-		typ := underlying(pkg.Scope.Lookup("T").Type.(Type))
+		typ := underlying(pkg.Scope.Lookup("T").GetType())
 		str := typeString(typ)
 		if str != test.str {
 			t.Errorf("%s: got %s, want %s", test.src, str, test.str)
@@ -153,14 +154,14 @@ var testExprs = []testEntry{
 func TestExprs(t *testing.T) {
 	for _, test := range testExprs {
 		src := "package p; var _ = " + test.src + "; var (x, y int; s []string; f func(int, float32) int; i interface{}; t interface { foo() })"
-		pkg, err := makePkg(t, src)
+		file, err := parser.ParseFile(fset, filename, src, parser.DeclarationErrors)
 		if err != nil {
 			t.Errorf("%s: %s", src, err)
 			continue
 		}
 		// TODO(gri) writing the code below w/o the decl variable will
 		//           cause a 386 compiler error (out of fixed registers)
-		decl := pkg.Files[filename].Decls[0].(*ast.GenDecl)
+		decl := file.Decls[0].(*ast.GenDecl)
 		expr := decl.Specs[0].(*ast.ValueSpec).Values[0]
 		str := exprString(expr)
 		if str != test.str {

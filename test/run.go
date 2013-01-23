@@ -30,10 +30,11 @@ import (
 )
 
 var (
-	verbose     = flag.Bool("v", false, "verbose. if set, parallelism is set to 1.")
-	numParallel = flag.Int("n", runtime.NumCPU(), "number of parallel tests to run")
-	summary     = flag.Bool("summary", false, "show summary of results")
-	showSkips   = flag.Bool("show_skips", false, "show skipped tests")
+	verbose        = flag.Bool("v", false, "verbose. if set, parallelism is set to 1.")
+	numParallel    = flag.Int("n", runtime.NumCPU(), "number of parallel tests to run")
+	summary        = flag.Bool("summary", false, "show summary of results")
+	showSkips      = flag.Bool("show_skips", false, "show skipped tests")
+	runoutputLimit = flag.Int("l", defaultRunOutputLimit(), "number of parallel runoutput tests to run")
 )
 
 var (
@@ -53,6 +54,10 @@ var (
 	// toRun is the channel of tests to run.
 	// It is nil until the first test is started.
 	toRun chan *test
+
+	// rungatec controls the max number of runoutput tests
+	// executed in parallel as they can each consume a lot of memory.
+	rungatec chan bool
 )
 
 // maxTests is an upper bound on the total number of tests.
@@ -68,6 +73,7 @@ func main() {
 	}
 
 	ratec = make(chan bool, *numParallel)
+	rungatec = make(chan bool, *runoutputLimit)
 	var err error
 	letter, err = build.ArchChar(build.Default.GOARCH)
 	check(err)
@@ -292,7 +298,7 @@ func goDirPackages(longdir string) ([][]string, error) {
 	}
 	return pkgs, nil
 }
-		
+
 // run runs a test.
 func (t *test) run() {
 	defer close(t.donec)
@@ -459,31 +465,32 @@ func (t *test) run() {
 		// Compile all files in the directory in lexicographic order.
 		// then link as if the last file is the main package and run it
 		longdir := filepath.Join(cwd, t.goDirName())
-		files, err := goDirFiles(longdir)
+		pkgs, err := goDirPackages(longdir)
 		if err != nil {
 			t.err = err
 			return
 		}
-		var gofile os.FileInfo
-		for _, gofile = range files {
-			_, err := compileInDir(runcmd, longdir, gofile.Name())
+		for i, gofiles := range pkgs {
+			_, err := compileInDir(runcmd, longdir, gofiles...)
 			if err != nil {
 				t.err = err
 				return
 			}
-		}
-		err = linkFile(runcmd, gofile.Name())
-		if err != nil {
-			t.err = err
-			return
-		}
-		out, err := runcmd(append([]string{filepath.Join(t.tempDir, "a.exe")}, args...)...)
-		if err != nil {
-			t.err = err
-			return
-		}
-		if strings.Replace(string(out), "\r\n", "\n", -1) != t.expectedOutput() {
-			t.err = fmt.Errorf("incorrect output\n%s", out)
+			if i == len(pkgs)-1 {
+				err = linkFile(runcmd, gofiles[0])
+				if err != nil {
+					t.err = err
+					return
+				}
+				out, err := runcmd(append([]string{filepath.Join(t.tempDir, "a.exe")}, args...)...)
+				if err != nil {
+					t.err = err
+					return
+				}
+				if strings.Replace(string(out), "\r\n", "\n", -1) != t.expectedOutput() {
+					t.err = fmt.Errorf("incorrect output\n%s", out)
+				}
+			}
 		}
 
 	case "build":
@@ -503,14 +510,17 @@ func (t *test) run() {
 		}
 
 	case "runoutput":
+		rungatec <- true
+		defer func() {
+			<-rungatec
+		}()
 		useTmp = false
 		out, err := runcmd(append([]string{"go", "run", t.goFileName()}, args...)...)
 		if err != nil {
 			t.err = err
 		}
 		tfile := filepath.Join(t.tempDir, "tmp__.go")
-		err = ioutil.WriteFile(tfile, out, 0666)
-		if err != nil {
+		if err := ioutil.WriteFile(tfile, out, 0666); err != nil {
 			t.err = fmt.Errorf("write tempfile:%s", err)
 			return
 		}
@@ -603,7 +613,7 @@ func (t *test) errorCheck(outStr string, fullshort ...string) (err error) {
 			out[i] = strings.Replace(out[i], full, short, -1)
 		}
 	}
-	
+
 	var want []wantedError
 	for j := 0; j < len(fullshort); j += 2 {
 		full, short := fullshort[j], fullshort[j+1]
@@ -723,37 +733,26 @@ func (t *test) wantedErrors(file, short string) (errs []wantedError) {
 
 var skipOkay = map[string]bool{
 	"linkx.go":               true,
-	"rotate.go":              true,
 	"sigchld.go":             true,
 	"sinit.go":               true,
-	"dwarf/main.go":          true,
-	"dwarf/z1.go":            true,
-	"dwarf/z10.go":           true,
-	"dwarf/z11.go":           true,
-	"dwarf/z12.go":           true,
-	"dwarf/z13.go":           true,
-	"dwarf/z14.go":           true,
-	"dwarf/z15.go":           true,
-	"dwarf/z16.go":           true,
-	"dwarf/z17.go":           true,
-	"dwarf/z18.go":           true,
-	"dwarf/z19.go":           true,
-	"dwarf/z2.go":            true,
-	"dwarf/z20.go":           true,
-	"dwarf/z3.go":            true,
-	"dwarf/z4.go":            true,
-	"dwarf/z5.go":            true,
-	"dwarf/z6.go":            true,
-	"dwarf/z7.go":            true,
-	"dwarf/z8.go":            true,
-	"dwarf/z9.go":            true,
 	"fixedbugs/bug248.go":    true, // combines errorcheckdir and rundir in the same dir.
 	"fixedbugs/bug302.go":    true, // tests both .$O and .a imports.
-	"fixedbugs/bug313.go":    true, // errorcheckdir with failures in the middle.
 	"fixedbugs/bug345.go":    true, // needs the appropriate flags in gc invocation.
 	"fixedbugs/bug369.go":    true, // needs compiler flags.
 	"fixedbugs/bug385_32.go": true, // arch-specific errors.
 	"fixedbugs/bug385_64.go": true, // arch-specific errors.
 	"fixedbugs/bug429.go":    true,
 	"bugs/bug395.go":         true,
+}
+
+// defaultRunOutputLimit returns the number of runoutput tests that
+// can be executed in parallel.
+func defaultRunOutputLimit() int {
+	const maxArmCPU = 2
+
+	cpu := runtime.NumCPU()
+	if runtime.GOARCH == "arm" && cpu > maxArmCPU {
+		cpu = maxArmCPU
+	}
+	return cpu
 }

@@ -28,8 +28,8 @@ var (
 	extraBytes      = []byte("%!(EXTRA ")
 	irparenBytes    = []byte("i)")
 	bytesBytes      = []byte("[]byte{")
-	widthBytes      = []byte("%!(BADWIDTH)")
-	precBytes       = []byte("%!(BADPREC)")
+	badWidthBytes   = []byte("%!(BADWIDTH)")
+	badPrecBytes    = []byte("%!(BADPREC)")
 	noVerbBytes     = []byte("%!(NOVERB)")
 )
 
@@ -180,9 +180,9 @@ func newCache(f func() interface{}) *cache {
 
 var ppFree = newCache(func() interface{} { return new(pp) })
 
-// Allocate a new pp struct or grab a cached one.
+// newPrinter allocates a new pp struct or grab a cached one.
 
-// 分配一个新的，或抓取一个已缓存的 pp 结构体。
+// newPrinter 分配一个新的，或抓取一个已缓存的 pp 结构体。
 func newPrinter() *pp {
 	p := ppFree.get().(*pp)
 	p.panicking = false
@@ -191,9 +191,9 @@ func newPrinter() *pp {
 	return p
 }
 
-// Save used pp structs in ppFree; avoids an allocation per invocation.
+// free saves used pp structs in ppFree; avoids an allocation per invocation.
 
-// 将已使用的 pp 结构体保存到 ppFree 中，以此避免为每个请求都分配。
+// free 将已使用的 pp 结构体保存到 ppFree 中，以此避免为每个请求都分配。
 func (p *pp) free() {
 	// Don't hold on to pp structs with large buffers.
 	// 不保存拥有大缓存的 pp 结构体。
@@ -369,7 +369,7 @@ func Sprintln(a ...interface{}) string {
 	return s
 }
 
-// Get the i'th arg of the struct value.
+// getField gets the i'th arg of the struct value.
 // If the arg itself is an interface, return a value for
 // the thing inside the interface, not the interface itself.
 
@@ -383,12 +383,9 @@ func getField(v reflect.Value, i int) reflect.Value {
 	return val
 }
 
-<<<<<<< local
-// Convert ASCII to integer.  n is 0 (and got is false) if no number present.
-// 将 ASCII 转换为整数。若不存在数字，则 num 为 0（且isnum 为false）。
-=======
 // parsenum converts ASCII to integer.  num is 0 (and isnum is false) if no number present.
->>>>>>> other
+
+// parsenum 将 ASCII 转换为整数。若不存在数字，则 num 为 0（且isnum 为false）。
 func parsenum(s string, start, end int) (num int, isnum bool, newi int) {
 	if start >= end {
 		return 0, false, end
@@ -1189,7 +1186,7 @@ func (p *pp) doPrintf(format string, a []interface{}) {
 		if i < end && format[i] == '*' {
 			p.fmt.wid, p.fmt.widPresent, i, fieldnum = intFromArg(a, end, i, fieldnum)
 			if !p.fmt.widPresent {
-				p.buf.Write(widthBytes)
+				p.buf.Write(badWidthBytes)
 			}
 		} else {
 			p.fmt.wid, p.fmt.widPresent, i = parsenum(format, i, end)
@@ -1200,7 +1197,7 @@ func (p *pp) doPrintf(format string, a []interface{}) {
 			if format[i+1] == '*' {
 				p.fmt.prec, p.fmt.precPresent, i, fieldnum = intFromArg(a, end, i+1, fieldnum)
 				if !p.fmt.precPresent {
-					p.buf.Write(precBytes)
+					p.buf.Write(badPrecBytes)
 				}
 			} else {
 				p.fmt.prec, p.fmt.precPresent, i = parsenum(format, i+1, end)
@@ -1257,12 +1254,8 @@ func (p *pp) doPrint(a []interface{}, addspace, addnewline bool) {
 	prevString := false
 	for fieldnum := 0; fieldnum < len(a); fieldnum++ {
 		p.fmt.clearflags()
-<<<<<<< local
-		// always add spaces if we're doing println
-		// 若我们执行 Println 就总是添加空格
-=======
 		// always add spaces if we're doing Println
->>>>>>> other
+		// 若我们执行 Println 就总是添加空格
 		field := a[fieldnum]
 		if fieldnum > 0 {
 			isString := field != nil && reflect.TypeOf(field).Kind() == reflect.String

@@ -418,7 +418,7 @@ type: float64
 You might be wondering where the interface is here, since the program looks
 like it's passing the <code>float64</code> variable <code>x</code>, not an
 interface value, to <code>reflect.TypeOf</code>. But it's there; as
-<a href="/pkg/reflect/#Type.TypeOf">godoc reports</a>, the signature of
+<a href="/pkg/reflect/#TypeOf">godoc reports</a>, the signature of
 <code>reflect.TypeOf</code> includes an empty interface:
 </p>
 </div>
@@ -426,7 +426,7 @@ interface value, to <code>reflect.TypeOf</code>. But it's there; as
 <p>
 你可能会问接口在哪，因为该程序看起来只是向 <code>reflect.TypeOf</code> 传递了一个
 <code>float64</code> 类型的变量 <code>x</code>，而不是一个接口值。但它就在那，
-正如 <a href="/pkg/reflect/#Type.TypeOf">godoc所显示的那样</a>，<code>reflect.TypeOf</code>
+正如 <a href="/pkg/reflect/#TypeOf">godoc所显示的那样</a>，<code>reflect.TypeOf</code>
 的签名包含了一个空接口：
 </p>
 

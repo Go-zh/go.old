@@ -500,6 +500,8 @@ The special sentence &ldquo;Fixes issue 159.&rdquo; associates
 the change with issue 159 in the <a href="http://code.google.com/p/go/issues/list">Go issue tracker</a>.
 When this change is eventually submitted, the issue
 tracker will automatically mark the issue as fixed.
+(These conventions are described in detail by the
+<a href="http://code.google.com/p/support/wiki/IssueTracker#Integration_with_version_control">Google Project Hosting Issue Tracker documentation</a>.)
 </p>
 </div>
 
@@ -547,6 +549,18 @@ to add <code>somefile</code> to CL 99999, and use <code>hg file -d 99999 somefil
 作为选择，你也可以使用 <code>hg file 99999 somefile</code> 将 <code>somefile</code> 添加到CL
 99999中，或使用 <code>hg file -d 99999 somefile</code> 将 <code>somefile</code>
 从该CL中移除。
+</p>
+
+<div class="english">
+<p>
+Creating the change uploads a copy of the diff to the code review server, but it does not
+notify anyone about it. To do that, you need to run <code>hg mail</code> (see below).
+</p>
+</div>
+
+<p>
+创建的更改会将该diff的副本上传至代码审核服务器，但它不会通知任何人。要通知他人，
+你需要运行 <code>hg mail</code>（见下）。
 </p>
 
 <div class="english">

@@ -96,7 +96,7 @@ type SI struct {
 	I interface{}
 }
 
-// A type with a String method with pointer receiver for testing %p
+// P is a type with a String method with pointer receiver for testing %p.
 
 // P 为用于测试 %p 的类型，该类型有带指针接收者的 String 方法
 type P int
@@ -712,9 +712,10 @@ func TestStructPrinter(t *testing.T) {
 	}
 }
 
-// Check map printing using substrings so we don't depend on the print order.
+// presentInMap checks map printing using substrings so we don't depend on the
+// print order.
 
-// 用子字符串来检查映射的打印，因此我们无需依赖打印顺序。
+// presentInMap 用子字符串来检查映射的打印，因此我们无需依赖打印顺序。
 func presentInMap(s string, a []string, t *testing.T) {
 	for i := 0; i < len(a); i++ {
 		loc := strings.Index(s, a[i])
@@ -756,10 +757,10 @@ func TestEmptyMap(t *testing.T) {
 	}
 }
 
-// Check that Sprint (and hence Print, Fprint) puts spaces in the right places,
-// that is, between arg pairs in which neither is a string.
+// TestBlank checks that Sprint (and hence Print, Fprint) puts spaces in the
+// right places, that is, between arg pairs in which neither is a string.
 
-// 检查 Sprint（同时也就检查了 Print 和 Fprint）是否将空格放到了正确的位置，
+// TestBlank 检查 Sprint（同时也就检查了 Print 和 Fprint）是否将空格放到了正确的位置，
 // 即，除字符串外的实参对之间。
 func TestBlank(t *testing.T) {
 	got := Sprint("<", 1, ">:", 1, 2, 3, "!")
@@ -769,10 +770,10 @@ func TestBlank(t *testing.T) {
 	}
 }
 
-// Check that Sprintln (and hence Println, Fprintln) puts spaces in the right places,
-// that is, between all arg pairs.
+// TestBlankln checks that Sprintln (and hence Println, Fprintln) puts spaces in
+// the right places, that is, between all arg pairs.
 
-// 检查 Sprintln（同时也就检查了 Println 和 Fprintln）是否将空格放到了正确的位置，
+// TestBlankln 检查 Sprintln（同时也就检查了 Println 和 Fprintln）是否将空格放到了正确的位置，
 // 即，所有的实参对之间。
 func TestBlankln(t *testing.T) {
 	got := Sprintln("<", 1, ">:", 1, 2, 3, "!")
@@ -782,9 +783,9 @@ func TestBlankln(t *testing.T) {
 	}
 }
 
-// Check Formatter with Sprint, Sprintln, Sprintf
+// TestFormatterPrintln checks Formatter with Sprint, Sprintln, Sprintf.
 
-// 用 Sprint、Sprintln 和 Sprintf 检查 Formatter
+// TestFormatterPrintln 用 Sprint、Sprintln 和 Sprintf 检查 Formatter。
 func TestFormatterPrintln(t *testing.T) {
 	f := F(1)
 	expect := "<v=F(1)>\n"
@@ -834,9 +835,9 @@ func TestWidthAndPrecision(t *testing.T) {
 	}
 }
 
-// A type that panics in String.
+// Panic is a type that panics in String.
 
-// 在 String 中恐慌的类型。
+// Panic 为在 String 中引起panic的类型。
 type Panic struct {
 	message interface{}
 }
@@ -855,9 +856,9 @@ func (p Panic) String() string {
 	panic(p.message)
 }
 
-// A type that panics in Format.
+// PanicF is a type that panics in Format.
 
-// 在 Format 中引发恐慌的类型。
+// PanicF 为在 Format 中引发panic的类型。
 type PanicF struct {
 	message interface{}
 }
@@ -897,9 +898,9 @@ func TestPanics(t *testing.T) {
 	}
 }
 
-// Test that erroneous String routine doesn't cause fatal recursion.
+// recurCount tests that erroneous String routine doesn't cause fatal recursion.
 
-// 测试错误的 String 程序是否会产生致命的递归。
+// recurCount 测试错误的 String 程序是否会产生致命的递归。
 var recurCount = 0
 
 type Recur struct {

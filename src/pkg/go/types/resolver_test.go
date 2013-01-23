@@ -5,16 +5,15 @@
 package types
 
 import (
-	"fmt"
 	"go/ast"
 	"go/parser"
-	"go/scanner"
 	"go/token"
 	"testing"
 )
 
 var sources = []string{
-	`package p
+	`
+	package p
 	import "fmt"
 	import "math"
 	const pi = math.Pi
@@ -23,69 +22,51 @@ var sources = []string{
 	}
 	var Println = fmt.Println
 	`,
-	`package p
+	`
+	package p
 	import "fmt"
 	func f() string {
+		_ = "foo"
 		return fmt.Sprintf("%d", g())
 	}
+	func g() (x int) { return }
 	`,
-	`package p
+	`
+	package p
 	import . "go/parser"
-	func g() Mode { return ImportsOnly }`,
+	import "sync"
+	func g() Mode { return ImportsOnly }
+	var _, x int = 1, 2
+	func init() {}
+	type T struct{ sync.Mutex; a, b, c int}
+	type I interface{ m() }
+	var _ = T{a: 1, b: 2, c: 3}
+	func (_ T) m() {}
+	`,
 }
 
 var pkgnames = []string{
 	"fmt",
-	"go/parser",
 	"math",
-}
-
-// ResolveQualifiedIdents resolves the selectors of qualified
-// identifiers by associating the correct ast.Object with them.
-// TODO(gri): Eventually, this functionality should be subsumed
-//            by Check.
-//
-func ResolveQualifiedIdents(fset *token.FileSet, pkg *ast.Package) error {
-	var errors scanner.ErrorList
-
-	findObj := func(pkg *ast.Object, name *ast.Ident) *ast.Object {
-		scope := pkg.Data.(*ast.Scope)
-		obj := scope.Lookup(name.Name)
-		if obj == nil {
-			errors.Add(fset.Position(name.Pos()), fmt.Sprintf("no %s in package %s", name.Name, pkg.Name))
-		}
-		return obj
-	}
-
-	ast.Inspect(pkg, func(n ast.Node) bool {
-		if s, ok := n.(*ast.SelectorExpr); ok {
-			if x, ok := s.X.(*ast.Ident); ok && x.Obj != nil && x.Obj.Kind == ast.Pkg {
-				// find selector in respective package
-				s.Sel.Obj = findObj(x.Obj, s.Sel)
-			}
-			return false
-		}
-		return true
-	})
-
-	return errors.Err()
 }
 
 func TestResolveQualifiedIdents(t *testing.T) {
 	// parse package files
 	fset := token.NewFileSet()
-	files := make(map[string]*ast.File)
-	for i, src := range sources {
-		filename := fmt.Sprintf("file%d", i)
-		f, err := parser.ParseFile(fset, filename, src, parser.DeclarationErrors)
+	var files []*ast.File
+	for _, src := range sources {
+		f, err := parser.ParseFile(fset, "", src, parser.DeclarationErrors)
 		if err != nil {
 			t.Fatal(err)
 		}
-		files[filename] = f
+		files = append(files, f)
 	}
 
-	// resolve package AST
-	pkg, err := ast.NewPackage(fset, files, GcImport, Universe)
+	// resolve and type-check package AST
+	idents := make(map[*ast.Ident]Object)
+	ctxt := Default
+	ctxt.Ident = func(id *ast.Ident, obj Object) { idents[id] = obj }
+	pkg, err := ctxt.Check(fset, files)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,33 +79,89 @@ func TestResolveQualifiedIdents(t *testing.T) {
 	}
 
 	// check that there are no top-level unresolved identifiers
-	for _, f := range pkg.Files {
+	for _, f := range files {
 		for _, x := range f.Unresolved {
 			t.Errorf("%s: unresolved global identifier %s", fset.Position(x.Pos()), x.Name)
 		}
 	}
 
-	// resolve qualified identifiers
-	if err := ResolveQualifiedIdents(fset, pkg); err != nil {
-		t.Error(err)
-	}
-
 	// check that qualified identifiers are resolved
-	ast.Inspect(pkg, func(n ast.Node) bool {
-		if s, ok := n.(*ast.SelectorExpr); ok {
-			if x, ok := s.X.(*ast.Ident); ok {
-				if x.Obj == nil {
-					t.Errorf("%s: unresolved qualified identifier %s", fset.Position(x.Pos()), x.Name)
-					return false
-				}
-				if x.Obj.Kind == ast.Pkg && s.Sel != nil && s.Sel.Obj == nil {
-					t.Errorf("%s: unresolved selector %s", fset.Position(s.Sel.Pos()), s.Sel.Name)
+	for _, f := range files {
+		ast.Inspect(f, func(n ast.Node) bool {
+			if s, ok := n.(*ast.SelectorExpr); ok {
+				if x, ok := s.X.(*ast.Ident); ok {
+					obj := idents[x]
+					if obj == nil {
+						t.Errorf("%s: unresolved qualified identifier %s", fset.Position(x.Pos()), x.Name)
+						return false
+					}
+					if _, ok := obj.(*Package); ok && idents[s.Sel] == nil {
+						t.Errorf("%s: unresolved selector %s", fset.Position(s.Sel.Pos()), s.Sel.Name)
+						return false
+					}
 					return false
 				}
 				return false
 			}
-			return false
+			return true
+		})
+	}
+
+	// Currently, the Check API doesn't call Ident for fields, methods, and composite literal keys.
+	// Introduce them artifically so that we can run the check below.
+	for _, f := range files {
+		ast.Inspect(f, func(n ast.Node) bool {
+			switch x := n.(type) {
+			case *ast.StructType:
+				for _, list := range x.Fields.List {
+					for _, f := range list.Names {
+						assert(idents[f] == nil)
+						idents[f] = &Var{Name: f.Name}
+					}
+				}
+			case *ast.InterfaceType:
+				for _, list := range x.Methods.List {
+					for _, f := range list.Names {
+						assert(idents[f] == nil)
+						idents[f] = &Func{Name: f.Name}
+					}
+				}
+			case *ast.CompositeLit:
+				for _, e := range x.Elts {
+					if kv, ok := e.(*ast.KeyValueExpr); ok {
+						if k, ok := kv.Key.(*ast.Ident); ok {
+							assert(idents[k] == nil)
+							idents[k] = &Var{Name: k.Name}
+						}
+					}
+				}
+			}
+			return true
+		})
+	}
+
+	// check that each identifier in the source is enumerated by the Context.Ident callback
+	for _, f := range files {
+		ast.Inspect(f, func(n ast.Node) bool {
+			if x, ok := n.(*ast.Ident); ok && x.Name != "_" && x.Name != "." {
+				obj := idents[x]
+				if obj == nil {
+					t.Errorf("%s: unresolved identifier %s", fset.Position(x.Pos()), x.Name)
+				} else {
+					delete(idents, x)
+				}
+				return false
+			}
+			return true
+		})
+	}
+
+	// TODO(gri) enable code below
+	// At the moment, the type checker introduces artifical identifiers which are not
+	// present in the source. Once it doesn't do that anymore, enable the checks below.
+	/*
+		for x := range idents {
+			t.Errorf("%s: identifier %s not present in source", fset.Position(x.Pos()), x.Name)
 		}
-		return true
-	})
+	*/
 }

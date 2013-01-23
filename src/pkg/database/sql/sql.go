@@ -459,21 +459,14 @@ func (db *DB) exec(query string, args []interface{}) (res Result, err error) {
 	}
 	defer sti.Close()
 
-	dargs, err := driverArgs(sti, args)
-	if err != nil {
-		return nil, err
-	}
-
-	resi, err := sti.Exec(dargs)
-	if err != nil {
-		return nil, err
-	}
-	return result{resi}, nil
+	return resultFromStatement(sti, args...)
 }
 
 // Query executes a query that returns rows, typically a SELECT.
+// The args are for any placeholder parameters in the query.
 
 // Query执行了一个有返回行的查询操作，比如SELECT。
+// args 形参为该查询中的任何占位符。
 func (db *DB) Query(query string, args ...interface{}) (*Rows, error) {
 	stmt, err := db.Prepare(query)
 	if err != nil {
@@ -547,7 +540,7 @@ func (db *DB) Driver() driver.Driver {
 // transaction fail with ErrTxDone.
 
 // Tx代表运行中的数据库事务。
-// 
+//
 // 必须调用Commit或者Rollback来结束事务。
 //
 // 在调用Commit或者Rollback之后，所有后续对事务的操作就会返回ErrTxDone。
@@ -742,16 +735,7 @@ func (tx *Tx) Exec(query string, args ...interface{}) (Result, error) {
 	}
 	defer sti.Close()
 
-	dargs, err := driverArgs(sti, args)
-	if err != nil {
-		return nil, err
-	}
-
-	resi, err := sti.Exec(dargs)
-	if err != nil {
-		return nil, err
-	}
-	return result{resi}, nil
+	return resultFromStatement(sti, args...)
 }
 
 // Query executes a query that returns rows, typically a SELECT.
@@ -834,6 +818,10 @@ func (s *Stmt) Exec(args ...interface{}) (Result, error) {
 	}
 	defer releaseConn(nil)
 
+	return resultFromStatement(si, args...)
+}
+
+func resultFromStatement(si driver.Stmt, args ...interface{}) (Result, error) {
 	// -1 means the driver doesn't know how to count the number of
 	// placeholders, so we won't sanity check input here and instead let the
 	// driver deal with errors.

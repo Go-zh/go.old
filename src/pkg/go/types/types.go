@@ -71,7 +71,6 @@ const (
 
 // A Basic represents a basic type.
 type Basic struct {
-	implementsType
 	Kind BasicKind
 	Info BasicInfo
 	Size int64
@@ -80,20 +79,37 @@ type Basic struct {
 
 // An Array represents an array type [Len]Elt.
 type Array struct {
-	implementsType
 	Len int64
 	Elt Type
 }
 
 // A Slice represents a slice type []Elt.
 type Slice struct {
-	implementsType
 	Elt Type
+}
+
+// A QualifiedName is a name qualified with the package that declared the name.
+type QualifiedName struct {
+	Pkg  *Package // nil only for predeclared error.Error
+	Name string   // unqualified type name for anonymous fields
+}
+
+// IsSame reports whether p and q are the same.
+func (p QualifiedName) IsSame(q QualifiedName) bool {
+	// spec:
+	// "Two identifiers are different if they are spelled differently,
+	// or if they appear in different packages and are not exported.
+	// Otherwise, they are the same."
+	if p.Name != q.Name {
+		return false
+	}
+	// p.Name == q.Name
+	return ast.IsExported(p.Name) || p.Pkg == q.Pkg
 }
 
 // A Field represents a field of a struct.
 type Field struct {
-	Name        string // unqualified type name for anonymous fields
+	QualifiedName
 	Type        Type
 	Tag         string
 	IsAnonymous bool
@@ -101,7 +117,6 @@ type Field struct {
 
 // A Struct represents a struct type struct{...}.
 type Struct struct {
-	implementsType
 	Fields []*Field
 }
 
@@ -116,25 +131,16 @@ func (typ *Struct) fieldIndex(name string) int {
 
 // A Pointer represents a pointer type *Base.
 type Pointer struct {
-	implementsType
 	Base Type
-}
-
-// A Variable represents a variable (including function parameters and results).
-type Var struct {
-	Name string
-	Type Type
 }
 
 // A Result represents a (multi-value) function call result.
 type Result struct {
-	implementsType
 	Values []*Var // Signature.Results of the function called
 }
 
 // A Signature represents a user-defined function type func(...) (...).
 type Signature struct {
-	implementsType
 	Recv       *Var   // nil if not a method
 	Params     []*Var // (incoming) parameters from left to right; or nil
 	Results    []*Var // (outgoing) results from left to right; or nil
@@ -175,7 +181,6 @@ const (
 
 // A builtin represents the type of a built-in function.
 type builtin struct {
-	implementsType
 	id          builtinId
 	name        string
 	nargs       int // number of arguments (minimum if variadic)
@@ -183,40 +188,44 @@ type builtin struct {
 	isStatement bool // true if the built-in is valid as an expression statement
 }
 
-// A Method represents a method of an interface.
+// A Method represents a method.
 type Method struct {
-	Name string
+	QualifiedName
 	Type *Signature
 }
 
 // An Interface represents an interface type interface{...}.
 type Interface struct {
-	implementsType
 	Methods []*Method // TODO(gri) consider keeping them in sorted order
 }
 
 // A Map represents a map type map[Key]Elt.
 type Map struct {
-	implementsType
 	Key, Elt Type
 }
 
 // A Chan represents a channel type chan Elt, <-chan Elt, or chan<-Elt.
 type Chan struct {
-	implementsType
 	Dir ast.ChanDir
 	Elt Type
 }
 
 // A NamedType represents a named type as declared in a type declaration.
 type NamedType struct {
-	implementsType
-	Obj        *ast.Object // corresponding declared object; Obj.Data.(*ast.Scope) contains methods, if any
-	Underlying Type        // nil if not fully declared yet; never a *NamedType
+	Obj        *TypeName // corresponding declared object
+	Underlying Type      // nil if not fully declared yet; never a *NamedType
+	Methods    []*Method // TODO(gri) consider keeping them in sorted order
 }
 
-// All concrete types embed implementsType which
-// ensures that all types implement the Type interface.
-type implementsType struct{}
-
-func (*implementsType) aType() {}
+func (*Basic) aType()     {}
+func (*Array) aType()     {}
+func (*Slice) aType()     {}
+func (*Struct) aType()    {}
+func (*Pointer) aType()   {}
+func (*Result) aType()    {}
+func (*Signature) aType() {}
+func (*builtin) aType()   {}
+func (*Interface) aType() {}
+func (*Map) aType()       {}
+func (*Chan) aType()      {}
+func (*NamedType) aType() {}

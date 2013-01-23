@@ -105,8 +105,8 @@ init(void)
 
 	xgetenv(&b, "GO386");
 	if(b.len == 0) {
-		if(cansse())
-			bwritestr(&b, "sse");
+		if(cansse2())
+			bwritestr(&b, "sse2");
 		else
 			bwritestr(&b, "387");
 	}
@@ -601,10 +601,6 @@ install(char *dir)
 		splitfields(&gccargs, bstr(&b));
 		for(i=0; i<nelem(proto_gccargs); i++)
 			vadd(&gccargs, proto_gccargs[i]);
-		if(xstrstr(bstr(&b), "clang") != nil) {
-			vadd(&gccargs, "-Wno-dangling-else");
-			vadd(&gccargs, "-Wno-unused-value");
-		}
 	}
 
 	islib = hasprefix(dir, "lib") || streq(dir, "cmd/cc") || streq(dir, "cmd/gc");
@@ -1057,8 +1053,12 @@ shouldbuild(char *file, char *dir)
 	// The main exception is libmach which has been modified
 	// in various places to support Go object files.
 	if(streq(gohostos, "plan9")) {
-		if(streq(dir, "lib9") && !hassuffix(file, "lib9/goos.c"))
+		if(streq(dir, "lib9")) {
+			name = lastelem(file);
+			if(streq(name, "goos.c") || streq(name, "flag.c"))
+				return 1;
 			return 0;
+		}
 		if(streq(dir, "libbio"))
 			return 0;
 	}

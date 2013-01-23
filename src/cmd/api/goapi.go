@@ -181,6 +181,7 @@ func main() {
 	defer bw.Flush()
 
 	if *checkFile == "" {
+		sort.Strings(features)
 		for _, f := range features {
 			fmt.Fprintf(bw, "%s\n", f)
 		}
@@ -878,7 +879,7 @@ func (w *Walker) walkTypeSpec(ts *ast.TypeSpec) {
 	case *ast.InterfaceType:
 		w.walkInterfaceType(name, t)
 	default:
-		w.emitFeature(fmt.Sprintf("type %s %s", name, w.nodeString(ts.Type)))
+		w.emitFeature(fmt.Sprintf("type %s %s", name, w.nodeString(w.namelessType(ts.Type))))
 	}
 }
 
@@ -1119,7 +1120,13 @@ func (w *Walker) namelessFieldList(fl *ast.FieldList) *ast.FieldList {
 	fl2 := &ast.FieldList{}
 	if fl != nil {
 		for _, f := range fl.List {
-			fl2.List = append(fl2.List, w.namelessField(f))
+			repeats := 1
+			if len(f.Names) > 1 {
+				repeats = len(f.Names)
+			}
+			for i := 0; i < repeats; i++ {
+				fl2.List = append(fl2.List, w.namelessField(f))
+			}
 		}
 	}
 	return fl2

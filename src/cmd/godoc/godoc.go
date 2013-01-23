@@ -15,6 +15,7 @@ import (
 	"go/format"
 	"go/printer"
 	"go/token"
+	htmlpkg "html"
 	"io"
 	"io/ioutil"
 	"log"
@@ -655,7 +656,9 @@ func redirect(w http.ResponseWriter, r *http.Request) (redirected bool) {
 		canonical += "/"
 	}
 	if r.URL.Path != canonical {
-		http.Redirect(w, r, canonical, http.StatusMovedPermanently)
+		url := *r.URL
+		url.Path = canonical
+		http.Redirect(w, r, url.String(), http.StatusMovedPermanently)
 		redirected = true
 	}
 	return
@@ -667,7 +670,9 @@ func redirectFile(w http.ResponseWriter, r *http.Request) (redirected bool) {
 		c = c[:len(c)-1]
 	}
 	if r.URL.Path != c {
-		http.Redirect(w, r, c, http.StatusMovedPermanently)
+		url := *r.URL
+		url.Path = c
+		http.Redirect(w, r, url.String(), http.StatusMovedPermanently)
 		redirected = true
 	}
 	return
@@ -681,10 +686,16 @@ func serveTextFile(w http.ResponseWriter, r *http.Request, abspath, relpath, tit
 		return
 	}
 
+	if r.FormValue("m") == "text" {
+		serveText(w, src)
+		return
+	}
+
 	var buf bytes.Buffer
 	buf.WriteString("<pre>")
 	FormatText(&buf, src, 1, pathpkg.Ext(abspath) == ".go", r.FormValue("h"), rangeSelection(r.FormValue("s")))
 	buf.WriteString("</pre>")
+	fmt.Fprintf(&buf, `<p><a href="/%s?m=text">View as plain text</a></p>`, htmlpkg.EscapeString(relpath))
 
 	servePage(w, Page{
 		Title:    title + " " + relpath,

@@ -383,10 +383,11 @@ func notSpace(r rune) bool {
 	return !isSpace(r)
 }
 
-// skipSpace provides Scan() methods the ability to skip space and newline characters
-// in keeping with the current scanning mode set by format strings and Scan()/Scanln().
+// SkipSpace provides Scan methods the ability to skip space and newline
+// characters in keeping with the current scanning mode set by format strings
+// and Scan/Scanln.
 
-// SkipSpace 让 Scan() 方法可根据由当前格式字符串和 Scan()/Scanln()
+// SkipSpace 让 Scan 方法可根据由当前格式字符串和 Scan/Scanln
 // 设置的扫描模式跳过空格和换行符。
 func (s *ss) SkipSpace() {
 	s.skipSpace(false)
@@ -464,9 +465,9 @@ func (r *readRune) ReadRune() (rr rune, size int, err error) {
 
 var ssFree = newCache(func() interface{} { return new(ss) })
 
-// Allocate a new ss struct or grab a cached one.
+// newScanState allocates a new ss struct or grab a cached one.
 
-// 分配一个新的 ss 结构体或抓取一个已缓存的。
+// newScanState 分配一个新的 ss 结构体或抓取一个已缓存的。
 func newScanState(r io.Reader, nlIsSpace, nlIsEnd bool) (s *ss, old ssave) {
 	// If the reader is a *ss, then we've got a recursive
 	// call to Scan, so re-use the scan state.
@@ -499,9 +500,9 @@ func newScanState(r io.Reader, nlIsSpace, nlIsEnd bool) (s *ss, old ssave) {
 	return
 }
 
-// Save used ss structs in ssFree; avoid an allocation per invocation.
+// free saves used ss structs in ssFree; avoid an allocation per invocation.
 
-// 在 ssFree 中保存已使用的 ss 结构体；避免为每次请求都进行分配。
+// free 在 ssFree 中保存已使用的 ss 结构体；避免为每次请求都进行分配。
 func (s *ss) free(old ssave) {
 	// If it was used recursively, just restore the old state.
 	// 如果要递归地使用，只需重新存储旧的状态即可。

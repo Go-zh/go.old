@@ -68,21 +68,24 @@ struct	Adr
 {
 	union
 	{
-		int32	u0offset;
+		struct {
+			int32	offset;
+			int32	offset2; // argsize
+		} u0off;
 		char*	u0sval;
 		Ieee	u0ieee;
 		char*	u0sbig;
 	} u0;
 	Sym*	sym;
 	Sym*	gotype;
-	int32	offset2; // argsize
 	char	type;
 	char	reg;
 	char	name;
 	char	class;
 };
 
-#define	offset	u0.u0offset
+#define	offset	u0.u0off.offset
+#define	offset2	u0.u0off.offset2
 #define	sval	u0.u0sval
 #define	scon	sval
 #define	ieee	u0.u0ieee
@@ -108,7 +111,6 @@ struct	Prog
 	} u0;
 	Prog*	cond;
 	Prog*	link;
-	Prog*	dlink;
 	int32	pc;
 	int32	line;
 	int32	spadj;
@@ -117,7 +119,7 @@ struct	Prog
 	uchar	as;
 	uchar	scond;
 	uchar	reg;
-	uchar	align;
+	uchar	align;	// unused
 };
 
 #define	regused	u0.u0regused
@@ -136,8 +138,6 @@ struct	Sym
 	uchar	reachable;
 	uchar	dynexport;
 	uchar	leaf;
-	uchar	stkcheck;
-	uchar	hide;
 	int32	dynid;
 	int32	plt;
 	int32	got;
@@ -148,6 +148,8 @@ struct	Sym
 	int32	elfsym;
 	uchar	special;
 	uchar	fnptr;	// used as fn ptr
+	uchar	stkcheck;
+	uchar	hide;
 	Sym*	hash;	// in hash table
 	Sym*	allsym;	// in all symbol list
 	Sym*	next;	// in text or data list
@@ -304,7 +306,6 @@ EXTERN	char*	rpath;
 EXTERN	uint32	stroffset;
 EXTERN	int32	symsize;
 EXTERN	Sym*	textp;
-EXTERN	int32	textsize;
 EXTERN	int	version;
 EXTERN	char	xcmp[C_GOK+1][C_GOK+1];
 EXTERN	Prog	zprg;
@@ -420,8 +421,9 @@ int32	immaddr(int32);
 int32	opbra(int, int);
 int	brextra(Prog*);
 int	isbranch(Prog*);
-void fnptrs(void);
+void	fnptrs(void);
 void	doelf(void);
+void	dozerostk(void); // used by -Z
 
 vlong		addaddr(Sym *s, Sym *t);
 vlong		addsize(Sym *s, Sym *t);
