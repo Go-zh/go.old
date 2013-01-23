@@ -157,16 +157,16 @@ sentence will appear in godoc's <a href="/pkg/">package list</a>.
 <p>
 Comments that are not adjacent to a top-level declaration are omitted from
 godoc's output, with one notable exception. Top-level comments that begin with
-the word <code>"BUG(who)”</code> are recognized as known bugs, and included in
-the "Bugs” section of the package documentation. The "who” part should be the
+the word <code>"BUG(who)"</code> are recognized as known bugs, and included in
+the "Bugs" section of the package documentation. The "who" part should be the
 user name of someone who could provide more information. For example, this is a
 known issue from the <a href="/pkg/bytes/#pkg-bugs"><code>bytes</code></a> package:
 </p>
 </div>
 
 <p>
-没挨着顶级声明的注释会从godoc的输出中忽略，不过有一个例外。以 <code>"BUG(who)”</code>
-开头的顶级注释会被识别为已知Bug，并包含在该包文档的“缺陷"一节中。“who”
+没挨着顶级声明的注释会从godoc的输出中忽略，不过有一个例外。以 <code>"BUG(who)"</code>
+开头的顶级注释会被识别为已知Bug，并包含在该包文档的“缺陷"一节中。“who"
 是能够提供更多信息的人。例如，下面是 <a href="/pkg/bytes/#pkg-bugs"><code>bytes</code></a>
 包中的一个已知问题：
 </p>
@@ -185,7 +185,7 @@ known issue from the <a href="/pkg/bytes/#pkg-bugs"><code>bytes</code></a> packa
 <p>
 Godoc treats executable commands somewhat differently. Instead of inspecting the
 command source code, it looks for a Go source file belonging to the special
-package "documentation”. The comment on the "package documentation” clause is
+package "documentation". The comment on the "package documentation" clause is
 used as the command's documentation. For example, see the
 <a href="/cmd/godoc/">godoc documentation</a> and its corresponding
 <a href="/src/cmd/godoc/doc.go">doc.go</a> file.

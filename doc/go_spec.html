@@ -14,10 +14,10 @@
 TODO
 [ ] need language about function/method calls and parameter passing rules
 [ ] last paragraph of #Assignments (constant promotion) should be elsewhere
-    and mention assignment to empty interface.
+	and mention assignment to empty interface.
 [ ] need to say something about "scope" of selectors?
 [ ] clarify what a field name is in struct declarations
-    (struct{T} vs struct {T T} vs struct {t T})
+	(struct{T} vs struct {T T} vs struct {t T})
 [ ] need explicit language about the result type of operations
 [ ] should probably write something about evaluation order of statements even
 	though obvious
@@ -27,13 +27,13 @@ TODO
 TODO
 [ ] 需要语言中关于函数/方法调用和形参传递的规则
 [ ] #赋值（常量推广）的最后一段应在别处
-    且应在空接口中提及赋值。
+	且应在空接口中提及赋值。
 [ ] 需要说一些关于选择者“作用域”的事？
 [ ] 阐明在结构声明中什么是字段名
-    (struct{T} 与 struct {T T} 与 struct {t T})
+	(struct{T} 与 struct {T T} 与 struct {t T})
 [ ] 关于操作符的返回类型需要详尽的语言描述
 [ ] 或许应当写一些关于语句求值顺序的东西，
-    尽管它很明显
+	尽管它很明显
 -->
 
 
@@ -418,30 +418,30 @@ token is
 </p>
 <ul>
 	<li>an
-	    <a href="#Identifiers">identifier</a>
+		<a href="#Identifiers">identifier</a>
 	</li>
 
 	<li>an
-	    <a href="#Integer_literals">integer</a>,
-	    <a href="#Floating-point_literals">floating-point</a>,
-	    <a href="#Imaginary_literals">imaginary</a>,
-	    <a href="#Rune_literals">rune</a>, or
-	    <a href="#String_literals">string</a> literal
+		<a href="#Integer_literals">integer</a>,
+		<a href="#Floating-point_literals">floating-point</a>,
+		<a href="#Imaginary_literals">imaginary</a>,
+		<a href="#Rune_literals">rune</a>, or
+		<a href="#String_literals">string</a> literal
 	</li>
 
 	<li>one of the <a href="#Keywords">keywords</a>
-	    <code>break</code>,
-	    <code>continue</code>,
-	    <code>fallthrough</code>, or
-	    <code>return</code>
+		<code>break</code>,
+		<code>continue</code>,
+		<code>fallthrough</code>, or
+		<code>return</code>
 	</li>
 
 	<li>one of the <a href="#Operators_and_Delimiters">operators and delimiters</a>
-	    <code>++</code>,
-	    <code>--</code>,
-	    <code>)</code>,
-	    <code>]</code>, or
-	    <code>}</code>
+		<code>++</code>,
+		<code>--</code>,
+		<code>)</code>,
+		<code>]</code>, or
+		<code>}</code>
 	</li>
 </ul>
 </li>
@@ -464,30 +464,30 @@ may be omitted before a closing <code>")"</code> or <code>"}"</code>.
 </p>
 <ul>
 	<li>
-	    <a href="#标识符">标识符</a>
+		<a href="#标识符">标识符</a>
 	</li>
 
 	<li>
-	    <a href="#整数">整数</a>，
-	    <a href="#浮点数">浮点数</a>，
-	    <a href="#虚数">虚数</a>，
-	    <a href="#符文">符文</a>或
-	    <a href="#字符串">字符串</a> 字面
+		<a href="#整数">整数</a>，
+		<a href="#浮点数">浮点数</a>，
+		<a href="#虚数">虚数</a>，
+		<a href="#符文">符文</a>或
+		<a href="#字符串">字符串</a> 字面
 	</li>
 
 	<li><a href="#关键字">关键字</a>
-	    <code>break</code>，
-	    <code>continue</code>，
-	    <code>fallthrough</code> 或
-	    <code>return</code>
+		<code>break</code>，
+		<code>continue</code>，
+		<code>fallthrough</code> 或
+		<code>return</code>
 	</li>
 
 	<li><a href="#运算符与分隔符">运算符与分隔符</a>
-	    <code>++</code>，
-	    <code>--</code>，
-	    <code>)</code>，
-	    <code>]</code>或
-	    <code>}</code>
+		<code>++</code>，
+		<code>--</code>，
+		<code>)</code>，
+		<code>]</code>或
+		<code>}</code>
 	</li>
 </ul>
 </li>
@@ -597,7 +597,7 @@ The following character sequences represent <a href="#Operators">operators</a>, 
 *    ^     *=    ^=     &lt;-    &gt;     &gt;=    {    }
 /    &lt;&lt;    /=    &lt;&lt;=    ++    =     :=    ,    ;
 %    &gt;&gt;    %=    &gt;&gt;=    --    !     ...   .    :
-     &amp;^          &amp;^=
+	 &amp;^          &amp;^=
 </pre>
 
 <div class="english">
@@ -660,8 +660,8 @@ point or the exponent may be elided.
 </p>
 <pre class="ebnf">
 float_lit = decimals "." [ decimals ] [ exponent ] |
-            decimals exponent |
-            "." decimals [ exponent ] .
+			decimals exponent |
+			"." decimals [ exponent ] .
 decimals  = decimal_digit { decimal_digit } .
 exponent  = ( "e" | "E" ) [ "+" | "-" ] decimals .
 </pre>
@@ -675,8 +675,8 @@ exponent  = ( "e" | "E" ) [ "+" | "-" ] decimals .
 </p>
 <pre class="ebnf">
 浮点数字面 = 十进制数 "." [ 十进制数 ] [ 指数 ] |
-             十进制指数 |
-             "." 十进制数 [ 指数 ] .
+			 十进制指数 |
+			 "." 十进制数 [ 指数 ] .
 十进制数   = 十进制数字 { 十进制数字 } .
 指数       = ( "e" | "E" ) [ "+" | "-" ] 十进制数 .
 </pre>
@@ -782,8 +782,8 @@ Unicode字符U+00E4，值 <code>0xe4</code>。
 
 <div class="english">
 <p>
-Several backslash escapes allow arbitrary values to be encoded
-as ASCII text.  There are four ways to represent the integer value
+Several backslash escapes allow arbitrary values to be encoded as
+ASCII text.  There are four ways to represent the integer value
 as a numeric constant: <code>\x</code> followed by exactly two hexadecimal
 digits; <code>\u</code> followed by exactly four hexadecimal digits;
 <code>\U</code> followed by exactly eight hexadecimal digits, and a
@@ -863,7 +863,7 @@ octal_byte_value = `\` octal_digit octal_digit octal_digit .
 hex_byte_value   = `\` "x" hex_digit hex_digit .
 little_u_value   = `\` "u" hex_digit hex_digit hex_digit hex_digit .
 big_u_value      = `\` "U" hex_digit hex_digit hex_digit hex_digit
-                           hex_digit hex_digit hex_digit hex_digit .
+						   hex_digit hex_digit hex_digit hex_digit .
 escaped_char     = `\` ( "a" | "b" | "f" | "n" | "r" | "t" | "v" | `\` | "'" | `"` ) .
 </pre>
 
@@ -898,7 +898,7 @@ unicode值      = unicode字符 | 小Unicode值 | 大Unicode值 | 转义字符 .
 十六进制字节值 = `\` "x" 十六进制数字 十六进制数字 .
 小Unicode值    = `\` "u" 十六进制数字 十六进制数字 十六进制数字 十六进制数字 .
 大Unicode值    = `\` "U" 十六进制数字 十六进制数字 十六进制数字 十六进制数字
-                         十六进制数字 十六进制数字 十六进制数字 十六进制数字 .
+						 十六进制数字 十六进制数字 十六进制数字 十六进制数字 .
 转义字符       = `\` ( "a" | "b" | "f" | "n" | "r" | "t" | "v" | `\` | "'" | `"` ) .
 </pre>
 
@@ -1233,18 +1233,18 @@ implementation must:
 	<li>Represent integer constants with at least 256 bits.</li>
 
 	<li>Represent floating-point constants, including the parts of
-	    a complex constant, with a mantissa of at least 256 bits
-	    and a signed exponent of at least 32 bits.</li>
+		a complex constant, with a mantissa of at least 256 bits
+		and a signed exponent of at least 32 bits.</li>
 
 	<li>Give an error if unable to represent an integer constant
-	    precisely.</li>
+		precisely.</li>
 
 	<li>Give an error if unable to represent a floating-point or
-	    complex constant due to overflow.</li>
+		complex constant due to overflow.</li>
 
 	<li>Round to the nearest representable constant if unable to
-	    represent a floating-point or complex constant due to limits
-	    on precision.</li>
+		represent a floating-point or complex constant due to limits
+		on precision.</li>
 </ul>
 <p>
 These requirements apply both to literal constants and to the result
@@ -1292,7 +1292,7 @@ which composes a new type from previously declared types.
 Type      = TypeName | TypeLit | "(" Type ")" .
 TypeName  = identifier | QualifiedIdent .
 TypeLit   = ArrayType | StructType | PointerType | FunctionType | InterfaceType |
-	    SliceType | MapType | ChannelType .
+		SliceType | MapType | ChannelType .
 </pre>
 </div>
 
@@ -1306,7 +1306,7 @@ TypeLit   = ArrayType | StructType | PointerType | FunctionType | InterfaceType 
 类型     = 类型名 | 类型字面 | "(" 类型 ")" .
 类型名   = 标识符 | 限定标识符 .
 类型字面 = 数组类型 | 结构类型 | 指针类型 | 函数类型 | 接口类型 |
-           切片类型 | 映射类型 | 信道类型 .
+		   切片类型 | 映射类型 | 信道类型 .
 </pre>
 
 <div class="english">
@@ -1642,7 +1642,7 @@ negative <a href="#Constants">constant</a> representable by a value
 of type <code>int</code>.
 The length of array <code>a</code> can be discovered
 using the built-in function <a href="#Length_and_capacity"><code>len</code></a>.
-The elements can be addressed by integer r <a href="#Index_expressions">indices</a>
+The elements can be addressed by integer <a href="#Index_expressions">indices</a>
 0 through <code>len(a)-1</code>.
 Array types are always one-dimensional but may be composed to form
 multi-dimensional types.
@@ -2690,31 +2690,31 @@ literal structure and corresponding components have identical types. In detail:
 
 <ul>
 	<li>Two array types are identical if they have identical element types and
-	    the same array length.</li>
+		the same array length.</li>
 
 	<li>Two slice types are identical if they have identical element types.</li>
 
 	<li>Two struct types are identical if they have the same sequence of fields,
-	    and if corresponding fields have the same names, and identical types,
-	    and identical tags.
-	    Two anonymous fields are considered to have the same name. Lower-case field
-	    names from different packages are always different.</li>
+		and if corresponding fields have the same names, and identical types,
+		and identical tags.
+		Two anonymous fields are considered to have the same name. Lower-case field
+		names from different packages are always different.</li>
 
 	<li>Two pointer types are identical if they have identical base types.</li>
 
 	<li>Two function types are identical if they have the same number of parameters
-	    and result values, corresponding parameter and result types are
-	    identical, and either both functions are variadic or neither is.
-	    Parameter and result names are not required to match.</li>
+		and result values, corresponding parameter and result types are
+		identical, and either both functions are variadic or neither is.
+		Parameter and result names are not required to match.</li>
 
 	<li>Two interface types are identical if they have the same set of methods
-	    with the same names and identical function types. Lower-case method names from
-	    different packages are always different. The order of the methods is irrelevant.</li>
+		with the same names and identical function types. Lower-case method names from
+		different packages are always different. The order of the methods is irrelevant.</li>
 
 	<li>Two map types are identical if they have identical key and value types.</li>
 
 	<li>Two channel types are identical if they have identical value types and
-	    the same direction.</li>
+		the same direction.</li>
 </ul>
 </div>
 
@@ -2921,16 +2921,16 @@ In addition to explicit blocks in the source code, there are implicit blocks:
 	<li>The <i>universe block</i> encompasses all Go source text.</li>
 
 	<li>Each <a href="#Packages">package</a> has a <i>package block</i> containing all
-	    Go source text for that package.</li>
+		Go source text for that package.</li>
 
 	<li>Each file has a <i>file block</i> containing all Go source text
-	    in that file.</li>
+		in that file.</li>
 
 	<li>Each <code>if</code>, <code>for</code>, and <code>switch</code>
-	    statement is considered to be in its own implicit block.</li>
+		statement is considered to be in its own implicit block.</li>
 
 	<li>Each clause in a <code>switch</code> or <code>select</code> statement
-	    acts as an implicit block.</li>
+		acts as an implicit block.</li>
 </ol>
 </div>
 
@@ -3013,23 +3013,23 @@ Go is lexically scoped using blocks:
 	<li>The scope of a predeclared identifier is the universe block.</li>
 
 	<li>The scope of an identifier denoting a constant, type, variable,
-	    or function (but not method) declared at top level (outside any
-	    function) is the package block.</li>
+		or function (but not method) declared at top level (outside any
+		function) is the package block.</li>
 
 	<li>The scope of the package name of an imported package is the file block
-	    of the file containing the import declaration.</li>
+		of the file containing the import declaration.</li>
 
 	<li>The scope of an identifier denoting a method receiver, function parameter,
-	    or result variable is the function body.</li>
+		or result variable is the function body.</li>
 
 	<li>The scope of a constant or variable identifier declared
-	    inside a function begins at the end of the ConstSpec or VarSpec
-	    (ShortVarDecl for short variable declarations)
-	    and ends at the end of the innermost containing block.</li>
+		inside a function begins at the end of the ConstSpec or VarSpec
+		(ShortVarDecl for short variable declarations)
+		and ends at the end of the innermost containing block.</li>
 
 	<li>The scope of a type identifier declared inside a function
-	    begins at the identifier in the TypeSpec
-	    and ends at the end of the innermost containing block.</li>
+		begins at the identifier in the TypeSpec
+		and ends at the end of the innermost containing block.</li>
 </ol>
 </div>
 
@@ -4053,7 +4053,7 @@ or a parenthesized expression.
 </p>
 
 <pre class="ebnf">
-Operand    = Literal | OperandName| MethodExpr | "(" Expression ")" .
+Operand    = Literal | OperandName | MethodExpr | "(" Expression ")" .
 Literal    = BasicLit | CompositeLit | FunctionLit .
 BasicLit   = int_lit | float_lit | imaginary_lit | rune_lit | string_lit .
 OperandName = identifier | QualifiedIdent.
@@ -4141,7 +4141,7 @@ a single expression or a key-value pair.
 <pre class="ebnf">
 CompositeLit  = LiteralType LiteralValue .
 LiteralType   = StructType | ArrayType | "[" "..." "]" ElementType |
-                SliceType | MapType | TypeName .
+				SliceType | MapType | TypeName .
 LiteralValue  = "{" [ ElementList [ "," ] ] "}" .
 ElementList   = Element { "," Element } .
 Element       = [ Key ":" ] Value .
@@ -4160,7 +4160,7 @@ Value         = Expression | LiteralValue .
 <pre class="ebnf">
 复合字面 = 字面类型 字面值 .
 字面类型 = 结构类型 | 数组类型 | "[" "..." "]" 元素类型 |
-           切片类型 | 映射类型 | 类型名 .
+		   切片类型 | 映射类型 | 类型名 .
 字面值   = "{" [ 元素列表 [ "," ] ] "}" .
 元素列表 = 元素 { "," 元素 } .
 元素     = [ 键 ":" ] 值 .
@@ -4202,20 +4202,20 @@ For struct literals the following rules apply:
 	<li>A key must be a field name declared in the LiteralType.
 	</li>
 	<li>An element list that does not contain any keys must
-	    list an element for each struct field in the
-	    order in which the fields are declared.
+		list an element for each struct field in the
+		order in which the fields are declared.
 	</li>
 	<li>If any element has a key, every element must have a key.
 	</li>
 	<li>An element list that contains keys does not need to
-	    have an element for each struct field. Omitted fields
-	    get the zero value for that field.
+		have an element for each struct field. Omitted fields
+		get the zero value for that field.
 	</li>
 	<li>A literal may omit the element list; such a literal evaluates
-	    to the zero value for its type.
+		to the zero value for its type.
 	</li>
 	<li>It is an error to specify an element for a non-exported
-	    field of a struct belonging to a different package.
+		field of a struct belonging to a different package.
 	</li>
 </ul>
 </div>
@@ -4280,13 +4280,13 @@ For array and slice literals the following rules apply:
 
 <ul>
 	<li>Each element has an associated integer index marking
-	    its position in the array.
+		its position in the array.
 	</li>
 	<li>An element with a key uses the key as its index; the
-	    key must be a constant integer expression.
+		key must be a constant integer expression.
 	</li>
 	<li>An element without a key uses the previous element's index plus one.
-	    If the first element has no key, its index is zero.
+		If the first element has no key, its index is zero.
 	</li>
 </ul>
 </div>
@@ -4647,8 +4647,8 @@ If <code>x</code> is a package name, see the section on
 <p>
 A selector <code>f</code> may denote a field or method <code>f</code> of
 a type <code>T</code>, or it may refer
-to a field or method <code>f</code> of a nested anonymous field of
-<code>T</code>.
+to a field or method <code>f</code> of a nested
+<a href="#Struct_types">anonymous field</a> of <code>T</code>.
 The number of anonymous fields traversed
 to reach <code>f</code> is called its <i>depth</i> in <code>T</code>.
 The depth of a field or method <code>f</code>
@@ -4661,7 +4661,7 @@ depth of <code>f</code> in <code>A</code> plus one.
 
 <p>
 选择者 <code>f</code> 可代表类型为 <code>T</code> 的字段或方法 <code>f</code>，
-或引用 <code>T</code> 中嵌套匿名字段的字段或方法 <code>f</code>。
+或引用 <code>T</code> 中嵌套<a href="#结构类型">匿名字段</a>的字段或方法 <code>f</code>。
 在 <code>T</code> 中遍历区域 <code>f</code> 的匿名字段所得的数量称为它的 <i>深度</i>。
 以 <code>T</code> 声明的字段或方法 <code>f</code> 的深度为0。
 在 <code>T</code> 中以匿名字段 <code>A</code> 声明的字段或方法 <code>f</code> 的深度
@@ -4728,7 +4728,8 @@ causes a <a href="#Run_time_panics">run-time panic</a>.
 
 <div class="english">
 <p>
-Selectors automatically <a href="#Address_operators">dereference</a> pointers to structs.
+Selectors automatically <a href="#Address_operators">dereference</a>
+pointers to structs.
 If <code>x</code> is a pointer to a struct, <code>x.y</code>
 is shorthand for <code>(*x).y</code>; if the field <code>y</code>
 is also a pointer to a struct, <code>x.y.z</code> is shorthand
@@ -4880,9 +4881,9 @@ If <code>a</code> is not a map:
 </p>
 <ul>
 	<li>the index <code>x</code> must be an integer value; it is <i>in range</i> if <code>0 &lt;= x &lt; len(a)</code>,
-	    otherwise it is <i>out of range</i></li>
+		otherwise it is <i>out of range</i></li>
 	<li>a <a href="#Constants">constant</a> index must be non-negative
-	     and representable by a value of type <code>int</code>
+		 and representable by a value of type <code>int</code>
 </ul>
 </div>
 
@@ -4903,7 +4904,9 @@ where <code>A</code> is an <a href="#Array_types">array type</a>:
 <ul>
 	<li>a <a href="#Constants">constant</a> index must be in range</li>
 	<li>if <code>a</code> is <code>nil</code> or if <code>x</code> is out of range at run time,
-	    a <a href="#Run_time_panics">run-time panic</a> occurs</li>
+		a <a href="#Run_time_panics">run-time panic</a> occurs</li>
+	<li><code>a[x]</code> is the array element at index <code>x</code> and the type of
+		<code>a[x]</code> is the element type of <code>A</code></li>
 </ul>
 </div>
 
@@ -4914,6 +4917,8 @@ where <code>A</code> is an <a href="#Array_types">array type</a>:
 	<li><a href="#常量">常量</a>下标必在界内</li>
 	<li>若 <code>a</code> 为 <code>nil</code> 或 <code>x</code> 在运行时越界，
 		就会引发一个<a href="#运行时恐慌">运行时恐慌</a></li>
+	<li><code>a[x]</code> 是下标为 <code>x</code> 的数组元素，且 <code>a[x]</code>
+		的类型即为 <code>A</code> 的元素类型</li>
 </ul>
 
 <div class="english">
@@ -4922,9 +4927,9 @@ For <code>a</code> of type <code>S</code> where <code>S</code> is a <a href="#Sl
 </p>
 <ul>
 	<li>if the slice is <code>nil</code> or if <code>x</code> is out of range at run time,
-	    a <a href="#Run_time_panics">run-time panic</a> occurs</li>
+		a <a href="#Run_time_panics">run-time panic</a> occurs</li>
 	<li><code>a[x]</code> is the slice element at index <code>x</code> and the type of
-	  <code>a[x]</code> is the element type of <code>S</code></li>
+		<code>a[x]</code> is the element type of <code>S</code></li>
 </ul>
 </div>
 
@@ -4945,11 +4950,11 @@ where <code>T</code> is a <a href="#String_types">string type</a>:
 </p>
 <ul>
 	<li>a <a href="#Constants">constant</a> index must be in range
-	    if the string <code>a</code> is also constant</li>
+		if the string <code>a</code> is also constant</li>
 	<li>if <code>x</code> is out of range at run time,
-	    a <a href="#Run_time_panics">run-time panic</a> occurs</li>
+		a <a href="#Run_time_panics">run-time panic</a> occurs</li>
 	<li><code>a[x]</code> is the byte at index <code>x</code> and the type of
-	    <code>a[x]</code> is <code>byte</code></li>
+		<code>a[x]</code> is <code>byte</code></li>
 	<li><code>a[x]</code> may not be assigned to</li>
 </ul>
 </div>
@@ -4971,14 +4976,14 @@ where <code>M</code> is a <a href="#Map_types">map type</a>:
 </p>
 <ul>
 	<li><code>x</code>'s type must be
-	<a href="#Assignability">assignable</a>
-	to the key type of <code>M</code></li>
+		<a href="#Assignability">assignable</a>
+		to the key type of <code>M</code></li>
 	<li>if the map contains an entry with key <code>x</code>,
-	  <code>a[x]</code> is the map value with key <code>x</code>
-	  and the type of <code>a[x]</code> is the value type of <code>M</code></li>
+		<code>a[x]</code> is the map value with key <code>x</code>
+		and the type of <code>a[x]</code> is the value type of <code>M</code></li>
 	<li>if the map is <code>nil</code> or does not contain such an entry,
-	  <code>a[x]</code> is the <a href="#The_zero_value">zero value</a>
-	  for the value type of <code>M</code></li>
+		<code>a[x]</code> is the <a href="#The_zero_value">zero value</a>
+		for the value type of <code>M</code></li>
 </ul>
 </div>
 
@@ -4988,9 +4993,9 @@ where <code>M</code> is a <a href="#Map_types">map type</a>:
 <ul>
 	<li><code>x</code> 的类型必须<a href="#可赋值性">可赋值</a>至 <code>M</code> 的键类型</li>
 	<li>若映射包含键为 <code>x</code> 的项，则 <code>a[x]</code> 为键 <code>x</code> 的映射值，
-	  且 <code>a[x]</code> 的类型为 <code>M</code> 的值类型</li>
+		且 <code>a[x]</code> 的类型为 <code>M</code> 的值类型</li>
 	<li>若映射为 <code>nil</code> 或不包含这样的项，
-	  <code>a[x]</code> 为 <code>M</code> 值类型的<a href="#零值">零值</a></li>
+		<code>a[x]</code> 为 <code>M</code> 值类型的<a href="#零值">零值</a></li>
 </ul>
 
 <div class="english">
@@ -5136,7 +5141,7 @@ For arrays or strings, the indices <code>low</code> and <code>high</code> are
 <i>in range</i> if <code>0 &lt;= <code>low</code> &lt;= <code>high</code> &lt;= len(a)</code>,
 otherwise they are <i>out of range</i>.
 For slices, the upper index bound is the slice capacity <code>cap(a)</code> rather than the length.
-A <a href="#Constant">constant</a> index must be non-negative and representable by a value of type
+A <a href="#Constants">constant</a> index must be non-negative and representable by a value of type
 <code>int</code>.
 If both indices
 are constant, they must satisfy <code>low &lt;= high</code>. If <code>a</code> is <code>nil</code>
@@ -5262,7 +5267,7 @@ r := y.(io.Reader)     // r 拥有 类型 io.Reader 且 y 必须同时实现了 
 
 <div class="english">
 <p>
-If a type assertion is used in an assignment or initialization of the form
+If a type assertion is used in an <a href="#Assignments">assignment</a> or initialization of the form
 </p>
 </div>
 
@@ -5289,7 +5294,7 @@ returning a value and a boolean indicating success.
 </div>
 
 <p>
-的形式用于赋值或初始化，该断言的结果即为类型为 <code>(T, bool)</code> 的值对。
+的形式用于<a href="#赋值">赋值</a>或初始化，该断言的结果即为类型为 <code>(T, bool)</code> 的值对。
 若该断言成立，该表达式返回值对 <code>(x.(T), true)</code>；否则，该表达式返回 <code>(Z, false)</code>，
 其中 <code>Z</code> 为类型为 <code>T</code> 的<a href="#零值">零值</a>。此种情况不会产生运行时恐慌。
 类型断言在这种构造中，其行为类似于函数调用返回一个值与一个布尔值以表示成功。
@@ -5692,11 +5697,11 @@ and finally <code>||</code> (logical OR):
 
 <pre class="grammar">
 Precedence    Operator
-    5             *  /  %  &lt;&lt;  &gt;&gt;  &amp;  &amp;^
-    4             +  -  |  ^
-    3             ==  !=  &lt;  &lt;=  &gt;  &gt;=
-    2             &amp;&amp;
-    1             ||
+	5             *  /  %  &lt;&lt;  &gt;&gt;  &amp;  &amp;^
+	4             +  -  |  ^
+	3             ==  !=  &lt;  &lt;=  &gt;  &gt;=
+	2             &amp;&amp;
+	1             ||
 </pre>
 </div>
 
@@ -5708,11 +5713,11 @@ Precedence    Operator
 
 <pre class="grammar">
   优先级        操作符
-    5             *  /  %  &lt;&lt;  &gt;&gt;  &amp;  &amp;^
-    4             +  -  |  ^
-    3             ==  !=  &lt;  &lt;=  &gt;  &gt;=
-    2             &amp;&amp;
-    1             ||
+	5             *  /  %  &lt;&lt;  &gt;&gt;  &amp;  &amp;^
+	4             +  -  |  ^
+	3             ==  !=  &lt;  &lt;=  &gt;  &gt;=
+	2             &amp;&amp;
+	1             ||
 </pre>
 
 <div class="english">
@@ -5822,6 +5827,7 @@ String addition creates a new string by concatenating the operands.
 For two integer values <code>x</code> and <code>y</code>, the integer quotient
 <code>q = x / y</code> and remainder <code>r = x % y</code> satisfy the following
 relationships:
+</p>
 
 <pre>
 x = q*y + r  and  |r| &lt; |y|
@@ -5930,7 +5936,7 @@ follows:
 +x                          is 0 + x
 -x    negation              is 0 - x
 ^x    bitwise complement    is m ^ x  with m = "all bits set to 1" for unsigned x
-                                      and  m = -1 for signed x
+									  and  m = -1 for signed x
 </pre>
 </div>
 
@@ -5942,7 +5948,7 @@ follows:
 +x                  即为 0 + x
 -x    相反数        即为 0 - x
 ^x    按位补码      即为 m ^ x  对于无符号的 x，m = "所有位置为1"
-                                对于带符号的 x，m = -1
+								对于带符号的 x，m = -1
 </pre>
 
 <div class="english">
@@ -6343,7 +6349,7 @@ will cause a <a href="#Run_time_panics">run-time panic</a>.
 For an operand <code>ch</code> of <a href="#Channel_types">channel type</a>,
 the value of the receive operation <code>&lt;-ch</code> is the value received
 from the channel <code>ch</code>. The channel direction must permit receive operations,
-and the type of the receive operation is the element type ofthe channel.
+and the type of the receive operation is the element type of the channel.
 The expression blocks until a value is available.
 Receiving from a <code>nil</code> channel blocks forever.
 Receiving from a <a href="#Close">closed</a> channel always succeeds,
@@ -6381,7 +6387,7 @@ A receive expression used in an assignment or initialization of the form
 </div>
 
 <p>
-接收表达式以形式
+接收表达式以
 </p>
 
 <pre>
@@ -6392,17 +6398,18 @@ var x, ok = &lt;-ch
 
 <div class="english">
 <p>
-yields an additional result.
-The boolean variable <code>ok</code> indicates whether
-the received value was sent on the channel (<code>true</code>)
-or is a <a href="#The_zero_value">zero value</a> returned
-because the channel is closed and empty (<code>false</code>).
+yields an additional result of type <code>bool</code> reporting whether the
+communication succeeded. The value of <code>ok</code> is <code>true</code>
+if the value received was delivered by a successful send operation to the
+channel, or <code>false</code> if it is a zero value generated because the
+channel is closed and empty.
 </p>
 </div>
 
 <p>
-用于赋值或初始化将产生一个附加结果。布尔变量 <code>ok</code> 表明接收值是在信道中发送
-（<code>true</code>）还是因信道被关闭或为空而作为<a href="#零值">零值</a>返回。
+的形式用于赋值或初始化将产生一个类型为 <code>bool</code> 的附加结果，来报告通信是否成功。
+若接收的值由一次成功向信道发送的操作发出的，则 <code>ok</code> 的值为 <code>true</code>；
+若接收的值是由于信道被关闭或为空而产生的零值，则为 <code>false</code>。
 </p>
 
 <!--
@@ -6665,11 +6672,11 @@ Conversion = Type "(" Expression [ "," ] ")" .
 <p>
 类型转换是形式为 <code>T(x)</code> 的表达式，其中 <code>T</code> 为类型，而
 <code>x</code> 是可转换为类型 <code>T</code> 的表达式。
+</p>
 
 <pre class="ebnf">
 类型转换 = 类型 "(" 表达式 [ "," ] ")" .
 </pre>
-</p>
 
 <div class="english">
 <p>
@@ -6861,7 +6868,21 @@ restricted circumstances.
 </div>
 
 <p>
-没有语言机制能在指针和整数之间转换。包<a href="#包unsafe"><code>unsafe</code></a>可在受限情况下实现此功能。
+没有语言机制能在指针和整数之间转换。包 <a href="#包unsafe"><code>unsafe</code></a>
+可在受限情况下实现此功能。
+</p>
+
+<div class="english">
+<p>
+Implementation restriction: For backward-compatibility with the Go 1 language
+specification, a compiler may accept non-parenthesized literal function types
+in conversions where the syntax is unambiguous.
+</p>
+</div>
+
+<p>
+实现限制：为了与Go1语言规范向后兼容，编译器可在语法明确的转换中，
+接受无括号的字面函数类型。
 </p>
 
 <div class="english">
@@ -7170,8 +7191,8 @@ an untyped complex constant.
 </p>
 
 <pre>
-const ic = complex(0, c)   // ic == 3.75i (untyped complex constant)
-const iΘ = complex(0, Θ)   // iΘ == 1.5i  (type complex128)
+const ic = complex(0, c)   // ic == 3.75i  (untyped complex constant)
+const iΘ = complex(0, Θ)   // iΘ == 1.5i   (type complex128)
 </pre>
 </div>
 
@@ -9468,14 +9489,14 @@ The implementation guarantees that the result always fits into an <code>int</cod
 Call      Argument type    Result
 
 len(s)    string type      string length in bytes
-          [n]T, *[n]T      array length (== n)
-          []T              slice length
-          map[K]T          map length (number of defined keys)
-          chan T           number of elements queued in channel buffer
+		  [n]T, *[n]T      array length (== n)
+		  []T              slice length
+		  map[K]T          map length (number of defined keys)
+		  chan T           number of elements queued in channel buffer
 
 cap(s)    [n]T, *[n]T      array length (== n)
-          []T              slice capacity
-          chan T           channel buffer capacity
+		  []T              slice capacity
+		  chan T           channel buffer capacity
 </pre>
 </div>
 
@@ -9488,14 +9509,14 @@ cap(s)    [n]T, *[n]T      array length (== n)
 调用      实参类型         结果
 
 len(s)    string type      字符串的字节长度。
-          [n]T, *[n]T      数组长度（== n）
-          []T              切片长度
-          map[K]T          映射长度（已定义键的数量）
-          chan T           信道缓存中元素队列的长度
+		  [n]T, *[n]T      数组长度（== n）
+		  []T              切片长度
+		  map[K]T          映射长度（已定义键的数量）
+		  chan T           信道缓存中元素队列的长度
 
 cap(s)    [n]T, *[n]T      数组长度（== n）
-          []T              切片容量
-          chan T           信道缓存容量
+		  []T              切片容量
+		  chan T           信道缓存容量
 </pre>
 
 <div class="english">
@@ -9664,8 +9685,8 @@ a <a href="#Run_time_panics">run-time panic</a> occurs.
 <pre>
 s := make([]int, 10, 100)       // slice with len(s) == 10, cap(s) == 100
 s := make([]int, 1e3)           // slice with len(s) == cap(s) == 1000
-s := make([]int, 1&lt;&lt;63)   // illegal: len(s) is not representable by a value of type int
-s := make([]int, 10, 0)	        // illegal: len(s) > cap(s)
+s := make([]int, 1&lt;&lt;63)         // illegal: len(s) is not representable by a value of type int
+s := make([]int, 10, 0)         // illegal: len(s) > cap(s)
 c := make(chan int, 10)         // channel with a buffer size of 10
 m := make(map[string]int, 100)  // map with initial space for 100 elements
 </pre>
@@ -10273,7 +10294,7 @@ package and may be relative to a repository of installed packages.
 <p>
 Implementation restriction: A compiler may restrict ImportPaths to
 non-empty strings using only characters belonging to
-<a href="http://www.unicode.org/versions/Unicode6.0.0/">Unicode's</a>
+<a href="http://www.unicode.org/versions/Unicode6.2.0/">Unicode's</a>
 L, M, N, P, and S general categories (the Graphic characters without
 spaces) and may also exclude the characters
 <code>!"#$%&amp;'()*,:;&lt;=&gt;?[\]^`{|}</code>
@@ -10282,7 +10303,7 @@ and the Unicode replacement character U+FFFD.
 </div>
 
 <p>
-实现限制：编译器会限制导入路径使用只属于<a href="http://www.unicode.org/versions/Unicode6.0.0/">Unicode</a>
+实现限制：编译器会限制导入路径使用只属于<a href="http://www.unicode.org/versions/Unicode6.2.0/">Unicode</a>
 中L、M、N、P及S一般类别（不带空格的图形字符）中的非空字符串，且不含字符
 <code>!"#$%&amp;'()*,:;&lt;=&gt;?[\]^`{|}</code> 以及Unicode占位字符U+FFFD。
 </p>

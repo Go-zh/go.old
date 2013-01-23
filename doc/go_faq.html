@@ -1851,6 +1851,59 @@ for more information about how to proceed.
 </p>
 
 <div class="english">
+<h3 id="Why_does_the_project_use_Mercurial_and_not_git">
+Why does the project use Mercurial and not git?</h3>
+</div>
+
+<h3 id="为什么此项目使用Mercurial而非git">
+为什么此项目使用Mercurial而非git？
+</h3>
+
+<div class="english">
+<p>
+The Go project, hosted by Google Code at
+<a href="http://code.google.com/p/go">code.google.com/p/go</a>,
+uses Mercurial as its version control system.
+When the project launched,
+Google Code supported only Subversion and Mercurial.
+Mercurial was a better choice because of its plugin mechanism
+that allowed us to create the "codereview" plugin to connect
+the project to the excellent code review tools at
+<a href="http://codereview.appspot.com">codereview.appspot.com</a>.
+</p>
+</div>
+
+<p>
+Go项目托管在Google Code的
+<a href="http://code.google.com/p/go">code.google.com/p/go</a> 上，
+使用Mercurial作为它的版本控制系统。当该项目启动时，Google
+Code只支持Subversion和Mercurial。Mercurial是个更好的选择，
+因为它的插件机制能让我们创建“codereview”插件，以此来将该项目与
+<a href="http://codereview.appspot.com">codereview.appspot.com</a>
+上卓越的代码审核工具连接起来。
+</p>
+
+<div class="english">
+<p>
+Programmers who work
+with the Go project's source rather than release downloads sometimes
+ask for the project to switch to git.
+That would be possible, but it would be a lot of work and
+would also require reimplementing the codereview plugin.
+Given that Mercurial works today, with code review support,
+combined with the Go project's mostly linear, non-branching use of
+version control, a switch to git doesn't seem worthwhile.
+</p>
+</div>
+
+<p>
+在Go项目源码上工作的程序员，比起发行下载版的程序员，有时会请求将此项目切换到git上。
+这是可能的，但它不仅需要做大量的工作，还需要重新实现codereview插件。
+由于现在的Mercurial拥有代码审核的支持，加上Go项目几乎是线性的，无分支的版本控制，
+切换到git上似乎不大值得。
+</p>
+
+<div class="english">
 <h2 id="Pointers">Pointers and Allocation</h2>
 </div>
 
@@ -1920,6 +1973,19 @@ func (s MyStruct)  valueMethod()   { } // method on value
 func (s *MyStruct) pointerMethod() { } // 为指针定义的方法
 func (s MyStruct)  valueMethod()   { } // 为值定义的方法
 </pre>
+
+<div class="english">
+<p>
+For programmers unaccustomed to pointers, the distinction between these
+two examples can be confusing, but the situation is actually very simple.
+When defining a method on a type, the receiver (<code>s</code> in the above
+examples) behaves exactly as if it were an argument to the method.
+Whether to define the receiver as a value or as a pointer is the same
+question, then, as whether a function argument should be a value or
+a pointer.
+There are several considerations.
+</p>
+</div>
 
 <p>
 对于不习惯指针的程序员，这两个例子之间的差别会造成混乱，但这种情况其实是非常简单的。
@@ -2160,9 +2226,15 @@ Go的内存分配器在虚拟内存中预留了一大块区域作为分配的地
 </p>
 
 <p>
+To find the amount of actual memory allocated to a Go process, use the Unix
+<code>top</code> command and consult the <code>RES</code> (Linux) or
+<code>RSIZE</code> (Mac OS X) columns.
+<!-- TODO(adg): find out how this works on Windows -->
+</p>
+
+<p>
 要得出分配给某个Go进程的实际内存数额，请使用Unix的 <code>top</code> 命令并查阅
 <code>RES</code>（Linux）或 <code>RSIZE</code>（Mac OS X）一列。
-<!-- TODO(adg): find out how this works on Windows -->
 </p>
 
 <div class="english">
@@ -2482,13 +2554,15 @@ To help detect this and other problems before they happen, run
 
 <div class="english">
 <p>
-To bind the value of <code>v</code> to each closure as they are launched, one
-could modify the inner loop to read:
+To bind the current value of <code>v</code> to each closure as it is launched, one
+must modify the inner loop to create a new variable each iteration.
+One way is to pass the variable as an argument to the closure:
 </p>
 </div>
 
 <p>
-要将 <code>v</code> 的值在每一个闭包启动后绑定至它们，可通过修改内部循环来读取：
+要将 <code>v</code> 的当前值在每一个闭包启动后绑定至它们，就必须在每一次迭代中，
+通过修改内部循环来创建新的变量。其中一种方式就是将变量作为实参传至该闭包中：
 </p>
 
 <pre>
@@ -2512,6 +2586,39 @@ the variable <code>u</code>.
 在这个例子中，<code>v</code> 的值作为一个实参传入了该匿名函数。然后这个值就可作为变量
 <code>u</code> 在该函数中访问了。
 </p>
+
+<div class="english">
+<p>
+Even easier is just to create a new variable, using a declaration style that may
+seem odd but works fine in Go:
+</p>
+</div>
+
+<p>
+甚至只需简单地创建新的变量，使用声明的风格看起来可能有点怪，但这在Go中能很好地工作：
+</p>
+
+<div class="english">
+<pre>
+    for _, v := range values {
+        <b>v := v</b> // create a new 'v'.
+        go func() {
+            fmt.Println(<b>v</b>)
+            done &lt;- true
+        }()
+    }
+</pre>
+</div>
+
+<pre>
+    for _, v := range values {
+        <b>v := v</b> // 创建新的“v”。
+        go func() {
+            fmt.Println(<b>v</b>)
+            done &lt;- true
+        }()
+    }
+</pre>
 
 <div class="english">
 <h2 id="Control_flow">Control flow</h2>
