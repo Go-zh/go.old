@@ -13,6 +13,16 @@ Notable divergences:
 	* The full range of spacing (the CFWS syntax element) is not supported,
 	  such as breaking addresses across lines.
 */
+
+/*
+包mail实现了解析邮件消息的功能.
+
+大多数情况下，这个包跟着RFC 5322定义的格式。
+需要注意的：
+	* 过时的地址格式将不能被解析, 包括嵌入路由信息的地址格式。
+	* 组地址不能被解析。
+	* 全范围的空格（CFWS样式元素）不支持，比如使用换行分隔地址。
+*/
 package mail
 
 import (
@@ -41,6 +51,8 @@ func (d debugT) Printf(format string, args ...interface{}) {
 }
 
 // A Message represents a parsed mail message.
+
+// Message代表解析后的邮件信息。
 type Message struct {
 	Header Header
 	Body   io.Reader
@@ -49,6 +61,9 @@ type Message struct {
 // ReadMessage reads a message from r.
 // The headers are parsed, and the body of the message will be available
 // for reading from r.
+
+// ReadMessage从r中读取一个邮件。
+// 头部已经被解析了，而邮件体是可见的。
 func ReadMessage(r io.Reader) (msg *Message, err error) {
 	tp := textproto.NewReader(bufio.NewReader(r))
 
@@ -65,10 +80,15 @@ func ReadMessage(r io.Reader) (msg *Message, err error) {
 
 // Layouts suitable for passing to time.Parse.
 // These are tried in order.
+
+// Layouts适合用来传递时间给time.Parse。
+// 它们是按照顺序的排列的。
 var dateLayouts []string
 
 func init() {
 	// Generate layouts based on RFC 5322, section 3.3.
+
+	// 基于RFC 5322，3.3节，生成layouts。
 
 	dows := [...]string{"", "Mon, "}   // day-of-week
 	days := [...]string{"2", "02"}     // day = 1*2DIGIT
@@ -102,10 +122,15 @@ func parseDate(date string) (time.Time, error) {
 }
 
 // A Header represents the key-value pairs in a mail message header.
+
+// Header代表邮件header中的key-value值对。
 type Header map[string][]string
 
 // Get gets the first value associated with the given key.
 // If there are no values associated with the key, Get returns "".
+
+// Get获取根据key取出的第一个对应的值。
+// 如果key没有对应的值，返回“”。
 func (h Header) Get(key string) string {
 	return textproto.MIMEHeader(h).Get(key)
 }
@@ -113,6 +138,8 @@ func (h Header) Get(key string) string {
 var ErrHeaderNotPresent = errors.New("mail: header not in message")
 
 // Date parses the Date header field.
+
+// Date解析Date头部区域。
 func (h Header) Date() (time.Time, error) {
 	hdr := h.Get("Date")
 	if hdr == "" {
@@ -122,6 +149,8 @@ func (h Header) Date() (time.Time, error) {
 }
 
 // AddressList parses the named header field as a list of addresses.
+
+// AddressList将命名后的头部区域作为一列地址列表解析出来。
 func (h Header) AddressList(key string) ([]*Address, error) {
 	hdr := h.Get(key)
 	if hdr == "" {
@@ -133,17 +162,25 @@ func (h Header) AddressList(key string) ([]*Address, error) {
 // Address represents a single mail address.
 // An address such as "Barry Gibbs <bg@example.com>" is represented
 // as Address{Name: "Barry Gibbs", Address: "bg@example.com"}.
+
+// Address代表单个的邮件地址。
+// 一个地址例如"Barry Gibbs <bg@example.com>"代表一个地址
+// {Name: "Barry Gibbs", Address: "bg@example.com"}。
 type Address struct {
 	Name    string // Proper name; may be empty.
 	Address string // user@domain
 }
 
 // Parses a single RFC 5322 address, e.g. "Barry Gibbs <bg@example.com>"
+
+// 解析一个单独的RFC 5322地址，例如 “Barry Gibbs <bg@example.com>”
 func ParseAddress(address string) (*Address, error) {
 	return newAddrParser(address).parseAddress()
 }
 
 // ParseAddressList parses the given string as a list of addresses.
+
+// ParseAddressList解析给的一列地址字符串
 func ParseAddressList(list string) ([]*Address, error) {
 	return newAddrParser(list).parseAddressList()
 }
@@ -151,6 +188,9 @@ func ParseAddressList(list string) ([]*Address, error) {
 // String formats the address as a valid RFC 5322 address.
 // If the address's name contains non-ASCII characters
 // the name will be rendered according to RFC 2047.
+
+// String格式化一个可视的RFC 5322地址。
+// 如果地址名字包含非ASCII字符串，名字就会按照RFC 2047来解析。
 func (a *Address) String() string {
 	s := "<" + a.Address + ">"
 	if a.Name == "" {
@@ -223,6 +263,8 @@ func (p *addrParser) parseAddressList() ([]*Address, error) {
 }
 
 // parseAddress parses a single RFC 5322 address at the start of p.
+
+// parseAddress在p开始的时候解析单个RFC 5322地址。
 func (p *addrParser) parseAddress() (addr *Address, err error) {
 	debug.Printf("parseAddress: %q", *p)
 	p.skipSpace()
@@ -276,6 +318,8 @@ func (p *addrParser) parseAddress() (addr *Address, err error) {
 }
 
 // consumeAddrSpec parses a single RFC 5322 addr-spec at the start of p.
+
+// consumeAddrSpec在p开始的时候解析单个RFC 5322 addr-spec。
 func (p *addrParser) consumeAddrSpec() (spec string, err error) {
 	debug.Printf("consumeAddrSpec: %q", *p)
 
@@ -326,6 +370,8 @@ func (p *addrParser) consumeAddrSpec() (spec string, err error) {
 }
 
 // consumePhrase parses the RFC 5322 phrase at the start of p.
+
+// consumePhrase在p开始的时候解析RFC phrase。
 func (p *addrParser) consumePhrase() (phrase string, err error) {
 	debug.Printf("consumePhrase: [%s]", *p)
 	// phrase = 1*word
@@ -366,6 +412,8 @@ func (p *addrParser) consumePhrase() (phrase string, err error) {
 }
 
 // consumeQuotedString parses the quoted string at the start of p.
+
+// consumeQuotedString在p开始的时候解析引用。
 func (p *addrParser) consumeQuotedString() (qs string, err error) {
 	// Assume first byte is '"'.
 	i := 1
@@ -399,6 +447,9 @@ Loop:
 
 // consumeAtom parses an RFC 5322 atom at the start of p.
 // If dot is true, consumeAtom parses an RFC 5322 dot-atom instead.
+
+// consumeAtom在p开始的时候解析RFC 5322原子操作。
+// 如果有点的话，consumeAtom就按照RFC 5322解析。
 func (p *addrParser) consumeAtom(dot bool) (atom string, err error) {
 	if !isAtext(p.peek(), false) {
 		return "", errors.New("mail: invalid string")
@@ -419,6 +470,8 @@ func (p *addrParser) consume(c byte) bool {
 }
 
 // skipSpace skips the leading space and tab characters.
+
+// skipSpace跳过开头的空格和tab字符。
 func (p *addrParser) skipSpace() {
 	*p = bytes.TrimLeft(*p, " \t")
 }
@@ -512,6 +565,9 @@ var atextChars = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
 
 // isAtext returns true if c is an RFC 5322 atext character.
 // If dot is true, period is included.
+
+// isAtext当c是一个RFC 5322定义的atext字符的话返回true。
+// 如果dot设置为true，就会考虑这个值。
 func isAtext(c byte, dot bool) bool {
 	if dot && c == '.' {
 		return true
@@ -520,6 +576,8 @@ func isAtext(c byte, dot bool) bool {
 }
 
 // isQtext returns true if c is an RFC 5322 qtest character.
+
+// isQtext当c是RFC 5322定义的qtest字符的话，返回true。
 func isQtext(c byte) bool {
 	// Printable US-ASCII, excluding backslash or quote.
 	if c == '\\' || c == '"' {
@@ -529,6 +587,8 @@ func isQtext(c byte) bool {
 }
 
 // isVchar returns true if c is an RFC 5322 VCHAR character.
+
+// isVchar当c是RFC 5322定义的VCHAR字符的话，返回true。
 func isVchar(c byte) bool {
 	// Visible (printing) characters.
 	return '!' <= c && c <= '~'
