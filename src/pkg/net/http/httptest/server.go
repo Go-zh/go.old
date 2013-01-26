@@ -105,6 +105,12 @@ func NewServer(handler http.Handler) *Server {
 // StartTLS.
 //
 // The caller should call Close when finished, to shut it down.
+
+// NewUnstartedServer返回一个新的Server实例，但是并不启动这个Server。
+//
+// 在改变了配置之后，调用者应该调用Start或者StartTLS。
+//
+// 调用者应该在结束之后调用Close来关闭Server。
 func NewUnstartedServer(handler http.Handler) *Server {
 	return &Server{
 		Listener: newLocalListener(),
@@ -113,6 +119,8 @@ func NewUnstartedServer(handler http.Handler) *Server {
 }
 
 // Start starts a server from NewUnstartedServer.
+
+// Start开启从NewUnstartedServer获取到的server。
 func (s *Server) Start() {
 	if s.URL != "" {
 		panic("Server already started")
@@ -128,6 +136,8 @@ func (s *Server) Start() {
 }
 
 // StartTLS starts TLS on a server from NewUnstartedServer.
+
+// StartTLS开启从NewUnstartedServer获取到的server的TLS。
 func (s *Server) StartTLS() {
 	if s.URL != "" {
 		panic("Server already started")
@@ -162,6 +172,9 @@ func (s *Server) wrapHandler() {
 
 // NewTLSServer starts and returns a new Server using TLS.
 // The caller should call Close when finished, to shut it down.
+
+// NewTLSServer 开启并且返回了一个使用TLS的新的Server。
+// 调用者应该在结束的时候调用Close来关闭它。
 func NewTLSServer(handler http.Handler) *Server {
 	ts := NewUnstartedServer(handler)
 	ts.StartTLS()
@@ -170,6 +183,8 @@ func NewTLSServer(handler http.Handler) *Server {
 
 // Close shuts down the server and blocks until all outstanding
 // requests on this server have completed.
+
+// Close关闭server并且阻塞server，知道所有的请求完成之后才继续。
 func (s *Server) Close() {
 	s.Listener.Close()
 	s.wg.Wait()
@@ -181,6 +196,8 @@ func (s *Server) Close() {
 
 // CloseClientConnections closes any currently open HTTP connections
 // to the test Server.
+
+// CloseClientConnections关闭任何现有打开的HTTP连接到测试服务器上。
 func (s *Server) CloseClientConnections() {
 	hl, ok := s.Listener.(*historyListener)
 	if !ok {
@@ -196,6 +213,9 @@ func (s *Server) CloseClientConnections() {
 // waitGroupHandler wraps a handler, incrementing and decrementing a
 // sync.WaitGroup on each request, to enable Server.Close to block
 // until outstanding requests are finished.
+
+// waitGroupHandler封装了一下handler，在每个请求中进行增加和减少sync.WaitGroup操作，
+// 调用Server.Close来阻塞server，知道server上所有的请求都结束才继续。
 type waitGroupHandler struct {
 	s *Server
 	h http.Handler // non-nil
@@ -210,6 +230,9 @@ func (h *waitGroupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // localhostCert is a PEM-encoded TLS cert with SAN DNS names
 // "127.0.0.1" and "[::1]", expiring at the last second of 2049 (the end
 // of ASN.1 time).
+
+// localCert是一个PEM-编码的TLS证书，它有的SAN DNS名字是“127.0.0.1” 和 “[::1]”,
+// 过期事件是2049年的最后一秒（以ASN.1时间计算）
 var localhostCert = []byte(`-----BEGIN CERTIFICATE-----
 MIIBTTCB+qADAgECAgEAMAsGCSqGSIb3DQEBBTAAMB4XDTcwMDEwMTAwMDAwMFoX
 DTQ5MTIzMTIzNTk1OVowADBaMAsGCSqGSIb3DQEBAQNLADBIAkEAsuA5mAFMj6Q7
@@ -222,6 +245,8 @@ Pg==
 -----END CERTIFICATE-----`)
 
 // localhostKey is the private key for localhostCert.
+
+// localhostKey是localhostCert的私钥。
 var localhostKey = []byte(`-----BEGIN RSA PRIVATE KEY-----
 MIIBPQIBAAJBALLgOZgBTI+kO6qAc3LysyKuJM7k+XqUqdgJHEH8gR5uytd1rO7v
 tG+VW/YKk3+XAIiCnK7a11apC/ItVEBegM8CAwEAAQJBAI5sxq7naeR9ahyqRkJi
