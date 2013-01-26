@@ -4,6 +4,8 @@
 
 // Implementation of Server
 
+// 实现Server
+
 package httptest
 
 import (
@@ -18,25 +20,34 @@ import (
 
 // A Server is an HTTP server listening on a system-chosen port on the
 // local loopback interface, for use in end-to-end HTTP tests.
+
+// Server是一个HTTP服务，它在系统选择的端口上监听请求，并且是在本地的接口监听，
+// 它完全是为了点到点的HTTP测试而出现。
 type Server struct {
-	URL      string // base URL of form http://ipaddr:port with no trailing slash
+	URL      string // base URL of form http://ipaddr:port with no trailing slash  // 基本的http://ipaddr:port的URL样式。没有进行尾部删减。
 	Listener net.Listener
-	TLS      *tls.Config // nil if not using TLS
+	TLS      *tls.Config // nil if not using TLS  // 如果没有使用TLS，则为nil。
 
 	// Config may be changed after calling NewUnstartedServer and
 	// before Start or StartTLS.
+
+	// Config可能在调用NewUnstartedServer之后或者在Start和StartTLS之前被改变。
 	Config *http.Server
 
 	// wg counts the number of outstanding HTTP requests on this server.
 	// Close blocks until all requests are finished.
+
+	// wg计算服务上的HTTP请求数。只有当全部请求都结束之后才关闭阻塞。
 	wg sync.WaitGroup
 }
 
 // historyListener keeps track of all connections that it's ever
 // accepted.
+
+// historyListener保持追踪服务接收过的所有请求。
 type historyListener struct {
 	net.Listener
-	sync.Mutex // protects history
+	sync.Mutex // protects history  // 保护history
 	history    []net.Conn
 }
 
@@ -71,10 +82,17 @@ func newLocalListener() net.Listener {
 // this flag lets you run
 //	go test -run=BrokenTest -httptest.serve=127.0.0.1:8000
 // to start the broken server so you can interact with it manually.
+
+// 当调试一个特别的http基于服务的测试的时候，这个flag就会允许你运行：
+//	go test -run=BrokenTest -httptest.serve=127.0.0.1:8000
+// 来开启服务以便于你可以和它进行手动交互。
 var serve = flag.String("httptest.serve", "", "if non-empty, httptest.NewServer serves on this address and blocks")
 
 // NewServer starts and returns a new Server.
 // The caller should call Close when finished, to shut it down.
+
+// NewServer开启并且返回一个新的Server。
+// 调用者应该当结束的时候调用Close来关闭Server。
 func NewServer(handler http.Handler) *Server {
 	ts := NewUnstartedServer(handler)
 	ts.Start()
