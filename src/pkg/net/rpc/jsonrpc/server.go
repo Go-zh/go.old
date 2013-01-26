@@ -15,11 +15,13 @@ import (
 var errMissingParams = errors.New("jsonrpc: request body missing params")
 
 type serverCodec struct {
-	dec *json.Decoder // for reading JSON values
-	enc *json.Encoder // for writing JSON values
+	dec *json.Decoder // for reading JSON values  // 读JSON值使用
+	enc *json.Encoder // for writing JSON values  // 写JSON值使用
 	c   io.Closer
 
 	// temporary work space
+
+	// 临时工作空间
 	req  serverRequest
 	resp serverResponse
 
@@ -29,12 +31,19 @@ type serverCodec struct {
 	// but save the original request ID in the pending map.
 	// When rpc responds, we use the sequence number in
 	// the response to find the original request ID.
-	mutex   sync.Mutex // protects seq, pending
+
+	// JSON-RPC客户端使用随意的json值作为一个请求ID。
+	// rpc则是使用uint64作为请求ID。
+	// 我们为每个请求分配uint64序列号，但是将原始的request ID存储在pending中。
+	// 当rpc相应之后，我们使用序列号来查找原始的request ID。
+	mutex   sync.Mutex // protects seq, pending  // 保护seq， pending
 	seq     uint64
 	pending map[uint64]*json.RawMessage
 }
 
 // NewServerCodec returns a new rpc.ServerCodec using JSON-RPC on conn.
+
+// NewServerCodec在连接中使用JSON-RPC返回一个新的rpc.ServerCodec
 func NewServerCodec(conn io.ReadWriteCloser) rpc.ServerCodec {
 	return &serverCodec{
 		dec:     json.NewDecoder(conn),
@@ -132,6 +141,10 @@ func (c *serverCodec) Close() error {
 // ServeConn runs the JSON-RPC server on a single connection.
 // ServeConn blocks, serving the connection until the client hangs up.
 // The caller typically invokes ServeConn in a go statement.
+
+// ServeConn在一个连接上运行启动一个JSON-RPC。
+// ServeConn是阻塞的，直到客户端关闭都服务这个连接。
+// 调用者一般是在go语句中调用ServeConn的。
 func ServeConn(conn io.ReadWriteCloser) {
 	rpc.ServeCodec(NewServerCodec(conn))
 }

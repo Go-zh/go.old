@@ -3,7 +3,9 @@
 // license that can be found in the LICENSE file.
 
 // Package jsonrpc implements a JSON-RPC ClientCodec and ServerCodec
-// for the rpc package.
+// for the rpc packagea.
+
+// 包jsonrpc使用了rpc的包实现了一个JSON-RPC的客户端解码器和服务端的解码器
 package jsonrpc
 
 import (
@@ -16,11 +18,11 @@ import (
 )
 
 type clientCodec struct {
-	dec *json.Decoder // for reading JSON values
-	enc *json.Encoder // for writing JSON values
+	dec *json.Decoder // for reading JSON values  // 为了读取Json值
+	enc *json.Encoder // for writing JSON values  // 为了写Json值
 	c   io.Closer
 
-	// temporary work space
+	// temporary work space  // 临时工作空间
 	req  clientRequest
 	resp clientResponse
 
@@ -28,11 +30,17 @@ type clientCodec struct {
 	// Package rpc expects both.
 	// We save the request method in pending when sending a request
 	// and then look it up by request ID when filling out the rpc Response.
-	mutex   sync.Mutex        // protects pending
-	pending map[uint64]string // map request id to method name
+	
+	// JSON-RPC回复内容包含了请求id，但是不包含请求方法。
+	// rpc包却都包含。
+	// 我们发送请求的时候将请求方法放到pendding中，并且填写rpc回复的时候根据请求ID来查找。
+	mutex   sync.Mutex        // protects pending  // 保护pending
+	pending map[uint64]string // map request id to method name  // 将请求id映射到方法名
 }
 
 // NewClientCodec returns a new rpc.ClientCodec using JSON-RPC on conn.
+
+// NewClientCodec在连接中使用JSON-RPC返回一个新的rpc.ClientCodec
 func NewClientCodec(conn io.ReadWriteCloser) rpc.ClientCodec {
 	return &clientCodec{
 		dec:     json.NewDecoder(conn),
@@ -109,11 +117,15 @@ func (c *clientCodec) Close() error {
 
 // NewClient returns a new rpc.Client to handle requests to the
 // set of services at the other end of the connection.
+
+// NewClient返回新的rpc.Client，用于连接的服务器一端来进行rpc服务。
 func NewClient(conn io.ReadWriteCloser) *rpc.Client {
 	return rpc.NewClientWithCodec(NewClientCodec(conn))
 }
 
 // Dial connects to a JSON-RPC server at the specified network address.
+
+// Dial在指定的网络地址上，连接了一个JSON-RPC服务
 func Dial(network, address string) (*rpc.Client, error) {
 	conn, err := net.Dial(network, address)
 	if err != nil {
