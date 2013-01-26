@@ -4,10 +4,17 @@
 
 // The wire protocol for HTTP's "chunked" Transfer-Encoding.
 
+// HTTP网络协议的“chunked”传输编码.
+
 // This code is a duplicate of ../chunked.go with these edits:
 //	s/newChunked/NewChunked/g
 //	s/package http/package httputil/
 // Please make any changes in both files.
+
+// 这个代码是../chunked.go的复制：
+//  s/newChunked/NewChunked/g
+//	s/package http/package httputil/
+// 改动的话请对以上所有文件进行改动。
 
 package httputil
 
@@ -28,6 +35,12 @@ var ErrLineTooLong = errors.New("header line too long")
 //
 // NewChunkedReader is not needed by normal applications. The http package
 // automatically decodes chunking when reading response bodies.
+
+// NewChunkedReader返回一个新的chunkedReader。这个chunkedReader能翻译从r中的HTTP “chunked”
+// 获取到的数据，并且返回数据。
+// chunkedReader当读取到最后的0长度的chunk的时候返回io.EOF。
+//
+// NewChunkedReader在通常的应用中并不需要。http包会在读取回复的消息体的时候自动解码。
 func NewChunkedReader(r io.Reader) io.Reader {
 	br, ok := r.(*bufio.Reader)
 	if !ok {
@@ -89,6 +102,10 @@ func (cr *chunkedReader) Read(b []uint8) (n int, err error) {
 // Give up if the line exceeds maxLineLength.
 // The returned bytes are a pointer into storage in
 // the bufio, so they are only valid until the next bufio read.
+
+// 从b中肚脐眼一行字节（直到\n为止）。
+// 如果这行的字节数超过了maxLineLength则自动放弃读取。
+// 返回的字节是指向bufio的指针，所以它们直到下个bufio读取的时候才可见。
 func readLine(b *bufio.Reader) (p []byte, err error) {
 	if p, err = b.ReadSlice('\n'); err != nil {
 		// We always know when EOF is coming.
@@ -126,12 +143,20 @@ func isASCIISpace(b byte) bool {
 // Content-Length header. Using NewChunkedWriter inside a handler
 // would result in double chunking or chunking with a Content-Length
 // length, both of which are wrong.
+
+// NewChunkedWriter返回一个新的chunkWriter，这个chunkWriter会将HTTP的“chunked”格式进行转化
+// 然后写入w中。关闭返回的chunkedWriter，发送0长度的chunk就标志着流的结束。
+//
+// 一般的应用并不需要使用NewChunkedWriter。如果不设置Content-Length头的话，http包会自动增加chunk。
+// 在handler中使用NewChunkedWriter会导致重复块，或者有Content-length长度的块，这两种都是错误的。
 func NewChunkedWriter(w io.Writer) io.WriteCloser {
 	return &chunkedWriter{w}
 }
 
 // Writing to chunkedWriter translates to writing in HTTP chunked Transfer
 // Encoding wire format to the underlying Wire chunkedWriter.
+
+// 写入到chunkedWriter会在写的时候进行翻译转换。将无线的格式编码转换为底层的chunkedWriter。
 type chunkedWriter struct {
 	Wire io.Writer
 }
@@ -139,6 +164,9 @@ type chunkedWriter struct {
 // Write the contents of data as one chunk to Wire.
 // NOTE: Note that the corresponding chunk-writing procedure in Conn.Write has
 // a bug since it does not check for success of io.WriteString
+
+// 将data的内容写成传输过程中的一个个块。
+// 注意：注意相关的Conn.Write是有个bug，因为它并没有检查io.WriteString的成功。
 func (cw *chunkedWriter) Write(data []byte) (n int, err error) {
 
 	// Don't send 0-length data. It looks like EOF for chunked encoding.
