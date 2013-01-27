@@ -5,6 +5,9 @@
 // Package bufio implements buffered I/O.  It wraps an io.Reader or io.Writer
 // object, creating another object (Reader or Writer) that also implements
 // the interface but provides buffering and some help for textual I/O.
+
+// bufio包实现有缓冲的I/O.它封装了一个io.Reader或者io.Writer对象，另外创建了一个对象
+//（Reader或者Writer），这个对象也实现了一个接口，并提供缓冲和文档读写的帮助。
 package bufio
 
 import (
@@ -27,7 +30,11 @@ var (
 
 // Buffered input.
 
+// 缓冲输入。
+
 // Reader implements buffering for an io.Reader object.
+
+// Reader实现了对一个io.Reader对象的缓冲读。
 type Reader struct {
 	buf          []byte
 	rd           io.Reader
@@ -42,6 +49,9 @@ const minReadBufferSize = 16
 // NewReaderSize returns a new Reader whose buffer has at least the specified
 // size. If the argument io.Reader is already a Reader with large enough
 // size, it returns the underlying Reader.
+
+// NewReaderSize返回了一个新的读取器，这个读取器的缓存大小至少大于制定的大小。
+// 如果io.Reader参数已经是一个有足够大缓存的读取器，它就会返回这个Reader了。
 func NewReaderSize(rd io.Reader, size int) *Reader {
 	// Is it already a Reader?
 	b, ok := rd.(*Reader)
@@ -60,6 +70,8 @@ func NewReaderSize(rd io.Reader, size int) *Reader {
 }
 
 // NewReader returns a new Reader whose buffer has the default size.
+
+// NewReader返回一个新的Reader，这个Reader的大小是默认的大小。
 func NewReader(rd io.Reader) *Reader {
 	return NewReaderSize(rd, defaultBufSize)
 }
@@ -67,6 +79,8 @@ func NewReader(rd io.Reader) *Reader {
 var errNegativeRead = errors.New("bufio: reader returned negative count from Read")
 
 // fill reads a new chunk into the buffer.
+
+// fill读取一个新的块到缓存中。
 func (b *Reader) fill() {
 	// Slide existing data to beginning.
 	if b.r > 0 {
@@ -96,6 +110,9 @@ func (b *Reader) readErr() error {
 // being valid at the next read call. If Peek returns fewer than n bytes, it
 // also returns an error explaining why the read is short. The error is
 // ErrBufferFull if n is larger than b's buffer size.
+
+// Peek返回没有读取的下n个字节。在下个读取的调用前，字节是不可见的。如果Peek返回的字节数少于n，
+// 它一定会解释为什么读取的字节数段了。如果n比b的缓冲大小更大，返回的错误是ErrBufferFull。
 func (b *Reader) Peek(n int) ([]byte, error) {
 	if n < 0 {
 		return nil, ErrNegativeCount
@@ -125,6 +142,11 @@ func (b *Reader) Peek(n int) ([]byte, error) {
 // It calls Read at most once on the underlying Reader,
 // hence n may be less than len(p).
 // At EOF, the count will be zero and err will be io.EOF.
+
+// Read读取数据到p。
+// 返回读取到p的字节数。
+// 底层读取最多只会调用一次Read，因此n会小于len(p)。
+// 在EOF之后，调用这个函数返回的会是0和io.Eof。
 func (b *Reader) Read(p []byte) (n int, err error) {
 	n = len(p)
 	if n == 0 {
@@ -162,6 +184,9 @@ func (b *Reader) Read(p []byte) (n int, err error) {
 
 // ReadByte reads and returns a single byte.
 // If no byte is available, returns an error.
+
+// ReadByte读取和回复一个单字节。
+// 如果没有字节可以读取，返回一个error。
 func (b *Reader) ReadByte() (c byte, err error) {
 	b.lastRuneSize = -1
 	for b.w == b.r {
@@ -177,6 +202,8 @@ func (b *Reader) ReadByte() (c byte, err error) {
 }
 
 // UnreadByte unreads the last byte.  Only the most recently read byte can be unread.
+
+// UnreadByte将最后的字节标志为未读。只有最后的字节才可以被标志为未读。
 func (b *Reader) UnreadByte() error {
 	b.lastRuneSize = -1
 	if b.r == b.w && b.lastByte >= 0 {
@@ -197,6 +224,9 @@ func (b *Reader) UnreadByte() error {
 // ReadRune reads a single UTF-8 encoded Unicode character and returns the
 // rune and its size in bytes. If the encoded rune is invalid, it consumes one byte
 // and returns unicode.ReplacementChar (U+FFFD) with a size of 1.
+
+// ReadRune读取单个的UTF-8编码的Unicode字节，并且返回rune和它的字节大小。
+// 如果编码的rune是可见的，它消耗一个字节并且返回1字节的unicode.ReplacementChar (U+FFFD)。
 func (b *Reader) ReadRune() (r rune, size int, err error) {
 	for b.r+utf8.UTFMax > b.w && !utf8.FullRune(b.buf[b.r:b.w]) && b.err == nil {
 		b.fill()
