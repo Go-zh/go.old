@@ -4,6 +4,8 @@
 
 // Package httputil provides HTTP utility functions, complementing the
 // more common ones in the net/http package.
+
+// httputil包提供HTTP功能单元，作为net/http包的补充.
 package httputil
 
 import (
@@ -24,6 +26,9 @@ var (
 
 // This is an API usage error - the local side is closed.
 // ErrPersistEOF (above) reports that the remote side is closed.
+
+// 这是一个API使用的错误 - 本地一边的连接关闭。
+// ErrPersistEOF（上文提到的）报告远端的一边连接关闭。
 var errClosed = errors.New("i/o operation on closed connection")
 
 // A ServerConn reads requests and sends responses over an underlying
@@ -35,6 +40,12 @@ var errClosed = errors.New("i/o operation on closed connection")
 //
 // ServerConn is low-level and should not be needed by most applications.
 // See Server.
+
+// ServerConn在底层连接之上读取请求，发送回复，直到HTTP keepalive出现了结束命令。
+// ServerConn允许靠调用Hijack来对底层连接进行劫持，从而得到连接的控制权。
+// ServerConn支持管道连接，例如，当回复发送的时候，请求可以不需要进行同步（但是是在相同的顺序）。
+//
+// ServerConn是底层级别的结构，很多应用需要使用到它。具体请看Server。
 type ServerConn struct {
 	lk              sync.Mutex // read-write protects the following fields
 	c               net.Conn
@@ -49,6 +60,8 @@ type ServerConn struct {
 
 // NewServerConn returns a new ServerConn reading and writing c.  If r is not
 // nil, it is the buffer to use when reading c.
+
+// NewServerConn返回一个新的ServerConn来读取和写c。如果r非空，则使用缓存对c进行读取。
 func NewServerConn(c net.Conn, r *bufio.Reader) *ServerConn {
 	if r == nil {
 		r = bufio.NewReader(c)
@@ -60,6 +73,9 @@ func NewServerConn(c net.Conn, r *bufio.Reader) *ServerConn {
 // as the read-side bufio which may have some left over data. Hijack may be
 // called before Read has signaled the end of the keep-alive logic. The user
 // should not call Hijack while Read or Write is in progress.
+
+// Hijack将ServerConn单独分离出来，并且返回底层的连接，以及可能有一些未读数据的缓存的读取器。
+// Hijack会在读取获取到keep-alive结束信号之前被调用。在Read或者Write进行中不可以调用Hijack。
 func (sc *ServerConn) Hijack() (c net.Conn, r *bufio.Reader) {
 	sc.lk.Lock()
 	defer sc.lk.Unlock()
@@ -71,6 +87,8 @@ func (sc *ServerConn) Hijack() (c net.Conn, r *bufio.Reader) {
 }
 
 // Close calls Hijack and then also closes the underlying connection
+
+// Close调用Hijack，并且关闭底层的连接。
 func (sc *ServerConn) Close() error {
 	c, _ := sc.Hijack()
 	if c != nil {
@@ -83,6 +101,9 @@ func (sc *ServerConn) Close() error {
 // it is gracefully determined that there are no more requests (e.g. after the
 // first request on an HTTP/1.0 connection, or after a Connection:close on a
 // HTTP/1.1 connection).
+
+// Read返回连接上的下个请求。如果确认了没有更多请求之后，将会返回ErrPersistEOF。（例如，在HTTP/1.0
+// 的第一个请求之后，或者在HTTP/1.1的Connection:close之后）
 func (sc *ServerConn) Read() (req *http.Request, err error) {
 
 	// Ensure ordered execution of Reads and Writes
@@ -159,6 +180,8 @@ func (sc *ServerConn) Read() (req *http.Request, err error) {
 
 // Pending returns the number of unanswered requests
 // that have been received on the connection.
+
+// Pending返回已经连接上但未应答的请求数。
 func (sc *ServerConn) Pending() int {
 	sc.lk.Lock()
 	defer sc.lk.Unlock()
@@ -168,6 +191,9 @@ func (sc *ServerConn) Pending() int {
 // Write writes resp in response to req. To close the connection gracefully, set the
 // Response.Close field to true. Write should be considered operational until
 // it returns an error, regardless of any errors returned on the Read side.
+
+// Write为请求进行回复。为了要更好的关闭连接，该函数将Response.Close设置为true。
+// 直到它返回一个错误之前，Write都可以被调用，并且应该要忽略任何读取端的错误。
 func (sc *ServerConn) Write(req *http.Request, resp *http.Response) error {
 
 	// Retrieve the pipeline ID of this request/response pair

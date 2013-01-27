@@ -21,6 +21,9 @@ import (
 // elaborate trick where the other copy is made during Request/Response.Write.
 // This would complicate things too much, given that these functions are for
 // debugging only.
+
+// 一种拷贝的方法，从b拷贝数据到r2，这样可以避免使用一些奇怪的方法，比如在Request/Response.Write
+// 的时候进行拷贝。这个方法会让事情变得复杂，所以这个方法仅仅是调试使用。
 func drainBody(b io.ReadCloser) (r1, r2 io.ReadCloser, err error) {
 	var buf bytes.Buffer
 	if _, err = buf.ReadFrom(b); err != nil {
@@ -33,6 +36,8 @@ func drainBody(b io.ReadCloser) (r1, r2 io.ReadCloser, err error) {
 }
 
 // dumpConn is a net.Conn which writes to Writer and reads from Reader
+
+// dumpConn是一个net.Conn接口实现，它向Writer写数据，从Reader读数据。
 type dumpConn struct {
 	io.Writer
 	io.Reader
@@ -48,6 +53,9 @@ func (c *dumpConn) SetWriteDeadline(t time.Time) error { return nil }
 // DumpRequestOut is like DumpRequest but includes
 // headers that the standard http.Transport adds,
 // such as User-Agent.
+
+// DumpRequestOut和DumpRequest一样，但是包含了header，这个header有标准的http.Transport，
+// 比如User-Agent。
 func DumpRequestOut(req *http.Request, body bool) ([]byte, error) {
 	save := req.Body
 	if !body || req.Body == nil {
@@ -104,6 +112,8 @@ func DumpRequestOut(req *http.Request, body bool) ([]byte, error) {
 
 // delegateReader is a reader that delegates to another reader,
 // once it arrives on a channel.
+
+// delegateReader是一个reader，一旦它放在一个channel上，它就是其他reader的代理
 type delegateReader struct {
 	c chan io.Reader
 	r io.Reader // nil until received from c
@@ -117,6 +127,8 @@ func (r *delegateReader) Read(p []byte) (int, error) {
 }
 
 // Return value if nonempty, def otherwise.
+
+// 返回值不会是空的，默认是def。
 func valueOrDefault(value, def string) string {
 	if value != "" {
 		return value
@@ -134,6 +146,8 @@ var reqWriteExcludeHeaderDump = map[string]bool{
 // dumpAsReceived writes req to w in the form as it was received, or
 // at least as accurately as possible from the information retained in
 // the request.
+
+// dumpAsReceived将请求按照原本的格式写到w上，或者会准确地将请求中的保留信息进行传输。
 func dumpAsReceived(req *http.Request, w io.Writer) error {
 	return nil
 }
@@ -145,6 +159,10 @@ func dumpAsReceived(req *http.Request, w io.Writer) error {
 // changes req.Body to refer to the in-memory copy.
 // The documentation for http.Request.Write details which fields
 // of req are used.
+
+// DumpRequest返回req的传输结构，可选的包括请求的消息体，调试使用。
+// DumpRequest在语义上是非操作性的，但是为了获取出消息体，它会将消息体读取到内存中，
+// 并且改变req.Body内存的一个拷贝映射。使用的是req的http.Request.Write属性的文档细节。
 func DumpRequest(req *http.Request, body bool) (dump []byte, err error) {
 	save := req.Body
 	if !body || req.Body == nil {
@@ -205,6 +223,8 @@ func DumpRequest(req *http.Request, body bool) (dump []byte, err error) {
 }
 
 // DumpResponse is like DumpRequest but dumps a response.
+
+// DumpResponse和DumpRequest一样，但是它取出的是一个response。
 func DumpResponse(resp *http.Response, body bool) (dump []byte, err error) {
 	var b bytes.Buffer
 	save := resp.Body
