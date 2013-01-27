@@ -251,6 +251,11 @@ func (sc *ServerConn) Write(req *http.Request, resp *http.Response) error {
 //
 // ClientConn is low-level and should not be needed by most applications.
 // See Client.
+
+// ClientConn从还保持着HTTP keepalive的底层连接发送请求，并且接收header。
+// ClientConn支持调用Hijack来劫持连接用于获取底层网络连接的控制来处理net.Conn。
+//
+// ClientConn是底层的结构，一般应用并不会需要使用到。具体参考Client。
 type ClientConn struct {
 	lk              sync.Mutex // read-write protects the following fields
 	c               net.Conn
@@ -266,6 +271,8 @@ type ClientConn struct {
 
 // NewClientConn returns a new ClientConn reading and writing c.  If r is not
 // nil, it is the buffer to use when reading c.
+
+// NewClientConn返回一个新的ClientConnd对c进行读取和写入。如果r非空，则使用缓存对c进行读取。
 func NewClientConn(c net.Conn, r *bufio.Reader) *ClientConn {
 	if r == nil {
 		r = bufio.NewReader(c)
@@ -280,6 +287,8 @@ func NewClientConn(c net.Conn, r *bufio.Reader) *ClientConn {
 
 // NewProxyClientConn works like NewClientConn but writes Requests
 // using Request's WriteProxy method.
+
+// NewProxyClientConn像NewClientConn一样，不同的是使用Request的WriteProxy方法对请求进行写操作。
 func NewProxyClientConn(c net.Conn, r *bufio.Reader) *ClientConn {
 	cc := NewClientConn(c, r)
 	cc.writeReq = (*http.Request).WriteProxy
@@ -290,6 +299,9 @@ func NewProxyClientConn(c net.Conn, r *bufio.Reader) *ClientConn {
 // as the read-side bufio which may have some left over data. Hijack may be
 // called before the user or Read have signaled the end of the keep-alive
 // logic. The user should not call Hijack while Read or Write is in progress.
+
+// Hijack将ClientConn单独分离出来，并且返回底层的连接，以及可能有一些未读数据的缓存的读取器。
+// Hijack会在读取获取到keep-alive结束信号之前被调用。在Read或者Write进行中不可以调用Hijack。
 func (cc *ClientConn) Hijack() (c net.Conn, r *bufio.Reader) {
 	cc.lk.Lock()
 	defer cc.lk.Unlock()
@@ -301,6 +313,8 @@ func (cc *ClientConn) Hijack() (c net.Conn, r *bufio.Reader) {
 }
 
 // Close calls Hijack and then also closes the underlying connection
+
+// Close调用Hijack并且关闭底层的连接
 func (cc *ClientConn) Close() error {
 	c, _ := cc.Hijack()
 	if c != nil {
@@ -314,6 +328,10 @@ func (cc *ClientConn) Close() error {
 // keepalive connection is logically closed after this request and the opposing
 // server is informed. An ErrUnexpectedEOF indicates the remote closed the
 // underlying TCP connection, which is usually considered as graceful close.
+
+// Write负责写请求。如果HTTP长连接已经被关闭了，ErrPersistEOF错误就会被抛出。如果req.Close设置为true，
+// 在通知请求和对应的服务之后，长连接就会被关闭了。ErrUnexpectedEOF则表示TCP连接被远端关闭。
+// 在考虑到关闭连接的时候必须考虑到这种情况。
 func (cc *ClientConn) Write(req *http.Request) (err error) {
 
 	// Ensure ordered execution of Writes
@@ -367,6 +385,8 @@ func (cc *ClientConn) Write(req *http.Request) (err error) {
 
 // Pending returns the number of unanswered requests
 // that have been sent on the connection.
+
+// Pending返回已经被发送出去但是却没有获取到应答的请求数。
 func (cc *ClientConn) Pending() int {
 	cc.lk.Lock()
 	defer cc.lk.Unlock()
@@ -377,6 +397,9 @@ func (cc *ClientConn) Pending() int {
 // returned together with an ErrPersistEOF, which means that the remote
 // requested that this be the last request serviced. Read can be called
 // concurrently with Write, but not with another Read.
+
+// Read读取连接上的下个请求。回复有可能和ErrPersistEOF一起返回，如果返回了这个错误，
+// 则代表远端的请求是最后被服务的请求了。Read可以和Write并发调用，但是却不能和其他Read并发调用。
 func (cc *ClientConn) Read(req *http.Request) (resp *http.Response, err error) {
 	// Retrieve the pipeline ID of this request/response pair
 	cc.lk.Lock()
@@ -439,6 +462,8 @@ func (cc *ClientConn) Read(req *http.Request) (resp *http.Response, err error) {
 }
 
 // Do is convenience method that writes a request and reads a response.
+
+// Do是一个写请求和读回复很方便的方法。
 func (cc *ClientConn) Do(req *http.Request) (resp *http.Response, err error) {
 	err = cc.Write(req)
 	if err != nil {
