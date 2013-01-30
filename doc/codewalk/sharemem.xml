@@ -1,5 +1,10 @@
+<!--
 <codewalk title="Share Memory By Communicating">
+-->
 
+<codewalk title="通过通信共享内存">
+
+<div class="english">
 <step title="Introduction" src="doc/codewalk/urlpoll.go">
 Go's approach to concurrency differs from the traditional use of
 threads and shared memory. Philosophically, it can be summarized:
@@ -8,20 +13,42 @@ threads and shared memory. Philosophically, it can be summarized:
 <br/><br/>
 Channels allow you to pass references to data structures between goroutines.
 If you consider this as passing around ownership of the data (the ability to
-read and write it), they become a powerful and expressive synchronization 
+read and write it), they become a powerful and expressive synchronization
 mechanism.
 <br/><br/>
 In this codewalk we will look at a simple program that polls a list of
 URLs, checking their HTTP response codes and periodically printing their state.
 </step>
+</div>
 
+<step title="前言" src="doc/codewalk/urlpoll.go">
+Go实现并发的方式，不同于传统的使用线程共享内存的方式。从哲学上，它可以概括为：
+<br/><br/>
+<i>不要通过共享内存来通信，而要通过通信来共享内存。</i>
+<br/><br/>
+信道允许你在Go程间传递数据结构的引用。如果你把它看做传递数据的所有权
+（即读写该数据的能力），它们就会成为强大而富有表达能力的同步机制。
+<br/><br/>
+在这次的代码漫步中，我们将看到一个简单的程序。它用于轮询一个URL的列表，检查它们的
+HTTP 响应代码，并定期打印出它们的状态。
+</step>
+
+<div class="english">
 <step title="State type" src="doc/codewalk/urlpoll.go:/State/,/}/">
 The State type represents the state of a URL.
 <br/><br/>
 The Pollers send State values to the StateMonitor,
 which maintains a map of the current state of each URL.
 </step>
+</div>
 
+<step title="State 类型" src="doc/codewalk/urlpoll.go:/State/,/}/">
+State 类型表示一个URL的状态。
+<br/><br/>
+Poller 会将 State 值发送到 StateMonitor，它维护了每一个URL当前状态的映射。
+</step>
+
+<div class="english">
 <step title="Resource type" src="doc/codewalk/urlpoll.go:/Resource/,/}/">
 A Resource represents the state of a URL to be polled: the URL itself
 and the number of errors encountered since the last successful poll.
@@ -30,14 +57,23 @@ When the program starts, it allocates one Resource for each URL.
 The main goroutine and the Poller goroutines send the Resources to
 each other on channels.
 </step>
+</div>
 
+<step title="Resource 类型" src="doc/codewalk/urlpoll.go:/Resource/,/}/">
+Resource 表示URL被轮询的状态，即URL本身及其最后一次成功轮询之后遇到的错误编号。
+<br/><br/>
+当此程序启动时，它会为每个URL都分配一个 Resource。主Go程与 Poller
+Go程会在信道上互相发送 Resource。
+</step>
+
+<div class="english">
 <step title="Poller function" src="doc/codewalk/urlpoll.go:/func Poller/,/\n}/">
 Each Poller receives Resource pointers from an input channel.
 In this program, the convention is that sending a Resource pointer on
 a channel passes ownership of the underlying data from the sender
 to the receiver.  Because of this convention, we know that
 no two goroutines will access this Resource at the same time.
-This means we don't have to worry about locking to prevent concurrent 
+This means we don't have to worry about locking to prevent concurrent
 access to these data structures.
 <br/><br/>
 The Poller processes the Resource by calling its Poll method.
@@ -46,25 +82,56 @@ It sends a State value to the status channel, to inform the StateMonitor
 of the result of the Poll.
 <br/><br/>
 Finally, it sends the Resource pointer to the out channel. This can be
-interpreted as the Poller saying &quot;I'm done with this Resource&quot; and 
-returning ownership of it to the main goroutine. 
+interpreted as the Poller saying &quot;I'm done with this Resource&quot; and
+returning ownership of it to the main goroutine.
 <br/><br/>
 Several goroutines run Pollers, processing Resources in parallel.
 </step>
+</div>
 
+<step title="Poller 函数" src="doc/codewalk/urlpoll.go:/func Poller/,/\n}/">
+每个 Poller 都会从输入信道中接收到 Resource 的指针。在此程序中，我们约定发送者通过信道，
+将底层数据的所有权传递给接收者。由此可知，不会出现两个Go程同时访问该 Resource
+的情况。这就意味着我们无需担心锁会阻止对这些数据结构的并发访问。
+<br/><br/>
+Poller 通过调用其 Poll 方法来处理 Resource。
+<br/><br/>
+它会向 status 信道发送 State 值，以此将 Poll 的结果通知给 StateMonitor。
+<br/><br/>
+最后，它会将 Resource 的指针发送给 out 信道。这可以理解成 Poller 说：“我搞定这个
+Resource 了”，然后将它的所有权返回给主Go程。
+<br/><br/>
+多个Go程运行多个 Poller，可以并行地处理 Resource。
+</step>
+
+<div class="english">
 <step title="The Poll method" src="doc/codewalk/urlpoll.go:/Poll executes/,/\n}/">
 The Poll method (of the Resource type) performs an HTTP HEAD request
 for the Resource's URL and returns the HTTP response's status code.
-If an error occurs, Poll logs the message to standard error and returns the 
+If an error occurs, Poll logs the message to standard error and returns the
 error string instead.
 </step>
+</div>
 
+<step title="Poll 方法" src="doc/codewalk/urlpoll.go:/Poll executes/,/\n}/">
+（Resource 类型的）Poll 方法为 Resource 的URL执行HTTP HEAD请求，并返回HTTP响应的状态码。
+若有错误产生，Poll 就会将该信息记录到标准错误中，并转而返回该错误的字符串。
+</step>
+
+<div class="english">
 <step title="main function" src="doc/codewalk/urlpoll.go:/func main/,/\n}/">
 The main function starts the Poller and StateMonitor goroutines
 and then loops passing completed Resources back to the pending
 channel after appropriate delays.
 </step>
+</div>
 
+<step title="main 函数" src="doc/codewalk/urlpoll.go:/func main/,/\n}/">
+main 会启动 Poller 和 StateMonitor Go程，接着经过适当的延迟后，循环地将已完成的
+Resource 传回 pending 信道。
+</step>
+
+<div class="english">
 <step title="Creating channels" src="doc/codewalk/urlpoll.go:/Create our/,/complete/">
 First, main makes two channels of *Resource, pending and complete.
 <br/><br/>
@@ -72,24 +139,51 @@ Inside main, a new goroutine sends one Resource per URL to pending
 and the main goroutine receives completed Resources from complete.
 <br/><br/>
 The pending and complete channels are passed to each of the Poller
-goroutines, within which they are known as in and out. 
+goroutines, within which they are known as in and out.
+</step>
+</div>
+
+<step title="创建信道" src="doc/codewalk/urlpoll.go:/Create our/,/complete/">
+首先，main 会创建两个 *Resource 的信道，pending 和 complete。
+<br/><br/>
+在 main 中，新的Go程会为每个URL发送一个 Resource 到 pending，而 main Go程则会从
+complete 接收已完成的 Resource。
+<br/><br/>
+pending 和 complete 信道会被传至每一个 Poller Go程中，在其中，它们被称为 in 和 out。
 </step>
 
+<div class="english">
 <step title="Initializing StateMonitor" src="doc/codewalk/urlpoll.go:/Launch the StateMonitor/,/statusInterval/">
-StateMonitor will initialize and launch a goroutine that stores the state 
-of each Resource. We will look at this function in detail later. 
+StateMonitor will initialize and launch a goroutine that stores the state
+of each Resource. We will look at this function in detail later.
 <br/><br/>
-For now, the important thing to note is that it returns a channel of State, 
+For now, the important thing to note is that it returns a channel of State,
 which is saved as status and passed to the Poller goroutines.
 </step>
+</div>
 
+<step title="初始化 StateMonitor" src="doc/codewalk/urlpoll.go:/Launch the StateMonitor/,/statusInterval/">
+StateMonitor 会初始化并启动一个Go程，它存储了每一个 Resource 的状态。
+稍后我们会看到关于此函数的细节。
+<br/><br/>
+现在最需要注意的，就是它会返回一个 State 的信道，该信道将作为状态保存并传至 Poller Go程。
+</step>
+
+<div class="english">
 <step title="Launching Poller goroutines" src="doc/codewalk/urlpoll.go:/Launch some Poller/,/}/">
 Now that it has the necessary channels, main launches a number of
 Poller goroutines, passing the channels as arguments.
-The channels provide the means of communication between the main, Poller, and 
+The channels provide the means of communication between the main, Poller, and
 StateMonitor goroutines.
 </step>
+</div>
 
+<step title="启动 Poller Go程" src="doc/codewalk/urlpoll.go:/Launch some Poller/,/}/">
+现在有了必须的信道，main 会启动一些 Poller Go程，并将这些信道作为实参传入其中。
+信道为 main、Poller 和 StateMonitor 提供了Go程间互相通信的手段。
+</step>
+
+<div class="english">
 <step title="Send Resources to pending" src="doc/codewalk/urlpoll.go:/Send some Resources/,/}\(\)/">
 To add the initial work to the system, main starts a new goroutine
 that allocates and sends one Resource per URL to pending.
@@ -98,7 +192,7 @@ The new goroutine is necessary because unbuffered channel sends and
 receives are synchronous. That means these channel sends will block until
 the Pollers are ready to read from pending.
 <br/><br/>
-Were these sends performed in the main goroutine with fewer Pollers than 
+Were these sends performed in the main goroutine with fewer Pollers than
 channel sends, the program would reach a deadlock situation, because
 main would not yet be receiving from complete.
 <br/><br/>
@@ -106,7 +200,23 @@ Exercise for the reader: modify this part of the program to read a list of
 URLs from a file. (You may want to move this goroutine into its own
 named function.)
 </step>
+</div>
 
+<step title="将 Resource 发送至 pending" src="doc/codewalk/urlpoll.go:/Send some Resources/,/}\(\)/">
+为了将初始的工作添加到此系统中，main 会启动一个新的Go程，它会为每个URL分配一个
+Resource，并将其发送到 pending 中。
+<br/><br/>
+这个新的Go程是必要的，因为无缓存信道的发送和接收是同步的。
+这也就意味着这些信道的发送操作将会阻塞，直到 Poller 对 pending 的读取操作已经就绪。
+<br/><br/>
+当这些在 main Go程中执行的发送与少于信道发送的 Poller 协同工作时，
+该程序就会遇到死锁的情况，这是由于 main 还未从 complete 进行接收。
+<br/><br/>
+读者练习：修改此程序的这一部分，让它从一个文件中读取URL的列表。
+（你可能想要将此Go程变为有它自己的名称的函数中。）
+</step>
+
+<div class="english">
 <step title="Main Event Loop" src="doc/codewalk/urlpoll.go:/range complete/,/\n	}/">
 When a Poller is done with a Resource, it sends it on the complete channel.
 This loop receives those Resource pointers from complete.
@@ -116,47 +226,106 @@ ensures that the sleeps can happen in parallel.
 <br/><br/>
 Note that any single Resource pointer may only be sent on either pending or
 complete at any one time. This ensures that a Resource is either being
-handled by a Poller goroutine or sleeping, but never both simultaneously.  
+handled by a Poller goroutine or sleeping, but never both simultaneously.
+In this way, we share our Resource data by communicating.
+</step>
+</div>
+
+<step title="主事件循环" src="doc/codewalk/urlpoll.go:/range complete/,/\n	}/">
+When a Poller is done with a Resource, it sends it on the complete channel.
+This loop receives those Resource pointers from complete.
+For each received Resource, it starts a new goroutine calling
+the Resource's Sleep method.  Using a new goroutine for each
+ensures that the sleeps can happen in parallel.
+<br/><br/>
+Note that any single Resource pointer may only be sent on either pending or
+complete at any one time. This ensures that a Resource is either being
+handled by a Poller goroutine or sleeping, but never both simultaneously.
 In this way, we share our Resource data by communicating.
 </step>
 
+<div class="english">
 <step title="The Sleep method" src="doc/codewalk/urlpoll.go:/Sleep/,/\n}/">
 Sleep calls time.Sleep to pause before sending the Resource to done.
 The pause will either be of a fixed length (pollInterval) plus an
 additional delay proportional to the number of sequential errors (r.errCount).
 <br/><br/>
-This is an example of a typical Go idiom: a function intended to run inside 
-a goroutine takes a channel, upon which it sends its return value 
+This is an example of a typical Go idiom: a function intended to run inside
+a goroutine takes a channel, upon which it sends its return value
 (or other indication of completed state).
 </step>
+</div>
+
+<step title="Sleep 方法" src="doc/codewalk/urlpoll.go:/Sleep/,/\n}/">
+Sleep calls time.Sleep to pause before sending the Resource to done.
+The pause will either be of a fixed length (pollInterval) plus an
+additional delay proportional to the number of sequential errors (r.errCount).
+<br/><br/>
+This is an example of a typical Go idiom: a function intended to run inside
+a goroutine takes a channel, upon which it sends its return value
+(or other indication of completed state).
+</step>
+
+<div class="english">
+<step title="StateMonitor" src="doc/codewalk/urlpoll.go:/StateMonitor/,/\n}/">
+The StateMonitor receives State values on a channel and periodically
+outputs the state of all Resources being polled by the program.
+</step>
+</div>
 
 <step title="StateMonitor" src="doc/codewalk/urlpoll.go:/StateMonitor/,/\n}/">
 The StateMonitor receives State values on a channel and periodically
 outputs the state of all Resources being polled by the program.
 </step>
 
+<div class="english">
 <step title="The updates channel" src="doc/codewalk/urlpoll.go:/updates :=/">
 The variable updates is a channel of State, on which the Poller goroutines
 send State values.
 <br/><br/>
 This channel is returned by the function.
 </step>
+</div>
 
-<step title="The urlStatus map" src="doc/codewalk/urlpoll.go:/urlStatus/">
-The variable urlStatus is a map of URLs to their most recent status. 
+<step title="updates 信道" src="doc/codewalk/urlpoll.go:/updates :=/">
+The variable updates is a channel of State, on which the Poller goroutines
+send State values.
+<br/><br/>
+This channel is returned by the function.
 </step>
 
+<div class="english">
+<step title="The urlStatus map" src="doc/codewalk/urlpoll.go:/urlStatus/">
+The variable urlStatus is a map of URLs to their most recent status.
+</step>
+</div>
+
+<step title="urlStatus 映射" src="doc/codewalk/urlpoll.go:/urlStatus/">
+The variable urlStatus is a map of URLs to their most recent status.
+</step>
+
+<div class="english">
 <step title="The Ticker object" src="doc/codewalk/urlpoll.go:/ticker/">
-A time.Ticker is an object that repeatedly sends a value on a channel at a 
-specified interval. 
+A time.Ticker is an object that repeatedly sends a value on a channel at a
+specified interval.
 <br/><br/>
-In this case, ticker triggers the printing of the current state to 
+In this case, ticker triggers the printing of the current state to
+standard output every updateInterval nanoseconds.
+</step>
+</div>
+
+<step title="Ticker 对象" src="doc/codewalk/urlpoll.go:/ticker/">
+A time.Ticker is an object that repeatedly sends a value on a channel at a
+specified interval.
+<br/><br/>
+In this case, ticker triggers the printing of the current state to
 standard output every updateInterval nanoseconds.
 </step>
 
+<div class="english">
 <step title="The StateMonitor goroutine" src="doc/codewalk/urlpoll.go:/go func/,/}\(\)/">
-StateMonitor will loop forever, selecting on two channels: 
-ticker.C and update. The select statement blocks until one of its 
+StateMonitor will loop forever, selecting on two channels:
+ticker.C and update. The select statement blocks until one of its
 communications is ready to proceed.
 <br/><br/>
 When StateMonitor receives a tick from ticker.C, it calls logState to
@@ -164,11 +333,28 @@ print the current state.  When it receives a State update from updates,
 it records the new status in the urlStatus map.
 <br/><br/>
 Notice that this goroutine owns the urlStatus data structure,
-ensuring that it can only be accessed sequentially. 
-This prevents memory corruption issues that might arise from parallel reads 
+ensuring that it can only be accessed sequentially.
+This prevents memory corruption issues that might arise from parallel reads
+and/or writes to a shared map.
+</step>
+</div>
+
+<step title="StateMonitor Go程" src="doc/codewalk/urlpoll.go:/go func/,/}\(\)/">
+StateMonitor will loop forever, selecting on two channels:
+ticker.C and update. The select statement blocks until one of its
+communications is ready to proceed.
+<br/><br/>
+When StateMonitor receives a tick from ticker.C, it calls logState to
+print the current state.  When it receives a State update from updates,
+it records the new status in the urlStatus map.
+<br/><br/>
+Notice that this goroutine owns the urlStatus data structure,
+ensuring that it can only be accessed sequentially.
+This prevents memory corruption issues that might arise from parallel reads
 and/or writes to a shared map.
 </step>
 
+<div class="english">
 <step title="Conclusion" src="doc/codewalk/urlpoll.go">
 In this codewalk we have explored a simple example of using Go's concurrency
 primitives to share memory through commmunication.
@@ -177,5 +363,15 @@ This should provide a starting point from which to explore the ways in which
 goroutines and channels can be used to write expressive and concise concurrent
 programs.
 </step>
-	
+</div>
+
+<step title="总结" src="doc/codewalk/urlpoll.go">
+In this codewalk we have explored a simple example of using Go's concurrency
+primitives to share memory through commmunication.
+<br/><br/>
+This should provide a starting point from which to explore the ways in which
+goroutines and channels can be used to write expressive and concise concurrent
+programs.
+</step>
+
 </codewalk>
