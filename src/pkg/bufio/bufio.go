@@ -6,7 +6,7 @@
 // object, creating another object (Reader or Writer) that also implements
 // the interface but provides buffering and some help for textual I/O.
 
-// bufio包实现有缓冲的I/O.它封装了一个io.Reader或者io.Writer对象，另外创建了一个对象
+// bufio 包实现了带缓存的I/O操作. 它封装了一个io.Reader或者io.Writer对象，另外创建了一个对象
 //（Reader或者Writer），这个对象也实现了一个接口，并提供缓冲和文档读写的帮助。
 package bufio
 

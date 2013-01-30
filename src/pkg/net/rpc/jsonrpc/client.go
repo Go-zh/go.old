@@ -5,7 +5,7 @@
 // Package jsonrpc implements a JSON-RPC ClientCodec and ServerCodec
 // for the rpc packagea.
 
-// 包jsonrpc使用了rpc的包实现了一个JSON-RPC的客户端解码器和服务端的解码器
+// jsonrpc 包使用了rpc的包实现了一个JSON-RPC的客户端解码器和服务端的解码器.
 package jsonrpc
 
 import (
@@ -30,7 +30,7 @@ type clientCodec struct {
 	// Package rpc expects both.
 	// We save the request method in pending when sending a request
 	// and then look it up by request ID when filling out the rpc Response.
-	
+
 	// JSON-RPC回复内容包含了请求id，但是不包含请求方法。
 	// rpc包却都包含。
 	// 我们发送请求的时候将请求方法放到pendding中，并且填写rpc回复的时候根据请求ID来查找。

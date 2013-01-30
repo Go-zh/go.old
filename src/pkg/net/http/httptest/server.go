@@ -21,7 +21,7 @@ import (
 // A Server is an HTTP server listening on a system-chosen port on the
 // local loopback interface, for use in end-to-end HTTP tests.
 
-// Server是一个HTTP服务，它在系统选择的端口上监听请求，并且是在本地的接口监听，
+// Server 是一个HTTP服务，它在系统选择的端口上监听请求，并且是在本地的接口监听，
 // 它完全是为了点到点的HTTP测试而出现。
 type Server struct {
 	URL      string // base URL of form http://ipaddr:port with no trailing slash  // 基本的http://ipaddr:port的URL样式。没有进行尾部删减。

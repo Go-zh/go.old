@@ -4,7 +4,7 @@
 
 // Package httptest provides utilities for HTTP testing.
 
-// httptest包提供HTTP测试的单元工具.
+// httptest 包提供HTTP测试的单元工具.
 package httptest
 
 import (

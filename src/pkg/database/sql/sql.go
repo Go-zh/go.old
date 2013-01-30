@@ -5,7 +5,7 @@
 // Package sql provides a generic interface around SQL (or SQL-like)
 // databases.
 
-// sql包提供通用的SQL数据库（或者类SQL）接口。
+// sql 包提供通用的SQL数据库（或者类SQL）接口。
 package sql
 
 import (

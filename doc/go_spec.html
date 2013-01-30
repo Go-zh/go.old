@@ -9703,7 +9703,7 @@ m := make(map[string]int, 100)  // map with initial space for 100 elements
 <pre>
 s := make([]int, 10, 100)       // len(s) == 10，cap(s) == 100 的切片
 s := make([]int, 1e3)           // len(s) == cap(s) == 1000 的切片
-s := make([]int, 1&lt;&lt;63)   // 非法：len(s) 不能表示为 int 类型的值
+s := make([]int, 1&lt;&lt;63)         // 非法：len(s) 不能表示为 int 类型的值
 s := make([]int, 10, 0)         // 非法：len(s) > cap(s)
 c := make(chan int, 10)         // 缓存大小为10的信道
 m := make(map[string]int, 100)  // 初始空间为100个元素的映射
