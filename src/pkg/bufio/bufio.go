@@ -249,6 +249,10 @@ func (b *Reader) ReadRune() (r rune, size int, err error) {
 // the buffer was not a ReadRune, UnreadRune returns an error.  (In this
 // regard it is stricter than UnreadByte, which will unread the last byte
 // from any read operation.)
+
+// UnreadRune将最后一个rune设置为未读。如果最新的在buffer上的操作不是ReadRune，则UnreadRune
+// 就返回一个error。（在这个角度上看，这个函数比UnreadByte更严格，UnreadByte会将最后一个读取
+// 的byte设置为未读。）
 func (b *Reader) UnreadRune() error {
 	if b.lastRuneSize < 0 || b.r == 0 {
 		return ErrInvalidUnreadRune
@@ -260,6 +264,8 @@ func (b *Reader) UnreadRune() error {
 }
 
 // Buffered returns the number of bytes that can be read from the current buffer.
+
+// Buffered返回当前缓存的可读字节数。
 func (b *Reader) Buffered() int { return b.w - b.r }
 
 // ReadSlice reads until the first occurrence of delim in the input,
@@ -272,6 +278,13 @@ func (b *Reader) Buffered() int { return b.w - b.r }
 // by the next I/O operation, most clients should use
 // ReadBytes or ReadString instead.
 // ReadSlice returns err != nil if and only if line does not end in delim.
+
+// ReadSlice从输入中读取，直到遇到第一个终止符为止，返回一个指向缓存中字节的slice。
+// 在下次调用的时候这些字节就是已经被读取了。如果ReadSlice在找到终止符之前遇到了error，
+// 它就会返回缓存中所有的数据和错误本身（经常是 io.EOF）。
+// 如果在终止符之前缓存已经被充满了，ReadSlice会返回ErrBufferFull错误。
+// 由于ReadSlice返回的数据会被下次的I/O操作重写，因此许多的客户端会选择使用ReadBytes或者ReadString代替。
+// 当且仅当数据没有以终止符结束的时候，ReadSlice返回err != nil
 func (b *Reader) ReadSlice(delim byte) (line []byte, err error) {
 	// Look in buffer.
 	if i := bytes.IndexByte(b.buf[b.r:b.w], delim); i >= 0 {
