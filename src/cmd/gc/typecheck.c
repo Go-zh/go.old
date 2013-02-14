@@ -31,6 +31,8 @@ static void	checkassign(Node*);
 static void	checkassignlist(NodeList*);
 static void	stringtoarraylit(Node**);
 static Node*	resolve(Node*);
+static void	checkdefergo(Node*);
+static int	checkmake(Type*, char*, Node*);
 
 static	NodeList*	typecheckdefstack;
 
@@ -376,8 +378,11 @@ reswitch:
 			t->bound = -1;	// slice
 		} else if(l->op == ODDD) {
 			t->bound = -100;	// to be filled in
-			if(!(top&Ecomplit))
+			if(!(top&Ecomplit) && !n->diag) {
+				t->broke = 1;
+				n->diag = 1;
 				yyerror("use of [...] array outside of array literal");
+			}
 		} else {
 			l = typecheck(&n->left, Erv);
 			switch(consttype(l)) {
@@ -640,6 +645,13 @@ reswitch:
 				n->op = OCMPIFACE;
 			}
 		}
+
+		if((op == ODIV || op == OMOD) && isconst(r, CTINT))
+		if(mpcmpfixc(r->val.u.xval, 0) == 0) {
+			yyerror("division by zero");
+			goto error;
+		} 
+
 		n->type = t;
 		goto ret;
 
@@ -821,23 +833,34 @@ reswitch:
 			yyerror("invalid operation: %N (index of type %T)", n, t);
 			goto error;
 
+
+		case TSTRING:
 		case TARRAY:
 			defaultlit(&n->right, T);
-			n->type = t->type;
+			if(t->etype == TSTRING)
+				n->type = types[TUINT8];
+			else
+				n->type = t->type;
+			why = "string";
+			if(t->etype == TARRAY) {
+				if(isfixedarray(t))
+					why = "array";
+				else
+					why = "slice";
+			}
 			if(n->right->type != T && !isint[n->right->type->etype]) {
-				yyerror("non-integer array index %N", n->right);
+				yyerror("non-integer %s index %N", why, n->right);
 				break;
 			}
 			if(n->right->op == OLITERAL) {
-			       	if(mpgetfix(n->right->val.u.xval) < 0) {
-					why = isfixedarray(t) ? "array" : "slice";
+			       	if(mpgetfix(n->right->val.u.xval) < 0)
 					yyerror("invalid %s index %N (index must be non-negative)", why, n->right);
-				} else if(isfixedarray(t) && t->bound > 0 && mpgetfix(n->right->val.u.xval) >= t->bound)
+				else if(isfixedarray(t) && t->bound > 0 && mpgetfix(n->right->val.u.xval) >= t->bound)
 					yyerror("invalid array index %N (out of bounds for %d-element array)", n->right, t->bound);
-				else if(mpcmpfixfix(n->right->val.u.xval, maxintval[TINT]) > 0) {
-					why = isfixedarray(t) ? "array" : "slice";
+				else if(isconst(n->left, CTSTR) && mpgetfix(n->right->val.u.xval) >= n->left->val.u.sval->len)
+					yyerror("invalid string index %N (out of bounds for %d-byte string)", n->right, n->left->val.u.sval->len);
+				else if(mpcmpfixfix(n->right->val.u.xval, maxintval[TINT]) > 0)
 					yyerror("invalid %s index %N (index too large)", why, n->right);
-				}
 			}
 			break;
 
@@ -848,13 +871,6 @@ reswitch:
 				n->right = assignconv(n->right, t->down, "map index");
 			n->type = t->type;
 			n->op = OINDEXMAP;
-			break;
-
-		case TSTRING:
-			defaultlit(&n->right, types[TUINT]);
-			if(n->right->type != T && !isint[n->right->type->etype])
-				yyerror("non-integer string index %N", n->right);
-			n->type = types[TUINT8];
 			break;
 		}
 		goto ret;
@@ -1020,8 +1036,11 @@ reswitch:
 		defaultlit(&n->left, T);
 		l = n->left;
 		if(l->op == OTYPE) {
-			if(n->isddd || l->type->bound == -100)
-				yyerror("invalid use of ... in type conversion", l);
+			if(n->isddd || l->type->bound == -100) {
+				if(!l->type->broke)
+					yyerror("invalid use of ... in type conversion", l);
+				n->diag = 1;
+			}
 			// pick off before type-checking arguments
 			ok |= Erv;
 			// turn CALL(type, arg) into CONV(arg) w/ type
@@ -1115,10 +1134,12 @@ reswitch:
 			if(!iscomplex[t->etype])
 				goto badcall1;
 			if(isconst(l, CTCPLX)){
+				r = n;
 				if(n->op == OREAL)
 					n = nodfltconst(&l->val.u.cval->real);
 				else
 					n = nodfltconst(&l->val.u.cval->imag);
+				n->orig = r;
 			}
 			n->type = types[cplxsubtype(t->etype)];
 			goto ret;
@@ -1178,7 +1199,9 @@ reswitch:
 		}
 		if(l->op == OLITERAL && r->op == OLITERAL) {
 			// make it a complex literal
-			n = nodcplxlit(l->val, r->val);
+			r = nodcplxlit(l->val, r->val);
+			r->orig = n;
+			n = r;
 		}
 		n->type = t;
 		goto ret;
@@ -1318,17 +1341,27 @@ reswitch:
 	case OCONV:
 	doconv:
 		ok |= Erv;
+		l = nod(OXXX, N, N);
+		n->orig = l;
+		*l = *n;
 		typecheck(&n->left, Erv | (top & (Eindir | Eiota)));
 		convlit1(&n->left, n->type, 1);
 		if((t = n->left->type) == T || n->type == T)
 			goto error;
 		if((n->op = convertop(t, n->type, &why)) == 0) {
-			yyerror("cannot convert %lN to type %T%s", n->left, n->type, why);
+			if(!n->diag && !n->type->broke) {
+				yyerror("cannot convert %lN to type %T%s", n->left, n->type, why);
+				n->diag = 1;
+			}
 			n->op = OCONV;
 		}
 		switch(n->op) {
 		case OCONVNOP:
 			if(n->left->op == OLITERAL) {
+				r = nod(OXXX, N, N);
+				n->op = OCONV;
+				n->orig = r;
+				*r = *n;
 				n->op = OLITERAL;
 				n->val = n->left->val;
 			}
@@ -1371,22 +1404,20 @@ reswitch:
 			l = args->n;
 			args = args->next;
 			typecheck(&l, Erv);
-			defaultlit(&l, types[TINT]);
 			r = N;
 			if(args != nil) {
 				r = args->n;
 				args = args->next;
 				typecheck(&r, Erv);
-				defaultlit(&r, types[TINT]);
 			}
 			if(l->type == T || (r && r->type == T))
 				goto error;
-			if(!isint[l->type->etype]) {
-				yyerror("non-integer len argument to make(%T)", t);
+			et = checkmake(t, "len", l) < 0;
+			et |= r && checkmake(t, "cap", r) < 0;
+			if(et)
 				goto error;
-			}
-			if(r && !isint[r->type->etype]) {
-				yyerror("non-integer cap argument to make(%T)", t);
+			if(isconst(l, CTINT) && r && isconst(r, CTINT) && mpcmpfixfix(l->val.u.xval, r->val.u.xval) > 0) {
+				yyerror("len larger than cap in make(%T)", t);
 				goto error;
 			}
 			n->left = l;
@@ -1402,10 +1433,8 @@ reswitch:
 				defaultlit(&l, types[TINT]);
 				if(l->type == T)
 					goto error;
-				if(!isint[l->type->etype]) {
-					yyerror("non-integer size argument to make(%T)", t);
+				if(checkmake(t, "size", l) < 0)
 					goto error;
-				}
 				n->left = l;
 			} else
 				n->left = nodintconst(0);
@@ -1421,10 +1450,8 @@ reswitch:
 				defaultlit(&l, types[TINT]);
 				if(l->type == T)
 					goto error;
-				if(!isint[l->type->etype]) {
-					yyerror("non-integer buffer argument to make(%T)", t);
+				if(checkmake(t, "buffer", l) < 0)
 					goto error;
-				}
 				n->left = l;
 			} else
 				n->left = nodintconst(0);
@@ -1532,12 +1559,15 @@ reswitch:
 
 	case ODEFER:
 		ok |= Etop;
-		typecheck(&n->left, Etop);
+		typecheck(&n->left, Etop|Erv);
+		if(!n->left->diag)
+			checkdefergo(n);
 		goto ret;
 
 	case OPROC:
 		ok |= Etop;
-		typecheck(&n->left, Etop|Eproc);
+		typecheck(&n->left, Etop|Eproc|Erv);
+		checkdefergo(n);
 		goto ret;
 
 	case OFOR:
@@ -1657,7 +1687,7 @@ ret:
 	}
 	if((top & Etop) && !(top & (Ecall|Erv|Etype)) && !(ok & Etop)) {
 		if(n->diag == 0) {
-			yyerror("%N not used", n);
+			yyerror("%N evaluated but not used", n);
 			n->diag = 1;
 		}
 		goto error;
@@ -1678,6 +1708,56 @@ error:
 
 out:
 	*np = n;
+}
+
+static void
+checkdefergo(Node *n)
+{
+	char *what;
+	
+	what = "defer";
+	if(n->op == OPROC)
+		what = "go";
+
+	switch(n->left->op) {
+	case OCALLINTER:
+	case OCALLMETH:
+	case OCALLFUNC:
+	case OCLOSE:
+	case OCOPY:
+	case ODELETE:
+	case OPANIC:
+	case OPRINT:
+	case OPRINTN:
+	case ORECOVER:
+		// ok
+		break;
+	case OAPPEND:
+	case OCAP:
+	case OCOMPLEX:
+	case OIMAG:
+	case OLEN:
+	case OMAKE:
+	case OMAKESLICE:
+	case OMAKECHAN:
+	case OMAKEMAP:
+	case ONEW:
+	case OREAL:
+	case OLITERAL: // conversion or unsafe.Alignof, Offsetof, Sizeof
+		if(n->left->orig != N && n->left->orig->op == OCONV)
+			goto conv;
+		yyerror("%s discards result of %N", what, n->left);
+		break;
+	default:
+	conv:
+		if(!n->diag) {
+			// The syntax made sure it was a call, so this must be
+			// a conversion.
+			n->diag = 1;
+			yyerror("%s requires function call, not conversion", what);
+		}
+		break;
+	}
 }
 
 static void
@@ -2929,12 +3009,12 @@ typecheckdef(Node *n)
 			yyerror("xxx");
 		}
 		typecheck(&e, Erv | Eiota);
-		if(e->type != T && e->op != OLITERAL) {
-			yyerror("const initializer must be constant");
-			goto ret;
-		}
 		if(isconst(e, CTNIL)) {
 			yyerror("const initializer cannot be nil");
+			goto ret;
+		}
+		if(e->type != T && e->op != OLITERAL || !isgoconst(e)) {
+			yyerror("const initializer %N is not a constant", e);
 			goto ret;
 		}
 		t = n->type;
@@ -3012,4 +3092,34 @@ ret:
 	lineno = lno;
 	n->walkdef = 1;
 	return n;
+}
+
+static int
+checkmake(Type *t, char *arg, Node *n)
+{
+	if(n->op == OLITERAL) {
+		n->val = toint(n->val);
+		if(mpcmpfixc(n->val.u.xval, 0) < 0) {
+			yyerror("negative %s argument in make(%T)", arg, t);
+			return -1;
+		}
+		if(mpcmpfixfix(n->val.u.xval, maxintval[TINT]) > 0) {
+			yyerror("%s argument too large in make(%T)", arg, t);
+			return -1;
+		}
+		
+		// Delay defaultlit until after we've checked range, to avoid
+		// a redundant "constant NNN overflows int" error.
+		defaultlit(&n, types[TINT]);
+		return 0;
+	}
+	
+	// Defaultlit still necessary for non-constant: n might be 1<<k.
+	defaultlit(&n, types[TINT]);
+
+	if(!isint[n->type->etype]) {
+		yyerror("non-integer %s argument in make(%T) - %T", arg, t, n->type);
+		return -1;
+	}
+	return 0;
 }

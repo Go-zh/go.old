@@ -104,6 +104,13 @@ libinit(void)
 		sprint(INITENTRY, "_rt0_%s_%s", goarch, goos);
 	}
 	lookup(INITENTRY, 0)->type = SXREF;
+	if(flag_shared) {
+		if(LIBINITENTRY == nil) {
+			LIBINITENTRY = mal(strlen(goarch)+strlen(goos)+20);
+			sprint(LIBINITENTRY, "_rt0_%s_%s_lib", goarch, goos);
+		}
+		lookup(LIBINITENTRY, 0)->type = SXREF;
+	}
 }
 
 void
@@ -305,7 +312,7 @@ loadlib(void)
 	//
 	// Exception: on OS X, programs such as Shark only work with dynamic
 	// binaries, so leave it enabled on OS X (Mach-O) binaries.
-	if(!havedynamic && HEADTYPE != Hdarwin)
+	if(!flag_shared && !havedynamic && HEADTYPE != Hdarwin)
 		debug['d'] = 1;
 	
 	importcycles();
@@ -1393,6 +1400,19 @@ headtype(char *name)
 	return -1;  // not reached
 }
 
+char*
+headstr(int v)
+{
+	static char buf[20];
+	int i;
+
+	for(i=0; headers[i].name; i++)
+		if(v == headers[i].val)
+			return headers[i].name;
+	snprint(buf, sizeof buf, "%d", v);
+	return buf;
+}
+
 void
 undef(void)
 {
@@ -1440,6 +1460,23 @@ Yconv(Fmt *fp)
 
 vlong coutpos;
 
+static void
+dowrite(int fd, char *p, int n)
+{
+	int m;
+	
+	while(n > 0) {
+		m = write(fd, p, n);
+		if(m <= 0) {
+			cursym = S;
+			diag("write error: %r");
+			errorexit();
+		}
+		n -= m;
+		p += m;
+	}
+}
+
 void
 cflush(void)
 {
@@ -1448,13 +1485,8 @@ cflush(void)
 	if(cbpmax < cbp)
 		cbpmax = cbp;
 	n = cbpmax - buf.cbuf;
-	if(n) {
-		if(write(cout, buf.cbuf, n) != n) {
-			diag("write error: %r");
-			errorexit();
-		}
-		coutpos += n;
-	}
+	dowrite(cout, buf.cbuf, n);
+	coutpos += n;
 	cbp = buf.cbuf;
 	cbc = sizeof(buf.cbuf);
 	cbpmax = cbp;
@@ -1495,10 +1527,7 @@ cwrite(void *buf, int n)
 	cflush();
 	if(n <= 0)
 		return;
-	if(write(cout, buf, n) != n) {
-		diag("write error: %r");
-		errorexit();
-	}
+	dowrite(cout, buf, n);
 	coutpos += n;
 }
 

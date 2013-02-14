@@ -69,8 +69,7 @@ func TestRE2Search(t *testing.T) {
 
 func TestRE2Exhaustive(t *testing.T) {
 	if testing.Short() {
-		t.Log("skipping TestRE2Exhaustive during short test")
-		return
+		t.Skip("skipping TestRE2Exhaustive during short test")
 	}
 	testRE2(t, "testdata/re2-exhaustive.txt.bz2")
 }
@@ -707,3 +706,17 @@ func BenchmarkMatchHard_1K(b *testing.B)    { benchmark(b, hard, 1<<10) }
 func BenchmarkMatchHard_32K(b *testing.B)   { benchmark(b, hard, 32<<10) }
 func BenchmarkMatchHard_1M(b *testing.B)    { benchmark(b, hard, 1<<20) }
 func BenchmarkMatchHard_32M(b *testing.B)   { benchmark(b, hard, 32<<20) }
+
+func TestLongest(t *testing.T) {
+	re, err := Compile(`a(|b)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g, w := re.FindString("ab"), "a"; g != w {
+		t.Errorf("first match was %q, want %q", g, w)
+	}
+	re.Longest()
+	if g, w := re.FindString("ab"), "ab"; g != w {
+		t.Errorf("longest match was %q, want %q", g, w)
+	}
+}

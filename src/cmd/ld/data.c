@@ -146,6 +146,7 @@ void
 relocsym(Sym *s)
 {
 	Reloc *r;
+	Sym *rs;
 	Prog p;
 	int32 i, off, siz, fl;
 	vlong o;
@@ -176,18 +177,35 @@ relocsym(Sym *s)
 		switch(r->type) {
 		default:
 			o = 0;
-			if(archreloc(r, s, &o) < 0)
+			if(isobj || archreloc(r, s, &o) < 0)
 				diag("unknown reloc %d", r->type);
 			break;
 		case D_ADDR:
 			o = symaddr(r->sym) + r->add;
+			if(isobj && r->sym->type != SCONST) {
+				if(thechar == '6')
+					o = 0;
+				else {
+					// set up addend for eventual relocation via outer symbol
+					rs = r->sym;
+					while(rs->outer != nil)
+						rs = rs->outer;
+					o -= symaddr(rs);
+				}
+			}
 			break;
 		case D_PCREL:
-			// r->sym can be null when CALL $(constant) is transformed from absoulte PC to relative PC call.
+			// r->sym can be null when CALL $(constant) is transformed from absolute PC to relative PC call.
 			o = 0;
 			if(r->sym)
 				o += symaddr(r->sym);
 			o += r->add - (s->value + r->off + r->siz);
+			if(isobj && r->sym->type != SCONST) {
+				if(thechar == '6')
+					o = 0;
+				else
+					o = r->add - r->siz;
+			}
 			break;
 		case D_SIZE:
 			o = r->sym->size + r->add;
@@ -232,7 +250,9 @@ void
 dynrelocsym(Sym *s)
 {
 	Reloc *r;
-
+	Sym *rel;
+	Sym *got;
+	
 	if(HEADTYPE == Hwindows) {
 		Sym *rel, *targ;
 
@@ -268,9 +288,23 @@ dynrelocsym(Sym *s)
 		return;
 	}
 
-	for(r=s->r; r<s->r+s->nr; r++)
+	got = rel = nil;
+	if(flag_shared) {
+		rel = lookuprel();
+		got = lookup(".got", 0);
+	}
+	s->rel_ro = 0;
+	for(r=s->r; r<s->r+s->nr; r++) {
 		if(r->sym != S && r->sym->type == SDYNIMPORT || r->type >= 256)
 			adddynrel(s, r);
+		if(flag_shared && r->sym != S && (r->sym->dynimpname == nil || r->sym->dynexport) && r->type == D_ADDR
+				&& (s == got || s->type == SDATA || s->type == SGOSTRING || s->type == STYPE || s->type == SRODATA)) {
+			// Create address based RELATIVE relocation
+			adddynrela(rel, s, r);
+			if(s->type < SNOPTRDATA)
+				s->rel_ro = 1;
+		}
+	}
 }
 
 void
@@ -714,6 +748,27 @@ setuint64(Sym *s, vlong r, uint64 v)
 	setuintxx(s, r, v, 8);
 }
 
+static vlong
+addaddrpcrelplus(Sym *s, Sym *t, int32 add)
+{
+	vlong i;
+	Reloc *r;
+
+	if(s->type == 0)
+		s->type = SDATA;
+	s->reachable = 1;
+	i = s->size;
+	s->size += PtrSize;
+	symgrow(s, s->size);
+	r = addrel(s);
+	r->sym = t;
+	r->off = i;
+	r->siz = PtrSize;
+	r->type = D_PCREL;
+	r->add = add;
+	return i;
+}
+
 vlong
 addaddrplus(Sym *s, Sym *t, int32 add)
 {
@@ -894,7 +949,7 @@ gcaddsym(Sym *gc, Sym *s, int32 off)
 		//print("gcaddsym:    %s    %d    %s\n", s->name, s->size, gotype->name);
 		adduintxx(gc, GC_CALL, PtrSize);
 		adduintxx(gc, off, PtrSize);
-		addaddrplus(gc, decodetype_gc(gotype), 1*PtrSize);
+		addaddrpcrelplus(gc, decodetype_gc(gotype), 4*PtrSize);
 	} else {
 		//print("gcaddsym:    %s    %d    <unknown type>\n", s->name, s->size);
 		for(a = -off&(PtrSize-1); a+PtrSize<=s->size; a+=PtrSize) {
@@ -968,6 +1023,12 @@ dodata(void)
 	}
 	*l = nil;
 
+	if(flag_shared) {
+		for(s=datap; s != nil; s = s->next) {
+			if(s->rel_ro)
+				s->type = SDATARELRO;
+		}
+	}
 	datap = datsort(datap);
 
 	/*
@@ -1004,7 +1065,7 @@ dodata(void)
 	sect->vaddr = datsize;
 	lookup("noptrdata", 0)->sect = sect;
 	lookup("enoptrdata", 0)->sect = sect;
-	for(; s != nil && s->type < SDATA; s = s->next) {
+	for(; s != nil && s->type < SDATARELRO; s = s->next) {
 		s->sect = sect;
 		s->type = SDATA;
 		t = alignsymsize(s->size);
@@ -1015,12 +1076,34 @@ dodata(void)
 	sect->len = datsize - sect->vaddr;
 	datsize = rnd(datsize, PtrSize);
 
+	/* dynamic relocated rodata */
+	if(flag_shared) {
+		sect = addsection(&segdata, ".data.rel.ro", 06);
+		sect->vaddr = datsize;
+		lookup("datarelro", 0)->sect = sect;
+		lookup("edatarelro", 0)->sect = sect;
+		for(; s != nil && s->type == SDATARELRO; s = s->next) {
+			if(s->align != 0)
+				datsize = rnd(datsize, s->align);
+			s->sect = sect;
+			s->type = SDATA;
+			s->value = datsize;
+			datsize += rnd(s->size, PtrSize);
+		}
+		sect->len = datsize - sect->vaddr;
+		datsize = rnd(datsize, PtrSize);
+	}
+
 	/* data */
 	sect = addsection(&segdata, ".data", 06);
 	sect->vaddr = datsize;
 	lookup("data", 0)->sect = sect;
 	lookup("edata", 0)->sect = sect;
 	for(; s != nil && s->type < SBSS; s = s->next) {
+		if(s->type == SDATARELRO) {
+			cursym = s;
+			diag("unexpected symbol type %d", s->type);
+		}
 		s->sect = sect;
 		s->type = SDATA;
 		t = alignsymsize(s->size);
@@ -1080,6 +1163,7 @@ dodata(void)
 	sect->vaddr = 0;
 	lookup("rodata", 0)->sect = sect;
 	lookup("erodata", 0)->sect = sect;
+	lookup("reloffset", 0)->sect = sect;
 	datsize = 0;
 	s = datap;
 	for(; s != nil && s->type < STYPELINK; s = s->next) {
@@ -1227,7 +1311,7 @@ textaddress(void)
 void
 address(void)
 {
-	Section *s, *text, *data, *rodata, *symtab, *pclntab, *noptr, *bss, *noptrbss;
+	Section *s, *text, *data, *rodata, *symtab, *pclntab, *noptr, *bss, *noptrbss, *datarelro;
 	Section *gcdata, *gcbss, *typelink;
 	Sym *sym, *sub;
 	uvlong va;
@@ -1257,6 +1341,7 @@ address(void)
 	noptr = nil;
 	bss = nil;
 	noptrbss = nil;
+	datarelro = nil;
 	for(s=segdata.sect; s != nil; s=s->next) {
 		s->vaddr = va;
 		va += s->len;
@@ -1270,6 +1355,8 @@ address(void)
 			bss = s;
 		if(strcmp(s->name, ".noptrbss") == 0)
 			noptrbss = s;
+		if(strcmp(s->name, ".data.rel.ro") == 0)
+			datarelro = s;
 	}
 	segdata.filelen -= bss->len + noptrbss->len; // deduct .bss
 
@@ -1297,6 +1384,10 @@ address(void)
 	xdefine("erodata", SRODATA, rodata->vaddr + rodata->len);
 	xdefine("typelink", SRODATA, typelink->vaddr);
 	xdefine("etypelink", SRODATA, typelink->vaddr + typelink->len);
+	if(datarelro != nil) {
+		xdefine("datarelro", SRODATA, datarelro->vaddr);
+		xdefine("edatarelro", SRODATA, datarelro->vaddr + datarelro->len);
+	}
 	xdefine("gcdata", SGCDATA, gcdata->vaddr);
 	xdefine("egcdata", SGCDATA, gcdata->vaddr + gcdata->len);
 	xdefine("gcbss", SGCBSS, gcbss->vaddr);

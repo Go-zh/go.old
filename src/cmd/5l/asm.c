@@ -40,7 +40,7 @@ static Prog *PP;
 char linuxdynld[] = "/lib/ld-linux.so.3"; // 2 for OABI, 3 for EABI
 char freebsddynld[] = "/usr/libexec/ld-elf.so.1";
 char openbsddynld[] = "XXX";
-char netbsddynld[] = "XXX";
+char netbsddynld[] = "/libexec/ld.elf_so";
 
 int32
 entryvalue(void)
@@ -91,6 +91,19 @@ static int32
 braddoff(int32 a, int32 b)
 {
 	return (((uint32)a) & 0xff000000U) | (0x00ffffffU & (uint32)(a + b));
+}
+
+Sym *
+lookuprel(void)
+{
+	return lookup(".rel", 0);
+}
+
+void
+adddynrela(Sym *rel, Sym *s, Reloc *r)
+{
+	addaddrplus(rel, s, r->off);
+	adduint32(rel, R_ARM_RELATIVE);
 }
 
 void
@@ -224,6 +237,35 @@ adddynrel(Sym *s, Reloc *r)
 
 	cursym = s;
 	diag("unsupported relocation for dynamic symbol %s (type=%d stype=%d)", targ->name, r->type, targ->type);
+}
+
+int
+elfreloc1(Reloc *r, vlong off, int32 elfsym, vlong add)
+{
+	USED(add);	// written to obj file by ../ld/data.c's reloc
+
+	LPUT(off);
+
+	switch(r->type) {
+	default:
+		return -1;
+
+	case D_ADDR:
+		if(r->siz == 4)
+			LPUT(R_ARM_ABS32 | elfsym<<8);
+		else
+			return -1;
+		break;
+
+	case D_PCREL:
+		if(r->siz == 4)
+			LPUT(R_ARM_REL32 | elfsym<<8);
+		else
+			return -1;
+		break;
+	}
+
+	return 0;
 }
 
 void
@@ -539,9 +581,6 @@ asmb(void)
 		case Hplan9x32:
 			symo = HEADR+segtext.len+segdata.filelen;
 			break;
-		case Hnetbsd:
-			symo = rnd(segdata.filelen, 4096);
-			break;
 		ElfSym:
 			symo = rnd(HEADR+segtext.filelen, INITRND)+segdata.filelen;
 			symo = rnd(symo, INITRND);
@@ -560,6 +599,9 @@ asmb(void)
 				if(debug['v'])
 					Bprint(&bso, "%5.2f dwarf\n", cputime());
 				dwarfemitdebugsections();
+				
+				if(isobj)
+					elfemitreloc();
 			}
 			break;
 		case Hplan9x32:
@@ -644,7 +686,7 @@ asmb(void)
 	}
 	cflush();
 	if(debug['c']){
-		print("textsize=%d\n", segtext.filelen);
+		print("textsize=%ulld\n", segtext.filelen);
 		print("datsize=%ulld\n", segdata.filelen);
 		print("bsssize=%ulld\n", segdata.len - segdata.filelen);
 		print("symsize=%d\n", symsize);
@@ -796,6 +838,7 @@ if(debug['G']) print("%ux: %s: arm %d\n", (uint32)(p->pc), p->from.sym->name, p-
 
 	case 5:		/* bra s */
 		v = -8;
+		// TODO: Use addrel.
 		if(p->cond != P)
 			v = (p->cond->pc - pc) - 8;
 		o1 = opbra(p->as, p->scond);
@@ -859,15 +902,22 @@ if(debug['G']) print("%ux: %s: arm %d\n", (uint32)(p->pc), p->from.sym->name, p-
 			rel = addrel(cursym);
 			rel->off = pc - cursym->value;
 			rel->siz = 4;
-			rel->type = D_ADDR;
 			rel->sym = p->to.sym;
 			rel->add = p->to.offset;
+			if(flag_shared) {
+				rel->type = D_PCREL;
+				rel->add += pc - p->pcrel->pc - 8;
+			} else
+				rel->type = D_ADDR;
 			o1 = 0;
 		}
 		break;
 
 	case 12:	/* movw $lcon, reg */
 		o1 = omvl(p, &p->from, p->to.reg);
+		if(o->flag & LPCREL) {
+			o2 = oprrr(AADD, p->scond) | p->to.reg | REGPC << 16 | p->to.reg << 12;
+		}
 		break;
 
 	case 13:	/* op $lcon, [R], R */
@@ -1172,13 +1222,23 @@ if(debug['G']) print("%ux: %s: arm %d\n", (uint32)(p->pc), p->from.sym->name, p-
 		break;
 
 	case 62:	/* case R -> movw	R<<2(PC),PC */
-		o1 = olrr(p->from.reg, REGPC, REGPC, p->scond);
-		o1 |= 2<<7;
+		if(o->flag & LPCREL) {
+			o1 = oprrr(AADD, p->scond) | immrot(1) | p->from.reg << 16 | REGTMP << 12;
+			o2 = olrr(REGTMP, REGPC, REGTMP, p->scond);
+			o2 |= 2<<7;
+			o3 = oprrr(AADD, p->scond) | REGTMP | REGPC << 16 | REGPC << 12;
+		} else {
+			o1 = olrr(p->from.reg, REGPC, REGPC, p->scond);
+			o1 |= 2<<7;
+		}
 		break;
 
 	case 63:	/* bcase */
-		if(p->cond != P)
+		if(p->cond != P) {
 			o1 = p->cond->pc;
+			if(flag_shared)
+				o1 = o1 - p->pcrel->pc - 16;
+		}
 		break;
 
 	/* reloc ops */
@@ -1187,6 +1247,10 @@ if(debug['G']) print("%ux: %s: arm %d\n", (uint32)(p->pc), p->from.sym->name, p-
 		if(!o1)
 			break;
 		o2 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
+		if(o->flag & LPCREL) {
+			o3 = o2;
+			o2 = oprrr(AADD, p->scond) | REGTMP | REGPC << 16 | REGTMP << 12;
+		}
 		break;
 
 	case 65:	/* mov/movbu addr,R */
@@ -1196,6 +1260,10 @@ if(debug['G']) print("%ux: %s: arm %d\n", (uint32)(p->pc), p->from.sym->name, p-
 		o2 = olr(0, REGTMP, p->to.reg, p->scond);
 		if(p->as == AMOVBU || p->as == AMOVB)
 			o2 |= 1<<22;
+		if(o->flag & LPCREL) {
+			o3 = o2;
+			o2 = oprrr(AADD, p->scond) | REGTMP | REGPC << 16 | REGTMP << 12;
+		}
 		break;
 
 	case 68:	/* floating point store -> ADDR */
@@ -1203,6 +1271,10 @@ if(debug['G']) print("%ux: %s: arm %d\n", (uint32)(p->pc), p->from.sym->name, p-
 		if(!o1)
 			break;
 		o2 = ofsr(p->as, p->from.reg, 0, REGTMP, p->scond, p);
+		if(o->flag & LPCREL) {
+			o3 = o2;
+			o2 = oprrr(AADD, p->scond) | REGTMP | REGPC << 16 | REGTMP << 12;
+		}
 		break;
 
 	case 69:	/* floating point load <- ADDR */
@@ -1210,6 +1282,10 @@ if(debug['G']) print("%ux: %s: arm %d\n", (uint32)(p->pc), p->from.sym->name, p-
 		if(!o1)
 			break;
 		o2 = ofsr(p->as, p->to.reg, 0, REGTMP, p->scond, p) | (1<<20);
+		if(o->flag & LPCREL) {
+			o3 = o2;
+			o2 = oprrr(AADD, p->scond) | REGTMP | REGPC << 16 | REGTMP << 12;
+		}
 		break;
 
 	/* ArmV4 ops: */
@@ -1406,12 +1482,20 @@ if(debug['G']) print("%ux: %s: arm %d\n", (uint32)(p->pc), p->from.sym->name, p-
 			o2 ^= (1<<5)|(1<<6);
 		else if(p->as == AMOVH)
 			o2 ^= (1<<6);
+		if(o->flag & LPCREL) {
+			o3 = o2;
+			o2 = oprrr(AADD, p->scond) | REGTMP | REGPC << 16 | REGTMP << 12;
+		}
 		break;
 	case 94:	/* movh/movhu R,addr -> strh */
 		o1 = omvl(p, &p->to, REGTMP);
 		if(!o1)
 			break;
 		o2 = oshr(p->from.reg, 0, REGTMP, p->scond);
+		if(o->flag & LPCREL) {
+			o3 = o2;
+			o2 = oprrr(AADD, p->scond) | REGTMP | REGPC << 16 | REGTMP << 12;
+		}
 		break;
 	case 95:	/* PLD off(reg) */
 		o1 = 0xf5d0f000;
@@ -1427,6 +1511,7 @@ if(debug['G']) print("%ux: %s: arm %d\n", (uint32)(p->pc), p->from.sym->name, p-
 		// It's not supposed to be reached, ever, but if it is, we'd
 		// like to be able to tell how we got there.  Assemble as
 		//	BL $0
+		// TODO: Use addrel.
 		v = (0 - pc) - 8;
 		o1 = opbra(ABL, C_SCOND_NONE);
 		o1 |= (v >> 2) & 0xffffff;

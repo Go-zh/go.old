@@ -405,6 +405,20 @@ simple_stmt:
 	expr
 	{
 		$$ = $1;
+
+		// These nodes do not carry line numbers.
+		// Since a bare name used as an expression is an error,
+		// introduce a wrapper node to give the correct line.
+		switch($$->op) {
+		case ONAME:
+		case ONONAME:
+		case OTYPE:
+		case OPACK:
+		case OLITERAL:
+			$$ = nod(OPAREN, $$, N);
+			$$->implicit = 1;
+			break;
+		}
 	}
 |	expr LASOP expr
 	{
@@ -933,7 +947,7 @@ pexpr_no_paren:
 		$$ = nod(OSLICE, $1, nod(OKEY, $3, $5));
 	}
 |	pseudocall
-|	convtype '(' expr ')'
+|	convtype '(' expr ocomma ')'
 	{
 		// conversion
 		$$ = nod(OCALL, $1, N);
@@ -989,6 +1003,7 @@ bare_complitexpr:
 		case OPACK:
 		case OLITERAL:
 			$$ = nod(OPAREN, $$, N);
+			$$->implicit = 1;
 		}
 	}
 |	'{' start_complit braced_keyval_list '}'
@@ -1262,8 +1277,11 @@ xfndcl:
 		$$ = $2;
 		if($$ == N)
 			break;
+		if(noescape && $3 != nil)
+			yyerror("can only use //go:noescape with external func implementations");
 		$$->nbody = $3;
 		$$->endlineno = lineno;
+		$$->noescape = noescape;
 		funcbody($$);
 	}
 
@@ -1447,6 +1465,7 @@ xdcl_list:
 		if(nsyntaxerrors == 0)
 			testdclstack();
 		nointerface = 0;
+		noescape = 0;
 	}
 
 vardcl_list:

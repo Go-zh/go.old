@@ -81,8 +81,7 @@ func Marshal(v interface{}) ([]byte, error) {
 func MarshalIndent(v interface{}, prefix, indent string) ([]byte, error) {
 	var b bytes.Buffer
 	enc := NewEncoder(&b)
-	enc.prefix = prefix
-	enc.indent = indent
+	enc.Indent(prefix, indent)
 	if err := enc.Encode(v); err != nil {
 		return nil, err
 	}
@@ -97,6 +96,14 @@ type Encoder struct {
 // NewEncoder returns a new encoder that writes to w.
 func NewEncoder(w io.Writer) *Encoder {
 	return &Encoder{printer{Writer: bufio.NewWriter(w)}}
+}
+
+// Indent sets the encoder to generate XML in which each element
+// begins on a new indented line that starts with prefix and is followed by
+// one or more copies of indent according to the nesting depth.
+func (enc *Encoder) Indent(prefix, indent string) {
+	enc.prefix = prefix
+	enc.indent = indent
 }
 
 // Encode writes the XML encoding of v to the stream.
@@ -117,6 +124,7 @@ type printer struct {
 	prefix     string
 	depth      int
 	indentedIn bool
+	putNewline bool
 }
 
 // marshalValue writes one or more XML elements representing val.
@@ -241,7 +249,7 @@ func (p *printer) marshalSimple(typ reflect.Type, val reflect.Value) error {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		p.WriteString(strconv.FormatUint(val.Uint(), 10))
 	case reflect.Float32, reflect.Float64:
-		p.WriteString(strconv.FormatFloat(val.Float(), 'g', -1, 64))
+		p.WriteString(strconv.FormatFloat(val.Float(), 'g', -1, val.Type().Bits()))
 	case reflect.String:
 		// TODO: Add EscapeString.
 		Escape(p, []byte(val.String()))
@@ -279,12 +287,25 @@ func (p *printer) marshalStruct(tinfo *typeInfo, val reflect.Value) error {
 		vf := finfo.value(val)
 		switch finfo.flags & fMode {
 		case fCharData:
+			var scratch [64]byte
 			switch vf.Kind() {
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				Escape(p, strconv.AppendInt(scratch[:0], vf.Int(), 10))
+			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+				Escape(p, strconv.AppendUint(scratch[:0], vf.Uint(), 10))
+			case reflect.Float32, reflect.Float64:
+				Escape(p, strconv.AppendFloat(scratch[:0], vf.Float(), 'g', -1, vf.Type().Bits()))
+			case reflect.Bool:
+				Escape(p, strconv.AppendBool(scratch[:0], vf.Bool()))
 			case reflect.String:
 				Escape(p, []byte(vf.String()))
 			case reflect.Slice:
 				if elem, ok := vf.Interface().([]byte); ok {
 					Escape(p, elem)
+				}
+			case reflect.Struct:
+				if vf.Type() == timeType {
+					Escape(p, []byte(vf.Interface().(time.Time).Format(time.RFC3339Nano)))
 				}
 			}
 			continue
@@ -374,7 +395,11 @@ func (p *printer) writeIndent(depthDelta int) {
 		}
 		p.indentedIn = false
 	}
-	p.WriteByte('\n')
+	if p.putNewline {
+		p.WriteByte('\n')
+	} else {
+		p.putNewline = true
+	}
 	if len(p.prefix) > 0 {
 		p.WriteString(p.prefix)
 	}

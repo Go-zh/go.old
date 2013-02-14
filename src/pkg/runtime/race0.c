@@ -7,9 +7,10 @@
 
 #include "runtime.h"
 
-void
+uintptr
 runtime·raceinit(void)
 {
+	return 0;
 }
 
 void
@@ -37,6 +38,26 @@ void
 runtime·racereadpc(void *addr, void *callpc, void *pc)
 {
 	USED(addr);
+	USED(callpc);
+	USED(pc);
+}
+
+void
+runtime·racewriterangepc(void *addr, uintptr sz, uintptr step, void *callpc, void *pc)
+{
+	USED(addr);
+	USED(sz);
+	USED(step);
+	USED(callpc);
+	USED(pc);
+}
+
+void
+runtime·racereadrangepc(void *addr, uintptr sz, uintptr step, void *callpc, void *pc)
+{
+	USED(addr);
+	USED(sz);
+	USED(step);
 	USED(callpc);
 	USED(pc);
 }
@@ -99,15 +120,14 @@ runtime·racefree(void *p)
 	USED(p);
 }
 
-void
-runtime·racegostart(int32 goid, void *pc)
+uintptr
+runtime·racegostart(void *pc)
 {
-	USED(goid);
 	USED(pc);
+	return 0;
 }
 
 void
-runtime·racegoend(int32 goid)
+runtime·racegoend()
 {
-	USED(goid);
 }

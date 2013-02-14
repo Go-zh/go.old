@@ -37,6 +37,7 @@ func sysInit() {
 	}
 	canCancelIO = syscall.LoadCancelIoEx() == nil
 	if syscall.LoadGetAddrInfo() == nil {
+		lookupPort = newLookupPort
 		lookupIP = newLookupIP
 	}
 }
@@ -60,11 +61,11 @@ func dialTimeout(net, addr string, timeout time.Duration) (Conn, error) {
 		return dialTimeoutRace(net, addr, timeout)
 	}
 	deadline := time.Now().Add(timeout)
-	_, addri, err := resolveNetAddr("dial", net, addr, deadline)
+	ra, err := resolveAddr("dial", net, addr, deadline)
 	if err != nil {
 		return nil, err
 	}
-	return dialAddr(net, addr, addri, deadline)
+	return dial(net, addr, ra, deadline)
 }
 
 // Interface for all IO operations.
@@ -618,15 +619,10 @@ func (fd *netFD) accept(toAddr func(syscall.Sockaddr) Addr) (*netFD, error) {
 	defer fd.decref()
 
 	// Get new socket.
-	// See ../syscall/exec_unix.go for description of ForkLock.
-	syscall.ForkLock.RLock()
-	s, err := syscall.Socket(fd.family, fd.sotype, 0)
+	s, err := sysSocket(fd.family, fd.sotype, 0)
 	if err != nil {
-		syscall.ForkLock.RUnlock()
 		return nil, &OpError{"socket", fd.net, fd.laddr, err}
 	}
-	syscall.CloseOnExec(s)
-	syscall.ForkLock.RUnlock()
 
 	// Associate our new socket with IOCP.
 	onceStartServer.Do(startServer)

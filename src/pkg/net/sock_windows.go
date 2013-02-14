@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Sockets for Windows
-
 package net
 
 import "syscall"
@@ -18,26 +16,35 @@ func listenerSockaddr(s syscall.Handle, f int, la syscall.Sockaddr, toAddr func(
 	if a == nil {
 		return la, nil
 	}
-	switch v := a.(type) {
+	switch a := a.(type) {
 	case *TCPAddr, *UnixAddr:
-		err := setDefaultListenerSockopts(s)
-		if err != nil {
+		if err := setDefaultListenerSockopts(s); err != nil {
 			return nil, err
 		}
 	case *UDPAddr:
-		if v.IP.IsMulticast() {
-			err := setDefaultMulticastSockopts(s)
-			if err != nil {
+		if a.IP.IsMulticast() {
+			if err := setDefaultMulticastSockopts(s); err != nil {
 				return nil, err
 			}
 			switch f {
 			case syscall.AF_INET:
-				v.IP = IPv4zero
+				a.IP = IPv4zero
 			case syscall.AF_INET6:
-				v.IP = IPv6unspecified
+				a.IP = IPv6unspecified
 			}
-			return v.sockaddr(f)
+			return a.sockaddr(f)
 		}
 	}
 	return la, nil
+}
+
+func sysSocket(f, t, p int) (syscall.Handle, error) {
+	// See ../syscall/exec_unix.go for description of ForkLock.
+	syscall.ForkLock.RLock()
+	s, err := syscall.Socket(f, t, p)
+	if err == nil {
+		syscall.CloseOnExec(s)
+	}
+	syscall.ForkLock.RUnlock()
+	return s, err
 }

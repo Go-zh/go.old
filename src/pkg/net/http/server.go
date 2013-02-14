@@ -223,12 +223,16 @@ func (cw *chunkWriter) Write(p []byte) (n int, err error) {
 	if cw.chunking {
 		_, err = fmt.Fprintf(cw.res.conn.buf, "%x\r\n", len(p))
 		if err != nil {
+			cw.res.conn.rwc.Close()
 			return
 		}
 	}
 	n, err = cw.res.conn.buf.Write(p)
 	if cw.chunking && err == nil {
 		_, err = cw.res.conn.buf.Write(crlf)
+	}
+	if err != nil {
+		cw.res.conn.rwc.Close()
 	}
 	return
 }
@@ -416,6 +420,16 @@ func (c *conn) readRequest() (w *response, err error) {
 	if c.hijacked() {
 		return nil, ErrHijacked
 	}
+
+	if d := c.server.ReadTimeout; d != 0 {
+		c.rwc.SetReadDeadline(time.Now().Add(d))
+	}
+	if d := c.server.WriteTimeout; d != 0 {
+		defer func() {
+			c.rwc.SetWriteDeadline(time.Now().Add(d))
+		}()
+	}
+
 	c.lr.N = int64(c.server.maxHeaderBytes()) + 4096 /* bufio slop */
 	var req *Request
 	if req, err = ReadRequest(c.buf.Reader); err != nil {
@@ -764,6 +778,18 @@ func (c *conn) closeWriteAndWait() {
 	time.Sleep(rstAvoidanceDelay)
 }
 
+// validNPN returns whether the proto is not a blacklisted Next
+// Protocol Negotiation protocol.  Empty and built-in protocol types
+// are blacklisted and can't be overridden with alternate
+// implementations.
+func validNPN(proto string) bool {
+	switch proto {
+	case "", "http/1.1", "http/1.0":
+		return false
+	}
+	return true
+}
+
 // Serve a new connection.
 func (c *conn) serve() {
 	defer func() {
@@ -779,11 +805,24 @@ func (c *conn) serve() {
 	}()
 
 	if tlsConn, ok := c.rwc.(*tls.Conn); ok {
+		if d := c.server.ReadTimeout; d != 0 {
+			c.rwc.SetReadDeadline(time.Now().Add(d))
+		}
+		if d := c.server.WriteTimeout; d != 0 {
+			c.rwc.SetWriteDeadline(time.Now().Add(d))
+		}
 		if err := tlsConn.Handshake(); err != nil {
 			return
 		}
 		c.tlsState = new(tls.ConnectionState)
 		*c.tlsState = tlsConn.ConnectionState()
+		if proto := c.tlsState.NegotiatedProtocol; validNPN(proto) {
+			if fn := c.server.TLSNextProto[proto]; fn != nil {
+				h := initNPNRequest{tlsConn, serverHandler{c.server}}
+				fn(c.server, tlsConn, h)
+			}
+			return
+		}
 	}
 
 	for {
@@ -826,20 +865,12 @@ func (c *conn) serve() {
 			break
 		}
 
-		handler := c.server.Handler
-		if handler == nil {
-			handler = DefaultServeMux
-		}
-		if req.RequestURI == "*" && req.Method == "OPTIONS" {
-			handler = globalOptionsHandler{}
-		}
-
 		// HTTP cannot have multiple simultaneous active requests.[*]
 		// Until the server replies to this request, it can't read another,
 		// so we might as well run the handler in this goroutine.
 		// [*] Not strictly true: HTTP pipelining.  We could let them all process
 		// in parallel even if their responses need to be serialized.
-		handler.ServeHTTP(w, w.req)
+		serverHandler{c.server}.ServeHTTP(w, w.req)
 		if c.hijacked() {
 			return
 		}
@@ -1232,6 +1263,32 @@ type Server struct {
 	WriteTimeout   time.Duration // maximum duration before timing out write of the response
 	MaxHeaderBytes int           // maximum size of request headers, DefaultMaxHeaderBytes if 0
 	TLSConfig      *tls.Config   // optional TLS config, used by ListenAndServeTLS
+
+	// TLSNextProto optionally specifies a function to take over
+	// ownership of the provided TLS connection when an NPN
+	// protocol upgrade has occured.  The map key is the protocol
+	// name negotiated. The Handler argument should be used to
+	// handle HTTP requests and will initialize the Request's TLS
+	// and RemoteAddr if not already set.  The connection is
+	// automatically closed when the function returns.
+	TLSNextProto map[string]func(*Server, *tls.Conn, Handler)
+}
+
+// serverHandler delegates to either the server's Handler or
+// DefaultServeMux and also handles "OPTIONS *" requests.
+type serverHandler struct {
+	srv *Server
+}
+
+func (sh serverHandler) ServeHTTP(rw ResponseWriter, req *Request) {
+	handler := sh.srv.Handler
+	if handler == nil {
+		handler = DefaultServeMux
+	}
+	if req.RequestURI == "*" && req.Method == "OPTIONS" {
+		handler = globalOptionsHandler{}
+	}
+	handler.ServeHTTP(rw, req)
 }
 
 // ListenAndServe listens on the TCP network address srv.Addr and then
@@ -1274,12 +1331,6 @@ func (srv *Server) Serve(l net.Listener) error {
 			return e
 		}
 		tempDelay = 0
-		if srv.ReadTimeout != 0 {
-			rw.SetReadDeadline(time.Now().Add(srv.ReadTimeout))
-		}
-		if srv.WriteTimeout != 0 {
-			rw.SetWriteDeadline(time.Now().Add(srv.WriteTimeout))
-		}
 		c, err := srv.newConn(rw)
 		if err != nil {
 			continue
@@ -1492,6 +1543,31 @@ func (globalOptionsHandler) ServeHTTP(w ResponseWriter, r *Request) {
 		mb := MaxBytesReader(w, r.Body, 4<<10)
 		io.Copy(ioutil.Discard, mb)
 	}
+}
+
+// eofReader is a non-nil io.ReadCloser that always returns EOF.
+var eofReader = ioutil.NopCloser(strings.NewReader(""))
+
+// initNPNRequest is an HTTP handler that initializes certain
+// uninitialized fields in its *Request. Such partially-initialized
+// Requests come from NPN protocol handlers.
+type initNPNRequest struct {
+	c *tls.Conn
+	h serverHandler
+}
+
+func (h initNPNRequest) ServeHTTP(rw ResponseWriter, req *Request) {
+	if req.TLS == nil {
+		req.TLS = &tls.ConnectionState{}
+		*req.TLS = h.c.ConnectionState()
+	}
+	if req.Body == nil {
+		req.Body = eofReader
+	}
+	if req.RemoteAddr == "" {
+		req.RemoteAddr = h.c.RemoteAddr().String()
+	}
+	h.h.ServeHTTP(rw, req)
 }
 
 // loggingConn is used for debugging.

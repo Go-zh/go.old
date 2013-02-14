@@ -223,7 +223,7 @@ func (name handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Index对请求“/debug/pprof/”返回一个HTML页面，这个页面展示了所有可见的统计。
 func Index(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/debug/pprof/") {
-		name := r.URL.Path[len("/debug/pprof/"):]
+		name := strings.TrimPrefix(r.URL.Path, "/debug/pprof/")
 		if name != "" {
 			handler(name).ServeHTTP(w, r)
 			return

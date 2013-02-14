@@ -99,6 +99,20 @@ int nelfsym = 1;
 static void addpltsym(Sym*);
 static void addgotsym(Sym*);
 
+Sym *
+lookuprel(void)
+{
+	return lookup(".rela", 0);
+}
+
+void
+adddynrela(Sym *rela, Sym *s, Reloc *r)
+{
+	addaddrplus(rela, s, r->off);
+	adduint64(rela, R_X86_64_RELATIVE);
+	addaddrplus(rela, r->sym, r->add); // Addend
+}
+
 void
 adddynrel(Sym *s, Reloc *r)
 {
@@ -268,6 +282,37 @@ adddynrel(Sym *s, Reloc *r)
 	
 	cursym = s;
 	diag("unsupported relocation for dynamic symbol %s (type=%d stype=%d)", targ->name, r->type, targ->type);
+}
+
+int
+elfreloc1(Reloc *r, vlong off, int32 elfsym, vlong add)
+{
+	VPUT(off);
+
+	switch(r->type) {
+	default:
+		return -1;
+
+	case D_ADDR:
+		if(r->siz == 4)
+			VPUT(R_X86_64_32 | (uint64)elfsym<<32);
+		else if(r->siz == 8)
+			VPUT(R_X86_64_64 | (uint64)elfsym<<32);
+		else
+			return -1;
+		break;
+
+	case D_PCREL:
+		if(r->siz == 4)
+			VPUT(R_X86_64_PC32 | (uint64)elfsym<<32);
+		else
+			return -1;
+		add -= r->siz;
+		break;
+	}
+
+	VPUT(add);
+	return 0;
 }
 
 int
@@ -463,7 +508,7 @@ adddynsym(Sym *s)
 			addaddr(d, s);
 	
 		/* size of object */
-		adduint64(d, 0);
+		adduint64(d, s->size);
 	
 		if(!s->dynexport && s->dynimplib && needlib(s->dynimplib)) {
 			elfwritedynent(lookup(".dynamic", 0), DT_NEEDED,
@@ -660,6 +705,9 @@ asmb(void)
 				       Bprint(&bso, "%5.2f dwarf\n", cputime());
 
 				dwarfemitdebugsections();
+				
+				if(isobj)
+					elfemitreloc();
 			}
 			break;
 		case Hplan9x64:

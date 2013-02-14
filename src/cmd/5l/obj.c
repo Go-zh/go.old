@@ -48,21 +48,22 @@ Header headers[] = {
    "noheader", Hnoheader,
    "risc", Hrisc,
    "plan9", Hplan9x32,
-   "netbsd", Hnetbsd,
    "ixp1200", Hixp1200,
    "ipaq", Hipaq,
    "linux", Hlinux,
    "freebsd", Hfreebsd,
+   "netbsd", Hnetbsd,
    0, 0
 };
 
 /*
  *	-Hrisc -T0x10005000 -R4		is aif for risc os
  *	-Hplan9 -T4128 -R4096		is plan9 format
- *	-Hnetbsd -T0xF0000020 -R4	is NetBSD format
  *	-Hixp1200			is IXP1200 (raw)
  *	-Hipaq -T0xC0008010 -R1024	is ipaq
  *	-Hlinux -Tx -Rx			is linux elf
+ *	-Hfreebsd			is freebsd elf
+ *	-Hnetbsd			is netbsd elf
  */
 
 void
@@ -80,6 +81,7 @@ main(int argc, char *argv[])
 	INITDAT = -1;
 	INITRND = -1;
 	INITENTRY = 0;
+	LIBINITENTRY = 0;
 	nuxiinit();
 	
 	p = getgoarm();
@@ -123,6 +125,7 @@ main(int argc, char *argv[])
 	flagcount("u", "reject unsafe packages", &debug['u']);
 	flagcount("v", "print link trace", &debug['v']);
 	flagcount("w", "disable DWARF generation", &debug['w']);
+	flagcount("shared", "generate shared object", &flag_shared);
 	
 	flagparse(&argc, &argv, usage);
 
@@ -164,15 +167,6 @@ main(int argc, char *argv[])
 		if(INITRND == -1)
 			INITRND = 4096;
 		break;
-	case Hnetbsd:	/* boot for NetBSD */
-		HEADR = 32L;
-		if(INITTEXT == -1)
-			INITTEXT = 0xF0000020L;
-		if(INITDAT == -1)
-			INITDAT = 0;
-		if(INITRND == -1)
-			INITRND = 4096;
-		break;
 	case Hixp1200: /* boot for IXP1200 */
 		HEADR = 0L;
 		if(INITTEXT == -1)
@@ -193,6 +187,7 @@ main(int argc, char *argv[])
 		break;
 	case Hlinux:	/* arm elf */
 	case Hfreebsd:
+	case Hnetbsd:
 		debug['d'] = 0;	// with dynamic linking
 		tlsoffset = -8; // hardcoded number, first 4-byte word for g, and then 4-byte word for m
 		                // this number is known to ../../pkg/runtime/cgo/gcc_linux_arm.c

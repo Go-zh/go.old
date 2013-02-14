@@ -266,6 +266,8 @@ gen(Node *n)
 	Label *lab;
 	int32 wasregalloc;
 
+//dump("gen", n);
+
 	lno = setlineno(n);
 	wasregalloc = anyregalloc();
 
@@ -733,8 +735,6 @@ cgen_as(Node *nl, Node *nr)
 			return;
 		}
 		clearslim(nl);
-		if(nl->addable)
-			gused(nl);
 		return;
 	}
 

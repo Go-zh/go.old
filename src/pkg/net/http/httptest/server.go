@@ -26,18 +26,25 @@ import (
 type Server struct {
 	URL      string // base URL of form http://ipaddr:port with no trailing slash  // 基本的http://ipaddr:port的URL样式。没有进行尾部删减。
 	Listener net.Listener
-	TLS      *tls.Config // nil if not using TLS  // 如果没有使用TLS，则为nil。
+
+	// TLS is the optional TLS configuration, populated with a new config
+	// after TLS is started. If set on an unstarted server before StartTLS
+	// is called, existing fields are copied into the new config.
+	//
+	// TLS 为可选的 TLS 配置，它在 TLS 启动后，与新的配置一起构成。若在 StartTLS
+	// 被调用前设置了一个未启动的服务，既有的字段就会被复制为新的配置。
+	TLS *tls.Config
 
 	// Config may be changed after calling NewUnstartedServer and
 	// before Start or StartTLS.
-
+	//
 	// Config可能在调用NewUnstartedServer之后或者在Start和StartTLS之前被改变。
 	Config *http.Server
 
 	// wg counts the number of outstanding HTTP requests on this server.
 	// Close blocks until all requests are finished.
-
-	// wg计算服务上的HTTP请求数。只有当全部请求都结束之后才关闭阻塞。
+	//
+	// wg 计算服务上的HTTP请求数。只有当全部请求都结束之后才关闭阻塞。
 	wg sync.WaitGroup
 }
 
@@ -147,9 +154,16 @@ func (s *Server) StartTLS() {
 		panic(fmt.Sprintf("httptest: NewTLSServer: %v", err))
 	}
 
-	s.TLS = &tls.Config{
-		NextProtos:   []string{"http/1.1"},
-		Certificates: []tls.Certificate{cert},
+	existingConfig := s.TLS
+	s.TLS = new(tls.Config)
+	if existingConfig != nil {
+		*s.TLS = *existingConfig
+	}
+	if s.TLS.NextProtos == nil {
+		s.TLS.NextProtos = []string{"http/1.1"}
+	}
+	if len(s.TLS.Certificates) == 0 {
+		s.TLS.Certificates = []tls.Certificate{cert}
 	}
 	tlsListener := tls.NewListener(s.Listener, s.TLS)
 

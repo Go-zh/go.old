@@ -33,6 +33,10 @@ import (
 // the value pointed at by the pointer.  If the pointer is nil, Unmarshal
 // allocates a new value for it to point to.
 //
+// To unmarshal JSON into a struct, Unmarshal matches incoming object
+// keys to the keys used by Marshal (either the struct field name or its tag),
+// preferring an exact match but also accepting a case-insensitive match.
+//
 // To unmarshal JSON into an interface value, Unmarshal unmarshals
 // the JSON into the concrete value contained in the interface value.
 // If the interface value is nil, that is, has no concrete value stored in it,
@@ -53,11 +57,20 @@ import (
 //
 func Unmarshal(data []byte, v interface{}) error {
 
+	// Quick check for well-formedness.
+	// Avoids filling out half a data structure
+	// before discovering a JSON syntax error.
+	var d decodeState
+	err := checkValid(data, &d.scan)
+	if err != nil {
+		return err
+	}
+
 	// skip heavy processing for primitive values
 	var first byte
 	var i int
 	for i, first = range data {
-		if !isSpace(rune(first)) {
+		if first > ' ' || !isSpace(rune(first)) {
 			break
 		}
 	}
@@ -66,21 +79,11 @@ func Unmarshal(data []byte, v interface{}) error {
 		if rv.Kind() != reflect.Ptr || rv.IsNil() {
 			return &InvalidUnmarshalError{reflect.TypeOf(v)}
 		}
-		var d decodeState
 		d.literalStore(data[i:], rv.Elem(), false)
 		return d.savedError
 	}
 
-	d := new(decodeState).init(data)
-
-	// Quick check for well-formedness.
-	// Avoids filling out half a data structure
-	// before discovering a JSON syntax error.
-	err := checkValid(data, &d.scan)
-	if err != nil {
-		return err
-	}
-
+	d.init(data)
 	return d.unmarshal(v)
 }
 
@@ -761,7 +764,7 @@ func (d *decodeState) valueInterface() interface{} {
 
 // arrayInterface is like array but returns []interface{}.
 func (d *decodeState) arrayInterface() []interface{} {
-	var v []interface{}
+	var v = make([]interface{}, 0)
 	for {
 		// Look ahead for ] - can only happen on first iteration.
 		op := d.scanWhile(scanSkipSpace)

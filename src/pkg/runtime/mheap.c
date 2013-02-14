@@ -138,7 +138,9 @@ HaveSpan:
 		*(uintptr*)(t->start<<PageShift) = *(uintptr*)(s->start<<PageShift);  // copy "needs zeroing" mark
 		t->state = MSpanInUse;
 		MHeap_FreeLocked(h, t);
+		t->unusedsince = s->unusedsince; // preserve age
 	}
+	s->unusedsince = 0;
 
 	// Record span info, because gc needs to be
 	// able to map interior pointer to containing span.
@@ -300,10 +302,12 @@ MHeap_FreeLocked(MHeap *h, MSpan *s)
 	}
 	mstats.heap_idle += s->npages<<PageShift;
 	s->state = MSpanFree;
-	s->unusedsince = 0;
-	s->npreleased = 0;
 	runtime·MSpanList_Remove(s);
 	sp = (uintptr*)(s->start<<PageShift);
+	// Stamp newly unused spans. The scavenger will use that
+	// info to potentially give back some pages to the OS.
+	s->unusedsince = runtime·nanotime();
+	s->npreleased = 0;
 
 	// Coalesce with earlier, later spans.
 	p = s->start;
@@ -350,6 +354,43 @@ forcegchelper(Note *note)
 	runtime·notewakeup(note);
 }
 
+static uintptr
+scavengelist(MSpan *list, uint64 now, uint64 limit)
+{
+	uintptr released, sumreleased;
+	MSpan *s;
+
+	if(runtime·MSpanList_IsEmpty(list))
+		return 0;
+
+	sumreleased = 0;
+	for(s=list->next; s != list; s=s->next) {
+		if((now - s->unusedsince) > limit) {
+			released = (s->npages - s->npreleased) << PageShift;
+			mstats.heap_released += released;
+			sumreleased += released;
+			s->npreleased = s->npages;
+			runtime·SysUnused((void*)(s->start << PageShift), s->npages << PageShift);
+		}
+	}
+	return sumreleased;
+}
+
+static uintptr
+scavenge(uint64 now, uint64 limit)
+{
+	uint32 i;
+	uintptr sumreleased;
+	MHeap *h;
+	
+	h = &runtime·mheap;
+	sumreleased = 0;
+	for(i=0; i < nelem(h->free); i++)
+		sumreleased += scavengelist(&h->free[i], now, limit);
+	sumreleased += scavengelist(&h->large, now, limit);
+	return sumreleased;
+}
+
 // Release (part of) unused memory to OS.
 // Goroutine created at startup.
 // Loop forever.
@@ -357,10 +398,9 @@ void
 runtime·MHeap_Scavenger(void)
 {
 	MHeap *h;
-	MSpan *s, *list;
 	uint64 tick, now, forcegc, limit;
-	uint32 k, i;
-	uintptr released, sumreleased;
+	uint32 k;
+	uintptr sumreleased;
 	byte *env;
 	bool trace;
 	Note note, *notep;
@@ -401,29 +441,12 @@ runtime·MHeap_Scavenger(void)
 			runtime·entersyscall();
 			runtime·notesleep(&note);
 			runtime·exitsyscall();
+			if(trace)
+				runtime·printf("scvg%d: GC forced\n", k);
 			runtime·lock(h);
 			now = runtime·nanotime();
-			if (trace)
-				runtime·printf("scvg%d: GC forced\n", k);
 		}
-		sumreleased = 0;
-		for(i=0; i < nelem(h->free)+1; i++) {
-			if(i < nelem(h->free))
-				list = &h->free[i];
-			else
-				list = &h->large;
-			if(runtime·MSpanList_IsEmpty(list))
-				continue;
-			for(s=list->next; s != list; s=s->next) {
-				if(s->unusedsince != 0 && (now - s->unusedsince) > limit) {
-					released = (s->npages - s->npreleased) << PageShift;
-					mstats.heap_released += released;
-					sumreleased += released;
-					s->npreleased = s->npages;
-					runtime·SysUnused((void*)(s->start << PageShift), s->npages << PageShift);
-				}
-			}
-		}
+		sumreleased = scavenge(now, limit);
 		runtime·unlock(h);
 
 		if(trace) {
@@ -434,6 +457,15 @@ runtime·MHeap_Scavenger(void)
 				mstats.heap_released>>20, (mstats.heap_sys - mstats.heap_released)>>20);
 		}
 	}
+}
+
+void
+runtime∕debug·freeOSMemory(void)
+{
+	runtime·gc(1);
+	runtime·lock(&runtime·mheap);
+	scavenge(~(uintptr)0, 0);
+	runtime·unlock(&runtime·mheap);
 }
 
 // Initialize a new span with the given start and npages.

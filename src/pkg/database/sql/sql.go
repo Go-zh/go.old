@@ -416,8 +416,10 @@ func (db *DB) prepare(query string) (stmt *Stmt, err error) {
 }
 
 // Exec executes a query without returning any rows.
+// The args are for any placeholder parameters in the query.
 
-// Exec执行query操作，而没有返回任何行。
+// Exec 执行query操作，而不返回任何行。
+// args 为查询中的任意占位符形参。
 func (db *DB) Exec(query string, args ...interface{}) (Result, error) {
 	var res Result
 	var err error
@@ -468,16 +470,77 @@ func (db *DB) exec(query string, args []interface{}) (res Result, err error) {
 // Query执行了一个有返回行的查询操作，比如SELECT。
 // args 形参为该查询中的任何占位符。
 func (db *DB) Query(query string, args ...interface{}) (*Rows, error) {
-	stmt, err := db.Prepare(query)
+	var rows *Rows
+	var err error
+	for i := 0; i < 10; i++ {
+		rows, err = db.query(query, args)
+		if err != driver.ErrBadConn {
+			break
+		}
+	}
+	return rows, err
+}
+
+func (db *DB) query(query string, args []interface{}) (*Rows, error) {
+	ci, err := db.conn()
 	if err != nil {
 		return nil, err
 	}
-	rows, err := stmt.Query(args...)
+
+	releaseConn := func(err error) { db.putConn(ci, err) }
+
+	return db.queryConn(ci, releaseConn, query, args)
+}
+
+// queryConn executes a query on the given connection.
+// The connection gets released by the releaseConn function.
+func (db *DB) queryConn(ci driver.Conn, releaseConn func(error), query string, args []interface{}) (*Rows, error) {
+	if queryer, ok := ci.(driver.Queryer); ok {
+		dargs, err := driverArgs(nil, args)
+		if err != nil {
+			releaseConn(err)
+			return nil, err
+		}
+		rowsi, err := queryer.Query(query, dargs)
+		if err != driver.ErrSkip {
+			if err != nil {
+				releaseConn(err)
+				return nil, err
+			}
+			// Note: ownership of ci passes to the *Rows, to be freed
+			// with releaseConn.
+			rows := &Rows{
+				db:          db,
+				ci:          ci,
+				releaseConn: releaseConn,
+				rowsi:       rowsi,
+			}
+			return rows, nil
+		}
+	}
+
+	sti, err := ci.Prepare(query)
 	if err != nil {
-		stmt.Close()
+		releaseConn(err)
 		return nil, err
 	}
-	rows.closeStmt = stmt
+
+	rowsi, err := rowsiFromStatement(sti, args...)
+	if err != nil {
+		releaseConn(err)
+		sti.Close()
+		return nil, err
+	}
+
+	// Note: ownership of ci passes to the *Rows, to be freed
+	// with releaseConn.
+	rows := &Rows{
+		db:          db,
+		ci:          ci,
+		releaseConn: releaseConn,
+		rowsi:       rowsi,
+		closeStmt:   sti,
+	}
 	return rows, nil
 }
 
@@ -742,20 +805,14 @@ func (tx *Tx) Exec(query string, args ...interface{}) (Result, error) {
 
 // Query执行哪些返回行的查询操作，比如SELECT。
 func (tx *Tx) Query(query string, args ...interface{}) (*Rows, error) {
-	if tx.done {
-		return nil, ErrTxDone
-	}
-	stmt, err := tx.Prepare(query)
+	ci, err := tx.grabConn()
 	if err != nil {
 		return nil, err
 	}
-	rows, err := stmt.Query(args...)
-	if err != nil {
-		stmt.Close()
-		return nil, err
-	}
-	rows.closeStmt = stmt
-	return rows, err
+
+	releaseConn := func(err error) { tx.releaseConn() }
+
+	return tx.db.queryConn(ci, releaseConn, query, args)
 }
 
 // QueryRow executes a query that is expected to return at most one row.
@@ -924,6 +981,24 @@ func (s *Stmt) Query(args ...interface{}) (*Rows, error) {
 		return nil, err
 	}
 
+	rowsi, err := rowsiFromStatement(si, args...)
+	if err != nil {
+		releaseConn(err)
+		return nil, err
+	}
+
+	// Note: ownership of ci passes to the *Rows, to be freed
+	// with releaseConn.
+	rows := &Rows{
+		db:          s.db,
+		ci:          ci,
+		releaseConn: releaseConn,
+		rowsi:       rowsi,
+	}
+	return rows, nil
+}
+
+func rowsiFromStatement(si driver.Stmt, args ...interface{}) (driver.Rows, error) {
 	// -1 means the driver doesn't know how to count the number of
 	// placeholders, so we won't sanity check input here and instead let the
 	// driver deal with errors.
@@ -938,18 +1013,9 @@ func (s *Stmt) Query(args ...interface{}) (*Rows, error) {
 
 	rowsi, err := si.Query(dargs)
 	if err != nil {
-		releaseConn(err)
 		return nil, err
 	}
-	// Note: ownership of ci passes to the *Rows, to be freed
-	// with releaseConn.
-	rows := &Rows{
-		db:          s.db,
-		ci:          ci,
-		releaseConn: releaseConn,
-		rowsi:       rowsi,
-	}
-	return rows, nil
+	return rowsi, nil
 }
 
 // QueryRow executes a prepared query statement with the given arguments.
@@ -1047,7 +1113,7 @@ type Rows struct {
 	closed    bool
 	lastcols  []driver.Value
 	lasterr   error
-	closeStmt *Stmt // if non-nil, statement to Close on close  // 如果非空，这些声明会在close调用的时候关闭。
+	closeStmt driver.Stmt // if non-nil, statement to Close on close  // 如果非空，这些声明会在close调用的时候关闭。
 }
 
 // Next prepares the next result row for reading with the Scan method.

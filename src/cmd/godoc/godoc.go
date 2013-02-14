@@ -419,9 +419,7 @@ func pkgLinkFunc(path string) string {
 	relpath := path[1:]
 	// because of the irregular mapping under goroot
 	// we need to correct certain relative paths
-	if strings.HasPrefix(relpath, "src/pkg/") {
-		relpath = relpath[len("src/pkg/"):]
-	}
+	relpath = strings.TrimPrefix(relpath, "src/pkg/")
 	return pkgHandler.pattern[1:] + relpath // remove trailing '/' for relative URL
 }
 
@@ -652,7 +650,7 @@ func applyTemplate(t *template.Template, name string, data interface{}) []byte {
 
 func redirect(w http.ResponseWriter, r *http.Request) (redirected bool) {
 	canonical := pathpkg.Clean(r.URL.Path)
-	if !strings.HasSuffix("/", canonical) {
+	if !strings.HasSuffix(canonical, "/") {
 		canonical += "/"
 	}
 	if r.URL.Path != canonical {
@@ -666,9 +664,7 @@ func redirect(w http.ResponseWriter, r *http.Request) (redirected bool) {
 
 func redirectFile(w http.ResponseWriter, r *http.Request) (redirected bool) {
 	c := pathpkg.Clean(r.URL.Path)
-	for strings.HasSuffix("/", c) {
-		c = c[:len(c)-1]
-	}
+	c = strings.TrimRight(c, "/")
 	if r.URL.Path != c {
 		url := *r.URL
 		url.Path = c

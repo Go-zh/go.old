@@ -138,8 +138,8 @@ to be added to your Mercurial configuration.
 </div>
 
 <p>
-无论谁对Go进行更改，在它被提交前都必须进行审核。（在特殊情况下，比如修复一个构建，
-可在提交后进行审核。）Mercurial扩展可帮助管理代码审核流程。该扩展包含在Go源码树中，
+无论谁对Go进行更改，在它被递交前都必须进行审核。（在特殊情况下，比如修复一个构建，
+可在递交后进行审核。）Mercurial扩展可帮助管理代码审核流程。该扩展包含在Go源码树中，
 但需要添加到你的Mercurial配置中。
 </p>
 
@@ -240,12 +240,16 @@ you are a committer (see below), but Mercurial complains if it is missing.
 <div class="english">
 <p>
 After adding the extension, <code>hg help codereview</code>
-will show documentation for its commands.
+will show documentation for its commands. As the codereview extension is only
+enabled for your checkout in <code>$GOROOT</code>, the remainder of this
+document assumes you are inside <code>$GOROOT</code> when issuing commands.
 </p>
 </div>
 
 <p>
 添加此扩展后，执行 <code>hg help codereview</code> 会显示该扩展的命令文档。
+仅当你在 <code>$GOROOT</code> 中检出源码时，codereview扩展才会启用，后文假设你已经在
+<code>$GOROOT</code> 中了。
 </p>
 
 <div class="english">
@@ -507,7 +511,7 @@ tracker will automatically mark the issue as fixed.
 
 <p>
 特殊的句子&ldquo;Fixes issue 159.&rdquo;将此更改与<a href="http://code.google.com/p/go/issues/list">Go问题跟踪系统</a>
-中的第195号问题相关联。在此更改被最终提交后，问题跟踪系统将自动把该问题标记为已修复。
+中的第195号问题相关联。在此更改被最终递交后，问题跟踪系统将自动把该问题标记为已修复。
 </p>
 
 <div class="english">
@@ -536,43 +540,73 @@ CL created: http://codereview.appspot.com/99999
 </pre>
 
 <div class="english">
+<h3>Adding or removing files from an existing change</h3>
+
 <p>
 If you need to re-edit the change description, or change the files included in the CL,
-run <code>hg change 99999</code>. Alternatively, you can use <code>hg file 99999 somefile</code>
-to add <code>somefile</code> to CL 99999, and use <code>hg file -d 99999 somefile</code> to remove
-<code>somefile</code> from the CL.
+run <code>hg change 99999</code>.
 </p>
 </div>
+
+<h3>为既有的更改添加或移除文件</h3>
 
 <p>
 若你需要重新编辑更改描述，或更改包含在该CL中的文件，请运行 <code>hg change 99999</code>。
-作为选择，你也可以使用 <code>hg file 99999 somefile</code> 将 <code>somefile</code> 添加到CL
-99999中，或使用 <code>hg file -d 99999 somefile</code> 将 <code>somefile</code>
-从该CL中移除。
-</p>
+<p>
 
 <div class="english">
 <p>
-Creating the change uploads a copy of the diff to the code review server, but it does not
-notify anyone about it. To do that, you need to run <code>hg mail</code> (see below).
+Alternatively, you can use
+</p>
+
+<pre>
+$ hg file 99999 somefile
+</pre>
+
+<p>
+to add <code>somefile</code> to CL 99999, and
+</p>
+
+<pre>
+$ hg file -d 99999 somefile
+</pre>
+
+<p>
+to remove <code>somefile</code> from the CL.
 </p>
 </div>
 
 <p>
-创建的更改会将该diff的副本上传至代码审核服务器，但它不会通知任何人。要通知他人，
-你需要运行 <code>hg mail</code>（见下）。
+当然，你也可以用
+</p>
+
+<pre>
+$ hg file 99999 somefile
+</pre>
+
+<p>
+将 <code>somefile</code> 添加到CL 99999，也可以用
+</p>
+
+<pre>
+$ hg file -d 99999 somefile
+</pre>
+
+<p>
+将 <code>somefile</code> 从该CL中移除。
 </p>
 
 <div class="english">
 <p>
-You can see a list of your pending changes by running <code>hg pending</code> (<code>hg p</code> for short).
+A file may only belong to a single active CL at a time. <code>hg file</code>
+will issue a warning if a file is moved between changes.
 </p>
 </div>
 
 <p>
-你可以通过运行 <code>hg pending</code> 来列出你待定的更改（简写为 <code>hg p</code>）。
+某文件可能同时只属于一个活动的CL。若该文件在更改之间被移动了，<code>hg file</code>
+就会发出警告。
 </p>
-
 
 <div class="english">
 <h3>Synchronize your client</h3>
@@ -586,7 +620,7 @@ to the repository.  To update your client, run</p>
 </div>
 
 <p>
-在你工作时，其他人可能将更改提交至仓库。要更新你的客户端，运行
+在你工作时，其他人可能将更改递交至代码仓库。要更新你的客户端，运行
 </p>
 
 <pre>
@@ -732,6 +766,19 @@ changes, but you may still need to run
 <h3>为审核邮寄更改</h3>
 
 <div class="english">
+<p>
+Creating or uploading the change uploads a copy of the diff to the code review server,
+but it does not notify anyone about it. To do that, you need to run <code>hg mail</code>
+(see below).
+</p>
+</div>
+
+<p>
+创建或更新更改后，会向代码审核服务器上传一份该代码diff的副本，但它不会通知任何人。
+若要通知他人，你需要运行 <code>hg mail</code>（见下）。
+</p>
+
+<div class="english">
 <p>To send out a change for review, run <code>hg mail</code> using the change list number
 assigned during <code>hg change</code>:</p>
 </div>
@@ -772,10 +819,20 @@ $ hg mail -r golang-dev@googlegroups.com --cc math-nuts@swtch.com 99999
 <p>Note that <code>-r</code> and <code>--cc</code> cannot be spelled <code>--r</code> or <code>-cc</code>.</p>
 </div>
 
-<p>
-请注意 <code>-r</code> 与 <code>--cc</code> 不可拼写为 <code>--r</code> 或 <code>-cc</code>。
-</p>
+<div class="english">
+请注意， <code>-r</code> 与 <code>--cc</code> 不可拼写为 <code>--r</code> 或 <code>-cc</code>。
+</div>
 
+<div class="english">
+<p>
+If your change relates to an open issue, please add a comment to the issue
+announcing your proposed fix, including a link to your CL.
+</p>
+</div>
+
+<p>
+若你的更改涉及一个开放的问题，请向该问题添加评论来发表你的修复提议，其中包括你的CL链接。
+</p>
 
 <div class="english">
 <h3>Reviewing code</h3>
@@ -805,13 +862,32 @@ to send comments back.
 <h3>修订并上传</h3>
 
 <div class="english">
-<p>You will probably revise your code in response to the reviewer comments.
+<p>
+You will probably revise your code in response to the reviewer comments. When
+you have done this, you can upload your change to the code review server
+without sending a notification by running <code>hg upload</code> using the change
+list number assigned during <code>hg change</code>
+</p>
+</div>
+
+<p>
+你或许会根据审核者评论的反馈来修订你的代码。当你完成后，就可以运行
+<code>hg upload</code> 使用 <code>hg change</code> 时分配的更改列表号，
+向代码审核服务器上传你的更改了。它并不会再次发出通知。
+</p>
+
+<pre>
+$ hg upload 99999
+</pre>
+
+<div class="english">
+<p>
 When you have revised the code and are ready for another round of review, run
 </p>
 </div>
 
 <p>
-你或许会根据审核者评论的反馈来修订你的代码。当修订过你的代码并准备好下一轮审核时，运行
+当修订过你的代码并准备好下一轮审核时，运行
 </p>
 
 <pre>
@@ -831,7 +907,7 @@ to send the line-by-line replies and any other comments.
 <p>
 再次上传最新的副本并发送邮件请求审核者再次查看（<code>PTAL</code>，即please take another look）。
 你也可浏览代码审核的Web页面并回复评论，让审核者知道你的处理方式，或解释为什么不作处理。
-当你回复完成后，请点击&ldquo;Publish and Mail comments&rdquo;来发送行与行对比的回复或其他评论。
+当你回复完成后，请点击&ldquo;Publish and Mail comments&rdquo;来发送行与行对比的回复或其它评论。
 </p>
 
 <div class="english">
@@ -840,6 +916,10 @@ The reviewer can comment on the new copy, and the process repeats.
 The reviewer approves the change by replying with a mail that says
 <code>LGTM</code>: looks good to me.
 </p>
+
+<p>
+You can see a list of your pending changes by running <code>hg pending</code> (<code>hg p</code> for short).
+</p>
 </div>
 
 <p>
@@ -847,26 +927,147 @@ The reviewer approves the change by replying with a mail that says
 <code>LGTM</code>：在我看来不错（looks good to me）。
 </p>
 
+<p>
+你可以通过运行 <code>hg pending</code>（简写为 <code>hg p</code>）来查看你待定的更改列表。
+</p>
+
+<div class="english">
+<h3>Reviewing code by others</h3>
+</div>
+
+<h3>让他人审核代码</h3>
+
+<div class="english">
+<p>
+You can import a CL proposed by someone else into your local Mercurial client
+by using the <code>hg clpatch</code> command. Running
+</p>
+</div>
+
+<p>
+你可以用 <code>hg clpatch</code> 命令来将他人建议的CL导入到你本地的Mercurial客户端。
+运行
+</p>
+
+<pre>
+$ hg clpatch 99999
+</pre>
+
+<div class="english">
+<p>
+will apply the latest diff for CL 99999 to your working copy. If any of the
+files referenced in CL 99999 have local modifications, <code>clpatch</code>
+will refuse to apply the whole diff. Once applied, CL 99999 will show up in
+the output of <code>hg pending</code> and others.
+</p>
+</div>
+
+<p>
+会将CL 99999最新的diff应用到你的工作副本中。若CL 99999引用的文件进行了本地的修改，
+<code>clpatch</code> 会拒绝应用整个diff。一旦它被应用，CL 99999会在 <code>hg pending</code>
+或其它的标准输出中显示。
+</p>
+
+<div class="english">
+<p>
+To revert a CL you have applied locally, use the <code>hg revert</code>
+command. Running
+</p>
+</div>
+
+<p>
+要恢复一个你在本地应用的CL，可使用 <code>hg revert</code> 命令。运行
+</p>
+
+<pre>
+$ hg revert @99999
+</pre>
+
+<div class="english">
+<p>
+will revert any files mentioned on CL 99999 to their original state. This can
+be an effective way of reverting one CL revision and applying another.
+</p>
+</div>
+
+<div class="english">
+<p>
+会将CL 99999的所有文件恢复到它们原来的状态。这是种恢复某个CL修订并应用另一个CL的有效方式。
+</p>
+</div>
+
+<div class="english">
+<p>
+Once the CL has been submitted, the next time you run <code>hg sync</code>
+it will be removed from your local pending list. Occasionally the pending list
+can get out of sync leaving stale references to closed or abandoned CLs.
+You can use <code>hg change -D 99999</code> to remove the reference to CL 99999.
+</p>
+</div>
+
+<p>
+该CL一旦被递交，你在下次运行 <code>hg sync</code> 时，它会从你本地的待定列表中移除。
+有时，待定列表不会同步已关闭的过时引用或被丢弃的CL。你可以使用 <code>hg change -D 99999</code>
+来移除CL 99999的引用。
+</p>
+
 <div class="english">
 <h3>Submit the change after the review</h3>
 </div>
 
-<h3>审核后提交更改</h3>
+<h3>在审核后提交更改</h3>
 
 <div class="english">
 <p>
 After the code has been <code>LGTM</code>'ed, it is time to submit
 it to the Mercurial repository.
+</p>
+</div>
+
+<p>
+在该代码被评论 <code>LGTM</code> 后，就该将它递交到Mercurial代码仓库了。
+</p>
+
+<div class="english">
+<p>
+If you are not a committer, you cannot submit the change directly.
+Instead a committer, usually the reviewer who said <code>LGTM</code>,
+will run:
+</p>
+</div>
+
+<p>
+若你不是提交者，就不能直接提交此更改。而递交者，通常为评论了 <code>LGTM</code>
+的审核者，将会运行：
+</p>
+
+<pre>
+$ hg clpatch 99999
+$ hg submit 99999
+</pre>
+
+<div class="english">
+<p>
+The <code>submit</code> command submits the code.  You will be listed as the
+author, but the change message will also indicate who the committer was.
+Your local client will notice that the change has been submitted
+when you next run <code>hg sync</code>.
+</p>
+</div>
+
+<p>
+<code>submit</code> 命令会递交此代码。你将会作为其作者被列出，该更改信息也会表明其提交着。
+当你在下一次运行 <code>hg sync</code> 时，你的本地客户端将会通知该更改已被递交。
+</p>
+
+<div class="english">
+<p>
 If you are a committer, you can run:
 </p>
 </div>
 
 <p>
-After the code has been <code>LGTM</code>'ed, it is time to submit
-it to the Mercurial repository.
-If you are a committer, you can run:
-在代码 <code>LGTM</code> 之后，就是将它提交到Mercurial仓库的时候了。
-若你是提交者，可运行：
+若你是一个提交者，可以运行：
 </p>
 
 <pre>
@@ -883,20 +1084,19 @@ in the repository.
 </div>
 
 <p>
-这会将此更改签入仓库中。更改描述会包含代码审核的链接，
-而代码审核则会更新一个此更改在仓库中的链接。
+这会将此更改签入代码仓库中。更改描述会包含代码审核的链接，
+而代码审核则会在代码仓库中更新此更改的链接。
 </p>
 
 <div class="english">
 <p>
 If your local copy of the repository is out of date,
-<code>hg submit</code>
-will refuse the change:
+<code>hg submit</code> will refuse the change:
 </p>
 </div>
 
 <p>
-若你的仓库的本地已副本过期，<code>hg submit</code> 会拒绝此更改：
+若你的仓库的本地副本已过期，<code>hg submit</code> 会拒绝此更改：
 </p>
 
 <pre>
@@ -913,7 +1113,7 @@ will run:
 </div>
 
 <p>
-若你不是提交者，你将无法直接提交此更改。某个提交者，通常为说 <code>LGTM</code> 的审核者会运行：
+若你不是提交者，你将无法直接递交此更改。某个提交者，通常为说 <code>LGTM</code> 的审核者会运行：
 </p>
 
 <pre>
@@ -937,17 +1137,16 @@ when you next run <code>hg sync</code>.
 <p>
 <code>clpatch</code> 命令会将你的更改99999导入提交者的本地Mercurial客户端，
 此时该提交者可更深入地检查并测试此代码。（任何人都可运行 <code>clpatch</code>
-以尝试已上传至代码审核服务的更改。）<code>submit</code> 命令提交该代码。
+以尝试已上传至代码审核服务的更改。）<code>submit</code> 命令递交该代码。
 你将会作为作者列出，但该更改信息也将指明谁是提交者。当你下一次运行 <code>hg sync</code>
 时你的本地客户端将提示该更改已被提交。
 </p>
 
-
 <div class="english">
-<h3 id="copyright">Copyright</h3>
+<h2 id="copyright">Copyright</h2>
 </div>
 
-<h3 id="版权">版权</h3>
+<h2 id="版权">版权</h2>
 
 <div class="english">
 <p>Files in the Go repository don't list author names,
@@ -980,7 +1179,7 @@ contributor license agreements:
 <p>
 <a href="/CONTRIBUTORS"><code>CONTRIBUTORS</code></a> 文件详述了哪些人是Go的贡献者；
 <a href="/AUTHORS"><code>AUTHORS</code></a> 文件详述了谁是&ldquo;Go的作者&rdquo;，
-即版权的持有者。Google的Go开发者将在你第一次提交更改时更新这些文件。
+即版权的持有者。Google的Go开发者将在你第一次递交更改时更新这些文件。
 为此，你必须完成贡献者许可协议之一：
 </p>
 
@@ -1021,7 +1220,7 @@ This rigmarole needs to be done only for your first submission.
 </div>
 
 <p>
-这些废话只会在你第一次提交意见时完成。
+这些废话只需在你第一次递交时完成。
 </p>
 
 <div class="english">
@@ -1041,3 +1240,14 @@ This rigmarole needs to be done only for your first submission.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 </pre>
+
+<div class="english">
+<p>
+Files in the repository are copyright the year they are added. It is not
+necessary to update the copyright year on files that you change.
+</p>
+</div>
+
+<p>
+代码仓库中的文件其版权年份即为它被添加的年份。在你更改这些文件后，无需更新版权年份。
+</p>

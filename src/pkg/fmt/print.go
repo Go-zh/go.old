@@ -629,10 +629,15 @@ func (p *pp) fmtString(v string, verb rune, goSyntax bool) {
 	}
 }
 
-func (p *pp) fmtBytes(v []byte, verb rune, goSyntax bool, depth int) {
+func (p *pp) fmtBytes(v []byte, verb rune, goSyntax bool, typ reflect.Type, depth int) {
 	if verb == 'v' || verb == 'd' {
 		if goSyntax {
-			p.buf.Write(bytesBytes)
+			if typ == nil {
+				p.buf.Write(bytesBytes)
+			} else {
+				p.buf.WriteString(typ.String())
+				p.buf.WriteByte('{')
+			}
 		} else {
 			p.buf.WriteByte('[')
 		}
@@ -899,7 +904,7 @@ func (p *pp) printField(field interface{}, verb rune, plus, goSyntax bool, depth
 		p.fmtString(f, verb, goSyntax)
 		wasString = verb == 's' || verb == 'v'
 	case []byte:
-		p.fmtBytes(f, verb, goSyntax, depth)
+		p.fmtBytes(f, verb, goSyntax, nil, depth)
 		wasString = verb == 's'
 	default:
 		// Restore flags in case handleMethods finds a Formatter.
@@ -1058,25 +1063,26 @@ BigSwitch:
 	case reflect.Array, reflect.Slice:
 		// Byte slices are special.
 		// 字节切片比较特殊。
-		if f.Type().Elem().Kind() == reflect.Uint8 {
-			// We know it's a slice of bytes, but we also know it does not have static type
-			// []byte, or it would have been caught above.  Therefore we cannot convert
-			// it directly in the (slightly) obvious way: f.Interface().([]byte); it doesn't have
-			// that type, and we can't write an expression of the right type and do a
-			// conversion because we don't have a static way to write the right type.
-			// So we build a slice by hand.  This is a rare case but it would be nice
-			// if reflection could help a little more.
-			//
-			// 我们知道它是个字节切片，但我们也知道它没有静态类型 []byte，
-			// 或它会被上面捕获。因此我们不能直接用（略显）简单的方式直接转换它：
-			// 即 f.Interface().([]byte)；它没有那种类型，而我们不能写出类型正确的表达式并将其转换，
-			// 这是因为我们没有一种静态的方法来写出正确的类型。因此我们手动构建了一个切片。
-			// 这是种非常罕见的情况，但如果反射能帮上一点忙的话就再好不过了。
-			bytes := make([]byte, f.Len())
-			for i := range bytes {
-				bytes[i] = byte(f.Index(i).Uint())
+		if typ := f.Type(); typ.Elem().Kind() == reflect.Uint8 {
+			var bytes []byte
+			if f.Kind() == reflect.Slice {
+				bytes = f.Bytes()
+			} else if f.CanAddr() {
+				bytes = f.Slice(0, f.Len()).Bytes()
+			} else {
+				// We have an array, but we cannot Slice() a non-addressable array,
+				// so we build a slice by hand. This is a rare case but it would be nice
+				// if reflection could help a little more.
+				//
+				// 我们有一个数组，但我们不能让不可寻址的数组调用 Slice()，
+				// 因此我们手动构建了一个切片。这是一种非常罕见的情况，
+				// 但如果反射能再多点帮助，那就再好不过了。
+				bytes = make([]byte, f.Len())
+				for i := range bytes {
+					bytes[i] = byte(f.Index(i).Uint())
+				}
 			}
-			p.fmtBytes(bytes, verb, goSyntax, depth)
+			p.fmtBytes(bytes, verb, goSyntax, typ, depth)
 			wasString = verb == 's'
 			break
 		}

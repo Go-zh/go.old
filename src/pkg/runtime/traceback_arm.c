@@ -25,14 +25,14 @@ runtime·gentraceback(byte *pc0, byte *sp, byte *lr0, G *gp, int32 skip, uintptr
 	bool waspanic;
 	Stktop *stk;
 	Func *f;
-	
+
 	pc = (uintptr)pc0;
 	lr = (uintptr)lr0;
 	fp = nil;
 	waspanic = false;
 
 	// If the PC is goexit, the goroutine hasn't started yet.
-	if(pc == (uintptr)runtime·goexit) {
+	if(pc == (uintptr)runtime·goexit && gp->entry != 0) {
 		pc = (uintptr)gp->entry;
 		lr = (uintptr)runtime·goexit;
 	}
@@ -60,7 +60,7 @@ runtime·gentraceback(byte *pc0, byte *sp, byte *lr0, G *gp, int32 skip, uintptr
 			sp = (byte*)stk->gobuf.sp;
 			lr = 0;
 			fp = nil;
-			if(pcbuf == nil)
+			if(pcbuf == nil && runtime·showframe(nil, gp == m->curg))
 				runtime·printf("----- stack segment boundary -----\n");
 			stk = (Stktop*)stk->stackbase;
 			continue;
@@ -118,7 +118,7 @@ runtime·gentraceback(byte *pc0, byte *sp, byte *lr0, G *gp, int32 skip, uintptr
 		else if(pcbuf != nil)
 			pcbuf[n++] = pc;
 		else {
-			if(runtime·showframe(f)) {
+			if(runtime·showframe(f, gp == m->curg)) {
 				// Print during crash.
 				//	main(0x1, 0x2, 0x3)
 				//		/home/rsc/go/src/runtime/x.go:23 +0xf
@@ -182,9 +182,21 @@ runtime·gentraceback(byte *pc0, byte *sp, byte *lr0, G *gp, int32 skip, uintptr
 		// If this was deferproc or newproc, the caller had an extra 12.
 		if(f->entry == (uintptr)runtime·deferproc || f->entry == (uintptr)runtime·newproc)
 			sp += 12;
+
+		// sighandler saves the lr on stack before faking a call to sigpanic
+		if(waspanic) {
+			x = *(uintptr *)sp;
+			sp += 4;
+			f = runtime·findfunc(pc);
+			if (f == nil) {
+				pc = x;
+			} else if (f->frame == 0)
+				lr = x;
+		}
 	}
 	
-	if(pcbuf == nil && (pc = gp->gopc) != 0 && (f = runtime·findfunc(pc)) != nil && gp->goid != 1) {
+	if(pcbuf == nil && (pc = gp->gopc) != 0 && (f = runtime·findfunc(pc)) != nil
+			&& runtime·showframe(f, gp == m->curg) && gp->goid != 1) {
 		runtime·printf("created by %S\n", f->name);
 		tracepc = pc;	// back up to CALL instruction for funcline.
 		if(n > 0 && pc > f->entry)
@@ -201,6 +213,12 @@ runtime·gentraceback(byte *pc0, byte *sp, byte *lr0, G *gp, int32 skip, uintptr
 void
 runtime·traceback(byte *pc0, byte *sp, byte *lr, G *gp)
 {
+	if(gp->status == Gsyscall) {
+		// Override signal registers if blocked in system call.
+		pc0 = gp->sched.pc;
+		sp = (byte*)gp->sched.sp;
+		lr = nil;
+	}
 	runtime·gentraceback(pc0, sp, lr, gp, 0, nil, 100);
 }
 

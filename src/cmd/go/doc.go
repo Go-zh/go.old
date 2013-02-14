@@ -95,6 +95,9 @@ The build flags are shared by the build, install, run, and test commands:
 		See the documentation for the go/build package for
 		more information about build tags.
 
+The list flags accept a space-separated list of strings. To embed spaces
+in an element in the list, surround it with either single or double quotes.
+
 For more about specifying packages, see 'go help packages'.
 For more about where packages and binaries are installed,
 see 'go help gopath'.
@@ -221,13 +224,10 @@ Download and install packages and dependencies
 
 Usage:
 
-	go get [-a] [-d] [-fix] [-n] [-p n] [-u] [-v] [-x] [packages]
+	go get [-d] [-fix] [-u] [build flags] [packages]
 
 Get downloads and installs the packages named by the import paths,
 along with their dependencies.
-
-The -a, -n, -v, -x, and -p flags have the same meaning as in 'go build'
-and 'go install'.  See 'go help build'.
 
 The -d flag instructs get to stop after downloading the packages; that is,
 it instructs get not to install the packages.
@@ -238,6 +238,9 @@ before resolving dependencies or building the code.
 The -u flag instructs get to use the network to update the named packages
 and their dependencies.  By default, get uses the network to check out
 missing packages but does not use it to look for updates to existing packages.
+
+Get also accepts all the flags in the 'go build' and 'go install' commands,
+to control the installation. See 'go help build'.
 
 When checking out or updating a package, get looks for a branch or tag
 that matches the locally installed version of Go. The most important
@@ -272,7 +275,7 @@ List packages
 
 Usage:
 
-	go list [-e] [-f format] [-json] [packages]
+	go list [-e] [-f format] [-json] [-tags 'tag list'] [packages]
 
 List lists the packages named by the import paths, one per line.
 
@@ -299,14 +302,15 @@ which calls strings.Join. The struct being passed to the template is:
         Root       string // Go root or Go path dir containing this package
 
         // Source files
-        GoFiles  []string     // .go source files (excluding CgoFiles, TestGoFiles, XTestGoFiles)
-        CgoFiles []string     // .go sources files that import "C"
-        CFiles   []string     // .c source files
-        HFiles   []string     // .h source files
-        SFiles   []string     // .s source files
-        SysoFiles []string    // .syso object files to add to archive
-        SwigFiles []string    // .swig files
-        SwigCXXFiles []string // .swigcxx files
+        GoFiles  []string       // .go source files (excluding CgoFiles, TestGoFiles, XTestGoFiles)
+        CgoFiles []string       // .go sources files that import "C"
+        IgnoredGoFiles []string // .go sources ignored due to build constraints
+        CFiles   []string       // .c source files
+        HFiles   []string       // .h source files
+        SFiles   []string       // .s source files
+        SysoFiles []string      // .syso object files to add to archive
+        SwigFiles []string      // .swig files
+        SwigCXXFiles []string   // .swigcxx files
 
         // Cgo directives
         CgoCFLAGS    []string // cgo: flags for C compiler
@@ -340,6 +344,9 @@ error and instead processes the erroneous packages with the usual
 printing.  Erroneous packages will have a non-empty ImportPath and
 a non-nil Error field; other information may or may not be missing
 (zeroed).
+
+The -tags flag specifies a list of build tags, like in the 'go build'
+command.
 
 For more about specifying packages, see 'go help packages'.
 
@@ -376,6 +383,7 @@ followed by detailed output for each failed package.
 'Go test' recompiles each package along with any files with names matching
 the file pattern "*_test.go".  These additional files can contain test functions,
 benchmark functions, and example functions.  See 'go help testfunc' for more.
+Each listed package causes the execution of a separate test binary.
 
 By default, go test needs no arguments.  It compiles and tests the package
 with source in the current directory, including tests, and runs the tests.
@@ -671,43 +679,27 @@ Description of testing flags
 The 'go test' command takes both flags that apply to 'go test' itself
 and flags that apply to the resulting test binary.
 
-The test binary, called pkg.test, where pkg is the name of the
-directory containing the package sources, has its own flags:
+The following flags are recognized by the 'go test' command and
+control the execution of any test:
 
-	-test.v
-	    Verbose output: log all tests as they are run.
-
-	-test.run pattern
-	    Run only those tests and examples matching the regular
-	    expression.
-
-	-test.bench pattern
+	-bench regexp
 	    Run benchmarks matching the regular expression.
-	    By default, no benchmarks run.
+	    By default, no benchmarks run. To run all benchmarks,
+	    use '-bench .' or '-bench=.'.
 
-	-test.benchmem
+	-benchmem
 	    Print memory allocation statistics for benchmarks.
 
-	-test.cpuprofile cpu.out
-	    Write a CPU profile to the specified file before exiting.
+	-benchtime t
+		Run enough iterations of each benchmark to take t, specified
+		as a time.Duration (for example, -benchtime 1h30s).
+		The default is 1 second (1s).
 
-	-test.memprofile mem.out
-	    Write a memory profile to the specified file when all tests
-	    are complete.
-
-	-test.memprofilerate n
-	    Enable more precise (and expensive) memory profiles by setting
-	    runtime.MemProfileRate.  See 'godoc runtime MemProfileRate'.
-	    To profile all memory allocations, use -test.memprofilerate=1
-	    and set the environment variable GOGC=off to disable the
-	    garbage collector, provided the test can run in the available
-	    memory without garbage collection.
-
-	-test.blockprofile block.out
+	-blockprofile block.out
 	    Write a goroutine blocking profile to the specified file
 	    when all tests are complete.
 
-	-test.blockprofilerate n
+	-blockprofilerate n
 	    Control the detail provided in goroutine blocking profiles by setting
 	    runtime.BlockProfileRate to n.  See 'godoc runtime BlockProfileRate'.
 	    The profiler aims to sample, on average, one blocking event every
@@ -715,38 +707,66 @@ directory containing the package sources, has its own flags:
 	    if -test.blockprofile is set without this flag, all blocking events
 	    are recorded, equivalent to -test.blockprofilerate=1.
 
-	-test.parallel n
+	-cpu 1,2,4
+	    Specify a list of GOMAXPROCS values for which the tests or
+	    benchmarks should be executed.  The default is the current value
+	    of GOMAXPROCS.
+
+	-cpuprofile cpu.out
+	    Write a CPU profile to the specified file before exiting.
+
+	-memprofile mem.out
+	    Write a memory profile to the specified file when all tests
+	    are complete.
+
+	-memprofilerate n
+	    Enable more precise (and expensive) memory profiles by setting
+	    runtime.MemProfileRate.  See 'godoc runtime MemProfileRate'.
+	    To profile all memory allocations, use -test.memprofilerate=1
+	    and set the environment variable GOGC=off to disable the
+	    garbage collector, provided the test can run in the available
+	    memory without garbage collection.
+
+	-parallel n
 	    Allow parallel execution of test functions that call t.Parallel.
 	    The value of this flag is the maximum number of tests to run
 	    simultaneously; by default, it is set to the value of GOMAXPROCS.
 
-	-test.short
+	-run regexp
+	    Run only those tests and examples matching the regular
+	    expression.
+
+	-short
 	    Tell long-running tests to shorten their run time.
 	    It is off by default but set during all.bash so that installing
 	    the Go tree can run a sanity check but not spend time running
 	    exhaustive tests.
 
-	-test.timeout t
+	-timeout t
 		If a test runs longer than t, panic.
 
-	-test.benchtime t
-		Run enough iterations of each benchmark to take t.
-		The default is 1 second.
+	-v
+	    Verbose output: log all tests as they are run.
 
-	-test.cpu 1,2,4
-	    Specify a list of GOMAXPROCS values for which the tests or
-	    benchmarks should be executed.  The default is the current value
-	    of GOMAXPROCS.
+The test binary, called pkg.test where pkg is the name of the
+directory containing the package sources, can be invoked directly
+after building it with 'go test -c'. When invoking the test binary
+directly, each of the standard flag names must be prefixed with 'test.',
+as in -test.run=TestMyFunc or -test.v.
 
-For convenience, each of these -test.X flags of the test binary is
-also available as the flag -X in 'go test' itself.  Flags not listed
-here are passed through unaltered.  For instance, the command
+When running 'go test', flags not listed above are passed through
+unaltered. For instance, the command
 
 	go test -x -v -cpuprofile=prof.out -dir=testdata -update
 
 will compile the test binary and then run it as
 
 	pkg.test -test.v -test.cpuprofile=prof.out -dir=testdata -update
+
+The test flags that generate profiles also leave the test binary in pkg.test
+for use when analyzing the profiles.
+
+Flags not recognized by 'go test' must be placed after any specified packages.
 
 
 Description of testing functions
@@ -763,8 +783,8 @@ A benchmark function is one named BenchmarkXXX and should have the signature,
 
 	func BenchmarkXXX(b *testing.B) { ... }
 
-An example function is similar to a test function but, instead of using *testing.T
-to report success or failure, prints output to os.Stdout and os.Stderr.
+An example function is similar to a test function but, instead of using
+*testing.T to report success or failure, prints output to os.Stdout.
 That output is compared against the function's "Output:" comment, which
 must be the last comment in the function body (see example below). An
 example with no such comment, or with no text after "Output:" is compiled

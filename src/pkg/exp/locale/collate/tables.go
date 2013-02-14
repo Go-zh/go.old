@@ -7,6 +7,8 @@ package collate
 
 var availableLocales = []string{"af", "ar", "as", "az", "be", "bg", "bn", "ca", "cs", "cy", "da", "de", "dz", "ee", "el", "en_US_POSIX", "eo", "es", "et", "fa", "fi", "fil", "fo", "fr_CA", "gu", "ha", "haw", "he", "hi", "hr", "hu", "hy", "ig", "is", "ja", "kk", "kl", "km", "kn", "ko", "kok", "ln", "lt", "lv", "mk", "ml", "mr", "mt", "my", "nb", "nn", "nso", "om", "or", "pa", "pl", "ps", "ro", "root", "ru", "se", "si", "sk", "sl", "sq", "sr", "sv", "ta", "te", "th", "tn", "to", "tr", "uk", "ur", "vi", "wae", "yo", "zh"}
 
+const varTop = 0x30e
+
 var locales = map[string]tableIndex{
 	"af": {
 		lookupOffset: 0x16,
@@ -324,15 +326,6 @@ var locales = map[string]tableIndex{
 		lookupOffset: 0xd4,
 		valuesOffset: 0x5e6,
 	},
-}
-
-var mainTable = table{
-	trie{mainLookup[1344:], mainValues[0:], mainLookup[:], mainValues[:]},
-	mainExpandElem[:],
-	contractTrieSet(mainCTEntries[:]),
-	mainContractElem[:],
-	18,
-	0x30E,
 }
 
 // mainExpandElem: 45432 entries, 181728 bytes
@@ -51902,4 +51895,4 @@ var mainCTEntries = [2490]struct{ l, h, n, i uint8 }{
 	{0x80, 0x81, 0, 1},
 }
 
-// Total size of mainTable is 921204 bytes
+// Total size of mainTable is 920988 bytes

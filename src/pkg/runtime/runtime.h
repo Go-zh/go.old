@@ -219,6 +219,7 @@ struct	G
 	G*	schedlink;
 	bool	readyonstop;
 	bool	ispanic;
+	bool	issystem;
 	int8	raceignore; // ignore race detection events
 	M*	m;		// for debuggers, but offset not hard-coded
 	M*	lockedm;
@@ -232,6 +233,7 @@ struct	G
 	uintptr	sigcode1;
 	uintptr	sigpc;
 	uintptr	gopc;	// pc of go statement that created this goroutine
+	uintptr	racectx;
 	uintptr	end[];
 };
 struct	M
@@ -252,6 +254,7 @@ struct	M
 	G*	curg;		// current running goroutine
 	int32	id;
 	int32	mallocing;
+	int32	throwing;
 	int32	gcing;
 	int32	locks;
 	int32	nomemprof;
@@ -279,6 +282,7 @@ struct	M
 	uint32	freglo[16];	// D[i] lsb and F[i]
 	uint32	freghi[16];	// D[i] msb and F[i+16]
 	uint32	fflag;		// floating point compare flags
+	uint32	locked;	// tracking for LockOSThread
 	M*	nextwaitm;	// next M waiting for lock
 	uintptr	waitsema;	// semaphore for parking on locks
 	uint32	waitsemacount;
@@ -294,8 +298,20 @@ struct	M
 #ifdef GOOS_windows
 	void*	thread;		// thread handle
 #endif
+#ifdef GOOS_plan9
+	int8*		notesig;
+#endif
 	SEH*	seh;
 	uintptr	end[];
+};
+
+// The m->locked word holds a single bit saying whether
+// external calls to LockOSThread are in effect, and then a counter
+// of the internal nesting depth of lockOSThread / unlockOSThread.
+enum
+{
+	LockExternal = 1,
+	LockInternal = 2,
 };
 
 struct	Stktop
@@ -562,15 +578,15 @@ struct Panic
  */
 extern	String	runtime·emptystring;
 extern	uintptr runtime·zerobase;
-G*	runtime·allg;
-G*	runtime·lastg;
-M*	runtime·allm;
+extern	G*	runtime·allg;
+extern	G*	runtime·lastg;
+extern	M*	runtime·allm;
 extern	int32	runtime·gomaxprocs;
 extern	bool	runtime·singleproc;
 extern	uint32	runtime·panicking;
 extern	int32	runtime·gcwaiting;		// gc is waiting to run
-int8*	runtime·goos;
-int32	runtime·ncpu;
+extern	int8*	runtime·goos;
+extern	int32	runtime·ncpu;
 extern	bool	runtime·iscgo;
 extern 	void	(*runtime·sysargs)(int32, uint8**);
 extern	uint32	runtime·maxstring;
@@ -652,6 +668,7 @@ void	runtime·stackfree(void*, uintptr);
 MCache*	runtime·allocmcache(void);
 void	runtime·freemcache(MCache*);
 void	runtime·mallocinit(void);
+void	runtime·mprofinit(void);
 bool	runtime·ifaceeq_c(Iface, Iface);
 bool	runtime·efaceeq_c(Eface, Eface);
 uintptr	runtime·ifacehash(Iface, uintptr);
@@ -852,8 +869,8 @@ void	runtime·semrelease(uint32*);
 int32	runtime·gomaxprocsfunc(int32 n);
 void	runtime·procyield(uint32);
 void	runtime·osyield(void);
-void	runtime·LockOSThread(void);
-void	runtime·UnlockOSThread(void);
+void	runtime·lockOSThread(void);
+void	runtime·unlockOSThread(void);
 
 void	runtime·mapassign(MapType*, Hmap*, byte*, byte*);
 void	runtime·mapaccess(MapType*, Hmap*, byte*, byte*, bool*);
@@ -865,7 +882,7 @@ Hmap*	runtime·makemap_c(MapType*, int64);
 Hchan*	runtime·makechan_c(ChanType*, int64);
 void	runtime·chansend(ChanType*, Hchan*, byte*, bool*, void*);
 void	runtime·chanrecv(ChanType*, Hchan*, byte*, bool*, bool*);
-bool	runtime·showframe(Func*);
+bool	runtime·showframe(Func*, bool);
 
 void	runtime·ifaceE2I(InterfaceType*, Eface, Iface*);
 

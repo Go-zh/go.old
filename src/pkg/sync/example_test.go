@@ -28,12 +28,11 @@ func ExampleWaitGroup() {
 		// Launch a goroutine to fetch the URL.
 		// 启动一个Go程来取回URL。
 		go func(url string) {
+			// Decrement the counter when the goroutine completes.
+			defer wg.Done()
 			// Fetch the URL.
 			// 取回URL
 			http.Get(url)
-			// Decrement the counter.
-			// 递减计数器
-			wg.Done()
 		}(url)
 	}
 	// Wait for all HTTP fetches to complete.
@@ -44,7 +43,7 @@ func ExampleWaitGroup() {
 func ExampleOnce() {
 	var once sync.Once
 	onceBody := func() {
-		fmt.Printf("Only once\n")
+		fmt.Println("Only once")
 	}
 	done := make(chan bool)
 	for i := 0; i < 10; i++ {

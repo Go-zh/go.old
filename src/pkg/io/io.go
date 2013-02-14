@@ -391,11 +391,13 @@ func WriteString(w Writer, s string) (n int, err error) {
 // If an EOF happens after reading fewer than min bytes,
 // ReadAtLeast returns ErrUnexpectedEOF.
 // If min is greater than the length of buf, ReadAtLeast returns ErrShortBuffer.
+// On return, n >= min if and only if err == nil.
 
 // ReadAtLeast 将 r 读取到 buf 中，直到读了最少 min 个字节为止。
 // 它返回复制的字节数，如果读取的字节较少，还会返回一个错误。若没有读取字节，
 // 错误就只是 EOF。如果一个 EOF 发生在读取了少于 min 个字节之后，ReadAtLeast
 // 就会返回 ErrUnexpectedEOF。若 min 大于 buf 的长度，ReadAtLeast 就会返回 ErrShortBuffer。
+// 对于返回值，当且仅当 err == nil 时，才有 n >= min。
 func ReadAtLeast(r Reader, buf []byte, min int) (n int, err error) {
 	if len(buf) < min {
 		return 0, ErrShortBuffer
@@ -405,12 +407,10 @@ func ReadAtLeast(r Reader, buf []byte, min int) (n int, err error) {
 		nn, err = r.Read(buf[n:])
 		n += nn
 	}
-	if err == EOF {
-		if n >= min {
-			err = nil
-		} else if n > 0 {
-			err = ErrUnexpectedEOF
-		}
+	if n >= min {
+		err = nil
+	} else if n > 0 && err == EOF {
+		err = ErrUnexpectedEOF
 	}
 	return
 }
@@ -420,20 +420,21 @@ func ReadAtLeast(r Reader, buf []byte, min int) (n int, err error) {
 // The error is EOF only if no bytes were read.
 // If an EOF happens after reading some but not all the bytes,
 // ReadFull returns ErrUnexpectedEOF.
+// On return, n == len(buf) if and only if err == nil.
 
 // ReadFull 精确地从 r 中将 len(buf) 个字节读取到 buf 中。
 // 它返回复制的字节数，如果读取的字节较少，还会返回一个错误。若没有读取字节，
 // 错误就只是 EOF。如果一个 EOF 发生在读取了一些但不是所有的字节后，ReadFull
 // 就会返回 ErrUnexpectedEOF。
+// 对于返回值，当且仅当 err == nil 时，才有 n == len(buf)。
 func ReadFull(r Reader, buf []byte) (n int, err error) {
 	return ReadAtLeast(r, buf, len(buf))
 }
 
 // CopyN copies n bytes (or until an error) from src to dst.
 // It returns the number of bytes copied and the earliest
-// error encountered while copying.  Because Read can
-// return the full amount requested as well as an error
-// (including EOF), so can CopyN.
+// error encountered while copying.
+// On return, written == n if and only if err == nil.
 //
 // If dst implements the ReaderFrom interface,
 // the copy is implemented using it.
@@ -444,46 +445,15 @@ func ReadFull(r Reader, buf []byte) (n int, err error) {
 //
 // 若 dst 实现了 ReaderFrom 接口，复制操作也就会使用它来实现。
 func CopyN(dst Writer, src Reader, n int64) (written int64, err error) {
-	// If the writer has a ReadFrom method, use it to do the copy.
-	// Avoids a buffer allocation and a copy.
-	// 若该写入器拥有 ReadFrom 方法，就使用它来进行复制。
-	// 避免一个缓存分配和一个副本。
-	if rt, ok := dst.(ReaderFrom); ok {
-		written, err = rt.ReadFrom(LimitReader(src, n))
-		if written < n && err == nil {
-			// rt stopped early; must have been EOF.
-			// rt 过早停止；必须为 EOF。
-			err = EOF
-		}
-		return
+	written, err = Copy(dst, LimitReader(src, n))
+	if written == n {
+		return n, nil
 	}
-	buf := make([]byte, 32*1024)
-	for written < n {
-		l := len(buf)
-		if d := n - written; d < int64(l) {
-			l = int(d)
-		}
-		nr, er := src.Read(buf[0:l])
-		if nr > 0 {
-			nw, ew := dst.Write(buf[0:nr])
-			if nw > 0 {
-				written += int64(nw)
-			}
-			if ew != nil {
-				err = ew
-				break
-			}
-			if nr != nw {
-				err = ErrShortWrite
-				break
-			}
-		}
-		if er != nil {
-			err = er
-			break
-		}
+	if written < n && err == nil {
+		// src stopped early; must have been EOF.
+		err = EOF
 	}
-	return written, err
+	return
 }
 
 // Copy copies from src to dst until either EOF is reached

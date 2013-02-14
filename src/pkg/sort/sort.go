@@ -235,6 +235,22 @@ func Sort(data Interface) {
 	quickSort(data, 0, n, maxDepth)
 }
 
+type reverse struct {
+	// This embedded Interface permits Reverse to use the methods of
+	// another Interface implementation.
+	Interface
+}
+
+// Less returns the opposite of the embedded implementation's Less method.
+func (r reverse) Less(i, j int) bool {
+	return r.Interface.Less(j, i)
+}
+
+// Reverse returns the reverse order for data.
+func Reverse(data Interface) Interface {
+	return &reverse{data}
+}
+
 // IsSorted reports whether data is sorted.
 
 // IsSorted 返回数据是否已经排序。

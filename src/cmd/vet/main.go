@@ -12,8 +12,10 @@ import (
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -23,15 +25,23 @@ import (
 var verbose = flag.Bool("v", false, "verbose")
 var exitCode = 0
 
-// Flags to control which checks to perform
-var (
-	vetAll             = flag.Bool("all", true, "check everything; disabled if any explicit check is requested")
-	vetMethods         = flag.Bool("methods", false, "check that canonically named methods are canonically defined")
-	vetPrintf          = flag.Bool("printf", false, "check printf-like invocations")
-	vetStructTags      = flag.Bool("structtags", false, "check that struct field tags have canonical format")
-	vetUntaggedLiteral = flag.Bool("composites", false, "check that composite literals used type-tagged elements")
-	vetRangeLoops      = flag.Bool("rangeloops", false, "check that range loop variables are used correctly")
-)
+// Flags to control which checks to perform. "all" is set to true here, and disabled later if
+// a flag is set explicitly.
+var report = map[string]*bool{
+	"all":        flag.Bool("all", true, "check everything; disabled if any explicit check is requested"),
+	"atomic":     flag.Bool("atomic", false, "check for common mistaken usages of the sync/atomic package"),
+	"buildtags":  flag.Bool("buildtags", false, "check that +build tags are valid"),
+	"composites": flag.Bool("composites", false, "check that composite literals used type-tagged elements"),
+	"methods":    flag.Bool("methods", false, "check that canonically named methods are canonically defined"),
+	"printf":     flag.Bool("printf", false, "check printf-like invocations"),
+	"structtags": flag.Bool("structtags", false, "check that struct field tags have canonical format"),
+	"rangeloops": flag.Bool("rangeloops", false, "check that range loop variables are used correctly"),
+}
+
+// vet tells whether to report errors for the named check, a flag name.
+func vet(name string) bool {
+	return *report["all"] || *report[name]
+}
 
 // setExit sets the value for os.Exit when it is called, later.  It
 // remembers the highest value.
@@ -61,8 +71,11 @@ func main() {
 	flag.Parse()
 
 	// If a check is named explicitly, turn off the 'all' flag.
-	if *vetMethods || *vetPrintf || *vetStructTags || *vetUntaggedLiteral || *vetRangeLoops {
-		*vetAll = false
+	for name, ptr := range report {
+		if name != "all" && *ptr {
+			*report["all"] = false
+			break
+		}
 	}
 
 	if *printfuncs != "" {
@@ -106,8 +119,23 @@ func main() {
 // doFile analyzes one file.  If the reader is nil, the source code is read from the
 // named file.
 func doFile(name string, reader io.Reader) {
+	if reader == nil {
+		f, err := os.Open(name)
+		if err != nil {
+			errorf("%s: %s", name, err)
+			return
+		}
+		defer f.Close()
+		reader = f
+	}
+	data, err := ioutil.ReadAll(reader)
+	if err != nil {
+		errorf("%s: %s", name, err)
+		return
+	}
+	checkBuildTag(name, data)
 	fs := token.NewFileSet()
-	parsedFile, err := parser.ParseFile(fs, name, reader, 0)
+	parsedFile, err := parser.ParseFile(fs, name, bytes.NewReader(data), 0)
 	if err != nil {
 		errorf("%s: %s", name, err)
 		return
@@ -188,6 +216,8 @@ func (f *File) walkFile(name string, file *ast.File) {
 // Visit implements the ast.Visitor interface.
 func (f *File) Visit(node ast.Node) ast.Visitor {
 	switch n := node.(type) {
+	case *ast.AssignStmt:
+		f.walkAssignStmt(n)
 	case *ast.CallExpr:
 		f.walkCallExpr(n)
 	case *ast.CompositeLit:
@@ -202,6 +232,11 @@ func (f *File) Visit(node ast.Node) ast.Visitor {
 		f.walkRangeStmt(n)
 	}
 	return f
+}
+
+// walkCall walks an assignment statement
+func (f *File) walkAssignStmt(stmt *ast.AssignStmt) {
+	f.checkAtomicAssignment(stmt)
 }
 
 // walkCall walks a call expression.
@@ -258,4 +293,11 @@ func (f *File) walkInterfaceType(t *ast.InterfaceType) {
 // walkRangeStmt walks a range statement.
 func (f *File) walkRangeStmt(n *ast.RangeStmt) {
 	checkRangeLoop(f, n)
+}
+
+// goFmt returns a string representation of the expression
+func (f *File) gofmt(x ast.Expr) string {
+	f.b.Reset()
+	printer.Fprint(&f.b, f.fset, x)
+	return f.b.String()
 }

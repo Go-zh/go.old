@@ -926,10 +926,10 @@ walkexpr(Node **np, NodeList **init)
 
 	case OANDNOT:
 		walkexpr(&n->left, init);
-		walkexpr(&n->right, init);
 		n->op = OAND;
 		n->right = nod(OCOM, n->right, N);
 		typecheck(&n->right, Erv);
+		walkexpr(&n->right, init);
 		goto ret;
 
 	case ODIV:
@@ -1296,9 +1296,16 @@ ret:
 static Node*
 ascompatee1(int op, Node *l, Node *r, NodeList **init)
 {
+	Node *n;
 	USED(op);
+	
+	// convas will turn map assigns into function calls,
+	// making it impossible for reorder3 to work.
+	n = nod(OAS, l, r);
+	if(l->op == OINDEXMAP)
+		return n;
 
-	return convas(nod(OAS, l, r), init);
+	return convas(n, init);
 }
 
 static NodeList*
@@ -1319,8 +1326,12 @@ ascompatee(int op, NodeList *nl, NodeList *nr, NodeList **init)
 		lr->n = safeexpr(lr->n, init);
 
 	nn = nil;
-	for(ll=nl, lr=nr; ll && lr; ll=ll->next, lr=lr->next)
+	for(ll=nl, lr=nr; ll && lr; ll=ll->next, lr=lr->next) {
+		// Do not generate 'x = x' during return. See issue 4014.
+		if(op == ORETURN && ll->n == lr->n)
+			continue;
 		nn = list(nn, ascompatee1(op, ll->n, lr->n, init));
+	}
 
 	// cannot happen: caller checked that lists had same length
 	if(ll || lr)
@@ -1896,13 +1907,14 @@ static int aliased(Node*, NodeList*, NodeList*);
 static NodeList*
 reorder3(NodeList *all)
 {
-	NodeList *list, *early;
+	NodeList *list, *early, *mapinit;
 	Node *l;
 
 	// If a needed expression may be affected by an
 	// earlier assignment, make an early copy of that
 	// expression and use the copy instead.
 	early = nil;
+	mapinit = nil;
 	for(list=all; list; list=list->next) {
 		l = list->n->left;
 
@@ -1926,8 +1938,11 @@ reorder3(NodeList *all)
 		case ONAME:
 			break;
 		case OINDEX:
+		case OINDEXMAP:
 			reorder3save(&l->left, all, list, &early);
 			reorder3save(&l->right, all, list, &early);
+			if(l->op == OINDEXMAP)
+				list->n = convas(list->n, &mapinit);
 			break;
 		case OIND:
 		case ODOTPTR:
@@ -1938,6 +1953,7 @@ reorder3(NodeList *all)
 		reorder3save(&list->n->right, all, list, &early);
 	}
 
+	early = concat(mapinit, early);
 	return concat(early, all);
 }
 

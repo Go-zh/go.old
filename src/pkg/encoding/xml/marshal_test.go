@@ -7,6 +7,7 @@ package xml
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"reflect"
 	"strconv"
@@ -57,6 +58,36 @@ type Domain struct {
 type Book struct {
 	XMLName struct{} `xml:"book"`
 	Title   string   `xml:",chardata"`
+}
+
+type Event struct {
+	XMLName struct{} `xml:"event"`
+	Year    int      `xml:",chardata"`
+}
+
+type Movie struct {
+	XMLName struct{} `xml:"movie"`
+	Length  uint     `xml:",chardata"`
+}
+
+type Pi struct {
+	XMLName       struct{} `xml:"pi"`
+	Approximation float32  `xml:",chardata"`
+}
+
+type Universe struct {
+	XMLName struct{} `xml:"universe"`
+	Visible float64  `xml:",chardata"`
+}
+
+type Particle struct {
+	XMLName struct{} `xml:"particle"`
+	HasMass bool     `xml:",chardata"`
+}
+
+type Departure struct {
+	XMLName struct{}  `xml:"departure"`
+	When    time.Time `xml:",chardata"`
 }
 
 type SecretAgent struct {
@@ -345,6 +376,12 @@ var marshalTests = []struct {
 	{Value: &Domain{Name: []byte("google.com&friends")}, ExpectXML: `<domain>google.com&amp;friends</domain>`},
 	{Value: &Domain{Name: []byte("google.com"), Comment: []byte(" &friends ")}, ExpectXML: `<domain>google.com<!-- &friends --></domain>`},
 	{Value: &Book{Title: "Pride & Prejudice"}, ExpectXML: `<book>Pride &amp; Prejudice</book>`},
+	{Value: &Event{Year: -3114}, ExpectXML: `<event>-3114</event>`},
+	{Value: &Movie{Length: 13440}, ExpectXML: `<movie>13440</movie>`},
+	{Value: &Pi{Approximation: 3.14159265}, ExpectXML: `<pi>3.1415927</pi>`},
+	{Value: &Universe{Visible: 9.3e13}, ExpectXML: `<universe>9.3e+13</universe>`},
+	{Value: &Particle{HasMass: true}, ExpectXML: `<particle>true</particle>`},
+	{Value: &Departure{When: ParseTime("2013-01-09T00:15:00-09:00")}, ExpectXML: `<departure>2013-01-09T00:15:00-09:00</departure>`},
 	{Value: atomValue, ExpectXML: atomXml},
 	{
 		Value: &Ship{
@@ -804,6 +841,24 @@ var marshalErrorTests = []struct {
 	},
 }
 
+var marshalIndentTests = []struct {
+	Value     interface{}
+	Prefix    string
+	Indent    string
+	ExpectXML string
+}{
+	{
+		Value: &SecretAgent{
+			Handle:    "007",
+			Identity:  "James Bond",
+			Obfuscate: "<redacted/>",
+		},
+		Prefix:    "",
+		Indent:    "\t",
+		ExpectXML: fmt.Sprintf("<agent handle=\"007\">\n\t<Identity>James Bond</Identity><redacted/>\n</agent>"),
+	},
+}
+
 func TestMarshalErrors(t *testing.T) {
 	for idx, test := range marshalErrorTests {
 		_, err := Marshal(test.Value)
@@ -844,6 +899,19 @@ func TestUnmarshal(t *testing.T) {
 			t.Errorf("#%d: unexpected error: %#v", i, err)
 		} else if got, want := dest, test.Value; !reflect.DeepEqual(got, want) {
 			t.Errorf("#%d: unmarshal(%q):\nhave %#v\nwant %#v", i, test.ExpectXML, got, want)
+		}
+	}
+}
+
+func TestMarshalIndent(t *testing.T) {
+	for i, test := range marshalIndentTests {
+		data, err := MarshalIndent(test.Value, test.Prefix, test.Indent)
+		if err != nil {
+			t.Errorf("#%d: Error: %s", i, err)
+			continue
+		}
+		if got, want := string(data), test.ExpectXML; got != want {
+			t.Errorf("#%d: MarshalIndent:\nGot:%s\nWant:\n%s", i, got, want)
 		}
 	}
 }

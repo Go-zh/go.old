@@ -151,14 +151,23 @@ yyerror(char *fmt, ...)
 		if(lastsyntax == lexlineno)
 			return;
 		lastsyntax = lexlineno;
-		
-		if(strstr(fmt, "{ or {")) {
+			
+		if(strstr(fmt, "{ or {") || strstr(fmt, " or ?") || strstr(fmt, " or @")) {
 			// The grammar has { and LBRACE but both show up as {.
 			// Rewrite syntax error referring to "{ or {" to say just "{".
 			strecpy(buf, buf+sizeof buf, fmt);
 			p = strstr(buf, "{ or {");
 			if(p)
 				memmove(p+1, p+6, strlen(p+6)+1);
+			
+			// The grammar has ? and @ but only for reading imports.
+			// Silence them in ordinary errors.
+			p = strstr(buf, " or ?");
+			if(p)
+				memmove(p, p+5, strlen(p+5)+1);
+			p = strstr(buf, " or @");
+			if(p)
+				memmove(p, p+5, strlen(p+5)+1);
 			fmt = buf;
 		}
 		
@@ -840,6 +849,7 @@ treecopy(Node *n)
 	default:
 		m = nod(OXXX, N, N);
 		*m = *n;
+		m->orig = m;
 		m->left = treecopy(n->left);
 		m->right = treecopy(n->right);
 		m->list = listtreecopy(n->list);

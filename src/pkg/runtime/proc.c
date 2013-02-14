@@ -24,6 +24,13 @@ static	int32	debug	= 0;
 
 int32	runtime·gcwaiting;
 
+G*	runtime·allg;
+G*	runtime·lastg;
+M*	runtime·allm;
+
+int8*	runtime·goos;
+int32	runtime·ncpu;
+
 // Go scheduler
 //
 // The go scheduler's job is to match ready-to-run goroutines (`g's)
@@ -72,7 +79,6 @@ struct Sched {
 	int32 profilehz;	// cpu profiling rate
 
 	bool init;  // running initialization
-	bool lockmain;  // init called runtime.LockOSThread
 
 	Note	stopped;	// one g can set waitstop and wait here for m's to stop
 };
@@ -183,6 +189,7 @@ runtime·schedinit(void)
 	byte *p;
 
 	m->nomemprof++;
+	runtime·mprofinit();
 	runtime·mallocinit();
 	mcommoninit(m);
 
@@ -214,7 +221,7 @@ runtime·schedinit(void)
 	m->nomemprof--;
 
 	if(raceenabled)
-		runtime·raceinit();
+		g->racectx = runtime·raceinit();
 }
 
 extern void main·init(void);
@@ -230,15 +237,15 @@ runtime·main(void)
 	// Those can arrange for main.main to run in the main thread
 	// by calling runtime.LockOSThread during initialization
 	// to preserve the lock.
-	runtime·LockOSThread();
+	runtime·lockOSThread();
 	// From now on, newgoroutines may use non-main threads.
 	setmcpumax(runtime·gomaxprocs);
 	runtime·sched.init = true;
 	scvg = runtime·newproc1((byte*)runtime·MHeap_Scavenger, nil, 0, 0, runtime·main);
+	scvg->issystem = true;
 	main·init();
 	runtime·sched.init = false;
-	if(!runtime·sched.lockmain)
-		runtime·UnlockOSThread();
+	runtime·unlockOSThread();
 
 	// The deadlock detection has false negatives.
 	// Let scvg start up, to eliminate the false negative
@@ -276,6 +283,8 @@ schedunlock(void)
 void
 runtime·goexit(void)
 {
+	if(raceenabled)
+		runtime·racegoend();
 	g->status = Gmoribund;
 	runtime·gosched();
 }
@@ -318,9 +327,13 @@ void
 runtime·tracebackothers(G *me)
 {
 	G *gp;
+	int32 traceback;
 
+	traceback = runtime·gotraceback();
 	for(gp = runtime·allg; gp != nil; gp = gp->alllink) {
 		if(gp == me || gp->status == Gdead)
+			continue;
+		if(gp->issystem && traceback < 2)
 			continue;
 		runtime·printf("\n");
 		runtime·goroutineheader(gp);
@@ -617,6 +630,7 @@ top:
 	if((scvg == nil && runtime·sched.grunning == 0) ||
 	   (scvg != nil && runtime·sched.grunning == 1 && runtime·sched.gwait == 0 &&
 	    (scvg->status == Grunning || scvg->status == Gsyscall))) {
+		m->throwing = -1;  // do not dump full stacks
 		runtime·throw("all goroutines are asleep - deadlock!");
 	}
 
@@ -897,12 +911,11 @@ schedule(G *gp)
 			gput(gp);
 			break;
 		case Gmoribund:
-			if(raceenabled)
-				runtime·racegoend(gp->goid);
 			gp->status = Gdead;
 			if(gp->lockedm) {
 				gp->lockedm = nil;
 				m->lockedg = nil;
+				m->locked = 0;
 			}
 			gp->idlem = nil;
 			runtime·unwindstack(gp, nil);
@@ -1314,7 +1327,7 @@ runtime·newproc1(byte *fn, byte *argp, int32 narg, int32 nret, void *callerpc)
 	byte *sp;
 	G *newg;
 	int32 siz;
-	int64 goid;
+	uintptr racectx;
 
 //printf("newproc1 %p %p narg=%d nret=%d\n", fn, argp, narg, nret);
 	siz = narg + nret;
@@ -1327,9 +1340,8 @@ runtime·newproc1(byte *fn, byte *argp, int32 narg, int32 nret, void *callerpc)
 	if(siz > StackMin - 1024)
 		runtime·throw("runtime.newproc: function arguments too large for new goroutine");
 
-	goid = runtime·xadd64((uint64*)&runtime·sched.goidgen, 1);
 	if(raceenabled)
-		runtime·racegostart(goid, callerpc);
+		racectx = runtime·racegostart(callerpc);
 
 	schedlock();
 
@@ -1361,9 +1373,11 @@ runtime·newproc1(byte *fn, byte *argp, int32 narg, int32 nret, void *callerpc)
 	newg->sched.g = newg;
 	newg->entry = fn;
 	newg->gopc = (uintptr)callerpc;
+	if(raceenabled)
+		newg->racectx = racectx;
 
 	runtime·sched.gcount++;
-	newg->goid = goid;
+	newg->goid = ++runtime·sched.goidgen;
 
 	newprocreadylocked(newg);
 	schedunlock();
@@ -1446,26 +1460,50 @@ runtime·gomaxprocsfunc(int32 n)
 	return ret;
 }
 
-void
-runtime·LockOSThread(void)
+static void
+LockOSThread(void)
 {
-	if(m == &runtime·m0 && runtime·sched.init) {
-		runtime·sched.lockmain = true;
-		return;
-	}
 	m->lockedg = g;
 	g->lockedm = m;
 }
 
 void
-runtime·UnlockOSThread(void)
+runtime·LockOSThread(void)
 {
-	if(m == &runtime·m0 && runtime·sched.init) {
-		runtime·sched.lockmain = false;
+	m->locked |= LockExternal;
+	LockOSThread();
+}
+
+void
+runtime·lockOSThread(void)
+{
+	m->locked += LockInternal;
+	LockOSThread();
+}
+
+static void
+UnlockOSThread(void)
+{
+	if(m->locked != 0)
 		return;
-	}
 	m->lockedg = nil;
 	g->lockedm = nil;
+}	
+
+void
+runtime·UnlockOSThread(void)
+{
+	m->locked &= ~LockExternal;
+	UnlockOSThread();
+}
+
+void
+runtime·unlockOSThread(void)
+{
+	if(m->locked < LockInternal)
+		runtime·throw("runtime: internal error: misuse of lockOSThread/unlockOSThread");
+	m->locked -= LockInternal;
+	UnlockOSThread();
 }
 
 bool

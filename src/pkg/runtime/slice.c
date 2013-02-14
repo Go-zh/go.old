@@ -20,9 +20,14 @@ static	void	growslice1(SliceType*, Slice, intgo, Slice *);
 void
 runtime·makeslice(SliceType *t, int64 len, int64 cap, Slice ret)
 {
-	if(len < 0 || (intgo)len != len)
+	// NOTE: The len > MaxMem/elemsize check here is not strictly necessary,
+	// but it produces a 'len out of range' error instead of a 'cap out of range' error
+	// when someone does make([]T, bignumber). 'cap out of range' is true too,
+	// but since the cap is only being supplied implicitly, saying len is clearer.
+	// See issue 4085.
+	if(len < 0 || (intgo)len != len || t->elem->size > 0 && len > MaxMem / t->elem->size)
 		runtime·panicstring("makeslice: len out of range");
-	
+
 	if(cap < len || (intgo)cap != cap || t->elem->size > 0 && cap > MaxMem / t->elem->size)
 		runtime·panicstring("makeslice: cap out of range");
 
@@ -71,31 +76,34 @@ makeslice1(SliceType *t, intgo len, intgo cap, Slice *ret)
 void
 runtime·appendslice(SliceType *t, Slice x, Slice y, Slice ret)
 {
-	intgo m, i;
+	intgo m;
 	uintptr w;
 	void *pc;
 
 	m = x.len+y.len;
+	w = t->elem->size;
 
 	if(m < x.len)
 		runtime·throw("append: slice overflow");
-
-	if(raceenabled) {
-		pc = runtime·getcallerpc(&t);
-		for(i=0; i<x.len; i++)
-			runtime·racereadpc(x.array + i*t->elem->size, pc, runtime·appendslice);
-		for(i=x.len; i<x.cap; i++)
-			runtime·racewritepc(x.array + i*t->elem->size, pc, runtime·appendslice);
-		for(i=0; i<y.len; i++)
-			runtime·racereadpc(y.array + i*t->elem->size, pc, runtime·appendslice);
-	}
 
 	if(m > x.cap)
 		growslice1(t, x, m, &ret);
 	else
 		ret = x;
 
-	w = t->elem->size;
+	if(raceenabled) {
+		// Don't mark read/writes on the newly allocated slice.
+		pc = runtime·getcallerpc(&t);
+		// read x[:len]
+		if(m > x.cap)
+			runtime·racereadrangepc(x.array, x.len*w, w, pc, runtime·appendslice);
+		// read y
+		runtime·racereadrangepc(y.array, y.len*w, w, pc, runtime·appendslice);
+		// write x[len(x):len(x)+len(y)]
+		if(m <= x.cap)
+			runtime·racewriterangepc(ret.array+ret.len*w, y.len*w, w, pc, runtime·appendslice);
+	}
+
 	runtime·memmove(ret.array + ret.len*w, y.array, y.len*w);
 	ret.len += y.len;
 	FLUSH(&ret);
@@ -107,7 +115,7 @@ runtime·appendslice(SliceType *t, Slice x, Slice y, Slice ret)
 void
 runtime·appendstr(SliceType *t, Slice x, String y, Slice ret)
 {
-	intgo m, i;
+	intgo m;
 	void *pc;
 
 	m = x.len+y.len;
@@ -115,18 +123,21 @@ runtime·appendstr(SliceType *t, Slice x, String y, Slice ret)
 	if(m < x.len)
 		runtime·throw("append: slice overflow");
 
-	if(raceenabled) {
-		pc = runtime·getcallerpc(&t);
-		for(i=0; i<x.len; i++)
-			runtime·racereadpc(x.array + i*t->elem->size, pc, runtime·appendstr);
-		for(i=x.len; i<x.cap; i++)
-			runtime·racewritepc(x.array + i*t->elem->size, pc, runtime·appendstr);
-	}
-
 	if(m > x.cap)
 		growslice1(t, x, m, &ret);
 	else
 		ret = x;
+
+	if(raceenabled) {
+		// Don't mark read/writes on the newly allocated slice.
+		pc = runtime·getcallerpc(&t);
+		// read x[:len]
+		if(m > x.cap)
+			runtime·racereadrangepc(x.array, x.len, 1, pc, runtime·appendstr);
+		// write x[len(x):len(x)+len(y)]
+		if(m <= x.cap)
+			runtime·racewriterangepc(ret.array+ret.len, y.len, 1, pc, runtime·appendstr);
+	}
 
 	runtime·memmove(ret.array + ret.len, y.str, y.len);
 	ret.len += y.len;
@@ -140,7 +151,6 @@ runtime·growslice(SliceType *t, Slice old, int64 n, Slice ret)
 {
 	int64 cap;
 	void *pc;
-	int32 i;
 
 	if(n < 1)
 		runtime·panicstring("growslice: invalid n");
@@ -152,8 +162,7 @@ runtime·growslice(SliceType *t, Slice old, int64 n, Slice ret)
 
 	if(raceenabled) {
 		pc = runtime·getcallerpc(&t);
-		for(i=0; i<old.len; i++)
-			runtime·racewritepc(old.array + i*t->elem->size, pc, runtime·growslice);
+		runtime·racereadrangepc(old.array, old.len*t->elem->size, t->elem->size, pc, runtime·growslice);
 	}
 
 	growslice1(t, old, cap, &ret);
@@ -199,7 +208,6 @@ void
 runtime·copy(Slice to, Slice fm, uintptr width, intgo ret)
 {
 	void *pc;
-	int32 i;
 
 	if(fm.len == 0 || to.len == 0 || width == 0) {
 		ret = 0;
@@ -212,10 +220,8 @@ runtime·copy(Slice to, Slice fm, uintptr width, intgo ret)
 
 	if(raceenabled) {
 		pc = runtime·getcallerpc(&to);
-		for(i=0; i<ret; i++) {
-			runtime·racewritepc(to.array + i*width, pc, runtime·copy);
-			runtime·racereadpc(fm.array + i*width, pc, runtime·copy);
-		}
+		runtime·racewriterangepc(to.array, ret*width, width, pc, runtime·copy);
+		runtime·racereadrangepc(fm.array, ret*width, width, pc, runtime·copy);
 	}
 
 	if(ret == 1 && width == 1) {	// common case worth about 2x to do here
@@ -245,7 +251,6 @@ void
 runtime·slicestringcopy(Slice to, String fm, intgo ret)
 {
 	void *pc;
-	int32 i;
 
 	if(fm.len == 0 || to.len == 0) {
 		ret = 0;
@@ -258,9 +263,7 @@ runtime·slicestringcopy(Slice to, String fm, intgo ret)
 
 	if(raceenabled) {
 		pc = runtime·getcallerpc(&to);
-		for(i=0; i<ret; i++) {
-			runtime·racewritepc(to.array + i, pc, runtime·slicestringcopy);
-		}
+		runtime·racewriterangepc(to.array, ret, 1, pc, runtime·slicestringcopy);
 	}
 
 	runtime·memmove(to.array, fm.str, ret);

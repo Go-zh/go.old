@@ -253,6 +253,7 @@ struct	Node
 	uchar	colas;		// OAS resulting from :=
 	uchar	diag;		// already printed error about this
 	uchar	esc;		// EscXXX
+	uchar	noescape;	// func arguments do not escape
 	uchar	funcdepth;
 	uchar	builtin;	// built-in name, like len or close
 	uchar	walkdef;
@@ -324,6 +325,7 @@ struct	Node
 	int32	ostk;
 	int32	iota;
 	uint32	walkgen;
+	int32	esclevel;
 };
 #define	N	((Node*)0)
 
@@ -645,20 +647,21 @@ enum
 	Cboth = Crecv | Csend,
 };
 
+// declaration context
 enum
 {
 	Pxxx,
 
-	PEXTERN,	// declaration context
-	PAUTO,
-	PPARAM,
-	PPARAMOUT,
-	PPARAMREF,	// param passed by reference
-	PFUNC,
+	PEXTERN,	// global variable
+	PAUTO,		// local variables
+	PPARAM,		// input arguments
+	PPARAMOUT,	// output results
+	PPARAMREF,	// closure variable reference
+	PFUNC,		// global function
 
 	PDISCARD,	// discard during parse of duplicate import
 
-	PHEAP = 1<<7,
+	PHEAP = 1<<7,	// an extra bit to identify an escaped variable
 };
 
 enum
@@ -940,6 +943,8 @@ EXTERN	int	compiling_runtime;
 EXTERN	int	compiling_wrappers;
 EXTERN	int	pure_go;
 EXTERN	int	flag_race;
+EXTERN	int	flag_largemodel;
+EXTERN	int	noescape;
 
 EXTERN	int	nointerface;
 EXTERN	int	fieldtrack_enabled;
@@ -995,6 +1000,7 @@ void	defaultlit(Node **np, Type *t);
 void	defaultlit2(Node **lp, Node **rp, int force);
 void	evconst(Node *n);
 int	isconst(Node *n, int ct);
+int	isgoconst(Node *n);
 Node*	nodcplxlit(Val r, Val i);
 Node*	nodlit(Val v);
 long	nonnegconst(Node *n);

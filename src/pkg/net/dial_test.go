@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"regexp"
 	"runtime"
 	"testing"
@@ -74,8 +75,7 @@ func TestDialTimeout(t *testing.T) {
 		// by default. FreeBSD likely works, but is untested.
 		// TODO(rsc):
 		// The timeout never happens on Windows.  Why?  Issue 3016.
-		t.Logf("skipping test on %q; untested.", runtime.GOOS)
-		return
+		t.Skipf("skipping test on %q; untested.", runtime.GOOS)
 	}
 
 	connected := 0
@@ -107,8 +107,7 @@ func TestDialTimeout(t *testing.T) {
 func TestSelfConnect(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		// TODO(brainman): do not know why it hangs.
-		t.Logf("skipping known-broken test on windows")
-		return
+		t.Skip("skipping known-broken test on windows")
 	}
 	// Test that Dial does not honor self-connects.
 	// See the comment in DialTCP.
@@ -225,11 +224,35 @@ func TestDialError(t *testing.T) {
 	}
 }
 
+var invalidDialAndListenArgTests = []struct {
+	net  string
+	addr string
+	err  error
+}{
+	{"foo", "bar", &OpError{Op: "dial", Net: "foo", Addr: nil, Err: UnknownNetworkError("foo")}},
+	{"baz", "", &OpError{Op: "listen", Net: "baz", Addr: nil, Err: UnknownNetworkError("baz")}},
+	{"tcp", "", &OpError{Op: "dial", Net: "tcp", Addr: nil, Err: errMissingAddress}},
+}
+
+func TestInvalidDialAndListenArgs(t *testing.T) {
+	for _, tt := range invalidDialAndListenArgTests {
+		var err error
+		switch tt.err.(*OpError).Op {
+		case "dial":
+			_, err = Dial(tt.net, tt.addr)
+		case "listen":
+			_, err = Listen(tt.net, tt.addr)
+		}
+		if !reflect.DeepEqual(tt.err, err) {
+			t.Fatalf("got %#v; expected %#v", err, tt.err)
+		}
+	}
+}
+
 func TestDialTimeoutFDLeak(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		// TODO(bradfitz): test on other platforms
-		t.Logf("skipping test on %s", runtime.GOOS)
-		return
+		t.Skipf("skipping test on %q", runtime.GOOS)
 	}
 
 	ln := newLocalListener(t)

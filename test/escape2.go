@@ -1258,3 +1258,45 @@ func foo139() *byte {
 	t := new(T)   // ERROR "new.T. escapes to heap"
 	return &t.x.y // ERROR "&t.x.y escapes to heap"
 }
+
+// issue 4751
+func foo140() interface{} {
+	type T struct {
+		X string
+	}
+	type U struct {
+		X string
+		T *T
+	}
+	t := &T{} // ERROR "&T literal escapes to heap"
+	return U{
+		X: t.X,
+		T: t,
+	}
+}
+
+//go:noescape
+
+func F1([]byte)
+
+func F2([]byte)
+
+//go:noescape
+
+func F3(x []byte) // ERROR "F3 x does not escape"
+
+func F4(x []byte)
+
+func G() {
+	var buf1 [10]byte
+	F1(buf1[:]) // ERROR "buf1 does not escape"
+	
+	var buf2 [10]byte // ERROR "moved to heap: buf2"
+	F2(buf2[:]) // ERROR "buf2 escapes to heap"
+
+	var buf3 [10]byte
+	F3(buf3[:]) // ERROR "buf3 does not escape"
+	
+	var buf4 [10]byte // ERROR "moved to heap: buf4"
+	F4(buf4[:]) // ERROR "buf4 escapes to heap"
+}

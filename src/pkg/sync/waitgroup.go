@@ -49,12 +49,21 @@ type WaitGroup struct {
 // G3: Wait() // G1 仍然没有运行，但 G3 发现 sema == 1，就解阻了！Bug。
 
 // Add adds delta, which may be negative, to the WaitGroup counter.
-// If the counter becomes zero, all goroutines blocked on Wait() are released.
+// If the counter becomes zero, all goroutines blocked on Wait are released.
 // If the counter goes negative, Add panics.
+//
+// Note that calls with positive delta must happen before the call to Wait,
+// or else Wait may wait for too small a group. Typically this means the calls
+// to Add should execute before the statement creating the goroutine or
+// other event to be waited for. See the WaitGroup example.
 
 // Add 添加 delta，对于 WaitGroup 的 counter 来说，它可能为负数。
 // 若 counter 变为零，在 Wait() 被释放后所有Go程就会阻塞。
-// 若 counter 变为负数，Add 就会引发恐慌。
+// 若 counter 变为负数，Add 就会引发Panic。
+//
+// 注意，用正整数的 delta 调用它必须发生在调用 Wait 之前，否则 Wait
+// 等待一组的时间会太短。一般来说这意味着对 Add 的调用应当执行在该语句创建Go程，
+// 或等待其它事件之前。具体见 WaitGroup 的示例。
 func (wg *WaitGroup) Add(delta int) {
 	if raceenabled {
 		raceReleaseMerge(unsafe.Pointer(wg))

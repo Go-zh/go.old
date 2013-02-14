@@ -126,6 +126,8 @@ putelfsym(Sym *x, char *s, int t, vlong addr, vlong size, int ver, Sym *go)
 		return;
 
 	off = putelfstr(s);
+	if(isobj)
+		addr -= xo->sect->vaddr;
 	putelfsyment(off, addr, size, (bind<<4)|(type&0xf), xo->sect->elfsect->shnum, (x->type & SHIDDEN) ? 2 : 0);
 	x->elfsym = numelfsym++;
 }
@@ -367,9 +369,9 @@ putsymb(Sym *s, char *name, int t, vlong v, vlong size, int ver, Sym *typ)
 			return;
 		}
 		if(ver)
-			Bprint(&bso, "%c %.8llux %s<%d> %s\n", t, v, s->name, ver, typ ? typ->name : "");
+			Bprint(&bso, "%c %.8llux %s<%d> %s\n", t, v, name, ver, typ ? typ->name : "");
 		else
-			Bprint(&bso, "%c %.8llux %s %s\n", t, v, s->name, typ ? typ->name : "");
+			Bprint(&bso, "%c %.8llux %s %s\n", t, v, name, typ ? typ->name : "");
 	}
 }
 
@@ -387,6 +389,11 @@ symtab(void)
 	xdefine("etypelink", SRODATA, 0);
 	xdefine("rodata", SRODATA, 0);
 	xdefine("erodata", SRODATA, 0);
+	xdefine("reloffset", SRODATA, 0);
+	if(flag_shared) {
+		xdefine("datarelro", SDATARELRO, 0);
+		xdefine("edatarelro", SDATARELRO, 0);
+	}
 	xdefine("gcdata", SGCDATA, 0);
 	xdefine("egcdata", SGCDATA, 0);
 	xdefine("gcbss", SGCBSS, 0);

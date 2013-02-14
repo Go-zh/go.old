@@ -93,6 +93,7 @@ walksymtab(void (*fn)(Sym*))
 
 static Func *func;
 static int32 nfunc;
+extern byte reloffset[];
 
 static byte **fname;
 static int32 nfname;
@@ -118,7 +119,7 @@ dofunc(Sym *sym)
 		}
 		f = &func[nfunc++];
 		f->name = runtime·gostringnocopy(sym->name);
-		f->entry = sym->value;
+		f->entry = sym->value + (uint64)reloffset;
 		if(sym->symtype == 'L' || sym->symtype == 'l')
 			f->frame = -sizeof(uintptr);
 		break;
@@ -559,11 +560,13 @@ contains(String s, int8 *p)
 }
 
 bool
-runtime·showframe(Func *f)
+runtime·showframe(Func *f, bool current)
 {
 	static int32 traceback = -1;
 
+	if(current && m->throwing > 0)
+		return 1;
 	if(traceback < 0)
 		traceback = runtime·gotraceback();
-	return traceback > 1 || contains(f->name, ".") && !hasprefix(f->name, "runtime.");
+	return traceback > 1 || f != nil && contains(f->name, ".") && !hasprefix(f->name, "runtime.");
 }

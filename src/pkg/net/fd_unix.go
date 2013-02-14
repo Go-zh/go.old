@@ -109,17 +109,24 @@ func (s *pollServer) AddFD(fd *netFD, mode int) error {
 // Evict evicts fd from the pending list, unblocking
 // any I/O running on fd.  The caller must have locked
 // pollserver.
-func (s *pollServer) Evict(fd *netFD) {
+// Return value is whether the pollServer should be woken up.
+func (s *pollServer) Evict(fd *netFD) bool {
+	doWakeup := false
 	if s.pending[fd.sysfd<<1] == fd {
 		s.WakeFD(fd, 'r', errClosing)
-		s.poll.DelFD(fd.sysfd, 'r')
+		if s.poll.DelFD(fd.sysfd, 'r') {
+			doWakeup = true
+		}
 		delete(s.pending, fd.sysfd<<1)
 	}
 	if s.pending[fd.sysfd<<1|1] == fd {
 		s.WakeFD(fd, 'w', errClosing)
-		s.poll.DelFD(fd.sysfd, 'w')
+		if s.poll.DelFD(fd.sysfd, 'w') {
+			doWakeup = true
+		}
 		delete(s.pending, fd.sysfd<<1|1)
 	}
+	return doWakeup
 }
 
 var wakeupbuf [1]byte
@@ -290,17 +297,14 @@ func server(fd int) *pollServer {
 
 func dialTimeout(net, addr string, timeout time.Duration) (Conn, error) {
 	deadline := time.Now().Add(timeout)
-	_, addri, err := resolveNetAddr("dial", net, addr, deadline)
+	ra, err := resolveAddr("dial", net, addr, deadline)
 	if err != nil {
 		return nil, err
 	}
-	return dialAddr(net, addr, addri, deadline)
+	return dial(net, addr, ra, deadline)
 }
 
 func newFD(fd, family, sotype int, net string) (*netFD, error) {
-	if err := syscall.SetNonblock(fd, true); err != nil {
-		return nil, err
-	}
 	netfd := &netFD{
 		sysfd:  fd,
 		family: family,
@@ -389,9 +393,12 @@ func (fd *netFD) Close() error {
 	// the final decref will close fd.sysfd.  This should happen
 	// fairly quickly, since all the I/O is non-blocking, and any
 	// attempts to block in the pollserver will return errClosing.
-	fd.pollServer.Evict(fd)
+	doWakeup := fd.pollServer.Evict(fd)
 	fd.pollServer.Unlock()
 	fd.decref()
+	if doWakeup {
+		fd.pollServer.Wakeup()
+	}
 	return nil
 }
 
@@ -615,16 +622,11 @@ func (fd *netFD) accept(toAddr func(syscall.Sockaddr) Addr) (netfd *netFD, err e
 	}
 	defer fd.decref()
 
-	// See ../syscall/exec_unix.go for description of ForkLock.
-	// It is okay to hold the lock across syscall.Accept
-	// because we have put fd.sysfd into non-blocking mode.
 	var s int
 	var rsa syscall.Sockaddr
 	for {
-		syscall.ForkLock.RLock()
-		s, rsa, err = syscall.Accept(fd.sysfd)
+		s, rsa, err = accept(fd.sysfd)
 		if err != nil {
-			syscall.ForkLock.RUnlock()
 			if err == syscall.EAGAIN {
 				if err = fd.pollServer.WaitRead(fd); err == nil {
 					continue
@@ -638,8 +640,6 @@ func (fd *netFD) accept(toAddr func(syscall.Sockaddr) Addr) (netfd *netFD, err e
 		}
 		break
 	}
-	syscall.CloseOnExec(s)
-	syscall.ForkLock.RUnlock()
 
 	if netfd, err = newFD(s, fd.family, fd.sotype, fd.net); err != nil {
 		closesocket(s)
@@ -661,6 +661,9 @@ func (fd *netFD) dup() (f *os.File, err error) {
 	syscall.ForkLock.RUnlock()
 
 	// We want blocking mode for the new fd, hence the double negative.
+	// This also puts the old fd into blocking mode, meaning that
+	// I/O will block the thread instead of letting us use the epoll server.
+	// Everything will still work, just with more threads.
 	if err = syscall.SetNonblock(ns, false); err != nil {
 		return nil, &OpError{"setnonblock", fd.net, fd.laddr, err}
 	}

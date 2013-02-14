@@ -92,8 +92,7 @@ func TestAddUint32(t *testing.T) {
 
 func TestAddInt64(t *testing.T) {
 	if test64err != nil {
-		t.Logf("Skipping 64-bit tests: %v", test64err)
-		return
+		t.Skipf("Skipping 64-bit tests: %v", test64err)
 	}
 	var x struct {
 		before int64
@@ -117,8 +116,7 @@ func TestAddInt64(t *testing.T) {
 
 func TestAddUint64(t *testing.T) {
 	if test64err != nil {
-		t.Logf("Skipping 64-bit tests: %v", test64err)
-		return
+		t.Skipf("Skipping 64-bit tests: %v", test64err)
 	}
 	var x struct {
 		before uint64
@@ -223,8 +221,7 @@ func TestCompareAndSwapUint32(t *testing.T) {
 
 func TestCompareAndSwapInt64(t *testing.T) {
 	if test64err != nil {
-		t.Logf("Skipping 64-bit tests: %v", test64err)
-		return
+		t.Skipf("Skipping 64-bit tests: %v", test64err)
 	}
 	var x struct {
 		before int64
@@ -256,8 +253,7 @@ func TestCompareAndSwapInt64(t *testing.T) {
 
 func TestCompareAndSwapUint64(t *testing.T) {
 	if test64err != nil {
-		t.Logf("Skipping 64-bit tests: %v", test64err)
-		return
+		t.Skipf("Skipping 64-bit tests: %v", test64err)
 	}
 	var x struct {
 		before uint64
@@ -391,8 +387,7 @@ func TestLoadUint32(t *testing.T) {
 
 func TestLoadInt64(t *testing.T) {
 	if test64err != nil {
-		t.Logf("Skipping 64-bit tests: %v", test64err)
-		return
+		t.Skipf("Skipping 64-bit tests: %v", test64err)
 	}
 	var x struct {
 		before int64
@@ -415,8 +410,7 @@ func TestLoadInt64(t *testing.T) {
 
 func TestLoadUint64(t *testing.T) {
 	if test64err != nil {
-		t.Logf("Skipping 64-bit tests: %v", test64err)
-		return
+		t.Skipf("Skipping 64-bit tests: %v", test64err)
 	}
 	var x struct {
 		before uint64
@@ -525,8 +519,7 @@ func TestStoreUint32(t *testing.T) {
 
 func TestStoreInt64(t *testing.T) {
 	if test64err != nil {
-		t.Logf("Skipping 64-bit tests: %v", test64err)
-		return
+		t.Skipf("Skipping 64-bit tests: %v", test64err)
 	}
 	var x struct {
 		before int64
@@ -550,8 +543,7 @@ func TestStoreInt64(t *testing.T) {
 
 func TestStoreUint64(t *testing.T) {
 	if test64err != nil {
-		t.Logf("Skipping 64-bit tests: %v", test64err)
-		return
+		t.Skipf("Skipping 64-bit tests: %v", test64err)
 	}
 	var x struct {
 		before uint64
@@ -863,8 +855,7 @@ func hammerCompareAndSwapPointer64(uaddr *uint64, count int) {
 
 func TestHammer64(t *testing.T) {
 	if test64err != nil {
-		t.Logf("Skipping 64-bit tests: %v", test64err)
-		return
+		t.Skipf("Skipping 64-bit tests: %v", test64err)
 	}
 	const p = 4
 	n := 100000
@@ -1036,8 +1027,7 @@ func TestHammerStoreLoad(t *testing.T) {
 
 func TestStoreLoadSeqCst32(t *testing.T) {
 	if runtime.NumCPU() == 1 {
-		t.Logf("Skipping test on %v processor machine", runtime.NumCPU())
-		return
+		t.Skipf("Skipping test on %v processor machine", runtime.NumCPU())
 	}
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(4))
 	N := int32(1e3)
@@ -1077,12 +1067,10 @@ func TestStoreLoadSeqCst32(t *testing.T) {
 
 func TestStoreLoadSeqCst64(t *testing.T) {
 	if runtime.NumCPU() == 1 {
-		t.Logf("Skipping test on %v processor machine", runtime.NumCPU())
-		return
+		t.Skipf("Skipping test on %v processor machine", runtime.NumCPU())
 	}
 	if test64err != nil {
-		t.Logf("Skipping 64-bit tests: %v", test64err)
-		return
+		t.Skipf("Skipping 64-bit tests: %v", test64err)
 	}
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(4))
 	N := int64(1e3)
@@ -1122,8 +1110,7 @@ func TestStoreLoadSeqCst64(t *testing.T) {
 
 func TestStoreLoadRelAcq32(t *testing.T) {
 	if runtime.NumCPU() == 1 {
-		t.Logf("Skipping test on %v processor machine", runtime.NumCPU())
-		return
+		t.Skipf("Skipping test on %v processor machine", runtime.NumCPU())
 	}
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(4))
 	N := int32(1e3)
@@ -1168,12 +1155,10 @@ func TestStoreLoadRelAcq32(t *testing.T) {
 
 func TestStoreLoadRelAcq64(t *testing.T) {
 	if runtime.NumCPU() == 1 {
-		t.Logf("Skipping test on %v processor machine", runtime.NumCPU())
-		return
+		t.Skipf("Skipping test on %v processor machine", runtime.NumCPU())
 	}
 	if test64err != nil {
-		t.Logf("Skipping 64-bit tests: %v", test64err)
-		return
+		t.Skipf("Skipping 64-bit tests: %v", test64err)
 	}
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(4))
 	N := int64(1e3)

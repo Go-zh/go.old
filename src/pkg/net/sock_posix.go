@@ -4,8 +4,6 @@
 
 // +build darwin freebsd linux netbsd openbsd windows
 
-// Sockets
-
 package net
 
 import (
@@ -15,17 +13,12 @@ import (
 
 var listenerBacklog = maxListenerBacklog()
 
-// Generic socket creation.
+// Generic POSIX socket creation.
 func socket(net string, f, t, p int, ipv6only bool, ulsa, ursa syscall.Sockaddr, deadline time.Time, toAddr func(syscall.Sockaddr) Addr) (fd *netFD, err error) {
-	// See ../syscall/exec_unix.go for description of ForkLock.
-	syscall.ForkLock.RLock()
-	s, err := syscall.Socket(f, t, p)
+	s, err := sysSocket(f, t, p)
 	if err != nil {
-		syscall.ForkLock.RUnlock()
 		return nil, err
 	}
-	syscall.CloseOnExec(s)
-	syscall.ForkLock.RUnlock()
 
 	if err = setDefaultSockopts(s, f, t, ipv6only); err != nil {
 		closesocket(s)

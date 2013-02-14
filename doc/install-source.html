@@ -96,8 +96,7 @@ Go编译器支持三种指令集，以下为在不同的架构上，编译器特
 	<code>arm</code> (a.k.a. <code>ARM</code>); <code>5g,5l,5c,5a</code>
 </dt>
 <dd>
-	Supports only Linux binaries. Less widely used than the other ports and therefore
-	not as thoroughly tested.
+	Supports only Linux binaries. Less widely used than the other ports and therefore not as thoroughly tested.
 </dd>
 </dl>
 </div>
@@ -161,65 +160,16 @@ The full set of supported combinations is listed in the discussion of
 
 <div class="english">
 <p>
-The Go tool chain is written in C.
-To build it, you need a C compiler installed.
+The Go tool chain is written in C. To build it, you need a C compiler installed.
+Please refer to the <a href="http://code.google.com/p/go-wiki/wiki/InstallFromSource#Install_C_tools">InstallFromSource</a>
+page on the Go community Wiki for operating system specific instructions.
 </p>
 </div>
 
 <p>
-Go工具链用C写成。要想构建它，你需要一个已安装的C编译器。
-</p>
-
-<div class="english">
-<p>
-On OS X, a C compiler is bundled in the command line tools for
-<a href="http://developer.apple.com/Xcode/">Xcode</a>,
-and you don't need to install the whole Xcode to compile Go.
-If you have already installed Xcode 4.3+, you can install command
-line tools from the Components tab of the Downloads preferences panel.
-To verify you have a working compiler, just invoke <code>gcc</code>
-in a freshly created Terminal window, unless you see the
-"<code>gcc: command not found</code>" error, you are ready to go.
-</p>
-</div>
-
-<p>
-在OS X上，C编译器已经绑定在<a href="http://developer.apple.com/Xcode/">Xcode</a>的命令行工具中，
-你无须为编译Go而安装完整的Xcode。如果你已经安装了Xcode 4.3+，就可以从Download首选项面板的Components选项卡安装。
-要确认你拥有一个可工作的编译器，只需在新创建的Terminal窗口中调用 <code>gcc</code> 即可，
-如果你没看到“<code>gcc: command not found</code>”错误，就说明已经准备好了。
-</p>
-
-<div class="english">
-<p>
-On Ubuntu/Debian, use <code>sudo apt-get install gcc libc6-dev</code>.
-If you want to build 32-bit binaries on a 64-bit system you'll also need the
-<code>libc6-dev-i386</code> package.
-</p>
-</div>
-
-<p>
-在Ubuntu/Debian上，可使用 <code>sudo apt-get install gcc libc6-dev</code> 安装。
-若你想在64位系统上构建32位的二进制文件，还需要 <code>libc6-dev-i386</code> 包。
-</p>
-
-<div class="english">
-<p>
-On Windows, install <code>gcc</code> with
-<a href="http://www.mingw.org/">MinGW</a>.
-(Make sure you add its <code>bin</code> subdirectory to your <code>PATH</code>.)
-</p>
-</div>
-
-<p>
-On Windows, install <code>gcc</code> with
-<a href="http://www.mingw.org/">MinGW</a>.
-(Make sure you add its <code>bin</code> subdirectory to your <code>PATH</code>.)
-</p>
-
-<p>
-在Windows上，可通过<a href="http://www.mingw.org/">MinGW</a>来安装 <code>gcc</code>。
-（请确保你已将其 <code>bin</code> 子目录添加到 <code>PATH</code>中。）
+Go工具链用C写成。要想构建它，你需要一个已安装的C编译器。请参阅Go社区维基上的
+<a href="http://code.google.com/p/go-wiki/wiki/InstallFromSource#Install_C_tools">InstallFromSource</a>
+页面来获得具体操作系统的说明。
 </p>
 
 <div class="english">

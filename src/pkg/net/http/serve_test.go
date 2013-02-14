@@ -184,10 +184,11 @@ var vtests = []struct {
 }
 
 func TestHostHandlers(t *testing.T) {
+	mux := NewServeMux()
 	for _, h := range handlers {
-		Handle(h.pattern, stringHandler(h.msg))
+		mux.Handle(h.pattern, stringHandler(h.msg))
 	}
-	ts := httptest.NewServer(nil)
+	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
 	conn, err := net.Dial("tcp", ts.Listener.Addr().String())
@@ -255,28 +256,20 @@ func TestMuxRedirectLeadingSlashes(t *testing.T) {
 }
 
 func TestServerTimeouts(t *testing.T) {
-	// TODO(bradfitz): convert this to use httptest.Server
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen error: %v", err)
-	}
-	addr, _ := l.Addr().(*net.TCPAddr)
-
 	reqNum := 0
-	handler := HandlerFunc(func(res ResponseWriter, req *Request) {
+	ts := httptest.NewUnstartedServer(HandlerFunc(func(res ResponseWriter, req *Request) {
 		reqNum++
 		fmt.Fprintf(res, "req=%d", reqNum)
-	})
-
-	server := &Server{Handler: handler, ReadTimeout: 250 * time.Millisecond, WriteTimeout: 250 * time.Millisecond}
-	go server.Serve(l)
-
-	url := fmt.Sprintf("http://%s/", addr)
+	}))
+	ts.Config.ReadTimeout = 250 * time.Millisecond
+	ts.Config.WriteTimeout = 250 * time.Millisecond
+	ts.Start()
+	defer ts.Close()
 
 	// Hit the HTTP server successfully.
 	tr := &Transport{DisableKeepAlives: true} // they interfere with this test
 	c := &Client{Transport: tr}
-	r, err := c.Get(url)
+	r, err := c.Get(ts.URL)
 	if err != nil {
 		t.Fatalf("http Get #1: %v", err)
 	}
@@ -289,13 +282,13 @@ func TestServerTimeouts(t *testing.T) {
 
 	// Slow client that should timeout.
 	t1 := time.Now()
-	conn, err := net.Dial("tcp", addr.String())
+	conn, err := net.Dial("tcp", ts.Listener.Addr().String())
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
 	buf := make([]byte, 1)
 	n, err := conn.Read(buf)
-	latency := time.Now().Sub(t1)
+	latency := time.Since(t1)
 	if n != 0 || err != io.EOF {
 		t.Errorf("Read = %v, %v, wanted %v, %v", n, err, 0, io.EOF)
 	}
@@ -306,7 +299,7 @@ func TestServerTimeouts(t *testing.T) {
 	// Hit the HTTP server successfully again, verifying that the
 	// previous slow connection didn't run our handler.  (that we
 	// get "req=2", not "req=3")
-	r, err = Get(url)
+	r, err = Get(ts.URL)
 	if err != nil {
 		t.Fatalf("http Get #2: %v", err)
 	}
@@ -316,7 +309,81 @@ func TestServerTimeouts(t *testing.T) {
 		t.Errorf("Get #2 got %q, want %q", string(got), expected)
 	}
 
-	l.Close()
+	if !testing.Short() {
+		conn, err := net.Dial("tcp", ts.Listener.Addr().String())
+		if err != nil {
+			t.Fatalf("Dial: %v", err)
+		}
+		defer conn.Close()
+		go io.Copy(ioutil.Discard, conn)
+		for i := 0; i < 5; i++ {
+			_, err := conn.Write([]byte("GET / HTTP/1.1\r\nHost: foo\r\n\r\n"))
+			if err != nil {
+				t.Fatalf("on write %d: %v", i, err)
+			}
+			time.Sleep(ts.Config.ReadTimeout / 2)
+		}
+	}
+}
+
+// golang.org/issue/4741 -- setting only a write timeout that triggers
+// shouldn't cause a handler to block forever on reads (next HTTP
+// request) that will never happen.
+func TestOnlyWriteTimeout(t *testing.T) {
+	var conn net.Conn
+	var afterTimeoutErrc = make(chan error, 1)
+	ts := httptest.NewUnstartedServer(HandlerFunc(func(w ResponseWriter, req *Request) {
+		buf := make([]byte, 512<<10)
+		_, err := w.Write(buf)
+		if err != nil {
+			t.Errorf("handler Write error: %v", err)
+			return
+		}
+		conn.SetWriteDeadline(time.Now().Add(-30 * time.Second))
+		_, err = w.Write(buf)
+		afterTimeoutErrc <- err
+	}))
+	ts.Listener = trackLastConnListener{ts.Listener, &conn}
+	ts.Start()
+	defer ts.Close()
+
+	tr := &Transport{DisableKeepAlives: false}
+	defer tr.CloseIdleConnections()
+	c := &Client{Transport: tr}
+
+	errc := make(chan error)
+	go func() {
+		res, err := c.Get(ts.URL)
+		if err != nil {
+			errc <- err
+			return
+		}
+		_, err = io.Copy(ioutil.Discard, res.Body)
+		errc <- err
+	}()
+	select {
+	case err := <-errc:
+		if err == nil {
+			t.Errorf("expected an error from Get request")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout waiting for Get error")
+	}
+	if err := <-afterTimeoutErrc; err == nil {
+		t.Error("expected write error after timeout")
+	}
+}
+
+// trackLastConnListener tracks the last net.Conn that was accepted.
+type trackLastConnListener struct {
+	net.Listener
+	last *net.Conn // destination
+}
+
+func (l trackLastConnListener) Accept() (c net.Conn, err error) {
+	c, err = l.Listener.Accept()
+	*l.last = c
+	return
 }
 
 // TestIdentityResponse verifies that a handler can unset
