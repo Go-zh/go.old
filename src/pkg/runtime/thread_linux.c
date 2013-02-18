@@ -13,8 +13,8 @@ int32 runtime·open(uint8*, int32, int32);
 int32 runtime·close(int32);
 int32 runtime·read(int32, void*, int32);
 
-static Sigset sigset_all = { ~(uint32)0, ~(uint32)0 };
 static Sigset sigset_none;
+static Sigset sigset_all = { ~(uint32)0, ~(uint32)0 };
 
 // Linux futex.
 //
@@ -177,7 +177,7 @@ runtime·minit(void)
 	// Initialize signal handling.
 	m->gsignal = runtime·malg(32*1024);	// OS X wants >=8K, Linux >=2K
 	runtime·signalstack((byte*)m->gsignal->stackguard - StackGuard, 32*1024);
-	runtime·rtsigprocmask(SIG_SETMASK, &sigset_none, nil, sizeof sigset_none);
+	runtime·rtsigprocmask(SIG_SETMASK, &sigset_none, nil, sizeof(Sigset));
 }
 
 void
@@ -256,7 +256,7 @@ runtime·badcallback(void)
 	runtime·write(2, badcallback, sizeof badcallback - 1);
 }
 
-static int8 badsignal[] = "runtime: signal received on thread not created by Go.\n";
+static int8 badsignal[] = "runtime: signal received on thread not created by Go: ";
 
 // This runs on a foreign stack, without an m or a g.  No stack split.
 #pragma textflag 7
@@ -267,5 +267,11 @@ runtime·badsignal(int32 sig)
 		return;  // Ignore SIGPROFs intended for a non-Go thread.
 	}
 	runtime·write(2, badsignal, sizeof badsignal - 1);
+	if (0 <= sig && sig < NSIG) {
+		// Call runtime·findnull dynamically to circumvent static stack size check.
+		static int32 (*findnull)(byte*) = runtime·findnull;
+		runtime·write(2, runtime·sigtab[sig].name, findnull((byte*)runtime·sigtab[sig].name));
+	}
+	runtime·write(2, "\n", 1);
 	runtime·exit(1);
 }

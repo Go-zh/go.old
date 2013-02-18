@@ -379,6 +379,25 @@ func runOut(dir string, cmdargs ...interface{}) []byte {
 	return out
 }
 
+// envForDir returns a copy of the environment
+// suitable for running in the given directory.
+// The environment is the current process's environment
+// but with an updated $PWD, so that an os.Getwd in the
+// child will be faster.
+func envForDir(dir string) []string {
+	env := os.Environ()
+	for i, kv := range env {
+		if strings.HasPrefix(kv, "PWD=") {
+			env[i] = "PWD=" + dir
+			return env
+		}
+	}
+	// Internally we only use rooted paths, so dir is rooted.
+	// Even if dir is not rooted, no harm done.
+	env = append(env, "PWD="+dir)
+	return env
+}
+
 // matchPattern(pattern)(name) reports whether
 // name matches pattern.  Pattern is a limited glob
 // pattern in which '...' means 'any string' and there
@@ -569,4 +588,61 @@ func stringList(args ...interface{}) []string {
 		}
 	}
 	return x
+}
+
+// toFold returns a string with the property that
+//	strings.EqualFold(s, t) iff toFold(s) == toFold(t)
+// This lets us test a large set of strings for fold-equivalent
+// duplicates without making a quadratic number of calls
+// to EqualFold. Note that strings.ToUpper and strings.ToLower
+// have the desired property in some corner cases.
+func toFold(s string) string {
+	// Fast path: all ASCII, no upper case.
+	// Most paths look like this already.
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= utf8.RuneSelf || 'A' <= c && c <= 'Z' {
+			goto Slow
+		}
+	}
+	return s
+
+Slow:
+	var buf bytes.Buffer
+	for _, r := range s {
+		// SimpleFold(x) cycles to the next equivalent rune > x
+		// or wraps around to smaller values. Iterate until it wraps,
+		// and we've found the minimum value.
+		for {
+			r0 := r
+			r = unicode.SimpleFold(r0)
+			if r <= r0 {
+				break
+			}
+		}
+		// Exception to allow fast path above: A-Z => a-z
+		if 'A' <= r && r <= 'Z' {
+			r += 'a' - 'A'
+		}
+		buf.WriteRune(r)
+	}
+	return buf.String()
+}
+
+// foldDup reports a pair of strings from the list that are
+// equal according to strings.EqualFold.
+// It returns "", "" if there are no such strings.
+func foldDup(list []string) (string, string) {
+	clash := map[string]string{}
+	for _, s := range list {
+		fold := toFold(s)
+		if t := clash[fold]; t != "" {
+			if s > t {
+				s, t = t, s
+			}
+			return s, t
+		}
+		clash[fold] = s
+	}
+	return "", ""
 }

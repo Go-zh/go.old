@@ -9,15 +9,12 @@
 package runtime
 #include "runtime.h"
 #include "arch_GOARCH.h"
-#include "stack.h"
 #include "malloc.h"
-#include "defs_GOOS_GOARCH.h"
 #include "type.h"
 #include "typekind.h"
 #include "race.h"
 
-#pragma dataflag 16 /* mark mheap as 'no pointers', hiding from garbage collector */
-MHeap runtime·mheap;
+MHeap *runtime·mheap;
 
 int32	runtime·checking;
 
@@ -68,7 +65,7 @@ runtime·mallocgc(uintptr size, uint32 flag, int32 dogc, int32 zeroed)
 		npages = size >> PageShift;
 		if((size & PageMask) != 0)
 			npages++;
-		s = runtime·MHeap_Alloc(&runtime·mheap, npages, 0, 1, zeroed);
+		s = runtime·MHeap_Alloc(runtime·mheap, npages, 0, 1, zeroed);
 		if(s == nil)
 			runtime·throw("out of memory");
 		size = npages<<PageShift;
@@ -82,9 +79,9 @@ runtime·mallocgc(uintptr size, uint32 flag, int32 dogc, int32 zeroed)
 
 	if (sizeof(void*) == 4 && c->local_total_alloc >= (1<<30)) {
 		// purge cache stats to prevent overflow
-		runtime·lock(&runtime·mheap);
+		runtime·lock(runtime·mheap);
 		runtime·purgecachedstats(c);
-		runtime·unlock(&runtime·mheap);
+		runtime·unlock(runtime·mheap);
 	}
 
 	if(!(flag & FlagNoGC))
@@ -168,7 +165,7 @@ runtime·free(void *v)
 		// they might coalesce v into other spans and change the bitmap further.
 		runtime·markfreed(v, size);
 		runtime·unmarkspan(v, 1<<PageShift);
-		runtime·MHeap_Free(&runtime·mheap, s, 1);
+		runtime·MHeap_Free(runtime·mheap, s, 1);
 	} else {
 		// Small object.
 		size = runtime·class_to_size[sizeclass];
@@ -198,12 +195,12 @@ runtime·mlookup(void *v, byte **base, uintptr *size, MSpan **sp)
 	m->mcache->local_nlookup++;
 	if (sizeof(void*) == 4 && m->mcache->local_nlookup >= (1<<30)) {
 		// purge cache stats to prevent overflow
-		runtime·lock(&runtime·mheap);
+		runtime·lock(runtime·mheap);
 		runtime·purgecachedstats(m->mcache);
-		runtime·unlock(&runtime·mheap);
+		runtime·unlock(runtime·mheap);
 	}
 
-	s = runtime·MHeap_LookupMaybe(&runtime·mheap, v);
+	s = runtime·MHeap_LookupMaybe(runtime·mheap, v);
 	if(sp)
 		*sp = s;
 	if(s == nil) {
@@ -247,11 +244,11 @@ runtime·allocmcache(void)
 	intgo rate;
 	MCache *c;
 
-	runtime·lock(&runtime·mheap);
-	c = runtime·FixAlloc_Alloc(&runtime·mheap.cachealloc);
-	mstats.mcache_inuse = runtime·mheap.cachealloc.inuse;
-	mstats.mcache_sys = runtime·mheap.cachealloc.sys;
-	runtime·unlock(&runtime·mheap);
+	runtime·lock(runtime·mheap);
+	c = runtime·FixAlloc_Alloc(&runtime·mheap->cachealloc);
+	mstats.mcache_inuse = runtime·mheap->cachealloc.inuse;
+	mstats.mcache_sys = runtime·mheap->cachealloc.sys;
+	runtime·unlock(runtime·mheap);
 	runtime·memclr((byte*)c, sizeof(*c));
 
 	// Set first allocation sample size.
@@ -268,10 +265,10 @@ void
 runtime·freemcache(MCache *c)
 {
 	runtime·MCache_ReleaseAll(c);
-	runtime·lock(&runtime·mheap);
+	runtime·lock(runtime·mheap);
 	runtime·purgecachedstats(c);
-	runtime·FixAlloc_Free(&runtime·mheap.cachealloc, c);
-	runtime·unlock(&runtime·mheap);
+	runtime·FixAlloc_Free(&runtime·mheap->cachealloc, c);
+	runtime·unlock(runtime·mheap);
 }
 
 void
@@ -315,6 +312,9 @@ runtime·mallocinit(void)
 	USED(p);
 	USED(arena_size);
 	USED(bitmap_size);
+
+	if((runtime·mheap = runtime·SysAlloc(sizeof(*runtime·mheap))) == nil)
+		runtime·throw("runtime: cannot allocate heap metadata");
 
 	runtime·InitSizes();
 
@@ -394,13 +394,13 @@ runtime·mallocinit(void)
 	if((uintptr)p & (((uintptr)1<<PageShift)-1))
 		runtime·throw("runtime: SysReserve returned unaligned address");
 
-	runtime·mheap.bitmap = p;
-	runtime·mheap.arena_start = p + bitmap_size;
-	runtime·mheap.arena_used = runtime·mheap.arena_start;
-	runtime·mheap.arena_end = runtime·mheap.arena_start + arena_size;
+	runtime·mheap->bitmap = p;
+	runtime·mheap->arena_start = p + bitmap_size;
+	runtime·mheap->arena_used = runtime·mheap->arena_start;
+	runtime·mheap->arena_end = runtime·mheap->arena_start + arena_size;
 
 	// Initialize the rest of the allocator.	
-	runtime·MHeap_Init(&runtime·mheap, runtime·SysAlloc);
+	runtime·MHeap_Init(runtime·mheap, runtime·SysAlloc);
 	m->mcache = runtime·allocmcache();
 
 	// See if it works.
@@ -498,8 +498,8 @@ runtime·settype_flush(M *mp, bool sysalloc)
 		// (Manually inlined copy of runtime·MHeap_Lookup)
 		p = (uintptr)v>>PageShift;
 		if(sizeof(void*) == 8)
-			p -= (uintptr)runtime·mheap.arena_start >> PageShift;
-		s = runtime·mheap.map[p];
+			p -= (uintptr)runtime·mheap->arena_start >> PageShift;
+		s = runtime·mheap->map[p];
 
 		if(s->sizeclass == 0) {
 			s->types.compression = MTypes_Single;
@@ -612,7 +612,7 @@ runtime·settype(void *v, uintptr t)
 	}
 
 	if(DebugTypeAtBlockEnd) {
-		s = runtime·MHeap_Lookup(&runtime·mheap, v);
+		s = runtime·MHeap_Lookup(runtime·mheap, v);
 		*(uintptr*)((uintptr)v+s->elemsize-sizeof(uintptr)) = t;
 	}
 }
@@ -651,7 +651,7 @@ runtime·gettype(void *v)
 	uintptr t, ofs;
 	byte *data;
 
-	s = runtime·MHeap_LookupMaybe(&runtime·mheap, v);
+	s = runtime·MHeap_LookupMaybe(runtime·mheap, v);
 	if(s != nil) {
 		t = 0;
 		switch(s->types.compression) {
@@ -748,123 +748,6 @@ runtime·cnew(Type *typ)
 	}
 
 	return ret;
-}
-
-typedef struct StackCacheNode StackCacheNode;
-struct StackCacheNode
-{
-	StackCacheNode *next;
-	void*	batch[StackCacheBatch-1];
-};
-
-static StackCacheNode *stackcache;
-static Lock stackcachemu;
-
-// stackcacherefill/stackcacherelease implement global cache of stack segments.
-// The cache is required to prevent unlimited growth of per-thread caches.
-static void
-stackcacherefill(void)
-{
-	StackCacheNode *n;
-	int32 i, pos;
-
-	runtime·lock(&stackcachemu);
-	n = stackcache;
-	if(n)
-		stackcache = n->next;
-	runtime·unlock(&stackcachemu);
-	if(n == nil) {
-		n = (StackCacheNode*)runtime·SysAlloc(FixedStack*StackCacheBatch);
-		if(n == nil)
-			runtime·throw("out of memory (staccachekrefill)");
-		runtime·xadd64(&mstats.stacks_sys, FixedStack*StackCacheBatch);
-		for(i = 0; i < StackCacheBatch-1; i++)
-			n->batch[i] = (byte*)n + (i+1)*FixedStack;
-	}
-	pos = m->stackcachepos;
-	for(i = 0; i < StackCacheBatch-1; i++) {
-		m->stackcache[pos] = n->batch[i];
-		pos = (pos + 1) % StackCacheSize;
-	}
-	m->stackcache[pos] = n;
-	pos = (pos + 1) % StackCacheSize;
-	m->stackcachepos = pos;
-	m->stackcachecnt += StackCacheBatch;
-}
-
-static void
-stackcacherelease(void)
-{
-	StackCacheNode *n;
-	uint32 i, pos;
-
-	pos = (m->stackcachepos - m->stackcachecnt) % StackCacheSize;
-	n = (StackCacheNode*)m->stackcache[pos];
-	pos = (pos + 1) % StackCacheSize;
-	for(i = 0; i < StackCacheBatch-1; i++) {
-		n->batch[i] = m->stackcache[pos];
-		pos = (pos + 1) % StackCacheSize;
-	}
-	m->stackcachecnt -= StackCacheBatch;
-	runtime·lock(&stackcachemu);
-	n->next = stackcache;
-	stackcache = n;
-	runtime·unlock(&stackcachemu);
-}
-
-void*
-runtime·stackalloc(uint32 n)
-{
-	uint32 pos;
-	void *v;
-
-	// Stackalloc must be called on scheduler stack, so that we
-	// never try to grow the stack during the code that stackalloc runs.
-	// Doing so would cause a deadlock (issue 1547).
-	if(g != m->g0)
-		runtime·throw("stackalloc not on scheduler stack");
-
-	// Stack allocator uses malloc/free most of the time,
-	// but if we're in the middle of malloc and need stack,
-	// we have to do something else to avoid deadlock.
-	// In that case, we fall back on a fixed-size free-list
-	// allocator, assuming that inside malloc all the stack
-	// frames are small, so that all the stack allocations
-	// will be a single size, the minimum (right now, 5k).
-	if(n == FixedStack || m->mallocing || m->gcing) {
-		if(n != FixedStack) {
-			runtime·printf("stackalloc: in malloc, size=%d want %d", FixedStack, n);
-			runtime·throw("stackalloc");
-		}
-		if(m->stackcachecnt == 0)
-			stackcacherefill();
-		pos = m->stackcachepos;
-		pos = (pos - 1) % StackCacheSize;
-		v = m->stackcache[pos];
-		m->stackcachepos = pos;
-		m->stackcachecnt--;
-		m->stackinuse++;
-		return v;
-	}
-	return runtime·mallocgc(n, FlagNoProfiling|FlagNoGC, 0, 0);
-}
-
-void
-runtime·stackfree(void *v, uintptr n)
-{
-	uint32 pos;
-
-	if(n == FixedStack || m->mallocing || m->gcing) {
-		if(m->stackcachecnt == StackCacheSize)
-			stackcacherelease();
-		pos = m->stackcachepos;
-		m->stackcache[pos] = v;
-		m->stackcachepos = (pos + 1) % StackCacheSize;
-		m->stackcachecnt++;
-		m->stackinuse--;
-		return;
-	}
-	runtime·free(v);
 }
 
 func GC() {

@@ -20,8 +20,8 @@ enum
 
 extern SigTab runtime·sigtab[];
 
-static Sigset sigset_all = ~(Sigset)0;
 static Sigset sigset_none;
+static Sigset sigset_all = ~(Sigset)0;
 
 extern int64 runtime·tfork(void *param, uintptr psize, M *mp, G *gp, void (*fn)(void));
 extern int32 runtime·thrsleep(void *ident, int32 clock_id, void *tsp, void *lock, const int32 *abort);
@@ -229,7 +229,7 @@ runtime·badcallback(void)
 	runtime·write(2, badcallback, sizeof badcallback - 1);
 }
 
-static int8 badsignal[] = "runtime: signal received on thread not created by Go.\n";
+static int8 badsignal[] = "runtime: signal received on thread not created by Go: ";
 
 // This runs on a foreign stack, without an m or a g.  No stack split.
 #pragma textflag 7
@@ -240,5 +240,11 @@ runtime·badsignal(int32 sig)
 		return;  // Ignore SIGPROFs intended for a non-Go thread.
 	}
 	runtime·write(2, badsignal, sizeof badsignal - 1);
+	if (0 <= sig && sig < NSIG) {
+		// Call runtime·findnull dynamically to circumvent static stack size check.
+		static int32 (*findnull)(byte*) = runtime·findnull;
+		runtime·write(2, runtime·sigtab[sig].name, findnull((byte*)runtime·sigtab[sig].name));
+	}
+	runtime·write(2, "\n", 1);
 	runtime·exit(1);
 }

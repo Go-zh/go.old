@@ -32,7 +32,7 @@ Goals of the sql and sql/driver packages:
   数据库驱动 -> sql（注册使用） + sql/driver（实现了接口）
 
 * Make type casting/conversions consistent between all drivers. To
-  achieve this, most of the conversions are done in the db package,
+  achieve this, most of the conversions are done in the sql package,
   not in each driver. The drivers then only have to deal with a
   smaller set of types.
 * 为了能更好的在各种驱动中完成类型的转化的统一性，许多转换我们都放在db包中做，而不是在每个驱动中做。

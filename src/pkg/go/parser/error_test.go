@@ -139,12 +139,13 @@ func checkErrors(t *testing.T, filename string, input interface{}) {
 		return
 	}
 
-	_, err = ParseFile(fsetErrs, filename, src, DeclarationErrors)
+	_, err = ParseFile(fsetErrs, filename, src, DeclarationErrors|AllErrors)
 	found, ok := err.(scanner.ErrorList)
 	if err != nil && !ok {
 		t.Error(err)
 		return
 	}
+	found.RemoveMultiples()
 
 	// we are expecting the following errors
 	// (collect these after parsing a file so that it is found in the file set)

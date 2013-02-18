@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 type T struct {
@@ -328,6 +329,43 @@ var unmarshalTests = []unmarshalTest{
 		in:  `{"X": 1,"Y":2}`,
 		ptr: new(S10),
 		out: S10{S13: S13{S8: S8{S9: S9{Y: 2}}}},
+	},
+
+	// invalid UTF-8 is coerced to valid UTF-8.
+	{
+		in:  "\"hello\xffworld\"",
+		ptr: new(string),
+		out: "hello\ufffdworld",
+	},
+	{
+		in:  "\"hello\xc2\xc2world\"",
+		ptr: new(string),
+		out: "hello\ufffd\ufffdworld",
+	},
+	{
+		in:  "\"hello\xc2\xffworld\"",
+		ptr: new(string),
+		out: "hello\ufffd\ufffdworld",
+	},
+	{
+		in:  "\"hello\\ud800world\"",
+		ptr: new(string),
+		out: "hello\ufffdworld",
+	},
+	{
+		in:  "\"hello\\ud800\\ud800world\"",
+		ptr: new(string),
+		out: "hello\ufffd\ufffdworld",
+	},
+	{
+		in:  "\"hello\\ud800\\ud800world\"",
+		ptr: new(string),
+		out: "hello\ufffd\ufffdworld",
+	},
+	{
+		in:  "\"hello\xed\xa0\x80\xed\xb0\x80world\"",
+		ptr: new(string),
+		out: "hello\ufffd\ufffd\ufffd\ufffd\ufffd\ufffdworld",
 	},
 }
 
@@ -1111,5 +1149,32 @@ func TestUnmarshalUnexported(t *testing.T) {
 	}
 	if !reflect.DeepEqual(out, want) {
 		t.Errorf("got %q, want %q", out, want)
+	}
+}
+
+// Time3339 is a time.Time which encodes to and from JSON
+// as an RFC 3339 time in UTC.
+type Time3339 time.Time
+
+func (t *Time3339) UnmarshalJSON(b []byte) error {
+	if len(b) < 2 || b[0] != '"' || b[len(b)-1] != '"' {
+		return fmt.Errorf("types: failed to unmarshal non-string value %q as an RFC 3339 time")
+	}
+	tm, err := time.Parse(time.RFC3339, string(b[1:len(b)-1]))
+	if err != nil {
+		return err
+	}
+	*t = Time3339(tm)
+	return nil
+}
+
+func TestUnmarshalJSONLiteralError(t *testing.T) {
+	var t3 Time3339
+	err := Unmarshal([]byte(`"0000-00-00T00:00:00Z"`), &t3)
+	if err == nil {
+		t.Fatalf("expected error; got time %v", time.Time(t3))
+	}
+	if !strings.Contains(err.Error(), "range") {
+		t.Errorf("got err = %v; want out of range error", err)
 	}
 }

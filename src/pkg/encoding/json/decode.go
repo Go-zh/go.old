@@ -55,32 +55,19 @@ import (
 // If no more serious errors are encountered, Unmarshal returns
 // an UnmarshalTypeError describing the earliest such error.
 //
+// When unmarshaling quoted strings, invalid UTF-8 or
+// invalid UTF-16 surrogate pairs are not treated as an error.
+// Instead, they are replaced by the Unicode replacement
+// character U+FFFD.
+//
 func Unmarshal(data []byte, v interface{}) error {
-
-	// Quick check for well-formedness.
+	// Check for well-formedness.
 	// Avoids filling out half a data structure
 	// before discovering a JSON syntax error.
 	var d decodeState
 	err := checkValid(data, &d.scan)
 	if err != nil {
 		return err
-	}
-
-	// skip heavy processing for primitive values
-	var first byte
-	var i int
-	for i, first = range data {
-		if first > ' ' || !isSpace(rune(first)) {
-			break
-		}
-	}
-	if first != '{' && first != '[' {
-		rv := reflect.ValueOf(v)
-		if rv.Kind() != reflect.Ptr || rv.IsNil() {
-			return &InvalidUnmarshalError{reflect.TypeOf(v)}
-		}
-		d.literalStore(data[i:], rv.Elem(), false)
-		return d.savedError
 	}
 
 	d.init(data)

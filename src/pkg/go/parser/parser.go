@@ -340,8 +340,26 @@ func (p *parser) next() {
 	}
 }
 
+// A bailout panic is raised to indicate early termination.
+type bailout struct{}
+
 func (p *parser) error(pos token.Pos, msg string) {
-	p.errors.Add(p.file.Position(pos), msg)
+	epos := p.file.Position(pos)
+
+	// If AllErrors is not set, discard errors reported on the same line
+	// as the last recorded error and stop parsing if there are more than
+	// 10 errors.
+	if p.mode&AllErrors == 0 {
+		n := len(p.errors)
+		if n > 0 && p.errors[n-1].Pos.Line == epos.Line {
+			return // discard - likely a spurious error
+		}
+		if n > 10 {
+			panic(bailout{})
+		}
+	}
+
+	p.errors.Add(epos, msg)
 }
 
 func (p *parser) errorExpected(pos token.Pos, msg string) {

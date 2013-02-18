@@ -13,8 +13,8 @@ extern int32 runtime·sys_umtx_op(uint32*, int32, uint32, void*, void*);
 #define	CTL_HW	6
 #define	HW_NCPU	3
 
+static Sigset sigset_none;
 static Sigset sigset_all = { ~(uint32)0, ~(uint32)0, ~(uint32)0, ~(uint32)0, };
-static Sigset sigset_none = { 0, 0, 0, 0, };
 
 static int32
 getncpu(void)
@@ -206,7 +206,7 @@ runtime·badcallback(void)
 	runtime·write(2, badcallback, sizeof badcallback - 1);
 }
 
-static int8 badsignal[] = "runtime: signal received on thread not created by Go.\n";
+static int8 badsignal[] = "runtime: signal received on thread not created by Go: ";
 
 // This runs on a foreign stack, without an m or a g.  No stack split.
 #pragma textflag 7
@@ -217,5 +217,11 @@ runtime·badsignal(int32 sig)
 		return;  // Ignore SIGPROFs intended for a non-Go thread.
 	}
 	runtime·write(2, badsignal, sizeof badsignal - 1);
+	if (0 <= sig && sig < NSIG) {
+		// Call runtime·findnull dynamically to circumvent static stack size check.
+		static int32 (*findnull)(byte*) = runtime·findnull;
+		runtime·write(2, runtime·sigtab[sig].name, findnull((byte*)runtime·sigtab[sig].name));
+	}
+	runtime·write(2, "\n", 1);
 	runtime·exit(1);
 }

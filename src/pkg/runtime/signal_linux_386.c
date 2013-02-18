@@ -124,6 +124,16 @@ runtime·setsig(int32 i, void (*fn)(int32, Siginfo*, void*, G*), bool restart)
 {
 	Sigaction sa;
 
+	// If SIGHUP handler is SIG_IGN, assume running
+	// under nohup and do not set explicit handler.
+	if(i == SIGHUP) {
+		runtime·memclr((byte*)&sa, sizeof sa);
+		if(runtime·rt_sigaction(i, nil, &sa, sizeof(sa.sa_mask)) != 0)
+			runtime·throw("rt_sigaction read failure");
+		if(sa.k_sa_handler == SIG_IGN)
+			return;
+	}
+
 	runtime·memclr((byte*)&sa, sizeof sa);
 	sa.sa_flags = SA_ONSTACK | SA_SIGINFO | SA_RESTORER;
 	if(restart)
