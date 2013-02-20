@@ -2,11 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package debug_test
+package debug
 
 import (
 	"runtime"
-	. "runtime/debug"
 	"testing"
 	"time"
 )
@@ -71,11 +70,12 @@ func TestReadGCStats(t *testing.T) {
 	}
 }
 
-var big = make([]byte, 1<<20)
+var big []byte
 
 func TestFreeOSMemory(t *testing.T) {
 	var ms1, ms2 runtime.MemStats
 
+	big = make([]byte, 1<<20)
 	big = nil
 	runtime.GC()
 	runtime.ReadMemStats(&ms1)

@@ -14,7 +14,7 @@
 	这样可以避免与模版生成的属性（有点类似于Go的标识符）发生冲突。
 -->
 {{with .PDoc}}
-	{{if $.IsPkg}}
+	{{if not $.IsMain}}
 		<div id="short-nav">
 			<dl>
 			<dd><code>import "{{html .ImportPath}}"</code></dd>
