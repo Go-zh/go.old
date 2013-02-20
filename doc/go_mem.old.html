@@ -1,0 +1,919 @@
+<!--{
+	"Title": "Go内存模型",
+	"Subtitle": "版本：2012年3月6日 || 译者：Oling Cat <olingcat@gmail.com>，特别感谢 Fall Ark 同学的帮助",
+	"Path": "/ref/mem.old"
+}-->
+
+<!--{
+	"Title": "The Go Memory Model",
+	"Subtitle": "Version of March 6, 2012",
+	"Path": "/ref/mem"
+}-->
+
+<style>
+p.rule {
+  font-style: italic;
+}
+span.event {
+  font-style: italic;
+}
+</style>
+
+<div class="english">
+<h2>Introduction</h2>
+</div>
+
+<h2>前言</h2>
+
+<div class="english">
+<p>
+The Go memory model specifies the conditions under which
+reads of a variable in one goroutine can be guaranteed to
+observe values produced by writes to the same variable in a different goroutine.
+</p>
+</div>
+
+<p>
+Go内存模型指定了在什么条件下，一个Go程对某变量写入的值，能够保证被另一个读取该变量的Go程观测到。
+</p>
+
+<div class="english">
+<h2>Happens Before</h2>
+</div>
+
+<h2>事件的发生顺序</h2>
+
+<div class="english">
+<p>
+Within a single goroutine, reads and writes must behave
+as if they executed in the order specified by the program.
+That is, compilers and processors may reorder the reads and writes
+executed within a single goroutine only when the reordering
+does not change the behavior within that goroutine
+as defined by the language specification.
+Because of this reordering, the execution order observed
+by one goroutine may differ from the order perceived
+by another.  For example, if one goroutine
+executes <code>a = 1; b = 2;</code>, another might observe
+the updated value of <code>b</code> before the updated value of <code>a</code>.
+</p>
+</div>
+
+<p>
+在单个Go程中，读取和写入的表现必须与程序指定的执行顺序相一致。换言之，
+仅当不会改变语言规范对Go程行为的定义时，编译器和处理器才会对读取和写入的执行重新排序。
+由于进行了重新排序，一个Go程观测到的执行顺序可能与另一个Go程感知到的不同。
+例如，若一个Go程执行 <code>a = 1; b = 2;</code>，另一个可能观测到 <code>b</code>
+的值先于 <code>a</code> 更新。
+</p>
+
+<div class="english">
+<p>
+To specify the requirements of reads and writes, we define
+<i>happens before</i>, a partial order on the execution
+of memory operations in a Go program.  If event <span class="event">e<sub>1</sub></span> happens
+before event <span class="event">e<sub>2</sub></span>, then we say that <span class="event">e<sub>2</sub></span> happens after <span class="event">e<sub>1</sub></span>.
+Also, if <span class="event">e<sub>1</sub></span> does not happen before <span class="event">e<sub>2</sub></span> and does not happen
+after <span class="event">e<sub>2</sub></span>, then we say that <span class="event">e<sub>1</sub></span> and <span class="event">e<sub>2</sub></span> happen concurrently.
+</p>
+</div>
+
+<p>
+为详细说明读取和写入的需求，我们定义了<i>事件发生顺序</i>，它表示在Go程序中对于内存操作的局部执行顺序。
+若事件 <span class="event">e<sub>1</sub></span> 发生在 <span class="event">e<sub>2</sub></span> 之前，
+那么我们就说 <span class="event">e<sub>2</sub></span> 发生在 <span class="event">e<sub>1</sub></span> 之后。
+换言之，若 <span class="event">e<sub>1</sub></span> 既未发生在 <span class="event">e<sub>2</sub></span> 之前，
+又未发生在 <span class="event">e<sub>2</sub></span> 之后，那么我们就说 <span class="event">e<sub>1</sub></span>
+与 <span class="event">e<sub>2</sub></span> 同时发生。
+</p>
+
+<div class="english">
+<p class="rule">
+Within a single goroutine, the happens-before order is the
+order expressed by the program.
+</p>
+</div>
+
+<p class="rule">
+在单一Go程中，事件发生的顺序即为程序所表达的顺序。
+</p>
+
+<div class="english">
+<p>
+A read <span class="event">r</span> of a variable <code>v</code> is <i>allowed</i> to observe a write <span class="event">w</span> to <code>v</code>
+if both of the following hold:
+</p>
+</div>
+
+<p>
+若以下条件均成立，则变量 <code>v</code> 的读取操作 <span class="event">r</span> 就<i>被允许</i>对
+<code>v</code> 的写入操作 <span class="event">w</span> 进行观测：
+</p>
+
+<div class="english">
+<ol>
+<li><span class="event">r</span> does not happen before <span class="event">w</span>.</li>
+<li>There is no other write <span class="event">w'</span> to <code>v</code> that happens
+    after <span class="event">w</span> but before <span class="event">r</span>.</li>
+</ol>
+</div>
+
+<ol>
+<li><span class="event">r</span> 不会发生在 <span class="event">w</span> 之前。</li>
+<li>在 <span class="event">w</span> 之后 <span class="event">r</span> 之前，不存在其它对
+	<code>v</code> 进行的写入操作 <span class="event">w'</span>。</li>
+</ol>
+
+<div class="english">
+<p>
+To guarantee that a read <span class="event">r</span> of a variable <code>v</code> observes a
+particular write <span class="event">w</span> to <code>v</code>, ensure that <span class="event">w</span> is the only
+write <span class="event">r</span> is allowed to observe.
+That is, <span class="event">r</span> is <i>guaranteed</i> to observe <span class="event">w</span> if both of the following hold:
+</p>
+</div>
+
+<p>
+为确保变量 <code>v</code> 的读取操作 <span class="event">r</span> 能够观测到特定的对 <code>v</code>
+进行写入的操作 <span class="event">w</span>，需确保 <span class="event">w</span>
+为唯一允许被 <span class="event">r</span> 观测的写入操作。也就是说，若以下条件均成立，则
+<span class="event">r</span> 可<i>保证</i>能观测到 <span class="event">w</span>：
+</p>
+
+<div class="english">
+<ol>
+<li><span class="event">w</span> happens before <span class="event">r</span>.</li>
+<li>Any other write to the shared variable <code>v</code>
+either happens before <span class="event">w</span> or after <span class="event">r</span>.</li>
+</ol>
+</div>
+
+<ol>
+<li><span class="event">w</span> 发生在 <span class="event">r</span> 之前。</li>
+<li>对共享变量 <code>v</code> 的其它任何写入操作都只能发生在 <span class="event">w</span>
+	之前或 <span class="event">r</span> 之后。</li>
+</ol>
+
+<div class="english">
+<p>
+This pair of conditions is stronger than the first pair;
+it requires that there are no other writes happening
+concurrently with <span class="event">w</span> or <span class="event">r</span>.
+</p>
+</div>
+
+<p>
+这对条件的意思比第一对更加强烈，它需要确保没有其它写入操作与 <span class="event">w</span>
+或 <span class="event">r</span> 同时发生。
+</p>
+
+<div class="english">
+<p>
+Within a single goroutine,
+there is no concurrency, so the two definitions are equivalent:
+a read <span class="event">r</span> observes the value written by the most recent write <span class="event">w</span> to <code>v</code>.
+When multiple goroutines access a shared variable <code>v</code>,
+they must use synchronization events to establish
+happens-before conditions that ensure reads observe the
+desired writes.
+</p>
+</div>
+
+<p>
+在单个Go程中并不存在并发，因此这两条定义是等价的：读取操作 <span class="event">r</span>
+可观测最近的写入操作 <span class="event">w</span> 对 <code>v</code> 写入的值。当多个Go程访问共享变量 <code>v</code> 时，它们必须使用同步来建立事件发生顺序的条件，以此确保读取操作能观测到预期的写入。
+</p>
+
+<div class="english">
+<p>
+The initialization of variable <code>v</code> with the zero value
+for <code>v</code>'s type behaves as a write in the memory model.
+</p>
+</div>
+
+<p>
+以变量 <code>v</code> 所属类型的零值来对 <code>v</code> 进行初始化，其表现如同在内存模型中进行的写入操作。
+</p>
+
+<div class="english">
+<p>
+Reads and writes of values larger than a single machine word
+behave as multiple machine-word-sized operations in an
+unspecified order.
+</p>
+</div>
+
+<p>
+对大于单个机器字的值的读取和写入，其表现如同按照未指定的顺序对多个机器字大小进行的操作。
+</p>
+
+<div class="english">
+<h2>Synchronization</h2>
+</div>
+
+<h2>同步</h2>
+
+<div class="english">
+<h3>Initialization</h3>
+</div>
+
+<h3>初始化</h3>
+
+<div class="english">
+<p>
+Program initialization runs in a single goroutine,
+but that goroutine may create other goroutines,
+which run concurrently.
+</p>
+</div>
+
+<p>
+程序的初始化运行在单个Go程中，但该Go程可能会创建其它同时运行的Go程。
+</p>
+
+<div class="english">
+<p class="rule">
+If a package <code>p</code> imports package <code>q</code>, the completion of
+<code>q</code>'s <code>init</code> functions happens before the start of any of <code>p</code>'s.
+</p>
+</div>
+
+<p class="rule">
+若包 <code>p</code> 导入了包 <code>q</code>，则 <code>q</code> 的 <code>init</code> 函数会在
+<code>p</code> 的任何函数启动前完成。
+</p>
+
+<div class="english">
+<p class="rule">
+The start of the function <code>main.main</code> happens after
+all <code>init</code> functions have finished.
+</p>
+</div>
+
+<p class="rule">
+函数 <code>main.main</code> 会在所有的 <code>init</code> 函数结束之后启动。
+</p>
+
+<div class="english">
+<h3>Goroutine creation</h3>
+</div>
+
+<h3>Go程的创建</h3>
+
+<div class="english">
+<p class="rule">
+The <code>go</code> statement that starts a new goroutine
+happens before the goroutine's execution begins.
+</p>
+</div>
+
+<p class="rule">
+<code>go</code> 语句会在该Go程开始执行之前启动一个新的Go程。
+</p>
+
+<div class="english">
+<p>
+For example, in this program:
+</p>
+</div>
+
+<p>
+例如，在程序
+</p>
+
+<pre>
+var a string
+
+func f() {
+	print(a)
+}
+
+func hello() {
+	a = "hello, world"
+	go f()
+}
+</pre>
+
+<div class="english">
+<p>
+calling <code>hello</code> will print <code>"hello, world"</code>
+at some point in the future (perhaps after <code>hello</code> has returned).
+</p>
+</div>
+
+<p>
+中，调用 <code>hello</code> 会在将来的某一时刻（或许在 <code>hello</code> 返回之后）打印 <code>"hello, world"</code>。
+</p>
+
+<div class="english">
+<h3>Goroutine destruction</h3>
+</div>
+
+<h3>Go程的销毁</h3>
+
+<div class="english">
+<p>
+The exit of a goroutine is not guaranteed to happen before
+any event in the program.  For example, in this program:
+</p>
+</div>
+
+<p>
+Go程并不能保证在程序中的任何事件发生之前退出。例如，在程序：
+</p>
+
+<pre>
+var a string
+
+func hello() {
+	go func() { a = "hello" }()
+	print(a)
+}
+</pre>
+
+<div class="english">
+<p>
+the assignment to <code>a</code> is not followed by
+any synchronization event, so it is not guaranteed to be
+observed by any other goroutine.
+In fact, an aggressive compiler might delete the entire <code>go</code> statement.
+</p>
+</div>
+
+<p>
+中，对 <code>a</code> 进行赋值后，并未发生任何同步事件，因此它并不能保证被任何其它Go程观测到。
+实际上，一个积极的编译器可删除全部的 <code>go</code> 语句。
+</p>
+
+<div class="english">
+<p>
+If the effects of a goroutine must be observed by another goroutine,
+use a synchronization mechanism such as a lock or channel
+communication to establish a relative ordering.
+</p>
+</div>
+
+<p>
+若一个Go程的作用必须被另一个Go程观测到，需使用诸如阻塞或信道通信之类的同步机制来建立相关的顺序。
+</p>
+
+<div class="english">
+<h3>Channel communication</h3>
+</div>
+
+<h3>信道通信</h3>
+
+<div class="english">
+<p>
+Channel communication is the main method of synchronization
+between goroutines.  Each send on a particular channel
+is matched to a corresponding receive from that channel,
+usually in a different goroutine.
+</p>
+</div>
+
+<p>
+信道通信是在Go程之间进行同步的主要方法。在特定信道上的每一次发送操作都有与其对应的接收操作相匹配，
+这通常发生在不同的信道上。
+</p>
+
+<div class="english">
+<p class="rule">
+A send on a channel happens before the corresponding
+receive from that channel completes.
+</p>
+</div>
+
+<p class="rule">
+信道上的发送操作总在与其对应的接收操作完成前发生。
+</p>
+
+<div class="english">
+<p>
+This program:
+</p>
+</div>
+
+<p>
+此程序：
+</p>
+
+<pre>
+var c = make(chan int, 10)
+var a string
+
+func f() {
+	a = "hello, world"
+	c &lt;- 0
+}
+
+func main() {
+	go f()
+	&lt;-c
+	print(a)
+}
+</pre>
+
+<div class="english">
+<p>
+is guaranteed to print <code>"hello, world"</code>.  The write to <code>a</code>
+happens before the send on <code>c</code>, which happens before
+the corresponding receive on <code>c</code> completes, which happens before
+the <code>print</code>.
+</p>
+</div>
+
+<p>
+可保证打印出 <code>"hello, world"</code>。该程序首先是对 <code>a</code> 进行的写入操作，
+然后是在 <code>c</code> 上进行的发送操作，随后是完成与其对应的从 <code>c</code>
+进行的接收操作，最后执行 <code>print</code> 函数。
+</p>
+
+<div class="english">
+<p class="rule">
+The closing of a channel happens before a receive that returns a zero value
+because the channel is closed.
+</p>
+</div>
+
+<p class="rule">
+The closing of a channel happens before a receive that returns a zero value
+because the channel is closed.
+信道在接收到零值后将会关闭。
+信道的关闭发生在接收之后，由于该信道已被关闭，
+</p>
+
+<div class="english">
+<p>
+In the previous example, replacing
+<code>c &lt;- 0</code> with <code>close(c)</code>
+yields a program with the same guaranteed behavior.
+</p>
+</div>
+
+<p>
+在上一个例子中，用 <code>close(c)</code> 代替 <code>c &lt;- 0</code>
+仍能保证该程序产生相同的行为。
+</p>
+
+<div class="english">
+<p class="rule">
+A receive from an unbuffered channel happens before
+the send on that channel completes.
+</p>
+</div>
+
+<p class="rule">
+从无缓冲信道进行的接收，要发生在对该信道进行的发送完成之前。
+</p>
+
+<div class="english">
+<p>
+This program (as above, but with the send and receive statements swapped and
+using an unbuffered channel):
+</p>
+</div>
+
+<p>
+此程序（与上面的相同，但交换了发送和接收语句的位置，并使用无缓冲信道）:
+</p>
+
+<pre>
+var c = make(chan int)
+var a string
+
+func f() {
+	a = "hello, world"
+	&lt;-c
+}
+</pre>
+
+<pre>
+func main() {
+	go f()
+	c &lt;- 0
+	print(a)
+}
+</pre>
+
+<div class="english">
+<p>
+is also guaranteed to print <code>"hello, world"</code>.  The write to <code>a</code>
+happens before the receive on <code>c</code>, which happens before
+the corresponding send on <code>c</code> completes, which happens
+before the <code>print</code>.
+</p>
+</div>
+
+<p>
+也可保证打印出 <code>"hello, world"</code>。该程序首先是对 <code>a</code> 进行的写入操作，
+然后是在 <code>c</code> 上进行的接收操作，随后是完成与其对应的向 <code>c</code>
+进行的发送操作，最后执行 <code>print</code> 函数。
+</p>
+
+<div class="english">
+<p>
+If the channel were buffered (e.g., <code>c = make(chan int, 1)</code>)
+then the program would not be guaranteed to print
+<code>"hello, world"</code>.  (It might print the empty string,
+crash, or do something else.)
+</p>
+</div>
+
+<p>
+若该信道为带缓冲的（例如，<code>c = make(chan int, 1)</code>），
+则该程序将无法保证打印出 <code>"hello, world"</code>。（它可能会打印出空字符串，
+崩溃，或最一些别的事情。）
+</p>
+
+<div class="english">
+<h3>Locks</h3>
+</div>
+
+<h3>锁定</h3>
+
+<div class="english">
+<p>
+The <code>sync</code> package implements two lock data types,
+<code>sync.Mutex</code> and <code>sync.RWMutex</code>.
+</p>
+</div>
+
+<p>
+<code>sync</code> 包实现了两种锁定数据类型：<code>sync.Mutex</code> 和 <code>sync.RWMutex</code>。
+</p>
+
+<div class="english">
+<p class="rule">
+For any <code>sync.Mutex</code> or <code>sync.RWMutex</code> variable <code>l</code> and <i>n</i> &lt; <i>m</i>,
+call <i>n</i> of <code>l.Unlock()</code> happens before call <i>m</i> of <code>l.Lock()</code> returns.
+</p>
+</div>
+
+<p class="rule">
+对于任何 <code>sync.Mutex</code> 或 <code>sync.RWMutex</code> 类型的变量
+<code>l</code> 以及任何 <i>n</i> &lt; <i>m</i>，对 <code>l.Unlock()</code>
+的第 <i>n</i> 次调用在对 <code>l.Lock()</code> 的第 <i>m</i> 次调用返回前发生。
+</p>
+
+<div class="english">
+<p>
+This program:
+</p>
+</div>
+
+<p>
+此程序：
+</p>
+
+<pre>
+var l sync.Mutex
+var a string
+
+func f() {
+	a = "hello, world"
+	l.Unlock()
+}
+
+func main() {
+	l.Lock()
+	go f()
+	l.Lock()
+	print(a)
+}
+</pre>
+
+<div class="english">
+<p>
+is guaranteed to print <code>"hello, world"</code>.
+The first call to <code>l.Unlock()</code> (in <code>f</code>) happens
+before the second call to <code>l.Lock()</code> (in <code>main</code>) returns,
+which happens before the <code>print</code>.
+</p>
+</div>
+
+<p>
+可保证打印出 <code>"hello, world"</code>。该程序首先（在 <code>f</code> 中）对
+<code>l.Unlock()</code> 进行第一次调用，然后（在 <code>main</code> 中）对
+<code>l.Lock()</code> 进行第二次调用，最后执行 <code>print</code> 函数。
+</p>
+
+<div class="english">
+<p class="rule">
+For any call to <code>l.RLock</code> on a <code>sync.RWMutex</code> variable <code>l</code>,
+there is an <i>n</i> such that the <code>l.RLock</code> happens (returns) after call <i>n</i> to
+<code>l.Unlock</code> and the matching <code>l.RUnlock</code> happens
+before call <i>n</i>+1 to <code>l.Lock</code>.
+</p>
+</div>
+
+<p class="rule">
+对于 <code>sync.RWMutex</code> 类型的变量 <code>l</code> 对 <code>l.RLock</code>
+的任何调用，存在一个这样的 <i>n</i>，使得 <code>l.RLock</code> 在对 <code>l.Unlock</code>
+的第 <i>n</i> 次调用之后发生（返回），且与其相匹配的 <code>l.RUnlock</code> 在对
+<code>l.Lock</code>的第 <i>n+1</i> 次调用之前发生。
+</p>
+
+<div class="english">
+<h3>Once</h3>
+</div>
+
+<h3>Once类型</h3>
+
+<div class="english">
+<p>
+The <code>sync</code> package provides a safe mechanism for
+initialization in the presence of multiple goroutines
+through the use of the <code>Once</code> type.
+Multiple threads can execute <code>once.Do(f)</code> for a particular <code>f</code>,
+but only one will run <code>f()</code>, and the other calls block
+until <code>f()</code> has returned.
+</p>
+</div>
+
+<p>
+<code>sync</code> 包通过使用 <code>Once</code> 类型，为存在多个Go程的初始化提供了安全的机制。
+多个线程可为特定的 <code>f</code> 执行 <code>once.Do(f)</code>，但只有一个会运行 <code>f()</code>，
+且其它的调用会一直阻塞，直到 <code>f()</code> 返回。
+</p>
+
+<div class="english">
+<p class="rule">
+A single call of <code>f()</code> from <code>once.Do(f)</code> happens (returns) before any call of <code>once.Do(f)</code> returns.
+</p>
+</div>
+
+<p class="rule">
+从 <code>once.Do(f)</code> 对 <code>f()</code> 的单次调用在对 <code>once.Do(f)</code>
+的任何调用返回之前发生（返回）。
+</p>
+
+<div class="english">
+<p>
+In this program:
+</p>
+</div>
+
+<p>
+在程序：
+</p>
+
+<pre>
+var a string
+var once sync.Once
+
+func setup() {
+	a = "hello, world"
+}
+
+func doprint() {
+	once.Do(setup)
+	print(a)
+}
+
+func twoprint() {
+	go doprint()
+	go doprint()
+}
+</pre>
+
+<div class="english">
+<p>
+calling <code>twoprint</code> causes <code>"hello, world"</code> to be printed twice.
+The first call to <code>twoprint</code> runs <code>setup</code> once.
+</p>
+</div>
+
+<p>
+中，调用 <code>twoprint</code> 会引起 <code>"hello, world"</code> 被打印两次。
+第一次对 <code>twoprint</code> 的调用会运行一次 <code>setup</code>。
+</p>
+
+<div class="english">
+<h2>Incorrect synchronization</h2>
+</div>
+
+<h2>错误的同步</h2>
+
+<div class="english">
+<p>
+Note that a read <span class="event">r</span> may observe the value written by a write <span class="event">w</span>
+that happens concurrently with <span class="event">r</span>.
+Even if this occurs, it does not imply that reads happening after <span class="event">r</span>
+will observe writes that happened before <span class="event">w</span>.
+</p>
+</div>
+
+<p>
+请注意，读取操作 <span class="event">r</span> 可能观测到由写入操作 <span class="event">w</span> 写入的值。
+即便如此，这也不意味着发生在 <span class="event">r</span> 之后的读取操作会观测到发生在
+<span class="event">w</span> 之前的写入操作。
+</p>
+
+<div class="english">
+<p>
+In this program:
+</p>
+</div>
+
+<p>
+在程序：
+</p>
+
+<pre>
+var a, b int
+
+func f() {
+	a = 1
+	b = 2
+}
+
+func g() {
+	print(b)
+	print(a)
+}
+
+func main() {
+	go f()
+	g()
+}
+</pre>
+
+<div class="english">
+<p>
+it can happen that <code>g</code> prints <code>2</code> and then <code>0</code>.
+</p>
+</div>
+
+<p>
+中，会发生 <code>g</code> 打印出 <code>2</code> 后面跟着 <code>0</code>。
+</p>
+
+<div class="english">
+<p>
+This fact invalidates a few common idioms.
+</p>
+</div>
+
+<p>
+This fact invalidates a few common idioms.
+这个事实会使很多一般的习惯变得非法。
+</p>
+
+<div class="english">
+<p>
+Double-checked locking is an attempt to avoid the overhead of synchronization.
+For example, the <code>twoprint</code> program might be
+incorrectly written as:
+</p>
+</div>
+
+<p>
+双重检测锁定试图避免同步的开销。例如，<code>twoprint</code> 程序可能会错误地写成：
+</p>
+
+<pre>
+var a string
+var done bool
+
+func setup() {
+	a = "hello, world"
+	done = true
+}
+
+func doprint() {
+	if !done {
+		once.Do(setup)
+	}
+	print(a)
+}
+
+func twoprint() {
+	go doprint()
+	go doprint()
+}
+</pre>
+
+<div class="english">
+<p>
+but there is no guarantee that, in <code>doprint</code>, observing the write to <code>done</code>
+implies observing the write to <code>a</code>.  This
+version can (incorrectly) print an empty string
+instead of <code>"hello, world"</code>.
+</p>
+</div>
+
+<p>
+但没有保证，在 <code>doprint</code> 中，对 <code>done</code> 的写入进行观测就意味着对
+<code>a</code> 的写入进行观测。这个版本可以（错误地）打印出一个空字符串而非 <code>"hello, world"</code>。
+</p>
+
+<div class="english">
+<p>
+Another incorrect idiom is busy waiting for a value, as in:
+</p>
+</div>
+
+<p>
+另一些错误的习惯就是忙于等待一个值，就像这样：
+</p>
+
+<pre>
+var a string
+var done bool
+
+func setup() {
+	a = "hello, world"
+	done = true
+}
+
+func main() {
+	go setup()
+	for !done {
+	}
+	print(a)
+}
+</pre>
+
+<div class="english">
+<p>
+As before, there is no guarantee that, in <code>main</code>,
+observing the write to <code>done</code>
+implies observing the write to <code>a</code>, so this program could
+print an empty string too.
+Worse, there is no guarantee that the write to <code>done</code> will ever
+be observed by <code>main</code>, since there are no synchronization
+events between the two threads.  The loop in <code>main</code> is not
+guaranteed to finish.
+</p>
+</div>
+
+<p>
+As before, there is no guarantee that, in <code>main</code>,
+observing the write to <code>done</code>
+implies observing the write to <code>a</code>, so this program could
+print an empty string too.
+Worse, there is no guarantee that the write to <code>done</code> will ever
+be observed by <code>main</code>, since there are no synchronization
+events between the two threads.  The loop in <code>main</code> is not
+guaranteed to finish.
+和前面一样，此程序没有保证，在 <code>main</code> 中，对 <code>done</code>
+的写入进行观测就意味着对 <code>a</code> 的写入进行观测，因此该程序也会打印出一个空字符串。
+更糟的是，无法保证在两个线程之间没有同步事件时，对 <code>done</code> 的写入永远能被
+<code>main</code> 所观测到。<code>main</code> 中的循环无法保证能够结束。
+</p>
+
+<div class="english">
+<p>
+There are subtler variants on this theme, such as this program.
+</p>
+</div>
+
+<p>
+在这个主题中， 有一些微妙的变体，比如这个程序：
+</p>
+
+<pre>
+type T struct {
+	msg string
+}
+
+var g *T
+
+func setup() {
+	t := new(T)
+	t.msg = "hello, world"
+	g = t
+}
+
+func main() {
+	go setup()
+	for g == nil {
+	}
+	print(g.msg)
+}
+</pre>
+
+<div class="english">
+<p>
+Even if <code>main</code> observes <code>g != nil</code> and exits its loop,
+there is no guarantee that it will observe the initialized
+value for <code>g.msg</code>.
+</p>
+</div>
+
+<p>
+即便 <code>main</code> 能够观测到 <code>g != nil</code> 并退其循环，
+也无法保证它将观测到 <code>g.msg</code> 的初始化值。
+</p>
+
+<div class="english">
+<p>
+In all these examples, the solution is the same:
+use explicit synchronization.
+</p>
+</div>
+
+<p>
+在所有的这些例子中，它们的解决方案都是相同的：使用显式同步。
+</p>
