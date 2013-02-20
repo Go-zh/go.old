@@ -168,11 +168,11 @@ const (
 )
 
 type testingData struct {
-	desc    string
-	t       *testing.T
-	data    []int
-	maxswap int // number of swaps allowed // 允许交换的最大数
-	nswap   int
+	desc        string
+	t           *testing.T
+	data        []int
+	maxswap     int // number of swaps allowed // 允许交换的最大数
+	ncmp, nswap int
 }
 
 func (d *testingData) Len() int { return len(d.data) }
