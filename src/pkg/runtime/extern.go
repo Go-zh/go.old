@@ -62,8 +62,8 @@ type Func struct { // Keep in sync with runtime.h:struct Func // 与 runtime.h:s
 	pc0    uintptr // starting pc, ln for table // 起始于 pc，ln 为表
 	ln0    int32
 	frame  int32 // stack frame size            // 栈帧 frame 的大小
-	args   int32 // number of 32-bit in/out args// 32位 in/out 实参 args 的数量
-	locals int32 // number of 32-bit locals     // 32位 局部变量 locals 的数量
+	args   int32 // in/out args size            // in/out 实参 args 的大小
+	locals int32 // locals size                 // 局部变量 locals 的大小
 }
 
 // FuncForPC returns a *Func describing the function that contains the

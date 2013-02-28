@@ -11,17 +11,32 @@ extern SigTab runtime·sigtab[];
 
 int32 runtime·postnote(int32, int8*);
 
+// Called to initialize a new m (including the bootstrap m).
+// Called on the parent thread (main thread in case of bootstrap), can allocate memory.
+void
+runtime·mpreinit(M *mp)
+{
+	// Initialize stack and goroutine for note handling.
+	mp->gsignal = runtime·malg(32*1024);
+	mp->notesig = (int8*)runtime·malloc(ERRMAX*sizeof(int8));
+}
+
+// Called to initialize a new m (including the bootstrap m).
+// Called on the new thread, can not allocate memory.
 void
 runtime·minit(void)
 {
-	// Initialize stack and goroutine for note handling.
-	m->gsignal = runtime·malg(32*1024);
-	m->notesig = (int8*)runtime·malloc(ERRMAX*sizeof(int8));
-
 	// Mask all SSE floating-point exceptions
 	// when running on the 64-bit kernel.
 	runtime·setfpmasks();
 }
+
+// Called from dropm to undo the effect of an minit.
+void
+runtime·unminit(void)
+{
+}
+
 
 static int32
 getproccount(void)
@@ -82,6 +97,7 @@ runtime·initsig(void)
 {
 }
 
+#pragma textflag 7
 void
 runtime·osyield(void)
 {
@@ -97,34 +113,6 @@ runtime·usleep(uint32 µs)
 	if(ms == 0)
 		ms = 1;
 	runtime·sleep(ms);
-}
-
-int64
-runtime·nanotime(void)
-{
-	static int32 fd = -1;
-	byte b[8];
-	uint32 hi, lo;
-
-	// As long as all goroutines share the same file
-	// descriptor table we can get away with using
-	// just a static fd.  Without a lock the file can
-	// be opened twice but that's okay.
-	//
-	// Using /dev/bintime gives us a latency on the
-	// order of ten microseconds between two calls.
-	//
-	// The naïve implementation (without the cached
-	// file descriptor) is roughly four times slower
-	// in 9vx on a 2.16 GHz Intel Core 2 Duo.
-
-	if(fd < 0 && (fd = runtime·open((byte*)"/dev/bintime", OREAD|OCEXEC)) < 0)
-		return 0;
-	if(runtime·pread(fd, b, sizeof b, 0) != sizeof b)
-		return 0;
-	hi = b[0]<<24 | b[1]<<16 | b[2]<<8 | b[3];
-	lo = b[4]<<24 | b[5]<<16 | b[6]<<8 | b[7];
-	return (int64)hi<<32 | (int64)lo;
 }
 
 void

@@ -474,7 +474,7 @@ int32	runtime·gcprocs(void);
 void	runtime·helpgc(int32 nproc);
 void	runtime·gchelper(void);
 
-bool	runtime·getfinalizer(void *p, bool del, void (**fn)(void*), uintptr *nret);
+bool	runtime·getfinalizer(void *p, bool del, FuncVal **fn, uintptr *nret);
 void	runtime·walkfintab(void (*fn)(void*));
 
 enum
@@ -482,6 +482,7 @@ enum
 	TypeInfo_SingleObject = 0,
 	TypeInfo_Array = 1,
 	TypeInfo_Map = 2,
+	TypeInfo_Chan = 3,
 
 	// Enables type information at the end of blocks allocated from heap	
 	DebugTypeAtBlockEnd = 0,

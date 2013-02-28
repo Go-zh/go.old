@@ -101,15 +101,15 @@ func mapiter2(hiter *any) (key any, val any)
 func makechan(chanType *byte, hint int64) (hchan chan any)
 func chanrecv1(chanType *byte, hchan <-chan any) (elem any)
 func chanrecv2(chanType *byte, hchan <-chan any) (elem any, received bool)
-func chansend1(chanType *byte, hchan chan<- any, elem any)
+func chansend1(chanType *byte, hchan chan <- any, elem any)
 func closechan(hchan any)
 
-func selectnbsend(chanType *byte, hchan chan<- any, elem any) bool
+func selectnbsend(chanType *byte, hchan chan <- any, elem any) bool
 func selectnbrecv(chanType *byte, elem *any, hchan <-chan any) bool
 func selectnbrecv2(chanType *byte, elem *any, received *bool, hchan <-chan any) bool
 
 func newselect(size int32) (sel *byte)
-func selectsend(sel *byte, hchan chan<- any, elem *any) (selected bool)
+func selectsend(sel *byte, hchan chan <- any, elem *any) (selected bool)
 func selectrecv(sel *byte, hchan <-chan any, elem *any) (selected bool)
 func selectrecv2(sel *byte, hchan <-chan any, elem *any, received *bool) (selected bool)
 func selectdefault(sel *byte) (selected bool)
@@ -118,8 +118,6 @@ func block()
 
 func makeslice(typ *byte, nel int64, cap int64) (ary []any)
 func growslice(typ *byte, old []any, n int64) (ary []any)
-
-func closure() // has args, but compiler fills in
 
 func memequal(eq *bool, size uintptr, x, y *any)
 func memequal8(eq *bool, size uintptr, x, y *any)

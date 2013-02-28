@@ -89,6 +89,7 @@ type GoStringer interface {
 }
 
 // Use simple []byte instead of bytes.Buffer to avoid large dependency.
+
 // 使用 []byte 而非 bytes.Buffer 以避免大量的依赖。
 type buffer []byte
 
@@ -828,7 +829,7 @@ func (p *pp) printField(field interface{}, verb rune, plus, goSyntax bool, depth
 
 	if field == nil {
 		if verb == 'T' || verb == 'v' {
-			p.buf.Write(nilAngleBytes)
+			p.fmt.pad(nilAngleBytes)
 		} else {
 			p.badVerb(verb)
 		}

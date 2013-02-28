@@ -190,15 +190,16 @@ gjmp(Prog *to)
 }
 
 void
-ggloblnod(Node *nam, int32 width)
+ggloblnod(Node *nam)
 {
 	Prog *p;
 
 	p = gins(AGLOBL, nam, N);
 	p->lineno = nam->lineno;
+	p->from.gotype = ngotype(nam);
 	p->to.sym = S;
 	p->to.type = D_CONST;
-	p->to.offset = width;
+	p->to.offset = nam->type->width;
 	if(nam->readonly)
 		p->from.scale = RODATA;
 	if(nam->type != T && !haspointers(nam->type))
@@ -254,11 +255,12 @@ isfat(Type *t)
  * call afunclit to fix up the argument.
  */
 void
-afunclit(Addr *a)
+afunclit(Addr *a, Node *n)
 {
 	if(a->type == D_ADDR && a->index == D_EXTERN) {
 		a->type = D_EXTERN;
 		a->index = D_NONE;
+		a->sym = n->sym;
 	}
 }
 
@@ -1096,6 +1098,8 @@ checkoffset(Addr *a, int canemitcode)
 void
 naddr(Node *n, Addr *a, int canemitcode)
 {
+	Prog *p;
+
 	a->scale = 0;
 	a->index = D_NONE;
 	a->type = D_NONE;
@@ -1157,13 +1161,27 @@ naddr(Node *n, Addr *a, int canemitcode)
 		a->type = D_PARAM;
 		a->node = n->left->orig;
 		break;
+	
+	case OCLOSUREVAR:
+		if(!canemitcode)
+			fatal("naddr OCLOSUREVAR cannot emit code");
+		p = gins(AMOVQ, N, N);
+		p->from.type = D_DX+D_INDIR;
+		p->from.offset = n->xoffset;
+		p->to.type = D_BX;
+		a->type = D_BX;
+		a->sym = S;
+		break;
+	
+	case OCFUNC:
+		naddr(n->left, a, canemitcode);
+		a->sym = n->left->sym;
+		break;
 
 	case ONAME:
 		a->etype = 0;
-		if(n->type != T) {
+		if(n->type != T)
 			a->etype = simtype[n->type->etype];
-			a->gotype = ngotype(n);
-		}
 		a->offset = n->xoffset;
 		a->sym = n->sym;
 		a->node = n->orig;
@@ -1195,6 +1213,7 @@ naddr(Node *n, Addr *a, int canemitcode)
 			a->index = D_EXTERN;
 			a->type = D_ADDR;
 			a->width = widthptr;
+			a->sym = funcsym(a->sym);
 			break;
 		}
 		break;

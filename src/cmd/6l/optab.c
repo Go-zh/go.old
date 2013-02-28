@@ -326,7 +326,8 @@ uchar	yloop[] =
 };
 uchar	ycall[] =
 {
-	Ynone,	Yml,	Zo_m64,	2,
+	Ynone,	Yml,	Zo_m64,	0,
+	Yrx,	Yrx,	Zo_m64,	2,
 	Ynone,	Ybr,	Zcall,	1,
 	0
 };
@@ -1316,6 +1317,8 @@ Optab optab[] =
 	{ APSHUFD,	yaes2,	Pq,	0x70,(0) },
 
 	{ AUSEFIELD,	ynop,	Px, 0,0 },
+	{ ALOCALS },
+	{ ATYPE },
 
 	{ AEND },
 	0

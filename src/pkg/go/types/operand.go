@@ -129,7 +129,7 @@ func (x *operand) isNil() bool {
 //           overlapping in functionality. Need to simplify and clean up.
 
 // isAssignable reports whether x is assignable to a variable of type T.
-func (x *operand) isAssignable(T Type) bool {
+func (x *operand) isAssignable(ctxt *Context, T Type) bool {
 	if x.mode == invalid || T == Typ[Invalid] {
 		return true // avoid spurious errors
 	}
@@ -187,7 +187,7 @@ func (x *operand) isAssignable(T Type) bool {
 		switch t := Tu.(type) {
 		case *Basic:
 			if x.mode == constant {
-				return isRepresentableConst(x.val, t.Kind)
+				return isRepresentableConst(x.val, ctxt, t.Kind)
 			}
 			// The result of a comparison is an untyped boolean,
 			// but may not be a constant.
@@ -205,20 +205,23 @@ func (x *operand) isAssignable(T Type) bool {
 }
 
 // isInteger reports whether x is a (typed or untyped) integer value.
-func (x *operand) isInteger() bool {
+func (x *operand) isInteger(ctxt *Context) bool {
 	return x.mode == invalid ||
 		isInteger(x.typ) ||
-		x.mode == constant && isRepresentableConst(x.val, UntypedInt)
+		x.mode == constant && isRepresentableConst(x.val, ctxt, UntypedInt)
 }
 
+// lookupResult represents the result of a struct field/method lookup.
 type lookupResult struct {
-	mode operandMode
-	typ  Type
+	mode  operandMode
+	typ   Type
+	index []int // field index sequence; nil for methods
 }
 
 type embeddedType struct {
 	typ       *NamedType
-	multiples bool // if set, typ is embedded multiple times at the same level
+	index     []int // field index sequence
+	multiples bool  // if set, typ is embedded multiple times at the same level
 }
 
 // lookupFieldBreadthFirst searches all types in list for a single entry (field
@@ -243,6 +246,7 @@ func lookupFieldBreadthFirst(list []embeddedType, name QualifiedName) (res looku
 		// first appearance of name
 		res.mode = mode
 		res.typ = typ
+		res.index = nil
 		return true
 	}
 
@@ -277,12 +281,16 @@ func lookupFieldBreadthFirst(list []embeddedType, name QualifiedName) (res looku
 			switch t := typ.Underlying.(type) {
 			case *Struct:
 				// look for a matching field and collect embedded types
-				for _, f := range t.Fields {
+				for i, f := range t.Fields {
 					if name.IsSame(f.QualifiedName) {
 						assert(f.Type != nil)
 						if !potentialMatch(e.multiples, variable, f.Type) {
 							return // name collision
 						}
+						var index []int
+						index = append(index, e.index...) // copy e.index
+						index = append(index, i)
+						res.index = index
 						continue
 					}
 					// Collect embedded struct fields for searching the next
@@ -295,7 +303,14 @@ func lookupFieldBreadthFirst(list []embeddedType, name QualifiedName) (res looku
 					// this level, f.Type appears multiple times at the next
 					// level.
 					if f.IsAnonymous && res.mode == invalid {
-						next = append(next, embeddedType{deref(f.Type).(*NamedType), e.multiples})
+						// Ignore embedded basic types - only user-defined
+						// named types can have methods or have struct fields.
+						if t, _ := deref(f.Type).(*NamedType); t != nil {
+							var index []int
+							index = append(index, e.index...) // copy e.index
+							index = append(index, i)
+							next = append(next, embeddedType{t, index, e.multiples})
+						}
 					}
 				}
 
@@ -348,14 +363,14 @@ func findType(list []embeddedType, typ *NamedType) *embeddedType {
 	return nil
 }
 
-func lookupField(typ Type, name QualifiedName) (operandMode, Type) {
+func lookupField(typ Type, name QualifiedName) lookupResult {
 	typ = deref(typ)
 
 	if t, ok := typ.(*NamedType); ok {
 		for _, m := range t.Methods {
 			if name.IsSame(m.QualifiedName) {
 				assert(m.Type != nil)
-				return value, m.Type
+				return lookupResult{value, m.Type, nil}
 			}
 		}
 		typ = t.Underlying
@@ -364,30 +379,33 @@ func lookupField(typ Type, name QualifiedName) (operandMode, Type) {
 	switch t := typ.(type) {
 	case *Struct:
 		var next []embeddedType
-		for _, f := range t.Fields {
+		for i, f := range t.Fields {
 			if name.IsSame(f.QualifiedName) {
-				return variable, f.Type
+				return lookupResult{variable, f.Type, []int{i}}
 			}
 			if f.IsAnonymous {
 				// Possible optimization: If the embedded type
 				// is a pointer to the current type we could
 				// ignore it.
-				next = append(next, embeddedType{typ: deref(f.Type).(*NamedType)})
+				// Ignore embedded basic types - only user-defined
+				// named types can have methods or have struct fields.
+				if t, _ := deref(f.Type).(*NamedType); t != nil {
+					next = append(next, embeddedType{t, []int{i}, false})
+				}
 			}
 		}
 		if len(next) > 0 {
-			res := lookupFieldBreadthFirst(next, name)
-			return res.mode, res.typ
+			return lookupFieldBreadthFirst(next, name)
 		}
 
 	case *Interface:
 		for _, m := range t.Methods {
 			if name.IsSame(m.QualifiedName) {
-				return value, m.Type
+				return lookupResult{value, m.Type, nil}
 			}
 		}
 	}
 
 	// not found
-	return invalid, nil
+	return lookupResult{mode: invalid}
 }

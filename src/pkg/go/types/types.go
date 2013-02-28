@@ -74,7 +74,7 @@ const (
 type Basic struct {
 	Kind BasicKind
 	Info BasicInfo
-	Size int64
+	size int64 // use DefaultSizeof to get size
 	Name string
 }
 
@@ -121,12 +121,13 @@ type Field struct {
 
 // A Struct represents a struct type struct{...}.
 type Struct struct {
-	Fields []*Field
+	Fields  []*Field
+	offsets []int64 // field offsets in bytes, lazily computed
 }
 
-func (typ *Struct) fieldIndex(name string) int {
+func (typ *Struct) fieldIndex(name QualifiedName) int {
 	for i, f := range typ.Fields {
-		if f.Name == name {
+		if f.QualifiedName.IsSame(name) {
 			return i
 		}
 	}

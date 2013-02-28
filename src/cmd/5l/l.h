@@ -147,6 +147,8 @@ struct	Sym
 	int32	size;
 	int32	align;	// if non-zero, required alignment in bytes
 	int32	elfsym;
+	int32	locals;	// size of stack frame locals area
+	int32	args;	// size of stack frame incoming arguments area
 	uchar	special;
 	uchar	fnptr;	// used as fn ptr
 	uchar	stkcheck;
@@ -319,6 +321,8 @@ EXTERN	int	dtype;
 EXTERN	int	tlsoffset;
 EXTERN	int	armsize;
 EXTERN	int	goarm;
+EXTERN	Sym*	adrgotype;	// type symbol on last Adr read
+EXTERN	Sym*	fromgotype;	// type symbol on last p->from read
 
 extern	char*	anames[];
 extern	Optab	optab[];

@@ -59,7 +59,13 @@ dumpglobls(void)
 			continue;
 		dowidth(n->type);
 
-		ggloblnod(n, n->type->width);
+		ggloblnod(n);
+	}
+
+	for(l=funcsyms; l; l=l->next) {
+		n = l->n;
+		dsymptr(n->sym, 0, n->sym->def->shortname->sym, 0);
+		ggloblsym(n->sym, widthptr, 1, 1);
 	}
 }
 

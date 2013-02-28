@@ -46,6 +46,36 @@ func TestStopTheWorldDeadlock(t *testing.T) {
 	runtime.GOMAXPROCS(maxprocs)
 }
 
+func TestYieldProgress(t *testing.T) {
+	testYieldProgress(t, false)
+}
+
+func TestYieldLockedProgress(t *testing.T) {
+	testYieldProgress(t, true)
+}
+
+func testYieldProgress(t *testing.T, locked bool) {
+	c := make(chan bool)
+	cack := make(chan bool)
+	go func() {
+		if locked {
+			runtime.LockOSThread()
+		}
+		for {
+			select {
+			case <-c:
+				cack <- true
+				return
+			default:
+				runtime.Gosched()
+			}
+		}
+	}()
+	time.Sleep(10 * time.Millisecond)
+	c <- true
+	<-cack
+}
+
 func TestYieldLocked(t *testing.T) {
 	const N = 10
 	c := make(chan bool)
@@ -81,6 +111,14 @@ func stackGrowthRecursive(i int) {
 	if i != 0 && pad[0] == 0 {
 		stackGrowthRecursive(i - 1)
 	}
+}
+
+func TestSchedLocalQueue(t *testing.T) {
+	runtime.TestSchedLocalQueue1()
+}
+
+func TestSchedLocalQueueSteal(t *testing.T) {
+	runtime.TestSchedLocalQueueSteal1()
 }
 
 func benchmarkStackGrowth(b *testing.B, rec int) {

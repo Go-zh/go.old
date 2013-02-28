@@ -74,7 +74,8 @@
 		-	pad with spaces on the right rather than the left (left-justify the field)
 		#	alternate format: add leading 0 for octal (%#o), 0x for hex (%#x);
 			0X for hex (%#X); suppress 0x for %p (%#p);
-			print a raw (backquoted) string if possible for %q (%#q);
+			for %q, print a raw (backquoted) string if strconv.CanBackquote
+			returns true;
 			write e.g. U+0078 'x' if the character is printable for %U (%#U).
 		' '	(space) leave a space for elided sign in numbers (% d);
 			put spaces between bytes printing strings or slices in hex (% x, % X)
@@ -261,9 +262,9 @@
 		+	总打印数值的正负号；对于%q（%+q）保证只输出ASCII编码的字符。
 		-	在右侧而非左侧填充空格（左对齐该区域）
 		#	备用格式：为八进制添加前导 0（%#o），为十六进制添加前导 0x（%#x）或
-			0X（%#X），为 %p（%#p）去掉前导 0x；如果可能的话，%q（%#q）会打印原始
-			（即反引号围绕的）字符串；如果是可打印字符，%U（%#U）会写出该字符的
-			Unicode 编码形式（如字符 x 会被打印成 U+0078 'x'）。
+			0X（%#X），为 %p（%#p）去掉前导 0x；对于 %q，若 strconv.CanBackquote
+			返回 true，就会打印原始（即反引号围绕的）字符串；如果是可打印字符，
+			%U（%#U）会写出该字符的Unicode编码形式（如字符 x 会被打印成 U+0078 'x'）。
 		' '	（空格）为数值中省略的正负号留出空白（% d）；
 			以十六进制（% x, % X）打印字符串或切片时，在字节之间用空格隔开
 		0	填充前导的0而非空格；

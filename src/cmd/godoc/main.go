@@ -50,7 +50,9 @@ import (
 	"strings"
 )
 
-const defaultAddr = ":6060" // default webserver address
+const defaultAddr = ":6060"
+
+// default webserver address
 
 var (
 	// file system to serve
@@ -61,7 +63,7 @@ var (
 	writeIndex = flag.Bool("write_index", false, "write index to a file; the file name must be specified with -index_files")
 
 	// network
-	httpAddr   = flag.String("http", "", "HTTP service address (e.g., '"+defaultAddr+"')")
+	httpAddr   = flag.String("http", "", "HTTP service address (e.g., '" + defaultAddr + "')")
 	serverAddr = flag.String("server", "", "webserver address for command line searches")
 
 	// layout control
@@ -71,21 +73,26 @@ var (
 
 	// command-line searches
 	query = flag.Bool("q", false, "arguments are considered search queries")
+
+	// which code 'Notes' to show.
+	notes = flag.String("notes", "BUG", "comma separated list of Note markers as per pkg:go/doc")
+	// vector of 'Notes' to show.
+	notesToShow []string
 )
 
 func serveError(w http.ResponseWriter, r *http.Request, relpath string, err error) {
 	w.WriteHeader(http.StatusNotFound)
 	servePage(w, Page{
-		Title:    "File " + relpath,
-		Subtitle: relpath,
-		Body:     applyTemplate(errorHTML, "errorHTML", err), // err may contain an absolute path!
-	})
+			Title:    "File " + relpath,
+			Subtitle: relpath,
+			Body:     applyTemplate(errorHTML, "errorHTML", err), // err may contain an absolute path!
+		})
 }
 
 func usage() {
 	fmt.Fprintf(os.Stderr,
-		"usage: godoc package [name ...]\n"+
-			"	godoc -http="+defaultAddr+"\n")
+					"usage: godoc package [name ...]\n" +
+							"	godoc -http=" + defaultAddr + "\n")
 	flag.PrintDefaults()
 	os.Exit(2)
 }
@@ -156,6 +163,8 @@ func makeRx(names []string) (rx *regexp.Regexp) {
 func main() {
 	flag.Usage = usage
 	flag.Parse()
+
+	notesToShow = strings.Split(*notes, ",")
 
 	// Check usage: either server and no args, command line and args, or index creation mode
 	if (*httpAddr != "" || *urlFlag != "") != (flag.NArg() == 0) && !*writeIndex {
@@ -462,5 +471,5 @@ type httpWriter struct {
 	code int
 }
 
-func (w *httpWriter) Header() http.Header  { return w.h }
+func (w *httpWriter) Header() http.Header { return w.h }
 func (w *httpWriter) WriteHeader(code int) { w.code = code }

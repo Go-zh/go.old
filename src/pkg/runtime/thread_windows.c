@@ -135,6 +135,7 @@ runtime·write(int32 fd, void *buf, int32 n)
 	return written;
 }
 
+#pragma textflag 7
 void
 runtime·osyield(void)
 {
@@ -205,10 +206,26 @@ runtime·newosproc(M *mp, G *gp, void *stk, void (*fn)(void))
 }
 
 // Called to initialize a new m (including the bootstrap m).
+// Called on the parent thread (main thread in case of bootstrap), can allocate memory.
+void
+runtime·mpreinit(M *mp)
+{
+	USED(mp);
+}
+
+// Called to initialize a new m (including the bootstrap m).
+// Called on the new thread, can not allocate memory.
 void
 runtime·minit(void)
 {
 	runtime·install_exception_handler();
+}
+
+// Called from dropm to undo the effect of an minit.
+void
+runtime·unminit(void)
+{
+	runtime·remove_exception_handler();
 }
 
 int64

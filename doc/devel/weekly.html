@@ -3,18 +3,10 @@
 }-->
 
 <p>This page summarizes the changes between tagged weekly snapshots of Go.
-For full details, see the <a href="http://code.google.com/p/go/source/list">Mercurial change log</a>.</p>
+    Such snapshots are no longer created. This page remains as a historical reference only.</p>
 
-<p>Weekly snapshots occur often and may not be stable.
-If stability of API and code is more important than having the
-latest features, use the <a href="release.html">official releases</a> instead.</p>
-
-<p>To update to a specific snapshot, use:</p>
-
-<pre>
-hg pull
-hg update weekly.<i>YYYY-MM-DD</i>
-</pre>
+<p>For recent information, see the <a href="http://code.google.com/p/go/source/list">Mercurial change log</a> and <a
+        href="http://groups.google.com/group/golang-dev/">development mailing list</a>.</p>
 
 <h2 id="2012-03-27">2012-03-27 (<a href="release.html#go1">Go 1</a>)</h2>
 
@@ -1166,44 +1158,44 @@ Other changes:
 	adjust foreign attributes,
 	foreign element HTML integration points, tag name adjustment,
 	parse <frameset> inside body (thanks Andrew Balholm),
-	propagate foreign namespaces only when adding foreign content.
-* json: better error messages when the ,string option is misused.
-* ld: parse but do not implement -X flag.
-* log/syslog: add Alert method (thanks Vadim Vygonets).
-* make.bash: remove old dregs (thanks Alex Brainman).
-* math/big: simplify fast string conversion.
-* math: fix typo in all_test.go (thanks Charles L. Dorian).
-* misc/windows: add src/pkg/runtime/z* files to installation script (thanks Alex Brainman).
-* net/http: don't ignore Request.Write's Flush error,
-	allow cookies with negative Max-Age attribute as these are (thanks Volker Dobler).
-* net/textproto: avoid corruption when reading a single header.
-* net: add IP-level socket option helpers for Unix variants (thanks Mikio Hara),
-	fix incorrect mode on ListenIP, ListenUDP (thanks Mikio Hara),
-	make use of the kernel state to listen on TCP, Unix (thanks Mikio Hara),
-	platform-dependent default socket options (thanks Mikio Hara).
-* os: add ModeCharDevice.
-* runtime: add NumCPU,
-	delete duplicate implementation of pcln walker,
-	distinct panic message for call of nil func value,
-	enable runtime.ncpu on FreeBSD (thanks Devon H. O'Dell),
-	make garbage collector faster by deleting code,
-	regenerate defs_darwin_{386,amd64}.h (thanks Dave Cheney),
-	runtime.usleep() bugfix on darwin/amd64 and linux/arm (thanks Shenghou Ma).
-* spec: pointer comparison for pointers to 0-sized variables,
-	change the wording regarding select statement choice.
-* strconv: fix round up corner case,
-	faster FormatFloat(x, *, -1, 64) using Grisu3 algorithm (thanks Rémy Oudompheng),
-	implement fast path for rounding already short numbers (thanks Rémy Oudompheng),
-	return ErrSyntax when unquoting illegal octal sequences.
-* syscall: linux-only support for parent death signal (thanks Albert Strasheim),
-	make Environ return original order.
-* testing: fix defer race,
-	use flag.Duration for -timeout flag.
-* text/template: handle panic values that are not errors (thanks Rémy Oudompheng),
-	for range on a map, sort the keys if feasible.
-* time: add ParseDuration,
-	fix docs for After and NewTicker.
-* windows: use ArbitraryUserPointer as TLS slot (thanks Wei Guangjing).
+    propagate foreign namespaces only when adding foreign content.
+    * json: better error messages when the ,string option is misused.
+    * ld: parse but do not implement -X flag.
+    * log/syslog: add Alert method (thanks Vadim Vygonets).
+    * make.bash: remove old dregs (thanks Alex Brainman).
+    * math/big: simplify fast string conversion.
+    * math: fix typo in all_test.go (thanks Charles L. Dorian).
+    * misc/windows: add src/pkg/runtime/z* files to installation script (thanks Alex Brainman).
+    * net/http: don't ignore Request.Write's Flush error,
+    allow cookies with negative Max-Age attribute as these are (thanks Volker Dobler).
+    * net/textproto: avoid corruption when reading a single header.
+    * net: add IP-level socket option helpers for Unix variants (thanks Mikio Hara),
+    fix incorrect mode on ListenIP, ListenUDP (thanks Mikio Hara),
+    make use of the kernel state to listen on TCP, Unix (thanks Mikio Hara),
+    platform-dependent default socket options (thanks Mikio Hara).
+    * os: add ModeCharDevice.
+    * runtime: add NumCPU,
+    delete duplicate implementation of pcln walker,
+    distinct panic message for call of nil func value,
+    enable runtime.ncpu on FreeBSD (thanks Devon H. O'Dell),
+    make garbage collector faster by deleting code,
+    regenerate defs_darwin_{386,amd64}.h (thanks Dave Cheney),
+    runtime.usleep() bugfix on darwin/amd64 and linux/arm (thanks Shenghou Ma).
+    * spec: pointer comparison for pointers to 0-sized variables,
+    change the wording regarding select statement choice.
+    * strconv: fix round up corner case,
+    faster FormatFloat(x, *, -1, 64) using Grisu3 algorithm (thanks Rémy Oudompheng),
+    implement fast path for rounding already short numbers (thanks Rémy Oudompheng),
+    return ErrSyntax when unquoting illegal octal sequences.
+    * syscall: linux-only support for parent death signal (thanks Albert Strasheim),
+    make Environ return original order.
+    * testing: fix defer race,
+    use flag.Duration for -timeout flag.
+    * text/template: handle panic values that are not errors (thanks Rémy Oudompheng),
+    for range on a map, sort the keys if feasible.
+    * time: add ParseDuration,
+    fix docs for After and NewTicker.
+    * windows: use ArbitraryUserPointer as TLS slot (thanks Wei Guangjing).
 </pre>
 
 <h2 id="2011-12-22">2011-12-22</h2>

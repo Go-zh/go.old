@@ -76,6 +76,8 @@ peep(void)
 		case AGLOBL:
 		case ANAME:
 		case ASIGNAME:
+		case ALOCALS:
+		case ATYPE:
 			p = p->link;
 		}
 	}
@@ -1174,6 +1176,8 @@ copyu(Prog *p, Adr *v, Adr *s)
 		if(v->type == D_FREG)
 			if(v->reg <= FREGEXT && v->reg > exfregoffset)
 				return 2;
+		if(p->from.type == D_REG && v->type == D_REG && p->from.reg == v->reg)
+			return 2;
 
 		if(s != A) {
 			if(copysub(&p->to, v, s, 1))
@@ -1188,6 +1192,9 @@ copyu(Prog *p, Adr *v, Adr *s)
 		if(v->type == D_REG)
 			if(v->reg == (uchar)REGARG)
 				return 3;
+		return 0;
+
+	case ALOCALS:	/* funny */
 		return 0;
 	}
 }

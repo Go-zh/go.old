@@ -416,7 +416,7 @@ walkexpr(Node **np, NodeList **init)
 	switch(n->op) {
 	default:
 		dump("walk", n);
-		fatal("walkexpr: switch 1 unknown op %N", n);
+		fatal("walkexpr: switch 1 unknown op %+hN", n);
 		break;
 
 	case OTYPE:
@@ -442,7 +442,6 @@ walkexpr(Node **np, NodeList **init)
 		usefield(n);
 		walkexpr(&n->left, init);
 		goto ret;
-		
 
 	case OEFACE:
 		walkexpr(&n->left, init);
@@ -537,6 +536,11 @@ walkexpr(Node **np, NodeList **init)
 		n->addable = 1;
 		goto ret;
 
+	case OCLOSUREVAR:
+	case OCFUNC:
+		n->addable = 1;
+		goto ret;
+
 	case ONAME:
 		if(!(n->class & PHEAP) && n->class != PPARAMREF)
 			n->addable = 1;
@@ -557,10 +561,12 @@ walkexpr(Node **np, NodeList **init)
 		if(n->list && n->list->n->op == OAS)
 			goto ret;
 
+		/*
 		if(n->left->op == OCLOSURE) {
 			walkcallclosure(n, init);
 			t = n->left->type;
 		}
+		*/
 
 		walkexpr(&n->left, init);
 		walkexprlist(n->list, init);
@@ -1341,7 +1347,7 @@ ascompatee(int op, NodeList *nl, NodeList *nr, NodeList **init)
 
 	// cannot happen: caller checked that lists had same length
 	if(ll || lr)
-		yyerror("error in shape across %+H %O %+H", nl, op, nr);
+		yyerror("error in shape across %+H %O %+H / %d %d [%s]", nl, op, nr, count(nl), count(nr), curfn->nname->sym->name);
 	return nn;
 }
 
@@ -2211,6 +2217,8 @@ paramstoheap(Type **argin, int out)
 	nn = nil;
 	for(t = structfirst(&savet, argin); t != T; t = structnext(&savet)) {
 		v = t->nname;
+		if(v && v->sym && v->sym->name[0] == '~')
+			v = N;
 		if(v == N && out && hasdefer) {
 			// Defer might stop a panic and show the
 			// return values as they exist at the time of panic.

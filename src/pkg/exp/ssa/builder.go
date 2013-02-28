@@ -23,23 +23,14 @@ package ssa
 // The Builder's and Program's indices (maps) are populated and
 // mutated during the CREATE phase, but during the BUILD phase they
 // remain constant, with the following exceptions:
-// - demoteSelector mutates Builder.types during the BUILD phase.
-//   TODO(adonovan): fix: let's not do that.
 // - globalValueSpec mutates Builder.nTo1Vars.
 //   TODO(adonovan): make this a per-Package map so it's thread-safe.
 // - Program.methodSets is populated lazily across phases.
 //   It uses a mutex so that access from multiple threads is serialized.
 
 // TODO(adonovan): fix the following:
-// - append, delete details.
 // - support f(g()) where g has multiple result parameters.
-// - finish emitCompare, emitArith.
-// - banish "untyped" types everywhere except package/universal constants?
 // - concurrent SSA code generation of multiple packages.
-// - consider function-local NamedTypes.
-//   They can have nonempty method-sets due to promotion.  Test.
-// - polish.
-// - tests.
 
 import (
 	"fmt"
@@ -58,10 +49,13 @@ var (
 	tByte       = types.Typ[types.Byte]
 	tFloat32    = types.Typ[types.Float32]
 	tFloat64    = types.Typ[types.Float64]
+	tComplex64  = types.Typ[types.Complex64]
+	tComplex128 = types.Typ[types.Complex128]
 	tInt        = types.Typ[types.Int]
 	tInvalid    = types.Typ[types.Invalid]
 	tUntypedNil = types.Typ[types.UntypedNil]
 	tRangeIter  = &types.Basic{Name: "iter"} // the type of all "range" iterators
+	tEface      = new(types.Interface)
 
 	// The result type of a "select".
 	tSelect = &types.Result{Values: []*types.Var{
@@ -122,6 +116,7 @@ const (
 	LogSource                                    // Show source locations as SSA builder progresses
 	SanityCheckFunctions                         // Perform sanity checking of function bodies
 	UseGCImporter                                // Ignore SourceLoader; use gc-compiled object code for all imports
+	NaiveForm                                    // Build naïve SSA form: don't replace local loads/stores with registers
 )
 
 // NewBuilder creates and returns a new SSA builder.
@@ -162,13 +157,7 @@ func NewBuilder(mode BuilderMode, loader SourceLoader, errh func(error)) *Builde
 	// constants/idents/types maps associated with the containing
 	// package so we can discard them once that package is built.
 	b.typechecker = types.Context{
-		// TODO(adonovan): permit the client to specify these
-		// values.  Perhaps expose the types.Context parameter
-		// directly (though of course we'll have to override
-		// the Expr/Ident/Import callbacks).
-		IntSize: 8,
-		PtrSize: 8,
-		Error:   errh,
+		Error: errh,
 		Expr: func(x ast.Expr, typ types.Type, val interface{}) {
 			b.types[x] = typ
 			if val != nil {
@@ -246,7 +235,7 @@ func (b *Builder) isType(e ast.Expr) bool {
 func (b *Builder) lookup(obj types.Object) (v Value, ok bool) {
 	v, ok = b.globals[obj]
 	if ok {
-		// TODO(adonovan): the build phase should only
+		// TODO(adonovan): opt: the build phase should only
 		// propagate to v if it's in the same package as the
 		// caller of lookup if we want to make this
 		// concurrent.
@@ -386,7 +375,7 @@ func (b *Builder) logicalBinop(fn *Function, e *ast.BinaryExpr) Value {
 
 	// TODO(adonovan): do we need emitConv on each edge?
 	// Test with named boolean types.
-	phi := &Phi{Edges: edges}
+	phi := &Phi{Edges: edges, Comment: e.Op.String()}
 	phi.Type_ = phi.Edges[0].Type()
 	return done.emit(phi)
 }
@@ -517,67 +506,109 @@ func (b *Builder) builtin(fn *Function, name string, args []ast.Expr, typ types.
 			return intLiteral(at.Len)
 		}
 		// Otherwise treat as normal.
+
+	case "panic":
+		fn.emit(&Panic{X: emitConv(fn, b.expr(fn, args[0]), tEface)})
+		fn.currentBlock = fn.newBasicBlock("unreachable")
+		return vFalse // any non-nil Value will do
 	}
 	return nil // treat all others as a regular function call
 }
 
-// demoteSelector returns a SelectorExpr syntax tree that is
-// equivalent to sel but contains no selections of promoted fields.
-// It returns the field index of the explicit (=outermost) selection.
+// selector evaluates the selector expression e and returns its value,
+// or if wantAddr is true, its address, in which case escaping
+// indicates whether the caller intends to use the resulting pointer
+// in a potentially escaping way.
 //
-// pkg is the package in which the reference occurs.  This is
-// significant because a non-exported field is considered distinct
-// from a field of that name in any other package.
-//
-// This is a rather clunky and inefficient implementation, but it
-// (a) is simple and hopefully self-evidently correct and
-// (b) permits us to decouple the demotion from the code generation,
-// the latter being performed in two modes: addr() for lvalues,
-// expr() for rvalues.
-// It does require mutation of Builder.types though; if we want to
-// make the Builder concurrent we'll have to avoid that.
-// TODO(adonovan): emit code directly rather than desugaring the AST.
-//
-func (b *Builder) demoteSelector(sel *ast.SelectorExpr, pkg *Package) (sel2 *ast.SelectorExpr, index int) {
-	id := makeId(sel.Sel.Name, pkg.Types)
-	xtype := b.exprType(sel.X)
-	// fmt.Fprintln(os.Stderr, xtype, id) // debugging
-	st := underlyingType(deref(xtype)).(*types.Struct)
+func (b *Builder) selector(fn *Function, e *ast.SelectorExpr, wantAddr, escaping bool) Value {
+	id := makeId(e.Sel.Name, fn.Pkg.Types)
+	st := underlyingType(deref(b.exprType(e.X))).(*types.Struct)
+	index := -1
 	for i, f := range st.Fields {
 		if IdFromQualifiedName(f.QualifiedName) == id {
-			return sel, i
+			index = i
+			break
 		}
 	}
-	// Not a named field.  Use breadth-first algorithm.
-	path, index := findPromotedField(st, id)
-	if path == nil {
-		panic("field not found, even with promotion: " + sel.Sel.Name)
+	var path *anonFieldPath
+	if index == -1 {
+		// Not a named field.  Use breadth-first algorithm.
+		path, index = findPromotedField(st, id)
+		if path == nil {
+			panic("field not found, even with promotion: " + e.Sel.Name)
+		}
 	}
+	fieldType := b.exprType(e)
+	if wantAddr {
+		return b.fieldAddr(fn, e.X, path, index, fieldType, escaping)
+	}
+	return b.fieldExpr(fn, e.X, path, index, fieldType)
+}
 
-	// makeSelector(e, [C,B,A]) returns (((e.A).B).C).
-	// e is the original selector's base.
-	// This function has no free variables.
-	var makeSelector func(b *Builder, e ast.Expr, path *anonFieldPath) *ast.SelectorExpr
-	makeSelector = func(b *Builder, e ast.Expr, path *anonFieldPath) *ast.SelectorExpr {
-		x := e
-		if path.tail != nil {
-			x = makeSelector(b, e, path.tail)
+// fieldAddr evaluates the base expression (a struct or *struct),
+// applies to it any implicit field selections from path, and then
+// selects the field #index of type fieldType.
+// Its address is returned.
+//
+// (fieldType can be derived from base+index.)
+//
+func (b *Builder) fieldAddr(fn *Function, base ast.Expr, path *anonFieldPath, index int, fieldType types.Type, escaping bool) Value {
+	var x Value
+	if path != nil {
+		switch underlyingType(path.field.Type).(type) {
+		case *types.Struct:
+			x = b.fieldAddr(fn, base, path.tail, path.index, path.field.Type, escaping)
+		case *types.Pointer:
+			x = b.fieldExpr(fn, base, path.tail, path.index, path.field.Type)
 		}
-		sel := &ast.SelectorExpr{
-			X:   x,
-			Sel: &ast.Ident{Name: path.field.Name},
+	} else {
+		switch underlyingType(b.exprType(base)).(type) {
+		case *types.Struct:
+			x = b.addr(fn, base, escaping).(address).addr
+		case *types.Pointer:
+			x = b.expr(fn, base)
 		}
-		b.types[sel] = path.field.Type // TODO(adonovan): fix: not thread-safe
-		return sel
 	}
+	v := &FieldAddr{
+		X:     x,
+		Field: index,
+	}
+	v.setType(pointer(fieldType))
+	return fn.emit(v)
+}
 
-	// Construct new SelectorExpr, bottom up.
-	sel2 = &ast.SelectorExpr{
-		X:   makeSelector(b, sel.X, path),
-		Sel: sel.Sel,
+// fieldExpr evaluates the base expression (a struct or *struct),
+// applies to it any implicit field selections from path, and then
+// selects the field #index of type fieldType.
+// Its value is returned.
+//
+// (fieldType can be derived from base+index.)
+//
+func (b *Builder) fieldExpr(fn *Function, base ast.Expr, path *anonFieldPath, index int, fieldType types.Type) Value {
+	var x Value
+	if path != nil {
+		x = b.fieldExpr(fn, base, path.tail, path.index, path.field.Type)
+	} else {
+		x = b.expr(fn, base)
 	}
-	b.types[sel2] = b.exprType(sel) // TODO(adonovan): fix: not thread-safe
-	return
+	switch underlyingType(x.Type()).(type) {
+	case *types.Struct:
+		v := &Field{
+			X:     x,
+			Field: index,
+		}
+		v.setType(fieldType)
+		return fn.emit(v)
+
+	case *types.Pointer: // *struct
+		v := &FieldAddr{
+			X:     x,
+			Field: index,
+		}
+		v.setType(pointer(fieldType))
+		return emitLoad(fn, fn.emit(v))
+	}
+	panic("unreachable")
 }
 
 // addr lowers a single-result addressable expression e to SSA form,
@@ -637,20 +668,7 @@ func (b *Builder) addr(fn *Function, e ast.Expr, escaping bool) lvalue {
 		}
 
 		// e.f where e is an expression.
-		e, index := b.demoteSelector(e, fn.Pkg)
-		var x Value
-		switch underlyingType(b.exprType(e.X)).(type) {
-		case *types.Struct:
-			x = b.addr(fn, e.X, escaping).(address).addr
-		case *types.Pointer:
-			x = b.expr(fn, e.X)
-		}
-		v := &FieldAddr{
-			X:     x,
-			Field: index,
-		}
-		v.setType(pointer(b.exprType(e)))
-		return address{fn.emit(v)}
+		return address{b.selector(fn, e, true, escaping)}
 
 	case *ast.IndexExpr:
 		var x Value
@@ -779,32 +797,20 @@ func (b *Builder) expr(fn *Function, e ast.Expr) Value {
 			// Type conversion, e.g. string(x) or big.Int(x)
 			return emitConv(fn, b.expr(fn, e.Args[0]), typ)
 		}
-		// Call to "intrinsic" built-ins, e.g. new, make.
-		wasPanic := false
+		// Call to "intrinsic" built-ins, e.g. new, make, panic.
 		if id, ok := e.Fun.(*ast.Ident); ok {
 			obj := b.obj(id)
 			if _, ok := fn.Prog.Builtins[obj]; ok {
 				if v := b.builtin(fn, id.Name, e.Args, typ); v != nil {
 					return v
 				}
-				wasPanic = id.Name == "panic"
 			}
 		}
 		// Regular function call.
 		var v Call
 		b.setCall(fn, e, &v.CallCommon)
 		v.setType(typ)
-		fn.emit(&v)
-
-		// Compile panic as if followed by for{} so that its
-		// successor is unreachable.
-		// TODO(adonovan): consider a dedicated Panic instruction
-		// (in which case, don't forget Go and Defer).
-		if wasPanic {
-			emitSelfLoop(fn)
-			fn.currentBlock = fn.newBasicBlock("unreachable")
-		}
-		return &v
+		return fn.emit(&v)
 
 	case *ast.UnaryExpr:
 		switch e.Op {
@@ -883,33 +889,19 @@ func (b *Builder) expr(fn *Function, e ast.Expr) Value {
 		}
 
 		// (*T).f or T.f, the method f from the method-set of type T.
+		xtype := b.exprType(e.X)
 		if b.isType(e.X) {
 			id := makeId(e.Sel.Name, fn.Pkg.Types)
-			typ := b.exprType(e.X)
-			if m := b.Prog.MethodSet(typ)[id]; m != nil {
+			if m := b.Prog.MethodSet(xtype)[id]; m != nil {
 				return m
 			}
 
 			// T must be an interface; return method thunk.
-			return makeImethodThunk(b.Prog, typ, id)
+			return makeImethodThunk(b.Prog, xtype, id)
 		}
 
 		// e.f where e is an expression.
-		e, index := b.demoteSelector(e, fn.Pkg)
-		switch underlyingType(b.exprType(e.X)).(type) {
-		case *types.Struct:
-			// Non-addressable struct in a register.
-			v := &Field{
-				X:     b.expr(fn, e.X),
-				Field: index,
-			}
-			v.setType(b.exprType(e))
-			return fn.emit(v)
-
-		case *types.Pointer: // *struct
-			// Addressable structs; use FieldAddr and Load.
-			return b.addr(fn, e, false).load(fn)
-		}
+		return b.selector(fn, e, false, false)
 
 	case *ast.IndexExpr:
 		switch t := underlyingType(b.exprType(e.X)).(type) {
@@ -996,7 +988,7 @@ func (b *Builder) setCallFunc(fn *Function, e *ast.CallExpr, c *CallCommon) {
 	// Case 2a: X.f() or (*X).f(): a statically dipatched call to
 	// the method f in the method-set of X or *X.  X may be
 	// an interface.  Treat like case 0.
-	// TODO(adonovan): inline expr() here, to make the call static
+	// TODO(adonovan): opt: inline expr() here, to make the call static
 	// and to avoid generation of a stub for an interface method.
 	if b.isType(sel.X) {
 		c.Func = b.expr(fn, e.Fun)
@@ -1076,7 +1068,7 @@ func (b *Builder) setCall(fn *Function, e *ast.CallExpr, c *CallCommon) {
 	// 3. Ellipsis call f(a, b, rest...) to variadic function.
 	//    'rest' is already a slice; all args treated in the usual manner.
 	// 4. f(g()) where g has >1 return parameters.  f may also be variadic.
-	//    TODO(adonovan): implement.
+	//    TODO(adonovan): fix: implement.
 
 	var args, varargs []ast.Expr = e.Args, nil
 	c.HasEllipsis = e.Ellipsis != 0
@@ -1139,17 +1131,21 @@ func (b *Builder) setCall(fn *Function, e *ast.CallExpr, c *CallCommon) {
 		var bptypes []types.Type // formal parameter types of builtins
 		switch builtin := e.Fun.(*ast.Ident).Name; builtin {
 		case "append":
-			// append([]T, ...T) []T
-			// append([]byte, string...) []byte  // TODO(adonovan): fix: support.
 			// Infer arg types from result type:
 			rt := b.exprType(e)
-			vt = underlyingType(rt).(*types.Slice).Elt // variadic
-			if !c.HasEllipsis {
-				args, varargs = args[:1], args[1:]
-			}
 			bptypes = append(bptypes, rt)
+			if c.HasEllipsis {
+				// 2-arg '...' call form.  No conversions.
+				// append([]T, []T) []T
+				// append([]byte, string) []byte
+			} else {
+				// variadic call form.
+				// append([]T, ...T) []T
+				args, varargs = args[:1], args[1:]
+				vt = underlyingType(rt).(*types.Slice).Elt
+			}
 		case "close":
-			bptypes = append(bptypes, nil) // no conv
+			// no conv
 		case "copy":
 			// copy([]T, []T) int
 			// Infer arg types from each other.  Sleazy.
@@ -1162,22 +1158,33 @@ func (b *Builder) setCall(fn *Function, e *ast.CallExpr, c *CallCommon) {
 			}
 		case "delete":
 			// delete(map[K]V, K)
-			// TODO(adonovan): fix: this is incorrect.
-			bptypes = append(bptypes, nil) // map
-			bptypes = append(bptypes, nil) // key
+			tkey := underlyingType(b.exprType(args[0])).(*types.Map).Key
+			bptypes = append(bptypes, nil)  // map: no conv
+			bptypes = append(bptypes, tkey) // key
 		case "print", "println": // print{,ln}(any, ...any)
-			vt = new(types.Interface) // variadic
+			vt = tEface // variadic
 			if !c.HasEllipsis {
 				args, varargs = args[:1], args[1:]
 			}
 		case "len":
-			bptypes = append(bptypes, nil) // no conv
+			// no conv
 		case "cap":
-			bptypes = append(bptypes, nil) // no conv
+			// no conv
 		case "real", "imag":
-			// TODO(adonovan): fix: apply reverse conversion
-			// to "complex" case below.
-			bptypes = append(bptypes, nil)
+			// Reverse conversion to "complex" case below.
+			// Typechecker, help us out. :(
+			var argType types.Type
+			switch b.exprType(e).(*types.Basic).Kind {
+			case types.UntypedFloat:
+				argType = types.Typ[types.UntypedComplex]
+			case types.Float64:
+				argType = tComplex128
+			case types.Float32:
+				argType = tComplex64
+			default:
+				unreachable()
+			}
+			bptypes = append(bptypes, argType, argType)
 		case "complex":
 			// Typechecker, help us out. :(
 			var argType types.Type
@@ -1193,7 +1200,7 @@ func (b *Builder) setCall(fn *Function, e *ast.CallExpr, c *CallCommon) {
 			}
 			bptypes = append(bptypes, argType, argType)
 		case "panic":
-			bptypes = append(bptypes, new(types.Interface))
+			bptypes = append(bptypes, tEface)
 		case "recover":
 			// no-op
 		default:
@@ -1339,14 +1346,14 @@ func (b *Builder) globalValueSpec(init *Function, spec *ast.ValueSpec, g *Global
 		if !b.nTo1Vars[spec] {
 			b.nTo1Vars[spec] = true
 			if b.mode&LogSource != 0 {
-				fmt.Fprintln(os.Stderr, "build globals", spec.Names) // ugly...
+				defer logStack("build globals %s", spec.Names)()
 			}
 			tuple := b.exprN(init, spec.Values[0])
 			rtypes := tuple.Type().(*types.Result).Values
 			for i, id := range spec.Names {
 				if !isBlankIdent(id) {
 					g := b.globals[b.obj(id)].(*Global)
-					g.spec = nil // just an optimisation
+					g.spec = nil // just an optimization
 					emitStore(init, g,
 						emitExtract(init, tuple, i, rtypes[i].Type))
 				}
@@ -1401,7 +1408,6 @@ func (b *Builder) localValueSpec(fn *Function, spec *ast.ValueSpec) {
 // isDef is true if this is a short variable declaration (:=).
 //
 // Note the similarity with localValueSpec.
-// TODO(adonovan): explain differences.
 //
 func (b *Builder) assignStmt(fn *Function, lhss, rhss []ast.Expr, isDef bool) {
 	// Side effects of all LHSs and RHSs must occur in left-to-right order.
@@ -1425,7 +1431,7 @@ func (b *Builder) assignStmt(fn *Function, lhss, rhss []ast.Expr, isDef bool) {
 		// e.g. x, y = f(), g()
 		if len(lhss) == 1 {
 			// x = type{...}
-			// Optimisation: in-place construction
+			// Optimization: in-place construction
 			// of composite literals.
 			b.exprInPlace(fn, lvals[0], rhss[0])
 		} else {
@@ -1770,7 +1776,7 @@ func (b *Builder) typeSwitchStmt(fn *Function, s *ast.TypeSwitchStmt, label *lbl
 func (b *Builder) selectStmt(fn *Function, s *ast.SelectStmt, label *lblock) {
 	// A blocking select of a single case degenerates to a
 	// simple send or receive.
-	// TODO(adonovan): is this optimisation worth its weight?
+	// TODO(adonovan): opt: is this optimization worth its weight?
 	if len(s.Body.List) == 1 {
 		clause := s.Body.List[0].(*ast.CommClause)
 		if clause.Comm != nil {
@@ -1835,8 +1841,6 @@ func (b *Builder) selectStmt(fn *Function, s *ast.SelectStmt, label *lblock) {
 	// } else {
 	//     ...default...
 	// }
-	//
-	// TODO(adonovan): opt: define and use a multiway dispatch instr.
 	pair := &Select{
 		States:   states,
 		Blocking: blocking,
@@ -2211,7 +2215,6 @@ func (b *Builder) stmt(fn *Function, _s ast.Stmt) {
 	// target is always set; its _break and _continue are set only
 	// within the body of switch/typeswitch/select/for/range.
 	// It is effectively an additional default-nil parameter of stmt().
-	// TODO(adonovan): fix: handle multiple labels on the same stmt.
 	var label *lblock
 start:
 	switch s := _s.(type) {
@@ -2262,14 +2265,14 @@ start:
 
 	case *ast.GoStmt:
 		// The "intrinsics" new/make/len/cap are forbidden here.
-		// panic() is not forbidden, but is not (yet) an intrinsic.
+		// panic is treated like an ordinary function call.
 		var v Go
 		b.setCall(fn, s.Call, &v.CallCommon)
 		fn.emit(&v)
 
 	case *ast.DeferStmt:
 		// The "intrinsics" new/make/len/cap are forbidden here.
-		// panic() is not forbidden, but is not (yet) an intrinsic.
+		// panic is treated like an ordinary function call.
 		var v Defer
 		b.setCall(fn, s.Call, &v.CallCommon)
 		fn.emit(&v)
@@ -2291,6 +2294,10 @@ start:
 		}
 		var results []Value
 		// Per the spec, there are three distinct cases of return.
+		// TODO(adonovan): fix: the design of Ret is incorrect:
+		// deferred procedures may modify named result locations
+		// after "Ret" has loaded its operands, causing the calls's
+		// result to change.  Tricky... rethink.
 		switch {
 		case len(s.Results) == 0:
 			// Return with no arguments.
@@ -2415,6 +2422,10 @@ func (b *Builder) buildFunction(fn *Function) {
 	}
 	if fn.syntax.body == nil {
 		return // Go source function with no body (external)
+	}
+	if fn.Prog.mode&LogSource != 0 {
+		defer logStack("build function %s @ %s",
+			fn.FullName(), fn.Prog.Files.Position(fn.Pos))()
 	}
 	fn.start(b.idents)
 	b.stmt(fn, fn.syntax.body)
@@ -2573,17 +2584,17 @@ func (b *Builder) createPackageImpl(typkg *types.Package, importPath string, fil
 	// The typechecker sets types.Package.Path only for GcImported
 	// packages, since it doesn't know import path until after typechecking is done.
 	// Here we ensure it is always set, since we know the correct path.
-	// TODO(adonovan): eliminate redundant ssa.Package.ImportPath field.
 	if typkg.Path == "" {
 		typkg.Path = importPath
+	} else if typkg.Path != importPath {
+		panic(fmt.Sprintf("%s != %s", typkg.Path, importPath))
 	}
 
 	p := &Package{
-		Prog:       b.Prog,
-		Types:      typkg,
-		ImportPath: importPath,
-		Members:    make(map[string]Member),
-		files:      files,
+		Prog:    b.Prog,
+		Types:   typkg,
+		Members: make(map[string]Member),
+		files:   files,
 	}
 
 	b.packages[typkg] = p
@@ -2680,7 +2691,8 @@ func (b *Builder) buildDecl(pkg *Package, decl ast.Decl) {
 		} else if decl.Recv == nil && id.Name == "init" {
 			// init() block
 			if b.mode&LogSource != 0 {
-				fmt.Fprintln(os.Stderr, "build init block @", b.Prog.Files.Position(decl.Pos()))
+				fmt.Fprintln(os.Stderr, "build init block @",
+					b.Prog.Files.Position(decl.Pos()))
 			}
 			init := pkg.Init
 
@@ -2715,7 +2727,7 @@ func (b *Builder) BuildPackage(p *Package) {
 		return // already done (or nothing to do)
 	}
 	if b.mode&LogSource != 0 {
-		fmt.Fprintln(os.Stderr, "build package", p.ImportPath)
+		defer logStack("build package %s", p.Types.Path)()
 	}
 	init := p.Init
 	init.start(b.idents)
@@ -2766,7 +2778,7 @@ func (b *Builder) BuildPackage(p *Package) {
 	// order.  This causes init() code to be generated in
 	// topological order.  We visit them transitively through
 	// functions of the same package, but we don't treat functions
-	// as roots.  TODO(adonovan): fix: don't visit through other
+	// as roots.  TODO(adonovan): opt: don't visit through other
 	// packages.
 	//
 	// We also ensure all functions and methods are built, even if

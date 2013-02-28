@@ -8,15 +8,21 @@
 
 package main
 
-import "runtime"
+import (
+	"os"
+	"runtime"
+)
 
 func main() {
 	test1()
 	test1WithClosures()
 	test2()
 	test3()
-	test4()
-	test5()
+	// exp/ssa/interp still has some bugs in recover().
+	if os.Getenv("GOSSAINTERP") == "" {
+		test4()
+		test5()
+	}
 	test6()
 	test6WithClosures()
 	test7()
@@ -125,7 +131,7 @@ func test4() {
 
 // Check that closures can set output arguments.
 // Run g().  If it panics, return x; else return deflt.
-func try(g func(), deflt interface{}) (x interface{}) {
+func try(g func (), deflt interface{}) (x interface{}) {
 	defer func() {
 		if v := recover(); v != nil {
 			x = v
@@ -137,7 +143,7 @@ func try(g func(), deflt interface{}) (x interface{}) {
 
 // Check that closures can set output arguments.
 // Run g().  If it panics, return x; else return deflt.
-func try1(g func(), deflt interface{}) (x interface{}) {
+func try1(g func (), deflt interface{}) (x interface{}) {
 	defer func() {
 		if v := recover(); v != nil {
 			x = v

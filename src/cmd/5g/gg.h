@@ -24,6 +24,7 @@ struct	Addr
 	} u;
 
 	Sym*	sym;
+	Sym*	gotype;
 	Node*	node;
 	int	width;
 	uchar	type;
@@ -141,7 +142,7 @@ int	isfat(Type*);
 int	dotaddable(Node*, Node*);
 void	sudoclean(void);
 int	sudoaddable(int, Node*, Addr*, int*);
-void	afunclit(Addr*);
+void	afunclit(Addr*, Node*);
 void	datagostring(Strlit*, Addr*);
 void	split64(Node*, Node*, Node*);
 void	splitclean(void);
@@ -165,7 +166,7 @@ int	Rconv(Fmt*);
 int	Yconv(Fmt*);
 void	listinit(void);
 
-void	zaddr(Biobuf*, Addr*, int);
+void	zaddr(Biobuf*, Addr*, int, int);
 
 #pragma	varargck	type	"D"	Addr*
 #pragma	varargck	type	"M"	Addr*

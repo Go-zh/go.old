@@ -94,7 +94,7 @@ func (c candidate) ptrRecv() bool {
 // building bridge methods as needed for promoted methods.
 // A nil result indicates an empty set.
 //
-// Thread-safe.  TODO(adonovan): explain concurrency invariants in detail.
+// Thread-safe.
 func (p *Program) MethodSet(typ types.Type) MethodSet {
 	if !canHaveConcreteMethods(typ, true) {
 		return nil
@@ -121,7 +121,6 @@ func (p *Program) MethodSet(typ types.Type) MethodSet {
 //
 func buildMethodSet(prog *Program, typ types.Type) MethodSet {
 	if prog.mode&LogSource != 0 {
-		// TODO(adonovan): this isn't quite appropriate for LogSource
 		fmt.Fprintf(os.Stderr, "buildMethodSet %s %T\n", typ, typ)
 	}
 
@@ -264,7 +263,7 @@ func makeBridgeMethod(prog *Program, typ types.Type, cand *candidate) *Function 
 	sig.Recv = &types.Var{Name: "recv", Type: typ}
 
 	if prog.mode&LogSource != 0 {
-		fmt.Fprintf(os.Stderr, "makeBridgeMethod %s, %s, type %s\n", typ, cand, &sig)
+		defer logStack("makeBridgeMethod %s, %s, type %s", typ, cand, &sig)()
 	}
 
 	fn := &Function{
@@ -274,9 +273,12 @@ func makeBridgeMethod(prog *Program, typ types.Type, cand *candidate) *Function 
 	}
 	fn.start(nil)
 	fn.addSpilledParam(sig.Recv)
-	// TODO(adonovan): fix: test variadic case---careful with types.
+	var last *Parameter
 	for _, p := range fn.Signature.Params {
-		fn.addParam(p.Name, p.Type)
+		last = fn.addParam(p.Name, p.Type)
+	}
+	if fn.Signature.IsVariadic {
+		last.Type_ = &types.Slice{Elt: last.Type_}
 	}
 
 	// Each bridge method performs a sequence of selections,
@@ -359,7 +361,7 @@ func makeBridgeMethod(prog *Program, typ types.Type, cand *candidate) *Function 
 //
 func makeImethodThunk(prog *Program, typ types.Type, id Id) *Function {
 	if prog.mode&LogSource != 0 {
-		fmt.Fprintf(os.Stderr, "makeImethodThunk %s.%s\n", typ, id)
+		defer logStack("makeImethodThunk %s.%s", typ, id)()
 	}
 	itf := underlyingType(typ).(*types.Interface)
 	index, meth := methodIndex(itf, itf.Methods, id)
@@ -372,10 +374,14 @@ func makeImethodThunk(prog *Program, typ types.Type, id Id) *Function {
 	// TODO(adonovan): set fn.Pos to location of interface method ast.Field.
 	fn.start(nil)
 	fn.addParam("recv", typ)
-	// TODO(adonovan): fix: test variadic case---careful with types.
+	var last *Parameter
 	for _, p := range fn.Signature.Params {
-		fn.addParam(p.Name, p.Type)
+		last = fn.addParam(p.Name, p.Type)
 	}
+	if fn.Signature.IsVariadic {
+		last.Type_ = &types.Slice{Elt: last.Type_}
+	}
+
 	var c Call
 	c.Method = index
 	c.Recv = fn.Params[0]
@@ -408,7 +414,7 @@ func findPromotedField(st *types.Struct, id Id) (*anonFieldPath, int) {
 	var list, next []*anonFieldPath
 	for i, f := range st.Fields {
 		if f.IsAnonymous {
-			list = append(next, &anonFieldPath{nil, i, f})
+			list = append(list, &anonFieldPath{nil, i, f})
 		}
 	}
 

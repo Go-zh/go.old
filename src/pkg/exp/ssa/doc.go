@@ -32,10 +32,11 @@
 //
 // The builder initially builds a naive SSA form in which all local
 // variables are addresses of stack locations with explicit loads and
-// stores.  If desired, registerisation and φ-node insertion using
-// dominance and dataflow can be performed as a later pass to improve
-// the accuracy and performance of subsequent analyses; this pass is
-// not yet implemented.
+// stores.  Registerisation of eligible locals and φ-node insertion
+// using dominance and dataflow are then performed as a second pass
+// called "lifting" to improve the accuracy and performance of
+// subsequent analyses; this pass can be skipped by setting the
+// NaiveForm builder flag.
 //
 // The program representation constructed by this package is fully
 // resolved internally, i.e. it does not rely on the names of Values,
@@ -93,16 +94,17 @@
 //              t4 = fmt.Println(t3)                                                    (n int, err error)
 //              ret
 //
+//
+// The ssadump utility is an example of an application that loads and
+// dumps the SSA form of a Go program, whether a single package or a
+// whole program.
+//
 // TODO(adonovan): demonstrate more features in the example:
 // parameters and control flow at the least.
 //
 // TODO(adonovan): Consider how token.Pos source location information
 // should be made available generally.  Currently it is only present in
 // Package, Function and CallCommon.
-//
-// TODO(adonovan): Provide an example skeleton application that loads
-// and dumps the SSA form of a program.  Accommodate package-at-a-time
-// vs. whole-program operation.
 //
 // TODO(adonovan): Consider the exceptional control-flow implications
 // of defer and recover().

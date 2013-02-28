@@ -296,7 +296,6 @@ typecheck1(Node **np, int top)
 		}
 
 		typecheckdef(n);
-		n->realtype = n->type;
 		if(n->op == ONONAME)
 			goto error;
 	}
@@ -1533,6 +1532,21 @@ reswitch:
 			fatal("OITAB of %T", t);
 		n->type = ptrto(types[TUINTPTR]);
 		goto ret;
+	
+	case OCLOSUREVAR:
+		ok |= Erv;
+		goto ret;
+	
+	case OCFUNC:
+		ok |= Erv;
+		typecheck(&n->left, Erv);
+		n->type = types[TUINTPTR];
+		goto ret;
+
+	case OCONVNOP:
+		ok |= Erv;
+		typecheck(&n->left, Erv);
+		goto ret;
 
 	/*
 	 * statements
@@ -2340,13 +2354,12 @@ typecheckcomplit(Node **np)
 			yyerror("invalid pointer type %T for composite literal (use &%T instead)", t, t->type);
 			goto error;
 		}
-		
 		// Also, the underlying type must be a struct, map, slice, or array.
 		if(!iscomptype(t)) {
 			yyerror("invalid pointer type %T for composite literal", t);
 			goto error;
 		}
-		t = t->type;		
+		t = t->type;
 	}
 
 	switch(t->etype) {
@@ -2400,6 +2413,9 @@ typecheckcomplit(Node **np)
 		if(t->bound < 0)
 			n->right = nodintconst(len);
 		n->op = OARRAYLIT;
+		// restore implicitness.
+		if(isptr[n->type->etype])
+			n->right->implicit = 1;
 		break;
 
 	case TMAP:

@@ -224,6 +224,8 @@ regopt(Prog *firstp)
 		case AGLOBL:
 		case ANAME:
 		case ASIGNAME:
+		case ALOCALS:
+		case ATYPE:
 			continue;
 		}
 		r = rega();
@@ -870,7 +872,6 @@ addmove(Reg *r, int bn, int rn, int f)
 	a->offset = v->offset;
 	a->etype = v->etype;
 	a->type = v->name;
-	a->gotype = v->gotype;
 	a->node = v->node;
 	a->sym = v->node->sym;
 
@@ -1054,7 +1055,6 @@ mkvar(Reg *r, Adr *a)
 	v = var+i;
 	v->offset = o;
 	v->name = n;
-	v->gotype = a->gotype;
 	v->etype = et;
 	v->width = w;
 	v->addr = flag;		// funny punning

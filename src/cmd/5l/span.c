@@ -830,8 +830,10 @@ buildop(void)
 		case ARFE:
 		case ATEXT:
 		case AUSEFIELD:
+		case ALOCALS:
 		case ACASE:
 		case ABCASE:
+		case ATYPE:
 			break;
 		case AADDF:
 			oprange[AADDD] = oprange[r];

@@ -14,325 +14,314 @@
 	这样可以避免与模版生成的属性（有点类似于Go的标识符）发生冲突。
 -->
 {{with .PDoc}}
-	{{if not $.IsMain}}
-		<div id="short-nav">
-			<dl>
-			<dd><code>import "{{html .ImportPath}}"</code></dd>
-			</dl>
-			<dl>
-			<!--
-			<dd><a href="#pkg-overview" class="overviewLink">Overview</a></dd>
-			-->
-			<dd><a href="#pkg-overview" class="overviewLink">概述</a></dd>
-			<!--
-			<dd><a href="#pkg-index" class="indexLink">Index</a></dd>
-			-->
-			<dd><a href="#pkg-index" class="indexLink">索引</a></dd>
-			{{if $.Examples}}
-				<!--
-				<dd><a href="#pkg-examples" class="examplesLink">Examples</a></dd>
-				-->
-				<dd><a href="#pkg-examples" class="examplesLink">示例</a></dd>
-			{{end}}
-			{{if $.Dirs}}
-				<!--
-				<dd><a href="#pkg-subdirectories">Subdirectories</a></dd>
-				-->
-				<dd><a href="#pkg-subdirectories">子目录</a></dd>
-			{{end}}
-			</dl>
-		</div>
-		<!-- The package's Name is printed as title by the top-level template -->
-		<!-- 包的名称会被顶级模版作为标题打印出来 -->
-		<div id="pkg-overview" class="toggleVisible">
-			<div class="collapsed">
-				<!--
-				<h2 class="toggleButton" title="Click to show Overview section">Overview ▹</h2>
-				-->
-				<h2 class="toggleButton" title="点击显示“概述”一节">概述 ▹</h2>
-			</div>
-			<div class="expanded">
-				<!--
-				<h2 class="toggleButton" title="Click to hide Overview section">Overview ▾</h2>
-				-->
-				<h2 class="toggleButton" title="点击隐藏“概述”一节">概述 ▾</h2>
-				{{comment_html .Doc}}
-			</div>
-		</div>
-		{{example_html "" $.Examples $.FSet}}
+{{if not $.IsMain}}
+<div id="short-nav">
+    <dl>
+        <dd><code>import "{{html .ImportPath}}"</code></dd>
+    </dl>
+    <dl>
+        <!--
+        <dd><a href="#pkg-overview" class="overviewLink">Overview</a></dd>
+        -->
+        <dd><a href="#pkg-overview" class="overviewLink">概述</a></dd>
+        <!--
+        <dd><a href="#pkg-index" class="indexLink">Index</a></dd>
+        -->
+        <dd><a href="#pkg-index" class="indexLink">索引</a></dd>
+        {{if $.Examples}}
+        <!--
+        <dd><a href="#pkg-examples" class="examplesLink">Examples</a></dd>
+        -->
+        <dd><a href="#pkg-examples" class="examplesLink">示例</a></dd>
+        {{end}}
+        {{if $.Dirs}}
+        <!--
+        <dd><a href="#pkg-subdirectories">Subdirectories</a></dd>
+        -->
+        <dd><a href="#pkg-subdirectories">子目录</a></dd>
+        {{end}}
+    </dl>
+</div>
+<!-- The package's Name is printed as title by the top-level template -->
+<!-- 包的名称会被顶级模版作为标题打印出来 -->
+<div id="pkg-overview" class="toggleVisible">
+    <div class="collapsed">
+        <!--
+        <h2 class="toggleButton" title="Click to show Overview section">Overview ▹</h2>
+        -->
+        <h2 class="toggleButton" title="点击显示“概述”一节">概述 ▹</h2>
+    </div>
+    <div class="expanded">
+        <!--
+        <h2 class="toggleButton" title="Click to hide Overview section">Overview ▾</h2>
+        -->
+        <h2 class="toggleButton" title="点击隐藏“概述”一节">概述 ▾</h2>
+        {{comment_html .Doc}}
+    </div>
+</div>
+{{example_html "" $.Examples $.FSet}}
 
-		<div id="pkg-index" class="toggleVisible">
-		<div class="collapsed">
-			<!--
-			<h2 class="toggleButton" title="Click to show Index section">Index ▹</h2>
-			-->
-			<h2 class="toggleButton" title="点击显示“索引”一节">索引 ▹</h2>
-		</div>
-		<div class="expanded">
-			<!--
-			<h2 class="toggleButton" title="Click to hide Index section">Index ▾</h2>
-			-->
-			<h2 class="toggleButton" title="点击隐藏“索引”一节">索引 ▾</h2>
+<div id="pkg-index" class="toggleVisible">
+    <div class="collapsed">
+        <!--
+        <h2 class="toggleButton" title="Click to show Index section">Index ▹</h2>
+        -->
+        <h2 class="toggleButton" title="点击显示“索引”一节">索引 ▹</h2>
+    </div>
+    <div class="expanded">
+        <!--
+        <h2 class="toggleButton" title="Click to hide Index section">Index ▾</h2>
+        -->
+        <h2 class="toggleButton" title="点击隐藏“索引”一节">索引 ▾</h2>
 
-		<!-- Table of contents for API; must be named manual-nav to turn off auto nav. -->
-		<!-- 为API列出表格；必须命名为manual-nav来关闭自动导航。 -->
-			<div id="manual-nav">
-			<dl>
-			{{if .Consts}}
-				<!--
-				<dd><a href="#pkg-constants">Constants</a></dd>
-				-->
-				<dd><a href="#pkg-constants">常量</a></dd>
-			{{end}}
-			{{if .Vars}}
-				<!--
-				<dd><a href="#pkg-variables">Variables</a></dd>
-				-->
-				<dd><a href="#pkg-variables">变量</a></dd>
-			{{end}}
-			{{range .Funcs}}
-				{{$name_html := html .Name}}
-				<dd><a href="#{{$name_html}}">{{node_html .Decl $.FSet}}</a></dd>
-			{{end}}
-			{{range .Types}}
-				{{$tname_html := html .Name}}
-				<dd><a href="#{{$tname_html}}">type {{$tname_html}}</a></dd>
-				{{range .Funcs}}
-					{{$name_html := html .Name}}
-					<dd>&nbsp; &nbsp; <a href="#{{$name_html}}">{{node_html .Decl $.FSet}}</a></dd>
-				{{end}}
-				{{range .Methods}}
-					{{$name_html := html .Name}}
-					<dd>&nbsp; &nbsp; <a href="#{{$tname_html}}.{{$name_html}}">{{node_html .Decl $.FSet}}</a></dd>
-				{{end}}
-			{{end}}
-			{{if .Bugs}}
-				<!--
-				<dd><a href="#pkg-bugs">Bugs</a></dd>
-				-->
-				<dd><a href="#pkg-bugs">缺陷</a></dd>
-			{{end}}
-			{{if .Notes}}
-                                {{range $marker, $item := .Notes}}
-				<dd><a href="#pkg-{{$marker}}">{{$marker}}</a></dd>
-                                {{end}}
-			{{end}}
-			</dl>
-			</div><!-- #manual-nav -->
+        <!-- Table of contents for API; must be named manual-nav to turn off auto nav. -->
+        <!-- 为API列出表格；必须命名为manual-nav来关闭自动导航。 -->
+        <div id="manual-nav">
+            <dl>
+                {{if .Consts}}
+                <!--
+                <dd><a href="#pkg-constants">Constants</a></dd>
+                -->
+                <dd><a href="#pkg-constants">常量</a></dd>
+                {{end}}
+                {{if .Vars}}
+                <!--
+                <dd><a href="#pkg-variables">Variables</a></dd>
+                -->
+                <dd><a href="#pkg-variables">变量</a></dd>
+                {{end}}
+                {{range .Funcs}}
+                {{$name_html := html .Name}}
+                <dd><a href="#{{$name_html}}">{{node_html .Decl $.FSet}}</a></dd>
+                {{end}}
+                {{range .Types}}
+                {{$tname_html := html .Name}}
+                <dd><a href="#{{$tname_html}}">type {{$tname_html}}</a></dd>
+                {{range .Funcs}}
+                {{$name_html := html .Name}}
+                <dd>&nbsp; &nbsp; <a href="#{{$name_html}}">{{node_html .Decl $.FSet}}</a></dd>
+                {{end}}
+                {{range .Methods}}
+                {{$name_html := html .Name}}
+                <dd>&nbsp; &nbsp; <a href="#{{$tname_html}}.{{$name_html}}">{{node_html .Decl $.FSet}}</a></dd>
+                {{end}}
+                {{end}}
+                {{if $.Notes}}
+                {{range $marker, $item := $.Notes}}
+                <dd><a href="#pkg-note-{{$marker}}">{{noteTitle $marker | html}}s</a></dd>
+                {{end}}
+                {{end}}
+            </dl>
+        </div>
+        <!-- #manual-nav -->
 
-		{{if $.Examples}}
-		<div id="pkg-examples">
-			<!--
-			<h4>Examples</h4>
-			-->
-			<h4>示例</h4>
-			<dl>
-			{{range $.Examples}}
-			<dd><a class="exampleLink" href="#example_{{.Name}}">{{example_name .Name}}</a></dd>
-			{{end}}
-			</dl>
-		</div>
-		{{end}}
+        {{if $.Examples}}
+        <div id="pkg-examples">
+            <!--
+            <h4>Examples</h4>
+            -->
+            <h4>示例</h4>
+            <dl>
+                {{range $.Examples}}
+                <dd><a class="exampleLink" href="#example_{{.Name}}">{{example_name .Name}}</a></dd>
+                {{end}}
+            </dl>
+        </div>
+        {{end}}
 
-		{{with .Filenames}}
-			<!--
-			<h4>Package files</h4>
-			-->
-			<h4>包文件</h4>
-			<p>
+        {{with .Filenames}}
+        <!--
+        <h4>Package files</h4>
+        -->
+        <h4>包文件</h4>
+
+        <p>
 			<span style="font-size:90%">
 			{{range .}}
 				<a href="{{.|srcLink|html}}">{{.|filename|html}}</a>
 			{{end}}
 			</span>
-			</p>
-		{{end}}
-		</div><!-- .expanded -->
-		</div><!-- #pkg-index -->
+        </p>
+        {{end}}
+    </div>
+    <!-- .expanded -->
+</div><!-- #pkg-index -->
 
-		{{with .Consts}}
-			<!--
-			<h2 id="pkg-constants">Constants</h2>
-			-->
-			<h2 id="pkg-constants">常量</h2>
-			{{range .}}
-				<pre>{{node_html .Decl $.FSet}}</pre>
-				{{comment_html .Doc}}
-			{{end}}
-		{{end}}
-		{{with .Vars}}
-			<!--
-			<h2 id="pkg-variables">Variables</h2>
-			-->
-			<h2 id="pkg-variables">变量</h2>
-			{{range .}}
-				<pre>{{node_html .Decl $.FSet}}</pre>
-				{{comment_html .Doc}}
-			{{end}}
-		{{end}}
-		{{range .Funcs}}
-			{{/* Name is a string - no need for FSet */}}
-			{{$name_html := html .Name}}
-			<h2 id="{{$name_html}}">func <a href="{{posLink_url .Decl $.FSet}}">{{$name_html}}</a></h2>
-			<pre>{{node_html .Decl $.FSet}}</pre>
-			{{comment_html .Doc}}
-			{{example_html .Name $.Examples $.FSet}}
-		{{end}}
-		{{range .Types}}
-			{{$tname := .Name}}
-			{{$tname_html := html .Name}}
-			<h2 id="{{$tname_html}}">type <a href="{{posLink_url .Decl $.FSet}}">{{$tname_html}}</a></h2>
-			<pre>{{node_html .Decl $.FSet}}</pre>
-			{{comment_html .Doc}}
+{{with .Consts}}
+<!--
+<h2 id="pkg-constants">Constants</h2>
+-->
+<h2 id="pkg-constants">常量</h2>
+{{range .}}
+<pre>{{node_html .Decl $.FSet}}</pre>
+{{comment_html .Doc}}
+{{end}}
+{{end}}
+{{with .Vars}}
+<!--
+<h2 id="pkg-variables">Variables</h2>
+-->
+<h2 id="pkg-variables">变量</h2>
+{{range .}}
+<pre>{{node_html .Decl $.FSet}}</pre>
+{{comment_html .Doc}}
+{{end}}
+{{end}}
+{{range .Funcs}}
+{{/* Name is a string - no need for FSet */}}
+{{$name_html := html .Name}}
+<h2 id="{{$name_html}}">func <a href="{{posLink_url .Decl $.FSet}}">{{$name_html}}</a></h2>
+<pre>{{node_html .Decl $.FSet}}</pre>
+{{comment_html .Doc}}
+{{example_html .Name $.Examples $.FSet}}
+{{end}}
+{{range .Types}}
+{{$tname := .Name}}
+{{$tname_html := html .Name}}
+<h2 id="{{$tname_html}}">type <a href="{{posLink_url .Decl $.FSet}}">{{$tname_html}}</a></h2>
+<pre>{{node_html .Decl $.FSet}}</pre>
+{{comment_html .Doc}}
 
-			{{range .Consts}}
-				<pre>{{node_html .Decl $.FSet}}</pre>
-				{{comment_html .Doc}}
-			{{end}}
+{{range .Consts}}
+<pre>{{node_html .Decl $.FSet}}</pre>
+{{comment_html .Doc}}
+{{end}}
 
-			{{range .Vars}}
-				<pre>{{node_html .Decl $.FSet}}</pre>
-				{{comment_html .Doc}}
-			{{end}}
+{{range .Vars}}
+<pre>{{node_html .Decl $.FSet}}</pre>
+{{comment_html .Doc}}
+{{end}}
 
-			{{example_html $tname $.Examples $.FSet}}
+{{example_html $tname $.Examples $.FSet}}
 
-			{{range .Funcs}}
-				{{$name_html := html .Name}}
-				<h3 id="{{$name_html}}">func <a href="{{posLink_url .Decl $.FSet}}">{{$name_html}}</a></h3>
-				<pre>{{node_html .Decl $.FSet}}</pre>
-				{{comment_html .Doc}}
-				{{example_html .Name $.Examples $.FSet}}
-			{{end}}
+{{range .Funcs}}
+{{$name_html := html .Name}}
+<h3 id="{{$name_html}}">func <a href="{{posLink_url .Decl $.FSet}}">{{$name_html}}</a></h3>
+<pre>{{node_html .Decl $.FSet}}</pre>
+{{comment_html .Doc}}
+{{example_html .Name $.Examples $.FSet}}
+{{end}}
 
-			{{range .Methods}}
-				{{$name_html := html .Name}}
-				<h3 id="{{$tname_html}}.{{$name_html}}">func ({{html .Recv}}) <a href="{{posLink_url .Decl $.FSet}}">{{$name_html}}</a></h3>
-				<pre>{{node_html .Decl $.FSet}}</pre>
-				{{comment_html .Doc}}
-				{{$name := printf "%s_%s" $tname .Name}}
-				{{example_html $name $.Examples $.FSet}}
-			{{end}}
-		{{end}}
-	{{else}}  {{/* not a package; is a command */}}
-		{{comment_html .Doc}}
-	{{end}}
-
-	{{with .Bugs}}
-		<!--
-		<h2 id="pkg-bugs">Bugs</h2>
-		-->
-		<h2 id="pkg-bugs">缺陷</h2>
-		{{range .}}
-		{{comment_html .}}
-		{{end}}
-	{{end}}
-	{{with .Notes}}
-                {{range $marker, $content := .}}
-		    <h2 id="pkg-{{$marker}}">{{$marker}}</h2>
-		    {{range .}}
-		    {{comment_html .}}
-                    {{end}}
-		{{end}}
-	{{end}}
+{{range .Methods}}
+{{$name_html := html .Name}}
+<h3 id="{{$tname_html}}.{{$name_html}}">func ({{html .Recv}}) <a href="{{posLink_url .Decl $.FSet}}">{{$name_html}}</a>
+</h3>
+<pre>{{node_html .Decl $.FSet}}</pre>
+{{comment_html .Doc}}
+{{$name := printf "%s_%s" $tname .Name}}
+{{example_html $name $.Examples $.FSet}}
+{{end}}
+{{end}}
+{{else}}  {{/* not a package; is a command */}}
+{{comment_html .Doc}}
+{{end}}
+{{with $.Notes}}
+{{range $marker, $content := .}}
+<h2 id="pkg-note-{{$marker}}">{{noteTitle $marker | html}}s</h2>
+{{range .}}
+{{comment_html .}}
+{{end}}
+{{end}}
+{{end}}
 {{end}}
 
 {{with .PAst}}
-	<pre>{{node_html . $.FSet}}</pre>
+<pre>{{node_html . $.FSet}}</pre>
 {{end}}
 
 {{with .Dirs}}
-	{{/* DirList entries are numbers and strings - no need for FSet */}}
-	{{if $.PDoc}}
-		<!--
-		<h2 id="pkg-subdirectories">Subdirectories</h2>
-		-->
-		<h2 id="pkg-subdirectories">子目录</h2>
-	{{else}}
-		<div class="pkgGopher">
-			<img class="gopher" src="/doc/gopher/pkg.png"/>
-		</div>
-	{{end}}
-	<table class="dir">
-	<tr>
-	<!--
-	<th>Name</th>
-	-->
-	<th>名称</th>
-	<th>&nbsp;&nbsp;&nbsp;&nbsp;</th>
-	<!--
-	<th style="text-align: left; width: auto">Synopsis</th>
-	-->
-	<th style="text-align: left; width: auto">简介</th>
-	</tr>
-	{{if not $.DirFlat}}
-		<tr>
-		<td><a href="..">..</a></td>
-		</tr>
-	{{end}}
-	{{range .List}}
-		{{if $.DirFlat}}
-			{{if .HasPkg}}
-				<tr>
-				<td class="name"><a href="{{html .Path}}/">{{html .Path}}</a></td>
-				<td>&nbsp;&nbsp;&nbsp;&nbsp;</td>
-				<td style="width: auto">{{html .Synopsis}}</td>
-				</tr>
-			{{end}}
-		{{else}}
-			<tr>
-			<td class="name">{{repeat `&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;` .Depth}}<a href="{{html .Path}}/">{{html .Name}}</a></td>
-			<td>&nbsp;&nbsp;&nbsp;&nbsp;</td>
-			<td style="width: auto">{{html .Synopsis}}</td>
-			</tr>
-		{{end}}
-	{{end}}
-	</table>
-	{{if $.PDoc}}{{else}}
-	<!--
-	<p>Need more packages? Take a look at the <a href="http://code.google.com/p/go-wiki/wiki/Projects">Go Projects wiki page</a>.</p>
-	-->
-	<p>需要更多包？瞧瞧<a href="http://code.google.com/p/go-wiki/wiki/Projects">Go项目维基页面</a>吧！</p>
-	{{end}}
+{{/* DirList entries are numbers and strings - no need for FSet */}}
+{{if $.PDoc}}
+<!--
+<h2 id="pkg-subdirectories">Subdirectories</h2>
+-->
+<h2 id="pkg-subdirectories">子目录</h2>
+{{else}}
+<div class="pkgGopher">
+    <img class="gopher" src="/doc/gopher/pkg.png"/>
+</div>
+{{end}}
+<table class="dir">
+    <tr>
+        <!--
+        <th>Name</th>
+        -->
+        <th>名称</th>
+        <th>&nbsp;&nbsp;&nbsp;&nbsp;</th>
+        <!--
+        <th style="text-align: left; width: auto">Synopsis</th>
+        -->
+        <th style="text-align: left; width: auto">简介</th>
+    </tr>
+    {{if not $.DirFlat}}
+    <tr>
+        <td><a href="..">..</a></td>
+    </tr>
+    {{end}}
+    {{range .List}}
+    {{if $.DirFlat}}
+    {{if .HasPkg}}
+    <tr>
+        <td class="name"><a href="{{html .Path}}/">{{html .Path}}</a></td>
+        <td>&nbsp;&nbsp;&nbsp;&nbsp;</td>
+        <td style="width: auto">{{html .Synopsis}}</td>
+    </tr>
+    {{end}}
+    {{else}}
+    <tr>
+        <td class="name">{{repeat `&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;` .Depth}}<a href="{{html .Path}}/">{{html .Name}}</a>
+        </td>
+        <td>&nbsp;&nbsp;&nbsp;&nbsp;</td>
+        <td style="width: auto">{{html .Synopsis}}</td>
+    </tr>
+    {{end}}
+    {{end}}
+</table>
+{{if $.PDoc}}{{else}}
+<!--
+<p>Need more packages? Take a look at the <a href="http://code.google.com/p/go-wiki/wiki/Projects">Go Projects wiki page</a>.</p>
+-->
+<p>需要更多包？瞧瞧<a href="http://code.google.com/p/go-wiki/wiki/Projects">Go项目维基页面</a>吧！</p>
+{{end}}
 {{end}}
 
 {{if $.Examples}}
 <script>
-$(document).ready(function() {
-	'use strict';
-	// Set up playground when each element is toggled.
-	$('div.play').each(function (i, el) {
-		var built = false;
-		$(el).closest('.toggle').click(function() {
-			// Only set up playground once.
-			if (built) {
-				return;
-			}
-			built = true;
+    $(document).ready(function () {
+        'use strict';
+        // Set up playground when each element is toggled.
+        $('div.play').each(function (i, el) {
+            var built = false;
+            $(el).closest('.toggle').click(function () {
+                // Only set up playground once.
+                if (built) {
+                    return;
+                }
+                built = true;
 
-			// Set up playground.
-			var code = $('.code', el);
-			playground({
-				'codeEl':   code,
-				'outputEl': $('.output', el),
-				'runEl':    $('.run', el),
-				'fmtEl':    $('.fmt', el),
-				'shareEl':  $('.share', el),
-				'shareRedirect': 'http://play.golang.org/p/'
-			});
+                // Set up playground.
+                var code = $('.code', el);
+                playground({
+                    'codeEl': code,
+                    'outputEl': $('.output', el),
+                    'runEl': $('.run', el),
+                    'fmtEl': $('.fmt', el),
+                    'shareEl': $('.share', el),
+                    'shareRedirect': 'http://play.golang.org/p/'
+                });
 
-			// Make the code textarea resize to fit content.
-			var resize = function() {
-				code.height(0);
-				var h = code[0].scrollHeight;
-				code.height(h+20); // minimize bouncing
-				code.closest('.input').height(h);
-			};
-			code.on('keydown', resize);
-			code.on('keyup', resize);
-			code.keyup(); // resize now.
-		});
-	});
-});
+                // Make the code textarea resize to fit content.
+                var resize = function () {
+                    code.height(0);
+                    var h = code[0].scrollHeight;
+                    code.height(h + 20); // minimize bouncing
+                    code.closest('.input').height(h);
+                };
+                code.on('keydown', resize);
+                code.on('keyup', resize);
+                code.keyup(); // resize now.
+            });
+        });
+    });
 </script>
 {{end}}

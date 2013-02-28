@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime"
 	"sync"
 )
 
@@ -248,7 +249,7 @@ var ErrNoRows = errors.New("sql: no rows in result set")
 // either do not share a *DB between multiple concurrent goroutines or
 // create and observe all state only within a transaction. Once
 // DB.Open is called, the returned Tx is bound to a single isolated
-// connection. Once Tx.Commit or Tx.Rollback is called, that
+// connection. Once Tx.Commit or <Tx class="Rollbac"></Tx>k is called, that
 // connection is returned to DB's idle connection pool.
 
 // DB是一个数据库处理器。它能很安全地被多个goroutines并发调用。
@@ -261,9 +262,66 @@ type DB struct {
 	driver driver.Driver
 	dsn    string
 
-	mu       sync.Mutex // protects freeConn and closed // 用来保护freeConn和closed属性的
-	freeConn []driver.Conn
-	closed   bool
+	mu        sync.Mutex           // protects following fields // 用于保护以下字段
+	outConn   map[driver.Conn]bool // whether the conn is in use // conn 是否正在使用
+	freeConn  []driver.Conn
+	closed    bool
+	dep       map[finalCloser]depSet
+	onConnPut map[driver.Conn][]func() // code (with mu held) run when conn is next returned // 当 conn 下一次返回后，代码（与 mu 一起）运行。
+	lastPut   map[driver.Conn]string   // stacktrace of last conn's put; debug only // conn 输出的最近一次栈跟踪；仅用于调试。
+}
+
+// depSet is a finalCloser's outstanding dependencies
+type depSet map[interface{}]bool // set of true bools
+
+// The finalCloser interface is used by (*DB).addDep and (*DB).get
+type finalCloser interface {
+	// finalClose is called when the reference count of an object
+	// goes to zero. (*DB).mu is not held while calling it.
+	finalClose() error
+}
+
+// addDep notes that x now depends on dep, and x's finalClose won't be
+// called until all of x's dependencies are removed with removeDep.
+func (db *DB) addDep(x finalCloser, dep interface{}) {
+	//println(fmt.Sprintf("addDep(%T %p, %T %p)", x, x, dep, dep))
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if db.dep == nil {
+		db.dep = make(map[finalCloser]depSet)
+	}
+	xdep := db.dep[x]
+	if xdep == nil {
+		xdep = make(depSet)
+		db.dep[x] = xdep
+	}
+	xdep[dep] = true
+}
+
+// removeDep notes that x no longer depends on dep.
+// If x still has dependencies, nil is returned.
+// If x no longer has any dependencies, its finalClose method will be
+// called and its error value will be returned.
+func (db *DB) removeDep(x finalCloser, dep interface{}) error {
+	//println(fmt.Sprintf("removeDep(%T %p, %T %p)", x, x, dep, dep))
+	done := false
+
+	db.mu.Lock()
+	xdep := db.dep[x]
+	if xdep != nil {
+		delete(xdep, dep)
+		if len(xdep) == 0 {
+			delete(db.dep, x)
+			done = true
+		}
+	}
+	db.mu.Unlock()
+
+	if !done {
+		return nil
+	}
+	//println(fmt.Sprintf("calling final close on %T %v (%#v)", x, x, x))
+	return x.finalClose()
 }
 
 // Open opens a database specified by its database driver name and a
@@ -278,11 +336,20 @@ type DB struct {
 //
 // 多数用户通过指定的驱动连接辅助函数来打开一个数据库。打开数据库之后会返回*DB。
 func Open(driverName, dataSourceName string) (*DB, error) {
-	driver, ok := drivers[driverName]
+	driveri, ok := drivers[driverName]
 	if !ok {
 		return nil, fmt.Errorf("sql: unknown driver %q (forgotten import?)", driverName)
 	}
-	return &DB{driver: driver, dsn: dataSourceName}, nil
+	// TODO: optionally proactively connect to a Conn to check
+	// the dataSourceName: golang.org/issue/4804
+	db := &DB{
+		driver:    driveri,
+		dsn:       dataSourceName,
+		outConn:   make(map[driver.Conn]bool),
+		lastPut:   make(map[driver.Conn]string),
+		onConnPut: make(map[driver.Conn][]func()),
+	}
+	return db, nil
 }
 
 // Close closes the database, releasing any open resources.
@@ -322,22 +389,38 @@ func (db *DB) conn() (driver.Conn, error) {
 	if n := len(db.freeConn); n > 0 {
 		conn := db.freeConn[n-1]
 		db.freeConn = db.freeConn[:n-1]
+		db.outConn[conn] = true
 		db.mu.Unlock()
 		return conn, nil
 	}
 	db.mu.Unlock()
-	return db.driver.Open(db.dsn)
+	conn, err := db.driver.Open(db.dsn)
+	if err == nil {
+		db.mu.Lock()
+		db.outConn[conn] = true
+		db.mu.Unlock()
+	}
+	return conn, err
 }
 
+// connIfFree returns (wanted, true) if wanted is still a valid conn and
+// isn't in use.
+//
+// If wanted is valid but in use, connIfFree returns (wanted, false).
+// If wanted is invalid, connIfFre returns (nil, false).
 func (db *DB) connIfFree(wanted driver.Conn) (conn driver.Conn, ok bool) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+	if db.outConn[wanted] {
+		return conn, false
+	}
 	for i, conn := range db.freeConn {
 		if conn != wanted {
 			continue
 		}
 		db.freeConn[i] = db.freeConn[len(db.freeConn)-1]
 		db.freeConn = db.freeConn[:len(db.freeConn)-1]
+		db.outConn[wanted] = true
 		return wanted, true
 	}
 	return nil, false
@@ -348,17 +431,55 @@ func (db *DB) connIfFree(wanted driver.Conn) (conn driver.Conn, ok bool) {
 // putConnHook是一个测试使用的钩子。
 var putConnHook func(*DB, driver.Conn)
 
+// noteUnusedDriverStatement notes that si is no longer used and should
+// be closed whenever possible (when c is next not in use), unless c is
+// already closed.
+func (db *DB) noteUnusedDriverStatement(c driver.Conn, si driver.Stmt) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if db.outConn[c] {
+		db.onConnPut[c] = append(db.onConnPut[c], func() {
+			si.Close()
+		})
+	} else {
+		si.Close()
+	}
+}
+
+// debugGetPut determines whether getConn & putConn calls' stack traces
+// are returned for more verbose crashes.
+const debugGetPut = false
+
 // putConn adds a connection to the db's free pool.
 // err is optionally the last error that occurred on this connection.
 
 // putConn将连接加入到数据库的空置池中。
 // error是连接过程中最后遇到的错误。
 func (db *DB) putConn(c driver.Conn, err error) {
+	db.mu.Lock()
+	if !db.outConn[c] {
+		if debugGetPut {
+			fmt.Printf("putConn(%v) DUPLICATE was: %s\n\nPREVIOUS was: %s", c, stack(), db.lastPut[c])
+		}
+		panic("sql: connection returned that was never out")
+	}
+	if debugGetPut {
+		db.lastPut[c] = stack()
+	}
+	delete(db.outConn, c)
+
+	if fns, ok := db.onConnPut[c]; ok {
+		for _, fn := range fns {
+			fn()
+		}
+		delete(db.onConnPut, c)
+	}
+
 	if err == driver.ErrBadConn {
 		// Don't reuse bad connections.
+		db.mu.Unlock()
 		return
 	}
-	db.mu.Lock()
 	if putConnHook != nil {
 		putConnHook(db, c)
 	}
@@ -373,9 +494,12 @@ func (db *DB) putConn(c driver.Conn, err error) {
 	c.Close()
 }
 
-// Prepare creates a prepared statement for later execution.
+// Prepare creates a prepared statement for later queries or executions.
+// Multiple queries or executions may be run concurrently from the
+// returned statement.
 
-// Prepare为后面的执行操作事先定义了声明。
+// Prepare 为以后的查询或执行操作事先创建了语句。
+// 多个查询或执行操作可在返回的语句中并发地运行。
 func (db *DB) Prepare(query string) (*Stmt, error) {
 	var stmt *Stmt
 	var err error
@@ -388,7 +512,7 @@ func (db *DB) Prepare(query string) (*Stmt, error) {
 	return stmt, err
 }
 
-func (db *DB) prepare(query string) (stmt *Stmt, err error) {
+func (db *DB) prepare(query string) (*Stmt, error) {
 	// TODO: check if db.driver supports an optional
 	// driver.Preparer interface and call that instead, if so,
 	// otherwise we make a prepared statement that's bound
@@ -399,19 +523,17 @@ func (db *DB) prepare(query string) (stmt *Stmt, err error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		db.putConn(ci, err)
-	}()
-
 	si, err := ci.Prepare(query)
 	if err != nil {
+		db.putConn(ci, err)
 		return nil, err
 	}
-	stmt = &Stmt{
+	stmt := &Stmt{
 		db:    db,
 		query: query,
 		css:   []connStmt{{ci, si}},
 	}
+	db.addDep(stmt, stmt)
 	return stmt, nil
 }
 
@@ -845,6 +967,8 @@ type Stmt struct {
 	query     string // that created the Stmt	// 什么样的查询建立了这个Stmt
 	stickyErr error  // if non-nil, this error is returned for all operations  // 如果是非空的话，所有操作都会返回这个错误。
 
+	closemu sync.RWMutex // held exclusively during close, for read otherwise.
+
 	// If in a transaction, else both nil:
 
 	// 只有在事务中，者两个值才都非空，其他情况下都是空的：
@@ -869,6 +993,8 @@ type Stmt struct {
 
 // Exec根据给出的参数执行定义好的声明，并返回Result来显示执行的结果。
 func (s *Stmt) Exec(args ...interface{}) (Result, error) {
+	s.closemu.RLock()
+	defer s.closemu.RUnlock()
 	_, releaseConn, si, err := s.connStmt()
 	if err != nil {
 		return nil, err
@@ -976,6 +1102,9 @@ func (s *Stmt) connStmt() (ci driver.Conn, releaseConn func(error), si driver.St
 
 // Query根据传递的参数执行一个声明的查询操作，然后以*Rows的结果返回查询结果。
 func (s *Stmt) Query(args ...interface{}) (*Rows, error) {
+	s.closemu.RLock()
+	defer s.closemu.RUnlock()
+
 	ci, releaseConn, si, err := s.connStmt()
 	if err != nil {
 		return nil, err
@@ -990,10 +1119,15 @@ func (s *Stmt) Query(args ...interface{}) (*Rows, error) {
 	// Note: ownership of ci passes to the *Rows, to be freed
 	// with releaseConn.
 	rows := &Rows{
-		db:          s.db,
-		ci:          ci,
-		releaseConn: releaseConn,
-		rowsi:       rowsi,
+		db:    s.db,
+		ci:    ci,
+		rowsi: rowsi,
+		// releaseConn set below
+	}
+	s.db.addDep(s, rows)
+	rows.releaseConn = func(err error) {
+		releaseConn(err)
+		s.db.removeDep(s, rows)
 	}
 	return rows, nil
 }
@@ -1051,6 +1185,9 @@ func (s *Stmt) QueryRow(args ...interface{}) *Row {
 
 // 关闭声明。
 func (s *Stmt) Close() error {
+	s.closemu.Lock()
+	defer s.closemu.Unlock()
+
 	if s.stickyErr != nil {
 		return s.stickyErr
 	}
@@ -1063,18 +1200,17 @@ func (s *Stmt) Close() error {
 
 	if s.tx != nil {
 		s.txsi.Close()
-	} else {
-		for _, v := range s.css {
-			if ci, match := s.db.connIfFree(v.ci); match {
-				v.si.Close()
-				s.db.putConn(ci, nil)
-			} else {
-				// TODO(bradfitz): care that we can't close
-				// this statement because the statement's
-				// connection is in use?
-			}
-		}
+		return nil
 	}
+
+	return s.db.removeDep(s, s)
+}
+
+func (s *Stmt) finalClose() error {
+	for _, v := range s.css {
+		s.db.noteUnusedDriverStatement(v.ci, v.si)
+	}
+	s.css = nil
 	return nil
 }
 
@@ -1106,7 +1242,7 @@ func (s *Stmt) Close() error {
 //     ...
 type Rows struct {
 	db          *DB
-	ci          driver.Conn // owned; must call putconn when closed to release // 已经存在的连接；当释放连接的时候必须调用putconn
+	ci          driver.Conn // owned; must call releaseConn when closed to release // 已经存在的连接；当释放连接的时候必须调用 releaseConn
 	releaseConn func(error)
 	rowsi       driver.Rows
 
@@ -1312,4 +1448,9 @@ type Result interface {
 
 type result struct {
 	driver.Result
+}
+
+func stack() string {
+	var buf [1024]byte
+	return string(buf[:runtime.Stack(buf[:], false)])
 }

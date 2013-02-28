@@ -71,7 +71,7 @@ func cname(s string) string {
 // even across files.
 func (p *Package) ParseFlags(f *File, srcfile string) {
 	linesIn := strings.Split(f.Preamble, "\n")
-	linesOut := make([]string, 0, len(linesIn))
+	linesOut := make([]string,0, len(linesIn))
 
 NextLine:
 	for _, line := range linesIn {
@@ -333,8 +333,8 @@ func (p *Package) guessKinds(f *File) []*Name {
 	// we assume lines without that error are constants.
 
 	// Make list of names that need sniffing, type lookup.
-	toSniff := make([]*Name, 0, len(f.Name))
-	needType := make([]*Name, 0, len(f.Name))
+	toSniff := make([]*Name,0, len(f.Name))
+	needType := make([]*Name,0, len(f.Name))
 
 	for _, n := range f.Name {
 		// If we've already found this name as a #define
@@ -373,13 +373,13 @@ func (p *Package) guessKinds(f *File) []*Name {
 		if strings.HasPrefix(n.C, "struct ") || strings.HasPrefix(n.C, "union ") || strings.HasPrefix(n.C, "enum ") {
 			n.Kind = "type"
 			i := len(needType)
-			needType = needType[0 : i+1]
+			needType = needType[0 : i + 1]
 			needType[i] = n
 			continue
 		}
 
 		i := len(toSniff)
-		toSniff = toSniff[0 : i+1]
+		toSniff = toSniff[0 : i + 1]
 		toSniff[i] = n
 	}
 
@@ -423,21 +423,21 @@ func (p *Package) guessKinds(f *File) []*Name {
 		if err != nil {
 			continue
 		}
-		i = (i - 1) / 2
+		i = (i - 1)/2
 		what := ""
 		switch {
 		default:
 			continue
 		case strings.Contains(line, ": useless type name in empty declaration"),
-			strings.Contains(line, ": declaration does not declare anything"),
-			strings.Contains(line, ": unexpected type name"):
+		strings.Contains(line, ": declaration does not declare anything"),
+		strings.Contains(line, ": unexpected type name"):
 			what = "type"
 			isConst[i] = false
 		case strings.Contains(line, ": statement with no effect"),
-			strings.Contains(line, ": expression result unused"):
+		strings.Contains(line, ": expression result unused"):
 			what = "not-type" // const or func or var
 		case strings.Contains(line, "undeclared"):
-			error_(token.NoPos, "%s", strings.TrimSpace(line[colon+1:]))
+			error_(token.NoPos, "%s", strings.TrimSpace(line[colon + 1:]))
 		case strings.Contains(line, "is not an integer constant"):
 			isConst[i] = false
 			continue
@@ -450,7 +450,7 @@ func (p *Package) guessKinds(f *File) []*Name {
 		n.Kind = what
 
 		j := len(needType)
-		needType = needType[0 : j+1]
+		needType = needType[0 : j + 1]
 		needType[j] = n
 	}
 	for i, b := range isConst {
@@ -458,7 +458,7 @@ func (p *Package) guessKinds(f *File) []*Name {
 			names[i].Kind = "const"
 			if toSniff[i] != nil && names[i].Const == "" {
 				j := len(needType)
-				needType = needType[0 : j+1]
+				needType = needType[0 : j + 1]
 				needType[j] = names[i]
 			}
 		}
@@ -681,13 +681,13 @@ func (p *Package) rewriteRef(f *File) {
 			}
 			if r.Context == "call2" {
 				// Invent new Name for the two-result function.
-				n := f.Name["2"+r.Name.Go]
+				n := f.Name["2" + r.Name.Go]
 				if n == nil {
 					n = new(Name)
 					*n = *r.Name
 					n.AddError = true
 					n.Mangle = "_C2func_" + n.Go
-					f.Name["2"+r.Name.Go] = n
+					f.Name["2" + r.Name.Go] = n
 				}
 				expr = ast.NewIdent(n.Mangle)
 				r.Name = n
@@ -772,18 +772,24 @@ func gccTmp() string {
 func (p *Package) gccCmd() []string {
 	c := []string{
 		p.gccName(),
-		"-Wall",                             // many warnings
-		"-Werror",                           // warnings are errors
-		"-o" + gccTmp(),                     // write object to tmp
-		"-gdwarf-2",                         // generate DWARF v2 debugging symbols
+		"-Wall", // many warnings
+		"-Werror", // warnings are errors
+			"-o" + gccTmp(), // write object to tmp
+		"-gdwarf-2", // generate DWARF v2 debugging symbols
 		"-fno-eliminate-unused-debug-types", // gets rid of e.g. untyped enum otherwise
-		"-c",  // do not link
+		"-c", // do not link
 		"-xc", // input language is C
 	}
 	if strings.Contains(p.gccName(), "clang") {
 		c = append(c,
 			"-ferror-limit=0",
+			// Apple clang version 1.7 (tags/Apple/clang-77) (based on LLVM 2.9svn)
+			// doesn't have -Wno-unneeded-internal-declaration, so we need yet another
+			// flag to disable the warning. Yes, really good diagnostics, clang.
+			"-Wno-unknown-warning-option",
 			"-Wno-unneeded-internal-declaration",
+			"-Wno-unused-function",
+			"-Qunused-arguments",
 		)
 	}
 
@@ -808,13 +814,13 @@ func (p *Package) gccDebug(stdin []byte) (*dwarf.Data, binary.ByteOrder, []byte)
 			for i := range f.Symtab.Syms {
 				s := &f.Symtab.Syms[i]
 				// Mach-O still uses a leading _ to denote non-assembly symbols.
-				if s.Name == "_"+"__cgodebug_data" {
+				if s.Name == "_" + "__cgodebug_data" {
 					// Found it.  Now find data section.
 					if i := int(s.Sect) - 1; 0 <= i && i < len(f.Sections) {
 						sect := f.Sections[i]
-						if sect.Addr <= s.Value && s.Value < sect.Addr+sect.Size {
+						if sect.Addr <= s.Value && s.Value < sect.Addr + sect.Size {
 							if sdat, err := sect.Data(); err == nil {
-								data = sdat[s.Value-sect.Addr:]
+								data = sdat[s.Value - sect.Addr:]
 							}
 						}
 					}
@@ -838,9 +844,9 @@ func (p *Package) gccDebug(stdin []byte) (*dwarf.Data, binary.ByteOrder, []byte)
 					// Found it.  Now find data section.
 					if i := int(s.Section); 0 <= i && i < len(f.Sections) {
 						sect := f.Sections[i]
-						if sect.Addr <= s.Value && s.Value < sect.Addr+sect.Size {
+						if sect.Addr <= s.Value && s.Value < sect.Addr + sect.Size {
 							if sdat, err := sect.Data(); err == nil {
-								data = sdat[s.Value-sect.Addr:]
+								data = sdat[s.Value - sect.Addr:]
 							}
 						}
 					}
@@ -857,7 +863,7 @@ func (p *Package) gccDebug(stdin []byte) (*dwarf.Data, binary.ByteOrder, []byte)
 		}
 		var data []byte
 		for _, s := range f.Symbols {
-			if s.Name == "_"+"__cgodebug_data" {
+			if s.Name == "_" + "__cgodebug_data" {
 				if i := int(s.SectionNumber) - 1; 0 <= i && i < len(f.Sections) {
 					sect := f.Sections[i]
 					if s.Value < sect.Size {
@@ -937,16 +943,16 @@ type typeConv struct {
 	typedef map[string]ast.Expr
 
 	// Predeclared types.
-	bool                                   ast.Expr
-	byte                                   ast.Expr // denotes padding
-	int8, int16, int32, int64              ast.Expr
-	uint8, uint16, uint32, uint64, uintptr ast.Expr
-	float32, float64                       ast.Expr
-	complex64, complex128                  ast.Expr
-	void                                   ast.Expr
-	unsafePointer                          ast.Expr
-	string                                 ast.Expr
-	goVoid                                 ast.Expr // _Ctype_void, denotes C's void
+	bool                                               ast.Expr
+	byte                                               ast.Expr // denotes padding
+	int8,    int16,    int32,    int64                 ast.Expr
+	uint8,    uint16,    uint32,    uint64,    uintptr ast.Expr
+	float32,    float64                                ast.Expr
+	complex64,    complex128                           ast.Expr
+	void                                               ast.Expr
+	unsafePointer                                      ast.Expr
+	string                                             ast.Expr
+	goVoid                                             ast.Expr // _Ctype_void, denotes C's void
 
 	ptrSize int64
 	intSize int64
@@ -1047,6 +1053,12 @@ func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
 			fatalf("%s: type conversion loop at %s", lineno(pos), dtype)
 		}
 		return t
+	}
+
+	// clang won't generate DW_AT_byte_size for pointer types,
+	// so we have to fix it here.
+	if dt, ok := base(dtype).(*dwarf.PtrType); ok && dt.ByteSize == -1 {
+		dt.ByteSize = c.ptrSize
 	}
 
 	t := new(Type)
@@ -1252,7 +1264,7 @@ func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
 			// Knows string layout used by compilers: pointer plus length,
 			// which rounds up to 2 pointers after alignment.
 			t.Go = c.string
-			t.Size = c.ptrSize * 2
+			t.Size = c.ptrSize*2
 			t.Align = c.ptrSize
 			break
 		}
@@ -1437,7 +1449,7 @@ func (c *typeConv) intExpr(n int64) ast.Expr {
 // Add padding of given size to fld.
 func (c *typeConv) pad(fld []*ast.Field, size int64) []*ast.Field {
 	n := len(fld)
-	fld = fld[0 : n+1]
+	fld = fld[0 : n + 1]
 	fld[n] = &ast.Field{Names: []*ast.Ident{c.Ident("_")}, Type: c.Opaque(size)}
 	return fld
 }
@@ -1446,7 +1458,7 @@ func (c *typeConv) pad(fld []*ast.Field, size int64) []*ast.Field {
 func (c *typeConv) Struct(dt *dwarf.StructType, pos token.Pos) (expr *ast.StructType, csyntax string, align int64) {
 	var buf bytes.Buffer
 	buf.WriteString("struct {")
-	fld := make([]*ast.Field, 0, 2*len(dt.Field)+1) // enough for padding around every field
+	fld := make([]*ast.Field,0, 2*len(dt.Field) + 1) // enough for padding around every field
 	off := int64(0)
 
 	// Rename struct fields that happen to be named Go keywords into
@@ -1482,7 +1494,7 @@ func (c *typeConv) Struct(dt *dwarf.StructType, pos token.Pos) (expr *ast.Struct
 	anon := 0
 	for _, f := range dt.Field {
 		if f.ByteOffset > off {
-			fld = c.pad(fld, f.ByteOffset-off)
+			fld = c.pad(fld, f.ByteOffset - off)
 			off = f.ByteOffset
 		}
 		t := c.Type(f.Type, pos)
@@ -1493,7 +1505,7 @@ func (c *typeConv) Struct(dt *dwarf.StructType, pos token.Pos) (expr *ast.Struct
 			if f.BitSize%8 != 0 {
 				continue
 			}
-			size = f.BitSize / 8
+			size = f.BitSize/8
 			name := tgo.(*ast.Ident).String()
 			if strings.HasPrefix(name, "int") {
 				name = "int"
@@ -1504,7 +1516,7 @@ func (c *typeConv) Struct(dt *dwarf.StructType, pos token.Pos) (expr *ast.Struct
 		}
 
 		n := len(fld)
-		fld = fld[0 : n+1]
+		fld = fld[0 : n + 1]
 		name := f.Name
 		if name == "" {
 			name = fmt.Sprintf("anon%d", anon)
@@ -1522,7 +1534,7 @@ func (c *typeConv) Struct(dt *dwarf.StructType, pos token.Pos) (expr *ast.Struct
 		}
 	}
 	if off < dt.ByteSize {
-		fld = c.pad(fld, dt.ByteSize-off)
+		fld = c.pad(fld, dt.ByteSize - off)
 		off = dt.ByteSize
 	}
 	if off != dt.ByteSize {
@@ -1615,8 +1627,8 @@ func fieldPrefix(fld []*ast.Field) string {
 				continue
 			}
 			if prefix == "" {
-				prefix = n.Name[:i+1]
-			} else if prefix != n.Name[:i+1] {
+				prefix = n.Name[:i + 1]
+			} else if prefix != n.Name[:i + 1] {
 				return ""
 			}
 		}

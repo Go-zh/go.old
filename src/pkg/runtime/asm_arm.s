@@ -50,7 +50,7 @@ TEXT _rt0_arm(SB),7,$-4
 	BL	runtime·schedinit(SB)
 
 	// create a new goroutine to start program
-	MOVW	$runtime·main(SB), R0
+	MOVW	$runtime·main·f(SB), R0
 	MOVW.W	R0, -4(R13)
 	MOVW	$8, R0
 	MOVW.W	R0, -4(R13)
@@ -65,6 +65,9 @@ TEXT _rt0_arm(SB),7,$-4
 	MOVW	$1234, R0
 	MOVW	$1000, R1
 	MOVW	R0, (R1)	// fail hard
+
+DATA	runtime·main·f+0(SB)/4,$runtime·main(SB)
+GLOBL	runtime·main·f(SB),8,$4
 
 TEXT runtime·breakpoint(SB),7,$0
 	// gdb won't skip this breakpoint instruction automatically,
@@ -109,14 +112,30 @@ TEXT runtime·gogo(SB), 7, $-4
 	MOVW	gobuf_sp(R1), SP	// restore SP
 	MOVW	gobuf_pc(R1), PC
 
-// void gogocall(Gobuf*, void (*fn)(void))
+// void gogocall(Gobuf*, void (*fn)(void), uintptr r7)
 // restore state from Gobuf but then call fn.
 // (call fn, returning to state in Gobuf)
 // using frame size $-4 means do not save LR on stack.
 TEXT runtime·gogocall(SB), 7, $-4
 	MOVW	0(FP), R3		// gobuf
 	MOVW	4(FP), R1		// fn
-	MOVW	8(FP), R2		// fp offset
+	MOVW	gobuf_g(R3), g
+	MOVW	0(g), R0		// make sure g != nil
+	MOVW	cgo_save_gm(SB), R0
+	CMP 	$0, R0 // if in Cgo, we have to save g and m
+	BL.NE	(R0) // this call will clobber R0
+	MOVW	8(FP), R7	// context
+	MOVW	gobuf_sp(R3), SP	// restore SP
+	MOVW	gobuf_pc(R3), LR
+	MOVW	R1, PC
+
+// void gogocallfn(Gobuf*, FuncVal*)
+// restore state from Gobuf but then call fn.
+// (call fn, returning to state in Gobuf)
+// using frame size $-4 means do not save LR on stack.
+TEXT runtime·gogocallfn(SB), 7, $-4
+	MOVW	0(FP), R3		// gobuf
+	MOVW	4(FP), R1		// fn
 	MOVW	gobuf_g(R3), g
 	MOVW	0(g), R0		// make sure g != nil
 	MOVW	cgo_save_gm(SB), R0
@@ -124,7 +143,8 @@ TEXT runtime·gogocall(SB), 7, $-4
 	BL.NE	(R0) // this call will clobber R0
 	MOVW	gobuf_sp(R3), SP	// restore SP
 	MOVW	gobuf_pc(R3), LR
-	MOVW	R1, PC
+	MOVW	R1, R7
+	MOVW	0(R1), PC
 
 // void mcall(void (*fn)(G*))
 // Switch to m->g0's stack, call fn(g).
@@ -168,6 +188,7 @@ TEXT runtime·morestack(SB),7,$-4
 	BL.EQ	runtime·abort(SB)
 
 	// Save in m.
+	MOVW	R7, m_cret(m) // function context
 	MOVW	R1, m_moreframesize(m)
 	MOVW	R2, m_moreargsize(m)
 
@@ -239,10 +260,11 @@ TEXT runtime·lessstack(SB), 7, $-4
 TEXT runtime·jmpdefer(SB), 7, $0
 	MOVW	0(SP), LR
 	MOVW	$-4(LR), LR	// BL deferreturn
-	MOVW	fn+0(FP), R0
+	MOVW	fn+0(FP), R7
 	MOVW	argp+4(FP), SP
 	MOVW	$-4(SP), SP	// SP is 4 below argp, due to saved LR
-	B		(R0)
+	MOVW	0(R7), R1
+	B	(R1)
 
 // Dummy function to use in saved gobuf.PC,
 // to match SP pointing at a return address.
@@ -288,13 +310,47 @@ TEXT	runtime·asmcgocall(SB),7,$0
 	RET
 
 // cgocallback(void (*fn)(void*), void *frame, uintptr framesize)
+// Turn the fn into a Go func (by taking its address) and call
+// cgocallback_gofunc.
+TEXT runtime·cgocallback(SB),7,$12
+	MOVW	$fn+0(FP), R0
+	MOVW	R0, 4(R13)
+	MOVW	frame+4(FP), R0
+	MOVW	R0, 8(R13)
+	MOVW	framesize+8(FP), R0
+	MOVW	R0, 12(R13)
+	MOVW	$runtime·cgocallback_gofunc(SB), R0
+	BL	(R0)
+	RET
+
+// cgocallback_gofunc(void (*fn)(void*), void *frame, uintptr framesize)
 // See cgocall.c for more details.
-TEXT	runtime·cgocallback(SB),7,$16
+TEXT	runtime·cgocallback_gofunc(SB),7,$16
+	// Load m and g from thread-local storage.
+	MOVW	cgo_load_gm(SB), R0
+	CMP	$0, R0
+	BL.NE	(R0)
+
+	// If m is nil, Go did not create the current thread.
+	// Call needm to obtain one for temporary use.
+	// In this case, we're running on the thread stack, so there's
+	// lots of space, but the linker doesn't know. Hide the call from
+	// the linker analysis by using an indirect call.
+	MOVW	m, savedm-16(SP)
+	CMP	$0, m
+	B.NE havem
+	MOVW	$runtime·needm(SB), R0
+	BL	(R0)
+
+havem:
+	// Now there's a valid m, and we're running on its m->g0.
+	// Save current m->g0->sched.sp on stack and then set it to SP.
+	// Save current sp in m->g0->sched.sp in preparation for
+	// switch back to m->curg stack.
 	MOVW	fn+0(FP), R0
 	MOVW	frame+4(FP), R1
 	MOVW	framesize+8(FP), R2
 
-	// Save current m->g0->sched.sp on stack and then set it to SP.
 	MOVW	m_g0(m), R3
 	MOVW	(g_sched+gobuf_sp)(R3), R4
 	MOVW.W	R4, -4(R13)
@@ -314,6 +370,8 @@ TEXT	runtime·cgocallback(SB),7,$16
 	// a frame size of 16, the same amount that we use below),
 	// so that the traceback will seamlessly trace back into
 	// the earlier calls.
+
+	// Save current m->g0->sched.sp on stack and then set it to SP.
 	MOVW	m_curg(m), g
 	MOVW	(g_sched+gobuf_sp)(g), R4 // prepare stack as R4
 
@@ -350,7 +408,27 @@ TEXT	runtime·cgocallback(SB),7,$16
 	ADD	$4, R13
 	MOVW	R6, (g_sched+gobuf_sp)(g)
 
+	// If the m on entry was nil, we called needm above to borrow an m
+	// for the duration of the call. Since the call is over, return it with dropm.
+	MOVW	savedm-16(SP), R6
+	CMP	$0, R6
+	B.NE	3(PC)
+	MOVW	$runtime·dropm(SB), R0
+	BL	(R0)
+
 	// Done!
+	RET
+
+// void setmg(M*, G*); set m and g. for use by needm.
+TEXT runtime·setmg(SB), 7, $-4
+	MOVW	mm+0(FP), m
+	MOVW	gg+4(FP), g
+
+	// Save m and g to thread-local storage.
+	MOVW	cgo_save_gm(SB), R0
+	CMP	$0, R0
+	BL.NE	(R0)
+
 	RET
 
 TEXT runtime·getcallerpc(SB),7,$-4

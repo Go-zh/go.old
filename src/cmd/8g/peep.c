@@ -126,6 +126,8 @@ peep(void)
 		case AGLOBL:
 		case ANAME:
 		case ASIGNAME:
+		case ALOCALS:
+		case ATYPE:
 			p = p->link;
 		}
 	}
@@ -894,6 +896,8 @@ copyu(Prog *p, Adr *v, Adr *s)
 		if(REGEXT && v->type <= REGEXT && v->type > exregoffset)
 			return 2;
 		if(REGARG >= 0 && v->type == (uchar)REGARG)
+			return 2;
+		if(v->type == p->from.type)
 			return 2;
 
 		if(s != A) {

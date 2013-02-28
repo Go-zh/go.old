@@ -2,12 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +builder // ERROR "possible malformed \+build comment"
-// +build !ignore
-
 package main
-
-// +build toolate // ERROR "build comment appears too late in file"
 
 import (
 	"bytes"
@@ -56,11 +51,11 @@ func checkBuildTag(name string, data []byte) {
 			fields := bytes.Fields(text)
 			if !bytes.Equal(fields[0], plusBuild) {
 				// Comment is something like +buildasdf not +build.
-				fmt.Fprintf(os.Stderr, "%s:%d: possible malformed +build comment\n", name, i+1)
+				fmt.Fprintf(os.Stderr, "%s:%d: possible malformed +build comment\n", name, i + 1)
 				continue
 			}
 			if i >= cutoff {
-				fmt.Fprintf(os.Stderr, "%s:%d: +build comment appears too late in file\n", name, i+1)
+				fmt.Fprintf(os.Stderr, "%s:%d: +build comment appears too late in file\n", name, i + 1)
 				setExit(1)
 				continue
 			}
@@ -69,7 +64,7 @@ func checkBuildTag(name string, data []byte) {
 			for _, arg := range fields[1:] {
 				for _, elem := range strings.Split(string(arg), ",") {
 					if strings.HasPrefix(elem, "!!") {
-						fmt.Fprintf(os.Stderr, "%s:%d: invalid double negative in build constraint: %s\n", name, i+1, arg)
+						fmt.Fprintf(os.Stderr, "%s:%d: invalid double negative in build constraint: %s\n", name, i + 1, arg)
 						setExit(1)
 						break Args
 					}
@@ -78,7 +73,7 @@ func checkBuildTag(name string, data []byte) {
 					}
 					for _, c := range elem {
 						if !unicode.IsLetter(c) && !unicode.IsDigit(c) && c != '_' {
-							fmt.Fprintf(os.Stderr, "%s:%d: invalid non-alphanumeric build constraint: %s\n", name, i+1, arg)
+							fmt.Fprintf(os.Stderr, "%s:%d: invalid non-alphanumeric build constraint: %s\n", name, i + 1, arg)
 							setExit(1)
 							break Args
 						}
@@ -89,7 +84,7 @@ func checkBuildTag(name string, data []byte) {
 		}
 		// Comment with +build but not at beginning.
 		if bytes.Contains(line, plusBuild) && i < cutoff {
-			fmt.Fprintf(os.Stderr, "%s:%d: possible malformed +build comment\n", name, i+1)
+			fmt.Fprintf(os.Stderr, "%s:%d: possible malformed +build comment\n", name, i + 1)
 			continue
 		}
 	}

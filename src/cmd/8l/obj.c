@@ -595,6 +595,15 @@ loop:
 		pc++;
 		goto loop;
 
+	case ALOCALS:
+		cursym->locals = p->to.offset;
+		pc++;
+		goto loop;
+
+	case ATYPE:
+		pc++;
+		goto loop;
+
 	case ATEXT:
 		s = p->from.sym;
 		if(s->text != nil) {
@@ -633,6 +642,7 @@ loop:
 		}
 		s->type = STEXT;
 		s->value = pc;
+		s->args = p->to.offset2;
 		lastp = p;
 		p->pc = pc++;
 		goto loop;

@@ -36,13 +36,12 @@ type Program struct {
 // type-specific accessor methods Func, Type, Var and Const.
 //
 type Package struct {
-	Prog       *Program          // the owning program
-	Types      *types.Package    // the type checker's package object for this package.
-	ImportPath string            // e.g. "sync/atomic"
-	Pos        token.Pos         // position of an arbitrary file in the package
-	Members    map[string]Member // all exported and unexported members of the package
-	AnonFuncs  []*Function       // all anonymous functions in this package
-	Init       *Function         // the package's (concatenated) init function
+	Prog      *Program          // the owning program
+	Types     *types.Package    // the type checker's package object for this package.
+	Pos       token.Pos         // position of an arbitrary file in the package
+	Members   map[string]Member // all exported and unexported members of the package
+	AnonFuncs []*Function       // all anonymous functions in this package
+	Init      *Function         // the package's (concatenated) init function
 
 	// The following fields are set transiently during building,
 	// then cleared.
@@ -248,7 +247,7 @@ type Function struct {
 // An SSA basic block.
 //
 // The final element of Instrs is always an explicit transfer of
-// control (If, Jump or Ret).
+// control (If, Jump, Ret or Panic).
 //
 // A block may contain no Instructions only if it is unreachable,
 // i.e. Preds is nil.  Empty blocks are typically pruned.
@@ -261,11 +260,14 @@ type Function struct {
 // instructions, respectively).
 //
 type BasicBlock struct {
-	Name         string         // label; no semantic significance
+	Index        int            // index of this block within Func.Blocks
+	Comment      string         // optional label; no semantic significance
 	Func         *Function      // containing function
 	Instrs       []Instruction  // instructions in order
 	Preds, Succs []*BasicBlock  // predecessors and successors
 	succs2       [2]*BasicBlock // initial space for Succs.
+	dom          *domNode       // node in dominator tree; optional.
+	gaps         int            // number of nil Instrs (transient).
 }
 
 // Pure values ----------------------------------------
@@ -372,6 +374,7 @@ type Alloc struct {
 	Type_     types.Type
 	Heap      bool
 	referrers []Instruction
+	index     int // dense numbering; for lifting
 }
 
 // Phi represents an SSA φ-node, which combines values that differ
@@ -383,7 +386,8 @@ type Alloc struct {
 //
 type Phi struct {
 	Register
-	Edges []Value // Edges[i] is value for Block().Preds[i]
+	Comment string  // a hint as to its purpose
+	Edges   []Value // Edges[i] is value for Block().Preds[i]
 }
 
 // Call represents a function or method call.
@@ -422,6 +426,8 @@ type BinOp struct {
 // UnOp yields the result of Op X.
 // ARROW is channel receive.
 // MUL is pointer indirection (load).
+// XOR is bitwise complement.
+// SUB is negation.
 //
 // If CommaOk and Op=ARROW, the result is a 2-tuple of the value above
 // and a boolean indicating the success of the receive.  The
@@ -835,6 +841,22 @@ type Ret struct {
 	Results []Value
 }
 
+// Panic initiates a panic with value X.
+//
+// A Panic instruction must be the last instruction of its containing
+// BasicBlock, which must have no successors.
+//
+// NB: 'go panic(x)' and 'defer panic(x)' do not use this instruction;
+// they are treated as calls to a built-in function.
+//
+// Example printed form:
+// 	panic t0
+//
+type Panic struct {
+	anInstruction
+	X Value // an interface{}
+}
+
 // Go creates a new goroutine and calls the specified function
 // within it.
 //
@@ -923,7 +945,7 @@ type Register struct {
 	referrers []Instruction
 }
 
-// AnInstruction is a mix-in embedded by all Instructions.
+// anInstruction is a mix-in embedded by all Instructions.
 // It provides the implementations of the Block and SetBlock methods.
 type anInstruction struct {
 	Block_ *BasicBlock // the basic block of this instruction
@@ -981,7 +1003,7 @@ type CallCommon struct {
 	Method      int       // index of interface method within Recv.Type().(*types.Interface).Methods
 	Func        Value     // target of call, iff function call
 	Args        []Value   // actual parameters, including receiver in invoke mode
-	HasEllipsis bool      // true iff last Args is a slice  (needed?)
+	HasEllipsis bool      // true iff last Args is a slice of '...' args (needed?)
 	Pos         token.Pos // position of call expression
 }
 
@@ -1118,6 +1140,7 @@ func (*MakeMap) ImplementsInstruction()         {}
 func (*MakeSlice) ImplementsInstruction()       {}
 func (*MapUpdate) ImplementsInstruction()       {}
 func (*Next) ImplementsInstruction()            {}
+func (*Panic) ImplementsInstruction()           {}
 func (*Phi) ImplementsInstruction()             {}
 func (*Range) ImplementsInstruction()           {}
 func (*Ret) ImplementsInstruction()             {}
@@ -1220,6 +1243,10 @@ func (v *Next) Operands(rands []*Value) []*Value {
 	return append(rands, &v.Iter)
 }
 
+func (s *Panic) Operands(rands []*Value) []*Value {
+	return append(rands, &s.X)
+}
+
 func (v *Phi) Operands(rands []*Value) []*Value {
 	for i := range v.Edges {
 		rands = append(rands, &v.Edges[i])
@@ -1239,8 +1266,8 @@ func (s *Ret) Operands(rands []*Value) []*Value {
 }
 
 func (v *Select) Operands(rands []*Value) []*Value {
-	for _, st := range v.States {
-		rands = append(rands, &st.Chan, &st.Send)
+	for i := range v.States {
+		rands = append(rands, &v.States[i].Chan, &v.States[i].Send)
 	}
 	return rands
 }

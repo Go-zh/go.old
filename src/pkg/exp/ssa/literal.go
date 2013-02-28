@@ -9,6 +9,11 @@ import (
 	"strconv"
 )
 
+var complexZero = types.Complex{
+	Re: new(big.Rat),
+	Im: new(big.Rat),
+}
+
 // newLiteral returns a new literal of the specified value and type.
 // val must be valid according to the specification of Literal.Value.
 //
@@ -26,6 +31,39 @@ func intLiteral(i int64) *Literal {
 // nilLiteral returns a nil literal of the specified (reference) type.
 func nilLiteral(typ types.Type) *Literal {
 	return newLiteral(types.NilType{}, typ)
+}
+
+// zeroLiteral returns a new "zero" literal of the specified type,
+// which must not be an array or struct type: the zero values of
+// aggregates are well-defined but cannot be represented by Literal.
+//
+func zeroLiteral(t types.Type) *Literal {
+	switch t := t.(type) {
+	case *types.Basic:
+		switch {
+		case t.Info&types.IsBoolean != 0:
+			return newLiteral(false, t)
+		case t.Info&types.IsComplex != 0:
+			return newLiteral(complexZero, t)
+		case t.Info&types.IsNumeric != 0:
+			return newLiteral(int64(0), t)
+		case t.Info&types.IsString != 0:
+			return newLiteral("", t)
+		case t.Kind == types.UnsafePointer:
+			fallthrough
+		case t.Kind == types.UntypedNil:
+			return nilLiteral(t)
+		default:
+			panic(fmt.Sprint("zeroLiteral for unexpected type:", t))
+		}
+	case *types.Pointer, *types.Slice, *types.Interface, *types.Chan, *types.Map, *types.Signature:
+		return nilLiteral(t)
+	case *types.NamedType:
+		return newLiteral(zeroLiteral(t.Underlying).Value, t)
+	case *types.Array, *types.Struct:
+		panic(fmt.Sprint("zeroLiteral applied to aggregate:", t))
+	}
+	panic(fmt.Sprint("zeroLiteral: unexpected ", t))
 }
 
 func (l *Literal) Name() string {
@@ -80,9 +118,8 @@ func (l *Literal) Int64() int64 {
 	case *big.Int:
 		return x.Int64()
 	case *big.Rat:
-		// TODO(adonovan): fix: is this the right rounding mode?
 		var q big.Int
-		return q.Quo(x.Num(), x.Denom()).Int64()
+		return q.Quo(x.Num(), x.Denom()).Int64() // truncate
 	}
 	panic(fmt.Sprintf("unexpected literal value: %T", l.Value))
 }
@@ -100,9 +137,8 @@ func (l *Literal) Uint64() uint64 {
 	case *big.Int:
 		return x.Uint64()
 	case *big.Rat:
-		// TODO(adonovan): fix: is this right?
 		var q big.Int
-		return q.Quo(x.Num(), x.Denom()).Uint64()
+		return q.Quo(x.Num(), x.Denom()).Uint64() // truncate
 	}
 	panic(fmt.Sprintf("unexpected literal value: %T", l.Value))
 }

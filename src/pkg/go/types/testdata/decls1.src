@@ -64,7 +64,7 @@ var (
 	t13 int = a /* ERROR "shifted operand" */ << d
 	t14 int = i << j /* ERROR "must be unsigned" */ 
 	t15 math /* ERROR "not in selector" */
-	t16 math.xxx /* ERROR "unexported" */
+	t16 math /* ERROR "unexported" */ .xxx
 	t17 math /* ERROR "not a type" */ .Pi
 	t18 float64 = math.Pi * 10.0
 	t19 int = t1 /* ERROR "cannot call" */ ()
@@ -88,8 +88,8 @@ var (
 	v4 = r + 2147483647
 	v5 = r + 2147483648 /* ERROR "overflows" */
 	v6 = 42
-	v7 = v6 + 2147483647
-	v8 = v6 + 2147483648 /* ERROR "overflows" */
+	v7 = v6 + 9223372036854775807
+	v8 = v6 + 9223372036854775808 /* ERROR "overflows" */
 	v9 = i + 1 << 10
 	v10 byte = 1024 /* ERROR "overflows" */
 	v11 = xx/yy*yy - xx

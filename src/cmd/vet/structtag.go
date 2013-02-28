@@ -30,12 +30,8 @@ func (f *File) checkCanonicalFieldTag(field *ast.Field) {
 	// Check tag for validity by appending
 	// new key:value to end and checking that
 	// the tag parsing code can find it.
-	if reflect.StructTag(tag+` _gofix:"_magic"`).Get("_gofix") != "_magic" {
+	if reflect.StructTag(tag + ` _gofix:"_magic"`).Get("_gofix") != "_magic" {
 		f.Warnf(field.Pos(), "struct field tag %s not compatible with reflect.StructTag.Get", field.Tag.Value)
 		return
 	}
-}
-
-type BadTypeUsedInTests struct {
-	X int "hello" // ERROR "not compatible with reflect.StructTag.Get"
 }

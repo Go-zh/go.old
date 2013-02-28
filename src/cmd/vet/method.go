@@ -36,21 +36,21 @@ type MethodSig struct {
 // rest has to match.
 var canonicalMethods = map[string]MethodSig{
 	// "Flush": {{}, {"error"}}, // http.Flusher and jpeg.writer conflict
-	"Format":        {[]string{"=fmt.State", "rune"}, []string{}},            // fmt.Formatter
-	"GobDecode":     {[]string{"[]byte"}, []string{"error"}},                 // gob.GobDecoder
-	"GobEncode":     {[]string{}, []string{"[]byte", "error"}},               // gob.GobEncoder
-	"MarshalJSON":   {[]string{}, []string{"[]byte", "error"}},               // json.Marshaler
-	"MarshalXML":    {[]string{}, []string{"[]byte", "error"}},               // xml.Marshaler
-	"Peek":          {[]string{"=int"}, []string{"[]byte", "error"}},         // image.reader (matching bufio.Reader)
-	"ReadByte":      {[]string{}, []string{"byte", "error"}},                 // io.ByteReader
-	"ReadFrom":      {[]string{"=io.Reader"}, []string{"int64", "error"}},    // io.ReaderFrom
-	"ReadRune":      {[]string{}, []string{"rune", "int", "error"}},          // io.RuneReader
+	"Format":        {[]string{"=fmt.State", "rune"}, []string{}}, // fmt.Formatter
+	"GobDecode":     {[]string{"[]byte"}, []string{"error"}}, // gob.GobDecoder
+	"GobEncode":     {[]string{}, []string{"[]byte", "error"}}, // gob.GobEncoder
+	"MarshalJSON":   {[]string{}, []string{"[]byte", "error"}}, // json.Marshaler
+	"MarshalXML":    {[]string{}, []string{"[]byte", "error"}}, // xml.Marshaler
+	"Peek":          {[]string{"=int"}, []string{"[]byte", "error"}}, // image.reader (matching bufio.Reader)
+	"ReadByte":      {[]string{}, []string{"byte", "error"}}, // io.ByteReader
+	"ReadFrom":      {[]string{"=io.Reader"}, []string{"int64", "error"}}, // io.ReaderFrom
+	"ReadRune":      {[]string{}, []string{"rune", "int", "error"}}, // io.RuneReader
 	"Scan":          {[]string{"=fmt.ScanState", "rune"}, []string{"error"}}, // fmt.Scanner
 	"Seek":          {[]string{"=int64", "int"}, []string{"int64", "error"}}, // io.Seeker
-	"UnmarshalJSON": {[]string{"[]byte"}, []string{"error"}},                 // json.Unmarshaler
+	"UnmarshalJSON": {[]string{"[]byte"}, []string{"error"}}, // json.Unmarshaler
 	"UnreadByte":    {[]string{}, []string{"error"}},
 	"UnreadRune":    {[]string{}, []string{"error"}},
-	"WriteByte":     {[]string{"byte"}, []string{"error"}},                // jpeg.writer (matching bufio.Writer)
+	"WriteByte":     {[]string{"byte"}, []string{"error"}}, // jpeg.writer (matching bufio.Writer)
 	"WriteTo":       {[]string{"=io.Writer"}, []string{"int64", "error"}}, // io.WriterTo
 }
 
@@ -90,7 +90,7 @@ func (f *File) checkCanonicalMethod(id *ast.Ident, t *ast.FuncType) {
 			fmt.Fprintf(&f.b, "<%s>", err)
 		}
 		actual := f.b.String()
-		actual = strings.TrimPrefix(actual, "func(")
+		actual = strings.TrimPrefix(actual, "func")
 		actual = id.Name + actual
 
 		f.Warnf(id.Pos(), "method %s should have signature %s", actual, expectFmt)
@@ -152,18 +152,11 @@ func (f *File) matchParamType(expect string, actual ast.Expr) bool {
 	}
 	// Strip package name if we're in that package.
 	if n := len(f.file.Name.Name); len(expect) > n && expect[:n] == f.file.Name.Name && expect[n] == '.' {
-		expect = expect[n+1:]
+		expect = expect[n + 1:]
 	}
 
 	// Overkill but easy.
 	f.b.Reset()
 	printer.Fprint(&f.b, f.fset, actual)
 	return f.b.String() == expect
-}
-
-func (t *BadTypeUsedInTests) Scan(x fmt.ScanState, c byte) { // ERROR "should have signature Scan"
-}
-
-type BadInterfaceUsedInTests interface {
-	ReadByte() byte // ERROR "should have signature ReadByte"
 }

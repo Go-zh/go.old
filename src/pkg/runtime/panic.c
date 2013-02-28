@@ -119,7 +119,7 @@ freedefer(Defer *d)
 // functions that split the stack.
 #pragma textflag 7
 uintptr
-runtime·deferproc(int32 siz, byte* fn, ...)
+runtime·deferproc(int32 siz, FuncVal *fn, ...)
 {
 	Defer *d;
 
@@ -156,7 +156,8 @@ void
 runtime·deferreturn(uintptr arg0)
 {
 	Defer *d;
-	byte *argp, *fn;
+	byte *argp;
+	FuncVal *fn;
 
 	d = g->defer;
 	if(d == nil)
@@ -382,6 +383,8 @@ nomatch:
 void
 runtime·startpanic(void)
 {
+	if(m->mcache == nil)  // can happen if called from signal handler or throw
+		m->mcache = runtime·allocmcache();
 	if(m->dying) {
 		runtime·printf("panic during panic\n");
 		runtime·exit(3);

@@ -723,12 +723,15 @@ typefmt(Fmt *fp, Type *t)
 		if(!(fp->flags&FmtShort)) {
 			s = t->sym;
 
-			// Take the name from the original, lest we substituted it with .anon%d
-			if ((fmtmode == FErr || fmtmode == FExp) && t->nname != N)
-				if(t->nname->orig != N)
+			// Take the name from the original, lest we substituted it with ~anon%d
+			if ((fmtmode == FErr || fmtmode == FExp) && t->nname != N) {
+				if(t->nname->orig != N) {
 					s = t->nname->orig->sym;
-				else 
+					if(s != S && s->name[0] == '~')
+						s = S;
+				} else 
 					s = S;
+			}
 			
 			if(s != S && !t->embedded) {
 				if(t->funarg)
@@ -1203,7 +1206,7 @@ exprfmt(Fmt *f, Node *n, int prec)
 		return fmtprint(f, "(%N{ %,H })", n->right, n->list);
 
 	case OPTRLIT:
-		if(fmtmode == FExp && n->left->implicit)
+		if(fmtmode == FExp)  // handle printing of '&' below.
 			return fmtprint(f, "%N", n->left);
 		return fmtprint(f, "&%N", n->left);
 
@@ -1211,6 +1214,8 @@ exprfmt(Fmt *f, Node *n, int prec)
 		if(fmtmode == FExp) {   // requires special handling of field names
 			if(n->implicit)
 				fmtstrcpy(f, "{");
+			else if(n->right->implicit)
+				fmtprint(f, "&%T{", n->type);
 			else
 				fmtprint(f, "(%T{", n->type);
 			for(l=n->list; l; l=l->next) {
@@ -1221,7 +1226,7 @@ exprfmt(Fmt *f, Node *n, int prec)
 				else
 					fmtstrcpy(f, " ");
 			}
-			if(!n->implicit)
+			if(!n->implicit && !n->right->implicit)
 				return fmtstrcpy(f, "})");
 			return fmtstrcpy(f, "}");
 		}
@@ -1233,6 +1238,8 @@ exprfmt(Fmt *f, Node *n, int prec)
 			return fmtprint(f, "%T literal", n->type);
 		if(fmtmode == FExp && n->implicit)
 			return fmtprint(f, "{ %,H }", n->list);
+		if(fmtmode == FExp && n->right->implicit)
+			return fmtprint(f, "&%T{ %,H }", n->type, n->list);
 		return fmtprint(f, "(%T{ %,H })", n->type, n->list);
 
 	case OKEY:

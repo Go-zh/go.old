@@ -40,7 +40,7 @@ func checkRangeLoop(f *File, n *ast.RangeStmt) {
 		return
 	}
 	var last *ast.CallExpr
-	switch s := sl[len(sl)-1].(type) {
+	switch s := sl[len(sl) - 1].(type) {
 	case *ast.GoStmt:
 		last = s.Call
 	case *ast.DeferStmt:
@@ -53,65 +53,13 @@ func checkRangeLoop(f *File, n *ast.RangeStmt) {
 		return
 	}
 	ast.Inspect(lit.Body, func(n ast.Node) bool {
-		id, ok := n.(*ast.Ident)
-		if !ok || id.Obj == nil {
+			id, ok := n.(*ast.Ident)
+			if !ok || id.Obj == nil {
+				return true
+			}
+			if key != nil && id.Obj == key.Obj || val != nil && id.Obj == val.Obj {
+				f.Warn(id.Pos(), "range variable", id.Name, "enclosed by function")
+			}
 			return true
-		}
-		if key != nil && id.Obj == key.Obj || val != nil && id.Obj == val.Obj {
-			f.Warn(id.Pos(), "range variable", id.Name, "enclosed by function")
-		}
-		return true
-	})
-}
-
-func BadRangeLoopsUsedInTests() {
-	var s []int
-	for i, v := range s {
-		go func() {
-			println(i) // ERROR "range variable i enclosed by function"
-			println(v) // ERROR "range variable v enclosed by function"
-		}()
-	}
-	for i, v := range s {
-		defer func() {
-			println(i) // ERROR "range variable i enclosed by function"
-			println(v) // ERROR "range variable v enclosed by function"
-		}()
-	}
-	for i := range s {
-		go func() {
-			println(i) // ERROR "range variable i enclosed by function"
-		}()
-	}
-	for _, v := range s {
-		go func() {
-			println(v) // ERROR "range variable v enclosed by function"
-		}()
-	}
-	for i, v := range s {
-		go func() {
-			println(i, v)
-		}()
-		println("unfortunately, we don't catch the error above because of this statement")
-	}
-	for i, v := range s {
-		go func(i, v int) {
-			println(i, v)
-		}(i, v)
-	}
-	for i, v := range s {
-		i, v := i, v
-		go func() {
-			println(i, v)
-		}()
-	}
-	// If the key of the range statement is not an identifier
-	// the code should not panic (it used to).
-	var x [2]int
-	var f int
-	for x[0], f = range s {
-		go func() {
-			_ = f // ERROR "range variable f enclosed by function"
-		}()
-	}
+		})
 }

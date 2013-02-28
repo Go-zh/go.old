@@ -34,7 +34,6 @@ func emitLoad(f *Function, addr Value) Value {
 func emitArith(f *Function, op token.Token, x, y Value, t types.Type) Value {
 	switch op {
 	case token.SHL, token.SHR:
-		// TODO(adonovan): fix: is this correct?
 		x = emitConv(f, x, t)
 		y = emitConv(f, y, types.Typ[types.Uint64])
 
@@ -59,7 +58,6 @@ func emitArith(f *Function, op token.Token, x, y Value, t types.Type) Value {
 // comparison comparison 'x op y'.
 //
 func emitCompare(f *Function, op token.Token, x, y Value) Value {
-	// TODO(adonovan): fix: this is incomplete.
 	xt := underlyingType(x.Type())
 	yt := underlyingType(y.Type())
 
@@ -69,7 +67,7 @@ func emitCompare(f *Function, op token.Token, x, y Value) Value {
 	//   switch true { case e: ... }
 	//   if e==true { ... }
 	// even in the case when e's type is an interface.
-	// TODO(adonovan): generalise to x==true, false!=y, etc.
+	// TODO(adonovan): opt: generalise to x==true, false!=y, etc.
 	if x == vTrue && op == token.EQL {
 		if yt, ok := yt.(*types.Basic); ok && yt.Info&types.IsBoolean != 0 {
 			return y
@@ -246,16 +244,4 @@ func emitTailCall(f *Function, call *Call) {
 	}
 	f.emit(&ret)
 	f.currentBlock = nil
-}
-
-// emitSelfLoop emits to f a self-loop.
-// This is a defensive measure to ensure control-flow integrity.
-// It should never be reachable.
-// Postcondition: f.currentBlock is nil.
-//
-func emitSelfLoop(f *Function) {
-	loop := f.newBasicBlock("selfloop")
-	emitJump(f, loop)
-	f.currentBlock = loop
-	emitJump(f, loop)
 }

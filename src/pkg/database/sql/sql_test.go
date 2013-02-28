@@ -8,7 +8,6 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -63,6 +62,10 @@ func exec(t *testing.T, db *DB, query string, args ...interface{}) {
 }
 
 func closeDB(t *testing.T, db *DB) {
+	if e := recover(); e != nil {
+		fmt.Printf("Panic: %v\n", e)
+		panic(e)
+	}
 	err := db.Close()
 	if err != nil {
 		t.Fatalf("error closing DB: %v", err)
@@ -270,6 +273,35 @@ func TestStatementQueryRow(t *testing.T) {
 
 }
 
+// golang.org/issue/3734
+func TestStatementQueryRowConcurrent(t *testing.T) {
+	db := newTestDB(t, "people")
+	defer closeDB(t, db)
+	stmt, err := db.Prepare("SELECT|people|age|name=?")
+	if err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	defer stmt.Close()
+
+	const n = 10
+	ch := make(chan error, n)
+	for i := 0; i < n; i++ {
+		go func() {
+			var age int
+			err := stmt.QueryRow("Alice").Scan(&age)
+			if err == nil && age != 1 {
+				err = fmt.Errorf("unexpected age %d", age)
+			}
+			ch <- err
+		}()
+	}
+	for i := 0; i < n; i++ {
+		if err := <-ch; err != nil {
+			t.Error(err)
+		}
+	}
+}
+
 // just a test of fakedb itself
 func TestBogusPreboundParameters(t *testing.T) {
 	db := newTestDB(t, "foo")
@@ -448,10 +480,8 @@ func TestIssue2542Deadlock(t *testing.T) {
 	}
 }
 
+// From golang.org/issue/3865
 func TestCloseStmtBeforeRows(t *testing.T) {
-	t.Skip("known broken test; golang.org/issue/3865")
-	return
-
 	db := newTestDB(t, "people")
 	defer closeDB(t, db)
 
@@ -667,7 +697,14 @@ func nullTestRun(t *testing.T, spec nullTestSpec) {
 	}
 }
 
-func stack() string {
-	buf := make([]byte, 1024)
-	return string(buf[:runtime.Stack(buf, false)])
+// golang.org/issue/4859
+func TestQueryRowNilScanDest(t *testing.T) {
+	db := newTestDB(t, "people")
+	defer closeDB(t, db)
+	var name *string // nil pointer
+	err := db.QueryRow("SELECT|people|name|").Scan(name)
+	want := "sql: Scan error on column index 0: destination pointer is nil"
+	if err == nil || err.Error() != want {
+		t.Errorf("error = %q; want %q", err.Error(), want)
+	}
 }

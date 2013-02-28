@@ -271,7 +271,6 @@ struct	Node
 
 	// most nodes
 	Type*	type;
-	Type*	realtype;	// as determined by typecheck
 	Node*	orig;		// original form, for printing, and tracking copies of ONAMEs
 
 	// func
@@ -561,6 +560,8 @@ enum
 	OINLCALL,	// intermediary representation of an inlined call.
 	OEFACE,	// itable and data words of an empty-interface value.
 	OITAB,	// itable word of an interface value.
+	OCLOSUREVAR, // variable reference at beginning of closure function
+	OCFUNC,	// reference to c function pointer (not go func value)
 
 	// arch-specific registers
 	OREGISTER,	// a register, such as AX.
@@ -694,7 +695,6 @@ typedef	struct	Var	Var;
 struct	Var
 {
 	vlong	offset;
-	Sym*	gotype;
 	Node*	node;
 	int	width;
 	char	name;
@@ -907,6 +907,7 @@ EXTERN	NodeList*	externdcl;
 EXTERN	NodeList*	closures;
 EXTERN	NodeList*	exportlist;
 EXTERN	NodeList*	importlist;	// imported functions and methods with inlinable bodies
+EXTERN	NodeList*	funcsyms;
 EXTERN	int	dclcontext;		// PEXTERN/PAUTO
 EXTERN	int	incannedimport;
 EXTERN	int	statuniqgen;		// name generator for static temps
@@ -1058,6 +1059,7 @@ Node*	typedcl0(Sym *s);
 Node*	typedcl1(Node *n, Node *t, int local);
 Node*	typenod(Type *t);
 NodeList*	variter(NodeList *vl, Node *t, NodeList *el);
+Sym*	funcsym(Sym*);
 
 /*
  *	esc.c
@@ -1434,7 +1436,7 @@ void	gdata(Node*, Node*, int);
 void	gdatacomplex(Node*, Mpcplx*);
 void	gdatastring(Node*, Strlit*);
 void	genembedtramp(Type*, Type*, Sym*, int iface);
-void	ggloblnod(Node *nam, int32 width);
+void	ggloblnod(Node *nam);
 void	ggloblsym(Sym *s, int32 width, int dupok, int rodata);
 Prog*	gjmp(Prog*);
 void	gused(Node*);
