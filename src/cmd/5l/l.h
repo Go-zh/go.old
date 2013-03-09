@@ -38,6 +38,7 @@ enum
 	thechar = '5',
 	PtrSize = 4,
 	IntSize = 4,
+	MaxAlign = 8,	// max data alignment
 	FuncAlign = 4  // single-instruction alignment
 };
 
@@ -137,7 +138,7 @@ struct	Sym
 	short	version;
 	uchar	dupok;
 	uchar	reachable;
-	uchar	dynexport;
+	uchar	cgoexport;
 	uchar	leaf;
 	int32	dynid;
 	int32	plt;

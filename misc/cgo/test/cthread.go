@@ -35,6 +35,7 @@ func testCthread(t *testing.T) {
 		t.Skip("testCthread disabled on arm")
 	}
 
+	sum.i = 0
 	C.doAdd(10, 6)
 
 	want := 10*(10 - 1)/2*6

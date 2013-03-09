@@ -1,4 +1,6 @@
 enum {
 	thechar = '5',
-	CacheLineSize = 32
+	BigEndian = 0,
+	CacheLineSize = 32,
+	appendCrossover = 16
 };

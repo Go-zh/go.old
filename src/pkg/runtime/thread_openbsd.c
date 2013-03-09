@@ -123,7 +123,7 @@ runtime·semawakeup(M *mp)
 }
 
 void
-runtime·newosproc(M *mp, G *gp, void *stk, void (*fn)(void))
+runtime·newosproc(M *mp, void *stk)
 {
 	Tfork param;
 	Sigset oset;
@@ -131,8 +131,8 @@ runtime·newosproc(M *mp, G *gp, void *stk, void (*fn)(void))
 
 	if(0) {
 		runtime·printf(
-			"newosproc stk=%p m=%p g=%p fn=%p id=%d/%d ostk=%p\n",
-			stk, mp, gp, fn, mp->id, mp->tls[0], &mp);
+			"newosproc stk=%p m=%p g=%p id=%d/%d ostk=%p\n",
+			stk, mp, mp->g0, mp->id, (int32)mp->tls[0], &mp);
 	}
 
 	mp->tls[0] = mp->id;	// so 386 asm can find it
@@ -142,7 +142,7 @@ runtime·newosproc(M *mp, G *gp, void *stk, void (*fn)(void))
 	param.tf_stack = stk;
 
 	oset = runtime·sigprocmask(SIG_SETMASK, sigset_all);
-	ret = runtime·tfork((byte*)&param, sizeof(param), mp, gp, fn);
+	ret = runtime·tfork((byte*)&param, sizeof(param), mp, mp->g0, runtime·mstart);
 	runtime·sigprocmask(SIG_SETMASK, oset);
 
 	if(ret < 0) {

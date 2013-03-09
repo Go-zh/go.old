@@ -1335,13 +1335,45 @@ typedef struct {
 	IMAGE_DATA_DIRECTORY DataDirectory[16];
 } IMAGE_OPTIONAL_HEADER;
 
+typedef struct {
+	uint16 Magic;
+	uint8  MajorLinkerVersion;
+	uint8  MinorLinkerVersion;
+	uint32 SizeOfCode;
+	uint32 SizeOfInitializedData;
+	uint32 SizeOfUninitializedData;
+	uint32 AddressOfEntryPoint;
+	uint32 BaseOfCode;
+	uint64 ImageBase;
+	uint32 SectionAlignment;
+	uint32 FileAlignment;
+	uint16 MajorOperatingSystemVersion;
+	uint16 MinorOperatingSystemVersion;
+	uint16 MajorImageVersion;
+	uint16 MinorImageVersion;
+	uint16 MajorSubsystemVersion;
+	uint16 MinorSubsystemVersion;
+	uint32 Win32VersionValue;
+	uint32 SizeOfImage;
+	uint32 SizeOfHeaders;
+	uint32 CheckSum;
+	uint16 Subsystem;
+	uint16 DllCharacteristics;
+	uint64 SizeOfStackReserve;
+	uint64 SizeOfStackCommit;
+	uint64 SizeOfHeapReserve;
+	uint64 SizeOfHeapCommit;
+	uint32 LoaderFlags;
+	uint32 NumberOfRvaAndSizes;
+	IMAGE_DATA_DIRECTORY DataDirectory[16];
+} PE64_IMAGE_OPTIONAL_HEADER;
+
 static int
 match8(void *buf, char *cmp)
 {
 	return strncmp((char*)buf, cmp, 8) == 0;
 }
 
-/* TODO(czaplinski): 64b windows? */
 /*
  * Read from Windows PE/COFF .exe file image.
  */
@@ -1349,13 +1381,14 @@ static int
 pedotout(int fd, Fhdr *fp, ExecHdr *hp)
 {
 	uint32 start, magic;
-	uint32 symtab, esymtab;
+	uint32 symtab, esymtab, pclntab, epclntab;
 	IMAGE_FILE_HEADER fh;
 	IMAGE_SECTION_HEADER sh;
 	IMAGE_OPTIONAL_HEADER oh;
+	PE64_IMAGE_OPTIONAL_HEADER oh64;
 	uint8 sym[18];
-	uint32 *valp;
-	int i;
+	uint32 *valp, ib, entry;
+	int i, ohoffset;
 
 	USED(hp);
 	seek(fd, 0x3c, 0);
@@ -1384,12 +1417,33 @@ pedotout(int fd, Fhdr *fp, ExecHdr *hp)
 		return 0;
 	}
 
+	ohoffset = seek(fd, 0, 1);
 	if (readn(fd, &oh, sizeof(oh)) != sizeof(oh)) {
 		werrstr("crippled PE Optional Header");
 		return 0;
 	}
 
-	seek(fd, start+sizeof(magic)+sizeof(fh)+leswab(fh.SizeOfOptionalHeader), 0);
+	switch(oh.Magic) {
+	case 0x10b:	// PE32
+		fp->type = FI386;
+		ib = leswal(oh.ImageBase);
+		entry = leswal(oh.AddressOfEntryPoint);
+		break;
+	case 0x20b:	// PE32+
+		fp->type = FAMD64;
+		seek(fd, ohoffset, 0);
+		if (readn(fd, &oh64, sizeof(oh64)) != sizeof(oh64)) {
+			werrstr("crippled PE32+ Optional Header");
+			return 0;
+		}
+		ib = leswal(oh64.ImageBase);
+		entry = leswal(oh64.AddressOfEntryPoint);
+		break;
+	default:
+		werrstr("invalid PE Optional Header magic number");
+		return 0;
+	}
+
 	fp->txtaddr = 0;
 	fp->dataddr = 0;
 	for (i=0; i<leswab(fh.NumberOfSections); i++) {
@@ -1398,9 +1452,9 @@ pedotout(int fd, Fhdr *fp, ExecHdr *hp)
 			return 0;
 		}
 		if (match8(sh.Name, ".text"))
-			settext(fp, leswal(sh.VirtualAddress), leswal(oh.AddressOfEntryPoint), leswal(sh.VirtualSize), leswal(sh.PointerToRawData));
+			settext(fp, ib+entry, ib+leswal(sh.VirtualAddress), leswal(sh.VirtualSize), leswal(sh.PointerToRawData));
 		if (match8(sh.Name, ".data"))
-			setdata(fp, leswal(sh.VirtualAddress), leswal(sh.SizeOfRawData), leswal(sh.PointerToRawData), leswal(sh.VirtualSize)-leswal(sh.SizeOfRawData));
+			setdata(fp, ib+leswal(sh.VirtualAddress), leswal(sh.SizeOfRawData), leswal(sh.PointerToRawData), leswal(sh.VirtualSize)-leswal(sh.SizeOfRawData));
 	}
 	if (fp->txtaddr==0 || fp->dataddr==0) {
 		werrstr("no .text or .data");
@@ -1408,7 +1462,7 @@ pedotout(int fd, Fhdr *fp, ExecHdr *hp)
 	}
 
 	seek(fd, leswal(fh.PointerToSymbolTable), 0);
-	symtab = esymtab = 0;
+	symtab = esymtab = pclntab = epclntab = 0;
 	for (i=0; i<leswal(fh.NumberOfSymbols); i++) {
 		if (readn(fd, sym, sizeof(sym)) != sizeof(sym)) {
 			werrstr("crippled COFF symbol %d", i);
@@ -1419,12 +1473,16 @@ pedotout(int fd, Fhdr *fp, ExecHdr *hp)
 			symtab = leswal(*valp);
 		if (match8(sym, "esymtab"))
 			esymtab = leswal(*valp);
+		if (match8(sym, "pclntab"))
+			pclntab = leswal(*valp);
+		if (match8(sym, "epclntab"))
+			epclntab = leswal(*valp);
 	}
-	if (symtab==0 || esymtab==0) {
-		werrstr("no symtab or esymtab in COFF symbol table");
+	if (symtab==0 || esymtab==0 || pclntab==0 || epclntab==0) {
+		werrstr("no symtab or esymtab or pclntab or epclntab in COFF symbol table");
 		return 0;
 	}
-	setsym(fp, symtab, esymtab-symtab, 0, 0, 0, 0);
+	setsym(fp, symtab, esymtab-symtab, 0, 0, pclntab, epclntab-pclntab);
 
 	return 1;
 }

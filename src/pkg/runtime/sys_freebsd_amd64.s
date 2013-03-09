@@ -38,8 +38,9 @@ TEXT runtime·thr_start(SB),7,$0
 	MOVQ	m_g0(R13), DI
 	MOVQ	DI, g(CX)
 
-	CALL runtime·stackcheck(SB)
-	CALL runtime·mstart(SB)
+	CALL	runtime·stackcheck(SB)
+	CALL	runtime·mstart(SB)
+
 	MOVQ 0, AX			// crash (not reached)
 
 // Exit the entire program (like C exit)

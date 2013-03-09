@@ -42,6 +42,7 @@ enum
 	thechar = '8',
 	PtrSize = 4,
 	IntSize = 4,
+	MaxAlign = 32,	// max data alignment
 	FuncAlign = 16
 };
 
@@ -126,7 +127,7 @@ struct	Sym
 	short	version;
 	uchar	dupok;
 	uchar	reachable;
-	uchar	dynexport;
+	uchar	cgoexport;
 	uchar	special;
 	uchar	stkcheck;
 	uchar	hide;
@@ -172,7 +173,7 @@ struct	Optab
 	short	as;
 	uchar*	ytab;
 	uchar	prefix;
-	uchar	op[10];
+	uchar	op[12];
 };
 
 enum
@@ -217,6 +218,7 @@ enum
 	Zxxx		= 0,
 
 	Zlit,
+	Zlitm_r,
 	Z_rp,
 	Zbr,
 	Zcall,
@@ -233,6 +235,7 @@ enum
 	Zloop,
 	Zm_o,
 	Zm_r,
+	Zm2_r,
 	Zm_r_xm,
 	Zm_r_i_xm,
 	Zaut_r,
@@ -249,6 +252,7 @@ enum
 	Zib_rr,
 	Zil_rr,
 	Zclr,
+	Zibm_r,	/* mmx1,mmx2/mem64,imm8 */
 	Zbyte,
 	Zmov,
 	Zmax,

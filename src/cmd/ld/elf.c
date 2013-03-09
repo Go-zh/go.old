@@ -762,7 +762,7 @@ elfshbits(Section *sect)
 		sh->flags |= SHF_WRITE;
 	if(!isobj)
 		sh->addr = sect->vaddr;
-	sh->addralign = PtrSize;
+	sh->addralign = sect->align;
 	sh->size = sect->len;
 	sh->off = sect->seg->fileoff + sect->vaddr - sect->seg->vaddr;
 
@@ -843,7 +843,9 @@ elfrelocsect(Section *sect, Sym *first)
 			case D_ADDR:
 			case D_PCREL:
 				if(r->sym->type == SCONST)
-					continue;
+					continue;	// handled in data.c:/^relocsym
+				if(r->type == D_PCREL && r->sym->sect == sym->sect)
+					continue;	// handled in data.c:/^relocsym
 				break;
 			}
 

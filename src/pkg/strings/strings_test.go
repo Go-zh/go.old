@@ -967,7 +967,7 @@ var ContainsRuneTests = []struct {
 func TestContainsRune(t *testing.T) {
 	for _, ct := range ContainsRuneTests {
 		if ContainsRune(ct.str, ct.r) != ct.expected {
-			t.Errorf("ContainsRune(%s, %s) = %v, want %v",
+			t.Errorf("ContainsRune(%q, %q) = %v, want %v",
 				ct.str, ct.r, !ct.expected, ct.expected)
 		}
 	}
@@ -1093,5 +1093,23 @@ func BenchmarkFieldsFunc(b *testing.B) {
 	b.SetBytes(int64(len(fieldsInput)))
 	for i := 0; i < b.N; i++ {
 		FieldsFunc(fieldsInput, unicode.IsSpace)
+	}
+}
+
+func BenchmarkSplit1(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		Split(benchInputHard, "")
+	}
+}
+
+func BenchmarkSplit2(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		Split(benchInputHard, "/")
+	}
+}
+
+func BenchmarkSplit3(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		Split(benchInputHard, "hello")
 	}
 }

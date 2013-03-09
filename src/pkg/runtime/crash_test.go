@@ -37,15 +37,7 @@ func executeTest(t *testing.T, templ string, data interface{}) string {
 	}
 	f.Close()
 
-	// Deadlock tests hang with GOMAXPROCS>1.  Issue 4826.
-	cmd := exec.Command("go", "run", src)
-	for _, s := range os.Environ() {
-		if strings.HasPrefix(s, "GOMAXPROCS") {
-			continue
-		}
-		cmd.Env = append(cmd.Env, s)
-	}
-	got, _ := cmd.CombinedOutput()
+	got, _ := exec.Command("go", "run", src).CombinedOutput()
 	return string(got)
 }
 
@@ -99,9 +91,9 @@ func TestLockedDeadlock2(t *testing.T) {
 	testDeadlock(t, lockedDeadlockSource2)
 }
 
-func TestCgoSignalDeadlock(t *testing.T) {
-	got := executeTest(t, cgoSignalDeadlockSource, nil)
-	want := "OK\n"
+func TestGoexitDeadlock(t *testing.T) {
+	got := executeTest(t, goexitDeadlockSource, nil)
+	want := ""
 	if got != want {
 		t.Fatalf("expected %q, but got %q", want, got)
 	}
@@ -192,67 +184,20 @@ func main() {
 }
 `
 
-const cgoSignalDeadlockSource = `
+const goexitDeadlockSource = `
 package main
-
-import "C"
-
 import (
-	"fmt"
-	"runtime"
-	"time"
+      "runtime"
 )
 
+func F() {
+      for i := 0; i < 10; i++ {
+      }
+}
+
 func main() {
-	runtime.GOMAXPROCS(100)
-	ping := make(chan bool)
-	go func() {
-		for i := 0; ; i++ {
-			runtime.Gosched()
-			select {
-			case done := <-ping:
-				if done {
-					ping <- true
-					return
-				}
-				ping <- true
-			default:
-			}
-			func() {
-				defer func() {
-					recover()
-				}()
-				var s *string
-				*s = ""
-			}()
-		}
-	}()
-	time.Sleep(time.Millisecond)
-	for i := 0; i < 64; i++ {
-		go func() {
-			runtime.LockOSThread()
-			select {}
-		}()
-		go func() {
-			runtime.LockOSThread()
-			select {}
-		}()
-		time.Sleep(time.Millisecond)
-		ping <- false
-		select {
-		case <-ping:
-		case <-time.After(time.Second):
-			fmt.Printf("HANG\n")
-			return
-		}
-	}
-	ping <- true
-	select {
-	case <-ping:
-	case <-time.After(time.Second):
-		fmt.Printf("HANG\n")
-		return
-	}
-	fmt.Printf("OK\n")
+      go F()
+      go F()
+      runtime.Goexit()
 }
 `

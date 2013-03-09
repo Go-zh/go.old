@@ -17,6 +17,7 @@
 enum {
 	Debug = 0,
 	DebugMark = 0,  // run second pass to check mark
+	CollectStats = 0,
 
 	// Four bits per word (see #defines below).
 	wordsPerBitmapWord = sizeof(void*)*8/4,
@@ -165,7 +166,28 @@ enum {
 	GC_DEFAULT_PTR = GC_NUM_INSTR,
 	GC_MAP_NEXT,
 	GC_CHAN,
+
+	GC_NUM_INSTR2
 };
+
+static struct {
+	struct {
+		uint64 sum;
+		uint64 cnt;
+	} ptr;
+	uint64 nbytes;
+	struct {
+		uint64 sum;
+		uint64 cnt;
+		uint64 notype;
+		uint64 typelookup;
+	} obj;
+	uint64 rescan;
+	uint64 rescanbytes;
+	uint64 instr[GC_NUM_INSTR2];
+	uint64 putempty;
+	uint64 getfull;
+} gcstats;
 
 // markonly marks an object. It returns true if the object
 // has been marked by this function, false otherwise.
@@ -314,6 +336,11 @@ flushptrbuf(PtrTarget *ptrbuf, PtrTarget **ptrbufpos, Obj **_wp, Workbuf **_wbuf
 	ptrbuf_end = *ptrbufpos;
 	n = ptrbuf_end - ptrbuf;
 	*ptrbufpos = ptrbuf;
+
+	if(CollectStats) {
+		runtime·xadd64(&gcstats.ptr.sum, n);
+		runtime·xadd64(&gcstats.ptr.cnt, 1);
+	}
 
 	// If buffer is nearly full, get a new one.
 	if(wbuf == nil || nobj+n >= nelem(wbuf->obj)) {
@@ -546,7 +573,7 @@ static void
 scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 {
 	byte *b, *arena_start, *arena_used;
-	uintptr n, i, end_b, elemsize, ti, objti, count, type;
+	uintptr n, i, end_b, elemsize, size, ti, objti, count, type;
 	uintptr *pc, precise_type, nominal_size;
 	uintptr *map_ret, mapkey_size, mapval_size, mapkey_ti, mapval_ti;
 	void *obj;
@@ -585,6 +612,8 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 
 		if(bufferList == nil) {
 			bufferList = runtime·SysAlloc(sizeof(*bufferList));
+			if(bufferList == nil)
+				runtime·throw("runtime: cannot allocate memory");
 			bufferList->next = nil;
 		}
 		scanbuffers = bufferList;
@@ -619,6 +648,12 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 			runtime·printf("scanblock %p %D\n", b, (int64)n);
 		}
 
+		if(CollectStats) {
+			runtime·xadd64(&gcstats.nbytes, n);
+			runtime·xadd64(&gcstats.obj.sum, nobj);
+			runtime·xadd64(&gcstats.obj.cnt, 1);
+		}
+
 		if(ti != 0) {
 			pc = (uintptr*)(ti & ~(uintptr)PC_BITS);
 			precise_type = (ti & PRECISE);
@@ -632,8 +667,14 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 				stack_top.count = 1;
 			}
 		} else if(UseSpanType) {
+			if(CollectStats)
+				runtime·xadd64(&gcstats.obj.notype, 1);
+
 			type = runtime·gettype(b);
 			if(type != 0) {
+				if(CollectStats)
+					runtime·xadd64(&gcstats.obj.typelookup, 1);
+
 				t = (Type*)(type & ~(uintptr)(PtrSize-1));
 				switch(type & (PtrSize-1)) {
 				case TypeInfo_SingleObject:
@@ -690,6 +731,9 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 		end_b = (uintptr)b + n - PtrSize;
 
 	for(;;) {
+		if(CollectStats)
+			runtime·xadd64(&gcstats.instr[pc[0]], 1);
+
 		obj = nil;
 		objti = 0;
 		switch(pc[0]) {
@@ -805,6 +849,10 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 						// Found a value that may be a pointer.
 						// Do a rescan of the entire block.
 						enqueue((Obj){b, n, 0}, &wbuf, &wp, &nobj);
+						if(CollectStats) {
+							runtime·xadd64(&gcstats.rescan, 1);
+							runtime·xadd64(&gcstats.rescanbytes, n);
+						}
 						break;
 					}
 				}
@@ -837,7 +885,7 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 			// Stack push.
 			*stack_ptr-- = stack_top;
 			stack_top = (Frame){1, 0, stack_top.b + pc[1], pc+3 /*return address*/};
-			pc = (uintptr*)((byte*)pc + (uintptr)pc[2]);  // target of the CALL instruction
+			pc = (uintptr*)((byte*)pc + *(int32*)(pc+2));  // target of the CALL instruction
 			continue;
 
 		case GC_MAP_PTR:
@@ -905,9 +953,14 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 			continue;
 
 		case GC_REGION:
-			// TODO(atom): to be expanded in a next CL. Same as GC_APTR for now.
 			obj = (void*)(stack_top.b + pc[1]);
+			size = pc[2];
+			objti = pc[3];
 			pc += 4;
+
+			*objbufpos++ = (Obj){obj, size, objti};
+			if(objbufpos == objbuf_end)
+				flushobjbuf(objbuf, &objbufpos, &wp, &wbuf, &nobj);
 			break;
 
 		case GC_CHAN:
@@ -1142,6 +1195,8 @@ getempty(Workbuf *b)
 		if(work.nchunk < sizeof *b) {
 			work.nchunk = 1<<20;
 			work.chunk = runtime·SysAlloc(work.nchunk);
+			if(work.chunk == nil)
+				runtime·throw("runtime: cannot allocate memory");
 		}
 		b = (Workbuf*)work.chunk;
 		work.chunk += sizeof *b;
@@ -1155,6 +1210,9 @@ getempty(Workbuf *b)
 static void
 putempty(Workbuf *b)
 {
+	if(CollectStats)
+		runtime·xadd64(&gcstats.putempty, 1);
+
 	runtime·lfstackpush(&work.empty, &b->node);
 }
 
@@ -1163,6 +1221,9 @@ static Workbuf*
 getfull(Workbuf *b)
 {
 	int32 i;
+
+	if(CollectStats)
+		runtime·xadd64(&gcstats.getfull, 1);
 
 	if(b != nil)
 		runtime·lfstackpush(&work.empty, &b->node);
@@ -1225,6 +1286,8 @@ addroot(Obj obj)
 		if(cap < 2*work.rootcap)
 			cap = 2*work.rootcap;
 		new = (Obj*)runtime·SysAlloc(cap*sizeof(Obj));
+		if(new == nil)
+			runtime·throw("runtime: cannot allocate memory");
 		if(work.roots != nil) {
 			runtime·memmove(new, work.roots, work.rootcap*sizeof(Obj));
 			runtime·SysFree(work.roots, work.rootcap*sizeof(Obj));
@@ -1376,6 +1439,8 @@ handlespecial(byte *p, uintptr size)
 	if(finq == nil || finq->cnt == finq->cap) {
 		if(finc == nil) {
 			finc = runtime·SysAlloc(PageSize);
+			if(finc == nil)
+				runtime·throw("runtime: cannot allocate memory");
 			finc->cap = (PageSize - sizeof(FinBlock)) / sizeof(Finalizer) + 1;
 			finc->alllink = allfin;
 			allfin = finc;
@@ -1621,19 +1686,11 @@ runtime·gchelper(void)
 static int32 gcpercent = GcpercentUnknown;
 
 static void
-stealcache(void)
-{
-	M *mp;
-
-	for(mp=runtime·allm; mp; mp=mp->alllink)
-		runtime·MCache_ReleaseAll(mp->mcache);
-}
-
-static void
 cachestats(GCStats *stats)
 {
 	M *mp;
 	MCache *c;
+	P *p, **pp;
 	int32 i;
 	uint64 stacks_inuse;
 	uint64 *src, *dst;
@@ -1642,8 +1699,6 @@ cachestats(GCStats *stats)
 		runtime·memclr((byte*)stats, sizeof(*stats));
 	stacks_inuse = 0;
 	for(mp=runtime·allm; mp; mp=mp->alllink) {
-		c = mp->mcache;
-		runtime·purgecachedstats(c);
 		stacks_inuse += mp->stackinuse*FixedStack;
 		if(stats) {
 			src = (uint64*)&mp->gcstats;
@@ -1652,6 +1707,12 @@ cachestats(GCStats *stats)
 				dst[i] += src[i];
 			runtime·memclr((byte*)&mp->gcstats, sizeof(mp->gcstats));
 		}
+	}
+	for(pp=runtime·allp; p=*pp; pp++) {
+		c = p->mcache;
+		if(c==nil)
+			continue;
+		runtime·purgecachedstats(c);
 		for(i=0; i<nelem(c->local_by_size); i++) {
 			mstats.by_size[i].nmalloc += c->local_by_size[i].nmalloc;
 			c->local_by_size[i].nmalloc = 0;
@@ -1738,7 +1799,7 @@ static void
 gc(struct gc_args *args)
 {
 	int64 t0, t1, t2, t3, t4;
-	uint64 heap0, heap1, obj0, obj1;
+	uint64 heap0, heap1, obj0, obj1, ninstr;
 	GCStats stats;
 	M *mp;
 	uint32 i;
@@ -1754,6 +1815,9 @@ gc(struct gc_args *args)
 
 	m->gcing = 1;
 	runtime·stoptheworld();
+
+	if(CollectStats)
+		runtime·memclr((byte*)&gcstats, sizeof(gcstats));
 
 	for(mp=runtime·allm; mp; mp=mp->alllink)
 		runtime·settype_flush(mp, false);
@@ -1806,11 +1870,10 @@ gc(struct gc_args *args)
 	runtime·parfordo(work.sweepfor);
 	t3 = runtime·nanotime();
 
-	stealcache();
-	cachestats(&stats);
-
 	if(work.nproc > 1)
 		runtime·notesleep(&work.alldone);
+
+	cachestats(&stats);
 
 	stats.nprocyield += work.sweepfor->nprocyield;
 	stats.nosyield += work.sweepfor->nosyield;
@@ -1851,6 +1914,27 @@ gc(struct gc_args *args)
 			stats.nhandoff, stats.nhandoffcnt,
 			work.sweepfor->nsteal, work.sweepfor->nstealcnt,
 			stats.nprocyield, stats.nosyield, stats.nsleep);
+		if(CollectStats) {
+			runtime·printf("scan: %D bytes, %D objects, %D untyped, %D types from MSpan\n",
+				gcstats.nbytes, gcstats.obj.cnt, gcstats.obj.notype, gcstats.obj.typelookup);
+			if(gcstats.ptr.cnt != 0)
+				runtime·printf("avg ptrbufsize: %D (%D/%D)\n",
+					gcstats.ptr.sum/gcstats.ptr.cnt, gcstats.ptr.sum, gcstats.ptr.cnt);
+			if(gcstats.obj.cnt != 0)
+				runtime·printf("avg nobj: %D (%D/%D)\n",
+					gcstats.obj.sum/gcstats.obj.cnt, gcstats.obj.sum, gcstats.obj.cnt);
+			runtime·printf("rescans: %D, %D bytes\n", gcstats.rescan, gcstats.rescanbytes);
+
+			runtime·printf("instruction counts:\n");
+			ninstr = 0;
+			for(i=0; i<nelem(gcstats.instr); i++) {
+				runtime·printf("\t%d:\t%D\n", i, gcstats.instr[i]);
+				ninstr += gcstats.instr[i];
+			}
+			runtime·printf("\ttotal:\t%D\n", ninstr);
+
+			runtime·printf("putempty: %D, getfull: %D\n", gcstats.putempty, gcstats.getfull);
+		}
 	}
 
 	runtime·MProf_GC();

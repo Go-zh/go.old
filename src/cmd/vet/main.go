@@ -15,7 +15,6 @@ import (
 	"go/parser"
 	"go/printer"
 	"go/token"
-	"go/types"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -30,6 +29,7 @@ var exitCode = 0
 // a flag is set explicitly.
 var report = map[string]*bool{
 	"all":        flag.Bool("all", true, "check everything; disabled if any explicit check is requested"),
+	"assign":     flag.Bool("assign", false, "check for useless assignments"),
 	"atomic":     flag.Bool("atomic", false, "check for common mistaken usages of the sync/atomic package"),
 	"buildtags":  flag.Bool("buildtags", false, "check that +build tags are valid"),
 	"composites": flag.Bool("composites", false, "check that composite literals used type-tagged elements"),
@@ -160,6 +160,7 @@ func doPackageDir(directory string) {
 		return
 	}
 	var names []string
+	names = append(names, pkg.GoFiles...)
 	names = append(names, pkg.CgoFiles...)
 	names = append(names, pkg.TestGoFiles...) // These are also in the "foo" package.
 	prefixDirectory(directory, names)
@@ -173,7 +174,7 @@ func doPackageDir(directory string) {
 }
 
 type Package struct {
-	types  map[ast.Expr]types.Type
+	types  map[ast.Expr]Type
 	values map[ast.Expr]interface{}
 }
 
@@ -185,35 +186,28 @@ func doPackage(names []string) {
 	for _, name := range names {
 		f, err := os.Open(name)
 		if err != nil {
-			errorf("%s: %s", name, err)
+			// Warn but continue to next package.
+			warnf("%s: %s", name, err)
+			return
 		}
 		defer f.Close()
 		data, err := ioutil.ReadAll(f)
 		if err != nil {
-			errorf("%s: %s", name, err)
+			warnf("%s: %s", name, err)
+			return
 		}
 		checkBuildTag(name, data)
 		parsedFile, err := parser.ParseFile(fs, name, bytes.NewReader(data), 0)
 		if err != nil {
-			errorf("%s: %s", name, err)
+			warnf("%s: %s", name, err)
+			return
 		}
 		files = append(files, &File{fset: fs, name: name, file: parsedFile})
 		astFiles = append(astFiles, parsedFile)
 	}
 	pkg := new(Package)
-	pkg.types = make(map[ast.Expr]types.Type)
-	pkg.values = make(map[ast.Expr]interface{})
-	exprFn := func(x ast.Expr, typ types.Type, val interface{}) {
-		pkg.types[x] = typ
-		if val != nil {
-			pkg.values[x] = val
-		}
-	}
-	context := types.Context{
-		Expr: exprFn,
-	}
 	// Type check the package.
-	_, err := context.Check(fs, astFiles)
+	err := pkg.check(fs, astFiles)
 	if err != nil && *verbose {
 		warnf("%s", err)
 	}
@@ -225,7 +219,8 @@ func doPackage(names []string) {
 
 func visit(path string, f os.FileInfo, err error) error {
 	if err != nil {
-		errorf("walk error: %s", err)
+		warnf("walk error: %s", err)
+		return err
 	}
 	// One package per directory. Ignore the files themselves.
 	if !f.IsDir() {
@@ -235,7 +230,7 @@ func visit(path string, f os.FileInfo, err error) error {
 	return nil
 }
 
-// walkDir recursively walks the tree looking for .go files.
+// walkDir recursively walks the tree looking for Go packages.
 func walkDir(root string) {
 	filepath.Walk(root, visit)
 }
@@ -329,6 +324,7 @@ func (f *File) Visit(node ast.Node) ast.Visitor {
 
 // walkAssignStmt walks an assignment statement
 func (f *File) walkAssignStmt(stmt *ast.AssignStmt) {
+	f.checkAssignStmt(stmt)
 	f.checkAtomicAssignment(stmt)
 }
 
@@ -388,7 +384,7 @@ func (f *File) walkRangeStmt(n *ast.RangeStmt) {
 	checkRangeLoop(f, n)
 }
 
-// goFmt returns a string representation of the expression
+// gofmt returns a string representation of the expression.
 func (f *File) gofmt(x ast.Expr) string {
 	f.b.Reset()
 	printer.Fprint(&f.b, f.fset, x)

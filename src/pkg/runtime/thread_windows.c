@@ -31,6 +31,9 @@
 #pragma dynimport runtime·timeBeginPeriod timeBeginPeriod "winmm.dll"
 #pragma dynimport runtime·WaitForSingleObject WaitForSingleObject "kernel32.dll"
 #pragma dynimport runtime·WriteFile WriteFile "kernel32.dll"
+#pragma dynimport runtime·NtWaitForSingleObject NtWaitForSingleObject "ntdll.dll"
+
+extern void *runtime·NtWaitForSingleObject;
 
 extern void *runtime·CloseHandle;
 extern void *runtime·CreateEvent;
@@ -135,22 +138,6 @@ runtime·write(int32 fd, void *buf, int32 n)
 	return written;
 }
 
-#pragma textflag 7
-void
-runtime·osyield(void)
-{
-	runtime·stdcall(runtime·Sleep, 1, (uintptr)0);
-}
-
-void
-runtime·usleep(uint32 us)
-{
-	us /= 1000;
-	if(us == 0)
-		us = 1;
-	runtime·stdcall(runtime·Sleep, 1, (uintptr)us);
-}
-
 #define INFINITE ((uintptr)0xFFFFFFFF)
 
 int32
@@ -187,13 +174,11 @@ runtime·semacreate(void)
 #define STACK_SIZE_PARAM_IS_A_RESERVATION ((uintptr)0x00010000)
 
 void
-runtime·newosproc(M *mp, G *gp, void *stk, void (*fn)(void))
+runtime·newosproc(M *mp, void *stk)
 {
 	void *thandle;
 
 	USED(stk);
-	USED(gp);	// assuming gp = mp->g0
-	USED(fn);	// assuming fn = mstart
 
 	thandle = runtime·stdcall(runtime·CreateThread, 6,
 		nil, (uintptr)0x20000, runtime·tstart_stdcall, mp,

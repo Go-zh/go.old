@@ -138,7 +138,7 @@ package code.google.com/p/foo/quxx: cannot download, $GOPATH must not be set to 
 
 <h2 id="library">Changes to the standard library</h2>
 
-<h3 id="debug/elf">debug/elf</h3>
+<h3 id="debug_elf">debug/elf</h3>
 <p>
     Previous versions of the debug/elf package intentionally skipped over the first
     symbol in the ELF symbol table, since it is always an empty symbol. This symbol
@@ -148,7 +148,7 @@ package code.google.com/p/foo/quxx: cannot download, $GOPATH must not be set to 
     adjusted to account for the additional symbol and the change in symbol offsets.
 </p>
 
-<h3 id="html/template">html/template</h3>
+<h3 id="html_template">html/template</h3>
 
 <p>
     Templates using the undocumented and only partially implemented
@@ -190,4 +190,26 @@ package code.google.com/p/foo/quxx: cannot download, $GOPATH must not be set to 
     external storage.
 </p>
 
-TODO
+<h3 id="exp_old">Exp and old subtrees moved to go.exp subrepo</h3>
+
+<p>
+To make it easier for binary distributions to access them if desired, the <code>exp</code>
+and <code>old</code> source subtrees, which are not included in binary distributions,
+have been moved to the new <code>go.exp</code> subrepository at
+<code>code.google.com/p/go.exp</code>. To access the <code>ssa</code> package,
+for example, run
+</p>
+
+<pre>
+$ go get code.google.com/p/go.exp/ssa
+</pre>
+
+<p>
+and then in Go source,
+</p>
+
+<pre>
+import "code.google.com/p/go.exp/ssa"
+</pre>
+
+<h3 id="TODO">TODO</h3>

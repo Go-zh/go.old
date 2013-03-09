@@ -313,7 +313,6 @@ static char *unreleased[] = {
 	"src/cmd/cov",
 	"src/cmd/prof",
 	"src/pkg/old",
-	"src/pkg/exp",
 };
 
 // setup sets up the tree for the initial build.
@@ -411,7 +410,13 @@ static char *proto_gccargs[] = {
 	"-fno-common",
 	"-ggdb",
 	"-pipe",
+#if defined(__NetBSD__) && defined(__arm__)
+	// GCC 4.5.4 (NetBSD nb1 20120916) on ARM is known to mis-optimize gc/mparith3.c
+	// Fix available at http://patchwork.ozlabs.org/patch/64562/.
+	"-O1",
+#else
 	"-O2",
+#endif
 };
 
 static Vec gccargs;

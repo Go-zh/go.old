@@ -34,6 +34,7 @@ TEXT runtime·thr_start(SB),7,$0
 	MOVW m_g0(R9), R10
 	BL runtime·emptyfunc(SB) // fault if stack check is wrong
 	BL runtime·mstart(SB)
+
 	MOVW $2, R9  // crash (not reached)
 	MOVW R9, (R9)
 	RET
@@ -133,10 +134,10 @@ TEXT runtime·sigaction(SB),7,$-8
 TEXT runtime·sigtramp(SB),7,$24
 	// this might be called in external code context,
 	// where g and m are not set.
-	// first save R0, because cgo_load_gm will clobber it
+	// first save R0, because _cgo_load_gm will clobber it
 	// TODO(adonovan): call runtime·badsignal if m=0, like other platforms?
 	MOVW	R0, 4(R13) // signum
-	MOVW	cgo_load_gm(SB), R0
+	MOVW	_cgo_load_gm(SB), R0
 	CMP 	$0, R0
 	BL.NE	(R0)
 

@@ -43,6 +43,7 @@ includes_FreeBSD='
 #include <sys/socket.h>
 #include <sys/sockio.h>
 #include <sys/sysctl.h>
+#include <sys/mman.h>
 #include <sys/wait.h>
 #include <sys/ioctl.h>
 #include <net/bpf.h>
@@ -83,6 +84,10 @@ includes_Linux='
 #include <net/if_arp.h>
 #include <net/route.h>
 #include <netpacket/packet.h>
+
+#ifndef MSG_FASTOPEN
+#define MSG_FASTOPEN    0x20000000
+#endif
 '
 
 includes_NetBSD='

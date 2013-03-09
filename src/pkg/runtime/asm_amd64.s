@@ -6,22 +6,22 @@
 
 TEXT _rt0_amd64(SB),7,$-8
 	// copy arguments forward on an even stack
-	MOVQ	0(DI), AX		// argc
-	LEAQ	8(DI), BX		// argv
+	MOVQ	DI, AX		// argc
+	MOVQ	SI, BX		// argv
 	SUBQ	$(4*8+7), SP		// 2args 2auto
 	ANDQ	$~15, SP
 	MOVQ	AX, 16(SP)
 	MOVQ	BX, 24(SP)
 	
 	// create istack out of the given (operating system) stack.
-	// initcgo may update stackguard.
+	// _cgo_init may update stackguard.
 	MOVQ	$runtime·g0(SB), DI
 	LEAQ	(-64*1024+104)(SP), BX
 	MOVQ	BX, g_stackguard(DI)
 	MOVQ	SP, g_stackbase(DI)
 
-	// if there is an initcgo, call it.
-	MOVQ	initcgo(SB), AX
+	// if there is an _cgo_init, call it.
+	MOVQ	_cgo_init(SB), AX
 	TESTQ	AX, AX
 	JZ	needtls
 	// g0 already in DI
@@ -440,6 +440,12 @@ TEXT runtime·xchg(SB), 7, $0
 	MOVQ	8(SP), BX
 	MOVL	16(SP), AX
 	XCHGL	AX, 0(BX)
+	RET
+
+TEXT runtime·xchg64(SB), 7, $0
+	MOVQ	8(SP), BX
+	MOVQ	16(SP), AX
+	XCHGQ	AX, 0(BX)
 	RET
 
 TEXT runtime·procyield(SB),7,$0

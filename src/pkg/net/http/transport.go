@@ -17,7 +17,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/url"
@@ -42,10 +41,13 @@ const DefaultMaxIdleConnsPerHost = 2
 // https, and http proxies (for either http or https with CONNECT).
 // Transport can also cache connections for future re-use.
 type Transport struct {
-	idleLk   sync.Mutex
-	idleConn map[string][]*persistConn
-	altLk    sync.RWMutex
-	altProto map[string]RoundTripper // nil or map of URI scheme => RoundTripper
+	idleMu     sync.Mutex
+	idleConn   map[string][]*persistConn
+	idleConnCh map[string]chan *persistConn
+	reqMu      sync.Mutex
+	reqConn    map[*Request]*persistConn
+	altMu      sync.RWMutex
+	altProto   map[string]RoundTripper // nil or map of URI scheme => RoundTripper
 
 	// TODO: tunable on global max cached connections
 	// TODO: tunable on timeout on cached connections
@@ -73,6 +75,12 @@ type Transport struct {
 	// (keep-alive) to keep per-host.  If zero,
 	// DefaultMaxIdleConnsPerHost is used.
 	MaxIdleConnsPerHost int
+
+	// ResponseHeaderTimeout, if non-zero, specifies the amount of
+	// time to wait for a server's response headers after fully
+	// writing the request (including its body, if any). This
+	// time does not include the time to read the response body.
+	ResponseHeaderTimeout time.Duration
 }
 
 // ProxyFromEnvironment returns the URL of the proxy to use for a
@@ -133,12 +141,12 @@ func (t *Transport) RoundTrip(req *Request) (resp *Response, err error) {
 		return nil, errors.New("http: nil Request.Header")
 	}
 	if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
-		t.altLk.RLock()
+		t.altMu.RLock()
 		var rt RoundTripper
 		if t.altProto != nil {
 			rt = t.altProto[req.URL.Scheme]
 		}
-		t.altLk.RUnlock()
+		t.altMu.RUnlock()
 		if rt == nil {
 			return nil, &badStringError{"unsupported protocol scheme", req.URL.Scheme}
 		}
@@ -175,8 +183,8 @@ func (t *Transport) RegisterProtocol(scheme string, rt RoundTripper) {
 	if scheme == "http" || scheme == "https" {
 		panic("protocol " + scheme + " already registered")
 	}
-	t.altLk.Lock()
-	defer t.altLk.Unlock()
+	t.altMu.Lock()
+	defer t.altMu.Unlock()
 	if t.altProto == nil {
 		t.altProto = make(map[string]RoundTripper)
 	}
@@ -191,10 +199,10 @@ func (t *Transport) RegisterProtocol(scheme string, rt RoundTripper) {
 // a "keep-alive" state. It does not interrupt any connections currently
 // in use.
 func (t *Transport) CloseIdleConnections() {
-	t.idleLk.Lock()
+	t.idleMu.Lock()
 	m := t.idleConn
 	t.idleConn = nil
-	t.idleLk.Unlock()
+	t.idleMu.Unlock()
 	if m == nil {
 		return
 	}
@@ -202,6 +210,17 @@ func (t *Transport) CloseIdleConnections() {
 		for _, pconn := range conns {
 			pconn.close()
 		}
+	}
+}
+
+// CancelRequest cancels an in-flight request by closing its
+// connection.
+func (t *Transport) CancelRequest(req *Request) {
+	t.reqMu.Lock()
+	pc := t.reqConn[req]
+	t.reqMu.Unlock()
+	if pc != nil {
+		pc.conn.Close()
 	}
 }
 
@@ -260,12 +279,23 @@ func (t *Transport) putIdleConn(pconn *persistConn) bool {
 	if max == 0 {
 		max = DefaultMaxIdleConnsPerHost
 	}
-	t.idleLk.Lock()
+	t.idleMu.Lock()
+	select {
+	case t.idleConnCh[key] <- pconn:
+		// We're done with this pconn and somebody else is
+		// currently waiting for a conn of this type (they're
+		// actively dialing, but this conn is ready
+		// first). Chrome calls this socket late binding.  See
+		// https://insouciant.org/tech/connection-management-in-chromium/
+		t.idleMu.Unlock()
+		return true
+	default:
+	}
 	if t.idleConn == nil {
 		t.idleConn = make(map[string][]*persistConn)
 	}
 	if len(t.idleConn[key]) >= max {
-		t.idleLk.Unlock()
+		t.idleMu.Unlock()
 		pconn.close()
 		return false
 	}
@@ -275,14 +305,29 @@ func (t *Transport) putIdleConn(pconn *persistConn) bool {
 		}
 	}
 	t.idleConn[key] = append(t.idleConn[key], pconn)
-	t.idleLk.Unlock()
+	t.idleMu.Unlock()
 	return true
 }
 
+func (t *Transport) getIdleConnCh(cm *connectMethod) chan *persistConn {
+	key := cm.key()
+	t.idleMu.Lock()
+	defer t.idleMu.Unlock()
+	if t.idleConnCh == nil {
+		t.idleConnCh = make(map[string]chan *persistConn)
+	}
+	ch, ok := t.idleConnCh[key]
+	if !ok {
+		ch = make(chan *persistConn)
+		t.idleConnCh[key] = ch
+	}
+	return ch
+}
+
 func (t *Transport) getIdleConn(cm *connectMethod) (pconn *persistConn) {
-	key := cm.String()
-	t.idleLk.Lock()
-	defer t.idleLk.Unlock()
+	key := cm.key()
+	t.idleMu.Lock()
+	defer t.idleMu.Unlock()
 	if t.idleConn == nil {
 		return nil
 	}
@@ -307,6 +352,19 @@ func (t *Transport) getIdleConn(cm *connectMethod) (pconn *persistConn) {
 	panic("unreachable")
 }
 
+func (t *Transport) setReqConn(r *Request, pc *persistConn) {
+	t.reqMu.Lock()
+	defer t.reqMu.Unlock()
+	if t.reqConn == nil {
+		t.reqConn = make(map[*Request]*persistConn)
+	}
+	if pc != nil {
+		t.reqConn[r] = pc
+	} else {
+		delete(t.reqConn, r)
+	}
+}
+
 func (t *Transport) dial(network, addr string) (c net.Conn, err error) {
 	if t.Dial != nil {
 		return t.Dial(network, addr)
@@ -323,6 +381,37 @@ func (t *Transport) getConn(cm *connectMethod) (*persistConn, error) {
 		return pc, nil
 	}
 
+	type dialRes struct {
+		pc  *persistConn
+		err error
+	}
+	dialc := make(chan dialRes)
+	go func() {
+		pc, err := t.dialConn(cm)
+		dialc <- dialRes{pc, err}
+	}()
+
+	idleConnCh := t.getIdleConnCh(cm)
+	select {
+	case v := <-dialc:
+		// Our dial finished.
+		return v.pc, v.err
+	case pc := <-idleConnCh:
+		// Another request finished first and its net.Conn
+		// became available before our dial. Or somebody
+		// else's dial that they didn't use.
+		// But our dial is still going, so give it away
+		// when it finishes:
+		go func() {
+			if v := <-dialc; v.err == nil {
+				t.putIdleConn(v.pc)
+			}
+		}()
+		return pc, nil
+	}
+}
+
+func (t *Transport) dialConn(cm *connectMethod) (*persistConn, error) {
 	conn, err := t.dial("tcp", cm.addr())
 	if err != nil {
 		if cm.proxyURL != nil {
@@ -335,7 +424,7 @@ func (t *Transport) getConn(cm *connectMethod) (*persistConn, error) {
 
 	pconn := &persistConn{
 		t:        t,
-		cacheKey: cm.String(),
+		cacheKey: cm.key(),
 		conn:     conn,
 		reqch:    make(chan requestAndChan, 50),
 		writech:  make(chan writeRequest, 50),
@@ -485,6 +574,10 @@ type connectMethod struct {
 	targetAddr   string   // Not used if proxy + http targetScheme (4th example in table)
 }
 
+func (ck *connectMethod) key() string {
+	return ck.String() // TODO: use a struct type instead
+}
+
 func (ck *connectMethod) String() string {
 	proxyStr := ""
 	targetAddr := ck.targetAddr
@@ -560,7 +653,6 @@ func remoteSideClosed(err error) bool {
 func (pc *persistConn) readLoop() {
 	defer close(pc.closech)
 	alive := true
-	var lastbody io.ReadCloser // last response body, if any, read on this connection
 
 	for alive {
 		pb, err := pc.br.Peek(1)
@@ -579,22 +671,15 @@ func (pc *persistConn) readLoop() {
 
 		rc := <-pc.reqch
 
-		// Advance past the previous response's body, if the
-		// caller hasn't done so.
-		if lastbody != nil {
-			lastbody.Close() // assumed idempotent
-			lastbody = nil
-		}
-
 		var resp *Response
 		if err == nil {
 			resp, err = ReadResponse(pc.br, rc.req)
 		}
+		hasBody := resp != nil && rc.req.Method != "HEAD" && resp.ContentLength != 0
 
 		if err != nil {
 			pc.close()
 		} else {
-			hasBody := rc.req.Method != "HEAD" && resp.ContentLength != 0
 			if rc.addedGzip && hasBody && resp.Header.Get("Content-Encoding") == "gzip" {
 				resp.Header.Del("Content-Encoding")
 				resp.Header.Del("Content-Length")
@@ -604,7 +689,7 @@ func (pc *persistConn) readLoop() {
 					pc.close()
 					err = zerr
 				} else {
-					resp.Body = &readFirstCloseBoth{&discardOnCloseReadCloser{gzReader}, resp.Body}
+					resp.Body = &readerAndCloser{gzReader, resp.Body}
 				}
 			}
 			resp.Body = &bodyEOFSignal{body: resp.Body}
@@ -614,11 +699,16 @@ func (pc *persistConn) readLoop() {
 			alive = false
 		}
 
-		hasBody := resp != nil && rc.req.Method != "HEAD" && resp.ContentLength != 0
 		var waitForBodyRead chan bool
 		if hasBody {
-			lastbody = resp.Body
-			waitForBodyRead = make(chan bool, 1)
+			waitForBodyRead = make(chan bool, 2)
+			resp.Body.(*bodyEOFSignal).earlyCloseFn = func() error {
+				// Sending false here sets alive to
+				// false and closes the connection
+				// below.
+				waitForBodyRead <- false
+				return nil
+			}
 			resp.Body.(*bodyEOFSignal).fn = func(err error) {
 				alive1 := alive
 				if err != nil {
@@ -635,15 +725,6 @@ func (pc *persistConn) readLoop() {
 		}
 
 		if alive && !hasBody {
-			// When there's no response body, we immediately
-			// reuse the TCP connection (putIdleConn), but
-			// we need to prevent ClientConn.Read from
-			// closing the Response.Body on the next
-			// loop, otherwise it might close the body
-			// before the client code has had a chance to
-			// read it (even though it'll just be 0, EOF).
-			lastbody = nil
-
 			if !pc.t.putIdleConn(pc) {
 				alive = false
 			}
@@ -656,6 +737,8 @@ func (pc *persistConn) readLoop() {
 		if waitForBodyRead != nil {
 			alive = <-waitForBodyRead
 		}
+
+		pc.t.setReqConn(rc.req, nil)
 
 		if !alive {
 			pc.close()
@@ -710,6 +793,7 @@ type writeRequest struct {
 }
 
 func (pc *persistConn) roundTrip(req *transportRequest) (resp *Response, err error) {
+	pc.t.setReqConn(req.Request, pc)
 	pc.lk.Lock()
 	pc.numExpectedResponses++
 	headerFn := pc.mutateHeaderFunc
@@ -744,6 +828,7 @@ func (pc *persistConn) roundTrip(req *transportRequest) (resp *Response, err err
 	var re responseAndError
 	var pconnDeadCh = pc.closech
 	var failTicker <-chan time.Time
+	var respHeaderTimer <-chan time.Time
 WaitResponse:
 	for {
 		select {
@@ -752,6 +837,9 @@ WaitResponse:
 				re = responseAndError{nil, err}
 				pc.close()
 				break WaitResponse
+			}
+			if d := pc.t.ResponseHeaderTimeout; d > 0 {
+				respHeaderTimer = time.After(d)
 			}
 		case <-pconnDeadCh:
 			// The persist connection is dead. This shouldn't
@@ -769,7 +857,11 @@ WaitResponse:
 			pconnDeadCh = nil                               // avoid spinning
 			failTicker = time.After(100 * time.Millisecond) // arbitrary time to wait for resc
 		case <-failTicker:
-			re = responseAndError{nil, errors.New("net/http: transport closed before response was received")}
+			re = responseAndError{err: errors.New("net/http: transport closed before response was received")}
+			break WaitResponse
+		case <-respHeaderTimer:
+			pc.close()
+			re = responseAndError{err: errors.New("net/http: timeout awaiting response headers")}
 			break WaitResponse
 		case re = <-resc:
 			break WaitResponse
@@ -780,6 +872,9 @@ WaitResponse:
 	pc.numExpectedResponses--
 	pc.lk.Unlock()
 
+	if re.err != nil {
+		pc.t.setReqConn(req.Request, nil)
+	}
 	return re.res, re.err
 }
 
@@ -823,13 +918,16 @@ func canonicalAddr(url *url.URL) string {
 
 // bodyEOFSignal wraps a ReadCloser but runs fn (if non-nil) at most
 // once, right before its final (error-producing) Read or Close call
-// returns.
+// returns. If earlyCloseFn is non-nil and Close is called before
+// io.EOF is seen, earlyCloseFn is called instead of fn, and its
+// return value is the return value from Close.
 type bodyEOFSignal struct {
-	body   io.ReadCloser
-	mu     sync.Mutex  // guards closed, rerr and fn
-	closed bool        // whether Close has been called
-	rerr   error       // sticky Read error
-	fn     func(error) // error will be nil on Read io.EOF
+	body         io.ReadCloser
+	mu           sync.Mutex   // guards following 4 fields
+	closed       bool         // whether Close has been called
+	rerr         error        // sticky Read error
+	fn           func(error)  // error will be nil on Read io.EOF
+	earlyCloseFn func() error // optional alt Close func used if io.EOF not seen
 }
 
 func (es *bodyEOFSignal) Read(p []byte) (n int, err error) {
@@ -862,6 +960,9 @@ func (es *bodyEOFSignal) Close() error {
 		return nil
 	}
 	es.closed = true
+	if es.earlyCloseFn != nil && es.rerr != io.EOF {
+		return es.earlyCloseFn()
+	}
 	err := es.body.Close()
 	es.condfn(err)
 	return err
@@ -879,28 +980,7 @@ func (es *bodyEOFSignal) condfn(err error) {
 	es.fn = nil
 }
 
-type readFirstCloseBoth struct {
-	io.ReadCloser
+type readerAndCloser struct {
+	io.Reader
 	io.Closer
-}
-
-func (r *readFirstCloseBoth) Close() error {
-	if err := r.ReadCloser.Close(); err != nil {
-		r.Closer.Close()
-		return err
-	}
-	if err := r.Closer.Close(); err != nil {
-		return err
-	}
-	return nil
-}
-
-// discardOnCloseReadCloser consumes all its input on Close.
-type discardOnCloseReadCloser struct {
-	io.ReadCloser
-}
-
-func (d *discardOnCloseReadCloser) Close() error {
-	io.Copy(ioutil.Discard, d.ReadCloser) // ignore errors; likely invalid or already closed
-	return d.ReadCloser.Close()
 }

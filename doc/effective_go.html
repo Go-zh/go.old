@@ -41,8 +41,14 @@ The <a href="/src/pkg/">Go package sources</a>
 are intended to serve not
 only as the core library but also as examples of how to
 use the language.
+Moreover, many of the packages contain working, self-contained
+executable examples you can run directly from the
+<a href="http://golang.org">golang.org</a> web site, such as
+<a href="http://golang.org/pkg/strings/#example_Map">this one</a> (click
+on the word "Example" to open it up).
 If you have a question about how to approach a problem or how something
-might be implemented, they can provide answers, ideas and
+might be implemented, the documentation, code and examples in the
+library can provide answers, ideas and
 background.
 </p>
 
@@ -108,7 +114,7 @@ All Go code in the standard packages has been formatted with <code>gofmt</code>.
 
 
 <p>
-Some formatting details remain.  Very briefly,
+Some formatting details remain.  Very briefly:
 </p>
 
 <dl>
@@ -123,14 +129,14 @@ Some formatting details remain.  Very briefly,
     </dd>
     <dt>Parentheses</dt>
     <dd>
-    Go needs fewer parentheses: control structures (<code>if</code>,
+    Go needs fewer parentheses than C and Java: control structures (<code>if</code>,
     <code>for</code>, <code>switch</code>) do not have parentheses in
     their syntax.
     Also, the operator precedence hierarchy is shorter and clearer, so
 <pre>
 x&lt;&lt;8 + y&lt;&lt;16
 </pre>
-    means what the spacing implies.
+    means what the spacing implies, unlike in the other languages.
     </dd>
 </dl>
 
@@ -140,8 +146,8 @@ x&lt;&lt;8 + y&lt;&lt;16
 Go provides C-style <code>/* */</code> block comments
 and C++-style <code>//</code> line comments.
 Line comments are the norm;
-block comments appear mostly as package comments and
-are also useful to disable large swaths of code.
+block comments appear mostly as package comments, but
+are useful within an expression or to disable large swaths of code.
 </p>
 
 <p>
@@ -205,6 +211,13 @@ takes care of that.
 The comments are uninterpreted plain text, so HTML and other
 annotations such as <code>_this_</code> will reproduce <i>verbatim</i> and should
 not be used.
+One adjustment <code>godoc</code> does do is to display indented
+text in a fixed-width font, suitable for program snippets.
+The package comment for the
+<a href="http://golang.org/pkg/fmt/"><code>fmt</code> package</a> uses this to good effect.
+</p>
+
+<p>
 Depending on the context, <code>godoc</code> might not even
 reformat comments, so make sure they look good straight up:
 use correct spelling, punctuation, and sentence structure,
@@ -229,6 +242,33 @@ starts with the name being declared.
 // Compile parses a regular expression and returns, if successful, a Regexp
 // object that can be used to match against text.
 func Compile(str string) (regexp *Regexp, err error) {
+</pre>
+
+<p>
+If the name always begins the comment, the output of <code>godoc</code>
+can usefully be run through <code>grep</code>.
+Imagine you couldn't remember the name "Compile" but were looking for
+the parsing function for regular expressions, so you ran
+the command,
+</p>
+
+<pre>
+$ godoc regexp | grep parse
+</pre>
+
+<p>
+If all the doc comments in the package began, "This function...", <code>grep</code>
+wouldn't help you remember the name. But because the package starts each
+doc comment with the name, you'd see something like this,
+which recalls the word you're looking for.
+</p>
+
+<pre>
+$ godoc regexp | grep parse
+    Compile parses a regular expression and returns, if successful, a Regexp
+    parsed. It simplifies safe initialization of global variables holding
+    cannot be parsed. It simplifies safe initialization of global variables
+$
 </pre>
 
 <p>
@@ -265,7 +305,7 @@ var (
 
 <p>
 Names are as important in Go as in any other language.
-In some cases they even have semantic effect: for instance,
+They even have semantic effect:
 the visibility of a name outside a package is determined by whether its
 first character is upper case.
 It's therefore worth spending a little time talking about naming conventions
@@ -310,11 +350,11 @@ not <code>encoding_base64</code> and not <code>encodingBase64</code>.
 </p>
 
 <p>
-The importer of a package will use the name to refer to its contents
-(the <code>import .</code> notation is intended mostly for tests and other
-unusual situations and should be avoided unless necessary),
+The importer of a package will use the name to refer to its contents.
 so exported names in the package can use that fact
 to avoid stutter.
+(Don't use the <code>import .</code> notation, which can simplify
+tests that must run outside the package they are testing, but should otherwise be avoided.)
 For instance, the buffered reader type in the <code>bufio</code> package is called <code>Reader</code>,
 not <code>BufReader</code>, because users see it as <code>bufio.Reader</code>,
 which is a clear, concise name.
@@ -335,9 +375,7 @@ Another short example is <code>once.Do</code>;
 <code>once.Do(setup)</code> reads well and would not be improved by
 writing <code>once.DoOrWaitUntilDone(setup)</code>.
 Long names don't automatically make things more readable.
-If the name represents something intricate or subtle, it's usually better
-to write a helpful doc comment than to attempt to put all the information
-into the name.
+A helpful doc comment can often be more valuable than an extra long name.
 </p>
 
 <h3 id="Getters">Getters</h3>
@@ -394,8 +432,8 @@ multiword names.
 <h2 id="semicolons">Semicolons</h2>
 
 <p>
-Like C, Go's formal grammar uses semicolons to terminate statements;
-unlike C, those semicolons do not appear in the source.
+Like C, Go's formal grammar uses semicolons to terminate statements,
+but unlike in C, those semicolons do not appear in the source.
 Instead the lexer uses a simple rule to insert semicolons automatically
 as it scans, so the input text is mostly free of them.
 </p>
@@ -431,7 +469,8 @@ statements on a line, should you write code that way.
 </p>
 
 <p>
-One caveat. You should never put the opening brace of a
+One consequence of the semicolon insertion rules
+is that you cannot put the opening brace of a
 control structure (<code>if</code>, <code>for</code>, <code>switch</code>,
 or <code>select</code>) on the next line.  If you do, a semicolon
 will be inserted before the brace, which could cause unwanted
@@ -540,7 +579,7 @@ codeUsing(f, d)
 </pre>
 
 
-<h3 id="redeclaration">Redeclaration</h3>
+<h3 id="redeclaration">Redeclaration and reassignment</h3>
 
 <p>
 An aside: The last example in the previous section demonstrates a detail of how the
@@ -577,7 +616,7 @@ if it has already been declared, provided:
 
 <ul>
 <li>this declaration is in the same scope as the existing declaration of <code>v</code>
-(if <code>v</code> is already declared in an outer scope, the declaration will create a new variable),</li>
+(if <code>v</code> is already declared in an outer scope, the declaration will create a new variable §),</li>
 <li>the corresponding value in the initialization is assignable to <code>v</code>, and</li>
 <li>there is at least one other variable in the declaration that is being declared anew.</li>
 </ul>
@@ -587,6 +626,12 @@ This unusual property is pure pragmatism,
 making it easy to use a single <code>err</code> value, for example,
 in a long <code>if-else</code> chain.
 You'll see it used often.
+</p>
+
+<p>
+§ It's worth noting here that in Go the scope of function parameters and return values
+is the same as the function body, even though they appear lexically outside the braces
+that enclose the body.
 </p>
 
 <h3 id="for">For</h3>
@@ -634,7 +679,7 @@ If you only need the first item in the range (the key or index), drop the second
 </p>
 <pre>
 for key := range m {
-    if expired(key) {
+    if key.expired() {
         delete(m, key)
     }
 }
@@ -651,30 +696,39 @@ for _, value := range array {
 </pre>
 
 <p>
+The blank identifier has many uses, as described in <a href="#blank">a later section</a>.
+
+<p>
 For strings, the <code>range</code> does more work for you, breaking out individual
-Unicode characters by parsing the UTF-8.
+Unicode code points by parsing the UTF-8.
 Erroneous encodings consume one byte and produce the
-replacement rune U+FFFD. The loop
+replacement rune U+FFFD.
+(The name (with associated builtin type) <code>rune</code> is Go terminology for a
+single Unicode code point.
+See <a href="http://golang.org/ref/spec#Rune_literals">the language specification</a>
+for details.)
+The loop
 </p>
 <pre>
-for pos, char := range "日本語" {
-    fmt.Printf("character %c starts at byte position %d\n", char, pos)
+for pos, char := range "日本\x80語" { // \x80 is an illegal UTF-8 encoding
+    fmt.Printf("character %#U starts at byte position %d\n", char, pos)
 }
 </pre>
 <p>
 prints
 </p>
 <pre>
-character 日 starts at byte position 0
-character 本 starts at byte position 3
-character 語 starts at byte position 6
+character U+65E5 '日' starts at byte position 0
+character U+672C '本' starts at byte position 3
+character U+FFFD '�' starts at byte position 6
+character U+8A9E '語' starts at byte position 7
 </pre>
 
 <p>
 Finally, Go has no comma operator and <code>++</code> and <code>--</code>
 are statements not expressions.
 Thus if you want to run multiple variables in a <code>for</code>
-you should use parallel assignment.
+you should use parallel assignment (although that precludes <code>++</code> and <code>--</code>).
 </p>
 <pre>
 // Reverse a
@@ -751,25 +805,31 @@ func Compare(a, b []byte) int {
 }
 </pre>
 
+<h2 id="type_switch">Type switch</h2>
+
 <p>
 A switch can also be used to discover the dynamic type of an interface
 variable.  Such a <em>type switch</em> uses the syntax of a type
 assertion with the keyword <code>type</code> inside the parentheses.
 If the switch declares a variable in the expression, the variable will
 have the corresponding type in each clause.
+It's also idiomatic to reuse the name in such cases, in effect declaring
+a new variable with the same name but a different type in each case.
 </p>
 <pre>
-switch t := interfaceValue.(type) {
+var t interface{}
+t = functionOfSomeType()
+switch t := t.(type) {
 default:
-    fmt.Printf("unexpected type %T", t)  // %T prints type
+    fmt.Printf("unexpected type %T", t)       // %T prints whatever type t has
 case bool:
-    fmt.Printf("boolean %t\n", t)
+    fmt.Printf("boolean %t\n", t)             // t has type bool
 case int:
-    fmt.Printf("integer %d\n", t)
+    fmt.Printf("integer %d\n", t)             // t has type int
 case *bool:
-    fmt.Printf("pointer to boolean %t\n", *t)
+    fmt.Printf("pointer to boolean %t\n", *t) // t has type *bool
 case *int:
-    fmt.Printf("pointer to integer %d\n", *t)
+    fmt.Printf("pointer to integer %d\n", *t) // t has type *int
 }
 </pre>
 
@@ -781,8 +841,8 @@ case *int:
 One of Go's unusual features is that functions and methods
 can return multiple values.  This form can be used to
 improve on a couple of clumsy idioms in C programs: in-band
-error returns (such as <code>-1</code> for <code>EOF</code>)
-and modifying an argument.
+error returns such as <code>-1</code> for <code>EOF</code>
+and modifying an argument passed by address.
 </p>
 
 <p>
@@ -791,7 +851,8 @@ error code secreted away in a volatile location.
 In Go, <code>Write</code>
 can return a count <i>and</i> an error: &ldquo;Yes, you wrote some
 bytes but not all of them because you filled the device&rdquo;.
-The signature of <code>File.Write</code> in package <code>os</code> is:
+The signature of the <code>Write</code> method on files from
+package <code>os</code> is:
 </p>
 
 <pre>
@@ -1158,7 +1219,7 @@ It creates slices, maps, and channels only, and it returns an <em>initialized</e
 (not <em>zeroed</em>)
 value of type <code>T</code> (not <code>*T</code>).
 The reason for the distinction
-is that these three types are, under the covers, references to data structures that
+is that these three types represent, under the covers, references to data structures that
 must be initialized before use.
 A slice, for example, is a three-item descriptor
 containing a pointer to the data (inside an array), the length, and the
@@ -1203,7 +1264,8 @@ v := make([]int, 100)
 <p>
 Remember that <code>make</code> applies only to maps, slices and channels
 and does not return a pointer.
-To obtain an explicit pointer allocate with <code>new</code>.
+To obtain an explicit pointer allocate with <code>new</code> or take the address
+of a variable explicitly.
 </p>
 
 <h3 id="arrays">Arrays</h3>
@@ -1250,7 +1312,8 @@ x := Sum(&amp;array)  // Note the explicit address-of operator
 </pre>
 
 <p>
-But even this style isn't idiomatic Go.  Slices are.
+But even this style isn't idiomatic Go.
+Use slices instead.
 </p>
 
 <h3 id="slices">Slices</h3>
@@ -1262,9 +1325,9 @@ dimension such as transformation matrices, most array programming in
 Go is done with slices rather than simple arrays.
 </p>
 <p>
-Slices are <i>reference types</i>, which means that if you assign one
-slice to another, both refer to the same underlying array.  For
-instance, if a function takes a slice argument, changes it makes to
+Slices hold references to an underlying array, and if you assign one
+slice to another, both refer to the same array.
+If a function takes a slice argument, changes it makes to
 the elements of the slice will be visible to the caller, analogous to
 passing a pointer to the underlying array.  A <code>Read</code>
 function can therefore accept a slice argument rather than a pointer
@@ -1341,19 +1404,87 @@ design, though, we need a little more information, so we'll return
 to it later.
 </p>
 
+<h3 id="two_dimensional_slices">Two-dimensional slices</h3>
+
+<p>
+Go's arrays and slices are one-dimensional.
+To create the equivalent of a 2D array or slice, it is necessary to define an array-of-arrays
+or slice-of-slices, like this:
+</p>
+
+<pre>
+type Transform [3][3]float64  // A 3x3 array, really an array of arrays.
+type LinesOfText [][]byte     // A slice of byte slices.
+</pre>
+
+<p>
+Because slices are variable-length, it is possible to have each inner
+slice be a different length.
+That can be a common situation, as in our <code>LinesOfText</code>
+example: each line has an independent length.
+</p>
+
+<pre>
+text := LinesOfText{
+	[]byte("Now is the time"),
+	[]byte("for all good gophers"),
+	[]byte("to bring some fun to the party."),
+}
+</pre>
+
+<p>
+Sometimes it's necessary to allocate a 2D slice, a situation that can arise when
+processing scan lines of pixels, for instance.
+There are two ways to achieve this.
+One is to allocate each slice independently; the other
+is to allocate a single array and point the individual slices into it.
+Which to use depends on your application.
+If the slices might grow or shrink, they should be allocated independently
+to avoid overwriting the next line; if not, it can be more efficient to construct
+the object with a single allocation.
+For reference, here are sketches of the two methods.
+First, a line a time:
+</p>
+
+<pre>
+// Allocate the top-level slice.
+picture := make([][]uint8, YSize) // One row per unit of y.
+// Loop over the rows, allocating the slice for each row.
+for i := range picture {
+	picture[i] = make([]uint8, XSize)
+}
+</pre>
+
+<p>
+And now as one allocation, sliced into lines:
+</p>
+
+<pre>
+// Allocate the top-level slice, the same as before.
+picture := make([][]uint8, YSize) // One row per unit of y.
+// Allocate one large slice to hold all the pixels.
+pixels := make([]uint8, XSize*YSize) // Has type []uint8 even though picture is [][]uint8.
+// Loop over the rows, slicing each row from the front of the remaining pixels slice.
+for i := range picture {
+	picture[i], pixels = pixels[:XSize], pixels[XSize:]
+}
+</pre>
 
 <h3 id="maps">Maps</h3>
 
 <p>
-Maps are a convenient and powerful built-in data structure to associate
-values of different types.
+Maps are a convenient and powerful built-in data structure that associate
+values of one type (the <em>key</em>) with values of another type
+(the <em>element</em> or <em>value</em>)
 The key can be of any type for which the equality operator is defined,
 such as integers,
 floating point and complex numbers,
 strings, pointers, interfaces (as long as the dynamic type
-supports equality), structs and arrays. Slices cannot be used as map keys,
+supports equality), structs and arrays.
+Slices cannot be used as map keys,
 because equality is not defined on them.
-Like slices, maps are a reference type. If you pass a map to a function
+Like slices, maps hold references to an underlying data structure.
+If you pass a map to a function
 that changes the contents of the map, the changes will be visible
 in the caller.
 </p>
@@ -1403,7 +1534,7 @@ if attended[person] { // will be false if person is not in the map
 <p>
 Sometimes you need to distinguish a missing entry from
 a zero value.  Is there an entry for <code>"UTC"</code>
-or is that zero value because it's not in the map at all?
+or is that the empty string because it's not in the map at all?
 You can discriminate with a form of multiple assignment.
 </p>
 <pre>
@@ -1430,10 +1561,8 @@ func offset(tz string) int {
 </pre>
 <p>
 To test for presence in the map without worrying about the actual value,
-you can use the blank identifier (<code>_</code>).
-The blank identifier can be assigned or declared with any value of any type, with the
-value discarded harmlessly.  For testing just presence in a map, use the blank
-identifier in place of the usual variable for the value.
+you can use the <a href="#blank">blank identifier</a> (<code>_</code>)
+in place of the usual variable for the value.
 </p>
 <pre>
 _, present := timeZone[tz]
@@ -1474,8 +1603,7 @@ fmt.Println("Hello", 23)
 fmt.Println(fmt.Sprint("Hello ", 23))
 </pre>
 <p>
-As mentioned in
-the <a href="http://tour.golang.org">Tour</a>, <code>fmt.Fprint</code>
+The formatted print functions <code>fmt.Fprint</code>
 and friends take as a first argument any object
 that implements the <code>io.Writer</code> interface; the variables <code>os.Stdout</code>
 and <code>os.Stderr</code> are familiar instances.
@@ -1541,8 +1669,10 @@ map[string] int{"CST":-21600, "PST":-28800, "EST":-18000, "UTC":0, "MST":-25200}
 <p>
 (Note the ampersands.)
 That quoted string format is also available through <code>%q</code> when
-applied to a value of type <code>string</code> or <code>[]byte</code>;
-the alternate format <code>%#q</code> will use backquotes instead if possible.
+applied to a value of type <code>string</code> or <code>[]byte</code>.
+The alternate format <code>%#q</code> will use backquotes instead if possible.
+(The <code>%q</code> format also applies to integers and runes, producing a
+single-quoted rune constant.)
 Also, <code>%x</code> works on strings, byte arrays and byte slices as well as
 on integers, generating a long hexadecimal string, and with
 a space in the format (<code>%&nbsp;x</code>) it puts spaces between the bytes.
@@ -1582,10 +1712,45 @@ the receiver for <code>String</code> must be of value type; this example used a 
 that's more efficient and idiomatic for struct types.
 See the section below on <a href="#pointers_vs_values">pointers vs. value receivers</a> for more information.)
 </p>
+
 <p>
 Our <code>String</code> method is able to call <code>Sprintf</code> because the
-print routines are fully reentrant and can be used recursively.
-We can even go one step further and pass a print routine's arguments directly to another such routine.
+print routines are fully reentrant and can be wrapped this way.
+There is one important detail to understand about this approach,
+however: don't construct a <code>String</code> method by calling
+<code>Sprintf</code> in a way that will recur into your <code>String</code>
+method indefinitely.  This can happen if the <code>Sprintf</code>
+call attempts to print the receiver directly as a string, which in
+turn will invoke the method again.  It's a common and easy mistake
+to make, as this example shows.
+</p>
+
+<pre>
+type MyString string
+
+func (m MyString) String() string {
+    return fmt.Sprintf("MyString=%s", m) // Error: will recur forever.
+}
+</pre>
+
+<p>
+It's also easy to fix: convert the argument to the basic string type, which does not have the
+method.
+</p>
+
+<pre>
+type MyString string
+func (m MyString) String() string {
+    return fmt.Sprintf("MyString=%s", string(m)) // OK: note conversion.
+}
+</pre>
+
+<p>
+In the <a href="#initialization">initialization section</a> we'll see another technique that avoids this recursion.
+</p>
+
+<p>
+Another printing technique is to pass a print routine's arguments directly to another such routine.
 The signature of <code>Printf</code> uses the type <code>...interface{}</code>
 for its final argument to specify that an arbitrary number of parameters (of arbitrary type)
 can appear after the format.
@@ -1640,7 +1805,7 @@ is different from our custom <code>Append</code> function above.
 Schematically, it's like this:
 </p>
 <pre>
-func append(slice []<i>T</i>, elements...T) []<i>T</i>
+func append(slice []<i>T</i>, elements...<i>T</i>) []<i>T</i>
 </pre>
 <p>
 where <i>T</i> is a placeholder for any given type.  You can't
@@ -1688,7 +1853,7 @@ would be wrong; <code>y</code> is not of type <code>int</code>.
 Although it doesn't look superficially very different from
 initialization in C or C++, initialization in Go is more powerful.
 Complex structures can be built during initialization and the ordering
-issues between initialized objects in different packages are handled
+issues among initialized objects, even among different packages, are handled
 correctly.
 </p>
 
@@ -1698,7 +1863,7 @@ correctly.
 Constants in Go are just that&mdash;constant.
 They are created at compile time, even when defined as
 locals in functions,
-and can only be numbers, strings or booleans.
+and can only be numbers, characters (runes), strings or booleans.
 Because of the compile-time restriction, the expressions
 that define them must be constant expressions,
 evaluatable by the compiler.  For instance,
@@ -1716,9 +1881,11 @@ sets of values.
 </p>
 {{code "/doc/progs/eff_bytesize.go" `/^type ByteSize/` `/^\)/`}}
 <p>
-The ability to attach a method such as <code>String</code> to a
-type makes it possible for such values to format themselves
-automatically for printing, even as part of a general type.
+The ability to attach a method such as <code>String</code> to any
+user-defined type makes it possible for arbitrary values to format themselves
+automatically for printing.
+Although you'll see it most often applied to structs, this technique is also useful for
+scalar types such as floating-point types like <code>ByteSize</code>.
 </p>
 {{code "/doc/progs/eff_bytesize.go" `/^func.*ByteSize.*String/` `/^}/`}}
 <p>
@@ -1727,13 +1894,13 @@ while <code>ByteSize(1e13)</code> prints as <code>9.09TB</code>.
 </p>
 
 <p>
-Note that it's fine to call <code>Sprintf</code> and friends in the
-implementation of <code>String</code> methods, but beware of
-recurring into the <code>String</code> method through the nested
-<code>Sprintf</code> call using a string format
-(<code>%s</code>, <code>%q</code>, <code>%v</code>, <code>%x</code> or <code>%X</code>).
-The <code>ByteSize</code> implementation of <code>String</code> is safe
-because it calls <code>Sprintf</code> with <code>%f</code>.
+The use here of <code>Sprintf</code>
+to implement <code>ByteSize</code>'s <code>String</code> method is safe
+(avoids recurring indefinitely) not because of a conversion but
+because it calls <code>Sprintf</code> with <code>%f</code>,
+which is not a string format: <code>Sprintf</code> will only call
+the <code>String</code> method when it wants a string, and <code>%f</code>
+wants a floating-point value.
 </p>
 
 <h3 id="variables">Variables</h3>
@@ -1787,7 +1954,8 @@ func init() {
 
 <h3 id="pointers_vs_values">Pointers vs. Values</h3>
 <p>
-Methods can be defined for any named type that is not a pointer or an interface;
+As we saw with <code>ByteSize</code>,
+methods can be defined for any named type (except a pointer or an interface);
 the receiver does not have to be a struct.
 </p>
 <p>
@@ -1848,7 +2016,7 @@ modifications to be discarded.
 </p>
 <p>
 By the way, the idea of using <code>Write</code> on a slice of bytes
-is implemented by <code>bytes.Buffer</code>.
+is central to the implementation of <code>bytes.Buffer</code>.
 </p>
 
 <h2 id="interfaces_and_types">Interfaces and other types</h2>
@@ -1891,10 +2059,8 @@ func (s Sequence) String() string {
 }
 </pre>
 <p>
-The conversion causes <code>s</code> to be treated as an ordinary slice
-and therefore receive the default formatting.
-Without the conversion, <code>Sprint</code> would find the
-<code>String</code> method of <code>Sequence</code> and recur indefinitely.
+This method is another example of the conversion technique for calling
+<code>Sprintf</code> safely from a <code>String</code> method.
 Because the two types (<code>Sequence</code> and <code>[]int</code>)
 are the same if we ignore the type name, it's legal to convert between them.
 The conversion doesn't create a new value, it just temporarily acts
@@ -1925,6 +2091,91 @@ converted to multiple types (<code>Sequence</code>, <code>sort.IntSlice</code>
 and <code>[]int</code>), each of which does some part of the job.
 That's more unusual in practice but can be effective.
 </p>
+
+<h3 id="interface_conversions">Interface conversions and type assertions</h3>
+
+<p>
+<a href="#type_switch">Type switches</a> are a form of conversion: they take an interface and, for
+each case in the switch, in a sense convert it to the type of that case.
+Here's a simplified version of how the code under <code>fmt.Printf</code> turns a value into
+a string using a type switch.
+If it's already a string, we want the actual string value held by the interface, while if it has a
+<code>String</code> method we want the result of calling the method.
+</p>
+
+<pre>
+type Stringer interface {
+    String() string
+}
+
+var value interface{} // Value provided by caller.
+switch str := value.(type) {
+case string:
+    return str
+case Stringer:
+    return str.String()
+}
+</pre>
+
+<p>
+The first case finds a concrete value; the second converts the interface into another interface.
+It's perfectly fine to mix types this way.
+</p>
+
+<p>
+What if there's only one type we care about? If we know the value holds a <code>string</code>
+and we just want to extract it?
+A one-case type switch would do, but so would a <em>type assertion</em>.
+A type assertion takes an interface value and extracts from it a value of the specified explicit type.
+The syntax borrows from the clause opening a type switch, but with an explicit
+type rather than the <code>type</code> keyword:
+
+<pre>
+value.(typeName)
+</pre>
+
+<p>
+and the result is a new value with the static type <code>typeName</code>.
+That type must either be the concrete type held by the interface, or a second interface
+type that the value can be converted to.
+To extract the string we know is in the value, we could write:
+</p>
+
+<pre>
+str := value.(string)
+</pre>
+
+<p>
+But if it turns out that the value does not contain a string, the program will crash with a run-time error.
+To guard against that, use the "comma, ok" idiom to test, safely, whether the value is a string:
+</p>
+
+<pre>
+str, ok := value.(string)
+if ok {
+    fmt.Printf("string value is: %q\n", str)
+} else {
+    fmt.Printf("value is not a string\n")
+}
+</pre>
+
+<p>
+If the type assertion fails, <code>str</code> will still exist and be of type string, but it will have
+the zero value, an empty string.
+</p>
+
+<p>
+As an illustration of the capability, here's an <code>if</code>-<code>else</code>
+statement that's equivalent to the type switch that opened this section.
+</p>
+
+<pre>
+if str, ok := value.(string); ok {
+    return str
+} else if str, ok := value.(Stringer); ok {
+    return str.String()
+}
+</pre>
 
 <h3 id="generality">Generality</h3>
 <p>
@@ -2083,9 +2334,7 @@ It's easy to write a function to print the arguments.
 </p>
 <pre>
 func ArgServer() {
-    for _, s := range os.Args {
-        fmt.Println(s)
-    }
+    fmt.Println(os.Args)
 }
 </pre>
 <p>
@@ -2121,9 +2370,7 @@ to have the right signature.
 <pre>
 // Argument server.
 func ArgServer(w http.ResponseWriter, req *http.Request) {
-    for _, s := range os.Args {
-        fmt.Fprintln(w, s)
-    }
+    fmt.Fprintln(w, os.Args)
 }
 </pre>
 <p>
@@ -2151,6 +2398,196 @@ In this section we have made an HTTP server from a struct, an integer,
 a channel, and a function, all because interfaces are just sets of
 methods, which can be defined for (almost) any type.
 </p>
+
+<h2 id="blank">The blank identifier</h2>
+
+<p>
+We've mentioned the blank identifier a couple of times now, in the context of
+<a href="#for"><code>for</code> <code>range</code> loops</a>
+and <a href="#maps">maps</a>.
+The blank identifier can be assigned or declared with any value of any type, with the
+value discarded harmlessly.
+It's a bit like writing to the Unix <code>/dev/null</code> file:
+it represents a write-only value
+to be used as a place-holder
+where a variable is needed but the actual value is irrelevant.
+It has uses beyond those we've seen already.
+</p>
+
+<h3 id="blank_assign">The blank identifier in multiple assignment</h3>
+
+<p>
+The use of a blank identifier in a <code>for</code> <code>range</code> loop is a
+special case of a general situation: multiple assignment.
+<p>
+If an assignment requires multiple values on the left side,
+but one of the values will not be used by the program,
+a blank identifier on the left-hand-side of the
+the assignment avoids the need
+to create a dummy variable and makes it clear that the
+value is to be discarded.
+For instance, when calling a function that returns
+a value and an error, but only the error is important,
+use the blank identifier to discard the irrelevant value.
+</p>
+
+<pre>
+if _, err := os.Stat(path); os.IsNotExist(err) {
+	fmt.Printf("%s does not exist\n", path)
+}
+</pre>
+
+<p>
+Occasionally you'll see code that discards the error value in order
+to ignore the error; this is terrible practice. Always check error returns;
+they're provided for a reason.
+</p>
+
+<pre>
+// Bad! This code will crash if path does not exist.
+fi, _ := os.Stat(path)
+if fi.IsDir() {
+    fmt.Printf("%s is a directory\n", path)
+}
+</pre>
+
+<h3 id="blank_unused">Unused imports and variables</h3>
+
+<p>
+It is an error to import a package or to declare a variable without using it.
+Unused imports bloat the program and slow compilation,
+while a variable that is initialized but not used is at least
+a wasted computation and perhaps indicative of a
+larger bug.
+When a program is under active development, however,
+unused imports and variables often arise and it can
+be annoying to delete them just to have the compilation proceed,
+only to have them be needed again later.
+The blank identifier provides a workaround.
+</p>
+<p>
+This half-written program is has two unused imports
+(<code>fmt</code> and <code>io</code>)
+and an unused variable (<code>fd</code>),
+so it will not compile, but it would be nice to see if the
+code so far is correct.
+</p>
+{{code "/doc/progs/eff_unused1.go" `/package/` `$`}}
+<p>
+To silence complaints about the unused imports, use a
+blank identifier to refer to a symbol from the imported package.
+Similarly, assigning the unused variable <code>fd</code>
+to the blank identifier will silence the unused variable error.
+This version of the program does compile.
+</p>
+{{code "/doc/progs/eff_unused2.go" `/package/` `$`}}
+
+<p>
+By convention, the global declarations to silence import errors
+should come right after the imports and be commented,
+both to make them easy to find and as a reminder to clean things up later.
+</p>
+
+<h3 id="blank_import">Import for side effect</h3>
+
+<p>
+An unused import like <code>fmt</code> or <code>io</code> in the
+previous example should eventually be used or removed:
+blank assignments identify code as a work in progress.
+But sometimes it is useful to import a package only for its
+side effects, without any explicit use.
+For example, during its <code>init</code> function,
+the <code><a href="/pkg/net/http/pprof/">net/http/pprof</a></code>
+package registers HTTP handlers that provide
+debugging information. It has an exported API, but
+most clients need only the handler registration and
+access the data through a web page.
+To import the package only for its side effects, rename the package
+to the blank identifier:
+</p>
+<pre>
+import _ "net/http/pprof"
+</pre>
+<p>
+This form of import makes clear that the package is being
+imported for its side effects, because there is no other possible
+use of the package: in this file, it doesn't have a name.
+(If it did, and we didn't use that name, the compiler would reject the program.)
+</p>
+
+<h3 id="blank_implements">Interface checks</h3>
+
+<p>
+As we saw in the discussion of <a href="#interfaces_and_types">interfaces</a> above,
+a type need not declare explicitly that it implements an interface.
+Instead, a type implements the interface just by implementing the interface's methods.
+In practice, most interface conversions are static and therefore checked at compile time.
+For example, passing an <code>*os.File</code> to a function
+expecting an <code>io.Reader</code> will not compile unless
+<code>*os.File</code> implements the <code>io.Reader</code> interface.
+</p>
+
+<p>
+Some interface checks do happen at run-time, though.
+One instance is in the <code><a href="/pkg/encoding/json/">encoding/json</a></code>
+package, which defines a <code><a href="/pkg/encoding/json/#Marshaler">Marshaler</a></code>
+interface. When the JSON encoder receives a value that implements that interface,
+the encoder invokes the value's marshaling method to convert it to JSON
+instead of doing the standard conversion.
+The encoder checks this property at run time with a <a href="interface_conversions">type assertion</a> like:
+</p>
+
+<pre>
+m, ok := val.(json.Marshaler)
+</pre>
+
+<p>
+If it's necessary only to ask whether a type implements an interface, without
+actually using the interface itself, perhaps as part of an error check, use the blank
+identifier to ignore the type-asserted value:
+</p>
+
+<pre>
+if _, ok := val.(json.Marshaler); ok {
+    fmt.Printf("value %v of type %T implements json.Marshaler\n", val, val)
+}
+</pre>
+
+<p>
+One place this situation arises is when it is necessary to guarantee within the package implementing the type that
+it it actually satisfies the interface.
+If a type—for example,
+<code><a href="/pkg/encoding/json/#RawMessage">json.RawMessage</a></code>—needs
+a custom its JSON representation, it should implement
+<code>json.Marshaler</code>, but there are no static conversions that would
+cause the compiler to verify this automatically.
+If the type inadvertently fails to satisfy the interface, the JSON encoder will still work,
+but will not use the custom implementation.
+To guarantee that the implementation is correct,
+a global declaration using the blank identifier can be used in the package:
+</p>
+<pre>
+var _ json.Marshaler = (*RawMessage)(nil)
+</pre>
+<p>
+In this declaration, the assignment involving a conversion of a
+<code>*RawMessage</code> to a <code>Marshaler</code>
+requires that <code>*RawMessage</code> implements <code>Marshaler</code>,
+and that property will be checked at compile time.
+Should the <code>json.Marshaler</code> interface change, this package
+will no longer compile and we will be on notice that it needs to be updated.
+</p>
+
+<p>
+The appearance of the blank identifier in this construct indicates that
+the declaration exists only for the type checking,
+not to create a variable.
+Don't do this for every type that satisfies an interface, though.
+By convention, such declarations are only used
+when there are no static conversions already present in the code,
+which is a rare event.
+</p>
+
 
 <h2 id="embedding">Embedding</h2>
 
@@ -2278,8 +2715,8 @@ log to the <code>Job</code>:
 job.Log("starting now...")
 </pre>
 <p>
-The <code>Logger</code> is a regular field of the struct and we can initialize
-it in the usual way with a constructor,
+The <code>Logger</code> is a regular field of the <code>Job</code> struct,
+so we can initialize it in the usual way inside the constructor for <code>Job</code>, like this,
 </p>
 <pre>
 func NewJob(command string, logger *log.Logger) *Job {
@@ -2294,10 +2731,12 @@ job := &amp;Job{command, log.New(os.Stderr, "Job: ", log.Ldate)}
 </pre>
 <p>
 If we need to refer to an embedded field directly, the type name of the field,
-ignoring the package qualifier, serves as a field name.  If we needed to access the
+ignoring the package qualifier, serves as a field name, as it did
+in the <code>Read</code> method of our <code>ReaderWriter</code> struct.
+Here, if we needed to access the
 <code>*log.Logger</code> of a <code>Job</code> variable <code>job</code>,
-we would write <code>job.Logger</code>.
-This would be useful if we wanted to refine the methods of <code>Logger</code>.
+we would write <code>job.Logger</code>,
+which would be useful if we wanted to refine the methods of <code>Logger</code>.
 </p>
 <pre>
 func (job *Job) Logf(format string, args ...interface{}) {
@@ -2413,7 +2852,8 @@ completion.  For that, we need channels.
 <h3 id="channels">Channels</h3>
 
 <p>
-Like maps, channels are a reference type and are allocated with <code>make</code>.
+Like maps, channels are allocated with <code>make</code>, and
+the resulting value acts as a reference to an underlying data structure.
 If an optional integer parameter is provided, it sets the buffer size for the channel.
 The default is zero, for an unbuffered or synchronous channel.
 </p>
@@ -2423,7 +2863,7 @@ cj := make(chan int, 0)         // unbuffered channel of integers
 cs := make(chan *os.File, 100)  // buffered channel of pointers to Files
 </pre>
 <p>
-Channels combine communication&mdash;the exchange of a value&mdash;with
+Unbuffered channels combine communication&mdash;the exchange of a value&mdash;with
 synchronization&mdash;guaranteeing that two calculations (goroutines) are in
 a known state.
 </p>
@@ -2619,6 +3059,17 @@ of logical CPUs on the local machine.
 Again, this requirement is expected to be retired as the scheduling and run-time improve.
 </p>
 
+<p>
+Be sure not to confuse the ideas of concurrency—structuring a program
+as independently executing components—and parallelism—executing
+calculations in parallel for efficiency on multiple CPUs.
+Although the concurrency features of Go can make some problems easy
+to structure as parallel computations, Go is a concurrent language,
+not a parallel one, and not all parallelization problems fit Go's model.
+For a discussion of the distinction, see the talk cited in
+<a href="http://blog.golang.org/2013/01/concurrency-is-not-parallelism.html">this
+blog post</a>.
+
 <h3 id="leaky_buffer">A leaky buffer</h3>
 
 <p>
@@ -2735,7 +3186,7 @@ it is much more informative than the plain
 
 <p>
 When feasible, error strings should identify their origin, such as by having
-a prefix naming the package that generated the error.  For example, in package
+a prefix naming the operation or package that generated the error.  For example, in package
 <code>image</code>, the string representation for a decoding error due to an
 unknown format is "image: unknown format".
 </p>
@@ -2763,11 +3214,8 @@ for try := 0; try &lt; 2; try++ {
 </pre>
 
 <p>
-The second <code>if</code> statement here is idiomatic Go.
-The type assertion <code>err.(*os.PathError)</code> is
-checked with the "comma ok" idiom (mentioned <a href="#maps">earlier</a>
-in the context of examining maps).
-If the type assertion fails, <code>ok</code> will be false, and <code>e</code>
+The second <code>if</code> statement here is another <a href="#interface_conversion">type assertion</a>.
+If it fails, <code>ok</code> will be false, and <code>e</code>
 will be <code>nil</code>.
 If it succeeds,  <code>ok</code> will be true, which means the
 error was of type <code>*os.PathError</code>, and then so is <code>e</code>,
@@ -2790,9 +3238,7 @@ that in effect creates a run-time error that will stop the program
 (but see the next section).  The function takes a single argument
 of arbitrary type&mdash;often a string&mdash;to be printed as the
 program dies.  It's also a way to indicate that something impossible has
-happened, such as exiting an infinite loop.  In fact, the compiler
-recognizes a <code>panic</code> at the end of a function and
-suppresses the usual check for a <code>return</code> statement.
+happened, such as exiting an infinite loop.
 </p>
 
 
@@ -2894,7 +3340,7 @@ With our recovery pattern in place, the <code>do</code>
 function (and anything it calls) can get out of any bad situation
 cleanly by calling <code>panic</code>.  We can use that idea to
 simplify error handling in complex software.  Let's look at an
-idealized excerpt from the <code>regexp</code> package, which reports
+idealized version of a <code>regexp</code> package, which reports
 parsing errors by calling <code>panic</code> with a local
 error type.  Here's the definition of <code>Error</code>,
 an <code>error</code> method, and the <code>Compile</code> function.
@@ -2935,17 +3381,26 @@ to <code>err</code>, that the problem was a parse error by asserting
 that it has the local type <code>Error</code>.
 If it does not, the type assertion will fail, causing a run-time error
 that continues the stack unwinding as though nothing had interrupted
-it.  This check means that if something unexpected happens, such
+it.
+This check means that if something unexpected happens, such
 as an index out of bounds, the code will fail even though we
 are using <code>panic</code> and <code>recover</code> to handle
-user-triggered errors.
+parse errors.
 </p>
 
 <p>
-With error handling in place, the <code>error</code> method
+With error handling in place, the <code>error</code> method (because it's a
+method bound to a type, it's fine, even natural, for it to have the same name
+as the builtin <code>error</code> type)
 makes it easy to report parse errors without worrying about unwinding
-the parse stack by hand.
+the parse stack by hand:
 </p>
+
+<pre>
+if pos==0 {
+    re.error("'*' illegal at start of expression")
+}
+</pre>
 
 <p>
 Useful though this pattern is, it should be used only within a package.
@@ -2965,156 +3420,6 @@ filter unexpected problems and re-panic with the original error.
 That's left as an exercise for the reader.
 </p>
 
-<h2 id="blank">Blank identifier</h2>
-
-<p>
-Go defines a special identifier <code>_</code>, called the <i>blank identifier</i>.
-The blank identifier can be used in a declaration to avoid
-declaring a name, and it can be used in an assignment to discard a value.
-This definition makes it useful in a variety of contexts.
-</p>
-
-<h3 id="blank_assign">Multiple assignment</h3>
-
-<p>
-If an assignment requires multiple values on the left side,
-but one of the values will not be used by the program,
-using the blank identifier in the assignment avoids the need
-to create a dummy variable.
-We saw one example of this in the discussion of
-<a href="#for">for loops</a> above.
-</p>
-<pre>
-sum := 0
-for _, value := range array {
-    sum += value
-}
-</pre>
-
-<p>
-Another common use is when calling a function that returns
-a value and an error, but only the error is important.
-</p>
-<pre>
-if _, err := os.Stat(path); os.IsNotExist(err) {
-	fmt.Printf("%s does not exist\n", path)
-}
-</pre>
-
-<p>
-A final use that is more common than it should be is to 
-discard the error from a function that is not expected to fail.
-This is usually a mistake: when the function does fail, the code
-will continue on and probably panic dereferencing a nil pointer.
-</p>
-<pre>
-// Always check errors: this program crashes if path does not exist.
-fi, _ := os.Stat(path)
-fmt.Printf("%s is %d bytes\n", path, fi.Size())
-</pre>
-
-<h3 id="blank_unused">Unused imports and variables</h3>
-
-<p>
-Go defines that it is an error to import a package without using it,
-or to declare a variable without using its value.
-Unused imports bloat a program and lengthen compiles unnecessarily;
-a variable that is initialized but not used is at least
-a wasted computation and perhaps indicative of a
-larger bug.
-Of course, both of these situations also arise in programs
-that are under active development, as you test and refine
-your code. 
-</p>
-<p>
-For example, in this program, there are two unused imports
-(<code>fmt</code> and <code>io</code>)
-and an unused variable (<code>greeting</code>).
-</p>
-{{code "/doc/progs/unused1.go" `/package/` `$`}}
-<p>
-Top-level blank declarations referring to the packages
-will silence the unused import errors.
-By convention, these declarations should come immediately after
-the imports, as a reminder to clean things up later.
-Similarly, assigning <code>greeting</code> to a blank identifier
-will silence the unused variable error.
-</p>
-{{code "/doc/progs/unused2.go" `/package/` `$`}}
-<p>
-
-<h3 id="blank_import">Import for side effect</h3>
-
-<p>
-An unused import like <code>fmt</code> or <code>io</code> in the last section
-should eventually be used or removed:
-blank assignments identify code as a work in progress.
-But sometimes it is useful to import a package only for its
-side effects, without any explicit use.
-For example, during its <code>init</code> function,
-the <code><a href="/pkg/net/http/pprof/">net/http/pprof</a></code>
-package registers HTTP handlers that provide useful
-debugging information. It has an exported API too, but
-most clients need only the handler registration.
-In this situation, it is conventional to rename the package
-to the blank identifier:
-</p>
-<pre>
-import _ "net/http/pprof"
-</pre>
-<p>
-This form of import makes clear that the package is being
-imported for its side effects, because there is no other possible
-use of the package: in this file, it doesn't have a name.
-</p>
-
-<h3 id="blank_implements">Interface checks</h3>
-
-<p>
-As we saw in the discussion of <a href="#interfaces_and_types">interfaces</a> above,
-Go does not require a type to declare explicitly that it implements an interface.
-It implements the interface by simply implementing the required methods.
-This makes Go programs more lightweight and flexible, and it can avoid
-unnecessary dependencies between packages. 
-Most interface conversions are static, visible to the compiler,
-and therefore checked at compile time.
-For example, passing an <code>*os.File</code> to a function
-expecting an <code>io.Reader</code> will not compile unless
-<code>*os.File</code> implements the <code>io.Reader</code> interface.
-</p>
-<p>
-However, some types that are used only to satisfy dynamic interface checks.
-For example, the <code><a href="/pkg/encoding/json/">encoding/json</a></code>
-package defines a <code><a href="/pkg/encoding/json/#Marshaler">Marshaler</a></code>
-interface. If the JSON encoder encounters a type implementing that interface,
-the encoder will let the type convert itself to JSON instead of using the standard
-conversion.
-This check is done only at runtime, with code like:
-</p>
-<pre>
-m, ok := val.(json.Marshaler)
-</pre>
-<p>
-If a type—for example,
-<code><a href="/pkg/encoding/json/#RawMessage">json.RawMessage</a></code>—intends
-to customize its JSON representation, it should implement
-<code>json.Marshaler</code>, but there are no static conversions that would
-cause the compiler to verify this automatically.
-A declaration can be used to add such a check:
-</p>
-<pre>
-var _ json.Marshaler = (*MyMessage)(nil)
-</pre>
-<p>
-As part of type-checking this static assignment of a
-<code>*RawMessage</code> to a <code>Marshaler</code>,
-the Go compiler will require that <code>*RawMessage</code> implements <code>Marshaler</code>.
-Using the blank identifier here indicates that
-the declaration exists only for the type checking,
-not to create a variable.
-Conventionally, such declarations are used only when there are
-no static conversions already present in the code.
-</p>
 
 <h2 id="web_server">A web server</h2>
 

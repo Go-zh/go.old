@@ -186,12 +186,16 @@ type ComplexType complex64
 // result of append, often in the variable holding the slice itself:
 //	slice = append(slice, elem1, elem2)
 //	slice = append(slice, anotherSlice...)
+// As a special case, it is legal to append a string to a byte slice, like this:
+//	slice = append([]byte("hello "), "world"...)
 
 // append 内建函数将元素追加到切片的末尾。
 // 若它有足够的容量，其目标就会重新切片以容纳新的元素。否则，就会分配一个新的基本数组。
 // append 返回更新后的切片。因此必须存储追加后的结果，通常为包含该切片自身的变量：
 //	slice = append(slice, elem1, elem2)
 //	slice = append(slice, anotherSlice...)
+// 作为一种特殊的情况，将字符追加到字节数组之后是合法的，就像这样：
+//	slice = append([]byte("hello "), "world"...)
 func append(slice []Type, elems ...Type) []Type
 
 // The copy built-in function copies elements from a source slice into a

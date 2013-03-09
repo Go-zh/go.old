@@ -12,8 +12,11 @@ import (
 	"go/token"
 )
 
-// enable for debugging
-const trace = false
+// debugging support
+const (
+	debug = true  // leave on during development
+	trace = false // turn on for detailed type resolution traces
+)
 
 type checker struct {
 	ctxt  *Context
@@ -28,9 +31,19 @@ type checker struct {
 	initspecs   map[*ast.ValueSpec]*ast.ValueSpec // "inherited" type and initialization expressions for constant declarations
 	methods     map[*TypeName]*Scope              // maps type names to associated methods
 	conversions map[*ast.CallExpr]bool            // set of type-checked conversions (to distinguish from calls)
-	funclist    []function                        // list of functions/methods with correct signatures and non-empty bodies
-	funcsig     *Signature                        // signature of currently typechecked function
-	pos         []token.Pos                       // stack of expr positions; debugging support, used if trace is set
+
+	// untyped expressions
+	// TODO(gri): Consider merging the untyped and constants map. Should measure
+	// the ratio between untyped non-constant and untyped constant expressions
+	// to make an informed decision.
+	untyped   map[ast.Expr]*Basic      // map of expressions of untyped type
+	constants map[ast.Expr]interface{} // map of untyped constant expressions; each key also appears in untyped
+	shiftOps  map[ast.Expr]bool        // map of lhs shift operands with delayed type-checking
+
+	// functions
+	funclist []function  // list of functions/methods with correct signatures and non-empty bodies
+	funcsig  *Signature  // signature of currently typechecked function
+	pos      []token.Pos // stack of expr positions; debugging support, used if trace is set
 }
 
 func (check *checker) register(id *ast.Ident, obj Object) {
@@ -189,20 +202,22 @@ func (check *checker) object(obj Object, cycleOk bool) {
 			return // already checked
 		}
 		// The obj.Val field for constants is initialized to its respective
-		// iota value by the parser.
-		// The object's fields can be in one of the following states:
-		// Type != nil  =>  the constant value is Val
-		// Type == nil  =>  the constant is not typechecked yet, and Val can be:
-		// Val  is int  =>  Val is the value of iota for this declaration
-		// Val  == nil  =>  the object's expression is being evaluated
-		if obj.Val == nil {
-			check.errorf(obj.GetPos(), "illegal cycle in initialization of %s", obj.Name)
+		// iota value (type int) by the parser.
+		// If the object's type is Typ[Invalid], the object value is ignored.
+		// If the object's type is valid, the object value must be a legal
+		// constant value; it may be nil to indicate that we don't know the
+		// value of the constant (e.g., in: "const x = float32("foo")" we
+		// know that x is a constant and has type float32, but we don't
+		// have a value due to the error in the conversion).
+		if obj.visited {
+			check.errorf(obj.GetPos(), "illegal cycle in initialization of constant %s", obj.Name)
 			obj.Type = Typ[Invalid]
 			return
 		}
+		obj.visited = true
 		spec := obj.spec
 		iota := obj.Val.(int)
-		obj.Val = nil // mark obj as "visited" for cycle detection
+		obj.Val = nil // set to a valid (but unknown) constant value
 		// determine spec for type and initialization expressions
 		init := spec
 		if len(init.Values) == 0 {
@@ -215,7 +230,7 @@ func (check *checker) object(obj Object, cycleOk bool) {
 			return // already checked
 		}
 		if obj.visited {
-			check.errorf(obj.GetPos(), "illegal cycle in initialization of %s", obj.Name)
+			check.errorf(obj.GetPos(), "illegal cycle in initialization of variable %s", obj.Name)
 			obj.Type = Typ[Invalid]
 			return
 		}
@@ -413,6 +428,9 @@ func check(ctxt *Context, fset *token.FileSet, files []*ast.File) (pkg *Package,
 		initspecs:   make(map[*ast.ValueSpec]*ast.ValueSpec),
 		methods:     make(map[*TypeName]*Scope),
 		conversions: make(map[*ast.CallExpr]bool),
+		untyped:     make(map[ast.Expr]*Basic),
+		constants:   make(map[ast.Expr]interface{}),
+		shiftOps:    make(map[ast.Expr]bool),
 	}
 
 	// set results and handle panics
@@ -424,7 +442,6 @@ func check(ctxt *Context, fset *token.FileSet, files []*ast.File) (pkg *Package,
 			err = check.firsterr
 		default:
 			// unexpected panic: don't crash clients
-			const debug = true
 			if debug {
 				check.dump("INTERNAL PANIC: %v", p)
 				panic(p)
@@ -466,6 +483,29 @@ func check(ctxt *Context, fset *token.FileSet, files []*ast.File) (pkg *Package,
 		}
 		check.funcsig = f.sig
 		check.stmtList(f.body.List)
+		if len(f.sig.Results) > 0 && f.body != nil && !check.isTerminating(f.body, "") {
+			check.errorf(f.body.Rbrace, "missing return")
+		}
+	}
+
+	// remaining untyped expressions must indeed be untyped
+	if debug {
+		for x, typ := range check.untyped {
+			if !isUntyped(typ) {
+				check.dump("%s: %s (type %s) is not untyped", x.Pos(), x, typ)
+				panic(0)
+			}
+		}
+	}
+
+	// notify client of any untyped types left
+	// TODO(gri) Consider doing this before and
+	// after function body checking for smaller
+	// map size and more immediate feedback.
+	if ctxt.Expr != nil {
+		for x, typ := range check.untyped {
+			ctxt.Expr(x, typ, check.constants[x])
+		}
 	}
 
 	return

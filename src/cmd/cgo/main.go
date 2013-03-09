@@ -33,7 +33,7 @@ type Package struct {
 	PtrSize     int64
 	IntSize     int64
 	GccOptions  []string
-	CgoFlags    map[string]string // #cgo flags (CFLAGS, LDFLAGS)
+	CgoFlags    map[string][]string // #cgo flags (CFLAGS, LDFLAGS)
 	Written     map[string]bool
 	Name        map[string]*Name // accumulated Name from Files
 	ExpFunc     []*ExpFunc       // accumulated ExpFunc from Files
@@ -142,6 +142,7 @@ var fset = token.NewFileSet()
 
 var dynobj = flag.String("dynimport", "", "if non-empty, print dynamic import data for that file")
 var dynout = flag.String("dynout", "", "write -dynobj output to this file")
+var dynlinker = flag.Bool("dynlinker", false, "record dynamic linker information in dynimport mode")
 
 // These flags are for bootstrapping a new Go implementation,
 // to generate Go and C headers that match the data layout and
@@ -311,7 +312,7 @@ func newPackage(args []string) *Package {
 		PtrSize:    ptrSize,
 		IntSize:    intSize,
 		GccOptions: gccOptions,
-		CgoFlags:   make(map[string]string),
+		CgoFlags:   make(map[string][]string),
 		Written:    make(map[string]bool),
 	}
 	return p

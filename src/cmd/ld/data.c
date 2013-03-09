@@ -58,70 +58,73 @@ datcmp(Sym *s1, Sym *s2)
 }
 
 Sym*
-datsort(Sym *l)
+listsort(Sym *l, int (*cmp)(Sym*, Sym*), int off)
 {
 	Sym *l1, *l2, *le;
+	#define NEXT(l) (*(Sym**)((char*)(l)+off))
 
-	if(l == 0 || l->next == 0)
+	if(l == 0 || NEXT(l) == 0)
 		return l;
 
 	l1 = l;
 	l2 = l;
 	for(;;) {
-		l2 = l2->next;
+		l2 = NEXT(l2);
 		if(l2 == 0)
 			break;
-		l2 = l2->next;
+		l2 = NEXT(l2);
 		if(l2 == 0)
 			break;
-		l1 = l1->next;
+		l1 = NEXT(l1);
 	}
 
-	l2 = l1->next;
-	l1->next = 0;
-	l1 = datsort(l);
-	l2 = datsort(l2);
+	l2 = NEXT(l1);
+	NEXT(l1) = 0;
+	l1 = listsort(l, cmp, off);
+	l2 = listsort(l2, cmp, off);
 
 	/* set up lead element */
-	if(datcmp(l1, l2) < 0) {
+	if(cmp(l1, l2) < 0) {
 		l = l1;
-		l1 = l1->next;
+		l1 = NEXT(l1);
 	} else {
 		l = l2;
-		l2 = l2->next;
+		l2 = NEXT(l2);
 	}
 	le = l;
 
 	for(;;) {
 		if(l1 == 0) {
 			while(l2) {
-				le->next = l2;
+				NEXT(le) = l2;
 				le = l2;
-				l2 = l2->next;
+				l2 = NEXT(l2);
 			}
-			le->next = 0;
+			NEXT(le) = 0;
 			break;
 		}
 		if(l2 == 0) {
 			while(l1) {
-				le->next = l1;
+				NEXT(le) = l1;
 				le = l1;
-				l1 = l1->next;
+				l1 = NEXT(l1);
 			}
 			break;
 		}
-		if(datcmp(l1, l2) < 0) {
-			le->next = l1;
+		if(cmp(l1, l2) < 0) {
+			NEXT(le) = l1;
 			le = l1;
-			l1 = l1->next;
+			l1 = NEXT(l1);
 		} else {
-			le->next = l2;
+			NEXT(le) = l2;
 			le = l2;
-			l2 = l2->next;
+			l2 = NEXT(l2);
 		}
 	}
-	le->next = 0;
+	NEXT(le) = 0;
 	return l;
+	
+	#undef NEXT
 }
 
 Reloc*
@@ -132,11 +135,7 @@ addrel(Sym *s)
 			s->maxr = 4;
 		else
 			s->maxr <<= 1;
-		s->r = realloc(s->r, s->maxr*sizeof s->r[0]);
-		if(s->r == 0) {
-			diag("out of memory");
-			errorexit();
-		}
+		s->r = erealloc(s->r, s->maxr*sizeof s->r[0]);
 		memset(s->r+s->nr, 0, (s->maxr-s->nr)*sizeof s->r[0]);
 	}
 	return &s->r[s->nr++];
@@ -200,7 +199,7 @@ relocsym(Sym *s)
 			if(r->sym)
 				o += symaddr(r->sym);
 			o += r->add - (s->value + r->off + r->siz);
-			if(isobj && r->sym->type != SCONST) {
+			if(isobj && r->sym->type != SCONST && r->sym->sect != cursym->sect) {
 				if(thechar == '6')
 					o = 0;
 				else
@@ -297,7 +296,7 @@ dynrelocsym(Sym *s)
 	for(r=s->r; r<s->r+s->nr; r++) {
 		if(r->sym != S && r->sym->type == SDYNIMPORT || r->type >= 256)
 			adddynrel(s, r);
-		if(flag_shared && r->sym != S && (r->sym->dynimpname == nil || r->sym->dynexport) && r->type == D_ADDR
+		if(flag_shared && r->sym != S && (r->sym->dynimpname == nil || (r->sym->cgoexport & CgoExportDynamic)) && r->type == D_ADDR
 				&& (s == got || s->type == SDATA || s->type == SGOSTRING || s->type == STYPE || s->type == SRODATA)) {
 			// Create address based RELATIVE relocation
 			adddynrela(rel, s, r);
@@ -339,11 +338,7 @@ symgrow(Sym *s, int32 siz)
 			s->maxp = 8;
 		while(s->maxp < siz)
 			s->maxp <<= 1;
-		s->p = realloc(s->p, s->maxp);
-		if(s->p == nil) {
-			diag("out of memory");
-			errorexit();
-		}
+		s->p = erealloc(s->p, s->maxp);
 		memset(s->p+s->np, 0, s->maxp-s->np);
 	}
 	s->np = siz;
@@ -748,27 +743,6 @@ setuint64(Sym *s, vlong r, uint64 v)
 	setuintxx(s, r, v, 8);
 }
 
-static vlong
-addaddrpcrelplus(Sym *s, Sym *t, int32 add)
-{
-	vlong i;
-	Reloc *r;
-
-	if(s->type == 0)
-		s->type = SDATA;
-	s->reachable = 1;
-	i = s->size;
-	s->size += PtrSize;
-	symgrow(s, s->size);
-	r = addrel(s);
-	r->sym = t;
-	r->off = i;
-	r->siz = PtrSize;
-	r->type = D_PCREL;
-	r->add = add;
-	return i;
-}
-
 vlong
 addaddrplus(Sym *s, Sym *t, int32 add)
 {
@@ -901,36 +875,38 @@ dosymtype(void)
 }
 
 static int32
-alignsymsize(int32 s)
+symalign(Sym *s)
 {
-	if(s >= 8)
-		s = rnd(s, 8);
-	else if(s >= PtrSize)
-		s = rnd(s, PtrSize);
-	else if(s > 2)
-		s = rnd(s, 4);
-	return s;
-}
+	int32 align;
 
+	align = MaxAlign;
+	while(align > s->size && align > 1)
+		align >>= 1;
+	if(align < s->align)
+		align = s->align;
+	return align;
+}
+	
 static int32
 aligndatsize(int32 datsize, Sym *s)
 {
-	int32 t;
+	return rnd(datsize, symalign(s));
+}
 
-	if(s->align != 0) {
-		datsize = rnd(datsize, s->align);
-	} else {
-		t = alignsymsize(s->size);
-		if(t & 1) {
-			;
-		} else if(t & 2)
-			datsize = rnd(datsize, 2);
-		else if(t & 4)
-			datsize = rnd(datsize, 4);
-		else
-			datsize = rnd(datsize, 8);
+// maxalign returns the maximum required alignment for
+// the list of symbols s; the list stops when s->type exceeds type.
+static int32
+maxalign(Sym *s, int type)
+{
+	int32 align, max;
+	
+	max = 0;
+	for(; s != S && s->type <= type; s = s->next) {
+		align = symalign(s);
+		if(max < align)
+			max = align;
 	}
-	return datsize;
+	return max;
 }
 
 static void
@@ -949,7 +925,9 @@ gcaddsym(Sym *gc, Sym *s, int32 off)
 		//print("gcaddsym:    %s    %d    %s\n", s->name, s->size, gotype->name);
 		adduintxx(gc, GC_CALL, PtrSize);
 		adduintxx(gc, off, PtrSize);
-		addaddrpcrelplus(gc, decodetype_gc(gotype), 4*PtrSize);
+		addpcrelplus(gc, decodetype_gc(gotype), 3*PtrSize+4);
+		if(PtrSize == 8)
+			adduintxx(gc, 0, 4);
 	} else {
 		//print("gcaddsym:    %s    %d    <unknown type>\n", s->name, s->size);
 		for(a = -off&(PtrSize-1); a+PtrSize<=s->size; a+=PtrSize) {
@@ -962,7 +940,7 @@ gcaddsym(Sym *gc, Sym *s, int32 off)
 void
 dodata(void)
 {
-	int32 t, datsize;
+	int32 datsize;
 	Section *sect;
 	Sym *s, *last, **l;
 	Sym *gcdata1, *gcbss1;
@@ -972,11 +950,11 @@ dodata(void)
 	Bflush(&bso);
 
 	// define garbage collection symbols
-	gcdata1 = lookup("gcdata1", 0);
-	gcdata1->type = SGCDATA;
+	gcdata1 = lookup("gcdata", 0);
+	gcdata1->type = STYPE;
 	gcdata1->reachable = 1;
-	gcbss1 = lookup("gcbss1", 0);
-	gcbss1->type = SGCBSS;
+	gcbss1 = lookup("gcbss", 0);
+	gcbss1->type = STYPE;
 	gcbss1->reachable = 1;
 
 	// size of .data and .bss section. the zero value is later replaced by the actual size of the section.
@@ -1029,7 +1007,7 @@ dodata(void)
 				s->type = SDATARELRO;
 		}
 	}
-	datap = datsort(datap);
+	datap = listsort(datap, datcmp, offsetof(Sym, next));
 
 	/*
 	 * allocate sections.  list is sorted by type,
@@ -1050,52 +1028,54 @@ dodata(void)
 	datsize = 0;
 	for(; s != nil && s->type < SNOPTRDATA; s = s->next) {
 		sect = addsection(&segdata, s->name, 06);
-		if(s->align != 0)
-			datsize = rnd(datsize, s->align);
+		sect->align = symalign(s);
+		datsize = rnd(datsize, sect->align);
 		sect->vaddr = datsize;
 		s->sect = sect;
 		s->type = SDATA;
 		s->value = datsize;
-		datsize += rnd(s->size, PtrSize);
+		datsize += s->size;
 		sect->len = datsize - sect->vaddr;
 	}
 
 	/* pointer-free data */
 	sect = addsection(&segdata, ".noptrdata", 06);
+	sect->align = maxalign(s, SDATARELRO-1);
+	datsize = rnd(datsize, sect->align);
 	sect->vaddr = datsize;
 	lookup("noptrdata", 0)->sect = sect;
 	lookup("enoptrdata", 0)->sect = sect;
 	for(; s != nil && s->type < SDATARELRO; s = s->next) {
+		datsize = aligndatsize(datsize, s);
 		s->sect = sect;
 		s->type = SDATA;
-		t = alignsymsize(s->size);
-		datsize = aligndatsize(datsize, s);
 		s->value = datsize;
-		datsize += t;
+		datsize += s->size;
 	}
 	sect->len = datsize - sect->vaddr;
-	datsize = rnd(datsize, PtrSize);
 
 	/* dynamic relocated rodata */
 	if(flag_shared) {
 		sect = addsection(&segdata, ".data.rel.ro", 06);
+		sect->align = maxalign(s, SDATARELRO);
+		datsize = rnd(datsize, sect->align);
 		sect->vaddr = datsize;
 		lookup("datarelro", 0)->sect = sect;
 		lookup("edatarelro", 0)->sect = sect;
 		for(; s != nil && s->type == SDATARELRO; s = s->next) {
-			if(s->align != 0)
-				datsize = rnd(datsize, s->align);
+			datsize = aligndatsize(datsize, s);
 			s->sect = sect;
 			s->type = SDATA;
 			s->value = datsize;
-			datsize += rnd(s->size, PtrSize);
+			datsize += s->size;
 		}
 		sect->len = datsize - sect->vaddr;
-		datsize = rnd(datsize, PtrSize);
 	}
 
 	/* data */
 	sect = addsection(&segdata, ".data", 06);
+	sect->align = maxalign(s, SBSS-1);
+	datsize = rnd(datsize, sect->align);
 	sect->vaddr = datsize;
 	lookup("data", 0)->sect = sect;
 	lookup("edata", 0)->sect = sect;
@@ -1106,39 +1086,39 @@ dodata(void)
 		}
 		s->sect = sect;
 		s->type = SDATA;
-		t = alignsymsize(s->size);
 		datsize = aligndatsize(datsize, s);
 		s->value = datsize;
 		gcaddsym(gcdata1, s, datsize - sect->vaddr);  // gc
-		datsize += t;
+		datsize += s->size;
 	}
 	sect->len = datsize - sect->vaddr;
-	datsize = rnd(datsize, PtrSize);
 
 	adduintxx(gcdata1, GC_END, PtrSize);
 	setuintxx(gcdata1, 0, sect->len, PtrSize);
 
 	/* bss */
 	sect = addsection(&segdata, ".bss", 06);
+	sect->align = maxalign(s, SNOPTRBSS-1);
+	datsize = rnd(datsize, sect->align);
 	sect->vaddr = datsize;
 	lookup("bss", 0)->sect = sect;
 	lookup("ebss", 0)->sect = sect;
 	for(; s != nil && s->type < SNOPTRBSS; s = s->next) {
 		s->sect = sect;
-		t = alignsymsize(s->size);
 		datsize = aligndatsize(datsize, s);
 		s->value = datsize;
 		gcaddsym(gcbss1, s, datsize - sect->vaddr);  // gc
-		datsize += t;
+		datsize += s->size;
 	}
 	sect->len = datsize - sect->vaddr;
-	datsize = rnd(datsize, PtrSize);
 
 	adduintxx(gcbss1, GC_END, PtrSize);
 	setuintxx(gcbss1, 0, sect->len, PtrSize);
 
 	/* pointer-free bss */
 	sect = addsection(&segdata, ".noptrbss", 06);
+	sect->align = maxalign(s, SNOPTRBSS);
+	datsize = rnd(datsize, sect->align);
 	sect->vaddr = datsize;
 	lookup("noptrbss", 0)->sect = sect;
 	lookup("enoptrbss", 0)->sect = sect;
@@ -1147,11 +1127,10 @@ dodata(void)
 			cursym = s;
 			diag("unexpected symbol type %d", s->type);
 		}
-		s->sect = sect;
-		t = alignsymsize(s->size);
 		datsize = aligndatsize(datsize, s);
+		s->sect = sect;
 		s->value = datsize;
-		datsize += t;
+		datsize += s->size;
 	}
 	sect->len = datsize - sect->vaddr;
 	lookup("end", 0)->sect = sect;
@@ -1159,104 +1138,80 @@ dodata(void)
 	/* we finished segdata, begin segtext */
 
 	/* read-only data */
+	s = datap;
 	sect = addsection(&segtext, ".rodata", 04);
+	sect->align = maxalign(s, STYPELINK-1);
 	sect->vaddr = 0;
 	lookup("rodata", 0)->sect = sect;
 	lookup("erodata", 0)->sect = sect;
-	lookup("reloffset", 0)->sect = sect;
 	datsize = 0;
-	s = datap;
 	for(; s != nil && s->type < STYPELINK; s = s->next) {
+		datsize = aligndatsize(datsize, s);
 		s->sect = sect;
-		if(s->align != 0)
-			datsize = rnd(datsize, s->align);
 		s->type = SRODATA;
 		s->value = datsize;
-		datsize += rnd(s->size, PtrSize);
+		datsize += s->size;
 	}
 	sect->len = datsize - sect->vaddr;
-	datsize = rnd(datsize, PtrSize);
 
-	/* type */
+	/* typelink */
 	sect = addsection(&segtext, ".typelink", 04);
+	sect->align = maxalign(s, STYPELINK);
+	datsize = rnd(datsize, sect->align);
 	sect->vaddr = datsize;
 	lookup("typelink", 0)->sect = sect;
 	lookup("etypelink", 0)->sect = sect;
 	for(; s != nil && s->type == STYPELINK; s = s->next) {
+		datsize = aligndatsize(datsize, s);
 		s->sect = sect;
 		s->type = SRODATA;
 		s->value = datsize;
 		datsize += s->size;
 	}
 	sect->len = datsize - sect->vaddr;
-	datsize = rnd(datsize, PtrSize);
-
-	/* gcdata */
-	sect = addsection(&segtext, ".gcdata", 04);
-	sect->vaddr = datsize;
-	lookup("gcdata", 0)->sect = sect;
-	lookup("egcdata", 0)->sect = sect;
-	for(; s != nil && s->type == SGCDATA; s = s->next) {
-		s->sect = sect;
-		s->type = SRODATA;
-		s->value = datsize;
-		datsize += s->size;
-	}
-	sect->len = datsize - sect->vaddr;
-	datsize = rnd(datsize, PtrSize);
-
-	/* gcbss */
-	sect = addsection(&segtext, ".gcbss", 04);
-	sect->vaddr = datsize;
-	lookup("gcbss", 0)->sect = sect;
-	lookup("egcbss", 0)->sect = sect;
-	for(; s != nil && s->type == SGCBSS; s = s->next) {
-		s->sect = sect;
-		s->type = SRODATA;
-		s->value = datsize;
-		datsize += s->size;
-	}
-	sect->len = datsize - sect->vaddr;
-	datsize = rnd(datsize, PtrSize);
 
 	/* gosymtab */
 	sect = addsection(&segtext, ".gosymtab", 04);
+	sect->align = maxalign(s, SPCLNTAB-1);
+	datsize = rnd(datsize, sect->align);
 	sect->vaddr = datsize;
 	lookup("symtab", 0)->sect = sect;
 	lookup("esymtab", 0)->sect = sect;
 	for(; s != nil && s->type < SPCLNTAB; s = s->next) {
+		datsize = aligndatsize(datsize, s);
 		s->sect = sect;
 		s->type = SRODATA;
 		s->value = datsize;
 		datsize += s->size;
 	}
 	sect->len = datsize - sect->vaddr;
-	datsize = rnd(datsize, PtrSize);
 
 	/* gopclntab */
 	sect = addsection(&segtext, ".gopclntab", 04);
+	sect->align = maxalign(s, SELFROSECT-1);
+	datsize = rnd(datsize, sect->align);
 	sect->vaddr = datsize;
 	lookup("pclntab", 0)->sect = sect;
 	lookup("epclntab", 0)->sect = sect;
 	for(; s != nil && s->type < SELFROSECT; s = s->next) {
+		datsize = aligndatsize(datsize, s);
 		s->sect = sect;
 		s->type = SRODATA;
 		s->value = datsize;
 		datsize += s->size;
 	}
 	sect->len = datsize - sect->vaddr;
-	datsize = rnd(datsize, PtrSize);
 
 	/* read-only ELF sections */
 	for(; s != nil && s->type < SELFSECT; s = s->next) {
 		sect = addsection(&segtext, s->name, 04);
-		if(s->align != 0)
-			datsize = rnd(datsize, s->align);
+		sect->align = symalign(s);
+		datsize = rnd(datsize, sect->align);
 		sect->vaddr = datsize;
 		s->sect = sect;
 		s->type = SRODATA;
 		s->value = datsize;
-		datsize += rnd(s->size, PtrSize);
+		datsize += s->size;
 		sect->len = datsize - sect->vaddr;
 	}
 }
@@ -1276,6 +1231,7 @@ textaddress(void)
 	// Could parallelize, by assigning to text
 	// and then letting threads copy down, but probably not worth it.
 	sect = segtext.sect;
+	sect->align = FuncAlign;
 	lookup("text", 0)->sect = sect;
 	lookup("etext", 0)->sect = sect;
 	va = INITTEXT;
@@ -1299,11 +1255,6 @@ textaddress(void)
 		}
 		va += sym->size;
 	}
-
-	// Align end of code so that rodata starts aligned.
-	// 128 bytes is likely overkill but definitely cheap.
-	va = rnd(va, 128);
-
 	sect->len = va - sect->vaddr;
 }
 
@@ -1312,7 +1263,7 @@ void
 address(void)
 {
 	Section *s, *text, *data, *rodata, *symtab, *pclntab, *noptr, *bss, *noptrbss, *datarelro;
-	Section *gcdata, *gcbss, *typelink;
+	Section *typelink;
 	Sym *sym, *sub;
 	uvlong va;
 
@@ -1321,8 +1272,9 @@ address(void)
 	segtext.vaddr = va;
 	segtext.fileoff = HEADR;
 	for(s=segtext.sect; s != nil; s=s->next) {
+		va = rnd(va, s->align);
 		s->vaddr = va;
-		va += rnd(s->len, PtrSize);
+		va += s->len;
 	}
 	segtext.len = va - INITTEXT;
 	segtext.filelen = segtext.len;
@@ -1343,6 +1295,8 @@ address(void)
 	noptrbss = nil;
 	datarelro = nil;
 	for(s=segdata.sect; s != nil; s=s->next) {
+		if(s->next)
+			s->len = s->next->vaddr - s->vaddr;
 		s->vaddr = va;
 		va += s->len;
 		segdata.filelen += s->len;
@@ -1358,14 +1312,12 @@ address(void)
 		if(strcmp(s->name, ".data.rel.ro") == 0)
 			datarelro = s;
 	}
-	segdata.filelen -= bss->len + noptrbss->len; // deduct .bss
+	segdata.filelen = bss->vaddr - segdata.vaddr;
 
 	text = segtext.sect;
 	rodata = text->next;
 	typelink = rodata->next;
-	gcdata = typelink->next;
-	gcbss = gcdata->next;
-	symtab = gcbss->next;
+	symtab = typelink->next;
 	pclntab = symtab->next;
 
 	for(sym = datap; sym != nil; sym = sym->next) {
@@ -1388,10 +1340,15 @@ address(void)
 		xdefine("datarelro", SRODATA, datarelro->vaddr);
 		xdefine("edatarelro", SRODATA, datarelro->vaddr + datarelro->len);
 	}
-	xdefine("gcdata", SGCDATA, gcdata->vaddr);
-	xdefine("egcdata", SGCDATA, gcdata->vaddr + gcdata->len);
-	xdefine("gcbss", SGCBSS, gcbss->vaddr);
-	xdefine("egcbss", SGCBSS, gcbss->vaddr + gcbss->len);
+
+	sym = lookup("gcdata", 0);
+	xdefine("egcdata", STYPE, symaddr(sym) + sym->size);
+	lookup("egcdata", 0)->sect = sym->sect;
+
+	sym = lookup("gcbss", 0);
+	xdefine("egcbss", STYPE, symaddr(sym) + sym->size);
+	lookup("egcbss", 0)->sect = sym->sect;
+
 	xdefine("symtab", SRODATA, symtab->vaddr);
 	xdefine("esymtab", SRODATA, symtab->vaddr + symtab->len);
 	xdefine("pclntab", SRODATA, pclntab->vaddr);

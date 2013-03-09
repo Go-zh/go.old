@@ -40,8 +40,6 @@ enum
 	SGOSTRING,
 	SRODATA,
 	STYPELINK,
-	SGCDATA,
-	SGCBSS,
 	SSYMTAB,
 	SPCLNTAB,
 	SELFROSECT,
@@ -63,6 +61,7 @@ enum
 	SFILE,
 	SCONST,
 	SDYNIMPORT,
+	SHOSTOBJ,
 
 	SSUB = 1<<8,	/* sub-symbol, linked from parent via ->sub list */
 	SMASK = SSUB - 1,
@@ -103,6 +102,7 @@ struct Segment
 struct Section
 {
 	uchar	rwx;
+	int32	align;
 	char	*name;
 	uvlong	vaddr;
 	uvlong	len;
@@ -137,6 +137,9 @@ EXTERN	char*	outfile;
 EXTERN	int32	nsymbol;
 EXTERN	char*	thestring;
 EXTERN	int	ndynexp;
+EXTERN	Sym**	dynexp;
+EXTERN	int	nldflag;
+EXTERN	char**	ldflag;
 EXTERN	int	havedynamic;
 EXTERN	int	iscgo;
 EXTERN	int	isobj;
@@ -145,6 +148,21 @@ EXTERN	int	flag_race;
 EXTERN	int flag_shared;
 EXTERN	char*	tracksym;
 EXTERN	char*	interpreter;
+
+enum
+{
+	LinkAuto = 0,
+	LinkInternal,
+	LinkExternal,
+};
+EXTERN	int	linkmode;
+
+// for dynexport field of Sym
+enum
+{
+	CgoExportDynamic = 1<<0,
+	CgoExportStatic = 1<<1,
+};
 
 EXTERN	Segment	segtext;
 EXTERN	Segment	segdata;
@@ -184,7 +202,7 @@ void	adddynrel(Sym*, Reloc*);
 void	adddynrela(Sym*, Sym*, Reloc*);
 Sym*	lookuprel(void);
 void	ldobj1(Biobuf *f, char*, int64 len, char *pn);
-void	ldobj(Biobuf*, char*, int64, char*, int);
+void	ldobj(Biobuf*, char*, int64, char*, char*, int);
 void	ldelf(Biobuf*, char*, int64, char*);
 void	ldmacho(Biobuf*, char*, int64, char*);
 void	ldpe(Biobuf*, char*, int64, char*);
@@ -196,7 +214,6 @@ void	deadcode(void);
 Reloc*	addrel(Sym*);
 void	codeblk(int32, int32);
 void	datblk(int32, int32);
-Sym*	datsort(Sym*);
 void	reloc(void);
 void	relocsym(Sym*);
 void	savedata(Sym*, Prog*, char*);
@@ -238,6 +255,12 @@ void	setpersrc(Sym*);
 void	doversion(void);
 void	usage(void);
 void	setinterp(char*);
+Sym*	listsort(Sym*, int(*cmp)(Sym*, Sym*), int);
+int	valuecmp(Sym*, Sym*);
+void	hostobjs(void);
+void	hostlink(void);
+char*	estrdup(char*);
+void*	erealloc(void*, long);
 
 int	pathchar(void);
 void*	mal(uint32);

@@ -9,7 +9,6 @@ package main
 import (
 	"flag"
 	"go/ast"
-	"go/types"
 	"strings"
 )
 
@@ -22,21 +21,9 @@ func (f *File) checkUntaggedLiteral(c *ast.CompositeLit) {
 		return
 	}
 
-	// Check that the CompositeLit's type is a slice or array (which need no tag), if possible.
-	if f.pkg != nil {
-		typ := f.pkg.types[c]
-		if typ != nil {
-			// If it's a named type, pull out the underlying type.
-			if namedType, ok := typ.(*types.NamedType); ok {
-				typ = namedType.Underlying
-			}
-			switch typ.(type) {
-			case *types.Slice:
-				return
-			case *types.Array:
-				return
-			}
-		}
+	isStruct, typeString := f.pkg.isStruct(c)
+	if !isStruct {
+		return
 	}
 
 	// It's a struct, or we can't tell it's not a struct because we don't have types.
@@ -66,15 +53,15 @@ func (f *File) checkUntaggedLiteral(c *ast.CompositeLit) {
 	// Convert the package name to an import path, and compare to a whitelist.
 	path := pkgPath(f, pkg.Name)
 	if path == "" {
-		f.Warnf(c.Pos(), "unresolvable package for %s.%s literal", pkg.Name, s.Sel.Name)
+		f.Badf(c.Pos(), "unresolvable package for %s.%s literal", pkg.Name, s.Sel.Name)
 		return
 	}
-	typ := path + "." + s.Sel.Name
-	if *compositeWhiteList && untaggedLiteralWhitelist[typ] {
+	typeName := path + "." + s.Sel.Name
+	if *compositeWhiteList && untaggedLiteralWhitelist[typeName] {
 		return
 	}
 
-	f.Warnf(c.Pos(), "%s composite literal uses untagged fields", typ)
+	f.Warn(c.Pos(), typeString+" composite literal uses untagged fields")
 }
 
 // pkgPath returns the import path "image/png" for the package name "png".
@@ -121,8 +108,6 @@ var untaggedLiteralWhitelist = map[string]bool{
 	"encoding/xml.CharData":                         true,
 	"encoding/xml.Comment":                          true,
 	"encoding/xml.Directive":                        true,
-	"exp/norm.Decomposition":                        true,
-	"exp/types.ObjList":                             true,
 	"go/scanner.ErrorList":                          true,
 	"image/color.Palette":                           true,
 	"net.HardwareAddr":                              true,

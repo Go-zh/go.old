@@ -52,7 +52,7 @@ typedef	struct	G		G;
 typedef	struct	Gobuf		Gobuf;
 typedef	union	Lock		Lock;
 typedef	struct	M		M;
-typedef struct	P		P;
+typedef	struct	P		P;
 typedef	struct	Mem		Mem;
 typedef	union	Note		Note;
 typedef	struct	Slice		Slice;
@@ -118,8 +118,17 @@ enum
 	Grunning,
 	Gsyscall,
 	Gwaiting,
-	Gmoribund,
+	Gmoribund_unused,  // currently unused, but hardcoded in gdb scripts
 	Gdead,
+};
+enum
+{
+	// P status
+	Pidle,
+	Prunning,
+	Psyscall,
+	Pgcstop,
+	Pdead,
 };
 enum
 {
@@ -214,6 +223,7 @@ struct	G
 	Gobuf	sched;
 	uintptr	gcstack;		// if status==Gsyscall, gcstack = stackbase to use during gc
 	uintptr	gcsp;		// if status==Gsyscall, gcsp = sched.sp to use during gc
+	byte*	gcpc;		// if status==Gsyscall, gcpc = sched.pc to use during gc
 	uintptr	gcguard;		// if status==Gsyscall, gcguard = stackguard to use during gc
 	uintptr	stack0;
 	FuncVal*	fnstart;		// initial function
@@ -224,13 +234,11 @@ struct	G
 	uint32	selgen;		// valid sudog pointer
 	int8*	waitreason;	// if status==Gwaiting
 	G*	schedlink;
-	bool	readyonstop;
 	bool	ispanic;
 	bool	issystem;
 	int8	raceignore; // ignore race detection events
 	M*	m;		// for debuggers, but offset not hard-coded
 	M*	lockedm;
-	M*	idlem;
 	int32	sig;
 	int32	writenbuf;
 	byte*	writebuf;
@@ -257,24 +265,27 @@ struct	M
 	uintptr	cret;		// return value from C
 	uint64	procid;		// for debuggers, but offset not hard-coded
 	G*	gsignal;	// signal-handling G
-	uint32	tls[8];		// thread-local storage (for 386 extern register)
+	uintptr	tls[4];		// thread-local storage (for x86 extern register)
+	void	(*mstartfn)(void);
 	G*	curg;		// current running goroutine
+	P*	p;		// attached P for executing Go code (nil if not executing Go code)
+	P*	nextp;
 	int32	id;
 	int32	mallocing;
 	int32	throwing;
 	int32	gcing;
 	int32	locks;
 	int32	nomemprof;
-	int32	waitnextg;
 	int32	dying;
 	int32	profilehz;
 	int32	helpgc;
+	bool	blockingsyscall;
+	bool	spinning;
 	uint32	fastrand;
 	uint64	ncgocall;	// number of cgo calls in total
 	int32	ncgo;		// number of cgo calls currently in progress
 	CgoMal*	cgomal;
-	Note	havenextg;
-	G*	nextg;
+	Note	park;
 	M*	alllink;	// on allm
 	M*	schedlink;
 	uint32	machport;	// Return address for Mach IPC (OS X)
@@ -284,7 +295,6 @@ struct	M
 	uint32	stackcachecnt;
 	void*	stackcache[StackCacheSize];
 	G*	lockedg;
-	G*	idleg;
 	uintptr	createstack[32];	// Stack that created this thread.
 	uint32	freglo[16];	// D[i] lsb and F[i]
 	uint32	freghi[16];	// D[i] msb and F[i+16]
@@ -298,6 +308,8 @@ struct	M
 	bool	racecall;
 	bool	needextram;
 	void*	racepc;
+	void	(*waitunlockf)(Lock*);
+	Lock*	waitlock;
 	uint32	moreframesize_minalloc;
 
 	uintptr	settype_buf[1024];
@@ -308,6 +320,7 @@ struct	M
 #endif
 #ifdef GOOS_plan9
 	int8*		notesig;
+	byte*	errstr;
 #endif
 	SEH*	seh;
 	uintptr	end[];
@@ -317,11 +330,23 @@ struct P
 {
 	Lock;
 
+	uint32	status;  // one of Pidle/Prunning/...
+	P*	link;
+	uint32	tick;   // incremented on every scheduler or system call
+	M*	m;	// back-link to associated M (nil if idle)
+	MCache*	mcache;
+
 	// Queue of runnable goroutines.
 	G**	runq;
 	int32	runqhead;
 	int32	runqtail;
 	int32	runqsize;
+
+	// Available G's (status == Gdead)
+	G*	gfree;
+	int32	gfreecnt;
+
+	byte	pad[64];
 };
 
 // The m->locked word holds a single bit saying whether
@@ -600,10 +625,11 @@ extern	uintptr runtime·zerobase;
 extern	G*	runtime·allg;
 extern	G*	runtime·lastg;
 extern	M*	runtime·allm;
+extern	P**	runtime·allp;
 extern	int32	runtime·gomaxprocs;
 extern	bool	runtime·singleproc;
 extern	uint32	runtime·panicking;
-extern	int32	runtime·gcwaiting;		// gc is waiting to run
+extern	uint32	runtime·gcwaiting;		// gc is waiting to run
 extern	int8*	runtime·goos;
 extern	int32	runtime·ncpu;
 extern	bool	runtime·iscgo;
@@ -642,7 +668,7 @@ void	runtime·prints(int8*);
 void	runtime·printf(int8*, ...);
 byte*	runtime·mchr(byte*, byte, byte*);
 int32	runtime·mcmp(byte*, byte*, uint32);
-void	runtime·memmove(void*, void*, uint32);
+void	runtime·memmove(void*, void*, uintptr);
 void*	runtime·mal(uintptr);
 String	runtime·catstring(String, String);
 String	runtime·gostring(byte*);
@@ -666,6 +692,7 @@ bool	runtime·casp(void**, void*, void*);
 uint32	runtime·xadd(uint32 volatile*, int32);
 uint64	runtime·xadd64(uint64 volatile*, int64);
 uint32	runtime·xchg(uint32 volatile*, uint32);
+uint64	runtime·xchg64(uint64 volatile*, uint64);
 uint32	runtime·atomicload(uint32 volatile*);
 void	runtime·atomicstore(uint32 volatile*, uint32);
 void	runtime·atomicstore64(uint64 volatile*, uint64);
@@ -677,7 +704,8 @@ void	runtime·exit1(int32);
 void	runtime·ready(G*);
 byte*	runtime·getenv(int8*);
 int32	runtime·atoi(byte*);
-void	runtime·newosproc(M *mp, G *gp, void *stk, void (*fn)(void));
+void	runtime·newosproc(M *mp, void *stk);
+void	runtime·mstart(void);
 G*	runtime·malg(int32);
 void	runtime·asminit(void);
 void	runtime·mpreinit(M*);
@@ -735,6 +763,8 @@ int64	runtime·cputicks(void);
 int64	runtime·tickspersecond(void);
 void	runtime·blockevent(int64, int32);
 extern int64 runtime·blockprofilerate;
+void	runtime·addtimer(Timer*);
+bool	runtime·deltimer(Timer*);
 
 #pragma	varargck	argpos	runtime·printf	1
 #pragma	varargck	type	"d"	int32

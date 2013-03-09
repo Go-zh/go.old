@@ -79,6 +79,7 @@ runtime·appendslice(SliceType *t, Slice x, Slice y, Slice ret)
 	intgo m;
 	uintptr w;
 	void *pc;
+	uint8 *p, *q;
 
 	m = x.len+y.len;
 	w = t->elem->size;
@@ -104,7 +105,24 @@ runtime·appendslice(SliceType *t, Slice x, Slice y, Slice ret)
 			runtime·racewriterangepc(ret.array+ret.len*w, y.len*w, w, pc, runtime·appendslice);
 	}
 
-	runtime·memmove(ret.array + ret.len*w, y.array, y.len*w);
+	// A very common case is appending bytes. Small appends can avoid the overhead of memmove.
+	// We can generalize a bit here, and just pick small-sized appends.
+	p = ret.array+ret.len*w;
+	q = y.array;
+	w *= y.len;
+	if(w <= appendCrossover) {
+		if(p <= q || w <= p-q) // No overlap.
+			while(w-- > 0)
+				*p++ = *q++;
+		else {
+			p += w;
+			q += w;
+			while(w-- > 0)
+				*--p = *--q;
+		}
+	} else {
+		runtime·memmove(p, q, w);
+	}
 	ret.len += y.len;
 	FLUSH(&ret);
 }
@@ -117,11 +135,13 @@ runtime·appendstr(SliceType *t, Slice x, String y, Slice ret)
 {
 	intgo m;
 	void *pc;
+	uintptr w;
+	uint8 *p, *q;
 
 	m = x.len+y.len;
 
 	if(m < x.len)
-		runtime·throw("append: slice overflow");
+		runtime·throw("append: string overflow");
 
 	if(m > x.cap)
 		growslice1(t, x, m, &ret);
@@ -139,7 +159,16 @@ runtime·appendstr(SliceType *t, Slice x, String y, Slice ret)
 			runtime·racewriterangepc(ret.array+ret.len, y.len, 1, pc, runtime·appendstr);
 	}
 
-	runtime·memmove(ret.array + ret.len, y.str, y.len);
+	// Small appends can avoid the overhead of memmove.
+	w = y.len;
+	p = ret.array+ret.len;
+	q = y.str;
+	if(w <= appendCrossover) {
+		while(w-- > 0)
+			*p++ = *q++;
+	} else {
+		runtime·memmove(p, q, w);
+	}
 	ret.len += y.len;
 	FLUSH(&ret);
 }

@@ -39,6 +39,7 @@ TEXT runtime·thr_start(SB),7,$0
 	MOVL	AX, m(CX)
 	CALL	runtime·stackcheck(SB)		// smashes AX
 	CALL	runtime·mstart(SB)
+
 	MOVL	0, AX			// crash (not reached)
 
 // Exit the entire program (like C exit)
