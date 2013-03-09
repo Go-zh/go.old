@@ -1,4 +1,10 @@
 <!--{
+	"Title": "Go编程语言规范",
+	"Subtitle": "版本：2013年2月11日 || 译者：Oling Cat",
+	"Path": "/ref/spec"
+}-->
+
+<!--{
 	"Title": "The Go Programming Language Specification",
 	"Subtitle": "Version of February 11, 2013",
 	"Path": "/ref/spec"
@@ -17,14 +23,35 @@ TODO
 	though obvious
 -->
 
+<!--
+TODO
+[ ] 需要描述关于函数/方法的调用规则
+[ ] #赋值（即常量推广）的最后一段应放到别处，并加上对空接口赋值的说明
+[ ] 需要说明选择器的“作用域”？
+[ ] 阐明什么是结构体声明中的字段名（struct{T} 之于 struct {T T} 之于 struct {t T}）
+[ ] 关于操作符的结果类型需要详尽的语言描述
+[ ] 或许该写一些关于语句求值顺序的东西，尽管它很明显
+-->
 
+<div class="english">
 <h2 id="Introduction">Introduction</h2>
+</div>
 
+<h2 id="引言">引言</h2>
+
+<div class="english">
 <p>
 This is a reference manual for the Go programming language. For
 more information and other documents, see <a href="http://golang.org/">http://golang.org</a>.
 </p>
+</div>
 
+<p>
+这是一份关于Go语言的参考手册。欲获取更多信息与文档，
+请访问<a href="http://golang.org/">http://golang.org</a>。
+</p>
+
+<div class="english">
 <p>
 Go is a general-purpose language designed with systems programming
 in mind. It is strongly typed and garbage-collected and has explicit
@@ -33,13 +60,32 @@ support for concurrent programming.  Programs are constructed from
 dependencies. The existing implementations use a traditional
 compile/link model to generate executable binaries.
 </p>
+</div>
 
+<p>
+Go是通用型的编程语言，它为系统编程而设计。它是强类型化的语言，具有垃圾回收机制，
+并显式支持并发编程。程序由<b>包</b>构造，以此来提供高效的依赖管理功能。
+既有实现使用传统的“编译-链接”模型来生成可执行的二进制文件。
+</p>
+
+<div class="english">
 <p>
 The grammar is compact and regular, allowing for easy analysis by
 automatic tools such as integrated development environments.
 </p>
+</div>
 
+<p>
+其语法紧凑而规则，便于IDE等自动化工具分析。
+</p>
+
+<div class="english">
 <h2 id="Notation">Notation</h2>
+</div>
+
+<h2 id="记法">记法</h2>
+
+<div class="english">
 <p>
 The syntax is specified using Extended Backus-Naur Form (EBNF):
 </p>
@@ -53,7 +99,23 @@ Group       = "(" Expression ")" .
 Option      = "[" Expression "]" .
 Repetition  = "{" Expression "}" .
 </pre>
+</div>
 
+<p>
+语法使用扩展巴克斯-诺尔范式（EBNF）定义：
+</p>
+
+<pre class="grammar">
+生成式 = 生成式名 "=" [ 表达式 ] "." .
+表达式 = 选择项 { "|" 选择项 } .
+选择项 = 条目 { 条目 } .
+条目   = 生成式名 | 标记 [ "…" 标记 ] | 组 | 可选项 | 重复项 .
+组     = "(" 表达式 ")" .
+可选项 = "[" 表达式 "]" .
+重复项 = "{" 表达式 "}" .
+</pre>
+
+<div class="english">
 <p>
 Productions are expressions constructed from terms and the following
 operators, in increasing precedence:
@@ -64,13 +126,32 @@ operators, in increasing precedence:
 []  option (0 or 1 times)
 {}  repetition (0 to n times)
 </pre>
+</div>
 
+<p>
+生成式由表达式构造，表达式通过术语及以下操作符构造，自上而下优先级递增（低=>高）：
+</p>
+<pre class="grammar">
+|   选择
+()  分组
+[]  可选（0 或 1 次）
+{}  重复（0 到 n 次）
+</pre>
+
+<div class="english">
 <p>
 Lower-case production names are used to identify lexical tokens.
 Non-terminals are in CamelCase. Lexical tokens are enclosed in
 double quotes <code>""</code> or back quotes <code>``</code>.
 </p>
+</div>
 
+<p>
+小写生成式名用于标识词法标记。非最终（Non-terminals）词法标记使用驼峰记法（CamelCase）。
+置于双引号 <code>""</code> 或反引号 <code>``</code> 中的即为词法标记。
+</p>
+
+<div class="english">
 <p>
 The form <code>a … b</code> represents the set of characters from
 <code>a</code> through <code>b</code> as alternatives. The horizontal
@@ -78,6 +159,13 @@ ellipsis <code>…</code> is also used elsewhere in the spec to informally denot
 enumerations or code snippets that are not further specified. The character <code>…</code>
 (as opposed to the three characters <code>...</code>) is not a token of the Go
 language.
+</p>
+</div>
+
+<p>
+形式 <code>a … b</code> 表示把从 <code>a</code> 到 <code>b</code> 的字符集作为选择项。
+横向省略号 <code>…</code> 也在本文档中非正式地表示各种列举或简略的代码片断。
+单个字符 <code>…</code>（不同于三个字符 <code>...</code>）并非Go语言本身的标记。
 </p>
 
 <h2 id="Source_code_representation">Source code representation</h2>
