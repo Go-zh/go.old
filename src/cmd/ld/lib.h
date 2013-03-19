@@ -34,7 +34,6 @@ enum
 
 	/* order here is order in output file */
 	STEXT,
-	SMACHOPLT,
 	STYPE,
 	SSTRING,
 	SGOSTRING,
@@ -43,19 +42,20 @@ enum
 	SSYMTAB,
 	SPCLNTAB,
 	SELFROSECT,
+	SMACHOPLT,
 	SELFSECT,
+	SMACHO,	/* Mach-O __nl_symbol_ptr */
+	SMACHOGOT,
 	SNOPTRDATA,
 	SDATARELRO,
 	SDATA,
-	SMACHO,	/* Mach-O __nl_symbol_ptr */
-	SMACHOGOT,
 	SWINDOWS,
 	SBSS,
 	SNOPTRBSS,
 
 	SXREF,
-	SMACHODYNSTR,
-	SMACHODYNSYM,
+	SMACHOSYMSTR,
+	SMACHOSYMTAB,
 	SMACHOINDIRECTPLT,
 	SMACHOINDIRECTGOT,
 	SFILE,
@@ -102,6 +102,7 @@ struct Segment
 struct Section
 {
 	uchar	rwx;
+	int16	extnum;
 	int32	align;
 	char	*name;
 	uvlong	vaddr;
@@ -148,6 +149,7 @@ EXTERN	int	flag_race;
 EXTERN	int flag_shared;
 EXTERN	char*	tracksym;
 EXTERN	char*	interpreter;
+EXTERN	char*	tmpdir;
 
 enum
 {
@@ -166,8 +168,7 @@ enum
 
 EXTERN	Segment	segtext;
 EXTERN	Segment	segdata;
-EXTERN	Segment	segsym;
-EXTERN	Segment segdwarf;
+EXTERN	Segment	segdwarf;
 
 void	addlib(char *src, char *obj);
 void	addlibpath(char *srcref, char *objref, char *file, char *pkg);
@@ -224,6 +225,7 @@ vlong	adduint8(Sym*, uint8);
 vlong	adduint16(Sym*, uint16);
 vlong	adduint32(Sym*, uint32);
 vlong	adduint64(Sym*, uint64);
+vlong	adduintxx(Sym*, uint64, int);
 vlong	addaddr(Sym*, Sym*);
 vlong	addaddrplus(Sym*, Sym*, int32);
 vlong	addpcrelplus(Sym*, Sym*, int32);
@@ -380,5 +382,3 @@ char*	decodetype_structfieldname(Sym*, int);
 Sym*	decodetype_structfieldtype(Sym*, int);
 vlong	decodetype_structfieldoffs(Sym*, int);
 vlong	decodetype_ifacemethodcount(Sym*);
-
-void	sortdynexp(void);

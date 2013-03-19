@@ -24,18 +24,34 @@ TEXT runtime·exit1(SB),7,$0
 	MOVL	$0xf1, 0xf1  // crash
 	RET
 
+TEXT runtime·open(SB),7,$0
+	MOVL	$5, AX
+	INT	$0x80
+	RET
+
+TEXT runtime·close(SB),7,$0
+	MOVL	$6, AX
+	INT	$0x80
+	RET
+
+TEXT runtime·read(SB),7,$0
+	MOVL	$3, AX
+	INT	$0x80
+	RET
+
 TEXT runtime·write(SB),7,$0
 	MOVL	$4, AX
 	INT	$0x80
 	RET
 
-TEXT runtime·raisesigpipe(SB),7,$8
-	get_tls(CX)
-	MOVL	m(CX), DX
-	MOVL	m_procid(DX), DX
-	MOVL	DX, 0(SP)	// thread_port
-	MOVL	$13, 4(SP)	// signal: SIGPIPE
-	MOVL	$328, AX	// __pthread_kill
+TEXT runtime·raise(SB),7,$16
+	MOVL	$20, AX // getpid
+	INT	$0x80
+	MOVL	AX, 4(SP)	// pid
+	MOVL	sig+0(FP), AX
+	MOVL	AX, 8(SP)	// signal
+	MOVL	$1, 12(SP)	// posix
+	MOVL	$37, AX // kill
 	INT	$0x80
 	RET
 
@@ -472,4 +488,33 @@ TEXT runtime·sysctl(SB),7,$0
 	NEGL	AX
 	RET
 	MOVL	$0, AX
+	RET
+
+// int32 runtime·kqueue(void);
+TEXT runtime·kqueue(SB),7,$0
+	MOVL	$362, AX
+	INT	$0x80
+	JAE	2(PC)
+	NEGL	AX
+	RET
+
+// int32 runtime·kevent(int kq, Kevent *changelist, int nchanges, Kevent *eventlist, int nevents, Timespec *timeout);
+TEXT runtime·kevent(SB),7,$0
+	MOVL	$363, AX
+	INT	$0x80
+	JAE	2(PC)
+	NEGL	AX
+	RET
+
+// int32 runtime·closeonexec(int32 fd);
+TEXT runtime·closeonexec(SB),7,$32
+	MOVL	$92, AX  // fcntl
+	// 0(SP) is where the caller PC would be; kernel skips it
+	MOVL	fd+0(FP), BX
+	MOVL	BX, 4(SP)  // fd
+	MOVL	$2, 8(SP)  // F_SETFD
+	MOVL	$1, 12(SP)  // FD_CLOEXEC
+	INT	$0x80
+	JAE	2(PC)
+	NEGL	AX
 	RET

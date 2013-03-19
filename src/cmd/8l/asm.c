@@ -128,7 +128,7 @@ adddynrel(Sym *s, Reloc *r)
 
 	// Handle relocations found in ELF object files.
 	case 256 + R_386_PC32:
-		if(targ->dynimpname != nil && !targ->cgoexport)
+		if(targ->type == SDYNIMPORT)
 			diag("unexpected R_386_PC32 relocation for dynamic symbol %s", targ->name);
 		if(targ->type == 0 || targ->type == SXREF)
 			diag("unknown symbol %s in pcrel", targ->name);
@@ -139,7 +139,7 @@ adddynrel(Sym *s, Reloc *r)
 	case 256 + R_386_PLT32:
 		r->type = D_PCREL;
 		r->add += 4;
-		if(targ->dynimpname != nil && !targ->cgoexport) {
+		if(targ->type == SDYNIMPORT) {
 			addpltsym(targ);
 			r->sym = lookup(".plt", 0);
 			r->add += targ->plt;
@@ -147,7 +147,7 @@ adddynrel(Sym *s, Reloc *r)
 		return;		
 	
 	case 256 + R_386_GOT32:
-		if(targ->dynimpname == nil || targ->cgoexport) {
+		if(targ->type != SDYNIMPORT) {
 			// have symbol
 			// turn MOVL of GOT entry into LEAL of symbol itself
 			if(r->off < 2 || s->p[r->off-2] != 0x8b) {
@@ -175,19 +175,19 @@ adddynrel(Sym *s, Reloc *r)
 		return;
 
 	case 256 + R_386_32:
-		if(targ->dynimpname != nil && !targ->cgoexport)
+		if(targ->type == SDYNIMPORT)
 			diag("unexpected R_386_32 relocation for dynamic symbol %s", targ->name);
 		r->type = D_ADDR;
 		return;
 	
 	case 512 + MACHO_GENERIC_RELOC_VANILLA*2 + 0:
 		r->type = D_ADDR;
-		if(targ->dynimpname != nil && !targ->cgoexport)
+		if(targ->type == SDYNIMPORT)
 			diag("unexpected reloc for dynamic symbol %s", targ->name);
 		return;
 	
 	case 512 + MACHO_GENERIC_RELOC_VANILLA*2 + 1:
-		if(targ->dynimpname != nil && !targ->cgoexport) {
+		if(targ->type == SDYNIMPORT) {
 			addpltsym(targ);
 			r->sym = lookup(".plt", 0);
 			r->add = targ->plt;
@@ -198,7 +198,7 @@ adddynrel(Sym *s, Reloc *r)
 		return;
 	
 	case 512 + MACHO_FAKE_GOTPCREL:
-		if(targ->dynimpname == nil || targ->cgoexport) {
+		if(targ->type != SDYNIMPORT) {
 			// have symbol
 			// turn MOVL of GOT entry into LEAL of symbol itself
 			if(r->off < 2 || s->p[r->off-2] != 0x8b) {
@@ -217,7 +217,7 @@ adddynrel(Sym *s, Reloc *r)
 	}
 	
 	// Handle references to ELF symbols from our own object files.
-	if(targ->dynimpname == nil || targ->cgoexport)
+	if(targ->type != SDYNIMPORT)
 		return;
 
 	switch(r->type) {
@@ -270,12 +270,13 @@ adddynrel(Sym *s, Reloc *r)
 }
 
 int
-elfreloc1(Reloc *r, vlong off, int32 elfsym, vlong add)
+elfreloc1(Reloc *r, vlong sectoff)
 {
-	USED(add);	// written to obj file by ../ld/data.c's reloc
+	int32 elfsym;
 
-	LPUT(off);
+	LPUT(sectoff);
 
+	elfsym = r->xsym->elfsym;
 	switch(r->type) {
 	default:
 		return -1;
@@ -296,6 +297,78 @@ elfreloc1(Reloc *r, vlong off, int32 elfsym, vlong add)
 	}
 
 	return 0;
+}
+
+int
+machoreloc1(Reloc *r, vlong sectoff)
+{
+	uint32 v;
+	Sym *rs;
+	
+	rs = r->xsym;
+
+	if(rs->type == SHOSTOBJ) {
+		if(rs->dynid < 0) {
+			diag("reloc %d to non-macho symbol %s type=%d", r->type, rs->name, rs->type);
+			return -1;
+		}
+		v = rs->dynid;			
+		v |= 1<<27; // external relocation
+	} else {
+		v = rs->sect->extnum;
+		if(v == 0) {
+			diag("reloc %d to symbol %s in non-macho section %s type=%d", r->type, rs->name, rs->sect->name, rs->type);
+			return -1;
+		}
+	}
+
+	switch(r->type) {
+	default:
+		return -1;
+	case D_ADDR:
+		v |= MACHO_GENERIC_RELOC_VANILLA<<28;
+		break;
+	case D_PCREL:
+		v |= 1<<24; // pc-relative bit
+		v |= MACHO_GENERIC_RELOC_VANILLA<<28;
+		break;
+	}
+	
+	switch(r->siz) {
+	default:
+		return -1;
+	case 1:
+		v |= 0<<25;
+		break;
+	case 2:
+		v |= 1<<25;
+		break;
+	case 4:
+		v |= 2<<25;
+		break;
+	case 8:
+		v |= 3<<25;
+		break;
+	}
+
+	LPUT(sectoff);
+	LPUT(v);
+	return 0;
+}
+
+int
+archreloc(Reloc *r, Sym *s, vlong *val)
+{
+	USED(s);
+	switch(r->type) {
+	case D_CONST:
+		*val = r->add;
+		return 0;
+	case D_GOTOFF:
+		*val = symaddr(r->sym) + r->add - symaddr(lookup(".got", 0));
+		return 0;
+	}
+	return -1;
 }
 
 void
@@ -324,21 +397,6 @@ elfsetupplt(void)
 		adduint32(got, 0);
 		adduint32(got, 0);
 	}
-}
-
-int
-archreloc(Reloc *r, Sym *s, vlong *val)
-{
-	USED(s);
-	switch(r->type) {
-	case D_CONST:
-		*val = r->add;
-		return 0;
-	case D_GOTOFF:
-		*val = symaddr(r->sym) + r->add - symaddr(lookup(".got", 0));
-		return 0;
-	}
-	return -1;
 }
 
 static void
@@ -428,26 +486,20 @@ addgotsym(Sym *s)
 void
 adddynsym(Sym *s)
 {
-	Sym *d, *str;
+	Sym *d;
 	int t;
 	char *name;
-	vlong off;
 	
 	if(s->dynid >= 0)
 		return;
 	
-	if(s->dynimpname == nil)
-		diag("adddynsym: no dynamic name for %s", s->name);
-
 	if(iself) {
 		s->dynid = nelfsym++;
 		
 		d = lookup(".dynsym", 0);
 
 		/* name */
-		name = s->dynimpname;
-		if(name == nil)
-			name = s->name;
+		name = s->extname;
 		adduint32(d, addstring(lookup(".dynstr", 0), name));
 		
 		/* value */
@@ -469,7 +521,7 @@ adddynsym(Sym *s)
 		adduint8(d, 0);
 	
 		/* shndx */
-		if(!s->cgoexport && s->dynimpname != nil)
+		if(s->type == SDYNIMPORT)
 			adduint16(d, SHN_UNDEF);
 		else {
 			switch(s->type) {
@@ -490,57 +542,10 @@ adddynsym(Sym *s)
 			adduint16(d, t);
 		}
 	} else if(HEADTYPE == Hdarwin) {
-		// Mach-O symbol nlist32
-		d = lookup(".dynsym", 0);
-		name = s->dynimpname;
-		if(name == nil)
-			name = s->name;
-		if(d->size == 0 && ndynexp > 0) { // pre-allocate for dynexps
-			symgrow(d, ndynexp*12);
-		}
-		if(s->dynid <= -100) { // pre-allocated, see cmd/ld/go.c:^sortdynexp()
-			s->dynid = -s->dynid-100;
-			off = s->dynid*12;
-		} else {
-			off = d->size;
-			s->dynid = off/12;
-		}
-		// darwin still puts _ prefixes on all C symbols
-		str = lookup(".dynstr", 0);
-		setuint32(d, off, str->size);
-		off += 4;
-		adduint8(str, '_');
-		addstring(str, name);
-		if(s->type == SDYNIMPORT) {
-			setuint8(d, off, 0x01); // type - N_EXT - external symbol
-			off++;
-			setuint8(d, off, 0); // section
-			off++;
-		} else {
-			setuint8(d, off, 0x0f);
-			off++;
-			switch(s->type) {
-			default:
-			case STEXT:
-				setuint8(d, off, 1);
-				break;
-			case SDATA:
-				setuint8(d, off, 2);
-				break;
-			case SBSS:
-				setuint8(d, off, 4);
-				break;
-			}
-			off++;
-		}
-		setuint16(d, off, 0); // desc
-		off += 2;
-		if(s->type == SDYNIMPORT)
-			setuint32(d, off, 0); // value
-		else
-			setaddr(d, off, s);
-		off += 4;
-	} else if(HEADTYPE != Hwindows) {
+		diag("adddynsym: missed symbol %s (%s)", s->name, s->extname);
+	} else if(HEADTYPE == Hwindows) {
+		// already taken care of
+	} else {
 		diag("adddynsym: unsupported binary format");
 	}
 }
@@ -687,6 +692,10 @@ asmb(void)
 			if(debug['v'])
 				Bprint(&bso, "%5.2f dwarf\n", cputime());
 			dwarfemitdebugsections();
+			break;
+		case Hdarwin:
+			if(isobj)
+				machoemitreloc();
 			break;
 		}
 	}

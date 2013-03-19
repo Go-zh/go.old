@@ -58,6 +58,28 @@ TEXT runtime·exit1(SB),7,$-8
 	MOVL	$0xf1, 0xf1  // crash
 	RET
 
+TEXT runtime·open(SB),7,$-8
+	MOVQ	8(SP), DI		// arg 1 pathname
+	MOVL	16(SP), SI		// arg 2 flags
+	MOVL	20(SP), DX		// arg 3 mode
+	MOVL	$5, AX
+	SYSCALL
+	RET
+
+TEXT runtime·close(SB),7,$-8
+	MOVL	8(SP), DI		// arg 1 fd
+	MOVL	$6, AX
+	SYSCALL
+	RET
+
+TEXT runtime·read(SB),7,$-8
+	MOVL	8(SP), DI		// arg 1 fd
+	MOVQ	16(SP), SI		// arg 2 buf
+	MOVL	24(SP), DX		// arg 3 count
+	MOVL	$3, AX
+	SYSCALL
+	RET
+
 TEXT runtime·write(SB),7,$-8
 	MOVL	8(SP), DI		// arg 1 fd
 	MOVQ	16(SP), SI		// arg 2 buf
@@ -73,14 +95,14 @@ TEXT runtime·getrlimit(SB),7,$-8
 	SYSCALL
 	RET
 
-TEXT runtime·raisesigpipe(SB),7,$16
+TEXT runtime·raise(SB),7,$16
 	// thr_self(&8(SP))
 	LEAQ	8(SP), DI	// arg 1 &8(SP)
 	MOVL	$432, AX
 	SYSCALL
 	// thr_kill(self, SIGPIPE)
 	MOVQ	8(SP), DI	// arg 1 id
-	MOVQ	$13, SI	// arg 2 SIGPIPE
+	MOVL	sig+0(FP), SI	// arg 2
 	MOVL	$433, AX
 	SYSCALL
 	RET
@@ -239,7 +261,7 @@ TEXT runtime·sysctl(SB),7,$0
 	MOVQ	$202, AX		// sys___sysctl
 	SYSCALL
 	JCC 3(PC)
-	NEGL	AX
+	NEGQ	AX
 	RET
 	MOVL	$0, AX
 	RET

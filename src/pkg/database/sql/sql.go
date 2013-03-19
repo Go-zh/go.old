@@ -5,7 +5,7 @@
 // Package sql provides a generic interface around SQL (or SQL-like)
 // databases.
 
-// sql 包提供通用的SQL数据库（或者类SQL）接口。
+// sql 包提供了通用的SQL（或类SQL）数据库接口。
 package sql
 
 import (
@@ -242,39 +242,60 @@ var ErrNoRows = errors.New("sql: no rows in result set")
 // DB is a database handle. It's safe for concurrent use by multiple
 // goroutines.
 //
-// If the underlying database driver has the concept of a connection
-// and per-connection session state, the sql package manages creating
-// and freeing connections automatically, including maintaining a free
-// pool of idle connections. If observing session state is required,
-// either do not share a *DB between multiple concurrent goroutines or
-// create and observe all state only within a transaction. Once
-// DB.Open is called, the returned Tx is bound to a single isolated
-// connection. Once Tx.Commit or <Tx class="Rollbac"></Tx>k is called, that
-// connection is returned to DB's idle connection pool.
-
-// DB是一个数据库处理器。它能很安全地被多个goroutines并发调用。
-//
-// 如果对应的数据库驱动有连接和会话状态的概念，sql包就能自动管理创建和释放连接，其中包括
-// 管理一个自由连接池。如果有观察会话状态的需求的话，有两种方法。多个goroutine不共用一个
-// *DB，或者在事物中创建和监控所有的状态。一旦DB.Open被调用，返回的Tx是绑定在一个独立的连接
-// 上的。当Tx.Commit或者Tx.Rollback被调用，连接就会返回到DB的闲置连接池。
+// The sql package creates and frees connections automatically; it
+// also maintains a free pool of idle connections. If the database has
+// a concept of per-connection state, such state can only be reliably
+// observed within a transaction. Once DB.Begin is called, the
+// returned Tx is bound to a single connection. Once Commit or
+// Rollback is called on the transaction, that transaction's
+// connection is returned to DB's idle connection pool. The pool size
+// can be controlled with SetMaxIdleConns.
+// TODO：待译
 type DB struct {
 	driver driver.Driver
 	dsn    string
 
 	mu        sync.Mutex           // protects following fields // 用于保护以下字段
-	outConn   map[driver.Conn]bool // whether the conn is in use // conn 是否正在使用
-	freeConn  []driver.Conn
+	outConn   map[*driverConn]bool // whether the conn is in use // conn 是否正在使用
+	freeConn  []*driverConn
 	closed    bool
 	dep       map[finalCloser]depSet
-	onConnPut map[driver.Conn][]func() // code (with mu held) run when conn is next returned // 当 conn 下一次返回后，代码（与 mu 一起）运行。
-	lastPut   map[driver.Conn]string   // stacktrace of last conn's put; debug only // conn 输出的最近一次栈跟踪；仅用于调试。
+	onConnPut map[*driverConn][]func() // code (with mu held) run when conn is next returned // 当 conn 下一次返回后，代码（与 mu 一起）运行。
+	lastPut   map[*driverConn]string   // stacktrace of last conn's put; debug only // conn 输出的最近一次栈跟踪；仅用于调试。
+	maxIdle   int                      // zero means defaultMaxIdleConns; negative means 0 // 零表示 defaultMaxIdleConns；负值表示0
+}
+
+// driverConn wraps a driver.Conn with a mutex, to
+// be held during all calls into the Conn. (including any calls onto
+// interfaces returned via that Conn, such as calls on Tx, Stmt,
+// Result, Rows)
+// TODO：待译
+type driverConn struct {
+	sync.Mutex
+	ci driver.Conn
+}
+
+// driverStmt associates a driver.Stmt with the
+// *driverConn from which it came, so the driverConn's lock can be
+// held during calls.
+// TODO：待译
+type driverStmt struct {
+	sync.Locker // the *driverConn
+	si          driver.Stmt
+}
+
+func (ds *driverStmt) Close() error {
+	ds.Lock()
+	defer ds.Unlock()
+	return ds.si.Close()
 }
 
 // depSet is a finalCloser's outstanding dependencies
+// TODO：待译
 type depSet map[interface{}]bool // set of true bools
 
 // The finalCloser interface is used by (*DB).addDep and (*DB).get
+// TODO：待译
 type finalCloser interface {
 	// finalClose is called when the reference count of an object
 	// goes to zero. (*DB).mu is not held while calling it.
@@ -283,6 +304,7 @@ type finalCloser interface {
 
 // addDep notes that x now depends on dep, and x's finalClose won't be
 // called until all of x's dependencies are removed with removeDep.
+// TODO：待译
 func (db *DB) addDep(x finalCloser, dep interface{}) {
 	//println(fmt.Sprintf("addDep(%T %p, %T %p)", x, x, dep, dep))
 	db.mu.Lock()
@@ -302,6 +324,7 @@ func (db *DB) addDep(x finalCloser, dep interface{}) {
 // If x still has dependencies, nil is returned.
 // If x no longer has any dependencies, its finalClose method will be
 // called and its error value will be returned.
+// TODO：待译
 func (db *DB) removeDep(x finalCloser, dep interface{}) error {
 	//println(fmt.Sprintf("removeDep(%T %p, %T %p)", x, x, dep, dep))
 	done := false
@@ -330,26 +353,45 @@ func (db *DB) removeDep(x finalCloser, dep interface{}) error {
 //
 // Most users will open a database via a driver-specific connection
 // helper function that returns a *DB.
+//
+// Open may just validate its arguments without creating a connection
+// to the database. To verify that the data source name is valid, call
+// Ping.
 
 // Open打开一个数据库，这个数据库是由其驱动名称和驱动制定的数据源信息打开的，这个数据源信息通常
 // 是由至少一个数据库名字和连接信息组成的。
 //
 // 多数用户通过指定的驱动连接辅助函数来打开一个数据库。打开数据库之后会返回*DB。
+//
+// TODO：待译
 func Open(driverName, dataSourceName string) (*DB, error) {
 	driveri, ok := drivers[driverName]
 	if !ok {
 		return nil, fmt.Errorf("sql: unknown driver %q (forgotten import?)", driverName)
 	}
-	// TODO: optionally proactively connect to a Conn to check
-	// the dataSourceName: golang.org/issue/4804
 	db := &DB{
 		driver:    driveri,
 		dsn:       dataSourceName,
-		outConn:   make(map[driver.Conn]bool),
-		lastPut:   make(map[driver.Conn]string),
-		onConnPut: make(map[driver.Conn][]func()),
+		outConn:   make(map[*driverConn]bool),
+		lastPut:   make(map[*driverConn]string),
+		onConnPut: make(map[*driverConn][]func()),
 	}
 	return db, nil
+}
+
+// Ping verifies a connection to the database is still alive,
+// establishing a connection if necessary.
+// TODO：待译
+func (db *DB) Ping() error {
+	// TODO(bradfitz): give drivers an optional hook to implement
+	// this in a more efficient or more reliable way, if they
+	// have one.
+	dc, err := db.conn()
+	if err != nil {
+		return err
+	}
+	db.putConn(dc, nil)
+	return nil
 }
 
 // Close closes the database, releasing any open resources.
@@ -359,8 +401,10 @@ func (db *DB) Close() error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	var err error
-	for _, c := range db.freeConn {
-		err1 := c.Close()
+	for _, dc := range db.freeConn {
+		dc.Lock()
+		err1 := dc.ci.Close()
+		dc.Unlock()
 		if err1 != nil {
 			err = err1
 		}
@@ -370,17 +414,52 @@ func (db *DB) Close() error {
 	return err
 }
 
-func (db *DB) maxIdleConns() int {
-	const defaultMaxIdleConns = 2
-	// TODO(bradfitz): ask driver, if supported, for its default preference
-	// TODO(bradfitz): let users override?
-	return defaultMaxIdleConns
+const defaultMaxIdleConns = 2
+
+func (db *DB) maxIdleConnsLocked() int {
+	n := db.maxIdle
+	switch {
+	case n == 0:
+		// TODO(bradfitz): ask driver, if supported, for its default preference
+		return defaultMaxIdleConns
+	case n < 0:
+		return 0
+	default:
+		return n
+	}
 }
 
-// conn returns a newly-opened or cached driver.Conn
+// SetMaxIdleConns sets the maximum number of connections in the idle
+// connection pool.
+//
+// If n <= 0, no idle connections are retained.
+// TODO：待译
+func (db *DB) SetMaxIdleConns(n int) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if n > 0 {
+		db.maxIdle = n
+	} else {
+		// No idle connections.
+		db.maxIdle = -1
+	}
+	for len(db.freeConn) > 0 && len(db.freeConn) > n {
+		nfree := len(db.freeConn)
+		dc := db.freeConn[nfree-1]
+		db.freeConn[nfree-1] = nil
+		db.freeConn = db.freeConn[:nfree-1]
+		go func() {
+			dc.Lock()
+			dc.ci.Close()
+			dc.Unlock()
+		}()
+	}
+}
 
-// conn返回新创建的，或者是缓存住的driver.Conn。
-func (db *DB) conn() (driver.Conn, error) {
+// conn returns a newly-opened or cached *driverConn
+
+// conn返回新创建的，或者是缓存住的*driverConn。
+func (db *DB) conn() (*driverConn, error) {
 	db.mu.Lock()
 	if db.closed {
 		db.mu.Unlock()
@@ -394,13 +473,16 @@ func (db *DB) conn() (driver.Conn, error) {
 		return conn, nil
 	}
 	db.mu.Unlock()
-	conn, err := db.driver.Open(db.dsn)
-	if err == nil {
-		db.mu.Lock()
-		db.outConn[conn] = true
-		db.mu.Unlock()
+
+	ci, err := db.driver.Open(db.dsn)
+	if err != nil {
+		return nil, err
 	}
-	return conn, err
+	dc := &driverConn{ci: ci}
+	db.mu.Lock()
+	db.outConn[dc] = true
+	db.mu.Unlock()
+	return dc, nil
 }
 
 // connIfFree returns (wanted, true) if wanted is still a valid conn and
@@ -408,7 +490,8 @@ func (db *DB) conn() (driver.Conn, error) {
 //
 // If wanted is valid but in use, connIfFree returns (wanted, false).
 // If wanted is invalid, connIfFre returns (nil, false).
-func (db *DB) connIfFree(wanted driver.Conn) (conn driver.Conn, ok bool) {
+// TODO：待译
+func (db *DB) connIfFree(wanted *driverConn) (conn *driverConn, ok bool) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	if db.outConn[wanted] {
@@ -429,12 +512,13 @@ func (db *DB) connIfFree(wanted driver.Conn) (conn driver.Conn, ok bool) {
 // putConnHook is a hook for testing.
 
 // putConnHook是一个测试使用的钩子。
-var putConnHook func(*DB, driver.Conn)
+var putConnHook func(*DB, *driverConn)
 
 // noteUnusedDriverStatement notes that si is no longer used and should
 // be closed whenever possible (when c is next not in use), unless c is
 // already closed.
-func (db *DB) noteUnusedDriverStatement(c driver.Conn, si driver.Stmt) {
+// TODO：待译
+func (db *DB) noteUnusedDriverStatement(c *driverConn, si driver.Stmt) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	if db.outConn[c] {
@@ -448,31 +532,32 @@ func (db *DB) noteUnusedDriverStatement(c driver.Conn, si driver.Stmt) {
 
 // debugGetPut determines whether getConn & putConn calls' stack traces
 // are returned for more verbose crashes.
+// TODO：待译
 const debugGetPut = false
 
 // putConn adds a connection to the db's free pool.
 // err is optionally the last error that occurred on this connection.
 
-// putConn将连接加入到数据库的空置池中。
-// error是连接过程中最后遇到的错误。
-func (db *DB) putConn(c driver.Conn, err error) {
+// putConn 将连接加入到数据库的空置池中。
+// err 是连接过程中最后遇到的错误。
+func (db *DB) putConn(dc *driverConn, err error) {
 	db.mu.Lock()
-	if !db.outConn[c] {
+	if !db.outConn[dc] {
 		if debugGetPut {
-			fmt.Printf("putConn(%v) DUPLICATE was: %s\n\nPREVIOUS was: %s", c, stack(), db.lastPut[c])
+			fmt.Printf("putConn(%v) DUPLICATE was: %s\n\nPREVIOUS was: %s", dc, stack(), db.lastPut[dc])
 		}
 		panic("sql: connection returned that was never out")
 	}
 	if debugGetPut {
-		db.lastPut[c] = stack()
+		db.lastPut[dc] = stack()
 	}
-	delete(db.outConn, c)
+	delete(db.outConn, dc)
 
-	if fns, ok := db.onConnPut[c]; ok {
+	if fns, ok := db.onConnPut[dc]; ok {
 		for _, fn := range fns {
 			fn()
 		}
-		delete(db.onConnPut, c)
+		delete(db.onConnPut, dc)
 	}
 
 	if err == driver.ErrBadConn {
@@ -481,17 +566,20 @@ func (db *DB) putConn(c driver.Conn, err error) {
 		return
 	}
 	if putConnHook != nil {
-		putConnHook(db, c)
+		putConnHook(db, dc)
 	}
-	if n := len(db.freeConn); !db.closed && n < db.maxIdleConns() {
-		db.freeConn = append(db.freeConn, c)
+	if n := len(db.freeConn); !db.closed && n < db.maxIdleConnsLocked() {
+		db.freeConn = append(db.freeConn, dc)
 		db.mu.Unlock()
 		return
 	}
 	// TODO: check to see if we need this Conn for any prepared
 	// statements which are still active?
 	db.mu.Unlock()
-	c.Close()
+
+	dc.Lock()
+	dc.ci.Close()
+	dc.Unlock()
 }
 
 // Prepare creates a prepared statement for later queries or executions.
@@ -519,22 +607,24 @@ func (db *DB) prepare(query string) (*Stmt, error) {
 	// to a connection, and to execute this prepared statement
 	// we either need to use this connection (if it's free), else
 	// get a new connection + re-prepare + execute on that one.
-	ci, err := db.conn()
+	dc, err := db.conn()
 	if err != nil {
 		return nil, err
 	}
-	si, err := ci.Prepare(query)
+	dc.Lock()
+	si, err := dc.ci.Prepare(query)
+	dc.Unlock()
 	if err != nil {
-		db.putConn(ci, err)
+		db.putConn(dc, err)
 		return nil, err
 	}
 	stmt := &Stmt{
 		db:    db,
 		query: query,
-		css:   []connStmt{{ci, si}},
+		css:   []connStmt{{dc, si}},
 	}
 	db.addDep(stmt, stmt)
-	db.putConn(ci, nil)
+	db.putConn(dc, nil)
 	return stmt, nil
 }
 
@@ -556,35 +646,39 @@ func (db *DB) Exec(query string, args ...interface{}) (Result, error) {
 }
 
 func (db *DB) exec(query string, args []interface{}) (res Result, err error) {
-	ci, err := db.conn()
+	dc, err := db.conn()
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
-		db.putConn(ci, err)
+		db.putConn(dc, err)
 	}()
 
-	if execer, ok := ci.(driver.Execer); ok {
+	if execer, ok := dc.ci.(driver.Execer); ok {
 		dargs, err := driverArgs(nil, args)
 		if err != nil {
 			return nil, err
 		}
+		dc.Lock()
 		resi, err := execer.Exec(query, dargs)
+		dc.Unlock()
 		if err != driver.ErrSkip {
 			if err != nil {
 				return nil, err
 			}
-			return result{resi}, nil
+			return driverResult{dc, resi}, nil
 		}
 	}
 
-	sti, err := ci.Prepare(query)
+	dc.Lock()
+	si, err := dc.ci.Prepare(query)
+	dc.Unlock()
 	if err != nil {
 		return nil, err
 	}
-	defer sti.Close()
+	defer withLock(dc, func() { si.Close() })
 
-	return resultFromStatement(sti, args...)
+	return resultFromStatement(driverStmt{dc, si}, args...)
 }
 
 // Query executes a query that returns rows, typically a SELECT.
@@ -617,24 +711,26 @@ func (db *DB) query(query string, args []interface{}) (*Rows, error) {
 
 // queryConn executes a query on the given connection.
 // The connection gets released by the releaseConn function.
-func (db *DB) queryConn(ci driver.Conn, releaseConn func(error), query string, args []interface{}) (*Rows, error) {
-	if queryer, ok := ci.(driver.Queryer); ok {
+func (db *DB) queryConn(dc *driverConn, releaseConn func(error), query string, args []interface{}) (*Rows, error) {
+	if queryer, ok := dc.ci.(driver.Queryer); ok {
 		dargs, err := driverArgs(nil, args)
 		if err != nil {
 			releaseConn(err)
 			return nil, err
 		}
+		dc.Lock()
 		rowsi, err := queryer.Query(query, dargs)
+		dc.Unlock()
 		if err != driver.ErrSkip {
 			if err != nil {
 				releaseConn(err)
 				return nil, err
 			}
-			// Note: ownership of ci passes to the *Rows, to be freed
+			// Note: ownership of dc passes to the *Rows, to be freed
 			// with releaseConn.
 			rows := &Rows{
 				db:          db,
-				ci:          ci,
+				dc:          dc,
 				releaseConn: releaseConn,
 				rowsi:       rowsi,
 			}
@@ -642,16 +738,21 @@ func (db *DB) queryConn(ci driver.Conn, releaseConn func(error), query string, a
 		}
 	}
 
-	sti, err := ci.Prepare(query)
+	dc.Lock()
+	si, err := dc.ci.Prepare(query)
+	dc.Unlock()
 	if err != nil {
 		releaseConn(err)
 		return nil, err
 	}
 
-	rowsi, err := rowsiFromStatement(sti, args...)
+	ds := driverStmt{dc, si}
+	rowsi, err := rowsiFromStatement(ds, args...)
 	if err != nil {
 		releaseConn(err)
-		sti.Close()
+		dc.Lock()
+		si.Close()
+		dc.Unlock()
 		return nil, err
 	}
 
@@ -659,10 +760,10 @@ func (db *DB) queryConn(ci driver.Conn, releaseConn func(error), query string, a
 	// with releaseConn.
 	rows := &Rows{
 		db:          db,
-		ci:          ci,
+		dc:          dc,
 		releaseConn: releaseConn,
 		rowsi:       rowsi,
-		closeStmt:   sti,
+		closeStmt:   si,
 	}
 	return rows, nil
 }
@@ -695,18 +796,20 @@ func (db *DB) Begin() (*Tx, error) {
 }
 
 func (db *DB) begin() (tx *Tx, err error) {
-	ci, err := db.conn()
+	dc, err := db.conn()
 	if err != nil {
 		return nil, err
 	}
-	txi, err := ci.Begin()
+	dc.Lock()
+	txi, err := dc.ci.Begin()
+	dc.Unlock()
 	if err != nil {
-		db.putConn(ci, err)
+		db.putConn(dc, err)
 		return nil, err
 	}
 	return &Tx{
 		db:  db,
-		ci:  ci,
+		dc:  dc,
 		txi: txi,
 	}, nil
 }
@@ -729,22 +832,18 @@ func (db *DB) Driver() driver.Driver {
 //
 // 必须调用Commit或者Rollback来结束事务。
 //
-// 在调用Commit或者Rollback之后，所有后续对事务的操作就会返回ErrTxDone。
+// 在调用 Commit 或者 Rollback 之后，所有对事务的后续操作就会返回 ErrTxDone。
 type Tx struct {
 	db *DB
 
-	// ci is owned exclusively until Commit or Rollback, at which point
+	// dc is owned exclusively until Commit or Rollback, at which point
 	// it's returned with putConn.
 
-	// ci会一直有值，直到Commit或者Rollback被调用以后。在释放ci的时候，它会被putConn调用返回。
+	// 在调用 Commit 或 Rollback 之前，dc 会一直有值，在释放 dc 的时候，它会被
+	// putConn 调用返回。
 	ci  driver.Conn
+	dc  *driverConn
 	txi driver.Tx
-
-	// cimu is held while somebody is using ci (between grabConn
-	// and releaseConn)
-
-	// 当某人使用ci的时候，cimu就会被持有了（在grabConn之后releaseConn之前的时间段内）
-	cimu sync.Mutex
 
 	// done transitions from false to true exactly once, on Commit
 	// or Rollback. once done, all operations fail with
@@ -762,21 +861,16 @@ func (tx *Tx) close() {
 		panic("double close") // internal error
 	}
 	tx.done = true
-	tx.db.putConn(tx.ci, nil)
-	tx.ci = nil
+	tx.db.putConn(tx.dc, nil)
+	tx.dc = nil
 	tx.txi = nil
 }
 
-func (tx *Tx) grabConn() (driver.Conn, error) {
+func (tx *Tx) grabConn() (*driverConn, error) {
 	if tx.done {
 		return nil, ErrTxDone
 	}
-	tx.cimu.Lock()
-	return tx.ci, nil
-}
-
-func (tx *Tx) releaseConn() {
-	tx.cimu.Unlock()
+	return tx.dc, nil
 }
 
 // Commit commits the transaction.
@@ -787,6 +881,8 @@ func (tx *Tx) Commit() error {
 		return ErrTxDone
 	}
 	defer tx.close()
+	tx.dc.Lock()
+	defer tx.dc.Unlock()
 	return tx.txi.Commit()
 }
 
@@ -798,6 +894,8 @@ func (tx *Tx) Rollback() error {
 		return ErrTxDone
 	}
 	defer tx.close()
+	tx.dc.Lock()
+	defer tx.dc.Unlock()
 	return tx.txi.Rollback()
 }
 
@@ -827,21 +925,25 @@ func (tx *Tx) Prepare(query string) (*Stmt, error) {
 	// Perhaps just looking at the reference count (by noting
 	// Stmt.Close) would be enough. We might also want a finalizer
 	// on Stmt to drop the reference count.
-	ci, err := tx.grabConn()
+	dc, err := tx.grabConn()
 	if err != nil {
 		return nil, err
 	}
-	defer tx.releaseConn()
 
-	si, err := ci.Prepare(query)
+	dc.Lock()
+	si, err := dc.ci.Prepare(query)
+	dc.Unlock()
 	if err != nil {
 		return nil, err
 	}
 
 	stmt := &Stmt{
-		db:    tx.db,
-		tx:    tx,
-		txsi:  si,
+		db: tx.db,
+		tx: tx,
+		txsi: &driverStmt{
+			Locker: dc,
+			si:     si,
+		},
 		query: query,
 	}
 	return stmt, nil
@@ -874,16 +976,20 @@ func (tx *Tx) Stmt(stmt *Stmt) *Stmt {
 	if tx.db != stmt.db {
 		return &Stmt{stickyErr: errors.New("sql: Tx.Stmt: statement from different database used")}
 	}
-	ci, err := tx.grabConn()
+	dc, err := tx.grabConn()
 	if err != nil {
 		return &Stmt{stickyErr: err}
 	}
-	defer tx.releaseConn()
-	si, err := ci.Prepare(stmt.query)
+	dc.Lock()
+	si, err := dc.ci.Prepare(stmt.query)
+	dc.Unlock()
 	return &Stmt{
-		db:        tx.db,
-		tx:        tx,
-		txsi:      si,
+		db: tx.db,
+		tx: tx,
+		txsi: &driverStmt{
+			Locker: dc,
+			si:     si,
+		},
 		query:     stmt.query,
 		stickyErr: err,
 	}
@@ -895,47 +1001,48 @@ func (tx *Tx) Stmt(stmt *Stmt) *Stmt {
 // Exec执行不返回任何行的操作。
 // 例如：INSERT和UPDATE操作。
 func (tx *Tx) Exec(query string, args ...interface{}) (Result, error) {
-	ci, err := tx.grabConn()
+	dc, err := tx.grabConn()
 	if err != nil {
 		return nil, err
 	}
-	defer tx.releaseConn()
 
-	if execer, ok := ci.(driver.Execer); ok {
+	if execer, ok := dc.ci.(driver.Execer); ok {
 		dargs, err := driverArgs(nil, args)
 		if err != nil {
 			return nil, err
 		}
+		dc.Lock()
 		resi, err := execer.Exec(query, dargs)
+		dc.Unlock()
 		if err == nil {
-			return result{resi}, nil
+			return driverResult{dc, resi}, nil
 		}
 		if err != driver.ErrSkip {
 			return nil, err
 		}
 	}
 
-	sti, err := ci.Prepare(query)
+	dc.Lock()
+	si, err := dc.ci.Prepare(query)
+	dc.Unlock()
 	if err != nil {
 		return nil, err
 	}
-	defer sti.Close()
+	defer withLock(dc, func() { si.Close() })
 
-	return resultFromStatement(sti, args...)
+	return resultFromStatement(driverStmt{dc, si}, args...)
 }
 
 // Query executes a query that returns rows, typically a SELECT.
 
 // Query执行哪些返回行的查询操作，比如SELECT。
 func (tx *Tx) Query(query string, args ...interface{}) (*Rows, error) {
-	ci, err := tx.grabConn()
+	dc, err := tx.grabConn()
 	if err != nil {
 		return nil, err
 	}
-
-	releaseConn := func(err error) { tx.releaseConn() }
-
-	return tx.db.queryConn(ci, releaseConn, query, args)
+	releaseConn := func(error) {}
+	return tx.db.queryConn(dc, releaseConn, query, args)
 }
 
 // QueryRow executes a query that is expected to return at most one row.
@@ -953,7 +1060,7 @@ func (tx *Tx) QueryRow(query string, args ...interface{}) *Row {
 
 // connStmt代表在某个连接上定义好的声明。
 type connStmt struct {
-	ci driver.Conn
+	dc *driverConn
 	si driver.Stmt
 }
 
@@ -974,7 +1081,7 @@ type Stmt struct {
 
 	// 只有在事务中，者两个值才都非空，其他情况下都是空的：
 	tx   *Tx
-	txsi driver.Stmt
+	txsi *driverStmt
 
 	mu     sync.Mutex // protects the rest of the fields // 保护其他字段
 	closed bool
@@ -996,35 +1103,41 @@ type Stmt struct {
 func (s *Stmt) Exec(args ...interface{}) (Result, error) {
 	s.closemu.RLock()
 	defer s.closemu.RUnlock()
-	_, releaseConn, si, err := s.connStmt()
+	dc, releaseConn, si, err := s.connStmt()
 	if err != nil {
 		return nil, err
 	}
 	defer releaseConn(nil)
 
-	return resultFromStatement(si, args...)
+	return resultFromStatement(driverStmt{dc, si}, args...)
 }
 
-func resultFromStatement(si driver.Stmt, args ...interface{}) (Result, error) {
+func resultFromStatement(ds driverStmt, args ...interface{}) (Result, error) {
+	ds.Lock()
+	want := ds.si.NumInput()
+	ds.Unlock()
+
 	// -1 means the driver doesn't know how to count the number of
 	// placeholders, so we won't sanity check input here and instead let the
 	// driver deal with errors.
 
 	// -1意味着驱动不知道如何计算占位符的数量，所以在这里，我们并不检查输入，而是让驱动自己来处理错误。
-	if want := si.NumInput(); want != -1 && len(args) != want {
+	if want != -1 && len(args) != want {
 		return nil, fmt.Errorf("sql: expected %d arguments, got %d", want, len(args))
 	}
 
-	dargs, err := driverArgs(si, args)
+	dargs, err := driverArgs(&ds, args)
 	if err != nil {
 		return nil, err
 	}
 
-	resi, err := si.Exec(dargs)
+	ds.Lock()
+	resi, err := ds.si.Exec(dargs)
+	ds.Unlock()
 	if err != nil {
 		return nil, err
 	}
-	return result{resi}, nil
+	return driverResult{ds.Locker, resi}, nil
 }
 
 // connStmt returns a free driver connection on which to execute the
@@ -1033,7 +1146,7 @@ func resultFromStatement(si driver.Stmt, args ...interface{}) (Result, error) {
 
 // connStmt返回空闲的驱动连接，这个连接是用来执行这个声明的，并且同时定义一个函数来释放连接，
 // 定义一个声明绑定连接。
-func (s *Stmt) connStmt() (ci driver.Conn, releaseConn func(error), si driver.Stmt, err error) {
+func (s *Stmt) connStmt() (ci *driverConn, releaseConn func(error), si driver.Stmt, err error) {
 	if err = s.stickyErr; err != nil {
 		return
 	}
@@ -1054,8 +1167,8 @@ func (s *Stmt) connStmt() (ci driver.Conn, releaseConn func(error), si driver.St
 		if err != nil {
 			return
 		}
-		releaseConn = func(error) { s.tx.releaseConn() }
-		return ci, releaseConn, s.txsi, nil
+		releaseConn = func(error) {}
+		return ci, releaseConn, s.txsi.si, nil
 	}
 
 	var cs connStmt
@@ -1063,7 +1176,7 @@ func (s *Stmt) connStmt() (ci driver.Conn, releaseConn func(error), si driver.St
 	for _, v := range s.css {
 		// TODO(bradfitz): lazily clean up entries in this
 		// list with dead conns while enumerating
-		if _, match = s.db.connIfFree(v.ci); match {
+		if _, match = s.db.connIfFree(v.dc); match {
 			cs = v
 			break
 		}
@@ -1074,11 +1187,13 @@ func (s *Stmt) connStmt() (ci driver.Conn, releaseConn func(error), si driver.St
 	// TODO(bradfitz): or wait for one? make configurable later?
 	if !match {
 		for i := 0; ; i++ {
-			ci, err := s.db.conn()
+			dc, err := s.db.conn()
 			if err != nil {
 				return nil, nil, nil, err
 			}
-			si, err := ci.Prepare(s.query)
+			dc.Lock()
+			si, err := dc.ci.Prepare(s.query)
+			dc.Unlock()
 			if err == driver.ErrBadConn && i < 10 {
 				continue
 			}
@@ -1086,14 +1201,14 @@ func (s *Stmt) connStmt() (ci driver.Conn, releaseConn func(error), si driver.St
 				return nil, nil, nil, err
 			}
 			s.mu.Lock()
-			cs = connStmt{ci, si}
+			cs = connStmt{dc, si}
 			s.css = append(s.css, cs)
 			s.mu.Unlock()
 			break
 		}
 	}
 
-	conn := cs.ci
+	conn := cs.dc
 	releaseConn = func(err error) { s.db.putConn(conn, err) }
 	return conn, releaseConn, cs.si, nil
 }
@@ -1106,12 +1221,13 @@ func (s *Stmt) Query(args ...interface{}) (*Rows, error) {
 	s.closemu.RLock()
 	defer s.closemu.RUnlock()
 
-	ci, releaseConn, si, err := s.connStmt()
+	dc, releaseConn, si, err := s.connStmt()
 	if err != nil {
 		return nil, err
 	}
 
-	rowsi, err := rowsiFromStatement(si, args...)
+	ds := driverStmt{dc, si}
+	rowsi, err := rowsiFromStatement(ds, args...)
 	if err != nil {
 		releaseConn(err)
 		return nil, err
@@ -1121,7 +1237,7 @@ func (s *Stmt) Query(args ...interface{}) (*Rows, error) {
 	// with releaseConn.
 	rows := &Rows{
 		db:    s.db,
-		ci:    ci,
+		dc:    dc,
 		rowsi: rowsi,
 		// releaseConn set below
 	}
@@ -1133,20 +1249,26 @@ func (s *Stmt) Query(args ...interface{}) (*Rows, error) {
 	return rows, nil
 }
 
-func rowsiFromStatement(si driver.Stmt, args ...interface{}) (driver.Rows, error) {
+func rowsiFromStatement(ds driverStmt, args ...interface{}) (driver.Rows, error) {
+	ds.Lock()
+	want := ds.si.NumInput()
+	ds.Unlock()
+
 	// -1 means the driver doesn't know how to count the number of
 	// placeholders, so we won't sanity check input here and instead let the
 	// driver deal with errors.
-	if want := si.NumInput(); want != -1 && len(args) != want {
-		return nil, fmt.Errorf("sql: statement expects %d inputs; got %d", si.NumInput(), len(args))
+	if want != -1 && len(args) != want {
+		return nil, fmt.Errorf("sql: statement expects %d inputs; got %d", want, len(args))
 	}
 
-	dargs, err := driverArgs(si, args)
+	dargs, err := driverArgs(&ds, args)
 	if err != nil {
 		return nil, err
 	}
 
-	rowsi, err := si.Query(dargs)
+	ds.Lock()
+	rowsi, err := ds.si.Query(dargs)
+	ds.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -1209,7 +1331,7 @@ func (s *Stmt) Close() error {
 
 func (s *Stmt) finalClose() error {
 	for _, v := range s.css {
-		s.db.noteUnusedDriverStatement(v.ci, v.si)
+		s.db.noteUnusedDriverStatement(v.dc, v.si)
 	}
 	s.css = nil
 	return nil
@@ -1243,7 +1365,7 @@ func (s *Stmt) finalClose() error {
 //     ...
 type Rows struct {
 	db          *DB
-	ci          driver.Conn // owned; must call releaseConn when closed to release // 已经存在的连接；当释放连接的时候必须调用 releaseConn
+	dc          *driverConn // owned; must call releaseConn when closed to release // 已经存在的连接；当释放连接的时候必须调用 releaseConn
 	releaseConn func(error)
 	rowsi       driver.Rows
 
@@ -1447,11 +1569,31 @@ type Result interface {
 	RowsAffected() (int64, error)
 }
 
-type result struct {
-	driver.Result
+type driverResult struct {
+	sync.Locker // the *driverConn
+	resi        driver.Result
+}
+
+func (dr driverResult) LastInsertId() (int64, error) {
+	dr.Lock()
+	defer dr.Unlock()
+	return dr.resi.LastInsertId()
+}
+
+func (dr driverResult) RowsAffected() (int64, error) {
+	dr.Lock()
+	defer dr.Unlock()
+	return dr.resi.RowsAffected()
 }
 
 func stack() string {
 	var buf [1024]byte
 	return string(buf[:runtime.Stack(buf[:], false)])
+}
+
+// withLock runs while holding lk.
+func withLock(lk sync.Locker, fn func()) {
+	lk.Lock()
+	fn()
+	lk.Unlock()
 }

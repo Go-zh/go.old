@@ -21,6 +21,25 @@ TEXT runtime·exit1(SB),7,$-4
 	MOVW $1, R9	// crash
 	MOVW R9, (R9)
 	RET
+	
+TEXT runtime·open(SB),7,$-8
+	MOVW 0(FP), R0
+	MOVW 4(FP), R1
+	MOVW 8(FP), R2
+	SWI $0xa00005
+	RET
+
+TEXT runtime·close(SB),7,$-8
+	MOVW 0(FP), R0
+	SWI $0xa00006
+	RET
+
+TEXT runtime·read(SB),7,$-8
+	MOVW 0(FP), R0
+	MOVW 4(FP), R1
+	MOVW 8(FP), R2
+	SWI $0xa00003
+	RET
 
 TEXT runtime·write(SB),7,$-4
 	MOVW	0(FP), R0	// arg 1 - fd
@@ -88,9 +107,9 @@ TEXT runtime·usleep(SB),7,$16
 	SWI $0xa001ae	// sys_nanosleep
 	RET
 
-TEXT runtime·raisesigpipe(SB),7,$16
+TEXT runtime·raise(SB),7,$16
 	SWI $0xa00137	// sys__lwp_self, the returned R0 is arg 1
-	MOVW $13, R1	// arg 2 - signo == SIGPIPE
+	MOVW	sig+0(FP), R1	// arg 2 - signal
 	SWI $0xa0013e	// sys__lwp_kill
 	RET
 

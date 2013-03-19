@@ -23,7 +23,7 @@ TEXT runtime·tfork(SB),7,$32
 
 	// Return if tfork syscall failed.
 	JCC	3(PC)
-	NEGL	AX
+	NEGQ	AX
 	RET
 
 	// In parent, return.
@@ -87,6 +87,28 @@ TEXT runtime·exit1(SB),7,$-8
 	MOVL	$0xf1, 0xf1		// crash
 	RET
 
+TEXT runtime·open(SB),7,$-8
+	MOVQ	8(SP), DI		// arg 1 pathname
+	MOVL	16(SP), SI		// arg 2 flags
+	MOVL	20(SP), DX		// arg 3 mode
+	MOVL	$5, AX
+	SYSCALL
+	RET
+
+TEXT runtime·close(SB),7,$-8
+	MOVL	8(SP), DI		// arg 1 fd
+	MOVL	$6, AX
+	SYSCALL
+	RET
+
+TEXT runtime·read(SB),7,$-8
+	MOVL	8(SP), DI		// arg 1 fd
+	MOVQ	16(SP), SI		// arg 2 buf
+	MOVL	24(SP), DX		// arg 3 count
+	MOVL	$3, AX
+	SYSCALL
+	RET
+
 TEXT runtime·write(SB),7,$-8
 	MOVL	8(SP), DI		// arg 1 - fd
 	MOVQ	16(SP), SI		// arg 2 - buf
@@ -111,11 +133,11 @@ TEXT runtime·usleep(SB),7,$16
 	SYSCALL
 	RET
 
-TEXT runtime·raisesigpipe(SB),7,$16
+TEXT runtime·raise(SB),7,$16
 	MOVL	$299, AX		// sys_getthrid
 	SYSCALL
 	MOVQ	AX, DI			// arg 1 - pid
-	MOVQ	$13, SI			// arg 2 - signum == SIGPIPE
+	MOVL	sig+0(FP), SI			// arg 2 - signum
 	MOVL	$37, AX			// sys_kill
 	SYSCALL
 	RET
@@ -220,8 +242,6 @@ TEXT runtime·mmap(SB),7,$0
 	MOVQ	$0, R9			// arg 6 - pad
 	MOVL	$197, AX
 	SYSCALL
-	JCC	2(PC)
-	NEGL	AX
 	ADDQ	$16, SP
 	RET
 
@@ -272,7 +292,7 @@ TEXT runtime·sysctl(SB),7,$0
 	MOVQ	$202, AX		// sys___sysctl
 	SYSCALL
 	JCC	3(PC)
-	NEGL	AX
+	NEGQ	AX
 	RET
 	MOVL	$0, AX
 	RET

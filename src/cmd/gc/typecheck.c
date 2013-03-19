@@ -1180,16 +1180,18 @@ reswitch:
 		if(l->type == T || r->type == T)
 			goto error;
 		defaultlit2(&l, &r, 0);
+		if(l->type == T || r->type == T)
+			goto error;
 		n->left = l;
 		n->right = r;
-		if(l->type->etype != r->type->etype) {
-		badcmplx:
-			yyerror("invalid operation: %N (complex of types %T, %T)", n, l->type, r->type);
+		if(!eqtype(l->type, r->type)) {
+			yyerror("invalid operation: %N (mismatched types %T and %T)", n, l->type, r->type);
 			goto error;
 		}
 		switch(l->type->etype) {
 		default:
-			goto badcmplx;
+			yyerror("invalid operation: %N (arguments have type %T, expected floating-point)", n, l->type, r->type);
+			goto error;
 		case TIDEAL:
 			t = types[TIDEAL];
 			break;

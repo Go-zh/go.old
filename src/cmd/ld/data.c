@@ -33,6 +33,7 @@
 #include	"l.h"
 #include	"../ld/lib.h"
 #include	"../ld/elf.h"
+#include	"../ld/macho.h"
 #include	"../ld/pe.h"
 #include	"../../pkg/runtime/mgc0.h"
 
@@ -154,6 +155,7 @@ relocsym(Sym *s)
 	cursym = s;
 	memset(&p, 0, sizeof p);
 	for(r=s->r; r<s->r+s->nr; r++) {
+		r->done = 1;
 		off = r->off;
 		siz = r->siz;
 		if(off < 0 || off+siz > s->np) {
@@ -180,31 +182,68 @@ relocsym(Sym *s)
 				diag("unknown reloc %d", r->type);
 			break;
 		case D_ADDR:
-			o = symaddr(r->sym) + r->add;
 			if(isobj && r->sym->type != SCONST) {
-				if(thechar == '6')
-					o = 0;
-				else {
-					// set up addend for eventual relocation via outer symbol
-					rs = r->sym;
-					while(rs->outer != nil)
-						rs = rs->outer;
-					o -= symaddr(rs);
+				r->done = 0;
+
+				// set up addend for eventual relocation via outer symbol.
+				rs = r->sym;
+				r->xadd = r->add;
+				while(rs->outer != nil) {
+					r->xadd += symaddr(rs) - symaddr(rs->outer);
+					rs = rs->outer;
 				}
+				if(rs->type != SHOSTOBJ && rs->sect == nil)
+					diag("missing section for %s", rs->name);
+				r->xsym = rs;
+
+				o = r->xadd;
+				if(iself) {
+					if(thechar == '6')
+						o = 0;
+				} else if(HEADTYPE == Hdarwin) {
+					if(rs->type != SHOSTOBJ)
+						o += symaddr(rs);
+				} else {
+					diag("unhandled pcrel relocation for %s", headtype);
+				}
+				break;
 			}
+			o = symaddr(r->sym) + r->add;
 			break;
 		case D_PCREL:
 			// r->sym can be null when CALL $(constant) is transformed from absolute PC to relative PC call.
+			if(isobj && r->sym && r->sym->type != SCONST && r->sym->sect != cursym->sect) {
+				r->done = 0;
+
+				// set up addend for eventual relocation via outer symbol.
+				rs = r->sym;
+				r->xadd = r->add;
+				while(rs->outer != nil) {
+					r->xadd += symaddr(rs) - symaddr(rs->outer);
+					rs = rs->outer;
+				}
+				r->xadd -= r->siz; // relative to address after the relocated chunk
+				if(rs->type != SHOSTOBJ && rs->sect == nil)
+					diag("missing section for %s", rs->name);
+				r->xsym = rs;
+
+				o = r->xadd;
+				if(iself) {
+					if(thechar == '6')
+						o = 0;
+				} else if(HEADTYPE == Hdarwin) {
+					if(rs->type != SHOSTOBJ)
+						o += symaddr(rs) - rs->sect->vaddr;
+					o -= r->off; // WTF?
+				} else {
+					diag("unhandled pcrel relocation for %s", headtype);
+				}
+				break;
+			}
 			o = 0;
 			if(r->sym)
 				o += symaddr(r->sym);
 			o += r->add - (s->value + r->off + r->siz);
-			if(isobj && r->sym->type != SCONST && r->sym->sect != cursym->sect) {
-				if(thechar == '6')
-					o = 0;
-				else
-					o = r->add - r->siz;
-			}
 			break;
 		case D_SIZE:
 			o = r->sym->size + r->add;
@@ -296,7 +335,7 @@ dynrelocsym(Sym *s)
 	for(r=s->r; r<s->r+s->nr; r++) {
 		if(r->sym != S && r->sym->type == SDYNIMPORT || r->type >= 256)
 			adddynrel(s, r);
-		if(flag_shared && r->sym != S && (r->sym->dynimpname == nil || (r->sym->cgoexport & CgoExportDynamic)) && r->type == D_ADDR
+		if(flag_shared && r->sym != S && s->type != SDYNIMPORT && r->type == D_ADDR
 				&& (s == got || s->type == SDATA || s->type == SGOSTRING || s->type == STYPE || s->type == SRODATA)) {
 			// Create address based RELATIVE relocation
 			adddynrela(rel, s, r);
@@ -552,8 +591,10 @@ void
 datblk(int32 addr, int32 size)
 {
 	Sym *sym;
-	int32 eaddr;
+	int32 i, eaddr;
 	uchar *p, *ep;
+	char *typ, *rsname;
+	Reloc *r;
 
 	if(debug['a'])
 		Bprint(&bso, "datblk [%#x,%#x) at offset %#llx\n", addr, addr+size, cpos());
@@ -573,23 +614,46 @@ datblk(int32 addr, int32 size)
 		if(sym->value >= eaddr)
 			break;
 		if(addr < sym->value) {
-			Bprint(&bso, "%-20s %.8ux| 00 ...\n", "(pre-pad)", addr);
+			Bprint(&bso, "\t%.8ux| 00 ...\n", addr);
 			addr = sym->value;
 		}
-		Bprint(&bso, "%-20s %.8ux|", sym->name, (uint)addr);
+		Bprint(&bso, "%s\n\t%.8ux|", sym->name, (uint)addr);
 		p = sym->p;
 		ep = p + sym->np;
-		while(p < ep)
+		while(p < ep) {
+			if(p > sym->p && (int)(p-sym->p)%16 == 0)
+				Bprint(&bso, "\n\t%.8ux|", (uint)(addr+(p-sym->p)));
 			Bprint(&bso, " %.2ux", *p++);
+		}
 		addr += sym->np;
 		for(; addr < sym->value+sym->size; addr++)
 			Bprint(&bso, " %.2ux", 0);
 		Bprint(&bso, "\n");
+		
+		if(isobj) {
+			for(i=0; i<sym->nr; i++) {
+				r = &sym->r[i];
+				rsname = "";
+				if(r->sym)
+					rsname = r->sym->name;
+				typ = "?";
+				switch(r->type) {
+				case D_ADDR:
+					typ = "addr";
+					break;
+				case D_PCREL:
+					typ = "pcrel";
+					break;
+				}
+				Bprint(&bso, "\treloc %.8ux/%d %s %s+%#llx [%#llx]\n",
+					(uint)(sym->value+r->off), r->siz, typ, rsname, r->add, r->sym->value+r->add);
+			}
+		}				
 	}
 
 	if(addr < eaddr)
-		Bprint(&bso, "%-20s %.8ux| 00 ...\n", "(post-pad)", (uint)addr);
-	Bprint(&bso, "%-20s %.8ux|\n", "", (uint)eaddr);
+		Bprint(&bso, "\t%.8ux| 00 ...\n", (uint)addr);
+	Bprint(&bso, "\t%.8ux|\n", (uint)eaddr);
 }
 
 void
@@ -879,6 +943,9 @@ symalign(Sym *s)
 {
 	int32 align;
 
+	if(s->align != 0)
+		return s->align;
+
 	align = MaxAlign;
 	while(align > s->size && align > 1)
 		align >>= 1;
@@ -940,7 +1007,7 @@ gcaddsym(Sym *gc, Sym *s, int32 off)
 void
 dodata(void)
 {
-	int32 datsize;
+	int32 n, datsize;
 	Section *sect;
 	Sym *s, *last, **l;
 	Sym *gcdata1, *gcbss1;
@@ -989,7 +1056,11 @@ dodata(void)
 	 * to assign addresses, record all the necessary
 	 * dynamic relocations.  these will grow the relocation
 	 * symbol, which is itself data.
+	 *
+	 * on darwin, we need the symbol table numbers for dynreloc.
 	 */
+	if(HEADTYPE == Hdarwin)
+		machosymorder();
 	dynreloc();
 
 	/* some symbols may no longer belong in datap (Mach-O) */
@@ -1136,9 +1207,10 @@ dodata(void)
 	lookup("end", 0)->sect = sect;
 
 	/* we finished segdata, begin segtext */
+	s = datap;
+	datsize = 0;
 
 	/* read-only data */
-	s = datap;
 	sect = addsection(&segtext, ".rodata", 04);
 	sect->align = maxalign(s, STYPELINK-1);
 	sect->vaddr = 0;
@@ -1202,7 +1274,7 @@ dodata(void)
 	}
 	sect->len = datsize - sect->vaddr;
 
-	/* read-only ELF sections */
+	/* read-only ELF, Mach-O sections */
 	for(; s != nil && s->type < SELFSECT; s = s->next) {
 		sect = addsection(&segtext, s->name, 04);
 		sect->align = symalign(s);
@@ -1214,6 +1286,13 @@ dodata(void)
 		datsize += s->size;
 		sect->len = datsize - sect->vaddr;
 	}
+	
+	/* number the sections */
+	n = 1;
+	for(sect = segtext.sect; sect != nil; sect = sect->next)
+		sect->extnum = n++;
+	for(sect = segdata.sect; sect != nil; sect = sect->next)
+		sect->extnum = n++;
 }
 
 // assign addresses to text
@@ -1266,6 +1345,7 @@ address(void)
 	Section *typelink;
 	Sym *sym, *sub;
 	uvlong va;
+	vlong vlen;
 
 	va = INITTEXT;
 	segtext.rwx = 05;
@@ -1295,11 +1375,11 @@ address(void)
 	noptrbss = nil;
 	datarelro = nil;
 	for(s=segdata.sect; s != nil; s=s->next) {
+		vlen = s->len;
 		if(s->next)
-			s->len = s->next->vaddr - s->vaddr;
+			vlen = s->next->vaddr - s->vaddr;
 		s->vaddr = va;
-		va += s->len;
-		segdata.filelen += s->len;
+		va += vlen;
 		segdata.len = va - segdata.vaddr;
 		if(strcmp(s->name, ".data") == 0)
 			data = s;

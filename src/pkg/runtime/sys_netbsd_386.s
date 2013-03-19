@@ -22,6 +22,21 @@ TEXT runtime·exit1(SB),7,$-4
 	MOVL	$0xf1, 0xf1		// crash
 	RET
 
+TEXT runtime·open(SB),7,$-4
+	MOVL	$5, AX
+	INT	$0x80
+	RET
+
+TEXT runtime·close(SB),7,$-4
+	MOVL	$6, AX
+	INT	$0x80
+	RET
+
+TEXT runtime·read(SB),7,$-4
+	MOVL	$3, AX
+	INT	$0x80
+	RET
+
 TEXT runtime·write(SB),7,$-4
 	MOVL	$4, AX			// sys_write
 	INT	$0x80
@@ -46,12 +61,13 @@ TEXT runtime·usleep(SB),7,$24
 	INT	$0x80
 	RET
 
-TEXT runtime·raisesigpipe(SB),7,$12
+TEXT runtime·raise(SB),7,$12
 	MOVL	$311, AX		// sys__lwp_self
 	INT	$0x80
 	MOVL	$0, 0(SP)
 	MOVL	AX, 4(SP)		// arg 1 - target
-	MOVL	$13, 8(SP)		// arg 2 - signo == SIGPIPE
+	MOVL	sig+0(FP), AX
+	MOVL	AX, 8(SP)		// arg 2 - signo
 	MOVL	$318, AX		// sys__lwp_kill
 	INT	$0x80
 	RET
@@ -72,8 +88,6 @@ TEXT runtime·mmap(SB),7,$36
 	STOSL
 	MOVL	$197, AX		// sys_mmap
 	INT	$0x80
-	JCC	2(PC)
-	NEGL	AX
 	RET
 
 TEXT runtime·munmap(SB),7,$-4

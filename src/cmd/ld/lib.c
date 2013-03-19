@@ -336,7 +336,6 @@ loadlib(void)
 		debug['d'] = 1;
 	
 	importcycles();
-	sortdynexp();
 }
 
 /*
@@ -529,7 +528,7 @@ ldhostobj(void (*ld)(Biobuf*, char*, int64, char*), Biobuf *f, char *pkg, int64 
 	}
 	h = &hostobj[nhostobj++];
 	h->ld = ld;
-	h->pkg = pkg;
+	h->pkg = estrdup(pkg);
 	h->pn = estrdup(pn);
 	h->file = estrdup(file);
 	h->off = Boffset(f);
@@ -557,7 +556,10 @@ hostobjs(void)
 	}
 }
 
-static char *tmpdir;
+// provided by lib9
+int runcmd(char**);
+char* mktempdir(void);
+void removeall(char*);
 
 static void
 rmtemp(void)
@@ -574,10 +576,11 @@ hostlinksetup(void)
 		return;
 
 	// create temporary directory and arrange cleanup
-	// TODO: Add flag to specify tempdir, which is then not cleaned up.
-	tmpdir = mktempdir();
-	atexit(rmtemp);
-	
+	if(tmpdir == nil) {
+		tmpdir = mktempdir();
+		atexit(rmtemp);
+	}
+
 	// change our output to temporary object file
 	close(cout);
 	p = smprint("%s/go.o", tmpdir);
@@ -616,6 +619,8 @@ hostlink(void)
 	}
 	if(!debug['s'])
 		argv[argc++] = "-ggdb"; 
+	if(HEADTYPE == Hdarwin)
+		argv[argc++] = "-Wl,-no_pie,-pagezero_size,4000000";
 	argv[argc++] = "-o";
 	argv[argc++] = outfile;
 	
@@ -845,6 +850,7 @@ _lookup(char *symb, int v, int creat)
 		return nil;
 
 	s = newsym(symb, v);
+	s->extname = s->name;
 	s->hash = hash[h];
 	hash[h] = s;
 

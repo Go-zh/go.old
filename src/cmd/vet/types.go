@@ -5,13 +5,16 @@
 // +build gotypes
 
 // This file contains the pieces of the tool that require the go/types package.
+// To compile this file, you must first run
+//  $ go get code.google.com/p/go.exp/go/types
 
 package main
 
 import (
 	"go/ast"
 	"go/token"
-	"go/types"
+
+	"code.google.com/p/go.exp/go/types"
 )
 
 // Type is equivalent to go/types.Type. Repeating it here allows us to avoid
@@ -44,23 +47,21 @@ func (pkg *Package) check(fs *token.FileSet, astFiles []*ast.File) error {
 func (pkg *Package) isStruct(c *ast.CompositeLit) (bool, string) {
 	// Check that the CompositeLit's type is a slice or array (which needs no tag), if possible.
 	typ := pkg.types[c]
-	if typ == nil {
-		return false, ""
-	}
 	// If it's a named type, pull out the underlying type.
+	actual := typ
 	if namedType, ok := typ.(*types.NamedType); ok {
-		typ = namedType.Underlying
+		actual = namedType.Underlying
 	}
-	switch typ.(type) {
+	if actual == nil {
+		// No type information available. Assume true, so we do the check.
+		return true, ""
+	}
+	switch actual.(type) {
 	case *types.Struct:
+		return true, typ.String()
 	default:
 		return false, ""
 	}
-	typeString := ""
-	if typ != nil {
-		typeString = typ.String() + " "
-	}
-	return true, typeString
 }
 
 func (f *File) matchArgType(t printfArgType, arg ast.Expr) bool {

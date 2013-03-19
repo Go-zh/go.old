@@ -948,13 +948,16 @@ func NotFoundHandler() Handler { return HandlerFunc(NotFound) }
 // request for a path that doesn't begin with prefix by
 // replying with an HTTP 404 not found error.
 func StripPrefix(prefix string, h Handler) Handler {
+	if prefix == "" {
+		return h
+	}
 	return HandlerFunc(func(w ResponseWriter, r *Request) {
-		if !strings.HasPrefix(r.URL.Path, prefix) {
+		if p := strings.TrimPrefix(r.URL.Path, prefix); len(p) < len(r.URL.Path) {
+			r.URL.Path = p
+			h.ServeHTTP(w, r)
+		} else {
 			NotFound(w, r)
-			return
 		}
-		r.URL.Path = r.URL.Path[len(prefix):]
-		h.ServeHTTP(w, r)
 	})
 }
 
@@ -1337,7 +1340,6 @@ func (srv *Server) Serve(l net.Listener) error {
 		}
 		go c.serve()
 	}
-	panic("not reached")
 }
 
 // ListenAndServe listens on the TCP network address addr

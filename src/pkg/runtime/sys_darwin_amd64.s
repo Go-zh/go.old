@@ -30,6 +30,28 @@ TEXT runtime·exit1(SB),7,$0
 	MOVL	$0xf1, 0xf1  // crash
 	RET
 
+TEXT runtime·open(SB),7,$0
+	MOVQ	8(SP), DI		// arg 1 pathname
+	MOVL	16(SP), SI		// arg 2 flags
+	MOVL	20(SP), DX		// arg 3 mode
+	MOVL	$(0x2000000+5), AX	// syscall entry
+	SYSCALL
+	RET
+
+TEXT runtime·close(SB),7,$0
+	MOVL	8(SP), DI		// arg 1 fd
+	MOVL	$(0x2000000+6), AX	// syscall entry
+	SYSCALL
+	RET
+
+TEXT runtime·read(SB),7,$0
+	MOVL	8(SP), DI		// arg 1 fd
+	MOVQ	16(SP), SI		// arg 2 buf
+	MOVL	24(SP), DX		// arg 3 count
+	MOVL	$(0x2000000+3), AX	// syscall entry
+	SYSCALL
+	RET
+
 TEXT runtime·write(SB),7,$0
 	MOVL	8(SP), DI		// arg 1 fd
 	MOVQ	16(SP), SI		// arg 2 buf
@@ -38,12 +60,13 @@ TEXT runtime·write(SB),7,$0
 	SYSCALL
 	RET
 
-TEXT runtime·raisesigpipe(SB),7,$24
-	get_tls(CX)
-	MOVQ	m(CX), DX
-	MOVL	$13, DI	// arg 1 SIGPIPE
-	MOVQ	m_procid(DX), SI	// arg 2 thread_port
-	MOVL	$(0x2000000+328), AX	// syscall entry __pthread_kill
+TEXT runtime·raise(SB),7,$24
+	MOVL	$(0x2000000+20), AX // getpid
+	SYSCALL
+	MOVQ	AX, DI	// arg 1 - pid
+	MOVL	sig+0(FP), SI	// arg 2 - signal
+	MOVL	$1, DX	// arg 3 - posix
+	MOVL	$(0x2000000+37), AX // kill
 	SYSCALL
 	RET
 
@@ -267,7 +290,7 @@ TEXT runtime·bsdthread_create(SB),7,$0
 	MOVQ	$(0x2000000+360), AX	// bsdthread_create
 	SYSCALL
 	JCC 3(PC)
-	NEGL	AX
+	NEGQ	AX
 	RET
 	MOVL	$0, AX
 	RET
@@ -320,7 +343,7 @@ TEXT runtime·bsdthread_register(SB),7,$0
 	MOVQ	$(0x2000000+366), AX	// bsdthread_register
 	SYSCALL
 	JCC 3(PC)
-	NEGL	AX
+	NEGQ	AX
 	RET
 	MOVL	$0, AX
 	RET
@@ -413,7 +436,41 @@ TEXT runtime·sysctl(SB),7,$0
 	MOVL	$(0x2000000+202), AX	// syscall entry
 	SYSCALL
 	JCC 3(PC)
-	NEGL	AX
+	NEGQ	AX
 	RET
 	MOVL	$0, AX
+	RET
+
+// int32 runtime·kqueue(void);
+TEXT runtime·kqueue(SB),7,$0
+	MOVQ    $0, DI
+	MOVQ    $0, SI
+	MOVQ    $0, DX
+	MOVL	$(0x2000000+362), AX
+	SYSCALL
+	JCC	2(PC)
+	NEGQ	AX
+	RET
+
+// int32 runtime·kevent(int kq, Kevent *changelist, int nchanges, Kevent *eventlist, int nevents, Timespec *timeout);
+TEXT runtime·kevent(SB),7,$0
+	MOVL    8(SP), DI
+	MOVQ    16(SP), SI
+	MOVL    24(SP), DX
+	MOVQ    32(SP), R10
+	MOVL    40(SP), R8
+	MOVQ    48(SP), R9
+	MOVL	$(0x2000000+363), AX
+	SYSCALL
+	JCC	2(PC)
+	NEGQ	AX
+	RET
+
+// void runtime·closeonexec(int32 fd);
+TEXT runtime·closeonexec(SB),7,$0
+	MOVL    8(SP), DI  // fd
+	MOVQ    $2, SI  // F_SETFD
+	MOVQ    $1, DX  // FD_CLOEXEC
+	MOVL	$(0x2000000+92), AX  // fcntl
+	SYSCALL
 	RET

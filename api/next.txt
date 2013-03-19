@@ -109,194 +109,6 @@ pkg go/format, func Node(io.Writer, *token.FileSet, interface{}) error
 pkg go/format, func Source([]uint8) ([]uint8, error)
 pkg go/parser, const AllErrors Mode
 pkg go/printer, type Config struct, Indent int
-pkg go/types, const Bool BasicKind
-pkg go/types, const Byte BasicKind
-pkg go/types, const Complex128 BasicKind
-pkg go/types, const Complex64 BasicKind
-pkg go/types, const DefaultMaxAlign ideal-int
-pkg go/types, const DefaultPtrSize ideal-int
-pkg go/types, const Float32 BasicKind
-pkg go/types, const Float64 BasicKind
-pkg go/types, const Int BasicKind
-pkg go/types, const Int16 BasicKind
-pkg go/types, const Int32 BasicKind
-pkg go/types, const Int64 BasicKind
-pkg go/types, const Int8 BasicKind
-pkg go/types, const Invalid BasicKind
-pkg go/types, const IsBoolean BasicInfo
-pkg go/types, const IsComplex BasicInfo
-pkg go/types, const IsConstType BasicInfo
-pkg go/types, const IsFloat BasicInfo
-pkg go/types, const IsInteger BasicInfo
-pkg go/types, const IsNumeric BasicInfo
-pkg go/types, const IsOrdered BasicInfo
-pkg go/types, const IsString BasicInfo
-pkg go/types, const IsUnsigned BasicInfo
-pkg go/types, const IsUntyped BasicInfo
-pkg go/types, const Rune BasicKind
-pkg go/types, const String BasicKind
-pkg go/types, const Uint BasicKind
-pkg go/types, const Uint16 BasicKind
-pkg go/types, const Uint32 BasicKind
-pkg go/types, const Uint64 BasicKind
-pkg go/types, const Uint8 BasicKind
-pkg go/types, const Uintptr BasicKind
-pkg go/types, const UnsafePointer BasicKind
-pkg go/types, const UntypedBool BasicKind
-pkg go/types, const UntypedComplex BasicKind
-pkg go/types, const UntypedFloat BasicKind
-pkg go/types, const UntypedInt BasicKind
-pkg go/types, const UntypedNil BasicKind
-pkg go/types, const UntypedRune BasicKind
-pkg go/types, const UntypedString BasicKind
-pkg go/types, func Check(*token.FileSet, []*ast.File) (*Package, error)
-pkg go/types, func DefaultAlignof(Type) int64
-pkg go/types, func DefaultOffsetsof([]*Field) []int64
-pkg go/types, func DefaultSizeof(Type) int64
-pkg go/types, func FindGcExportData(*bufio.Reader) error
-pkg go/types, func FindPkg(string, string) (string, string)
-pkg go/types, func GcImport(map[string]*Package, string) (*Package, error)
-pkg go/types, func GcImportData(map[string]*Package, string, string, *bufio.Reader) (*Package, error)
-pkg go/types, func IsIdentical(Type, Type) bool
-pkg go/types, method (*Array) String() string
-pkg go/types, method (*Basic) String() string
-pkg go/types, method (*Chan) String() string
-pkg go/types, method (*Const) GetName() string
-pkg go/types, method (*Const) GetPkg() *Package
-pkg go/types, method (*Const) GetPos() token.Pos
-pkg go/types, method (*Const) GetType() Type
-pkg go/types, method (*Context) Check(*token.FileSet, []*ast.File) (*Package, error)
-pkg go/types, method (*Func) GetName() string
-pkg go/types, method (*Func) GetPkg() *Package
-pkg go/types, method (*Func) GetPos() token.Pos
-pkg go/types, method (*Func) GetType() Type
-pkg go/types, method (*Interface) String() string
-pkg go/types, method (*Map) String() string
-pkg go/types, method (*NamedType) String() string
-pkg go/types, method (*Package) GetName() string
-pkg go/types, method (*Package) GetPkg() *Package
-pkg go/types, method (*Package) GetPos() token.Pos
-pkg go/types, method (*Package) GetType() Type
-pkg go/types, method (*Pointer) String() string
-pkg go/types, method (*Result) String() string
-pkg go/types, method (*Scope) Insert(Object) Object
-pkg go/types, method (*Scope) Lookup(string) Object
-pkg go/types, method (*Scope) String() string
-pkg go/types, method (*Signature) String() string
-pkg go/types, method (*Slice) String() string
-pkg go/types, method (*Struct) String() string
-pkg go/types, method (*TypeName) GetName() string
-pkg go/types, method (*TypeName) GetPkg() *Package
-pkg go/types, method (*TypeName) GetPos() token.Pos
-pkg go/types, method (*TypeName) GetType() Type
-pkg go/types, method (*Var) GetName() string
-pkg go/types, method (*Var) GetPkg() *Package
-pkg go/types, method (*Var) GetPos() token.Pos
-pkg go/types, method (*Var) GetType() Type
-pkg go/types, method (Complex) String() string
-pkg go/types, method (Field) IsSame(QualifiedName) bool
-pkg go/types, method (Method) IsSame(QualifiedName) bool
-pkg go/types, method (NilType) String() string
-pkg go/types, method (QualifiedName) IsSame(QualifiedName) bool
-pkg go/types, type Array struct
-pkg go/types, type Array struct, Elt Type
-pkg go/types, type Array struct, Len int64
-pkg go/types, type Basic struct
-pkg go/types, type Basic struct, Info BasicInfo
-pkg go/types, type Basic struct, Kind BasicKind
-pkg go/types, type Basic struct, Name string
-pkg go/types, type Basic struct, Size int64
-pkg go/types, type BasicInfo int
-pkg go/types, type BasicKind int
-pkg go/types, type Chan struct
-pkg go/types, type Chan struct, Dir ast.ChanDir
-pkg go/types, type Chan struct, Elt Type
-pkg go/types, type Complex struct
-pkg go/types, type Complex struct, Im *big.Rat
-pkg go/types, type Complex struct, Re *big.Rat
-pkg go/types, type Const struct
-pkg go/types, type Const struct, Name string
-pkg go/types, type Const struct, Pkg *Package
-pkg go/types, type Const struct, Type Type
-pkg go/types, type Const struct, Val interface{}
-pkg go/types, type Context struct
-pkg go/types, type Context struct, Alignof func(Type) int64
-pkg go/types, type Context struct, Error func(error)
-pkg go/types, type Context struct, Expr func(ast.Expr, Type, interface{})
-pkg go/types, type Context struct, Ident func(*ast.Ident, Object)
-pkg go/types, type Context struct, Import Importer
-pkg go/types, type Context struct, IntSize int64
-pkg go/types, type Context struct, Offsetsof func([]*Field) []int64
-pkg go/types, type Context struct, PtrSize int64
-pkg go/types, type Context struct, Sizeof func(Type) int64
-pkg go/types, type Field struct
-pkg go/types, type Field struct, IsAnonymous bool
-pkg go/types, type Field struct, Tag string
-pkg go/types, type Field struct, Type Type
-pkg go/types, type Field struct, embedded QualifiedName
-pkg go/types, type Func struct
-pkg go/types, type Func struct, Name string
-pkg go/types, type Func struct, Pkg *Package
-pkg go/types, type Func struct, Type Type
-pkg go/types, type Importer func(imports map[string]*Package, path string) (pkg *Package, err error)
-pkg go/types, type Importer func(map[string]*Package, string) (*Package, error)
-pkg go/types, type Interface struct
-pkg go/types, type Interface struct, Methods []*Method
-pkg go/types, type Map struct
-pkg go/types, type Map struct, Elt Type
-pkg go/types, type Map struct, Key Type
-pkg go/types, type Method struct
-pkg go/types, type Method struct, Type *Signature
-pkg go/types, type Method struct, embedded QualifiedName
-pkg go/types, type NamedType struct
-pkg go/types, type NamedType struct, Methods []*Method
-pkg go/types, type NamedType struct, Obj *TypeName
-pkg go/types, type NamedType struct, Underlying Type
-pkg go/types, type NilType struct
-pkg go/types, type Object interface, GetName() string
-pkg go/types, type Object interface, GetPkg() *Package
-pkg go/types, type Object interface, GetPos() token.Pos
-pkg go/types, type Object interface, GetType() Type
-pkg go/types, type Object interface, unexported methods
-pkg go/types, type Package struct
-pkg go/types, type Package struct, Complete bool
-pkg go/types, type Package struct, Imports map[string]*Package
-pkg go/types, type Package struct, Name string
-pkg go/types, type Package struct, Path string
-pkg go/types, type Package struct, Scope *Scope
-pkg go/types, type Pointer struct
-pkg go/types, type Pointer struct, Base Type
-pkg go/types, type QualifiedName struct
-pkg go/types, type QualifiedName struct, Name string
-pkg go/types, type QualifiedName struct, Pkg *Package
-pkg go/types, type Result struct
-pkg go/types, type Result struct, Values []*Var
-pkg go/types, type Scope struct
-pkg go/types, type Scope struct, Entries []Object
-pkg go/types, type Scope struct, Outer *Scope
-pkg go/types, type Signature struct
-pkg go/types, type Signature struct, IsVariadic bool
-pkg go/types, type Signature struct, Params []*Var
-pkg go/types, type Signature struct, Recv *Var
-pkg go/types, type Signature struct, Results []*Var
-pkg go/types, type Slice struct
-pkg go/types, type Slice struct, Elt Type
-pkg go/types, type Struct struct
-pkg go/types, type Struct struct, Fields []*Field
-pkg go/types, type Type interface, String() string
-pkg go/types, type Type interface, unexported methods
-pkg go/types, type TypeName struct
-pkg go/types, type TypeName struct, Name string
-pkg go/types, type TypeName struct, Pkg *Package
-pkg go/types, type TypeName struct, Type Type
-pkg go/types, type Var struct
-pkg go/types, type Var struct, Name string
-pkg go/types, type Var struct, Pkg *Package
-pkg go/types, type Var struct, Type Type
-pkg go/types, var Default Context
-pkg go/types, var Typ [...]*Basic
-pkg go/types, var Universe *Scope
-pkg go/types, var Unsafe *Package
 pkg image, const YCbCrSubsampleRatio440 YCbCrSubsampleRatio
 pkg io, type ByteWriter interface { WriteByte }
 pkg io, type ByteWriter interface, WriteByte(uint8) error
@@ -1041,9 +853,206 @@ pkg syscall (darwin-amd64-cgo), type Termios struct, Lflag uint64
 pkg syscall (darwin-amd64-cgo), type Termios struct, Oflag uint64
 pkg syscall (darwin-amd64-cgo), type Termios struct, Ospeed uint64
 pkg syscall (darwin-amd64-cgo), type Termios struct, Pad_cgo_0 [4]uint8
+pkg syscall (freebsd-386), const B0 ideal-int
+pkg syscall (freebsd-386), const B110 ideal-int
+pkg syscall (freebsd-386), const B115200 ideal-int
+pkg syscall (freebsd-386), const B1200 ideal-int
+pkg syscall (freebsd-386), const B134 ideal-int
+pkg syscall (freebsd-386), const B14400 ideal-int
+pkg syscall (freebsd-386), const B150 ideal-int
+pkg syscall (freebsd-386), const B1800 ideal-int
+pkg syscall (freebsd-386), const B19200 ideal-int
+pkg syscall (freebsd-386), const B200 ideal-int
+pkg syscall (freebsd-386), const B230400 ideal-int
+pkg syscall (freebsd-386), const B2400 ideal-int
+pkg syscall (freebsd-386), const B28800 ideal-int
+pkg syscall (freebsd-386), const B300 ideal-int
+pkg syscall (freebsd-386), const B38400 ideal-int
+pkg syscall (freebsd-386), const B460800 ideal-int
+pkg syscall (freebsd-386), const B4800 ideal-int
+pkg syscall (freebsd-386), const B50 ideal-int
+pkg syscall (freebsd-386), const B57600 ideal-int
+pkg syscall (freebsd-386), const B600 ideal-int
+pkg syscall (freebsd-386), const B7200 ideal-int
+pkg syscall (freebsd-386), const B75 ideal-int
+pkg syscall (freebsd-386), const B76800 ideal-int
+pkg syscall (freebsd-386), const B921600 ideal-int
+pkg syscall (freebsd-386), const B9600 ideal-int
+pkg syscall (freebsd-386), const BIOCGTSTAMP ideal-int
+pkg syscall (freebsd-386), const BIOCSTSTAMP ideal-int
+pkg syscall (freebsd-386), const BPF_T_BINTIME ideal-int
+pkg syscall (freebsd-386), const BPF_T_BINTIME_FAST ideal-int
+pkg syscall (freebsd-386), const BPF_T_BINTIME_MONOTONIC ideal-int
+pkg syscall (freebsd-386), const BPF_T_BINTIME_MONOTONIC_FAST ideal-int
+pkg syscall (freebsd-386), const BPF_T_FAST ideal-int
+pkg syscall (freebsd-386), const BPF_T_FLAG_MASK ideal-int
+pkg syscall (freebsd-386), const BPF_T_FORMAT_MASK ideal-int
+pkg syscall (freebsd-386), const BPF_T_MICROTIME ideal-int
+pkg syscall (freebsd-386), const BPF_T_MICROTIME_FAST ideal-int
+pkg syscall (freebsd-386), const BPF_T_MICROTIME_MONOTONIC ideal-int
+pkg syscall (freebsd-386), const BPF_T_MICROTIME_MONOTONIC_FAST ideal-int
+pkg syscall (freebsd-386), const BPF_T_MONOTONIC ideal-int
+pkg syscall (freebsd-386), const BPF_T_MONOTONIC_FAST ideal-int
+pkg syscall (freebsd-386), const BPF_T_NANOTIME ideal-int
+pkg syscall (freebsd-386), const BPF_T_NANOTIME_FAST ideal-int
+pkg syscall (freebsd-386), const BPF_T_NANOTIME_MONOTONIC ideal-int
+pkg syscall (freebsd-386), const BPF_T_NANOTIME_MONOTONIC_FAST ideal-int
+pkg syscall (freebsd-386), const BPF_T_NONE ideal-int
+pkg syscall (freebsd-386), const BPF_T_NORMAL ideal-int
+pkg syscall (freebsd-386), const BRKINT ideal-int
+pkg syscall (freebsd-386), const CFLUSH ideal-int
+pkg syscall (freebsd-386), const CLOCAL ideal-int
+pkg syscall (freebsd-386), const CREAD ideal-int
+pkg syscall (freebsd-386), const CS5 ideal-int
+pkg syscall (freebsd-386), const CS6 ideal-int
+pkg syscall (freebsd-386), const CS7 ideal-int
+pkg syscall (freebsd-386), const CS8 ideal-int
+pkg syscall (freebsd-386), const CSIZE ideal-int
+pkg syscall (freebsd-386), const CSTART ideal-int
+pkg syscall (freebsd-386), const CSTATUS ideal-int
+pkg syscall (freebsd-386), const CSTOP ideal-int
+pkg syscall (freebsd-386), const CSTOPB ideal-int
+pkg syscall (freebsd-386), const CSUSP ideal-int
+pkg syscall (freebsd-386), const DLT_AOS ideal-int
+pkg syscall (freebsd-386), const DLT_CAN_SOCKETCAN ideal-int
+pkg syscall (freebsd-386), const DLT_DBUS ideal-int
+pkg syscall (freebsd-386), const DLT_DECT ideal-int
+pkg syscall (freebsd-386), const DLT_DVB_CI ideal-int
+pkg syscall (freebsd-386), const DLT_FC_2 ideal-int
+pkg syscall (freebsd-386), const DLT_FC_2_WITH_FRAME_DELIMS ideal-int
+pkg syscall (freebsd-386), const DLT_GSMTAP_ABIS ideal-int
+pkg syscall (freebsd-386), const DLT_GSMTAP_UM ideal-int
+pkg syscall (freebsd-386), const DLT_IEEE802_15_4_NOFCS ideal-int
+pkg syscall (freebsd-386), const DLT_IPNET ideal-int
+pkg syscall (freebsd-386), const DLT_IPOIB ideal-int
+pkg syscall (freebsd-386), const DLT_IPV4 ideal-int
+pkg syscall (freebsd-386), const DLT_IPV6 ideal-int
+pkg syscall (freebsd-386), const DLT_JUNIPER_ATM_CEMIC ideal-int
+pkg syscall (freebsd-386), const DLT_JUNIPER_FIBRECHANNEL ideal-int
+pkg syscall (freebsd-386), const DLT_JUNIPER_SRX_E2E ideal-int
+pkg syscall (freebsd-386), const DLT_JUNIPER_VS ideal-int
+pkg syscall (freebsd-386), const DLT_LINUX_EVDEV ideal-int
+pkg syscall (freebsd-386), const DLT_MATCHING_MAX ideal-int
+pkg syscall (freebsd-386), const DLT_MATCHING_MIN ideal-int
+pkg syscall (freebsd-386), const DLT_MPLS ideal-int
+pkg syscall (freebsd-386), const DLT_MUX27010 ideal-int
+pkg syscall (freebsd-386), const DLT_NETANALYZER ideal-int
+pkg syscall (freebsd-386), const DLT_NETANALYZER_TRANSPARENT ideal-int
+pkg syscall (freebsd-386), const DLT_NFLOG ideal-int
+pkg syscall (freebsd-386), const DLT_STANAG_5066_D_PDU ideal-int
+pkg syscall (freebsd-386), const DLT_USB_LINUX_MMAPPED ideal-int
+pkg syscall (freebsd-386), const DLT_WIHART ideal-int
+pkg syscall (freebsd-386), const ECAPMODE Errno
+pkg syscall (freebsd-386), const FLUSHO ideal-int
+pkg syscall (freebsd-386), const HUPCL ideal-int
+pkg syscall (freebsd-386), const ICANON ideal-int
+pkg syscall (freebsd-386), const ICRNL ideal-int
+pkg syscall (freebsd-386), const IEXTEN ideal-int
 pkg syscall (freebsd-386), const IFAN_ARRIVAL ideal-int
 pkg syscall (freebsd-386), const IFAN_DEPARTURE ideal-int
+pkg syscall (freebsd-386), const IFF_CANTCONFIG ideal-int
+pkg syscall (freebsd-386), const IFT_INFINIBAND ideal-int
+pkg syscall (freebsd-386), const IGNBRK ideal-int
+pkg syscall (freebsd-386), const IGNCR ideal-int
+pkg syscall (freebsd-386), const IGNPAR ideal-int
+pkg syscall (freebsd-386), const IMAXBEL ideal-int
+pkg syscall (freebsd-386), const INLCR ideal-int
+pkg syscall (freebsd-386), const INPCK ideal-int
+pkg syscall (freebsd-386), const IN_RFC3021_MASK ideal-int
+pkg syscall (freebsd-386), const IPPROTO_MH ideal-int
+pkg syscall (freebsd-386), const IPPROTO_SEND ideal-int
+pkg syscall (freebsd-386), const IP_RECVTOS ideal-int
+pkg syscall (freebsd-386), const ISIG ideal-int
+pkg syscall (freebsd-386), const ISTRIP ideal-int
+pkg syscall (freebsd-386), const IXANY ideal-int
+pkg syscall (freebsd-386), const IXOFF ideal-int
+pkg syscall (freebsd-386), const IXON ideal-int
+pkg syscall (freebsd-386), const MADV_AUTOSYNC ideal-int
+pkg syscall (freebsd-386), const MADV_CORE ideal-int
+pkg syscall (freebsd-386), const MADV_DONTNEED ideal-int
+pkg syscall (freebsd-386), const MADV_FREE ideal-int
+pkg syscall (freebsd-386), const MADV_NOCORE ideal-int
+pkg syscall (freebsd-386), const MADV_NORMAL ideal-int
+pkg syscall (freebsd-386), const MADV_NOSYNC ideal-int
+pkg syscall (freebsd-386), const MADV_PROTECT ideal-int
+pkg syscall (freebsd-386), const MADV_RANDOM ideal-int
+pkg syscall (freebsd-386), const MADV_SEQUENTIAL ideal-int
+pkg syscall (freebsd-386), const MADV_WILLNEED ideal-int
+pkg syscall (freebsd-386), const MAP_ANON ideal-int
+pkg syscall (freebsd-386), const MAP_ANONYMOUS ideal-int
+pkg syscall (freebsd-386), const MAP_COPY ideal-int
+pkg syscall (freebsd-386), const MAP_FILE ideal-int
+pkg syscall (freebsd-386), const MAP_FIXED ideal-int
+pkg syscall (freebsd-386), const MAP_HASSEMAPHORE ideal-int
+pkg syscall (freebsd-386), const MAP_NOCORE ideal-int
+pkg syscall (freebsd-386), const MAP_NORESERVE ideal-int
+pkg syscall (freebsd-386), const MAP_NOSYNC ideal-int
+pkg syscall (freebsd-386), const MAP_PREFAULT_READ ideal-int
+pkg syscall (freebsd-386), const MAP_PRIVATE ideal-int
+pkg syscall (freebsd-386), const MAP_RENAME ideal-int
+pkg syscall (freebsd-386), const MAP_RESERVED0080 ideal-int
+pkg syscall (freebsd-386), const MAP_RESERVED0100 ideal-int
+pkg syscall (freebsd-386), const MAP_SHARED ideal-int
+pkg syscall (freebsd-386), const MAP_STACK ideal-int
+pkg syscall (freebsd-386), const MCL_CURRENT ideal-int
+pkg syscall (freebsd-386), const MCL_FUTURE ideal-int
+pkg syscall (freebsd-386), const MS_ASYNC ideal-int
+pkg syscall (freebsd-386), const MS_INVALIDATE ideal-int
+pkg syscall (freebsd-386), const MS_SYNC ideal-int
+pkg syscall (freebsd-386), const NET_RT_IFLISTL ideal-int
+pkg syscall (freebsd-386), const NOFLSH ideal-int
+pkg syscall (freebsd-386), const OCRNL ideal-int
+pkg syscall (freebsd-386), const ONLCR ideal-int
+pkg syscall (freebsd-386), const ONLRET ideal-int
+pkg syscall (freebsd-386), const ONOCR ideal-int
+pkg syscall (freebsd-386), const ONOEOT ideal-int
+pkg syscall (freebsd-386), const OPOST ideal-int
+pkg syscall (freebsd-386), const PARENB ideal-int
+pkg syscall (freebsd-386), const PARMRK ideal-int
+pkg syscall (freebsd-386), const PARODD ideal-int
+pkg syscall (freebsd-386), const PENDIN ideal-int
+pkg syscall (freebsd-386), const PROT_EXEC ideal-int
+pkg syscall (freebsd-386), const PROT_NONE ideal-int
+pkg syscall (freebsd-386), const PROT_READ ideal-int
+pkg syscall (freebsd-386), const PROT_WRITE ideal-int
+pkg syscall (freebsd-386), const RT_CACHING_CONTEXT ideal-int
+pkg syscall (freebsd-386), const RT_DEFAULT_FIB ideal-int
+pkg syscall (freebsd-386), const SIOCGIFFIB ideal-int
+pkg syscall (freebsd-386), const SIOCSIFFIB ideal-int
+pkg syscall (freebsd-386), const SO_PROTOCOL ideal-int
+pkg syscall (freebsd-386), const SO_PROTOTYPE ideal-int
+pkg syscall (freebsd-386), const SO_USER_COOKIE ideal-int
+pkg syscall (freebsd-386), const SYS_CLOCK_GETCPUCLOCKID2 ideal-int
+pkg syscall (freebsd-386), const SYS_WAIT6 ideal-int
 pkg syscall (freebsd-386), const SizeofIfAnnounceMsghdr ideal-int
+pkg syscall (freebsd-386), const TCIFLUSH ideal-int
+pkg syscall (freebsd-386), const TCIOFLUSH ideal-int
+pkg syscall (freebsd-386), const TCOFLUSH ideal-int
+pkg syscall (freebsd-386), const TCP_KEEPCNT ideal-int
+pkg syscall (freebsd-386), const TCP_KEEPIDLE ideal-int
+pkg syscall (freebsd-386), const TCP_KEEPINIT ideal-int
+pkg syscall (freebsd-386), const TCP_KEEPINTVL ideal-int
+pkg syscall (freebsd-386), const TCSAFLUSH ideal-int
+pkg syscall (freebsd-386), const TOSTOP ideal-int
+pkg syscall (freebsd-386), const VDISCARD ideal-int
+pkg syscall (freebsd-386), const VDSUSP ideal-int
+pkg syscall (freebsd-386), const VEOF ideal-int
+pkg syscall (freebsd-386), const VEOL ideal-int
+pkg syscall (freebsd-386), const VEOL2 ideal-int
+pkg syscall (freebsd-386), const VERASE ideal-int
+pkg syscall (freebsd-386), const VERASE2 ideal-int
+pkg syscall (freebsd-386), const VINTR ideal-int
+pkg syscall (freebsd-386), const VKILL ideal-int
+pkg syscall (freebsd-386), const VLNEXT ideal-int
+pkg syscall (freebsd-386), const VMIN ideal-int
+pkg syscall (freebsd-386), const VQUIT ideal-int
+pkg syscall (freebsd-386), const VREPRINT ideal-int
+pkg syscall (freebsd-386), const VSTART ideal-int
+pkg syscall (freebsd-386), const VSTATUS ideal-int
+pkg syscall (freebsd-386), const VSTOP ideal-int
+pkg syscall (freebsd-386), const VSUSP ideal-int
+pkg syscall (freebsd-386), const VTIME ideal-int
+pkg syscall (freebsd-386), const VWERASE ideal-int
 pkg syscall (freebsd-386), func SlicePtrFromStrings([]string) ([]*uint8, error)
 pkg syscall (freebsd-386), type IfAnnounceMsghdr struct
 pkg syscall (freebsd-386), type IfAnnounceMsghdr struct, Index uint16
@@ -1054,9 +1063,206 @@ pkg syscall (freebsd-386), type IfAnnounceMsghdr struct, Version uint8
 pkg syscall (freebsd-386), type IfAnnounceMsghdr struct, What uint16
 pkg syscall (freebsd-386), type InterfaceAnnounceMessage struct
 pkg syscall (freebsd-386), type InterfaceAnnounceMessage struct, Header IfAnnounceMsghdr
+pkg syscall (freebsd-amd64), const B0 ideal-int
+pkg syscall (freebsd-amd64), const B110 ideal-int
+pkg syscall (freebsd-amd64), const B115200 ideal-int
+pkg syscall (freebsd-amd64), const B1200 ideal-int
+pkg syscall (freebsd-amd64), const B134 ideal-int
+pkg syscall (freebsd-amd64), const B14400 ideal-int
+pkg syscall (freebsd-amd64), const B150 ideal-int
+pkg syscall (freebsd-amd64), const B1800 ideal-int
+pkg syscall (freebsd-amd64), const B19200 ideal-int
+pkg syscall (freebsd-amd64), const B200 ideal-int
+pkg syscall (freebsd-amd64), const B230400 ideal-int
+pkg syscall (freebsd-amd64), const B2400 ideal-int
+pkg syscall (freebsd-amd64), const B28800 ideal-int
+pkg syscall (freebsd-amd64), const B300 ideal-int
+pkg syscall (freebsd-amd64), const B38400 ideal-int
+pkg syscall (freebsd-amd64), const B460800 ideal-int
+pkg syscall (freebsd-amd64), const B4800 ideal-int
+pkg syscall (freebsd-amd64), const B50 ideal-int
+pkg syscall (freebsd-amd64), const B57600 ideal-int
+pkg syscall (freebsd-amd64), const B600 ideal-int
+pkg syscall (freebsd-amd64), const B7200 ideal-int
+pkg syscall (freebsd-amd64), const B75 ideal-int
+pkg syscall (freebsd-amd64), const B76800 ideal-int
+pkg syscall (freebsd-amd64), const B921600 ideal-int
+pkg syscall (freebsd-amd64), const B9600 ideal-int
+pkg syscall (freebsd-amd64), const BIOCGTSTAMP ideal-int
+pkg syscall (freebsd-amd64), const BIOCSTSTAMP ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_BINTIME ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_BINTIME_FAST ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_BINTIME_MONOTONIC ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_BINTIME_MONOTONIC_FAST ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_FAST ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_FLAG_MASK ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_FORMAT_MASK ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_MICROTIME ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_MICROTIME_FAST ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_MICROTIME_MONOTONIC ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_MICROTIME_MONOTONIC_FAST ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_MONOTONIC ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_MONOTONIC_FAST ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_NANOTIME ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_NANOTIME_FAST ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_NANOTIME_MONOTONIC ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_NANOTIME_MONOTONIC_FAST ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_NONE ideal-int
+pkg syscall (freebsd-amd64), const BPF_T_NORMAL ideal-int
+pkg syscall (freebsd-amd64), const BRKINT ideal-int
+pkg syscall (freebsd-amd64), const CFLUSH ideal-int
+pkg syscall (freebsd-amd64), const CLOCAL ideal-int
+pkg syscall (freebsd-amd64), const CREAD ideal-int
+pkg syscall (freebsd-amd64), const CS5 ideal-int
+pkg syscall (freebsd-amd64), const CS6 ideal-int
+pkg syscall (freebsd-amd64), const CS7 ideal-int
+pkg syscall (freebsd-amd64), const CS8 ideal-int
+pkg syscall (freebsd-amd64), const CSIZE ideal-int
+pkg syscall (freebsd-amd64), const CSTART ideal-int
+pkg syscall (freebsd-amd64), const CSTATUS ideal-int
+pkg syscall (freebsd-amd64), const CSTOP ideal-int
+pkg syscall (freebsd-amd64), const CSTOPB ideal-int
+pkg syscall (freebsd-amd64), const CSUSP ideal-int
+pkg syscall (freebsd-amd64), const DLT_AOS ideal-int
+pkg syscall (freebsd-amd64), const DLT_CAN_SOCKETCAN ideal-int
+pkg syscall (freebsd-amd64), const DLT_DBUS ideal-int
+pkg syscall (freebsd-amd64), const DLT_DECT ideal-int
+pkg syscall (freebsd-amd64), const DLT_DVB_CI ideal-int
+pkg syscall (freebsd-amd64), const DLT_FC_2 ideal-int
+pkg syscall (freebsd-amd64), const DLT_FC_2_WITH_FRAME_DELIMS ideal-int
+pkg syscall (freebsd-amd64), const DLT_GSMTAP_ABIS ideal-int
+pkg syscall (freebsd-amd64), const DLT_GSMTAP_UM ideal-int
+pkg syscall (freebsd-amd64), const DLT_IEEE802_15_4_NOFCS ideal-int
+pkg syscall (freebsd-amd64), const DLT_IPNET ideal-int
+pkg syscall (freebsd-amd64), const DLT_IPOIB ideal-int
+pkg syscall (freebsd-amd64), const DLT_IPV4 ideal-int
+pkg syscall (freebsd-amd64), const DLT_IPV6 ideal-int
+pkg syscall (freebsd-amd64), const DLT_JUNIPER_ATM_CEMIC ideal-int
+pkg syscall (freebsd-amd64), const DLT_JUNIPER_FIBRECHANNEL ideal-int
+pkg syscall (freebsd-amd64), const DLT_JUNIPER_SRX_E2E ideal-int
+pkg syscall (freebsd-amd64), const DLT_JUNIPER_VS ideal-int
+pkg syscall (freebsd-amd64), const DLT_LINUX_EVDEV ideal-int
+pkg syscall (freebsd-amd64), const DLT_MATCHING_MAX ideal-int
+pkg syscall (freebsd-amd64), const DLT_MATCHING_MIN ideal-int
+pkg syscall (freebsd-amd64), const DLT_MPLS ideal-int
+pkg syscall (freebsd-amd64), const DLT_MUX27010 ideal-int
+pkg syscall (freebsd-amd64), const DLT_NETANALYZER ideal-int
+pkg syscall (freebsd-amd64), const DLT_NETANALYZER_TRANSPARENT ideal-int
+pkg syscall (freebsd-amd64), const DLT_NFLOG ideal-int
+pkg syscall (freebsd-amd64), const DLT_STANAG_5066_D_PDU ideal-int
+pkg syscall (freebsd-amd64), const DLT_USB_LINUX_MMAPPED ideal-int
+pkg syscall (freebsd-amd64), const DLT_WIHART ideal-int
+pkg syscall (freebsd-amd64), const ECAPMODE Errno
+pkg syscall (freebsd-amd64), const FLUSHO ideal-int
+pkg syscall (freebsd-amd64), const HUPCL ideal-int
+pkg syscall (freebsd-amd64), const ICANON ideal-int
+pkg syscall (freebsd-amd64), const ICRNL ideal-int
+pkg syscall (freebsd-amd64), const IEXTEN ideal-int
 pkg syscall (freebsd-amd64), const IFAN_ARRIVAL ideal-int
 pkg syscall (freebsd-amd64), const IFAN_DEPARTURE ideal-int
+pkg syscall (freebsd-amd64), const IFF_CANTCONFIG ideal-int
+pkg syscall (freebsd-amd64), const IFT_INFINIBAND ideal-int
+pkg syscall (freebsd-amd64), const IGNBRK ideal-int
+pkg syscall (freebsd-amd64), const IGNCR ideal-int
+pkg syscall (freebsd-amd64), const IGNPAR ideal-int
+pkg syscall (freebsd-amd64), const IMAXBEL ideal-int
+pkg syscall (freebsd-amd64), const INLCR ideal-int
+pkg syscall (freebsd-amd64), const INPCK ideal-int
+pkg syscall (freebsd-amd64), const IN_RFC3021_MASK ideal-int
+pkg syscall (freebsd-amd64), const IPPROTO_MH ideal-int
+pkg syscall (freebsd-amd64), const IPPROTO_SEND ideal-int
+pkg syscall (freebsd-amd64), const IP_RECVTOS ideal-int
+pkg syscall (freebsd-amd64), const ISIG ideal-int
+pkg syscall (freebsd-amd64), const ISTRIP ideal-int
+pkg syscall (freebsd-amd64), const IXANY ideal-int
+pkg syscall (freebsd-amd64), const IXOFF ideal-int
+pkg syscall (freebsd-amd64), const IXON ideal-int
+pkg syscall (freebsd-amd64), const MADV_AUTOSYNC ideal-int
+pkg syscall (freebsd-amd64), const MADV_CORE ideal-int
+pkg syscall (freebsd-amd64), const MADV_DONTNEED ideal-int
+pkg syscall (freebsd-amd64), const MADV_FREE ideal-int
+pkg syscall (freebsd-amd64), const MADV_NOCORE ideal-int
+pkg syscall (freebsd-amd64), const MADV_NORMAL ideal-int
+pkg syscall (freebsd-amd64), const MADV_NOSYNC ideal-int
+pkg syscall (freebsd-amd64), const MADV_PROTECT ideal-int
+pkg syscall (freebsd-amd64), const MADV_RANDOM ideal-int
+pkg syscall (freebsd-amd64), const MADV_SEQUENTIAL ideal-int
+pkg syscall (freebsd-amd64), const MADV_WILLNEED ideal-int
+pkg syscall (freebsd-amd64), const MAP_ANON ideal-int
+pkg syscall (freebsd-amd64), const MAP_ANONYMOUS ideal-int
+pkg syscall (freebsd-amd64), const MAP_COPY ideal-int
+pkg syscall (freebsd-amd64), const MAP_FILE ideal-int
+pkg syscall (freebsd-amd64), const MAP_FIXED ideal-int
+pkg syscall (freebsd-amd64), const MAP_HASSEMAPHORE ideal-int
+pkg syscall (freebsd-amd64), const MAP_NOCORE ideal-int
+pkg syscall (freebsd-amd64), const MAP_NORESERVE ideal-int
+pkg syscall (freebsd-amd64), const MAP_NOSYNC ideal-int
+pkg syscall (freebsd-amd64), const MAP_PREFAULT_READ ideal-int
+pkg syscall (freebsd-amd64), const MAP_PRIVATE ideal-int
+pkg syscall (freebsd-amd64), const MAP_RENAME ideal-int
+pkg syscall (freebsd-amd64), const MAP_RESERVED0080 ideal-int
+pkg syscall (freebsd-amd64), const MAP_RESERVED0100 ideal-int
+pkg syscall (freebsd-amd64), const MAP_SHARED ideal-int
+pkg syscall (freebsd-amd64), const MAP_STACK ideal-int
+pkg syscall (freebsd-amd64), const MCL_CURRENT ideal-int
+pkg syscall (freebsd-amd64), const MCL_FUTURE ideal-int
+pkg syscall (freebsd-amd64), const MS_ASYNC ideal-int
+pkg syscall (freebsd-amd64), const MS_INVALIDATE ideal-int
+pkg syscall (freebsd-amd64), const MS_SYNC ideal-int
+pkg syscall (freebsd-amd64), const NET_RT_IFLISTL ideal-int
+pkg syscall (freebsd-amd64), const NOFLSH ideal-int
+pkg syscall (freebsd-amd64), const OCRNL ideal-int
+pkg syscall (freebsd-amd64), const ONLCR ideal-int
+pkg syscall (freebsd-amd64), const ONLRET ideal-int
+pkg syscall (freebsd-amd64), const ONOCR ideal-int
+pkg syscall (freebsd-amd64), const ONOEOT ideal-int
+pkg syscall (freebsd-amd64), const OPOST ideal-int
+pkg syscall (freebsd-amd64), const PARENB ideal-int
+pkg syscall (freebsd-amd64), const PARMRK ideal-int
+pkg syscall (freebsd-amd64), const PARODD ideal-int
+pkg syscall (freebsd-amd64), const PENDIN ideal-int
+pkg syscall (freebsd-amd64), const PROT_EXEC ideal-int
+pkg syscall (freebsd-amd64), const PROT_NONE ideal-int
+pkg syscall (freebsd-amd64), const PROT_READ ideal-int
+pkg syscall (freebsd-amd64), const PROT_WRITE ideal-int
+pkg syscall (freebsd-amd64), const RT_CACHING_CONTEXT ideal-int
+pkg syscall (freebsd-amd64), const RT_DEFAULT_FIB ideal-int
+pkg syscall (freebsd-amd64), const SIOCGIFFIB ideal-int
+pkg syscall (freebsd-amd64), const SIOCSIFFIB ideal-int
+pkg syscall (freebsd-amd64), const SO_PROTOCOL ideal-int
+pkg syscall (freebsd-amd64), const SO_PROTOTYPE ideal-int
+pkg syscall (freebsd-amd64), const SO_USER_COOKIE ideal-int
+pkg syscall (freebsd-amd64), const SYS_CLOCK_GETCPUCLOCKID2 ideal-int
+pkg syscall (freebsd-amd64), const SYS_WAIT6 ideal-int
 pkg syscall (freebsd-amd64), const SizeofIfAnnounceMsghdr ideal-int
+pkg syscall (freebsd-amd64), const TCIFLUSH ideal-int
+pkg syscall (freebsd-amd64), const TCIOFLUSH ideal-int
+pkg syscall (freebsd-amd64), const TCOFLUSH ideal-int
+pkg syscall (freebsd-amd64), const TCP_KEEPCNT ideal-int
+pkg syscall (freebsd-amd64), const TCP_KEEPIDLE ideal-int
+pkg syscall (freebsd-amd64), const TCP_KEEPINIT ideal-int
+pkg syscall (freebsd-amd64), const TCP_KEEPINTVL ideal-int
+pkg syscall (freebsd-amd64), const TCSAFLUSH ideal-int
+pkg syscall (freebsd-amd64), const TOSTOP ideal-int
+pkg syscall (freebsd-amd64), const VDISCARD ideal-int
+pkg syscall (freebsd-amd64), const VDSUSP ideal-int
+pkg syscall (freebsd-amd64), const VEOF ideal-int
+pkg syscall (freebsd-amd64), const VEOL ideal-int
+pkg syscall (freebsd-amd64), const VEOL2 ideal-int
+pkg syscall (freebsd-amd64), const VERASE ideal-int
+pkg syscall (freebsd-amd64), const VERASE2 ideal-int
+pkg syscall (freebsd-amd64), const VINTR ideal-int
+pkg syscall (freebsd-amd64), const VKILL ideal-int
+pkg syscall (freebsd-amd64), const VLNEXT ideal-int
+pkg syscall (freebsd-amd64), const VMIN ideal-int
+pkg syscall (freebsd-amd64), const VQUIT ideal-int
+pkg syscall (freebsd-amd64), const VREPRINT ideal-int
+pkg syscall (freebsd-amd64), const VSTART ideal-int
+pkg syscall (freebsd-amd64), const VSTATUS ideal-int
+pkg syscall (freebsd-amd64), const VSTOP ideal-int
+pkg syscall (freebsd-amd64), const VSUSP ideal-int
+pkg syscall (freebsd-amd64), const VTIME ideal-int
+pkg syscall (freebsd-amd64), const VWERASE ideal-int
 pkg syscall (freebsd-amd64), func SlicePtrFromStrings([]string) ([]*uint8, error)
 pkg syscall (freebsd-amd64), func Syscall9(uintptr, uintptr, uintptr, uintptr, uintptr, uintptr, uintptr, uintptr, uintptr, uintptr) (uintptr, uintptr, Errno)
 pkg syscall (freebsd-amd64), type IfAnnounceMsghdr struct

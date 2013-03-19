@@ -1855,9 +1855,7 @@ for more information about how to proceed.
 Why does the project use Mercurial and not git?</h3>
 </div>
 
-<h3 id="为什么此项目使用Mercurial而非git">
-为什么此项目使用Mercurial而非git？
-</h3>
+<h3 id="为什么此项目使用Mercurial而非git">为什么此项目使用Mercurial而非git？</h3>
 
 <div class="english">
 <p>
@@ -1902,6 +1900,77 @@ version control, a switch to git doesn't seem worthwhile.
 由于现在的Mercurial拥有代码审核的支持，加上Go项目几乎是线性的，无分支的版本控制，
 切换到git上似乎不大值得。
 </p>
+
+<div class="english">
+<h3 id="git_https">
+Why does "go get" use HTTPS when cloning a repository?</h3>
+</div>
+
+<h3 id="git用https">为什么“go get”在克隆代码仓库时使用HTTPS？</h3>
+
+<div class="english">
+<p>
+Companies often permit outgoing traffic only on the standard TCP ports 80 (HTTP)
+and 443 (HTTPS), blocking outgoing traffic on other ports, including TCP port 9418
+(git) and TCP port 22 (SSH).
+When using HTTPS instead of HTTP, <code>git</code> enforces certificate validation by
+default, providing protection against man-in-the-middle, eavesdropping and tampering attacks.
+The <code>go get</code> command therefore uses HTTPS for safety.
+</p>
+</div>
+
+<p>
+公司通常只允许标准TCP端口80（HTTP）和443（HTTPS）的向外通行，而封闭其它端口的向外通行，
+包括TCP端口9418（git）和TCP端口22（SSH）。当使用HTTPS代替HTTP时，<code>git</code>
+默认会强制执行证书认证来提供保护，防止中间人的窃听和篡改攻击。因此为了安全，
+<code>go get</code> 命令就使用了HTTPS。
+</p>
+
+<div class="english">
+<p>
+If you use <code>git</code> and prefer to push changes through SSH using your existing key
+it's easy to work around this. For GitHub, try one of these solutions:
+</p>
+</div>
+
+<p>
+如果你更喜欢 <code>git</code> 用你现有的密钥通过SSH来推送更改，那也很容易。
+对于GitHub，试试下面的解决方案：
+</p>
+
+<div class="english">
+<ul>
+<li>Manually clone the repository in the expected package directory:
+<pre>
+$ cd $GOPATH/src/github.com/username
+$ git clone git@github.com:username/package.git
+</pre>
+</li>
+<li>Force <code>git push</code> to use the <code>SSH</code> protocol by appending
+these two lines to <code>~/.gitconfig</code>:
+<pre>
+[url "git@github.com:"]
+	pushInsteadOf = https://github.com/
+</pre>
+</li>
+</ul>
+</div>
+
+<ul>
+<li>在期望的目录下手动克隆代码仓库：
+<pre>
+$ cd $GOPATH/src/github.com/username
+$ git clone git@github.com:username/package.git
+</pre>
+</li>
+<li>将一下两行添加到 <code>~/.gitconfig</code> 中，强制 <code>git push</code>
+使用 <code>SSH</code> 协议：
+<pre>
+[url "git@github.com:"]
+	pushInsteadOf = https://github.com/
+</pre>
+</li>
+</ul>
 
 <div class="english">
 <h2 id="Pointers">Pointers and Allocation</h2>
@@ -1953,6 +2022,109 @@ makes a copy of the pointer, but again not the data it points to.
 复制一个映射或切片会创建一个存储在接口值中的东西的一个副本。若该接口值保存了一个结构，
 复制该接口值则会创建一个该结构的副本。若该接口值保存了一个指针，
 复制该接口值则会创建一个该指针的副本，而且同样不是它所指向的数据。
+</p>
+
+<div class="english">
+<h3 id="pointer_to_interface">
+When should I use a pointer to an interface?</h3>
+</div>
+
+<h3 id="接口指针">我应在何时使用接口指针？</h3>
+
+<div class="english">
+<p>
+Almost never. Pointers to interface values arise only in rare, tricky situations involving
+disguising an interface value's type for delayed evaluation.
+</p>
+</div>
+
+<p>
+几乎用不着。接口值指针极其罕见，复杂情况涉及掩饰接口值的类型以延迟求值。
+</p>
+
+<div class="english">
+<p>
+It is however a common mistake to pass a pointer to an interface value
+to a function expecting an interface. The compiler will complain about this
+error but the situation can still be confusing, because sometimes a
+<a href="#different_method_sets">pointer
+is necessary to satisfy an interface</a>.
+The insight is that although a pointer to a concrete type can satisfy
+an interface, with one exception <em>a pointer to an interface can never satisfy a interface</em>.
+</p>
+</div>
+
+<p>
+不过有一个常见的错误，就是将接口值指针传递给一个期望接受接口的函数。编译器会抱怨这种错误，
+但这种情况仍然会产生混淆，因为有时<a href="#不同的方法集">为了满足一个接口，指针是必要的</a>。
+这种洞察力就在于，尽管常量类型的指针可以满足一个接口，但还有一个例外：<b>接口指针永远无法满足接口</b>。
+</p>
+
+<div class="english">
+<p>
+Consider the variable declaration,
+</p>
+</div>
+
+<p>
+考虑此变量声明：
+</p>
+
+<pre>
+var w io.Writer
+</pre>
+
+<div class="english">
+<p>
+The printing function <code>fmt.Fprintf</code> takes as its first argument
+a value that satisfies <code>io.Writer</code>—something that implements
+the canonical <code>Write</code> method. Thus we can write
+</p>
+</div>
+
+<p>
+打印函数 <code>fmt.Fprintf</code> 将其第一个实参作为接口值，该值满足像
+<code>io.Writer</code> 这类实现了标准 <code>Write</code> 方法的接口。
+因此我们可以这样写：
+</p>
+
+<pre>
+fmt.Fprintf(w, "hello, world\n")
+</pre>
+
+<div class="english">
+<p>
+If however we pass the address of <code>w</code>, the program will not compile.
+</p>
+</div>
+
+<p>
+If however we pass the address of <code>w</code>, the program will not compile.
+但如果我们传递了 <code>w</code> 的地址，该程序将不会编译。
+</p>
+
+<div class="english">
+<pre>
+fmt.Fprintf(&amp;w, "hello, world\n") // Compile-time error.
+</pre>
+</div>
+
+<pre>
+fmt.Fprintf(&amp;w, "hello, world\n") // 编译时错误。
+</pre>
+
+<div class="english">
+<p>
+The one exception is that any value, even a pointer to an interface, can be assigned to
+a variable of empty interface type (<code>interface{}</code>).
+Even so, it's almost certainly a mistake if the value is a pointer to an interface;
+the result can be confusing.
+</p>
+</div>
+
+<p>
+一个例外就是任何值，甚至接口指针都能被赋予一个空接口类型（<code>interface{}</code>）的变量。
+即便如此，若该值是一个指针接口，就几乎可以断定它是个错误；其结果仍会产生混淆。
 </p>
 
 <div class="english">
@@ -2830,7 +3002,7 @@ What compiler technology is used to build the compilers?</h3>
 
 <div class="english">
 <p>
-<code>Gccgo</code> has a C++ front-end with a recursive descent parser coupled to the
+<code>Gccgo</code> has a front end written in C++, with a recursive descent parser coupled to the
 standard GCC back end. <code>Gc</code> is written in C using
 <code>yacc</code>/<code>bison</code> for the parser.
 Although it's a new program, it fits in the Plan 9 C compiler suite

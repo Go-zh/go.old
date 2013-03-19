@@ -11,6 +11,7 @@ struct MachoHdr {
 typedef struct MachoSect MachoSect;
 struct MachoSect {
 	char*	name;
+	char*	segname;
 	uint64	addr;
 	uint64	size;
 	uint32	off;
@@ -44,19 +45,15 @@ struct MachoLoad {
 	uint32	*data;
 };
 
-typedef struct MachoDebug MachoDebug;
-struct MachoDebug {
-	uint32	fileoffset;
-	uint32	filesize;
-};
-
 MachoHdr*	getMachoHdr(void);
 MachoSeg*	newMachoSeg(char*, int);
-MachoSect*	newMachoSect(MachoSeg*, char*);
+MachoSect*	newMachoSect(MachoSeg*, char*, char*);
 MachoLoad*	newMachoLoad(uint32, uint32);
-MachoDebug*	newMachoDebug(void);
 int	machowrite(void);
 void	machoinit(void);
+void	machosymorder(void);
+void	machoemitreloc(void);
+int	machoreloc1(Reloc*, vlong);
 
 /*
  * Total amount of space to reserve at the start of the file

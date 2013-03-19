@@ -21,13 +21,17 @@ var errNilPtr = errors.New("destination pointer is nil") // embedded in descript
 // driverArgs converts arguments from callers of Stmt.Exec and
 // Stmt.Query into driver Values.
 //
-// The statement si may be nil, if no statement is available.
+// The statement ds may be nil, if no statement is available.
 
 // driverArgs 将Stmt.Exec和Stmt.Query的调用参数转换成为driver中定义的值。
 //
-// statement是可能为空，如果没有statement的话。
-func driverArgs(si driver.Stmt, args []interface{}) ([]driver.Value, error) {
+// 若没有语句可用，则语句 ds 为 nil。
+func driverArgs(ds *driverStmt, args []interface{}) ([]driver.Value, error) {
 	dargs := make([]driver.Value, len(args))
+	var si driver.Stmt
+	if ds != nil {
+		si = ds.si
+	}
 	cc, ok := si.(driver.ColumnConverter)
 
 	// Normal path, for a driver.Stmt that is not a ColumnConverter.
@@ -66,7 +70,9 @@ func driverArgs(si driver.Stmt, args []interface{}) ([]driver.Value, error) {
 		// column before going across the network to get the
 		// same error.
 		var err error
+		ds.Lock()
 		dargs[n], err = cc.ColumnConverter(n).ConvertValue(arg)
+		ds.Unlock()
 		if err != nil {
 			return nil, fmt.Errorf("sql: converting argument #%d's type: %v", n, err)
 		}

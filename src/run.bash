@@ -74,9 +74,12 @@ go run $GOROOT/test/run.go - .
 ) || exit $?
 
 [ "$CGO_ENABLED" != 1 ] ||
-[ "$GOHOSTOS" == openbsd ] || # issue 4878
 (xcd ../misc/cgo/test
 go test
+case "$GOHOSTOS-$GOARCH" in
+darwin-386 | darwin-amd64 | freebsd-386 | freebsd-amd64 | linux-386 | linux-amd64 | netbsd-386 | netbsd-amd64 | openbsd-386 | openbsd-amd64)
+	go test -ldflags '-w -hostobj'
+esac
 ) || exit $?
 
 [ "$CGO_ENABLED" != 1 ] ||
@@ -113,9 +116,12 @@ go build ../misc/dashboard/builder ../misc/goplay
 ./timing.sh -test
 ) || exit $?
 
+[ "$GOOS" == openbsd ] || # golang.org/issue/5057
+(
 echo
 echo '#' ../test/bench/go1
 go test ../test/bench/go1
+) || exit $?
 
 (xcd ../test
 unset GOMAXPROCS

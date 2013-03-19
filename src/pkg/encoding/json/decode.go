@@ -261,6 +261,16 @@ func (d *decodeState) value(v reflect.Value) {
 		}
 		d.scan.step(&d.scan, '"')
 		d.scan.step(&d.scan, '"')
+
+		n := len(d.scan.parseState)
+		if n > 0 && d.scan.parseState[n-1] == parseObjectKey {
+			// d.scan thinks we just read an object key; finish the object
+			d.scan.step(&d.scan, ':')
+			d.scan.step(&d.scan, '"')
+			d.scan.step(&d.scan, '"')
+			d.scan.step(&d.scan, '}')
+		}
+
 		return
 	}
 
@@ -739,6 +749,7 @@ func (d *decodeState) valueInterface() interface{} {
 	switch d.scanWhile(scanSkipSpace) {
 	default:
 		d.error(errPhase)
+		panic("unreachable")
 	case scanBeginArray:
 		return d.arrayInterface()
 	case scanBeginObject:
@@ -746,7 +757,6 @@ func (d *decodeState) valueInterface() interface{} {
 	case scanBeginLiteral:
 		return d.literalInterface()
 	}
-	panic("unreachable")
 }
 
 // arrayInterface is like array but returns []interface{}.

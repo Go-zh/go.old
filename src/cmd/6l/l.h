@@ -101,9 +101,12 @@ struct	Reloc
 {
 	int32	off;
 	uchar	siz;
+	uchar	done;
 	int32	type;
 	int64	add;
+	int64	xadd;
 	Sym*	sym;
+	Sym*	xsym;
 };
 
 struct	Prog
@@ -141,6 +144,7 @@ struct	Auto
 struct	Sym
 {
 	char*	name;
+	char*	extname;	// name used in external object files
 	short	type;
 	short	version;
 	uchar	dupok;
@@ -168,7 +172,6 @@ struct	Sym
 	vlong	size;
 	Sym*	gotype;
 	char*	file;
-	char*	dynimpname;
 	char*	dynimplib;
 	char*	dynimpvers;
 	struct Section*	sect;

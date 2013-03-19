@@ -117,10 +117,11 @@ main(int argc, char *argv[])
 	flagstr("r", "dir1:dir2:...: set ELF dynamic linker search path", &rpath);
 	flagcount("race", "enable race detector", &flag_race);
 	flagcount("s", "disable symbol table", &debug['s']);
+	flagcount("shared", "generate shared object", &flag_shared);
+	flagstr("tmpdir", "leave temporary files in this directory", &tmpdir);
 	flagcount("u", "reject unsafe packages", &debug['u']);
 	flagcount("v", "print link trace", &debug['v']);
 	flagcount("w", "disable DWARF generation", &debug['w']);
-	flagcount("shared", "generate shared object", &flag_shared);
 	
 	flagparse(&argc, &argv, usage);
 	
@@ -140,7 +141,11 @@ main(int argc, char *argv[])
 		switch(HEADTYPE) {
 		default:
 			sysfatal("cannot use -hostobj with -H %s", headstr(HEADTYPE));
+		case Hdarwin:
+		case Hfreebsd:
 		case Hlinux:
+		case Hnetbsd:
+		case Hopenbsd:
 			break;
 		}
 	}
@@ -418,6 +423,7 @@ ldobj1(Biobuf *f, char *pkg, int64 len, char *pn)
 	ntext = 0;
 	eof = Boffset(f) + len;
 	src[0] = 0;
+	pn = estrdup(pn); // we keep it in Sym* references
 
 newloop:
 	memset(h, 0, sizeof(h));

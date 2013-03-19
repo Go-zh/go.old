@@ -465,7 +465,7 @@ loadcgo(char *file, char *pkg, char *p, int n)
 				free(local);
 			if(s->type == 0 || s->type == SXREF) {
 				s->dynimplib = lib;
-				s->dynimpname = remote;
+				s->extname = remote;
 				s->dynimpvers = q;
 				s->type = SDYNIMPORT;
 				havedynamic = 1;
@@ -486,11 +486,8 @@ loadcgo(char *file, char *pkg, char *p, int n)
 		}
 
 		if(strcmp(f[0], "cgo_export_static") == 0 || strcmp(f[0], "cgo_export_dynamic") == 0) {
-			// TODO: Make Mach-O code happier. Right now it sees the dynimpname and
-			// includes CgoExportStatic symbols in the dynamic table, and then dyld
-			// cannot find them when we run the binary. Disabling Windows too
-			// because it probably has the same issue.
-			if(strcmp(f[0], "cgo_export_static") == 0 && (HEADTYPE == Hdarwin || HEADTYPE == Hwindows))
+			// TODO: Remove once we know Windows is okay.
+			if(strcmp(f[0], "cgo_export_static") == 0 && HEADTYPE == Hwindows)
 				continue;
 
 			if(nf < 2 || nf > 3)
@@ -502,22 +499,27 @@ loadcgo(char *file, char *pkg, char *p, int n)
 				remote = local;
 			local = expandpkg(local, pkg);
 			s = lookup(local, 0);
+
+			// export overrides import, for openbsd/cgo.
+			// see issue 4878.
 			if(s->dynimplib != nil) {
-				fprint(2, "%s: symbol is both imported and exported: %s\n", argv0, local);
-				nerrors++;
+				s->dynimplib = nil;
+				s->extname = nil;
+				s->dynimpvers = nil;
+				s->type = 0;
 			}
-			
-			if(strcmp(f[0], "cgo_export_static") == 0)
-				s->cgoexport |= CgoExportStatic;
-			else
-				s->cgoexport |= CgoExportDynamic;
-			if(s->dynimpname == nil) {
-				s->dynimpname = remote;
+
+			if(s->cgoexport == 0) {
+				if(strcmp(f[0], "cgo_export_static") == 0)
+					s->cgoexport |= CgoExportStatic;
+				else
+					s->cgoexport |= CgoExportDynamic;
+				s->extname = remote;
 				if(ndynexp%32 == 0)
 					dynexp = erealloc(dynexp, (ndynexp+32)*sizeof dynexp[0]);
 				dynexp[ndynexp++] = s;
-			} else if(strcmp(s->dynimpname, remote) != 0) {
-				fprint(2, "%s: conflicting cgo_export directives: %s as %s and %s\n", argv0, s->name, s->dynimpname, remote);
+			} else if(strcmp(s->extname, remote) != 0) {
+				fprint(2, "%s: conflicting cgo_export directives: %s as %s and %s\n", argv0, s->name, s->extname, remote);
 				nerrors++;
 				return;
 			}
@@ -773,6 +775,9 @@ addexport(void)
 {
 	int i;
 	
+	if(HEADTYPE == Hdarwin)
+		return;
+
 	for(i=0; i<ndynexp; i++)
 		adddynsym(dynexp[i]);
 }
@@ -919,29 +924,4 @@ importcycles(void)
 	
 	for(p=pkgall; p; p=p->all)
 		cycle(p);
-}
-
-static int
-scmp(const void *p1, const void *p2)
-{
-	Sym *s1, *s2;
-
-	s1 = *(Sym**)p1;
-	s2 = *(Sym**)p2;
-	return strcmp(s1->dynimpname, s2->dynimpname);
-}
-void
-sortdynexp(void)
-{
-	int i;
-
-	// On Mac OS X Mountain Lion, we must sort exported symbols
-	// So we sort them here and pre-allocate dynid for them
-	// See http://golang.org/issue/4029
-	if(HEADTYPE != Hdarwin)
-		return;
-	qsort(dynexp, ndynexp, sizeof dynexp[0], scmp);
-	for(i=0; i<ndynexp; i++) {
-		dynexp[i]->dynid = -i-100; // also known to [68]l/asm.c:^adddynsym
-	}
 }

@@ -169,6 +169,11 @@ type Decoder struct {
 	// the CharsetReader's result values must be non-nil.
 	CharsetReader func(charset string, input io.Reader) (io.Reader, error)
 
+	// DefaultSpace sets the default name space used for unadorned tags,
+	// as if the entire XML stream were wrapped in an element containing
+	// the attribute xmlns="DefaultSpace".
+	DefaultSpace string
+
 	r         io.ByteReader
 	buf       bytes.Buffer
 	saved     *bytes.Buffer
@@ -268,6 +273,8 @@ func (d *Decoder) Token() (t Token, err error) {
 	return
 }
 
+const xmlURL = "http://www.w3.org/XML/1998/namespace"
+
 // Apply name space translation to name n.
 // The default name space (for Space=="")
 // applies only to element names, not to attribute names.
@@ -277,11 +284,15 @@ func (d *Decoder) translate(n *Name, isElementName bool) {
 		return
 	case n.Space == "" && !isElementName:
 		return
+	case n.Space == "xml":
+		n.Space = xmlURL
 	case n.Space == "" && n.Local == "xmlns":
 		return
 	}
 	if v, ok := d.ns[n.Space]; ok {
 		n.Space = v
+	} else if n.Space == "" {
+		n.Space = d.DefaultSpace
 	}
 }
 
@@ -956,7 +967,7 @@ Input:
 				b0, b1 = 0, 0
 				continue Input
 			}
-			ent := string(d.buf.Bytes()[before])
+			ent := string(d.buf.Bytes()[before:])
 			if ent[len(ent)-1] != ';' {
 				ent += " (no semicolon)"
 			}
@@ -1718,6 +1729,7 @@ var (
 	esc_tab  = []byte("&#x9;")
 	esc_nl   = []byte("&#xA;")
 	esc_cr   = []byte("&#xD;")
+	esc_fffd = []byte("\uFFFD") // Unicode replacement character
 )
 
 // EscapeText writes to w the properly escaped XML equivalent
@@ -1725,8 +1737,10 @@ var (
 func EscapeText(w io.Writer, s []byte) error {
 	var esc []byte
 	last := 0
-	for i, c := range s {
-		switch c {
+	for i := 0; i < len(s); {
+		r, width := utf8.DecodeRune(s[i:])
+		i += width
+		switch r {
 		case '"':
 			esc = esc_quot
 		case '\'':
@@ -1744,15 +1758,19 @@ func EscapeText(w io.Writer, s []byte) error {
 		case '\r':
 			esc = esc_cr
 		default:
+			if !isInCharacterRange(r) {
+				esc = esc_fffd
+				break
+			}
 			continue
 		}
-		if _, err := w.Write(s[last:i]); err != nil {
+		if _, err := w.Write(s[last : i-width]); err != nil {
 			return err
 		}
 		if _, err := w.Write(esc); err != nil {
 			return err
 		}
-		last = i + 1
+		last = i
 	}
 	if _, err := w.Write(s[last:]); err != nil {
 		return err
