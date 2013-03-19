@@ -11,6 +11,7 @@ import (
 
 // Independently check that the special "Is" functions work
 // in the Latin-1 range through the property table.
+// 独立地检测特殊的“Is”函数在Latin-1范围内通过属性表的工作。
 
 func TestIsControlLatin1(t *testing.T) {
 	for i := rune(0); i <= MaxLatin1; i++ {

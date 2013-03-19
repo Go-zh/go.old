@@ -16,6 +16,9 @@ type T struct {
 
 // Hand-chosen tests from Unicode 5.1.0, 6.0.0 and 6.2.0 mostly to discover when new
 // scripts and categories arise.
+
+// 从Unicode 5.1.0、6.0.0和6.2.0中手动挑选的测试，
+// 主要是为了发现新的书写系统和属性何时出现。
 var inTest = []T{
 	{0x06e2, "Arabic"},
 	{0x0567, "Armenian"},
@@ -122,7 +125,7 @@ var inTest = []T{
 	{0xa216, "Yi"},
 }
 
-var outTest = []T{ // not really worth being thorough
+var outTest = []T{ // not really worth being thorough // 不值得彻底地测试。
 	{0x20, "Telugu"},
 }
 

@@ -7,6 +7,9 @@
 // and be generated automatically, but that requires some API
 // development first.
 
+// TODO: 此文件只包含了土耳其语和阿塞拜疆语的特殊情况规则。
+// 它应当包含所有语言的特殊情况规则，并能够自动地生成，不过首先要开发一些API。
+
 package unicode
 
 var TurkishCase SpecialCase = _TurkishCase

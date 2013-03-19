@@ -98,6 +98,8 @@ var notletterTest = []rune{
 }
 
 // Contains all the special cased Latin-1 chars.
+
+// 包含所有Latin-1字符中所有的特殊写法。
 var spaceTest = []rune{
 	0x09,
 	0x0a,
@@ -118,11 +120,13 @@ type caseT struct {
 
 var caseTest = []caseT{
 	// errors
+	// 错误
 	{-1, '\n', 0xFFFD},
 	{UpperCase, -1, -1},
 	{UpperCase, 1 << 30, 1 << 30},
 
 	// ASCII (special-cased so test carefully)
+	// ASCII（特殊写法要小心对待）
 	{UpperCase, '\n', '\n'},
 	{UpperCase, 'a', 'A'},
 	{UpperCase, 'A', 'A'},
@@ -137,6 +141,7 @@ var caseTest = []caseT{
 	{TitleCase, '7', '7'},
 
 	// Latin-1: easy to read the tests!
+	// Latin-1：只要读这些测试就行了！
 	{UpperCase, 0x80, 0x80},
 	{UpperCase, 'Å', 'Å'},
 	{UpperCase, 'å', 'Å'},
@@ -163,6 +168,7 @@ var caseTest = []caseT{
 	{TitleCase, 0x212A, 0x212A},
 
 	// From an UpperLower sequence
+	// 来自一个“大写-小写”序列
 	// A640;CYRILLIC CAPITAL LETTER ZEMLYA;Lu;0;L;;;;;N;;;;A641;
 	{UpperCase, 0xA640, 0xA640},
 	{LowerCase, 0xA640, 0xA641},
@@ -181,6 +187,7 @@ var caseTest = []caseT{
 	{TitleCase, 0xA65F, 0xA65E},
 
 	// From another UpperLower sequence
+	// 来自另一个“大写-小写”序列
 	// 0139;LATIN CAPITAL LETTER L WITH ACUTE;Lu;0;L;004C 0301;;;;N;LATIN CAPITAL LETTER L ACUTE;;;013A;
 	{UpperCase, 0x0139, 0x0139},
 	{LowerCase, 0x0139, 0x013A},
@@ -195,6 +202,7 @@ var caseTest = []caseT{
 	{TitleCase, 0x0148, 0x0147},
 
 	// Last block in the 5.1.0 table
+	// 5.1.0表的最后一块
 	// 10400;DESERET CAPITAL LETTER LONG I;Lu;0;L;;;;;N;;;;10428;
 	{UpperCase, 0x10400, 0x10400},
 	{LowerCase, 0x10400, 0x10428},
@@ -213,12 +221,14 @@ var caseTest = []caseT{
 	{TitleCase, 0x1044F, 0x10427},
 
 	// First one not in the 5.1.0 table
+	// 第一个不在5.1.0表中
 	// 10450;SHAVIAN LETTER PEEP;Lo;0;L;;;;;N;;;;;
 	{UpperCase, 0x10450, 0x10450},
 	{LowerCase, 0x10450, 0x10450},
 	{TitleCase, 0x10450, 0x10450},
 
 	// Non-letters with case.
+	// 非字母字符及其写法。
 	{LowerCase, 0x2161, 0x2171},
 	{UpperCase, 0x0345, 0x0399},
 }
@@ -331,6 +341,8 @@ func TestIsSpace(t *testing.T) {
 
 // Check that the optimizations for IsLetter etc. agree with the tables.
 // We only need to check the Latin-1 range.
+
+// 检查对 IsLetter 等函数接受该表的优化。我们只需检查Latin-1范围集即可。
 func TestLetterOptimizations(t *testing.T) {
 	for i := rune(0); i <= MaxLatin1; i++ {
 		if Is(Letter, i) != IsLetter(i) {
@@ -390,14 +402,19 @@ var simpleFoldTests = []string{
 	// SimpleFold could order its returned slices in any order it wants,
 	// but we know it orders them in increasing order starting at in
 	// and looping around from MaxRune to 0.
+	//
+	// SimpleFold 能按它想要的任何顺序排序它返回的切片，不过我们知道它会按升序排序，
+	// 并从 MaxRune 循环遍历至 0
 
 	// Easy cases.
+	// 简单的写法。
 	"Aa",
 	"aA",
 	"δΔ",
 	"Δδ",
 
 	// ASCII special cases.
+	// ASCII的特殊写法。
 	"KkK",
 	"kKK",
 	"KKk",
@@ -406,6 +423,7 @@ var simpleFoldTests = []string{
 	"ſSs",
 
 	// Non-ASCII special cases.
+	// 非-ASCII的特殊写法。
 	"ρϱΡ",
 	"ϱΡρ",
 	"Ρρϱ",
@@ -415,6 +433,7 @@ var simpleFoldTests = []string{
 	"ιͅΙι",
 
 	// Extra special cases: has lower/upper but no case fold.
+	// 扩展的特殊写法：有大/小写但没有写法转换。
 	"İ",
 	"ı",
 }
@@ -441,6 +460,13 @@ func TestSimpleFold(t *testing.T) {
 // In practice most runes are ASCII so this is a conservative estimate
 // of an effective cutoff value. In practice we could probably set it higher
 // than what this function recommends.
+//
+// 执行“go test -calibrate”会对一个范围列表分别进行线性查找和二分查找，校准之后，
+// 会在二者之间找到一个合理的临界点。我们创建了一个假表，然后用相对于这些范围
+// 所有可能的输入（即所有范围之前，每个范围之内，各个范围之间，所有范围之后），
+// 在该表中进行一系列的搜索，以此来获得所需的时间。这假定所有的符文有相同的可能性。
+// 在实践中，大多数的符文是ASCII，因此这是个保守估计的有效临界值。在实践中，
+// 我们或许应将此值设置得高于这个函数的建议值。
 
 var calibrate = flag.Bool("calibrate", false, "compute crossover for linear vs. binary search")
 
@@ -457,6 +483,9 @@ func TestCalibrate(t *testing.T) {
 	// The 10% bias gives linear search an edge when they're close,
 	// because on predominantly ASCII inputs linear search is even
 	// better than our benchmarks measure.
+	//
+	// 寻找二分查找成功搜索超过10%的位置。当线性搜索结束时10%的偏离给了一个边界，
+	// 主要是因为ASCII输入的线性查找甚至比我们的基准测试还好。
 	n := sort.Search(64, func(n int) bool {
 		tab := fakeTable(n)
 		blinear := func(b *testing.B) {
@@ -508,6 +537,7 @@ func linear(ranges []Range16, r uint16) bool {
 
 func binary(ranges []Range16, r uint16) bool {
 	// binary search over ranges
+	// 对整个范围进行二分查找
 	lo := 0
 	hi := len(ranges)
 	for lo < hi {
