@@ -97,7 +97,6 @@ func (m *Mutex) Lock() {
 // It is allowed for one goroutine to lock a Mutex and then
 // arrange for another goroutine to unlock it.
 
-
 // Unlock 用于解锁 m。
 // 若 m 在进入 Unlock 前并未锁定，就会引发一个运行时错误。
 //
