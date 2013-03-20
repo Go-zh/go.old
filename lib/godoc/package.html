@@ -224,9 +224,12 @@
 	{{with $.Notes}}
 		{{range $marker, $content := .}}
 			<h2 id="pkg-note-{{$marker}}">{{noteTitle $marker | html}}s</h2>
+			<ul>
 			{{range .}}
 			{{comment_html .}}
+			<li>{{html .Body}}</li>
 			{{end}}
+			</ul>
 		{{end}}
 	{{end}}
 {{end}}
@@ -319,7 +322,7 @@ $(document).ready(function() {
 			var resize = function() {
 				code.height(0);
 				var h = code[0].scrollHeight;
-				code.height(h+20); // minimize bouncing
+				code.height(h+20); // minimize bouncing.
 				code.closest('.input').height(h);
 			};
 			code.on('keydown', resize);

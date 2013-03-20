@@ -189,7 +189,7 @@ func is32(ranges []Range32, r uint32) bool {
 	return false
 }
 
-// Is tests whether rune is in the specified table of ranges.
+// Is reports whether the rune is in the specified table of ranges.
 
 // Is 报告该符文是否在指定范围的表中。
 func Is(rangeTab *RangeTable, r rune) bool {

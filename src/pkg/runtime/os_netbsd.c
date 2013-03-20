@@ -1,5 +1,6 @@
-// Use of this source file is governed by a BSD-style
-// license that can be found in the LICENSE file.`
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 
 #include "runtime.h"
 #include "defs_GOOS_GOARCH.h"
@@ -65,7 +66,6 @@ int32
 runtime·semasleep(int64 ns)
 {
 	Timespec ts;
-	int64 secs;
 
 	// spin-mutex lock
 	while(runtime·xchg(&m->waitsemalock, 1))
@@ -94,11 +94,7 @@ runtime·semasleep(int64 ns)
 				runtime·lwp_park(nil, 0, &m->waitsemacount, nil);
 			} else {
 				ns += runtime·nanotime();
-				secs = ns/1000000000LL;
-				// Avoid overflow
-				if(secs > 1LL<<30)
-					secs = 1LL<<30;
-				ts.tv_sec = secs;
+				ts.tv_sec = ns/1000000000LL;
 				ts.tv_nsec = ns%1000000000LL;
 				// TODO(jsing) - potential deadlock!
 				// See above for details.

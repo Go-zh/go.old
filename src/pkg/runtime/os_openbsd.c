@@ -1,5 +1,6 @@
-// Use of this source file is governed by a BSD-style
-// license that can be found in the LICENSE file.`
+// Copyright 2011 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 
 #include "runtime.h"
 #include "defs_GOOS_GOARCH.h"
@@ -79,8 +80,8 @@ runtime·semasleep(int64 ns)
 				ns += runtime·nanotime();
 				secs = ns/1000000000LL;
 				// Avoid overflow
-				if(secs > 1LL<<30)
-					secs = 1LL<<30;
+				if(secs >= 1LL<<31)
+					secs = (1LL<<31) - 1;
 				ts.tv_sec = secs;
 				ts.tv_nsec = ns%1000000000LL;
 				runtime·thrsleep(&m->waitsemacount, CLOCK_REALTIME, &ts, &m->waitsemalock, nil);
