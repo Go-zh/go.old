@@ -36,6 +36,29 @@ package math
 //	atanh(+-1) is +-INF with signal.
 //
 
+// 原始C代码、详细注释、下面的常量以及此通知来自
+// FreeBSD 的 /usr/src/lib/msun/src/e_atanh.c 文件。
+// 此Go代码为原始C代码的简化版本。
+//
+//（版权声明见上。）
+//
+// __ieee754_atanh(x)
+// 方法：
+//	1. 通过 atanh(-x) = -atanh(x) 将 x 换算成负数
+//	2. 对于 x>=0.5
+//	            1              2x                          x
+//	atanh(x) = --- * log(1 + -------) = 0.5 * log1p(2 * --------)
+//	            2             1 - x                      1 - x
+//
+//	对于 x<0.5
+//	atanh(x) = 0.5*log1p(2x+2x*x/(1-x))
+//
+// 特殊情况：
+//	若 |x| > 1，则 atanh(x)   为带符号 NaN；
+//	               atanh(NaN) 为无符号 NaN；
+//	               atanh(±1)  为带符号 ±INF。
+//
+
 // Atanh returns the inverse hyperbolic tangent of x.
 //
 // Special cases are:
@@ -44,9 +67,19 @@ package math
 //	Atanh(-1) = -Inf
 //	Atanh(x) = NaN if x < -1 or x > 1
 //	Atanh(NaN) = NaN
+
+// Atanh 返回 x 的反双曲正切值。
+//
+// 特殊情况为：
+//	                       Atanh(1)   = +Inf
+//	                       Atanh(±0)  = ±0
+//	                       Atanh(-1)  = -Inf
+//	若 x < -1 或 x > 1，则 Atanh(x)   = NaN
+//	                       Atanh(NaN) = NaN
 func Atanh(x float64) float64 {
 	const NearZero = 1.0 / (1 << 28) // 2**-28
 	// special cases
+	// 特殊情况
 	switch {
 	case x < -1 || x > 1 || IsNaN(x):
 		return NaN()

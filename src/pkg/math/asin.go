@@ -10,17 +10,28 @@ package math
 	They are implemented by computing the arctangent
 	after appropriate range reduction.
 */
+/*
+	浮点数反正弦和反余弦。
+
+	在适当减少范围后，它们通过计算反正切来实现。
+*/
 
 // Asin returns the arcsine of x.
 //
 // Special cases are:
 //	Asin(±0) = ±0
 //	Asin(x) = NaN if x < -1 or x > 1
+
+// Asin 返回 x 的反正弦值。
+//
+// 特殊情况为：
+//	Asin(±0) = ±0
+//	Asin(x)  = NaN（若 x < -1 或 x >）
 func Asin(x float64) float64
 
 func asin(x float64) float64 {
 	if x == 0 {
-		return x // special case
+		return x // special case // 特殊情况
 	}
 	sign := false
 	if x < 0 {
@@ -28,7 +39,7 @@ func asin(x float64) float64 {
 		sign = true
 	}
 	if x > 1 {
-		return NaN() // special case
+		return NaN() // special case // 特殊情况
 	}
 
 	temp := Sqrt(1 - x*x)
@@ -48,6 +59,11 @@ func asin(x float64) float64 {
 //
 // Special case is:
 //	Acos(x) = NaN if x < -1 or x > 1
+
+// Acos 返回 x 的反余弦值。
+//
+// 特殊情况为：
+//	Acos(x) = NaN（若 x < -1 或 x > 1）
 func Acos(x float64) float64
 
 func acos(x float64) float64 {

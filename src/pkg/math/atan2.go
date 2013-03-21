@@ -26,10 +26,32 @@ package math
 //	Atan2(y<0, -Inf) = -Pi
 //	Atan2(+Inf, x) = +Pi/2
 //	Atan2(-Inf, x) = -Pi/2
+
+// Atan2 返回 y/x 的反正切值，通过二者的符号决定其返回值的象限。
+//
+// 特殊情况为（按顺序）：
+//	Atan2(y, NaN)     = NaN
+//	Atan2(NaN, x)     = NaN
+//	Atan2(+0, x>=0)   = +0
+//	Atan2(-0, x>=0)   = -0
+//	Atan2(+0, x<=-0)  = +Pi
+//	Atan2(-0, x<=-0)  = -Pi
+//	Atan2(y>0, 0)     = +Pi/2
+//	Atan2(y<0, 0)     = -Pi/2
+//	Atan2(+Inf, +Inf) = +Pi/4
+//	Atan2(-Inf, +Inf) = -Pi/4
+//	Atan2(+Inf, -Inf) = 3Pi/4
+//	Atan2(-Inf, -Inf) = -3Pi/4
+//	Atan2(y, +Inf)    = 0
+//	Atan2(y>0, -Inf)  = +Pi
+//	Atan2(y<0, -Inf)  = -Pi
+//	Atan2(+Inf, x)    = +Pi/2
+//	Atan2(-Inf, x)    = -Pi/2
 func Atan2(y, x float64) float64
 
 func atan2(y, x float64) float64 {
 	// special cases
+	// 特殊情况
 	switch {
 	case IsNaN(y) || IsNaN(x):
 		return NaN()
@@ -60,6 +82,7 @@ func atan2(y, x float64) float64 {
 	}
 
 	// Call atan and determine the quadrant.
+	// 调用 atan 并决定其象限。
 	q := Atan(y / x)
 	if x < 0 {
 		if q <= 0 {

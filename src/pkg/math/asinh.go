@@ -30,12 +30,36 @@ package math
 //	         := sign(x)*log1p(|x| + x**2/(1 + sqrt(1+x**2)))
 //
 
+// 原始C代码、详细注释、下面的常量以及此通知来自
+// FreeBSD 的 /usr/src/lib/msun/src/s_asinh.c 文件。
+// 此Go代码为原始C代码的简化版本。
+//
+//（版权声明见上。）
+//
+// asinh(x)
+// 方法：
+//	基于
+//	        asinh(x) = sign(x) * log [ |x| + sqrt(x*x+1) ]
+//	我们有
+//	若 1+x*x=1， 则 asinh(x) := x；                                    否则
+//	若 |x| 很大，则 asinh(x) := sign(x)*(log(x)+ln2))；                否则
+//	若 |x|>2，   则 asinh(x) := sign(x)*log(2|x|+1/(|x|+sqrt(x*x+1)))；否则
+//	                asinh(x) := sign(x)*log1p(|x| + x**2/(1 + sqrt(1+x**2)))。
+//
+
 // Asinh returns the inverse hyperbolic sine of x.
 //
 // Special cases are:
 //	Asinh(±0) = ±0
 //	Asinh(±Inf) = ±Inf
 //	Asinh(NaN) = NaN
+
+// Asinh 返回 x 的反双曲正弦值。
+//
+// 特殊情况为：
+//	Asinh(±0)   = ±0
+//	Asinh(±Inf) = ±Inf
+//	Asinh(NaN)  = NaN
 func Asinh(x float64) float64 {
 	const (
 		Ln2      = 6.93147180559945286227e-01 // 0x3FE62E42FEFA39EF
@@ -43,6 +67,7 @@ func Asinh(x float64) float64 {
 		Large    = 1 << 28                    // 2**28
 	)
 	// special cases
+	// 特殊情况
 	if IsNaN(x) || IsInf(x, 0) {
 		return x
 	}

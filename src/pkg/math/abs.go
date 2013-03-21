@@ -9,6 +9,11 @@ package math
 // Special cases are:
 //	Abs(±Inf) = +Inf
 //	Abs(NaN) = NaN
+
+// Abs 返回 x 的绝对值。
+// 特殊情况为：
+//	Abs(±Inf) = +Inf
+//	Abs(NaN)  = NaN
 func Abs(x float64) float64
 
 func abs(x float64) float64 {
@@ -16,7 +21,7 @@ func abs(x float64) float64 {
 	case x < 0:
 		return -x
 	case x == 0:
-		return 0 // return correctly abs(-0)
+		return 0 // return correctly abs(-0) // 返回正确的 abs(-0)
 	}
 	return x
 }

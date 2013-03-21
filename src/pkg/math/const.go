@@ -3,10 +3,15 @@
 // license that can be found in the LICENSE file.
 
 // Package math provides basic constants and mathematical functions.
+
+// math 包提供了基本常数和数学函数。
 package math
 
 // Mathematical constants.
 // Reference: http://oeis.org/Axxxxxx
+
+// 数学常数。
+// 引用自：http://oeis.org/Axxxxxx
 const (
 	E   = 2.71828182845904523536028747135266249775724709369995957496696763 // A001113
 	Pi  = 3.14159265358979323846264338327950288419716939937510582097494459 // A000796
@@ -26,6 +31,10 @@ const (
 // Floating-point limit values.
 // Max is the largest finite value representable by the type.
 // SmallestNonzero is the smallest positive, non-zero value representable by the type.
+
+// 浮点数极限值。
+// Max 为该类型可表示的最大有限值。
+// SmallestNonzero 为该类型可表示的最小非零负值。
 const (
 	MaxFloat32             = 3.40282346638528859811704183484516925440e+38  // 2**127 * (2**24 - 1) / 2**23
 	SmallestNonzeroFloat32 = 1.401298464324817070923729583289916131280e-45 // 1 / 2**(127 - 1 + 23)
@@ -35,6 +44,7 @@ const (
 )
 
 // Integer limit values.
+// 整数极限值。
 const (
 	MaxInt8   = 1<<7 - 1
 	MinInt8   = -1 << 7

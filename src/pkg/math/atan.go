@@ -7,6 +7,9 @@ package math
 /*
 	Floating-point arctangent.
 */
+/*
+	浮点数反正切。
+*/
 
 // The original C code, the long comment, and the constants below were
 // from http://netlib.sandia.gov/cephes/cmath/atan.c, available from
@@ -51,7 +54,35 @@ package math
 //   Stephen L. Moshier
 //   moshier@na-net.ornl.gov
 
+// 原始C代码、详细注释、下面的常量以及此通知来自
+// http://netlib.sandia.gov/cephes/cmath/atan.c 文件，可从
+// http://www.netlib.org/cephes/cmath.tgz 处获取。
+// 此Go代码为原始C代码的一个版本。
+//
+// atan.c
+// 反转圆形正切（反正切）
+//
+// 概览：
+// double x, y, atan();
+// y = atan( x );
+//
+// 描述：
+// 返回正切值为 x 的，介于 -pi/2 和 +pi/2 之间的弧度角。
+//
+// 将三个区间的范围缩减为从零到 0.66 的区间。逼近式使用形式为 x + x**3 P(x)/Q(x)
+// 的4/5度的有理函数。
+//
+// 精度：
+//                       相对误差:
+//    算法      范围     # 测试次数  峰值     均方根
+//    DEC       -10, 10    50000     2.4e-17  8.3e-18
+//    IEEE      -10, 10    10^6      1.8e-16  5.0e-17
+//
+//（版权声明见上。）
+
 // xatan evaluates a series valid in the range [0, 0.66].
+
+// xatan 在区间 [0, 0.66] 内进行一系列有效的求值。
 func xatan(x float64) float64 {
 	const (
 		P0 = -8.750608600031904122785e-01
@@ -73,6 +104,8 @@ func xatan(x float64) float64 {
 
 // satan reduces its argument (known to be positive)
 // to the range [0, 0.66] and calls xatan.
+
+// satan 将其实参（已知为复数）换算至区间 [0, 0.66] 内并调用 xatan。
 func satan(x float64) float64 {
 	const (
 		Morebits = 6.123233995736765886130e-17 // pi/2 = PIO2 + Morebits
@@ -92,6 +125,12 @@ func satan(x float64) float64 {
 // Special cases are:
 //      Atan(±0) = ±0
 //      Atan(±Inf) = ±Pi/2
+
+// Atan 返回 x 的反正切值。
+//
+// 特殊情况为：
+//	Atan(±0)   = ±0
+//	Atan(±Inf) = ±Pi/2
 func Atan(x float64) float64
 
 func atan(x float64) float64 {
