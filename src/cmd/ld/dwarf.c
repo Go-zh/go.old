@@ -154,6 +154,7 @@ enum
 	DW_ABRV_IFACETYPE,
 	DW_ABRV_MAPTYPE,
 	DW_ABRV_PTRTYPE,
+	DW_ABRV_BARE_PTRTYPE, // only for void*, no DW_AT_type attr to please gdb 6.
 	DW_ABRV_SLICETYPE,
 	DW_ABRV_STRINGTYPE,
 	DW_ABRV_STRUCTTYPE,
@@ -305,6 +306,12 @@ static struct DWAbbrev {
 		DW_TAG_pointer_type, DW_CHILDREN_no,
 		DW_AT_name,	DW_FORM_string,
 		DW_AT_type,	DW_FORM_ref_addr,
+		0, 0
+	},
+	/* BARE_PTRTYPE */
+	{
+		DW_TAG_pointer_type, DW_CHILDREN_no,
+		DW_AT_name,	DW_FORM_string,
 		0, 0
 	},
 
@@ -717,7 +724,7 @@ putattrs(int abbrev, DWAttr* attr)
 				attrs[af->attr]->value,
 				attrs[af->attr]->data);
 		else
-			putattr(abbrev, af->form, 0, 0, 0);
+			putattr(abbrev, af->form, 0, 0, nil);
 }
 
 static void putdie(DWDie* die);
@@ -1009,8 +1016,7 @@ defgotype(Sym *gotype)
 		break;
 
 	case KindUnsafePointer:
-		die = newdie(&dwtypes, DW_ABRV_PTRTYPE, name);
-		newrefattr(die, DW_AT_type, find(&dwtypes, "void"));
+		die = newdie(&dwtypes, DW_ABRV_BARE_PTRTYPE, name);
 		break;
 
 	default:
@@ -1125,32 +1131,16 @@ mkinternaltypename(char *base, char *arg1, char *arg2)
 }
 
 
-// synthesizemaptypes is way too closely married to runtime/hashmap.c
-enum {
-	MaxValsize = 256 - 64
-};
-
 static void
 synthesizemaptypes(DWDie *die)
 {
 
-	DWDie *hash, *hash_subtable, *hash_entry,
-		*dwh, *dwhs, *dwhe, *dwhash, *keytype, *valtype, *fld;
-	int hashsize, keysize, valsize, datsize, valsize_in_hash, datavo;
-	DWAttr *a;
+	DWDie *hash, *dwh, *keytype, *valtype;
 
-	hash		= walktypedef(defgotype(lookup_or_diag("type.runtime.hmap")));
-	hash_subtable	= walktypedef(defgotype(lookup_or_diag("type.runtime.hash_subtable")));
-	hash_entry	= walktypedef(defgotype(lookup_or_diag("type.runtime.hash_entry")));
+	hash		= defgotype(lookup_or_diag("type.runtime.hmap"));
 
-	if (hash == nil || hash_subtable == nil || hash_entry == nil)
+	if (hash == nil)
 		return;
-
-	dwhash = (DWDie*)getattr(find_or_diag(hash_entry, "hash"), DW_AT_type)->data;
-	if (dwhash == nil)
-		return;
-
-	hashsize = getattr(dwhash, DW_AT_byte_size)->value;
 
 	for (; die != nil; die = die->link) {
 		if (die->abbrev != DW_ABRV_MAPTYPE)
@@ -1159,63 +1149,12 @@ synthesizemaptypes(DWDie *die)
 		keytype = (DWDie*) getattr(die, DW_AT_internal_key_type)->data;
 		valtype = (DWDie*) getattr(die, DW_AT_internal_val_type)->data;
 
-		a = getattr(keytype, DW_AT_byte_size);
-		keysize = a ? a->value : PtrSize;  // We don't store size with Pointers
-
-		a = getattr(valtype, DW_AT_byte_size);
-		valsize = a ? a->value : PtrSize;
-
-		// This is what happens in hash_init and makemap_c
-		valsize_in_hash = valsize;
-		if (valsize > MaxValsize)
-			valsize_in_hash = PtrSize;
-		datavo = keysize;
-		if (valsize_in_hash >= PtrSize)
-			datavo = rnd(keysize, PtrSize);
-		datsize = datavo + valsize_in_hash;
-		if (datsize < PtrSize)
-			datsize = PtrSize;
-		datsize = rnd(datsize, PtrSize);
-
-		// Construct struct hash_entry<K,V>
-		dwhe = newdie(&dwtypes, DW_ABRV_STRUCTTYPE,
-			mkinternaltypename("hash_entry",
-				getattr(keytype, DW_AT_name)->data,
-				getattr(valtype, DW_AT_name)->data));
-
-		fld = newdie(dwhe, DW_ABRV_STRUCTFIELD, "hash");
-		newrefattr(fld, DW_AT_type, dwhash);
-		newmemberoffsetattr(fld, 0);
-
-		fld = newdie(dwhe, DW_ABRV_STRUCTFIELD, "key");
-		newrefattr(fld, DW_AT_type, keytype);
-		newmemberoffsetattr(fld, hashsize);
-
-		fld = newdie(dwhe, DW_ABRV_STRUCTFIELD, "val");
-		if (valsize > MaxValsize)
-			valtype = defptrto(valtype);
-		newrefattr(fld, DW_AT_type, valtype);
-		newmemberoffsetattr(fld, hashsize + datavo);
-		newattr(dwhe, DW_AT_byte_size, DW_CLS_CONSTANT, hashsize + datsize, nil);
-
-		// Construct hash_subtable<hash_entry<K,V>>
-		dwhs = newdie(&dwtypes, DW_ABRV_STRUCTTYPE,
-			mkinternaltypename("hash_subtable",
-				getattr(keytype, DW_AT_name)->data,
-				getattr(valtype, DW_AT_name)->data));
-		copychildren(dwhs, hash_subtable);
-		substitutetype(dwhs, "last", defptrto(dwhe));
-		substitutetype(dwhs, "entry", dwhe);  // todo: []hash_entry with dynamic size
-		newattr(dwhs, DW_AT_byte_size, DW_CLS_CONSTANT,
-			getattr(hash_subtable, DW_AT_byte_size)->value, nil);
-
 		// Construct hash<K,V>
 		dwh = newdie(&dwtypes, DW_ABRV_STRUCTTYPE,
 			mkinternaltypename("hash",
 				getattr(keytype, DW_AT_name)->data,
 				getattr(valtype, DW_AT_name)->data));
 		copychildren(dwh, hash);
-		substitutetype(dwh, "st", defptrto(dwhs));
 		newattr(dwh, DW_AT_byte_size, DW_CLS_CONSTANT,
 			getattr(hash, DW_AT_byte_size)->value, nil);
 
@@ -2193,8 +2132,7 @@ dwarfemitdebugsections(void)
 	// Some types that must exist to define other ones.
 	newdie(&dwtypes, DW_ABRV_NULLTYPE, "<unspecified>");
 	newdie(&dwtypes, DW_ABRV_NULLTYPE, "void");
-	newrefattr(newdie(&dwtypes, DW_ABRV_PTRTYPE, "unsafe.Pointer"),
-		DW_AT_type, find(&dwtypes, "void"));
+	newdie(&dwtypes, DW_ABRV_BARE_PTRTYPE, "unsafe.Pointer");
 	die = newdie(&dwtypes, DW_ABRV_BASETYPE, "uintptr");  // needed for array size
 	newattr(die, DW_AT_encoding,  DW_CLS_CONSTANT, DW_ATE_unsigned, 0);
 	newattr(die, DW_AT_byte_size, DW_CLS_CONSTANT, PtrSize, 0);

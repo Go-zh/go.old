@@ -4,15 +4,6 @@
 
 package math
 
-// Sqrt returns the square root of x.
-//
-// Special cases are:
-//	Sqrt(+Inf) = +Inf
-//	Sqrt(±0) = ±0
-//	Sqrt(x < 0) = NaN
-//	Sqrt(NaN) = NaN
-func Sqrt(x float64) float64
-
 // The original C code and the long comment below are
 // from FreeBSD's /usr/src/lib/msun/src/e_sqrt.c and
 // came with this notice.  The go code is a simplified
@@ -156,7 +147,6 @@ func Sqrt(x float64) float64
 //	Sqrt(x < 0) = NaN
 //	Sqrt(NaN) = NaN
 
-// TODO(osc): merge更新后un-comment最后一行
 // Sqrt 返回 x 的平方根。
 //
 // 特殊情况为：
@@ -164,7 +154,7 @@ func Sqrt(x float64) float64
 //	Sqrt(±0)    = ±0
 //	Sqrt(x < 0) = NaN
 //	Sqrt(NaN)   = NaN
-// func Sqrt(x float64) float64
+func Sqrt(x float64) float64
 
 func sqrt(x float64) float64 {
 	// special cases

@@ -16,15 +16,15 @@ TODO
 <a href="/doc/go1compat.html">The Go compatibility document</a> promises
 that programs written to the Go 1 language specification will continue to operate,
 and those promises are maintained.
-In the interest of firming up the specification, though, there are some
+In the interest of firming up the specification, though, there are
 details about some error cases that have been clarified.
-There is also some new language features.
+There are also some new language features.
 </p>
 
 <h3 id="divzero">Integer division by zero</h3>
 
 <p>
-In Go 1, integer division by a constant zero produced a runtime panic:
+In Go 1, integer division by a constant zero produced a run-time panic:
 </p>
 
 <pre>
@@ -81,8 +81,8 @@ For example,
 The language allows the implementation to choose whether the <code>int</code> type and
 <code>uint</code> types are 32 or 64 bits. Previous Go implementations made <code>int</code>
 and <code>uint</code> 32 bits on all systems. Both the gc and gccgo implementations
-<a href="http://golang.org/issue/2188">now make
-<code>int</code> and <code>uint</code> 64 bits on 64-bit platforms such as AMD64/x86-64</a>.
+now make
+<code>int</code> and <code>uint</code> 64 bits on 64-bit platforms such as AMD64/x86-64.
 Among other things, this enables the allocation of slices with
 more than 2 billion elements on 64-bit platforms.
 </p>
@@ -142,6 +142,15 @@ func main() {
 
 <p>
 printed <code>"\ud800"</code> in Go 1.0, but prints <code>"\ufffd"</code> in Go 1.1.
+</p>
+
+<p>
+Surrogate-half Unicode values are now illegal in rune and string constants, so constants such as
+<code>'\ud800'</code> and <code>"\ud800"</code> are now rejected by the compilers.
+When written explicitly as UTF-8 encoded bytes,
+such strings can still be created, as in <code>"\xed\xa0\x80"</code>.
+However, when such a string is decoded as a sequence of runes, as in a range loop, it will yield only <code>utf8.RuneError</code>
+values.
 </p>
 
 <p>
@@ -214,7 +223,17 @@ package code.google.com/p/foo/quxx: cannot download, $GOPATH must not be set to 
 </pre>
 
 <p>
-TODO: go test uses  -c with a profile flag.
+The <code>go test</code> command no longer deletes the binary when run with profiling enabled,
+to make it easier to analyze the profile.
+The implementation sets the <code>-c</code> flag automatically, so after running,
+</p>
+
+<pre>
+$ go test -cpuprofile cpuprof.out mypackage
+</pre>
+
+<p>
+the file <code>mypackage.test</code> will be left in the directory where <code>go test</code> was run.
 </p>
 
 <h3 id="gofix">Changes to go fix</h3>
@@ -245,29 +264,39 @@ TODO introduction
 <h3 id="bufio_scanner">bufio.Scanner</h3>
 
 <p>
-TODO
+The various routines to scan textual input in the
+<a href="/pkg/bufio/"><code>bufio</code></a>
+package,
+<a href="/pkg/bufio/#Reader.ReadBytes"><code>ReadBytes</code></a>,
+<a href="/pkg/bufio/#Reader.ReadString"><code>ReadString</code></a>
+and particularly
+<a href="/pkg/bufio/#Reader.ReadLine"><code>ReadLine</code></a>,
+are needlessly complex to use for simple purposes.
+In Go 1.1, a new type,
+<a href="/pkg/bufio/#Scanner"><code>Scanner</code></a>,
+has been added to make it easier to do simple tasks such as
+read the input as a sequence of lines or space-delimited words.
+It simplifies the problem by terminating the scan on problematic
+input such as pathologically long lines, and having a simple
+default: line-oriented input, with each line stripped of its terminator.
+Here is code to reproduce the input a line at a time:
 </p>
 
-<h3 id="debug_elf">debug/elf</h3>
+<pre>
+scanner := bufio.NewScanner(os.Stdin)
+for scanner.Scan() {
+    fmt.Println(scanner.Text()) // Println will add back the final '\n'
+}
+if err := scanner.Err(); err != nil {
+    fmt.Fprintln(os.Stderr, "reading standard input:", err)
+}
+</pre>
 
 <p>
-TODO: Decide whether to keep this change. See CL 6848044.
-</p>
-
-<p>
-Previous versions of the <a href="/debug/elf/"><code>debug/elf</code></a> package
-intentionally skipped over the first
-symbol in the ELF symbol table, since it is always an empty symbol.
-This symbol
-is no longer skipped since indexes into the symbol table returned by <code>debug/elf</code>
-will be different from indexes into the original ELF symbol table.
-Any code that calls the methods
-<a href="/pkg/debug/elf/#File.Symbols"><code>Symbols</code></a>
-or
-<a href="/pkg/debug/elf/#File.ImportedSymbols"><code>ImportedSymbols</code></a>
-of the
-<a href="/pkg/debug/elf/#File"><code>elf.File</code></a>
-type may need to be adjusted to account for the additional symbol and the change in symbol offsets.
+Scanning behavior can be adjusted through a function to control subdividing the input
+(see the documentation for <a href="/pkg/bufio/#SplitFunc"><code>SplitFunc</code></a>),
+but for tough problems or the need to continue past errors, the older interface
+may still be required.
 </p>
 
 <h3 id="net">net</h3>
@@ -305,9 +334,51 @@ methods.
 <h3 id="reflect">reflect</h3>
 
 <p>
-TODO: 
-<code>reflect</code>: Select, ChanOf, MakeFunc, MapOf, SliceOf, Convert, Type.ConvertibleTo
+The <a href="/pkg/reflect/"><code>reflect</code></a> package has several significant additions.
 </p>
+
+<p>
+It is now possible to run a <code>select</code> statement using
+the <code>reflect</code> package; see the description of
+<a href="/pkg/reflect/#Select"><code>Select</code></a>
+and
+<a href="/pkg/reflect/#SelectCase"><code>SelectCase</code></a>
+for details.
+</p>
+
+<p>
+The new method
+<a href="/pkg/reflect/#Value.Convert"><code>Value.Convert</code></a>
+(or
+<a href="/pkg/reflect/#Type"><code>Type.ConvertibleTo</code></a>)
+provides functionality to execute a Go conversion or type assertion operation
+on a
+<a href="/pkg/reflect/#Value"><code>Value</code></a>
+(or test for its possibility).
+</p>
+
+<p>
+The new function
+<a href="/pkg/reflect/#MakeFunc"><code>MakeFunc</code></a>
+creates a wrapper function to make it easier to call a function with existing
+<a href="/pkg/reflect/#Value"><code>Values</code></a>,
+doing the standard Go conversions among the arguments, for instance
+to pass an actual <code>int</code> to a formal <code>interface{}</code>.
+</p>
+
+<p>
+Finally, the new functions
+<a href="/pkg/reflect/#ChanOf"><code>ChanOf</code></a>,
+<a href="/pkg/reflect/#MapOf"><code>MapOf</code></a>
+and
+<a href="/pkg/reflect/#SliceOf"><code>SliceOf</code></a>
+construct new
+<a href="/pkg/reflect/#Type"><code>Types</code></a>
+from existing types, for example to construct a the type <code>[]T</code> given
+only <code>T</code>.
+</p>
+
+
 
 <h3 id="runtime">runtime</h3>
 
@@ -421,24 +492,54 @@ The <a href="/pkg/crypto/hmac/"><code>crypto/hmac</code></a> package has a new f
 <a href="/pkg/crypto/hmac/#Equal"><code>Equal</code></a>, to compare two MACs.
 </li>
 
-<li> TODO: 
-<code>crypto/x509</code>: DecryptPEMBlock, EncryptPEMBlock etc.
+<li>
+The <a href="/pkg/crypto/x509/"><code>crypto/x509</code></a> package
+now supports PEM blocks (see
+<a href="/pkg/crypto/x509/#DecryptPEMBlock"><code>DecryptPEMBlock</code></a> for instance),
+and a new function
+<a href="/pkg/crypto/x509/#ParseECPrivateKey"><code>ParseECPrivateKey</code></a> to parse elliptic curve private keys.
 </li>
 
-<li> TODO: 
-<code>database/sql/driver</code>: Queryer
+<li>
+The <a href="/pkg/database/sql/"><code>database/sql/</code></a> package
+has a new 
+<a href="/pkg/database/sql/#DB.Ping"><code>Ping</code></a>
+method for its
+<a href="/pkg/database/sql/#DB"><code>DB</code></a>
+type that tests the health of the connection.
 </li>
 
-<li> TODO: 
-<code>database/sql</code>: Ping, SetMaxIdleConns
+<li>
+The <a href="/pkg/database/sql/driver/"><code>database/sql/driver</code></a> package
+has a new
+<a href="/pkg/database/sql/driver/#Queryer"><code>Queryer</code></a>
+interface that a
+<a href="/pkg/database/sql/driver/#Conn"><code>Conn</code></a>
+may implement to improve performance.
 </li>
 
-<li> TODO: 
-<code>encoding/json</code>: Decoder.Buffered, UseNumber, Number
+<li>
+The <a href="/pkg/encoding/json/"><code>encoding/json</code></a> package's
+<a href="/pkg/encoding/json/#Decoder"><code>Decoder</code></a>
+has a new method
+<a href="/pkg/encoding/json/#Decoder.Reader"><code>Reader</code></a>
+to provide access to the remaining data in its buffer,
+as well as a new method
+<a href="/pkg/encoding/json/#Decoder.UseNumber"><code>UseNumber</code></a>
+to unmarshal a value into the new type
+<a href="/pkg/encoding/json/#Number"><code>Number</code></a>,
+a string, rather than a float64.
 </li>
 
-<li> TODO: 
-<code>encoding/xml</code>: EscapeText Encoder.Indent
+<li>
+The <a href="/pkg/encoding/xml/"><code>endoding/xml</code></a> package
+has a new function,
+<a href="/pkg/encoding/xml/#EscapeText"><code>EscapeText</code></a>,
+which writes escaped XML output,
+and a method on
+<a href="/pkg/encoding/xml/#Encoder"><code>Encoder</code></a>,
+<a href="/pkg/encoding/xml/#Encoder.Indent"><code>Indent</code></a>,
+to specify indented output.
 </li>
 
 <li>
@@ -455,8 +556,15 @@ information that the <a href="/cmd/godoc/"><code>godoc</code></a>
 command can filter or present according to the value of the <code>-notes</code> flag.
 </li>
 
-<li> TODO: 
-<code>go/format</code>: Node, Source
+<li>
+A new package, <a href="/pkg/go/format/"><code>go/format</code></a>, provides
+a convenient way for a program to access the formatting capabilities of <code>gofmt</code>.
+It has two functions,
+<a href="/pkg/go/format/#Node"><code>Node</code></a> to format a Go parser
+<a href="/pkg/go/ast/#Node"><code>Node</code></a>,
+and
+<a href="/pkg/go/format/#Source"><code>Source</code></a>
+to format arbitrary Go source code.
 </li>
 
 <li>
@@ -498,8 +606,12 @@ and
 <a href="/pkg/math/big/#Rat.SetFloat64"><code>SetFloat64</code></a>.
 </li>
 
-<li> TODO: 
-<code>mime/multipart</code>: Writer.SetBoundary
+<li>
+The <a href="/pkg/mime/multipart/"><code>mime/multipart</code></a> package
+has a new method for its
+<a href="/pkg/mime/multipart/#Writer"><code>Writer</code></a>,
+<a href="/pkg/mime/multipart/#Writer.SetBoundary"><code>SetBoundary</code></a>,
+to define the boundary separator used to package the output.
 </li>
 
 <li>
@@ -518,11 +630,15 @@ The new <a href="/pkg/net/http/cookiejar/">net/http/cookiejar</a> package provid
 <code>net/smtp</code>: Client.Hello
 </li>
 
-<li> TODO: 
-<code>net/textproto</code>: TrimBytes, TrimString
+<li>
+The <a href="/pkg/net/textproto/"><code>net/textproto</code></a> package
+has two new functions,
+<a href="/pkg/net/textproto/#TrimBytes"><code>TrimBytes</code></a> and
+<a href="/pkg/net/textproto/#TrimString"><code>TrimString</code></a>,
+which do ASCII-only trimming of leading and trailing spaces.
 </li>
 
-<li>
+<li> TODO:
 <code>net</code>: DialOption, DialOpt, ListenUnixgram, LookupNS, IPConn.ReadMsgIP, IPConn.WriteMsgIP, UDPConn.ReadMsgUDP, UDPConn.WriteMsgUDP, UnixConn.CloseRead, UnixConn.CloseWrite
 </li>
 
@@ -530,8 +646,9 @@ The new <a href="/pkg/net/http/cookiejar/">net/http/cookiejar</a> package provid
 The new method <a href="/pkg/os/#FileMode.IsRegular"><code>os.FileMode.IsRegular</code> </a> makes it easy to ask if a file is a plain file.
 </li>
 
-<li> TODO: 
-<code>pkg/image</code>: new subsamplings
+<li>
+The <a href="/pkg/image/jpeg/"><code>image/jpeg</code></a> package now
+reads progressive JPEG files and handles a few more subsampling configurations.
 </li>
 
 <li>
@@ -543,8 +660,17 @@ method, while
 strings into pieces based on separators defined by the regular expression.
 </li>
 
-<li> TODO: 
-<code>runtime/debug</code>: FreeOSMemory, ReadGCStats, SetGCPercent
+<li>
+The <a href="/pkg/runtime/debug/"><code>runtime/debug</code></a> package
+has three new functions regarding memory usage.
+The <a href="/pkg/runtime/debug/#FreeOSMemory"><code>FreeOSMemory</code></a>
+function triggers a run of the garbage collector and then attempts to return unused
+memory to the operating system;
+the <a href="/pkg/runtime/debug/#ReadGCStats"><code>ReadGCStats</code></a>
+function retrieves statistics about the collector; and
+<a href="/pkg/runtime/debug/#SetGCPercent"><code>SetGCPercent</code></a>
+provides a programmatic way to control how often the collector runs,
+including disabling it altogether.
 </li>
 
 <li>
