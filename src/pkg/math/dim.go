@@ -10,6 +10,13 @@ package math
 //	Dim(+Inf, +Inf) = NaN
 //	Dim(-Inf, -Inf) = NaN
 //	Dim(x, NaN) = Dim(NaN, x) = NaN
+
+// Dim 返回 x-y 和 0 中较大的数。
+//
+// 特殊情况为：
+//	Dim(+Inf, +Inf)           = NaN
+//	Dim(-Inf, -Inf)           = NaN
+//	Dim(x, NaN) = Dim(NaN, x) = NaN
 func Dim(x, y float64) float64
 
 func dim(x, y float64) float64 {
@@ -23,10 +30,19 @@ func dim(x, y float64) float64 {
 //	Max(x, NaN) = Max(NaN, x) = NaN
 //	Max(+0, ±0) = Max(±0, +0) = +0
 //	Max(-0, -0) = -0
+
+// Max 返回 x 和 y 中较大的数。
+//
+// 特殊情况为：
+//	Max(x, +Inf) = Max(+Inf, x) = +Inf
+//	Max(x, NaN)  = Max(NaN, x)  = NaN
+//	Max(+0, ±0)  = Max(±0, +0)  = +0
+//	Max(-0, -0)  = -0
 func Max(x, y float64) float64
 
 func max(x, y float64) float64 {
 	// special cases
+	// 特殊情况
 	switch {
 	case IsInf(x, 1) || IsInf(y, 1):
 		return Inf(1)
@@ -50,10 +66,18 @@ func max(x, y float64) float64 {
 //	Min(x, -Inf) = Min(-Inf, x) = -Inf
 //	Min(x, NaN) = Min(NaN, x) = NaN
 //	Min(-0, ±0) = Min(±0, -0) = -0
+
+// Min 返回 x 和 y 中较小的数。
+//
+// 特殊情况为：
+//	Min(x, -Inf) = Min(-Inf, x) = -Inf
+//	Min(x, NaN)  = Min(NaN, x)  = NaN
+//	Min(-0, ±0)  = Min(±0, -0)  = -0
 func Min(x, y float64) float64
 
 func min(x, y float64) float64 {
 	// special cases
+	// 特殊情况
 	switch {
 	case IsInf(x, -1) || IsInf(y, -1):
 		return Inf(-1)

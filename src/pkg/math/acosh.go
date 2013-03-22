@@ -63,9 +63,9 @@ package math
 // Acosh 返回 x 的反双曲余弦值。
 //
 // 特殊情况为：
-//	Acosh(+Inf) = +Inf
-//	Acosh(x)    = NaN if x < 1
-//	Acosh(NaN)  = NaN
+//	             Acosh(+Inf) = +Inf
+//	若 x < 1，则 Acosh(x)    = NaN
+//	             Acosh(NaN)  = NaN
 func Acosh(x float64) float64 {
 	const (
 		Ln2   = 6.93147180559945286227e-01 // 0x3FE62E42FEFA39EF

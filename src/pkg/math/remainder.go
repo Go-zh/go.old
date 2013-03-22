@@ -26,6 +26,20 @@ package math
 // Method :
 //      Based on Mod() returning  x - [x/y]chopped * y  exactly.
 
+// 原始C代码、详细注释、下面的常量以及此通知来自
+// FreeBSD 的 /usr/src/lib/msun/src/e_remainder.c 文件。
+// 此Go代码为原始C代码的简化版本。
+//
+//（版权声明见上。）
+//
+// __ieee754_remainder(x,y)
+// 返回：
+//      若以无限精度运算，则返回 x REM y  =  x - [x/y]*y，其中 [x/y]
+//      为最接近 x/y 的（无限位）整数（若有两种选择，取偶数）is the (infinite bit)
+//      integer nearest x/y (in half way cases, choose the even one).
+// Method :
+//      Based on Mod() returning  x - [x/y]chopped * y  exactly.
+
 // Remainder returns the IEEE 754 floating-point remainder of x/y.
 //
 // Special cases are:

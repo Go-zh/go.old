@@ -6,6 +6,8 @@ package math
 
 // Copysign returns a value with the magnitude
 // of x and the sign of y.
+
+// Copysign 的返回值由 x 的量和 y 的符号构成。
 func Copysign(x, y float64) float64 {
 	const sign = 1 << 63
 	return Float64frombits(Float64bits(x)&^sign | Float64bits(y)&sign)

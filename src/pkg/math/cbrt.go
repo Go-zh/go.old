@@ -11,6 +11,11 @@ package math
 	Mathematical Society.
 	(http://www.jstor.org/stable/2006387?seq=9, accessed 11-Feb-2010)
 */
+/*
+	此算法基于1980年美国数学学会计算数学分类，Gunter Meinardus 与
+	G. D. Taylor 合著的《牛顿法计算方根的最优分割》的一部分。
+	（http://www.jstor.org/stable/2006387?seq=9，于2010年2月11日访问。）
+*/
 
 // Cbrt returns the cube root of x.
 //
@@ -18,6 +23,13 @@ package math
 //	Cbrt(±0) = ±0
 //	Cbrt(±Inf) = ±Inf
 //	Cbrt(NaN) = NaN
+
+// Cbrt 返回 x 的立方根。
+//
+// 特殊情况为：
+//	Cbrt(±0)   = ±0
+//	Cbrt(±Inf) = ±Inf
+//	Cbrt(NaN)  = NaN
 func Cbrt(x float64) float64 {
 	const (
 		A1 = 1.662848358e-01
@@ -34,6 +46,7 @@ func Cbrt(x float64) float64 {
 		C4 = 1.412333954e-01
 	)
 	// special cases
+	// 特殊情况
 	switch {
 	case x == 0 || IsNaN(x) || IsInf(x, 0):
 		return x
@@ -44,11 +57,12 @@ func Cbrt(x float64) float64 {
 		sign = true
 	}
 	// Reduce argument and estimate cube root
+	// 换算实参并估计立方根
 	f, e := Frexp(x) // 0.5 <= f < 1.0
 	m := e % 3
 	if m > 0 {
 		m -= 3
-		e -= m // e is multiple of 3
+		e -= m // e is multiple of 3 // e 为 3 的倍数。
 	}
 	switch m {
 	case 0: // 0.5 <= f < 1.0
@@ -60,13 +74,15 @@ func Cbrt(x float64) float64 {
 		f *= 0.25 // 0.125 <= f < 0.25
 		f = C1*f + C2 - C3/(C4+f)
 	}
-	y := Ldexp(f, e/3) // e/3 = exponent of cube root
+	y := Ldexp(f, e/3) // e/3 = exponent of cube root // e/3 = 立方根的指数
 
 	// Iterate
+	// 迭代
 	s := y * y * y
 	t := s + x
 	y *= (t + x) / (s + t)
 	// Reiterate
+	// 再次迭代
 	s = (y*y*y - x) / x
 	y -= y * (((14.0/81.0)*s-(2.0/9.0))*s + (1.0 / 3.0)) * s
 	if sign {

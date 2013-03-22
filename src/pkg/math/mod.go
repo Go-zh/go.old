@@ -7,6 +7,9 @@ package math
 /*
 	Floating-point mod function.
 */
+/*
+	浮点取模函数。
+*/
 
 // Mod returns the floating-point remainder of x/y.
 // The magnitude of the result is less than y and its
@@ -18,6 +21,16 @@ package math
 //	Mod(x, 0) = NaN
 //	Mod(x, ±Inf) = x
 //	Mod(x, NaN) = NaN
+
+// Mod 返回 x/y 的浮点余数。
+// 其结果的大小小于 y 且其符号与 x 一致。
+//
+// 特殊情况为：
+//	Mod(±Inf, y) = NaN
+//	Mod(NaN, y)  = NaN
+//	Mod(x, 0)    = NaN
+//	Mod(x, ±Inf) = x
+//	Mod(x, NaN)  = NaN
 func Mod(x, y float64) float64
 
 func mod(x, y float64) float64 {
