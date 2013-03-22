@@ -168,6 +168,7 @@ func Sqrt(x float64) float64
 
 func sqrt(x float64) float64 {
 	// special cases
+	// 特殊情况
 	switch {
 	case x == 0 || IsNaN(x) || IsInf(x, 1):
 		return x
@@ -176,24 +177,29 @@ func sqrt(x float64) float64 {
 	}
 	ix := Float64bits(x)
 	// normalize x
+	// 规范化 x
 	exp := int((ix >> shift) & mask)
-	if exp == 0 { // subnormal x
+	if exp == 0 { // 次规范化 x
 		for ix&1<<shift == 0 {
 			ix <<= 1
 			exp--
 		}
 		exp++
 	}
-	exp -= bias // unbias exponent
+	exp -= bias // unbias exponent // 反偏移指数
 	ix &^= mask << shift
 	ix |= 1 << shift
+	// 若 exp 为奇数，则乘二使其成为偶数
 	if exp&1 == 1 { // odd exp, double x to make it even
 		ix <<= 1
 	}
+	// exp = exp/2，平方根的指数
 	exp >>= 1 // exp = exp/2, exponent of square root
 	// generate sqrt(x) bit by bit
+	// 逐位生成 sqrt(x)
 	ix <<= 1
 	var q, s uint64               // q = sqrt(x)
+	// r = 将位从最高有效位移至最低有效位
 	r := uint64(1 << (shift + 1)) // r = moving bit from MSB to LSB
 	for r != 0 {
 		t := s + r
@@ -206,9 +212,11 @@ func sqrt(x float64) float64 {
 		r >>= 1
 	}
 	// final rounding
-	if ix != 0 { // remainder, result not exact
-		q += q & 1 // round according to extra bit
+	// 最终舍入
+	if ix != 0 { // remainder, result not exact    // 若剩余的结果不精确，
+		q += q & 1 // round according to extra bit // 就根据多余的位舍入。
 	}
+	// 有效数字 + 偏移指数。
 	ix = q>>1 + uint64(exp-1+bias)<<shift // significand + biased exponent
 	return Float64frombits(ix)
 }
