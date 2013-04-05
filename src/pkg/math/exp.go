@@ -4,15 +4,6 @@
 
 package math
 
-// Exp returns e**x, the base-e exponential of x.
-//
-// Special cases are:
-//	Exp(+Inf) = +Inf
-//	Exp(NaN) = NaN
-// Very large values overflow to 0 or +Inf.
-// Very small values underflow to 1.
-func Exp(x float64) float64
-
 // The original C code, the long comment, and the constants
 // below are from FreeBSD's /usr/src/lib/msun/src/e_exp.c
 // and came with this notice.  The go code is a simplified
@@ -89,6 +80,83 @@ func Exp(x float64) float64
 // compiler will convert from decimal to binary accurately enough
 // to produce the hexadecimal values shown.
 
+// 原始C代码、详细注释、下面的常量以及此通知来自
+// FreeBSD 的 /usr/src/lib/msun/src/e_exp.c 文件。
+// 此Go代码为原始C代码的简化版本。
+//
+//（版权声明见上。）
+//
+// exp(x)
+// 返回 x 的指数。
+//
+// 方法：
+//   1. 实参换算：
+//      将 x 转换为 r，使得 |r| <= 0.5*ln2 ~ 0.34658。
+//      给定 x，寻找 r 以及整数 k 使得
+//
+//               x = k*ln2 + r,  |r| <= 0.5*ln2。
+//
+//      为了更高的精度，这里的 r 将被表示为 r = hi-lo。
+//
+//   2. exp(r) 的近似值由特殊的有理函数在区间 [0,0.34658] 上计算：
+//      写法
+//          R(r**2) = r*(exp(r)+1)/(exp(r)-1) = 2 + r*r/6 - r**4/360 + ...
+//      我们在 [0,0.34658] 上用特殊的Remes算法来生成5度的多项式，以逼近 R。
+//      该多项式近似值的最大误差以 2**-59 为界。
+//      换言之，即
+//          R(z) ~ 2.0 + P1*z + P2*z**2 + P3*z**3 + P4*z**4 + P5*z**5
+//              （其中 z=r*r，P1 至 P5 的值将在后面列出。）
+//      且
+//          |                  5          |     -59
+//          | 2.0+P1*z+...+P5*z   -  R(z) | <= 2
+//          |                             |
+//      因此，对 exp(r) 的计算可转换为
+//                             2*r
+//              exp(r) = 1 + -------
+//                            R - r
+//                                 r*R1(r)
+//                     = 1 + r + ----------- （用于更高的精度）
+//                                2 - R1(r)
+//      其中
+//                               2       4             10
+//              R1(r) = r - (P1*r  + P2*r  + ... + P5*r   )。
+//
+//   3. 按比例缩减以获得 exp(x)：
+//      根据步骤1，我们有
+//         exp(x) = 2**k * exp(r)
+//
+// 特殊情况：
+//      exp(INF) 为 INF，exp(NaN) 为 NaN；
+//      exp(-INF) 为 0，且
+//      对于有限的实参，只有 exp(0)=1 是精确的。
+//
+// 精度：
+//      取决于误差分析，其误差总是小于1 ulp（最后的位置单元）。
+//
+// 其它信息：
+//      对于IEEE双精度浮点数
+//          若 x >  7.09782712893383973096e+02 则 exp(x) 向上溢出
+//          若 x < -7.45133219101941108420e+02 则 exp(x) 向下溢出
+//
+//（后文信息只与C源码相关，故不作翻译。）
+
+// Exp returns e**x, the base-e exponential of x.
+//
+// Special cases are:
+//	Exp(+Inf) = +Inf
+//	Exp(NaN) = NaN
+// Very large values overflow to 0 or +Inf.
+// Very small values underflow to 1.
+
+// Exp 返回 e**x，即以 e 为底的 x 次幂。
+//
+// 特殊情况为：
+//	Exp(+Inf) = +Inf
+//	Exp(NaN)  = NaN
+// 非常大的数会向上溢出为 0 或 +Inf。
+// 非常小的数会向下溢出为 1。
+func Exp(x float64) float64
+
 func exp(x float64) float64 {
 	const (
 		Ln2Hi = 6.93147180369123816490e-01
@@ -101,6 +169,7 @@ func exp(x float64) float64 {
 	)
 
 	// special cases
+	// 特殊情况
 	switch {
 	case IsNaN(x) || IsInf(x, 1):
 		return x
@@ -115,6 +184,7 @@ func exp(x float64) float64 {
 	}
 
 	// reduce; computed as r = hi - lo for extra precision.
+	// 分解；通过 r = hi - lo 计算来获取额外的精度。
 	var k int
 	switch {
 	case x < 0:
@@ -126,12 +196,17 @@ func exp(x float64) float64 {
 	lo := float64(k) * Ln2Lo
 
 	// compute
+	// 计算
 	return expmulti(hi, lo, k)
 }
 
 // Exp2 returns 2**x, the base-2 exponential of x.
 //
 // Special cases are the same as Exp.
+
+// Exp2 返回 2**x，即以 2 为底的 x 此指数。
+//
+// 特殊情况与 Exp 相同。
 func Exp2(x float64) float64
 
 func exp2(x float64) float64 {
@@ -144,6 +219,7 @@ func exp2(x float64) float64 {
 	)
 
 	// special cases
+	// 特殊情况
 	switch {
 	case IsNaN(x) || IsInf(x, 1):
 		return x
@@ -157,6 +233,9 @@ func exp2(x float64) float64 {
 
 	// argument reduction; x = r×lg(e) + k with |r| ≤ ln(2)/2.
 	// computed as r = hi - lo for extra precision.
+
+	// 实参换算；x = r×lg(e) + k 其中 |r| ≤ ln(2)/2。
+	// 通过 r = hi - lo 计算来获取额外的精度。
 	var k int
 	switch {
 	case x > 0:
@@ -169,10 +248,13 @@ func exp2(x float64) float64 {
 	lo := -t * Ln2Lo
 
 	// compute
+	// 计算
 	return expmulti(hi, lo, k)
 }
 
 // exp1 returns e**r × 2**k where r = hi - lo and |r| ≤ ln(2)/2.
+
+// exp1 返回 e**r × 2**k，其中 r = hi - lo 且 |r| ≤ ln(2)/2。
 func expmulti(hi, lo float64, k int) float64 {
 	const (
 		P1 = 1.66666666666666019037e-01  /* 0x3FC55555; 0x5555553E */
@@ -187,5 +269,6 @@ func expmulti(hi, lo float64, k int) float64 {
 	c := r - t*(P1+t*(P2+t*(P3+t*(P4+t*P5))))
 	y := 1 - ((lo - (r*c)/(2-c)) - hi)
 	// TODO(rsc): make sure Ldexp can handle boundary k
+	// TODO(rsc): 确认 Ldexp 可处理临界值 k
 	return Ldexp(y, k)
 }

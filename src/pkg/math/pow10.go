@@ -6,6 +6,7 @@ package math
 
 // This table might overflow 127-bit exponent representations.
 // In that case, truncate it after 1.0e38.
+// 此表可能从127位的指数表示中溢出，此时就会从 1.0e38 之后截断。
 var pow10tab [70]float64
 
 // Pow10 returns 10**e, the base-10 exponential of e.
@@ -13,6 +14,12 @@ var pow10tab [70]float64
 // Special cases are:
 //	Pow10(e) = +Inf for e > 309
 //	Pow10(e) = 0 for e < -324
+
+// Pow10 返回 10**e，即以 10 为底的 e 次幂。
+//
+// 特殊情况为：
+//	对于 e >  309，有 Pow10(e) = +Inf
+//	对于 e < -324，有 Pow10(e) = 0
 func Pow10(e int) float64 {
 	if e <= -325 {
 		return 0

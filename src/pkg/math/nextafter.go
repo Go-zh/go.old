@@ -10,8 +10,15 @@ package math
 // Special cases are:
 //      Nextafter(NaN, y) = NaN
 //      Nextafter(x, NaN) = NaN
+
+// Nextafter 返回 x 之后直到 y 的下一个可表示的值。若 x == y，则返回 x。
+//
+// 特殊情况为：
+//	Nextafter(NaN, y) = NaN
+//	Nextafter(x, NaN) = NaN
 func Nextafter(x, y float64) (r float64) {
 	switch {
+	// 特殊情况
 	case IsNaN(x) || IsNaN(y): // special case
 		r = NaN()
 	case x == y:

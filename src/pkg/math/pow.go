@@ -12,6 +12,9 @@ func isOddInt(x float64) bool {
 // Special cases taken from FreeBSD's /usr/src/lib/msun/src/e_pow.c
 // updated by IEEE Std. 754-2008 "Section 9.2.1 Special values".
 
+// 特殊情况来自于 FreeBSD 的 /usr/src/lib/msun/src/e_pow.c 文件，
+// 根据IEEE 754-2008标准《章节 9.2.1 特殊值》更新。
+
 // Pow returns x**y, the base-x exponential of y.
 //
 // Special cases are (in order):
@@ -35,6 +38,30 @@ func isOddInt(x float64) bool {
 //	Pow(+Inf, y) = +0 for y < 0
 //	Pow(-Inf, y) = Pow(-0, -y)
 //	Pow(x, y) = NaN for finite x < 0 and finite non-integer y
+
+// Pow 返回 x**y，即以 x 为底的 y 次幂。
+//
+// 特殊情况为（按顺序）：
+//	对于任何 x，    有 Pow(x, ±0) = 1
+//	对于任何 y，    有 Pow(1, y)  = 1
+//	对于任何 x，    有 Pow(x, 1)  = x
+//	                   Pow(NaN, y) = NaN
+//	                   Pow(x, NaN) = NaN
+//	                   Pow(±0, -Inf) = +Inf
+//	                   Pow(±0, +Inf) = +0
+//	对于奇整数       y < 0，有 Pow(±0, y) = ±Inf
+//	对于有限非奇整数 y < 0，有 Pow(±0, y) = +Inf
+//	对于奇整数       y > 0，有 Pow(±0, y) = ±0
+//	对于有限非奇整数 y > 0，有 Pow(±0, y) = +0
+//	                 Pow(-1, ±Inf) = 1
+//	对于 |x| > 1，有 Pow(x, +Inf) = +Inf
+//	对于 |x| > 1，有 Pow(x, -Inf) = +0
+//	对于 |x| < 1，有 Pow(x, +Inf) = +0
+//	对于 |x| < 1，有 Pow(x, -Inf) = +Inf
+//	对于   y > 0，有 Pow(+Inf, y) = +Inf
+//	对于   y < 0，有 Pow(+Inf, y) = +0 for y < 0
+//	                 Pow(-Inf, y) = Pow(-0, -y)
+//	对于有限数 x < 0 和有限非整数 y，有 Pow(x, y) = NaN
 func Pow(x, y float64) float64 {
 	switch {
 	case y == 0 || x == 1:
@@ -96,6 +123,7 @@ func Pow(x, y float64) float64 {
 	}
 
 	// ans = a1 * 2**ae (= 1 for now).
+	// ans = a1 * 2**ae（现在等于 1）。
 	a1 := 1.0
 	ae := 0
 
@@ -112,6 +140,10 @@ func Pow(x, y float64) float64 {
 	// by multiplying in successive squarings
 	// of x according to bits of yi.
 	// accumulate powers of two into exp.
+	//
+	// ans *= x**yi
+	// 根据 yi 的位数，将 x 的连续平方相乘，
+	// 以此将 2 的幂累加成指数。
 	x1, xe := Frexp(x)
 	for i := int64(yi); i != 0; i >>= 1 {
 		if i&1 == 1 {
@@ -129,6 +161,10 @@ func Pow(x, y float64) float64 {
 	// ans = a1*2**ae
 	// if flip { ans = 1 / ans }
 	// but in the opposite order
+	//
+	// ans = a1*2**ae
+	// 若 flip 为真就执行 { ans = 1 / ans }
+	// 否则就以相反的顺序。
 	if flip {
 		a1 = 1 / a1
 		ae = -ae

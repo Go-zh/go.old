@@ -54,6 +54,37 @@ package math
 //   moshier@na-net.ornl.gov
 //
 
+// 原始C代码、详细注释、下面的常量以及此通知来自
+// http://netlib.sandia.gov/cephes/cmath/sin.c 文件，可从
+// http://www.netlib.org/cephes/cmath.tgz 处获取。
+// 此Go代码为原始C代码的简化版本。
+//      tanh.c
+//
+//      双曲正切
+//
+// 概览：
+//
+// double x, y, tanh();
+//
+// y = tanh( x );
+//
+// 描述：
+//
+// 返回从 MINLOG 到 MAXLOG 范围内实参的双曲正切。
+//      MAXLOG = 8.8029691931113054295988e+01 = log(2**127)
+//      MINLOG = -8.872283911167299960540e+01 = log(2**-128)
+//
+// 有理函数用于 |x| < 0.625。此处采用了 Cody & Waite 的公式 x + x**3 P(x)/Q(x)。
+// 否则采用
+//      tanh(x) = sinh(x)/cosh(x) = 1  -  2/(exp(2x) + 1).
+//
+// 精度:
+//                 相对误差:
+//    算法   范围  # 测试次数  峰值       均方根
+//    IEEE   -2,2    30000     2.5e-16    5.8e-17
+//
+//（版权声明见上。）
+
 var tanhP = [...]float64{
 	-9.64399179425052238628E-1,
 	-9.92877231001918586564E1,
@@ -71,6 +102,13 @@ var tanhQ = [...]float64{
 //	Tanh(±0) = ±0
 //	Tanh(±Inf) = ±1
 //	Tanh(NaN) = NaN
+
+// Tanh 返回 x 的双曲正切。
+//
+// 特殊情况为：
+//	Tanh(±0)   = ±0
+//	Tanh(±Inf) = ±1
+//	Tanh(NaN)  = NaN
 func Tanh(x float64) float64 {
 	const MAXLOG = 8.8029691931113054295988e+01 // log(2**127)
 	z := Abs(x)

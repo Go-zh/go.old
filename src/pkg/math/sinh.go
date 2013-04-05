@@ -15,6 +15,15 @@ package math
 	Cosh(x) is computed from the exponential func for
 	all arguments.
 */
+/*
+	浮点数双曲正弦和余弦。
+
+	指数函数用于量级大于 0.5 的实参调用。
+
+	一连串的用于量级大于 0.5 的实参调用。
+
+	Cosh(x) 将指数函数用于所有实参的计算。
+*/
 
 // Sinh returns the hyperbolic sine of x.
 //
@@ -22,8 +31,16 @@ package math
 //	Sinh(±0) = ±0
 //	Sinh(±Inf) = ±Inf
 //	Sinh(NaN) = NaN
+
+// Sinh 返回 x 的双曲正弦值。
+//
+// 特殊情况为：
+//	Sinh(±0)   = ±0
+//	Sinh(±Inf) = ±Inf
+//	Sinh(NaN)  = NaN
 func Sinh(x float64) float64 {
 	// The coefficients are #2029 from Hart & Cheney. (20.36D)
+	// 这些系数源于 Hart & Cheney 的第 #2029 号论文。（20.36D）
 	const (
 		P0 = -0.6307673640497716991184787251e+6
 		P1 = -0.8991272022039509355398013511e+5
@@ -66,6 +83,13 @@ func Sinh(x float64) float64 {
 //	Cosh(±0) = 1
 //	Cosh(±Inf) = +Inf
 //	Cosh(NaN) = NaN
+
+// Cosh 返回 x 的双曲余弦值。
+//
+// 特殊情况为：
+//	Cosh(±0)   = 1
+//	Cosh(±Inf) = +Inf
+//	Cosh(NaN)  = NaN
 func Cosh(x float64) float64 {
 	if x < 0 {
 		x = -x

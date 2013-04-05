@@ -10,6 +10,13 @@ package math
 //	Floor(±0) = ±0
 //	Floor(±Inf) = ±Inf
 //	Floor(NaN) = NaN
+
+// Floor 返回小于或等于 x 的最大整数。
+//
+// 特殊情况为：
+//	Floor(±0)   = ±0
+//	Floor(±Inf) = ±Inf
+//	Floor(NaN)  = NaN
 func Floor(x float64) float64
 
 func floor(x float64) float64 {
@@ -33,6 +40,13 @@ func floor(x float64) float64 {
 //	Ceil(±0) = ±0
 //	Ceil(±Inf) = ±Inf
 //	Ceil(NaN) = NaN
+
+// Ceil 返回大于或等于 x 的最小整数。
+//
+// 特殊情况为：
+//	Ceil(±0)   = ±0
+//	Ceil(±Inf) = ±Inf
+//	Ceil(NaN)  = NaN
 func Ceil(x float64) float64
 
 func ceil(x float64) float64 {
@@ -45,6 +59,13 @@ func ceil(x float64) float64 {
 //	Trunc(±0) = ±0
 //	Trunc(±Inf) = ±Inf
 //	Trunc(NaN) = NaN
+
+// Trunc 返回 x 的整数值
+//
+// 特殊情况为：
+//	Trunc(±0)   = ±0
+//	Trunc(±Inf) = ±Inf
+//	Trunc(NaN)  = NaN
 func Trunc(x float64) float64
 
 func trunc(x float64) float64 {
