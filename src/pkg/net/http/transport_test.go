@@ -7,6 +7,7 @@
 package http_test
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"crypto/rand"
@@ -950,14 +951,28 @@ func TestTransportConcurrency(t *testing.T) {
 		fmt.Fprintf(w, "%v", r.FormValue("echo"))
 	}))
 	defer ts.Close()
-	tr := &Transport{}
+
+	var wg sync.WaitGroup
+	wg.Add(numReqs)
+
+	tr := &Transport{
+		Dial: func(netw, addr string) (c net.Conn, err error) {
+			// Due to the Transport's "socket late
+			// binding" (see idleConnCh in transport.go),
+			// the numReqs HTTP requests below can finish
+			// with a dial still outstanding.  So count
+			// our dials as work too so the leak checker
+			// doesn't complain at us.
+			wg.Add(1)
+			defer wg.Done()
+			return net.Dial(netw, addr)
+		},
+	}
 	defer tr.CloseIdleConnections()
 	c := &Client{Transport: tr}
 	reqs := make(chan string)
 	defer close(reqs)
 
-	var wg sync.WaitGroup
-	wg.Add(numReqs)
 	for i := 0; i < maxProcs*2; i++ {
 		go func() {
 			for req := range reqs {
@@ -1383,6 +1398,114 @@ func TestTransportSocketLateBinding(t *testing.T) {
 	}
 	barRes.Body.Close()
 	dialGate <- true
+}
+
+// Issue 2184
+func TestTransportReading100Continue(t *testing.T) {
+	defer afterTest(t)
+
+	const numReqs = 5
+	reqBody := func(n int) string { return fmt.Sprintf("request body %d", n) }
+	reqID := func(n int) string { return fmt.Sprintf("REQ-ID-%d", n) }
+
+	send100Response := func(w *io.PipeWriter, r *io.PipeReader) {
+		defer w.Close()
+		defer r.Close()
+		br := bufio.NewReader(r)
+		n := 0
+		for {
+			n++
+			req, err := ReadRequest(br)
+			if err == io.EOF {
+				return
+			}
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			slurp, err := ioutil.ReadAll(req.Body)
+			if err != nil {
+				t.Errorf("Server request body slurp: %v", err)
+				return
+			}
+			id := req.Header.Get("Request-Id")
+			resCode := req.Header.Get("X-Want-Response-Code")
+			if resCode == "" {
+				resCode = "100 Continue"
+				if string(slurp) != reqBody(n) {
+					t.Errorf("Server got %q, %v; want %q", slurp, err, reqBody(n))
+				}
+			}
+			body := fmt.Sprintf("Response number %d", n)
+			v := []byte(strings.Replace(fmt.Sprintf(`HTTP/1.1 %s
+Date: Thu, 28 Feb 2013 17:55:41 GMT
+
+HTTP/1.1 200 OK
+Content-Type: text/html
+Echo-Request-Id: %s
+Content-Length: %d
+
+%s`, resCode, id, len(body), body), "\n", "\r\n", -1))
+			w.Write(v)
+			if id == reqID(numReqs) {
+				return
+			}
+		}
+
+	}
+
+	tr := &Transport{
+		Dial: func(n, addr string) (net.Conn, error) {
+			sr, sw := io.Pipe() // server read/write
+			cr, cw := io.Pipe() // client read/write
+			conn := &rwTestConn{
+				Reader: cr,
+				Writer: sw,
+				closeFunc: func() error {
+					sw.Close()
+					cw.Close()
+					return nil
+				},
+			}
+			go send100Response(cw, sr)
+			return conn, nil
+		},
+		DisableKeepAlives: false,
+	}
+	defer tr.CloseIdleConnections()
+	c := &Client{Transport: tr}
+
+	testResponse := func(req *Request, name string, wantCode int) {
+		res, err := c.Do(req)
+		if err != nil {
+			t.Fatalf("%s: Do: %v", name, err)
+		}
+		if res.StatusCode != wantCode {
+			t.Fatalf("%s: Response Statuscode=%d; want %d", name, res.StatusCode, wantCode)
+		}
+		if id, idBack := req.Header.Get("Request-Id"), res.Header.Get("Echo-Request-Id"); id != "" && id != idBack {
+			t.Errorf("%s: response id %q != request id %q", name, idBack, id)
+		}
+		_, err = ioutil.ReadAll(res.Body)
+		if err != nil {
+			t.Fatalf("%s: Slurp error: %v", name, err)
+		}
+	}
+
+	// Few 100 responses, making sure we're not off-by-one.
+	for i := 1; i <= numReqs; i++ {
+		req, _ := NewRequest("POST", "http://dummy.tld/", strings.NewReader(reqBody(i)))
+		req.Header.Set("Request-Id", reqID(i))
+		testResponse(req, fmt.Sprintf("100, %d/%d", i, numReqs), 200)
+	}
+
+	// And some other informational 1xx but non-100 responses, to test
+	// we return them but don't re-use the connection.
+	for i := 1; i <= numReqs; i++ {
+		req, _ := NewRequest("POST", "http://other.tld/", strings.NewReader(reqBody(i)))
+		req.Header.Set("X-Want-Response-Code", "123 Sesame Street")
+		testResponse(req, fmt.Sprintf("123, %d/%d", i, numReqs), 123)
+	}
 }
 
 type proxyFromEnvTest struct {

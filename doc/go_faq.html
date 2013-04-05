@@ -311,6 +311,19 @@ Go试图成为结合解释型编程的轻松、动态类型语言的高效以及
 </p>
 
 <div class="english">
+<p>
+The article <a href="http://talks.golang.org/2012/splash.article">Go at Google</a>
+discusses the background and motivation behind the design of the Go language,
+as well as providing more detail about many of the answers presented in this FAQ.
+</p>
+</div>
+
+<p>
+文章 <a href="http://talks.golang.org/2012/splash.article">Go 在 Google</a>
+中讨论了Go语言设计的其背景和动机，关于本FAQ中的许多为题，该文章提供了更多详情。
+</p>
+
+<div class="english">
 <h3 id="ancestors">
 What are Go's ancestors?</h3>
 </div>
@@ -432,6 +445,21 @@ document server running in a production configuration on
 <a href="http://golang.org">http://golang.org</a> 后台支持的服务。它仅仅是在
 <a href="https://developers.google.com/appengine/">Google应用引擎</a>
 上配置的产品中运行的文档服务。
+</p>
+
+<div class="english">
+<p>
+Other examples include the <a href="https://code.google.com/p/vitess/">Vitess</a>
+system for large-scale SQL installations and Google's download server, <code>dl.google.com</code>,
+which delivers Chrome binaries and other large installables such as <code>apt-get</code>
+packages.
+</p>
+</div>
+
+<p>
+其它例子包括用于大规模SQL安装的 <a href="https://code.google.com/p/vitess/">Vitess</a>
+系统，以及Google的下载服务器 <code>dl.google.com</code>，它用于释放Chrome二进制文件
+和其它类似 <code>apt-get</code> 的大型可安装包。
 </p>
 
 <div class="english">
@@ -800,12 +828,15 @@ for concurrency comes from Hoare's Communicating Sequential Processes, or CSP.
 Occam and Erlang are two well known languages that stem from CSP.
 Go's concurrency primitives derive from a different part of the family tree
 whose main contribution is the powerful notion of channels as first class objects.
+Experience with several earlier languages has shown that the CSP model
+fits well into a procedural language framework.
 </p>
 </div>
 
 <p>
 Hoare的通信序列过程（即CSP）为并发提供了高级的语言支持，它是最成功的模型之一。
 Go的并发原语来自该家族树不同的部分，它最主要的贡献就是将强大的信道概念作为第一类对象。
+从这些早期语言中得到的经验显现出CSP模型很适合用作过程式语言的框架。
 </p>
 
 <div class="english">
@@ -1747,20 +1778,20 @@ There's a lot of history on that topic.  Early on, maps and channels
 were syntactically pointers and it was impossible to declare or use a
 non-pointer instance.  Also, we struggled with how arrays should work.
 Eventually we decided that the strict separation of pointers and
-values made the language harder to use.  Introducing reference types,
-including slices to handle the reference form of arrays, resolved
-these issues.  Reference types add some regrettable complexity to the
-language but they have a large effect on usability: Go became a more
-productive, comfortable language when they were introduced.
+values made the language harder to use.  Changing these
+types to act as references to the associated, shared data structures resolved
+these issues. This change added some regrettable complexity to the
+language but had a large effect on usability: Go became a more
+productive, comfortable language when it was introduced.
 </p>
 </div>
 
 <p>
 这个话题有很长的历史。在早期，映射和在语法上是指针，它不可能通过声明或使用非指针来实例化。
 此外，我们也曾在数组该如何工作的问题上挣扎。最后我们认为，指针和值的严格分离会使语言更难用。
-引入引用类型，包括用切片来处理数组的引用形式，解决了这些问题。
-引用类型向该语言加入了一些令人遗憾的复杂性，但它们在可用性上有更大的效果：
-当它们被引入时，Go成为了一门更高效，更舒适的语言。
+将这些类型的行为修改成对关联的引用，共享数据结构解决了这些问题。
+这种修改向该语言加入了一些令人遗憾的复杂性，但它们在可用性上有更大的效果：
+当它被引入时，Go成为了一门更高效，更舒适的语言。
 </p>
 
 <div class="english">
@@ -2171,7 +2202,7 @@ There are several considerations.
 First, and most important, does the method need to modify the
 receiver?
 If it does, the receiver <em>must</em> be a pointer.
-(Slices and maps are reference types, so their story is a little
+(Slices and maps act as references, so their story is a little
 more subtle, but for instance to change the length of a slice
 in a method the receiver must still be a pointer.)
 In the examples above, if <code>pointerMethod</code> modifies
@@ -2184,7 +2215,7 @@ of passing a value), so changes it makes will be invisible to the caller.
 
 <p>
 首先，也是最重要的一点，方法需要修改接收者吗？如果是，则接收者<em>必须</em>是一个指针。
-（切片和映射是引用类型，所以它们的状况有一点微妙，但比如说要改变方法中切片的长度，
+（切片和映射的行为类似于引用，所以它们的状况有一点微妙，但比如说要改变方法中切片的长度，
 则接受者仍然必须是指针。）在上面的例子中，如果 <code>pointerMethod</code> 修改了
 <code>s</code> 的字段，那么调用者将观察到那些改变，但 <code>valueMethod</code>
 是由调用者实参的副本调用的（这是传值的规定），因此对它的更改对于调用者来说是不可见的。
@@ -2276,10 +2307,10 @@ of Effective Go</a> for more details.
 
 <div class="english">
 <h3 id="q_int_sizes">
-Why is <code>int</code> 32 bits on 64 bit machines?</h3>
+What is the size of an <code>int</code> on a 64 bit machine?</h3>
 </div>
 
-<h3 id="int的大小问题">为什么 <code>int</code> 在64位机器上为32位？</h3>
+<h3 id="int的大小问题"><code>int</code> 在64位机器上的大小是多少？</h3>
 
 <div class="english">
 <p>
@@ -2497,11 +2528,15 @@ run-time support to utilize more than one OS thread.
 <p>
 Programs that perform parallel computation should benefit from an increase in
 <code>GOMAXPROCS</code>.
+However, be aware that
+<a href="http://blog.golang.org/2013/01/concurrency-is-not-parallelism.html">concurrency
+is not parallelism</a>.
 </p>
 </div>
 
 <p>
-执行并行计算的程序应该能从增加 <code>GOMAXPROCS</code> 中获益。
+执行并行计算的程序应该能从增加 <code>GOMAXPROCS</code> 中获益。不过，你必须意识到
+<a href="http://blog.golang.org/2013/01/concurrency-is-not-parallelism.html">并发不是并行</a>。
 </p>
 
 <div class="english">
@@ -2560,6 +2595,19 @@ should recognize such cases and optimize its use of OS threads. For now,
 <p>
 Go的Go程调度并不如所需要的那么好。在将来，它应当能识别这类情况，并优化它对操作系统线程的使用。
 现在，<code>GOMAXPROCS</code> 应当根据每个应用来进行设置。
+</p>
+
+<div class="english">
+<p>
+For more detail on this topic see the talk entitled,
+<a href="http://blog.golang.org/2013/01/concurrency-is-not-parallelism.html">Concurrency
+is not Parallelism</a>.
+</p>
+</div>
+
+<p>
+关于此话题的更多详情见
+<a href="http://blog.golang.org/2013/01/concurrency-is-not-parallelism.html">并发不是并行</a>。
 </p>
 
 <div class="english">
@@ -3024,9 +3072,11 @@ We considered writing <code>gc</code>, the original Go compiler, in Go itself bu
 elected not to do so because of the difficulties of bootstrapping and
 especially of open source distribution&mdash;you'd need a Go compiler to
 set up a Go environment. <code>Gccgo</code>, which came later, makes it possible to
-consider writing a compiler in Go, which might well happen. (Go would be a
+consider writing a compiler in Go, which might well happen.
+(Go would be a
 fine language in which to implement a compiler; a native lexer and
-parser are already available in the <a href="/pkg/go/"><code>go</code></a> package.)
+parser are already available in the <a href="/pkg/go/"><code>go</code></a> package
+and a type checker is in the works.)
 </p>
 </div>
 
@@ -3034,8 +3084,8 @@ parser are already available in the <a href="/pkg/go/"><code>go</code></a> packa
 我们考虑过用Go自身编写官方的Go编译器 <code>gc</code>，但由于自举的困难和开源分布的特殊性，
 我们决定不这样做——你需要一个Go编译器来设置一个Go的环境。<code>gccgo</code>
 出现得稍晚一些，它让考虑使用Go来编写编译器成为了可能，这很有可能发生。
-（Go是实现编辑器的不错的语言；原生的词法分析器和解析器在
-<a href="/pkg/go/"><code>go</code></a> 包中已经可用。）
+（Go是实现编译器的不错的语言；原生的词法分析器和解析器在
+<a href="/pkg/go/"><code>go</code></a> 包中已经可用，类型检查器正在开发。）
 </p>
 
 <div class="english">

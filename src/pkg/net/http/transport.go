@@ -58,7 +58,7 @@ type Transport struct {
 	// Dial specifies the dial function for creating TCP
 	// connections.
 	// If Dial is nil, net.Dial is used.
-	Dial func(net, addr string) (c net.Conn, err error)
+	Dial func(network, addr string) (net.Conn, error)
 
 	// TLSClientConfig specifies the TLS configuration to use with
 	// tls.Client. If nil, the default configuration is used.
@@ -686,6 +686,14 @@ func (pc *persistConn) readLoop() {
 		var resp *Response
 		if err == nil {
 			resp, err = ReadResponse(pc.br, rc.req)
+			if err == nil && resp.StatusCode == 100 {
+				// Skip any 100-continue for now.
+				// TODO(bradfitz): if rc.req had "Expect: 100-continue",
+				// actually block the request body write and signal the
+				// writeLoop now to begin sending it. (Issue 2184) For now we
+				// eat it, since we're never expecting one.
+				resp, err = ReadResponse(pc.br, rc.req)
+			}
 		}
 		hasBody := resp != nil && rc.req.Method != "HEAD" && resp.ContentLength != 0
 
@@ -707,7 +715,10 @@ func (pc *persistConn) readLoop() {
 			resp.Body = &bodyEOFSignal{body: resp.Body}
 		}
 
-		if err != nil || resp.Close || rc.req.Close {
+		if err != nil || resp.Close || rc.req.Close || resp.StatusCode <= 199 {
+			// Don't do keep-alive on error if either party requested a close
+			// or we get an unexpected informational (1xx) response.
+			// StatusCode 100 is already handled above.
 			alive = false
 		}
 

@@ -122,11 +122,15 @@ func convertAssign(dest, src interface{}) error {
 			if d == nil {
 				return errNilPtr
 			}
-			bcopy := make([]byte, len(s))
-			copy(bcopy, s)
-			*d = bcopy
+			*d = cloneBytes(s)
 			return nil
 		case *[]byte:
+			if d == nil {
+				return errNilPtr
+			}
+			*d = cloneBytes(s)
+			return nil
+		case *RawBytes:
 			if d == nil {
 				return errNilPtr
 			}
@@ -135,7 +139,19 @@ func convertAssign(dest, src interface{}) error {
 		}
 	case nil:
 		switch d := dest.(type) {
+		case *interface{}:
+			if d == nil {
+				return errNilPtr
+			}
+			*d = nil
+			return nil
 		case *[]byte:
+			if d == nil {
+				return errNilPtr
+			}
+			*d = nil
+			return nil
+		case *RawBytes:
 			if d == nil {
 				return errNilPtr
 			}
@@ -155,6 +171,26 @@ func convertAssign(dest, src interface{}) error {
 			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
 			reflect.Float32, reflect.Float64:
 			*d = fmt.Sprintf("%v", src)
+			return nil
+		}
+	case *[]byte:
+		sv = reflect.ValueOf(src)
+		switch sv.Kind() {
+		case reflect.Bool,
+			reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+			reflect.Float32, reflect.Float64:
+			*d = []byte(fmt.Sprintf("%v", src))
+			return nil
+		}
+	case *RawBytes:
+		sv = reflect.ValueOf(src)
+		switch sv.Kind() {
+		case reflect.Bool,
+			reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+			reflect.Float32, reflect.Float64:
+			*d = RawBytes(fmt.Sprintf("%v", src))
 			return nil
 		}
 	case *bool:
@@ -226,6 +262,16 @@ func convertAssign(dest, src interface{}) error {
 	}
 
 	return fmt.Errorf("unsupported driver -> Scan pair: %T -> %T", src, dest)
+}
+
+func cloneBytes(b []byte) []byte {
+	if b == nil {
+		return nil
+	} else {
+		c := make([]byte, len(b))
+		copy(c, b)
+		return c
+	}
 }
 
 func asString(src interface{}) string {

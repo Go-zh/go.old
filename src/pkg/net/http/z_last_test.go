@@ -27,7 +27,11 @@ func interestingGoroutines() (gs []string) {
 			strings.Contains(stack, "created by net.startServer") ||
 			strings.Contains(stack, "created by testing.RunTests") ||
 			strings.Contains(stack, "closeWriteAndWait") ||
-			strings.Contains(stack, "testing.Main(") {
+			strings.Contains(stack, "testing.Main(") ||
+			// These only show up with GOTRACEBACK=2; Issue 5005 (comment 28)
+			strings.Contains(stack, "runtime.goexit") ||
+			strings.Contains(stack, "created by runtime.gc") ||
+			strings.Contains(stack, "runtime.MHeap_Scavenger") {
 			continue
 		}
 		gs = append(gs, stack)
@@ -65,8 +69,6 @@ func afterTest(t *testing.T) {
 	if testing.Short() {
 		return
 	}
-	buf := make([]byte, 1<<20)
-	var stacks string
 	var bad string
 	badSubstring := map[string]string{
 		").readLoop(":                                  "a Transport",
@@ -75,9 +77,10 @@ func afterTest(t *testing.T) {
 		"timeoutHandler":                               "a TimeoutHandler",
 		"net.(*netFD).connect(":                        "a timing out dial",
 	}
+	var stacks string
 	for i := 0; i < 4; i++ {
 		bad = ""
-		stacks = string(buf[:runtime.Stack(buf, true)])
+		stacks = strings.Join(interestingGoroutines(), "\n\n")
 		for substr, what := range badSubstring {
 			if strings.Contains(stacks, substr) {
 				bad = what
@@ -90,6 +93,5 @@ func afterTest(t *testing.T) {
 		// shutting down, so give it some time.
 		time.Sleep(250 * time.Millisecond)
 	}
-	gs := interestingGoroutines()
-	t.Errorf("Test appears to have leaked %s:\n%s", bad, strings.Join(gs, "\n\n"))
+	t.Errorf("Test appears to have leaked %s:\n%s", bad, stacks)
 }

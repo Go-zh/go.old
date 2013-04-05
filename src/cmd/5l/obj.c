@@ -114,6 +114,8 @@ main(int argc, char *argv[])
 	flagcount("a", "disassemble output", &debug['a']);
 	flagcount("c", "dump call graph", &debug['c']);
 	flagcount("d", "disable dynamic executable", &debug['d']);
+	flagstr("extld", "linker to run in external mode", &extld);
+	flagstr("extldflags", "flags for external linker", &extldflags);
 	flagcount("f", "ignore version mismatch", &debug['f']);
 	flagcount("g", "disable go package data checks", &debug['g']);
 	flagstr("k", "sym: set field tracking symbol", &tracksym);
@@ -136,9 +138,16 @@ main(int argc, char *argv[])
 	if(argc != 1)
 		usage();
 
-	if(linkmode != LinkInternal) {
+	// getgoextlinkenabled is based on GO_EXTLINK_ENABLED when
+	// Go was built; see ../../make.bash.
+	if(linkmode == LinkAuto && strcmp(getgoextlinkenabled(), "0") == 0)
+		linkmode = LinkInternal;
+
+	if(linkmode == LinkExternal) {
 		diag("only -linkmode=internal is supported");
 		errorexit();
+	} else if(linkmode == LinkAuto) {
+		linkmode = LinkInternal;
 	}
 
 	libinit();
@@ -606,11 +615,15 @@ loop:
 		break;
 
 	case ALOCALS:
+		if(skip)
+			goto casedef;
 		cursym->locals = p->to.offset;
 		pc++;
 		break;
 
 	case ATYPE:
+		if(skip)
+			goto casedef;
 		pc++;
 		goto loop;
 

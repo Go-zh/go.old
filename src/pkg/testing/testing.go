@@ -18,6 +18,8 @@
 //         ...
 //     }
 //
+// Benchmarks
+//
 // Functions of the form
 //     func BenchmarkXxx(*testing.B)
 // are considered benchmarks, and are executed by the "go test" command when
@@ -48,6 +50,8 @@
 //             big.Len()
 //         }
 //     }
+//
+// Examples
 //
 // The package also runs and verifies example code. Example functions may
 // include a concluding line comment that begins with "Output:" and is compared with
@@ -246,11 +250,13 @@ func (c *common) log(s string) {
 }
 
 // Log formats its arguments using default formatting, analogous to Println,
-// and records the text in the error log.
+// and records the text in the error log. The text will be printed only if
+// the test fails or the -test.v flag is set.
 func (c *common) Log(args ...interface{}) { c.log(fmt.Sprintln(args...)) }
 
 // Logf formats its arguments according to the format, analogous to Printf,
-// and records the text in the error log.
+// and records the text in the error log. The text will be printed only if
+// the test fails or the -test.v flag is set.
 func (c *common) Logf(format string, args ...interface{}) { c.log(fmt.Sprintf(format, args...)) }
 
 // Error is equivalent to Log followed by Fail.
@@ -337,6 +343,7 @@ func tRunner(t *T, test *InternalTest) {
 		t.duration = time.Now().Sub(t.start)
 		// If the test panicked, print any test output before dying.
 		if err := recover(); err != nil {
+			t.Fail()
 			t.report()
 			panic(err)
 		}

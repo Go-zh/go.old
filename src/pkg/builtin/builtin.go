@@ -142,6 +142,21 @@ type byte byte
 // 习惯上用它来区别字符值和整数值。
 type rune rune
 
+// iota is a predeclared identifier representing the untyped integer ordinal
+// number of the current const specification in a (usually parenthesized)
+// const declaration. It is zero-indexed.
+
+// iota 为预声明的标识符，它表示常量声明中（一般在括号中），
+// 当前常量规范的无类型化整数序数。它从0开始索引。
+const iota = 0 // Untyped int. // 无类型化 int。
+
+// nil is a predeclared identifier representing the zero value for a
+// pointer, channel, func, interface, map, or slice type.
+
+// nil 为预声明的标示符，它表示指针、信道、函数、接口、映射或切片类型的零值。
+var nil Type // Type must be a pointer, channel, func, interface, map, or slice type
+// Type 必须为指针、信道、函数、接口、映射或切片类型。
+
 // Type is here for the purposes of documentation only. It is a stand-in
 // for any Go type, but represents the same type for any given function
 // invocation.

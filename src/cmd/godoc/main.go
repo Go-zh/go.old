@@ -376,26 +376,26 @@ func main() {
 	}
 
 	// first, try as package unless forced as command
-	var info PageInfo
+	var info *PageInfo
 	if !forceCmd {
 		info = pkgHandler.getPageInfo(abspath, relpath, mode)
 	}
 
 	// second, try as command unless the path is absolute
 	// (the go command invokes godoc w/ absolute paths; don't override)
-	var cinfo PageInfo
+	var cinfo *PageInfo
 	if !filepath.IsAbs(path) {
 		abspath = pathpkg.Join(cmdHandler.fsRoot, path)
 		cinfo = cmdHandler.getPageInfo(abspath, relpath, mode)
 	}
 
 	// determine what to use
-	if info.IsEmpty() {
-		if !cinfo.IsEmpty() {
+	if info == nil || info.IsEmpty() {
+		if cinfo != nil && !cinfo.IsEmpty() {
 			// only cinfo exists - switch to cinfo
 			info = cinfo
 		}
-	} else if !cinfo.IsEmpty() {
+	} else if cinfo != nil && !cinfo.IsEmpty() {
 		// both info and cinfo exist - use cinfo if info
 		// contains only subdirectory information
 		if info.PAst == nil && info.PDoc == nil {
@@ -405,15 +405,19 @@ func main() {
 		}
 	}
 
+	if info == nil {
+		log.Fatalf("%s: no such directory or package", flag.Arg(0))
+	}
 	if info.Err != nil {
 		log.Fatalf("%v", info.Err)
 	}
+
 	if info.PDoc != nil && info.PDoc.ImportPath == target {
 		// Replace virtual /target with actual argument from command line.
 		info.PDoc.ImportPath = flag.Arg(0)
 	}
 
-	// If we have more than one argument, use the remaining arguments for filtering
+	// If we have more than one argument, use the remaining arguments for filtering.
 	if flag.NArg() > 1 {
 		args := flag.Args()[1:]
 		rx := makeRx(args)

@@ -31,6 +31,7 @@
 
 #include	"l.h"
 #include	"lib.h"
+#include	"../ld/elf.h"
 #include	"../../pkg/runtime/stack.h"
 
 #include	<ar.h>
@@ -608,7 +609,7 @@ void
 hostlink(void)
 {
 	char *p, **argv;
-	int i, w, n, argc, len;
+	int c, i, w, n, argc, len;
 	Hostobj *h;
 	Biobuf *f;
 	static char buf[64<<10];
@@ -616,11 +617,22 @@ hostlink(void)
 	if(linkmode != LinkExternal || nerrors > 0)
 		return;
 
-	argv = malloc((10+nhostobj+nldflag)*sizeof argv[0]);
+	c = 0;
+	p = extldflags;
+	while(p != nil) {
+		while(*p == ' ')
+			p++;
+		if(*p == '\0')
+			break;
+		c++;
+		p = strchr(p + 1, ' ');
+	}
+
+	argv = malloc((10+nhostobj+nldflag+c)*sizeof argv[0]);
 	argc = 0;
-	// TODO: Add command-line flag to override gcc path and specify additional leading options.
-	// TODO: Add command-line flag to specify additional trailing options.
-	argv[argc++] = "gcc";
+	if(extld == nil)
+		extld = "gcc";
+	argv[argc++] = extld;
 	switch(thechar){
 	case '8':
 		argv[argc++] = "-m32";
@@ -636,9 +648,12 @@ hostlink(void)
 	argv[argc++] = "-o";
 	argv[argc++] = outfile;
 	
+	if(rpath)
+		argv[argc++] = smprint("-Wl,-rpath,%s", rpath);
+
 	// Force global symbols to be exported for dlopen, etc.
-	// NOTE: May not work on OS X or Windows. We'll see.
-	argv[argc++] = "-rdynamic";
+	if(iself)
+		argv[argc++] = "-rdynamic";
 
 	// already wrote main object file
 	// copy host objects to temporary directory
@@ -675,6 +690,17 @@ hostlink(void)
 	argv[argc++] = smprint("%s/go.o", tmpdir);
 	for(i=0; i<nldflag; i++)
 		argv[argc++] = ldflag[i];
+
+	p = extldflags;
+	while(p != nil) {
+		while(*p == ' ')
+			*p++ = '\0';
+		if(*p == '\0')
+			break;
+		argv[argc++] = p;
+		p = strchr(p + 1, ' ');
+	}
+
 	argv[argc] = nil;
 
 	quotefmtinstall();
@@ -846,17 +872,16 @@ _lookup(char *symb, int v, int creat)
 	Sym *s;
 	char *p;
 	int32 h;
-	int l, c;
+	int c;
 
 	h = v;
 	for(p=symb; c = *p; p++)
 		h = h+h+h + c;
-	l = (p - symb) + 1;
 	// not if(h < 0) h = ~h, because gcc 4.3 -O2 miscompiles it.
 	h &= 0xffffff;
 	h %= NHASH;
 	for(s = hash[h]; s != S; s = s->hash)
-		if(memcmp(s->name, symb, l) == 0)
+		if(strcmp(s->name, symb) == 0)
 			return s;
 	if(!creat)
 		return nil;
@@ -1860,7 +1885,10 @@ genasmsym(void (*put)(Sym*, char*, int, vlong, vlong, int, Sym*))
 		/* frame, locals, args, auto and param after */
 		put(nil, ".frame", 'm', (uint32)s->text->to.offset+PtrSize, 0, 0, 0);
 		put(nil, ".locals", 'm', s->locals, 0, 0, 0);
-		put(nil, ".args", 'm', s->args, 0, 0, 0);
+		if(s->text->textflag & NOSPLIT)
+			put(nil, ".args", 'm', ArgsSizeUnknown, 0, 0, 0);
+		else
+			put(nil, ".args", 'm', s->args, 0, 0, 0);
 
 		for(a=s->autom; a; a=a->link) {
 			// Emit a or p according to actual offset, even if label is wrong.

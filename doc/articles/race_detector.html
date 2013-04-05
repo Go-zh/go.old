@@ -16,7 +16,9 @@
 
 <div class="english">
 <p>
-Data races are one of the most common and hardest to debug types of bugs in concurrent systems.  A data race occurs when two goroutines access the same variable concurrently and at least one of the accesses is a write.  See the <a href="/ref/mem/">The Go Memory Model</a> for details.
+Data races are among the most common and hardest to debug types of bugs in concurrent systems.
+A data race occurs when two goroutines access the same variable concurrently and at least one of the accesses is a write.
+See the <a href="/ref/mem/">The Go Memory Model</a> for details.
 </p>
 </div>
 
@@ -77,7 +79,8 @@ func main() {
 
 <div class="english">
 <p>
-Fortunately, Go includes a built-in data race detector.  To use it, add the <code>-race</code> flag to the go command:
+To help diangose such bugs, Go includes a built-in data race detector.
+To use it, add the <code>-race</code> flag to the go command:
 </p>
 </div>
 
@@ -109,7 +112,9 @@ $ go install -race mypkg // 安装该包
 
 <div class="english">
 <p>
-When the race detector finds a data race in the program, it prints a report.  The report contains stack traces for conflicting accesses, as well as stacks where the involved goroutines were created.  For example:
+When the race detector finds a data race in the program, it prints a report.
+The report contains stack traces for conflicting accesses, as well as stacks where the involved goroutines were created.
+Here is an example:
 </p>
 </div>
 
@@ -161,7 +166,8 @@ Goroutine 184 (running) created at:
 
 <div class="english">
 <p>
-The <code>GORACE</code> environment variable sets race detector options.  The format is:
+The <code>GORACE</code> environment variable sets race detector options.
+The format is:
 </p>
 </div>
 
@@ -187,7 +193,8 @@ The options are:
 <ul>
 <li>
 <code>log_path</code> (default <code>stderr</code>): The race detector writes
-its report to a file named log_path.pid.  The special names <code>stdout</code>
+its report to a file named <code>log_path.<em>pid</em></code>.
+The special names <code>stdout</code>
 and <code>stderr</code> cause reports to be written to standard output and
 standard error, respectively.
 </li>
@@ -204,8 +211,8 @@ from all reported file paths, to make reports more concise.
 
 <li>
 <code>history_size</code> (default <code>1</code>): The per-goroutine memory
-access history is <code>32K * 2**history_size elements</code>. Increasing this
-value can avoid a "failed to restore the stack" error in reports, but at the
+access history is <code>32K * 2**history_size elements</code>.
+Increasing this value can avoid a "failed to restore the stack" error in reports, at the
 cost of increased memory usage.
 </li>
 </div>
@@ -255,9 +262,10 @@ $ GORACE="log_path=/tmp/race/report strip_path_prefix=/my/go/sources/" go test -
 
 <div class="english">
 <p>
-When you build with <code>-race</code> flag, go command defines additional
+When you build with <code>-race</code> flag, the <code>go</code> command defines additional
 <a href="/pkg/go/build/#Build_Constraints">build tag</a> <code>race</code>.
-You can use it to exclude some code/tests under the race detector. For example:
+You can use the tag to exclude some code and tests when running the race detector.
+Some examples:
 </p>
 </div>
 
@@ -321,7 +329,8 @@ func TestBaz(t *testing.T)  {
 <p>
 To start, run your tests using the race detector (<code>go test -race</code>).
 The race detector only finds races that happen at runtime, so it can't find
-races in code paths that are not executed. If your tests have incomplete coverage,
+races in code paths that are not executed.
+If your tests have incomplete coverage,
 you may find more races by running a binary built with <code>-race</code> under a realistic
 workload.
 </p>
@@ -389,9 +398,9 @@ func main() {
 <div class="english">
 <p>
 The variable <code>i</code> in the function literal is the same variable used by the loop, so
-the read in the goroutine races with the loop increment. (This program typically
-prints 55555, not 01234.) The program can be fixed by making a copy of the
-variable:
+the read in the goroutine races with the loop increment.
+(This program typically prints 55555, not 01234.)
+The program can be fixed by making a copy of the variable:
 </p>
 </div>
 
@@ -501,12 +510,12 @@ func ParallelWrite(data []byte) chan error {
 
 <div class="english">
 <p>
-The fix is to introduce new variables in the goroutines (note <code>:=</code>):
+The fix is to introduce new variables in the goroutines (note the use of <code>:=</code>):
 </p>
 </div>
 
 <p>
-其解决方案就是在该Go程中引入新的变量（注意 <code>:=</code>）：
+其解决方案就是在该Go程中引入新的变量（注意对 <code>:=</code> 的使用）：
 </p>
 
 <pre>
@@ -525,14 +534,14 @@ The fix is to introduce new variables in the goroutines (note <code>:=</code>):
 
 <div class="english">
 <p>
-If the following code is called from several goroutines, it leads to bad races on the <code>service</code> map.
-Concurrent reads and writes of a map are not safe:
+If the following code is called from several goroutines, it leads to races on the <code>service</code> map.
+Concurrent reads and writes of the same map are not safe:
 </p>
 </div>
 
 <p>
-若以下代码在多个Go程中调用，就会导致 <code>service</code> 映射产生非常严重的竞争。
-对一个映射的并发读写是不安全的：
+若以下代码在多个Go程中调用，就会导致 <code>service</code> 映射产生竞争。
+对映射的并发读写是不安全的：
 </p>
 
 <pre>
@@ -584,7 +593,8 @@ func LookupService(name string) net.Addr {
 
 <div class="english">
 <p>
-Data races can happen on variables of primitive types as well (<code>bool</code>, <code>int</code>, <code>int64</code>, etc.), like in the following example:
+Data races can happen on variables of primitive types as well (<code>bool</code>, <code>int</code>, <code>int64</code>, etc.),
+as in this example:
 </p>
 </div>
 
@@ -639,7 +649,10 @@ func (w *Watchdog) Start() {
 
 <div class="english">
 <p>
-Even such &ldquo;innocent&rdquo; data races can lead to hard to debug problems caused by (1) non-atomicity of the memory accesses, (2) interference with compiler optimizations and (3) processor memory access reordering issues.
+Even such "innocent" data races can lead to hard-to-debug problems caused by
+non-atomicity of the memory accesses,
+interference with compiler optimizations,
+or reordering issues accessing processor memory .
 </p>
 </div>
 
@@ -651,7 +664,8 @@ Even such &ldquo;innocent&rdquo; data races can lead to hard to debug problems c
 <div class="english">
 <p>
 A typical fix for this race is to use a channel or a mutex.
-To preserve the lock-free behavior, one can also use the <a href="/pkg/sync/atomic/"><code>sync/atomic</code></a> package.
+To preserve the lock-free behavior, one can also use the
+<a href="/pkg/sync/atomic/"><code>sync/atomic</code></a> package.
 </p>
 </div>
 

@@ -2856,11 +2856,19 @@ walkcompare(Node **np, NodeList **init)
 	typecheck(&call, Etop);
 	walkstmt(&call);
 	*init = list(*init, call);
-	
-	if(n->op == OEQ)
-		r = tempbool;
-	else
-		r = nod(ONOT, tempbool, N);
+
+	// tempbool cannot be used directly as multiple comparison
+	// expressions may exist in the same statement. Create another
+	// temporary to hold the value (its address is not taken so it can
+	// be optimized away).
+	r = temp(types[TBOOL]);
+	a = nod(OAS, r, tempbool);
+	typecheck(&a, Etop);
+	walkstmt(&a);
+	*init = list(*init, a);
+
+	if(n->op != OEQ)
+		r = nod(ONOT, r, N);
 	typecheck(&r, Erv);
 	walkexpr(&r, init);
 	*np = r;
@@ -2889,14 +2897,29 @@ hard:
 static int
 samecheap(Node *a, Node *b)
 {
-	if(a == N || b == N || a->op != b->op)
-		return 0;
-	
-	switch(a->op) {
-	case ONAME:
-		return a == b;
-	// TODO: Could do more here, but maybe this is enough.
-	// It's all cheapexpr does.
+	Node *ar, *br;
+	while(a != N && b != N && a->op == b->op) {
+		switch(a->op) {
+		default:
+			return 0;
+		case ONAME:
+			return a == b;
+		case ODOT:
+		case ODOTPTR:
+			ar = a->right;
+			br = b->right;
+			if(ar->op != ONAME || br->op != ONAME || ar->sym != br->sym)
+				return 0;
+			break;
+		case OINDEX:
+			ar = a->right;
+			br = b->right;
+			if(!isconst(ar, CTINT) || !isconst(br, CTINT) || mpcmpfixfix(ar->val.u.xval, br->val.u.xval) != 0)
+				return 0;
+			break;
+		}
+		a = a->left;
+		b = b->left;
 	}
 	return 0;
 }

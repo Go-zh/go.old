@@ -9,49 +9,69 @@
 }-->
 
 <div class="english">
-<h2 id="introduction">Introduction</h2>
+<h2 id="download">Download the Go distribution</h2>
 </div>
 
-<h2 id="前言">前言</h2>
+<h2 id="下载">下载Go发行版</h2>
 
 <div class="english">
 <p>
-Go is an open source project with a BSD-style license.
-There are two official Go compiler toolchains: the <code>gc</code> Go compiler
-and the <code>gccgo</code> compiler that is part of the GNU C Compiler (GCC).
+<a href="http://code.google.com/p/go/downloads" id="start" class="download" target="_blank">
+<span class="big">Download Go</span>
+<span class="desc">Click here to visit the downloads page</span>
+</a>
 </p>
 </div>
 
 <p>
-Go是一个使用BSD风格授权的开源项目，它有两个官方Go编译器工具链：<code>gc</code>
-Go编译器，以及 <code>gccgo</code> 编译器，它是GNU编译器集合（GCC）的一部分。
-</p>
-
-<div class="english">
-<p>
-The <code>gc</code> compiler is the more mature and well-tested of the two.
-This page is about installing a binary distribution of the <code>gc</code>
-compiler.
-</p>
-</div>
-
-<p>
-其中，<code>gc</code> 编译器更为成熟，测试更全面。本页面主要说明如何安装
-<code>gc</code>编译器的二进制发行版。
+<a href="http://code.google.com/p/go/downloads" id="start" class="download" target="_blank">
+<span class="big">下载Go</span>
+<span class="desc">点此浏览下载页</span>
 </p>
 
 <div class="english">
 <p>
-For information about installing the <code>gc</code> compiler from source, see
-<a href="/doc/install/source">Installing Go from source</a>.
-For information about installing <code>gccgo</code>, see
-<a href="/doc/install/gccgo">Setting up and using gccgo</a>.
+Click the link above to visit the
+<a href="http://code.google.com/p/go/downloads">Go project's downloads page</a>
+and select the binary distribution that matches your operating system and
+processor architecture.
 </p>
 </div>
 
 <p>
-关于从源码安装 <code>gc</code> 编译器的信息，请访问<a href="/doc/install/source">从源码安装Go</a>。
-关于安装 <code>gccgo</code> 的信息，请访问<a href="/doc/install/gccgo">设置并使用gccgo</a>。
+点击上面的链接浏览
+<a href="http://code.google.com/p/go/downloads">Go项目的下载页</a>，
+并选择与你的操作系统和处理器架构相匹配的二进制发行版。
+</p>
+
+<div class="english">
+<p>
+Official binary distributions are available for the FreeBSD, Linux, Mac OS X
+(Snow Leopard, Lion, and Mountain Lion), NetBSD, and Windows operating systems
+and the 32-bit (<code>386</code>) and 64-bit (<code>amd64</code>) x86 processor
+architectures.
+</p>
+</div>
+
+<p>
+官方二进制发行版可支持FreeBSD、Linux、Mac OS X（Snow Leopard、Lion和Mountain Lion）、
+NetBSD和Windows操作系统以及32位（<code>386</code>）和64位（<code>amd64</code>）的
+x86 处理器架构。
+</p>
+
+<div class="english">
+<p>
+If a binary distribution is not available for your combination of operating
+system and architecture you may want to try
+<a href="/doc/install/source">installing from source</a> or
+<a href="/doc/install/gccgo">installing gccgo instead of gc</a>.
+</p>
+</div>
+
+<p>
+若在你的操作系统和架构上没有可用的二进制发行版，请尝试
+<a href="/doc/install/source">从源码安装Go</a> 或
+<a href="/doc/install/gccgo">安装gccgo来代替gc</a>。
 </p>
 
 <div class="english">
@@ -100,75 +120,6 @@ installed Xcode 4.3+, you can install it from the Components tab of the
 Downloads preferences panel.
 </p>
 </div>
-
-<table class="codetable" frame="border" summary="requirements">
-<tr>
-<th align="middle">操作系统</th>
-<th align="middle">架构</th>
-<th align="middle">注记</th>
-</tr>
-<tr><td colspan="3"><hr></td></tr>
-<tr><td>FreeBSD 7或更新版本</td> <td>amd64, 386, arm</td> <td>Debian GNU/kFreeBSD不支持；FreeBSD/ARM需要FreeBSD 10或更新版</td></tr>
-<tr><td>Linux 2.6.23或更新版本配合glibc</td> <td>amd64, 386, arm</td> <td>CentOS/RHEL 5.x不支持；还没有ARM的二进制发行版</td></tr>
-<tr><td>Mac OS X 10.6/10.7</td> <td>amd64, 386</td> <td>使用Xcode<sup>&#8225;</sup>自带的gcc<sup>&#8224;</sup></td></tr>
-<tr><td>Windows 2000或更新版本</td> <td>amd64, 386</td> <td>使用mingw gcc<sup>&#8224;</sup>，无需cygwin或msys</td></tr>
-<tr><td>NetBSD 6 或更新</td> <td>amd64, 386</td> <td></td></tr>
-</table>
-
-<p>
-<sup>&#8224;</sup>只有当你打算使用<a href="/cmd/cgo">cgo</a>时才需要<code>gcc</code>。
-<sup>&#8225;</sup>你只需为<a href="http://developer.apple.com/Xcode/">Xcode</a>安装命令行工具。
-如果你已经安装了Xcode 4.3+，就可以从Download首选项面板的Components选项卡安装。
-</p>
-
-<div class="english">
-<h2 id="download">Download the Go tools</h2>
-</div>
-
-<h2 id="下载">下载Go工具</h2>
-
-<div class="english">
-<p>
-Visit the
-<a href="http://code.google.com/p/go/downloads">Go project's downloads page</a>
-and select the binary distribution that matches
-your operating system and processor architecture.
-</p>
-</div>
-
-<p>
-请访问<a href="http://code.google.com/p/go/downloads">Go项目的下载页面</a>，
-并选择与你的操作系统及处理器架构相匹配的二进制发行版。
-</p>
-
-<div class="english">
-<p>
-Official binary distributions are available
-for the FreeBSD, Linux, Mac OS X (Snow Leopard/Lion), NetBSD, and Windows operating systems
-and the 32-bit (<code>386</code>) and 64-bit (<code>amd64</code>)
-x86 processor architectures.
-</p>
-</div>
-
-<p>
-官方为FreeBSD、Linux、Mac OS X（Snow Leopard/Lion）、NetBSD与Windows操作系统以及32位
-（<code>386</code>）与64位（<code>amd64</code>）的x86处理器架构提供二进制发行版。
-</p>
-
-<div class="english">
-<p>
-If a binary distribution is not available for your
-OS/arch combination you may want to try
-<a href="/doc/install/source">installing from source</a> or
-<a href="/doc/install/gccgo">installing gccgo instead of gc</a>.
-</p>
-</div>
-
-<p>
-若对于你的操作系统/CPU架构并未提供二进制发行版，你或许可以试试
-<a href="/doc/install/source">从源码安装</a>或
-<a href="/doc/install/gccgo">安装gccgo以替代gc</a>.
-</p>
 
 <div class="english">
 <h2 id="install">Install the Go tools</h2>

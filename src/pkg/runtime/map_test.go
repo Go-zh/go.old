@@ -7,8 +7,11 @@ package runtime_test
 import (
 	"fmt"
 	"math"
+	"os"
 	"runtime"
 	"sort"
+	"strings"
+	"sync"
 	"testing"
 )
 
@@ -231,6 +234,40 @@ func TestIterGrowWithGC(t *testing.T) {
 	}
 }
 
+func TestConcurrentReadsAfterGrowth(t *testing.T) {
+	if os.Getenv("GOMAXPROCS") == "" {
+		defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(16))
+	}
+	numLoop := 10
+	numGrowStep := 250
+	numReader := 16
+	if testing.Short() {
+		numLoop, numGrowStep = 2, 500
+	}
+	for i := 0; i < numLoop; i++ {
+		m := make(map[int]int, 0)
+		for gs := 0; gs < numGrowStep; gs++ {
+			m[gs] = gs
+			var wg sync.WaitGroup
+			wg.Add(numReader * 2)
+			for nr := 0; nr < numReader; nr++ {
+				go func() {
+					defer wg.Done()
+					for _ = range m {
+					}
+				}()
+				go func() {
+					defer wg.Done()
+					for key := 0; key < gs; key++ {
+						_ = m[key]
+					}
+				}()
+			}
+			wg.Wait()
+		}
+	}
+}
+
 func TestBigItems(t *testing.T) {
 	var key [256]string
 	for i := 0; i < 256; i++ {
@@ -278,5 +315,40 @@ func TestEmptyKeyAndValue(t *testing.T) {
 	}
 	if b[empty{}] != 1 {
 		t.Errorf("empty key returned wrong value")
+	}
+}
+
+// Tests a map with a single bucket, with same-lengthed short keys
+// ("quick keys") as well as long keys.
+func TestSingleBucketMapStringKeys_DupLen(t *testing.T) {
+	testMapLookups(t, map[string]string{
+		"x":    "x1val",
+		"xx":   "x2val",
+		"foo":  "fooval",
+		"bar":  "barval", // same key length as "foo"
+		"xxxx": "x4val",
+		strings.Repeat("x", 128): "longval1",
+		strings.Repeat("y", 128): "longval2",
+	})
+}
+
+// Tests a map with a single bucket, with all keys having different lengths.
+func TestSingleBucketMapStringKeys_NoDupLen(t *testing.T) {
+	testMapLookups(t, map[string]string{
+		"x":                      "x1val",
+		"xx":                     "x2val",
+		"foo":                    "fooval",
+		"xxxx":                   "x4val",
+		"xxxxx":                  "x5val",
+		"xxxxxx":                 "x6val",
+		strings.Repeat("x", 128): "longval",
+	})
+}
+
+func testMapLookups(t *testing.T, m map[string]string) {
+	for k, v := range m {
+		if m[k] != v {
+			t.Fatalf("m[%q] = %q; want %q", k, m[k], v)
+		}
 	}
 }

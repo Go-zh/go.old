@@ -548,6 +548,12 @@ algtype1(Type *t, Type **bad)
 		*bad = T;
 
 	switch(t->etype) {
+	case TANY:
+	case TFORW:
+		// will be defined later.
+		*bad = t;
+		return -1;
+
 	case TINT8:
 	case TUINT8:
 	case TINT16:
@@ -665,11 +671,14 @@ Type*
 maptype(Type *key, Type *val)
 {
 	Type *t;
+	Type *bad;
+	int atype;
 
 	if(key != nil) {
-		switch(key->etype) {
+		atype = algtype1(key, &bad);
+		switch(bad == T ? key->etype : bad->etype) {
 		default:
-			if(algtype1(key, nil) == ANOEQ)
+			if(atype == ANOEQ)
 				yyerror("invalid map key type %T", key);
 			break;
 		case TANY:
@@ -714,6 +723,12 @@ methcmp(const void *va, const void *vb)
 	
 	a = *(Type**)va;
 	b = *(Type**)vb;
+	if(a->sym == S && b->sym == S)
+		return 0;
+	if(a->sym == S)
+		return -1;
+	if(b->sym == S)
+		return 1;
 	i = strcmp(a->sym->name, b->sym->name);
 	if(i != 0)
 		return i;
@@ -1393,7 +1408,7 @@ assignconv(Node *n, Type *t, char *context)
 	Node *r, *old;
 	char *why;
 	
-	if(n == N || n->type == T)
+	if(n == N || n->type == T || n->type->broke)
 		return n;
 
 	old = n;
@@ -1759,6 +1774,13 @@ ullmancalc(Node *n)
 	case OCALLINTER:
 		ul = UINF;
 		goto out;
+	case OANDAND:
+	case OOROR:
+		// hard with race detector
+		if(flag_race) {
+			ul = UINF;
+			goto out;
+		}
 	}
 	ul = 1;
 	if(n->left != N)

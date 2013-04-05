@@ -160,7 +160,7 @@ runtime·free(void *v)
 	if(sizeclass == 0) {
 		// Large object.
 		size = s->npages<<PageShift;
-		*(uintptr*)(s->start<<PageShift) = 1;	// mark as "needs to be zeroed"
+		*(uintptr*)(s->start<<PageShift) = (uintptr)0xfeedfeedfeedfeedll;	// mark as "needs to be zeroed"
 		// Must mark v freed before calling unmarkspan and MHeap_Free:
 		// they might coalesce v into other spans and change the bitmap further.
 		runtime·markfreed(v, size);
@@ -170,7 +170,7 @@ runtime·free(void *v)
 		// Small object.
 		size = runtime·class_to_size[sizeclass];
 		if(size > sizeof(uintptr))
-			((uintptr*)v)[1] = 1;	// mark as "needs to be zeroed"
+			((uintptr*)v)[1] = (uintptr)0xfeedfeedfeedfeedll;	// mark as "needs to be zeroed"
 		// Must mark v freed before calling MCache_Free:
 		// it might coalesce v and other blocks into a bigger span
 		// and change the bitmap further.
@@ -318,7 +318,10 @@ runtime·mallocinit(void)
 
 	runtime·InitSizes();
 
-	limit = runtime·memlimit();
+	// limit = runtime·memlimit();
+	// See https://code.google.com/p/go/issues/detail?id=5049
+	// TODO(rsc): Fix after 1.1.
+	limit = 0;
 
 	// Set up the allocation arena, a contiguous area of memory where
 	// allocated data will be found.  The arena begins with a bitmap large

@@ -60,6 +60,7 @@ closurebody(NodeList *body)
 
 	func = curfn;
 	func->nbody = body;
+	func->endlineno = lineno;
 	funcbody(func);
 
 	// closure-specific variables are hanging off the
@@ -75,7 +76,7 @@ closurebody(NodeList *body)
 	return func;
 }
 
-static Node* makeclosure(Node *func, int nowrap);
+static Node* makeclosure(Node *func);
 
 void
 typecheckclosure(Node *func, int top)
@@ -124,11 +125,11 @@ typecheckclosure(Node *func, int top)
 	}
 
 	// Create top-level function 
-	xtop = list(xtop, makeclosure(func, func->cvars==nil || (top&Ecall)));
+	xtop = list(xtop, makeclosure(func));
 }
 
 static Node*
-makeclosure(Node *func, int nowrap)
+makeclosure(Node *func)
 {
 	Node *xtype, *v, *addr, *xfunc, *cv;
 	NodeList *l, *body;
@@ -154,6 +155,7 @@ makeclosure(Node *func, int nowrap)
 	declare(xfunc->nname, PFUNC);
 	xfunc->nname->funcdepth = func->funcdepth;
 	xfunc->funcdepth = func->funcdepth;
+	xfunc->endlineno = func->endlineno;
 	
 	// declare variables holding addresses taken from closure
 	// and initialize in entry prologue.

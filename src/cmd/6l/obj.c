@@ -83,7 +83,7 @@ main(int argc, char *argv[])
 	INITRND = -1;
 	INITENTRY = 0;
 	LIBINITENTRY = 0;
-	linkmode = LinkInternal; // TODO: LinkAuto once everything works.
+	linkmode = LinkAuto;
 	nuxiinit();
 
 	flagcount("1", "use alternate profiling code", &debug['1']);
@@ -107,6 +107,8 @@ main(int argc, char *argv[])
 	flagcount("a", "disassemble output", &debug['a']);
 	flagcount("c", "dump call graph", &debug['c']);
 	flagcount("d", "disable dynamic executable", &debug['d']);
+	flagstr("extld", "linker to run in external mode", &extld);
+	flagstr("extldflags", "flags for external linker", &extldflags);
 	flagcount("f", "ignore version mismatch", &debug['f']);
 	flagcount("g", "disable go package data checks", &debug['g']);
 	flagfn1("linkmode", "mode: set link mode (internal, external, auto)", setlinkmode);
@@ -133,11 +135,16 @@ main(int argc, char *argv[])
 	if(HEADTYPE == -1)
 		HEADTYPE = headtype(goos);
 
+	// getgoextlinkenabled is based on GO_EXTLINK_ENABLED when
+	// Go was built; see ../../make.bash.
+	if(linkmode == LinkAuto && strcmp(getgoextlinkenabled(), "0") == 0)
+		linkmode = LinkInternal;
+
 	switch(HEADTYPE) {
 	default:
 		if(linkmode == LinkAuto)
 			linkmode = LinkInternal;
-		if(linkmode == LinkExternal)
+		if(linkmode == LinkExternal && strcmp(getgoextlinkenabled(), "1") != 0)
 			sysfatal("cannot use -linkmode=external with -H %s", headstr(HEADTYPE));
 		break;
 	case Hdarwin:
@@ -597,11 +604,15 @@ loop:
 		goto loop;
 
 	case ALOCALS:
+		if(skip)
+			goto casdef;
 		cursym->locals = p->to.offset;
 		pc++;
 		goto loop;
 	
 	case ATYPE:
+		if(skip)
+			goto casdef;
 		pc++;
 		goto loop;
 

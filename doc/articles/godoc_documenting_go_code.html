@@ -183,18 +183,16 @@ known issue from the <a href="/pkg/bytes/#pkg-bugs"><code>bytes</code></a> packa
 
 <div class="english">
 <p>
-Godoc treats executable commands somewhat differently. Instead of inspecting the
-command source code, it looks for a Go source file belonging to the special
-package "documentation". The comment on the "package documentation" clause is
-used as the command's documentation. For example, see the
+Godoc treats executable commands in the same way. It looks for a comment on
+package main, which is sometimes put in a separate file called <code>doc.go</code>.
+For example, see the
 <a href="/cmd/godoc/">godoc documentation</a> and its corresponding
 <a href="/src/cmd/godoc/doc.go">doc.go</a> file.
 </p>
 </div>
 
 <p>
-Godoc对待可执行命令则有所不同。它并不从命令的源码中检索，而是从属于特殊包
-“documentation"的Go源码中查找。“package documentation"子句前的注释会用作该命令的文档。
+Godoc对待可执行命令则有所不同。它会在 main 包中名为 <code>doc.go</code> 的独立文件中寻找。
 例如，<a href="/cmd/godoc/">godoc文档</a>及与其对应的<a href="/src/cmd/godoc/doc.go">doc.go</a>文件。
 </p>
 

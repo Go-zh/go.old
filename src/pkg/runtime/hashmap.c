@@ -74,9 +74,9 @@
 typedef struct Bucket Bucket;
 struct Bucket
 {
-	uint8 tophash[BUCKETSIZE];  // top 8 bits of hash of each entry (0 = empty)
+	uint8  tophash[BUCKETSIZE]; // top 8 bits of hash of each entry (0 = empty)
 	Bucket *overflow;           // overflow bucket, if any
-	byte data[1];               // BUCKETSIZE keys followed by BUCKETSIZE values
+	byte   data[1];             // BUCKETSIZE keys followed by BUCKETSIZE values
 };
 // NOTE: packing all the keys together and then all the values together makes the
 // code a bit more complicated than alternating key/value/key/value/... but it allows
@@ -102,7 +102,7 @@ struct Hmap
 	uint16  bucketsize;   // bucket size in bytes
 
 	uintptr hash0;        // hash seed
-	byte    *buckets;     // array of 2^B Buckets
+	byte    *buckets;     // array of 2^B Buckets. may be nil if count==0.
 	byte    *oldbuckets;  // previous bucket array of half the size, non-nil only when growing
 	uintptr nevacuate;    // progress counter for evacuation (buckets less than this have been evacuated)
 };
@@ -126,6 +126,7 @@ enum
 {
 	docheck = 0,  // check invariants before and after every op.  Slow!!!
 	debug = 0,    // print every operation
+	checkgc = 0 || docheck,  // check interaction of mallocgc() with the garbage collector
 };
 static void
 check(MapType *t, Hmap *h)
@@ -221,7 +222,7 @@ hash_init(MapType *t, Hmap *h, uint32 hint)
 		keysize = sizeof(byte*);
 	}
 	valuesize = t->elem->size;
-	if(valuesize >= MAXVALUESIZE) {
+	if(valuesize > MAXVALUESIZE) {
 		flags |= IndirectValue;
 		valuesize = sizeof(byte*);
 	}
@@ -253,10 +254,16 @@ hash_init(MapType *t, Hmap *h, uint32 hint)
 
 	// allocate initial hash table
 	// If hint is large zeroing this memory could take a while.
-	buckets = runtime·mallocgc(bucketsize << B, 0, 1, 0);
-	for(i = 0; i < (uintptr)1 << B; i++) {
-		b = (Bucket*)(buckets + i * bucketsize);
-		clearbucket(b);
+	if(checkgc) mstats.next_gc = mstats.heap_alloc;
+	if(B == 0) {
+		// done lazily later.
+		buckets = nil;
+	} else {
+		buckets = runtime·mallocgc(bucketsize << B, 0, 1, 0);
+		for(i = 0; i < (uintptr)1 << B; i++) {
+			b = (Bucket*)(buckets + i * bucketsize);
+			clearbucket(b);
+		}
 	}
 
 	// initialize Hmap
@@ -322,6 +329,7 @@ evacuate(MapType *t, Hmap *h, uintptr oldbucket)
 				// the B'th bit of the hash in this case.
 				if((hash & newbit) == 0) {
 					if(xi == BUCKETSIZE) {
+						if(checkgc) mstats.next_gc = mstats.heap_alloc;
 						newx = runtime·mallocgc(h->bucketsize, 0, 1, 0);
 						clearbucket(newx);
 						x->overflow = newx;
@@ -346,6 +354,7 @@ evacuate(MapType *t, Hmap *h, uintptr oldbucket)
 					xv += h->valuesize;
 				} else {
 					if(yi == BUCKETSIZE) {
+						if(checkgc) mstats.next_gc = mstats.heap_alloc;
 						newy = runtime·mallocgc(h->bucketsize, 0, 1, 0);
 						clearbucket(newy);
 						y->overflow = newy;
@@ -441,6 +450,7 @@ hash_grow(MapType *t, Hmap *h)
 		runtime·throw("evacuation not done in time");
 	old_buckets = h->buckets;
 	// NOTE: this could be a big malloc, but since we don't need zeroing it is probably fast.
+	if(checkgc) mstats.next_gc = mstats.heap_alloc;
 	new_buckets = runtime·mallocgc(h->bucketsize << (h->B + 1), 0, 1, 0);
 	flags = (h->flags & ~(Iterator | OldIterator));
 	if((h->flags & Iterator) != 0) {
@@ -470,7 +480,7 @@ hash_lookup(MapType *t, Hmap *h, byte **keyp)
 {
 	void *key;
 	uintptr hash;
-	uintptr bucket;
+	uintptr bucket, oldbucket;
 	Bucket *b;
 	uint8 top;
 	uintptr i;
@@ -480,12 +490,20 @@ hash_lookup(MapType *t, Hmap *h, byte **keyp)
 	key = *keyp;
 	if(docheck)
 		check(t, h);
+	if(h->count == 0)
+		return nil;
 	hash = h->hash0;
 	t->key->alg->hash(&hash, t->key->size, key);
 	bucket = hash & (((uintptr)1 << h->B) - 1);
-	if(h->oldbuckets != nil)
-		grow_work(t, h, bucket);
-	b = (Bucket*)(h->buckets + bucket * h->bucketsize);
+	if(h->oldbuckets != nil) {
+		oldbucket = bucket & (((uintptr)1 << (h->B - 1)) - 1);
+		b = (Bucket*)(h->oldbuckets + oldbucket * h->bucketsize);
+		if(evacuated(b)) {
+			b = (Bucket*)(h->buckets + bucket * h->bucketsize);
+		}
+	} else {
+		b = (Bucket*)(h->buckets + bucket * h->bucketsize);
+	}
 	top = hash >> (sizeof(uintptr)*8 - 8);
 	if(top == 0)
 		top = 1;
@@ -509,12 +527,14 @@ hash_lookup(MapType *t, Hmap *h, byte **keyp)
 static uint8 empty_value[MAXVALUESIZE];
 
 // Specialized versions of mapaccess1 for specific types.
-// See ./hashmap_fast and ../../cmd/gc/walk.c.
+// See ./hashmap_fast.c and ../../cmd/gc/walk.c.
 #define HASH_LOOKUP1 runtime·mapaccess1_fast32
 #define HASH_LOOKUP2 runtime·mapaccess2_fast32
 #define KEYTYPE uint32
 #define HASHFUNC runtime·algarray[AMEM32].hash
 #define EQFUNC(x,y) ((x) == (y))
+#define EQMAYBE(x,y) ((x) == (y))
+#define HASMAYBE false
 #define QUICKEQ(x) true
 #include "hashmap_fast.c"
 
@@ -523,6 +543,8 @@ static uint8 empty_value[MAXVALUESIZE];
 #undef KEYTYPE
 #undef HASHFUNC
 #undef EQFUNC
+#undef EQMAYBE
+#undef HASMAYBE
 #undef QUICKEQ
 
 #define HASH_LOOKUP1 runtime·mapaccess1_fast64
@@ -530,6 +552,8 @@ static uint8 empty_value[MAXVALUESIZE];
 #define KEYTYPE uint64
 #define HASHFUNC runtime·algarray[AMEM64].hash
 #define EQFUNC(x,y) ((x) == (y))
+#define EQMAYBE(x,y) ((x) == (y))
+#define HASMAYBE false
 #define QUICKEQ(x) true
 #include "hashmap_fast.c"
 
@@ -538,13 +562,17 @@ static uint8 empty_value[MAXVALUESIZE];
 #undef KEYTYPE
 #undef HASHFUNC
 #undef EQFUNC
+#undef EQMAYBE
+#undef HASMAYBE
 #undef QUICKEQ
 
 #define HASH_LOOKUP1 runtime·mapaccess1_faststr
 #define HASH_LOOKUP2 runtime·mapaccess2_faststr
 #define KEYTYPE String
 #define HASHFUNC runtime·algarray[ASTRING].hash
-#define EQFUNC(x,y) ((x).len == (y).len && ((x).str == (y).str || runtime·mcmp((x).str, (y).str, (x).len) == 0))
+#define EQFUNC(x,y) ((x).len == (y).len && ((x).str == (y).str || runtime·memeq((x).str, (y).str, (x).len)))
+#define EQMAYBE(x,y) ((x).len == (y).len)
+#define HASMAYBE true
 #define QUICKEQ(x) ((x).len < 32)
 #include "hashmap_fast.c"
 
@@ -567,6 +595,12 @@ hash_insert(MapType *t, Hmap *h, void *key, void *value)
 		check(t, h);
 	hash = h->hash0;
 	t->key->alg->hash(&hash, t->key->size, key);
+	if(h->buckets == nil) {
+		h->buckets = runtime·mallocgc(h->bucketsize, 0, 1, 0);
+		b = (Bucket*)(h->buckets);
+		clearbucket(b);
+	}
+
  again:
 	bucket = hash & (((uintptr)1 << h->B) - 1);
 	if(h->oldbuckets != nil)
@@ -611,6 +645,7 @@ hash_insert(MapType *t, Hmap *h, void *key, void *value)
 
 	if(inserti == nil) {
 		// all current buckets are full, allocate a new one.
+		if(checkgc) mstats.next_gc = mstats.heap_alloc;
 		newb = runtime·mallocgc(h->bucketsize, 0, 1, 0);
 		clearbucket(newb);
 		b->overflow = newb;
@@ -621,11 +656,13 @@ hash_insert(MapType *t, Hmap *h, void *key, void *value)
 
 	// store new key/value at insert position
 	if((h->flags & IndirectKey) != 0) {
+		if(checkgc) mstats.next_gc = mstats.heap_alloc;
 		kmem = runtime·mallocgc(t->key->size, 0, 1, 0);
 		*(byte**)insertk = kmem;
 		insertk = kmem;
 	}
 	if((h->flags & IndirectValue) != 0) {
+		if(checkgc) mstats.next_gc = mstats.heap_alloc;
 		vmem = runtime·mallocgc(t->elem->size, 0, 1, 0);
 		*(byte**)insertv = vmem;
 		insertv = vmem;
@@ -651,6 +688,8 @@ hash_remove(MapType *t, Hmap *h, void *key)
 	
 	if(docheck)
 		check(t, h);
+	if(h->count == 0)
+		return;
 	hash = h->hash0;
 	t->key->alg->hash(&hash, t->key->size, key);
 	bucket = hash & (((uintptr)1 << h->B) - 1);
@@ -718,6 +757,7 @@ struct hash_iter
 	uintptr bucket;
 	struct Bucket *bptr;
 	uintptr i;
+	intptr check_bucket;
 };
 
 // iterator state:
@@ -727,6 +767,9 @@ struct hash_iter
 static void
 hash_iter_init(MapType *t, Hmap *h, struct hash_iter *it)
 {
+	if(sizeof(struct hash_iter) / sizeof(uintptr) != 11) {
+		runtime·throw("hash_iter size incorrect"); // see ../../cmd/gc/range.c
+	}
 	it->t = t;
 	it->h = h;
 
@@ -739,8 +782,14 @@ hash_iter_init(MapType *t, Hmap *h, struct hash_iter *it)
 	it->wrapped = false;
 	it->bptr = nil;
 
-	// Remember we have an iterator at this level.
-	h->flags |= Iterator;
+	// Remember we have an iterator.
+	h->flags |= Iterator | OldIterator;  // careful: see issue 5120.
+
+	if(h->buckets == nil) {
+		// Empty map. Force next hash_next to exit without
+		// evalulating h->bucket.
+		it->wrapped = true;
+	}
 }
 
 // initializes it->key and it->value to the next key/value pair
@@ -750,9 +799,11 @@ hash_next(struct hash_iter *it)
 {
 	Hmap *h;
 	MapType *t;
-	uintptr bucket;
+	uintptr bucket, oldbucket;
+	uintptr hash;
 	Bucket *b;
 	uintptr i;
+	intptr check_bucket;
 	bool eq;
 	byte *k, *v;
 	byte *rk, *rv;
@@ -762,6 +813,7 @@ hash_next(struct hash_iter *it)
 	bucket = it->bucket;
 	b = it->bptr;
 	i = it->i;
+	check_bucket = it->check_bucket;
 
 next:
 	if(b == nil) {
@@ -773,10 +825,21 @@ next:
 		}
 		if(h->oldbuckets != nil && it->B == h->B) {
 			// Iterator was started in the middle of a grow, and the grow isn't done yet.
-			// Make sure the bucket we're about to read is valid.
-			grow_work(t, h, bucket);
+			// If the bucket we're looking at hasn't been filled in yet (i.e. the old
+			// bucket hasn't been evacuated) then we need to iterate through the old
+			// bucket and only return the ones that will be migrated to this bucket.
+			oldbucket = bucket & (((uintptr)1 << (it->B - 1)) - 1);
+			b = (Bucket*)(h->oldbuckets + oldbucket * h->bucketsize);
+			if(!evacuated(b)) {
+				check_bucket = bucket;
+			} else {
+				b = (Bucket*)(it->buckets + bucket * h->bucketsize);
+				check_bucket = -1;
+			}
+		} else {
+			b = (Bucket*)(it->buckets + bucket * h->bucketsize);
+			check_bucket = -1;
 		}
-		b = (Bucket*)(it->buckets + bucket * h->bucketsize);
 		bucket++;
 		if(bucket == ((uintptr)1 << it->B)) {
 			bucket = 0;
@@ -788,6 +851,30 @@ next:
 	v = b->data + h->keysize * BUCKETSIZE + h->valuesize * i;
 	for(; i < BUCKETSIZE; i++, k += h->keysize, v += h->valuesize) {
 		if(b->tophash[i] != 0) {
+			if(check_bucket >= 0) {
+				// Special case: iterator was started during a grow and the
+				// grow is not done yet.  We're working on a bucket whose
+				// oldbucket has not been evacuated yet.  So we iterate
+				// through the oldbucket, skipping any keys that will go
+				// to the other new bucket (each oldbucket expands to two
+				// buckets during a grow).
+				t->key->alg->equal(&eq, t->key->size, IK(h, k), IK(h, k));
+				if(!eq) {
+					// Hash is meaningless if k != k (NaNs).  Return all
+					// NaNs during the first of the two new buckets.
+					if(bucket >= ((uintptr)1 << (it->B - 1))) {
+						continue;
+					}
+				} else {
+					// If the item in the oldbucket is not destined for
+					// the current new bucket in the iteration, skip it.
+					hash = h->hash0;
+					t->key->alg->hash(&hash, t->key->size, IK(h, k));
+					if((hash & (((uintptr)1 << it->B) - 1)) != check_bucket) {
+						continue;
+					}
+				}
+			}
 			if(!evacuated(b)) {
 				// this is the golden data, we can return it.
 				it->key = IK(h, k);
@@ -820,6 +907,7 @@ next:
 			it->bucket = bucket;
 			it->bptr = b;
 			it->i = i + 1;
+			it->check_bucket = check_bucket;
 			return;
 		}
 	}
@@ -840,7 +928,7 @@ next:
 bool
 hash_gciter_init (Hmap *h, struct hash_gciter *it)
 {
-	// GC during map initialization
+	// GC during map initialization or on an empty map.
 	if(h->buckets == nil)
 		return false;
 
@@ -982,6 +1070,13 @@ next:
 //
 /// interfaces to go runtime
 //
+
+void
+reflect·ismapkey(Type *typ, bool ret)
+{
+	ret = typ != nil && typ->alg->hash != runtime·nohash;
+	FLUSH(&ret);
+}
 
 Hmap*
 runtime·makemap_c(MapType *typ, int64 hint)

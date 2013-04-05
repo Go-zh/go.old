@@ -52,6 +52,7 @@ enum
 	SWINDOWS,
 	SBSS,
 	SNOPTRBSS,
+	STLSBSS,
 
 	SXREF,
 	SMACHOSYMSTR,
@@ -68,6 +69,13 @@ enum
 	SHIDDEN = 1<<9, // hidden or local symbol
 
 	NHASH = 100003,
+};
+
+enum
+{
+	// This value is known to the garbage collector and should be kept in
+	// sync with runtime/pkg/runtime.h
+	ArgsSizeUnknown = 0x80000000
 };
 
 typedef struct Library Library;
@@ -149,6 +157,8 @@ EXTERN	int flag_shared;
 EXTERN	char*	tracksym;
 EXTERN	char*	interpreter;
 EXTERN	char*	tmpdir;
+EXTERN	char*	extld;
+EXTERN	char*	extldflags;
 
 enum
 {

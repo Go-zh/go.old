@@ -10,6 +10,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -64,10 +65,39 @@ func (a dummyAddr) String() string {
 	return string(a)
 }
 
+type noopConn struct{}
+
+func (noopConn) LocalAddr() net.Addr                { return dummyAddr("local-addr") }
+func (noopConn) RemoteAddr() net.Addr               { return dummyAddr("remote-addr") }
+func (noopConn) SetDeadline(t time.Time) error      { return nil }
+func (noopConn) SetReadDeadline(t time.Time) error  { return nil }
+func (noopConn) SetWriteDeadline(t time.Time) error { return nil }
+
+type rwTestConn struct {
+	io.Reader
+	io.Writer
+	noopConn
+
+	closeFunc func() error // called if non-nil
+	closec    chan bool    // else, if non-nil, send value to it on close
+}
+
+func (c *rwTestConn) Close() error {
+	if c.closeFunc != nil {
+		return c.closeFunc()
+	}
+	select {
+	case c.closec <- true:
+	default:
+	}
+	return nil
+}
+
 type testConn struct {
 	readBuf  bytes.Buffer
 	writeBuf bytes.Buffer
 	closec   chan bool // if non-nil, send value to it on close
+	noopConn
 }
 
 func (c *testConn) Read(b []byte) (int, error) {
@@ -83,26 +113,6 @@ func (c *testConn) Close() error {
 	case c.closec <- true:
 	default:
 	}
-	return nil
-}
-
-func (c *testConn) LocalAddr() net.Addr {
-	return dummyAddr("local-addr")
-}
-
-func (c *testConn) RemoteAddr() net.Addr {
-	return dummyAddr("remote-addr")
-}
-
-func (c *testConn) SetDeadline(t time.Time) error {
-	return nil
-}
-
-func (c *testConn) SetReadDeadline(t time.Time) error {
-	return nil
-}
-
-func (c *testConn) SetWriteDeadline(t time.Time) error {
 	return nil
 }
 
@@ -1447,6 +1457,198 @@ func TestOptions(t *testing.T) {
 	}
 }
 
+// Tests regarding the ordering of Write, WriteHeader, Header, and
+// Flush calls.  In Go 1.0, rw.WriteHeader immediately flushed the
+// (*response).header to the wire. In Go 1.1, the actual wire flush is
+// delayed, so we could maybe tack on a Content-Length and better
+// Content-Type after we see more (or all) of the output. To preserve
+// compatibility with Go 1, we need to be careful to track which
+// headers were live at the time of WriteHeader, so we write the same
+// ones, even if the handler modifies them (~erroneously) after the
+// first Write.
+func TestHeaderToWire(t *testing.T) {
+	req := []byte(strings.Replace(`GET / HTTP/1.1
+Host: golang.org
+
+`, "\n", "\r\n", -1))
+
+	tests := []struct {
+		name    string
+		handler func(ResponseWriter, *Request)
+		check   func(output string) error
+	}{
+		{
+			name: "write without Header",
+			handler: func(rw ResponseWriter, r *Request) {
+				rw.Write([]byte("hello world"))
+			},
+			check: func(got string) error {
+				if !strings.Contains(got, "Content-Length:") {
+					return errors.New("no content-length")
+				}
+				if !strings.Contains(got, "Content-Type: text/plain") {
+					return errors.New("no content-length")
+				}
+				return nil
+			},
+		},
+		{
+			name: "Header mutation before write",
+			handler: func(rw ResponseWriter, r *Request) {
+				h := rw.Header()
+				h.Set("Content-Type", "some/type")
+				rw.Write([]byte("hello world"))
+				h.Set("Too-Late", "bogus")
+			},
+			check: func(got string) error {
+				if !strings.Contains(got, "Content-Length:") {
+					return errors.New("no content-length")
+				}
+				if !strings.Contains(got, "Content-Type: some/type") {
+					return errors.New("wrong content-type")
+				}
+				if strings.Contains(got, "Too-Late") {
+					return errors.New("don't want too-late header")
+				}
+				return nil
+			},
+		},
+		{
+			name: "write then useless Header mutation",
+			handler: func(rw ResponseWriter, r *Request) {
+				rw.Write([]byte("hello world"))
+				rw.Header().Set("Too-Late", "Write already wrote headers")
+			},
+			check: func(got string) error {
+				if strings.Contains(got, "Too-Late") {
+					return errors.New("header appeared from after WriteHeader")
+				}
+				return nil
+			},
+		},
+		{
+			name: "flush then write",
+			handler: func(rw ResponseWriter, r *Request) {
+				rw.(Flusher).Flush()
+				rw.Write([]byte("post-flush"))
+				rw.Header().Set("Too-Late", "Write already wrote headers")
+			},
+			check: func(got string) error {
+				if !strings.Contains(got, "Transfer-Encoding: chunked") {
+					return errors.New("not chunked")
+				}
+				if strings.Contains(got, "Too-Late") {
+					return errors.New("header appeared from after WriteHeader")
+				}
+				return nil
+			},
+		},
+		{
+			name: "header then flush",
+			handler: func(rw ResponseWriter, r *Request) {
+				rw.Header().Set("Content-Type", "some/type")
+				rw.(Flusher).Flush()
+				rw.Write([]byte("post-flush"))
+				rw.Header().Set("Too-Late", "Write already wrote headers")
+			},
+			check: func(got string) error {
+				if !strings.Contains(got, "Transfer-Encoding: chunked") {
+					return errors.New("not chunked")
+				}
+				if strings.Contains(got, "Too-Late") {
+					return errors.New("header appeared from after WriteHeader")
+				}
+				if !strings.Contains(got, "Content-Type: some/type") {
+					return errors.New("wrong content-length")
+				}
+				return nil
+			},
+		},
+		{
+			name: "sniff-on-first-write content-type",
+			handler: func(rw ResponseWriter, r *Request) {
+				rw.Write([]byte("<html><head></head><body>some html</body></html>"))
+				rw.Header().Set("Content-Type", "x/wrong")
+			},
+			check: func(got string) error {
+				if !strings.Contains(got, "Content-Type: text/html") {
+					return errors.New("wrong content-length; want html")
+				}
+				return nil
+			},
+		},
+		{
+			name: "explicit content-type wins",
+			handler: func(rw ResponseWriter, r *Request) {
+				rw.Header().Set("Content-Type", "some/type")
+				rw.Write([]byte("<html><head></head><body>some html</body></html>"))
+			},
+			check: func(got string) error {
+				if !strings.Contains(got, "Content-Type: some/type") {
+					return errors.New("wrong content-length; want html")
+				}
+				return nil
+			},
+		},
+		{
+			name: "empty handler",
+			handler: func(rw ResponseWriter, r *Request) {
+			},
+			check: func(got string) error {
+				if !strings.Contains(got, "Content-Type: text/plain") {
+					return errors.New("wrong content-length; want text/plain")
+				}
+				if !strings.Contains(got, "Content-Length: 0") {
+					return errors.New("want 0 content-length")
+				}
+				return nil
+			},
+		},
+		{
+			name: "only Header, no write",
+			handler: func(rw ResponseWriter, r *Request) {
+				rw.Header().Set("Some-Header", "some-value")
+			},
+			check: func(got string) error {
+				if !strings.Contains(got, "Some-Header") {
+					return errors.New("didn't get header")
+				}
+				return nil
+			},
+		},
+		{
+			name: "WriteHeader call",
+			handler: func(rw ResponseWriter, r *Request) {
+				rw.WriteHeader(404)
+				rw.Header().Set("Too-Late", "some-value")
+			},
+			check: func(got string) error {
+				if !strings.Contains(got, "404") {
+					return errors.New("wrong status")
+				}
+				if strings.Contains(got, "Some-Header") {
+					return errors.New("shouldn't have seen Too-Late")
+				}
+				return nil
+			},
+		},
+	}
+	for _, tc := range tests {
+		var output bytes.Buffer
+		conn := &rwTestConn{
+			Reader: bytes.NewReader(req),
+			Writer: &output,
+			closec: make(chan bool, 1),
+		}
+		ln := &oneConnListener{conn: conn}
+		go Serve(ln, HandlerFunc(tc.handler))
+		<-conn.closec
+		if err := tc.check(output.String()); err != nil {
+			t.Errorf("%s: %v\nGot response:\n%s", tc.name, err, output.Bytes())
+		}
+	}
+}
+
 // goTimeout runs f, failing t if f takes more than ns to complete.
 func goTimeout(t *testing.T, d time.Duration, f func()) {
 	ch := make(chan bool, 2)
@@ -1635,7 +1837,9 @@ Accept-Charset: ISO-8859-1,utf-8;q=0.7,*;q=0.3
 	res := []byte("Hello world!\n")
 
 	conn := &testConn{
-		closec: make(chan bool),
+		// testConn.Close will not push into the channel
+		// if it's full.
+		closec: make(chan bool, 1),
 	}
 	handler := HandlerFunc(func(rw ResponseWriter, r *Request) {
 		rw.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1649,5 +1853,148 @@ Accept-Charset: ISO-8859-1,utf-8;q=0.7,*;q=0.3
 		ln.conn = conn
 		Serve(ln, handler)
 		<-conn.closec
+	}
+}
+
+// repeatReader reads content count times, then EOFs.
+type repeatReader struct {
+	content []byte
+	count   int
+	off     int
+}
+
+func (r *repeatReader) Read(p []byte) (n int, err error) {
+	if r.count <= 0 {
+		return 0, io.EOF
+	}
+	n = copy(p, r.content[r.off:])
+	r.off += n
+	if r.off == len(r.content) {
+		r.count--
+		r.off = 0
+	}
+	return
+}
+
+func BenchmarkServerFakeConnWithKeepAlive(b *testing.B) {
+	b.ReportAllocs()
+
+	req := []byte(strings.Replace(`GET / HTTP/1.1
+Host: golang.org
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8
+User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_2) AppleWebKit/537.17 (KHTML, like Gecko) Chrome/24.0.1312.52 Safari/537.17
+Accept-Encoding: gzip,deflate,sdch
+Accept-Language: en-US,en;q=0.8
+Accept-Charset: ISO-8859-1,utf-8;q=0.7,*;q=0.3
+
+`, "\n", "\r\n", -1))
+	res := []byte("Hello world!\n")
+
+	conn := &rwTestConn{
+		Reader: &repeatReader{content: req, count: b.N},
+		Writer: ioutil.Discard,
+		closec: make(chan bool, 1),
+	}
+	handled := 0
+	handler := HandlerFunc(func(rw ResponseWriter, r *Request) {
+		handled++
+		rw.Header().Set("Content-Type", "text/html; charset=utf-8")
+		rw.Write(res)
+	})
+	ln := &oneConnListener{conn: conn}
+	go Serve(ln, handler)
+	<-conn.closec
+	if b.N != handled {
+		b.Errorf("b.N=%d but handled %d", b.N, handled)
+	}
+}
+
+// same as above, but representing the most simple possible request
+// and handler. Notably: the handler does not call rw.Header().
+func BenchmarkServerFakeConnWithKeepAliveLite(b *testing.B) {
+	b.ReportAllocs()
+
+	req := []byte(strings.Replace(`GET / HTTP/1.1
+Host: golang.org
+
+`, "\n", "\r\n", -1))
+	res := []byte("Hello world!\n")
+
+	conn := &rwTestConn{
+		Reader: &repeatReader{content: req, count: b.N},
+		Writer: ioutil.Discard,
+		closec: make(chan bool, 1),
+	}
+	handled := 0
+	handler := HandlerFunc(func(rw ResponseWriter, r *Request) {
+		handled++
+		rw.Write(res)
+	})
+	ln := &oneConnListener{conn: conn}
+	go Serve(ln, handler)
+	<-conn.closec
+	if b.N != handled {
+		b.Errorf("b.N=%d but handled %d", b.N, handled)
+	}
+}
+
+const someResponse = "<html>some response</html>"
+
+// A Reponse that's just no bigger than 2KB, the buffer-before-chunking threshold.
+var response = bytes.Repeat([]byte(someResponse), 2<<10/len(someResponse))
+
+// Both Content-Type and Content-Length set. Should be no buffering.
+func BenchmarkServerHandlerTypeLen(b *testing.B) {
+	benchmarkHandler(b, HandlerFunc(func(w ResponseWriter, r *Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.Header().Set("Content-Length", strconv.Itoa(len(response)))
+		w.Write(response)
+	}))
+}
+
+// A Content-Type is set, but no length. No sniffing, but will count the Content-Length.
+func BenchmarkServerHandlerNoLen(b *testing.B) {
+	benchmarkHandler(b, HandlerFunc(func(w ResponseWriter, r *Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.Write(response)
+	}))
+}
+
+// A Content-Length is set, but the Content-Type will be sniffed.
+func BenchmarkServerHandlerNoType(b *testing.B) {
+	benchmarkHandler(b, HandlerFunc(func(w ResponseWriter, r *Request) {
+		w.Header().Set("Content-Length", strconv.Itoa(len(response)))
+		w.Write(response)
+	}))
+}
+
+// Neither a Content-Type or Content-Length, so sniffed and counted.
+func BenchmarkServerHandlerNoHeader(b *testing.B) {
+	benchmarkHandler(b, HandlerFunc(func(w ResponseWriter, r *Request) {
+		w.Write(response)
+	}))
+}
+
+func benchmarkHandler(b *testing.B, h Handler) {
+	b.ReportAllocs()
+	req := []byte(strings.Replace(`GET / HTTP/1.1
+Host: golang.org
+
+`, "\n", "\r\n", -1))
+	conn := &rwTestConn{
+		Reader: &repeatReader{content: req, count: b.N},
+		Writer: ioutil.Discard,
+		closec: make(chan bool, 1),
+	}
+	handled := 0
+	handler := HandlerFunc(func(rw ResponseWriter, r *Request) {
+		handled++
+		h.ServeHTTP(rw, r)
+	})
+	ln := &oneConnListener{conn: conn}
+	go Serve(ln, handler)
+	<-conn.closec
+	if b.N != handled {
+		b.Errorf("b.N=%d but handled %d", b.N, handled)
 	}
 }

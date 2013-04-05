@@ -28,15 +28,17 @@ var exitCode = 0
 // Flags to control which checks to perform. "all" is set to true here, and disabled later if
 // a flag is set explicitly.
 var report = map[string]*bool{
-	"all":        flag.Bool("all", true, "check everything; disabled if any explicit check is requested"),
-	"assign":     flag.Bool("assign", false, "check for useless assignments"),
-	"atomic":     flag.Bool("atomic", false, "check for common mistaken usages of the sync/atomic package"),
-	"buildtags":  flag.Bool("buildtags", false, "check that +build tags are valid"),
-	"composites": flag.Bool("composites", false, "check that composite literals used type-tagged elements"),
-	"methods":    flag.Bool("methods", false, "check that canonically named methods are canonically defined"),
-	"printf":     flag.Bool("printf", false, "check printf-like invocations"),
-	"structtags": flag.Bool("structtags", false, "check that struct field tags have canonical format"),
-	"rangeloops": flag.Bool("rangeloops", false, "check that range loop variables are used correctly"),
+	"all":         flag.Bool("all", true, "check everything; disabled if any explicit check is requested"),
+	"asmdecl":     flag.Bool("asmdecl", false, "check assembly against Go declarations"),
+	"assign":      flag.Bool("assign", false, "check for useless assignments"),
+	"atomic":      flag.Bool("atomic", false, "check for common mistaken usages of the sync/atomic package"),
+	"buildtags":   flag.Bool("buildtags", false, "check that +build tags are valid"),
+	"composites":  flag.Bool("composites", false, "check that composite literals used type-tagged elements"),
+	"methods":     flag.Bool("methods", false, "check that canonically named methods are canonically defined"),
+	"printf":      flag.Bool("printf", false, "check printf-like invocations"),
+	"rangeloops":  flag.Bool("rangeloops", false, "check that range loop variables are used correctly"),
+	"structtags":  flag.Bool("structtags", false, "check that struct field tags have canonical format"),
+	"unreachable": flag.Bool("unreachable", false, "check for unreachable code"),
 }
 
 // vet tells whether to report errors for the named check, a flag name.
@@ -64,11 +66,12 @@ func Usage() {
 // File is a wrapper for the state of a file used in the parser.
 // The parse tree walkers are all methods of this type.
 type File struct {
-	pkg  *Package
-	fset *token.FileSet
-	name string
-	file *ast.File
-	b    bytes.Buffer // for use by methods
+	pkg     *Package
+	fset    *token.FileSet
+	name    string
+	content []byte
+	file    *ast.File
+	b       bytes.Buffer // for use by methods
 }
 
 func main() {
@@ -163,6 +166,7 @@ func doPackageDir(directory string) {
 	names = append(names, pkg.GoFiles...)
 	names = append(names, pkg.CgoFiles...)
 	names = append(names, pkg.TestGoFiles...) // These are also in the "foo" package.
+	names = append(names, pkg.SFiles...)
 	prefixDirectory(directory, names)
 	doPackage(names)
 	// Is there also a "foo_test" package? If so, do that one as well.
@@ -176,6 +180,7 @@ func doPackageDir(directory string) {
 type Package struct {
 	types  map[ast.Expr]Type
 	values map[ast.Expr]interface{}
+	files  []*File
 }
 
 // doPackage analyzes the single package constructed from the named files.
@@ -197,15 +202,19 @@ func doPackage(names []string) {
 			return
 		}
 		checkBuildTag(name, data)
-		parsedFile, err := parser.ParseFile(fs, name, bytes.NewReader(data), 0)
-		if err != nil {
-			warnf("%s: %s", name, err)
-			return
+		var parsedFile *ast.File
+		if strings.HasSuffix(name, ".go") {
+			parsedFile, err = parser.ParseFile(fs, name, bytes.NewReader(data), 0)
+			if err != nil {
+				warnf("%s: %s", name, err)
+				return
+			}
+			astFiles = append(astFiles, parsedFile)
 		}
-		files = append(files, &File{fset: fs, name: name, file: parsedFile})
-		astFiles = append(astFiles, parsedFile)
+		files = append(files, &File{fset: fs, content: data, name: name, file: parsedFile})
 	}
 	pkg := new(Package)
+	pkg.files = files
 	// Type check the package.
 	err := pkg.check(fs, astFiles)
 	if err != nil && *verbose {
@@ -213,8 +222,11 @@ func doPackage(names []string) {
 	}
 	for _, file := range files {
 		file.pkg = pkg
-		file.walkFile(file.name, file.file)
+		if file.file != nil {
+			file.walkFile(file.name, file.file)
+		}
 	}
+	asmCheck(pkg)
 }
 
 func visit(path string, f os.FileInfo, err error) error {
@@ -228,6 +240,15 @@ func visit(path string, f os.FileInfo, err error) error {
 	}
 	doPackageDir(path)
 	return nil
+}
+
+func (pkg *Package) hasFileWithSuffix(suffix string) bool {
+	for _, f := range pkg.files {
+		if strings.HasSuffix(f.name, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // walkDir recursively walks the tree looking for Go packages.
@@ -278,6 +299,9 @@ func (f *File) Badf(pos token.Pos, format string, args ...interface{}) {
 }
 
 func (f *File) loc(pos token.Pos) string {
+	if pos == token.NoPos {
+		return ""
+	}
 	// Do not print columns. Because the pos often points to the start of an
 	// expression instead of the inner part with the actual error, the
 	// precision can mislead.
@@ -313,7 +337,9 @@ func (f *File) Visit(node ast.Node) ast.Visitor {
 	case *ast.Field:
 		f.walkFieldTag(n)
 	case *ast.FuncDecl:
-		f.walkMethodDecl(n)
+		f.walkFuncDecl(n)
+	case *ast.FuncLit:
+		f.walkFuncLit(n)
 	case *ast.InterfaceType:
 		f.walkInterfaceType(n)
 	case *ast.RangeStmt:
@@ -356,18 +382,22 @@ func (f *File) walkFieldTag(field *ast.Field) {
 	f.checkCanonicalFieldTag(field)
 }
 
-// walkMethodDecl walks the method's signature.
+// walkMethod walks the method's signature.
 func (f *File) walkMethod(id *ast.Ident, t *ast.FuncType) {
 	f.checkCanonicalMethod(id, t)
 }
 
-// walkMethodDecl walks the method signature in the declaration.
-func (f *File) walkMethodDecl(d *ast.FuncDecl) {
-	if d.Recv == nil {
-		// not a method
-		return
+// walkFuncDecl walks a function declaration.
+func (f *File) walkFuncDecl(d *ast.FuncDecl) {
+	f.checkUnreachable(d.Body)
+	if d.Recv != nil {
+		f.walkMethod(d.Name, d.Type)
 	}
-	f.walkMethod(d.Name, d.Type)
+}
+
+// walkFuncLit walks a function literal.
+func (f *File) walkFuncLit(x *ast.FuncLit) {
+	f.checkUnreachable(x.Body)
 }
 
 // walkInterfaceType walks the method signatures of an interface.

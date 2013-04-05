@@ -262,6 +262,7 @@ var cgoEnabled = map[string]bool{
 	"darwin/amd64":  true,
 	"freebsd/386":   true,
 	"freebsd/amd64": true,
+	"freebsd/arm":   true,
 	"linux/386":     true,
 	"linux/amd64":   true,
 	"linux/arm":     true,
@@ -300,7 +301,13 @@ func defaultContext() Context {
 	case "0":
 		c.CgoEnabled = false
 	default:
-		c.CgoEnabled = cgoEnabled[c.GOOS+"/"+c.GOARCH]
+		// golang.org/issue/5141
+		// cgo should be disabled for cross compilation builds
+		if runtime.GOARCH == c.GOARCH && runtime.GOOS == c.GOOS {
+			c.CgoEnabled = cgoEnabled[c.GOOS+"/"+c.GOARCH]
+			break
+		}
+		c.CgoEnabled = false
 	}
 
 	return c

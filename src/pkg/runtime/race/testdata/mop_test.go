@@ -227,6 +227,37 @@ func TestRaceCaseFallthrough(t *testing.T) {
 	<-ch
 }
 
+func TestRaceCaseType(t *testing.T) {
+	var x, y int
+	var i interface{} = x
+	c := make(chan int, 1)
+	go func() {
+		switch i.(type) {
+		case nil:
+		case int:
+		}
+		c <- 1
+	}()
+	i = y
+	<-c
+}
+
+func TestRaceCaseTypeBody(t *testing.T) {
+	var x, y int
+	var i interface{} = &x
+	c := make(chan int, 1)
+	go func() {
+		switch i := i.(type) {
+		case nil:
+		case *int:
+			*i = y
+		}
+		c <- 1
+	}()
+	x = y
+	<-c
+}
+
 func TestNoRaceRange(t *testing.T) {
 	ch := make(chan int, 3)
 	a := [...]int{1, 2, 3}
@@ -339,11 +370,11 @@ func TestRaceDiv(t *testing.T) {
 }
 
 func TestRaceDivConst(t *testing.T) {
-	var x, y, z int
+	var x, y, z uint32
 	ch := make(chan int, 2)
 
 	go func() {
-		x = y / 3
+		x = y / 3 // involves only a HMUL node
 		ch <- 1
 	}()
 	go func() {
@@ -574,6 +605,30 @@ func TestRaceIfaceWW(t *testing.T) {
 	<-ch
 	b = a
 	a = b
+}
+
+func TestRaceIfaceCmp(t *testing.T) {
+	var a, b Writer
+	a = DummyWriter{1}
+	ch := make(chan bool, 1)
+	go func() {
+		a = DummyWriter{1}
+		ch <- true
+	}()
+	_ = a == b
+	<-ch
+}
+
+func TestRaceIfaceCmpNil(t *testing.T) {
+	var a Writer
+	a = DummyWriter{1}
+	ch := make(chan bool, 1)
+	go func() {
+		a = DummyWriter{1}
+		ch <- true
+	}()
+	_ = a == nil
+	<-ch
 }
 
 func TestRaceEfaceConv(t *testing.T) {
@@ -970,8 +1025,7 @@ func TestRaceAnd(t *testing.T) {
 	<-c
 }
 
-// OANDAND is not instrumented in the compiler.
-func TestRaceFailingAnd2(t *testing.T) {
+func TestRaceAnd2(t *testing.T) {
 	c := make(chan bool)
 	x, y := 0, 0
 	go func() {
@@ -1007,8 +1061,7 @@ func TestRaceOr(t *testing.T) {
 	<-c
 }
 
-// OOROR is not instrumented in the compiler.
-func TestRaceFailingOr2(t *testing.T) {
+func TestRaceOr2(t *testing.T) {
 	c := make(chan bool)
 	x, y := 0, 0
 	go func() {
@@ -1153,6 +1206,15 @@ func (p InterImpl) Foo(x int) {
 	_, _, _ = x, y, z
 }
 
+type InterImpl2 InterImpl
+
+func (p *InterImpl2) Foo(x int) {
+	if p == nil {
+		InterImpl{}.Foo(x)
+	}
+	InterImpl(*p).Foo(x)
+}
+
 func TestRaceInterCall(t *testing.T) {
 	c := make(chan bool, 1)
 	p := InterImpl{}
@@ -1211,6 +1273,54 @@ func TestRaceMethodCall2(t *testing.T) {
 		c <- true
 	}()
 	i.Foo(0)
+	<-c
+}
+
+// Method value with concrete value receiver.
+func TestRaceMethodValue(t *testing.T) {
+	c := make(chan bool, 1)
+	i := InterImpl{}
+	go func() {
+		i = InterImpl{}
+		c <- true
+	}()
+	_ = i.Foo
+	<-c
+}
+
+// Method value with interface receiver.
+func TestRaceMethodValue2(t *testing.T) {
+	c := make(chan bool, 1)
+	var i Inter = InterImpl{}
+	go func() {
+		i = InterImpl{}
+		c <- true
+	}()
+	_ = i.Foo
+	<-c
+}
+
+// Method value with implicit dereference.
+func TestRaceMethodValue3(t *testing.T) {
+	c := make(chan bool, 1)
+	i := &InterImpl{}
+	go func() {
+		*i = InterImpl{}
+		c <- true
+	}()
+	_ = i.Foo // dereferences i.
+	<-c
+}
+
+// Method value implicitly taking receiver address.
+func TestNoRaceMethodValue(t *testing.T) {
+	c := make(chan bool, 1)
+	i := InterImpl2{}
+	go func() {
+		i = InterImpl2{}
+		c <- true
+	}()
+	_ = i.Foo // takes the address of i only.
 	<-c
 }
 
@@ -1340,6 +1450,17 @@ func TestRaceSliceSlice2(t *testing.T) {
 	<-c
 }
 
+func TestRaceSliceString(t *testing.T) {
+	c := make(chan bool, 1)
+	x := "hello"
+	go func() {
+		x = "world"
+		c <- true
+	}()
+	_ = x[2:3]
+	<-c
+}
+
 // http://golang.org/issue/4453
 func TestRaceFailingSliceStruct(t *testing.T) {
 	type X struct {
@@ -1350,6 +1471,21 @@ func TestRaceFailingSliceStruct(t *testing.T) {
 	go func() {
 		y := make([]X, 10)
 		copy(y, x)
+		c <- true
+	}()
+	x[1].y = 42
+	<-c
+}
+
+func TestRaceFailingAppendSliceStruct(t *testing.T) {
+	type X struct {
+		x, y int
+	}
+	c := make(chan bool, 1)
+	x := make([]X, 10)
+	go func() {
+		y := make([]X, 0, 10)
+		y = append(y, x...)
 		c <- true
 	}()
 	x[1].y = 42

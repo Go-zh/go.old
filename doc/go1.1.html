@@ -6,9 +6,41 @@
 
 <h2 id="introduction">Introduction to Go 1.1</h2>
 
-TODO
- - overview
- - link back to Go 1 and also Go 1 Compatibility docs.
+<p>
+The release of <a href="/doc/go1.html">Go version 1</a> (Go 1 or Go 1.0 for short)
+in March of 2012 introduced a new period
+of stability in the Go language and libraries.
+That stability has helped nourish a growing community of Go users
+and systems around the world.
+Several "point" releases since
+then—1.0.1, 1.0.2, and 1.0.3—have been issued.
+These point releases fixed known bugs but made
+no non-critical changes to the implementation.
+</p>
+
+<p>
+This new release, Go 1.1, keeps the <a href="/doc/go1compat.html">promise
+of compatibility</a> but adds a couple of significant
+(backwards-compatible, of course) language changes, has a long list
+of (again, compatible) library changes, and
+includes major work on the implementation of the compilers,
+libraries, and run-time.
+The focus is on performance.
+Benchmarking is an inexact science at best, but we see significant,
+sometimes dramatic speedups for many of our test programs.
+We trust that many of our users' programs will also see improvements
+just by updating their Go installation and recompiling.
+</p>
+
+<p>
+This document summarizes the changes between Go 1 and Go 1.1.
+Very little if any code will need modification to run with Go 1.1,
+although a couple of rare error cases surface with this release
+and need to be addressed if they arise.
+Details appear below; see the discussion of
+<a href="#int">64-bit ints</a> and <a href="#unicode_literals">Unicode literals</a>
+in particular.
+</p>
 
 <h2 id="language">Changes to the language</h2>
 
@@ -48,19 +80,87 @@ See the <a href="#unicode">Unicode</a> section for more information.
 <h3 id="method_values">Method values</h3>
 
 <p>
-TODO
+Go 1.1 now implements
+<a href="/ref/spec#Method_values">method values</a>,
+which are functions that have been bound to a specific receiver value.
+For instance, given a
+<a href="/pkg/bufio/#Writer"><code>Writer</code></a>
+value <code>w</code>,
+the expression
+<code>w.Write</code>,
+a method value, is a function that will always write to <code>w</code>; it is equivalent to
+a function literal closing over <code>w</code>:
+</p>
+
+<pre>
+func (p []byte) (n int, err error) {
+	return w.Write(p)
+}
+</pre>
+
+<p>
+Method values are distinct from method expressions, which generate functions
+from methods of a given type; the method expression <code>(*bufio.Writer).Write</code>
+is equivalent to a function with an extra first argument, a receiver of type
+<code>(*bufio.Writer)</code>:
+</p>
+
+<pre>
+func (w *bufio.Writer, p []byte) (n int, err error) {
+	return w.Write(p)
+}
+</pre>
+
+<p>
+<em>Updating</em>: No existing code is affected; the change is strictly backward-compatible.
 </p>
 
 <h3 id="return">Return requirements</h3>
 
 <p>
-TODO
+Before Go 1.1, a function that returned a value needed an explicit "return" 
+or call to <code>panic</code> at
+the end of the function; this was a simple way to make the programmer
+be explicit about the meaning of the function. But there are many cases
+where a final "return" is clearly unnecessary, such as a function with
+only an infinite "for" loop.
+</p>
+
+<p>
+In Go 1.1, the rule about final "return" statements is more permissive.
+It introduces the concept of a
+<a href="/ref/spec/#Terminating_statements"><em>terminating statement</em></a>,
+a statement that is guaranteed to be the last one a function executes.
+Examples include 
+"for" loops with no condition and "if-else"
+statements in which each half ends in a "return".
+If the final statement of a function can be shown <em>syntactically</em> to
+be a terminating statement, no final "return" statement is needed.
+</p>
+
+<p>
+Note that the rule is purely syntactic: it pays no attention to the values in the
+code and therefore requires no complex analysis.
+</p>
+
+<p>
+<em>Updating</em>: The change is backward-compatible, but existing code
+with superfluous "return" statements and calls to <code>panic</code> may
+be simplified manually.
+Such code can be identified by <code>go vet</code>.
 </p>
 
 <h2 id="impl">Changes to the implementations and tools</h2>
 
+<h3 id="gccgo">Status of gccgo</h3>
+
 <p>
-TODO: more
+The GCC release schedule does not coincide with the Go release schedule, so some skew is inevitable in
+<code>gccgo</code>'s releases.
+The 4.8.0 version of GCC shipped in March, 2013 and includes a nearly-Go 1.1 version of <code>gccgo</code>.
+Its library is a little behind the release, but the biggest difference is that method values are not implemented.
+Sometime around May 2013, we expect 4.8.1 of GCC to ship with a <code>gccgo</code>
+providing a complete Go 1.1 implementaiton.
 </p>
 
 <h3 id="gc_flag">Command-line flag parsing</h3>
@@ -111,6 +211,24 @@ would instead say:
 <pre>
 i := int(int32(x))
 </pre>
+
+<h3 id="heap">Heap size on 64-bit architectures</h3>
+
+<p>
+On 64-bit architectures only, the maximum heap size has been enlarged substantially,
+from a few gigabytes to several tens of gigabytes.
+(The exact details depend on the system and may change.)
+</p>
+
+<p>
+On 32-bit architectures, the heap size has not changed.
+</p>
+
+<p>
+<em>Updating</em>:
+This change should have no effect on existing programs beyond allowing them
+to run with larger heaps.
+</p>
 
 <h3 id="unicode">Unicode</h3>
 
@@ -164,7 +282,20 @@ some editors add them as a kind of "magic number" identifying a UTF-8 encoded fi
 <em>Updating</em>:
 Most programs will be unaffected by the surrogate change.
 Programs that depend on the old behavior should be modified to avoid the issue.
-The byte-order-mark change is strictly backwards-compatible.
+The byte-order-mark change is strictly backward-compatible.
+</p>
+
+<h3 id="race">Race detector</h3>
+
+<p>
+A major addition to the tools is a <em>race detector</em>, a way to find
+bugs in programs caused by problems like concurrent changes to the same variable.
+This new facility is built into the <code>go</code> tool.
+For now, it is only available on Linux, Mac OS X, and Windows systems with
+64-bit x86 processors.
+To enable it, set the <code>-race</code> flag when building or testing your program 
+(for instance, <code>go test -race</code>).
+The race detector is documented in <a href="/doc/articles/race_detector.html">a separate article</a>.
 </p>
 
 <h3 id="gc_asm">The gc assemblers</h3>
@@ -177,7 +308,9 @@ to adjust frame pointer offsets.
 </p>
 
 <p>
-TODO: Point to cmd/vet once it handles this.
+<em>Updating</em>:
+The <code>go vet</code> command now checks that functions implemented in assembly
+match the Go function prototypes they implement.
 </p>
 
 <h3 id="gocmd">Changes to the go command</h3>
@@ -218,9 +351,11 @@ when <code>$GOPATH</code> and <code>$GOROOT</code> are set to the same value.
 
 <pre>
 $ GOPATH=$GOROOT go get code.google.com/p/foo/quxx
-warning: GOPATH set to GOROOT (/home/User/go) has no effect
+warning: GOPATH set to GOROOT (/home/you/go) has no effect
 package code.google.com/p/foo/quxx: cannot download, $GOPATH must not be set to $GOROOT. For more details see: go help gopath
 </pre>
+
+<h3 id="gotest">Changes to the go test command</h3>
 
 <p>
 The <code>go test</code> command no longer deletes the binary when run with profiling enabled,
@@ -236,7 +371,20 @@ $ go test -cpuprofile cpuprof.out mypackage
 the file <code>mypackage.test</code> will be left in the directory where <code>go test</code> was run.
 </p>
 
-<h3 id="gofix">Changes to go fix</h3>
+<p>
+The <code>go test</code> command can now generate profiling information
+that reports where goroutines are blocked, that is,
+where they tend to stall waiting for an event such as a channel communication.
+The information is presented as a
+<em>blocking profile</em>
+enabled with the
+<code>-blockprofile</code>
+option of
+<code>go test</code>.
+Run <code>go help test</code> for more information.
+</p>
+
+<h3 id="gofix">Changes to the go fix command</h3>
 
 <p>
 The <a href="/cmd/fix/"><code>fix</code></a> command, usually run as
@@ -246,17 +394,69 @@ To update pre-Go 1 code to Go 1.1, use a Go 1.0 tool chain
 to convert the code to Go 1.0 first.
 </p>
 
+<h3 id="gorun">Changes to the go run command</h3>
+
+<p>
+The <code>go run</code> command now runs all files in the current working
+directory if no file arguments are listed. Also, the <code>go run</code>
+command now returns an error if test files are provided on the command line. In
+this sense, "<code>go run</code>" replaces "<code>go run *.go</code>".
+</p>
+
+<h3 id="platforms">Additional platforms</h3>
+
+<p>
+The Go 1.1 tool chain adds experimental support for <code>freebsd/arm</code>,
+<code>netbsd/386</code>, <code>netbsd/amd64</code>, <code>netbsd/arm</code>, 
+<code>openbsd/386</code> and <code>openbsd/amd64</code> platforms.
+</p>
+
+<p>
+An ARMv6 or later processor is required for <code>freebsd/arm</code> or
+<code>netbsd/arm</code>.
+</p>
+
+<p>
+Go 1.1 adds experimental support for <code>cgo</code> on <code>linux/arm</code>.
+</p>
+
+<h3 id="crosscompile">Cross compilation</h3>
+
+<p>
+When cross-compiling, the <code>go</code> tool will disable <code>cgo</code>
+support by default.
+</p>
+
+<p>
+To explicitly enable <code>cgo</code>, set <code>CGO_ENABLED=1</code>.
+</p>
+
 <h2 id="performance">Performance</h2>
 
 <p>
-TODO introduction
+The performance of code compiled with the Go 1.1 gc tool suite should be noticeably
+better for most Go programs.
+Typical improvements relative to Go 1.0 seem to be about 30%-40%, sometimes
+much more, but occasionally less or even non-existent.
+There are too many small performance-driven tweaks through the tools and libraries
+to list them all here, but the following major changes are worth noting:
 </p>
 
 <ul>
-<li>TODO better code generation (inlining, ...?)</li>
-<li>TODO parallel gc</li>
-<li>TODO more precise gc</li>
-<li>TODO networking is more efficient (known to runtime)</li>
+<li>The gc compilers generate better code in many cases, most noticeably for
+floating point on the 32-bit Intel architecture.</li>
+<li>The gc compilers do more in-lining, including for some operations
+in the run-time such as <a href="/pkg/builtin/#append"><code>append</code></a>
+and interface conversions.</li>
+<li>There is a new implementation of Go maps with significant reduction in
+memory footprint and CPU time.</li>
+<li>The garbage collector has been made more parallel, which can reduce
+latencies for programs running on multiple CPUs.</li>
+<li>The garbage collector is also more precise, which costs a small amount of
+CPU time but can reduce the size of the heap significantly, especially
+on 32-bit architectures.</li>
+<li>Due to tighter coupling of the run-time and network libraries, fewer
+context switches are required on network operations.</li>
 </ul>
 
 <h2 id="library">Changes to the standard library</h2>
@@ -310,9 +510,9 @@ that the only valid networks for
 are <code>"tcp"</code>,
 <code>"tcp4"</code>, and <code>"tcp6"</code>, the Go 1.0 implementation silently accepted any string.
 The Go 1.1 implementation returns an error if the network is not one of those strings.
-The same is true of the other protocol-specific resolvers <a href="/pkg/ResolveIPAddr/"><code>ResolveIPAddr</code></a>,
-<a href="/pkg/ResolveUDPAddr/"><code>ResolveUDPAddr</code></a>, and
-<a href="/pkg/ResolveUnixAddr/"><code>ResolveUnixAddr</code></a>.
+The same is true of the other protocol-specific resolvers <a href="/pkg/net/#ResolveIPAddr"><code>ResolveIPAddr</code></a>,
+<a href="/pkg/net/#ResolveUDPAddr"><code>ResolveUDPAddr</code></a>, and
+<a href="/pkg/net/#ResolveUnixAddr"><code>ResolveUnixAddr</code></a>.
 </p>
 
 <p>
@@ -322,13 +522,33 @@ returned a
 <a href="/pkg/net/#UDPConn"><code>UDPConn</code></a> as
 a representation of the connection endpoint.
 The Go 1.1 implementation instead returns a
-<a href="/pkg/UnixConn/"><code>UnixConn</code></a>
+<a href="/pkg/net/#UnixConn"><code>UnixConn</code></a>
 to allow reading and writing
 with its
 <a href="/pkg/net/#UnixConn.ReadFrom"><code>ReadFrom</code></a>
 and 
 <a href="/pkg/net/#UnixConn.WriteTo"><code>WriteTo</code></a>
 methods.
+</p>
+
+<p>
+The data structures
+<a href="/pkg/net/#IPAddr"><code>IPAddr</code></a>,
+<a href="/pkg/net/#TCPAddr"><code>TCPAddr</code></a>, and
+<a href="/pkg/net/#UDPAddr"><code>UDPAddr</code></a>
+add a new string field called <code>Zone</code>.
+Code using untagged composite literals (e.g. <code>net.TCPAddr{ip, port}</code>)
+instead of tagged literals (<code>net.TCPAddr{IP: ip, Port: port}</code>)
+will break due to the new field.
+The Go 1 compatibility rules allow this change: client code must use tagged literals to avoid such breakages.
+</p>
+
+<p>
+<em>Updating</em>:
+To correct breakage caused by the new struct field,
+<code>go fix</code> will rewrite code to add tags for these types.
+More generally, <code>go vet</code> will identify composite literals that
+should be revised to use field tags.
 </p>
 
 <h3 id="reflect">reflect</h3>
@@ -338,7 +558,7 @@ The <a href="/pkg/reflect/"><code>reflect</code></a> package has several signifi
 </p>
 
 <p>
-It is now possible to run a <code>select</code> statement using
+It is now possible to run a "select" statement using
 the <code>reflect</code> package; see the description of
 <a href="/pkg/reflect/#Select"><code>Select</code></a>
 and
@@ -374,18 +594,10 @@ and
 <a href="/pkg/reflect/#SliceOf"><code>SliceOf</code></a>
 construct new
 <a href="/pkg/reflect/#Type"><code>Types</code></a>
-from existing types, for example to construct a the type <code>[]T</code> given
+from existing types, for example to construct the type <code>[]T</code> given
 only <code>T</code>.
 </p>
 
-
-
-<h3 id="runtime">runtime</h3>
-
-<p>
-TODO:
-<code>runtime</code>: BlockProfile
-</p>
 
 <h3 id="time">time</h3>
 <p>
@@ -488,6 +700,14 @@ so it implements the
 </li>
 
 <li>
+The <a href="/pkg/compress/gzip/"><code>compress/gzip</code></a> package has
+a new <a href="/pkg/compress/gzip/#Writer.Flush"><code>Flush</code></a>
+method for its
+<a href="/pkg/compress/gzip/#Writer"><code>Writer</code></a>
+type that flushes its underlying <code>flate.Writer</code>.
+</li>
+
+<li>
 The <a href="/pkg/crypto/hmac/"><code>crypto/hmac</code></a> package has a new function,
 <a href="/pkg/crypto/hmac/#Equal"><code>Equal</code></a>, to compare two MACs.
 </li>
@@ -501,7 +721,7 @@ and a new function
 </li>
 
 <li>
-The <a href="/pkg/database/sql/"><code>database/sql/</code></a> package
+The <a href="/pkg/database/sql/"><code>database/sql</code></a> package
 has a new 
 <a href="/pkg/database/sql/#DB.Ping"><code>Ping</code></a>
 method for its
@@ -522,7 +742,7 @@ may implement to improve performance.
 The <a href="/pkg/encoding/json/"><code>encoding/json</code></a> package's
 <a href="/pkg/encoding/json/#Decoder"><code>Decoder</code></a>
 has a new method
-<a href="/pkg/encoding/json/#Decoder.Reader"><code>Reader</code></a>
+<a href="/pkg/encoding/json/#Decoder.Buffered"><code>Buffered</code></a>
 to provide access to the remaining data in its buffer,
 as well as a new method
 <a href="/pkg/encoding/json/#Decoder.UseNumber"><code>UseNumber</code></a>
@@ -532,7 +752,7 @@ a string, rather than a float64.
 </li>
 
 <li>
-The <a href="/pkg/encoding/xml/"><code>endoding/xml</code></a> package
+The <a href="/pkg/encoding/xml/"><code>encoding/xml</code></a> package
 has a new function,
 <a href="/pkg/encoding/xml/#EscapeText"><code>EscapeText</code></a>,
 which writes escaped XML output,
@@ -569,12 +789,17 @@ to format arbitrary Go source code.
 
 <li>
 The undocumented and only partially implemented "noescape" feature of the
-<a href="/pkg/html/template/">html/template</a>
+<a href="/pkg/html/template/"><code>html/template</code></a>
 package has been removed; programs that depend on it will break.
 </li>
 
 <li>
-The <a href="/pkg/io/">io</a> package now exports the
+The <a href="/pkg/image/jpeg/"><code>image/jpeg</code></a> package now
+reads progressive JPEG files and handles a few more subsampling configurations.
+</li>
+
+<li>
+The <a href="/pkg/io/"><code>io</code></a> package now exports the
 <a href="/pkg/io/#ByteWriter"><code>io.ByteWriter</code></a> interface to capture the common
 functionality of writing a byte at a time.
 </li>
@@ -615,19 +840,101 @@ to define the boundary separator used to package the output.
 </li>
 
 <li>
-The new <a href="/pkg/net/http/cookiejar/">net/http/cookiejar</a> package provides the basics for managing HTTP cookies.
+The
+<a href="/pkg/net/"><code>net</code></a> package's
+<a href="/pkg/net/#ListenUnixgram"><code>ListenUnixgram</code></a>
+function has changed return types: it now returns a
+<a href="/pkg/net/#UnixConn"><code>UnixConn</code></a>
+rather than a
+<a href="/pkg/net/#UDPConn"><code>UDPConn</code></a>, which was
+clearly a mistake in Go 1.0.
+Since this API change fixes a bug, it is permitted by the Go 1 compatibility rules.
 </li>
 
-<li> TODO: 
-<code>net/http</code>: ParseTime, CloseNotifier, Request.PostFormValue, ServeMux.Handler, Transport.CancelRequest
+<li>
+The <a href="/pkg/net/"><code>net</code></a> package includes a new type,
+<a href="/pkg/net/#Dialer"><code>Dialer</code></a>, to supply options to
+<a href="/pkg/net/#Dialer.Dial"><code>Dial</code></a>.
 </li>
 
-<li> TODO: 
-<code>net/mail</code>: ParseAddress, ParseAddressList
+<li>
+The <a href="/pkg/net/"><code>net</code></a> package adds support for
+link-local IPv6 addresses with zone qualifiers, such as <code>fe80::1%lo0</code>.
+The address structures <a href="/pkg/net/#IPAddr"><code>IPAddr</code></a>,
+<a href="/pkg/net/#UDPAddr"><code>UDPAddr</code></a>, and
+<a href="/pkg/net/#TCPAddr"><code>TCPAddr</code></a>
+record the zone in a new field, and functions that expect string forms of these addresses, such as
+<a href="/pkg/net/#Dial"><code>Dial</code></a>,
+<a href="/pkg/net/#ResolveIPAddr"><code>ResolveIPAddr</code></a>,
+<a href="/pkg/net/#ResolveUDPAddr"><code>ResolveUDPAddr</code></a>, and
+<a href="/pkg/net/#ResolveTCPAddr"><code>ResolveTCPAddr</code></a>,
+now accept the zone-qualified form.
 </li>
 
-<li> TODO: 
-<code>net/smtp</code>: Client.Hello
+<li>
+The <a href="/pkg/net/"><code>net</code></a> package adds
+<a href="/pkg/net/#LookupNS"><code>LookupNS</code></a> to its suite of resolving functions.
+<code>LookupNS</code> returns the <a href="/pkg/net/#NS">NS records</a> for a host name.
+</li>
+
+<li>
+The <a href="/pkg/net/"><code>net</code></a> package adds protocol-specific 
+packet reading and writing methods to
+<a href="/pkg/net/#IPConn"><code>IPConn</code></a>
+(<a href="/pkg/net/#IPConn.ReadMsgIP"><code>ReadMsgIP</code></a>
+and <a href="/pkg/net/#IPConn.WriteMsgIP"><code>WriteMsgIP</code></a>) and 
+<a href="/pkg/net/#UDPConn"><code>UDPConn</code></a>
+(<a href="/pkg/net/#UDPConn.ReadMsgUDP"><code>ReadMsgUDP</code></a> and
+<a href="/pkg/net/#UDPConn.WriteMsgUDP"><code>WriteMsgUDP</code></a>).
+These are specialized versions of <a href="/pkg/net/#PacketConn"><code>PacketConn</code></a>'s
+<code>ReadFrom</code> and <code>WriteTo</code> methods that provide access to out-of-band data associated
+with the packets.
+ </li>
+ 
+ <li>
+The <a href="/pkg/net/"><code>net</code></a> package adds methods to
+<a href="/pkg/net/#UnixConn"><code>UnixConn</code></a> to allow closing half of the connection 
+(<a href="/pkg/net/#UnixConn.CloseRead"><code>CloseRead</code></a> and
+<a href="/pkg/net/#UnixConn.CloseWrite"><code>CloseWrite</code></a>),
+matching the existing methods of <a href="/pkg/net/#TCPConn"><code>TCPConn</code></a>.
+</li>
+ 
+<li>
+The <a href="/pkg/net/http/"><code>net/http</code></a> package includes several new additions.
+<a href="/pkg/net/http/#ParseTime"><code>ParseTime</code></a> parses a time string, trying
+several common HTTP time formats.
+The <a href="/pkg/net/http/#Request.PostFormValue">PostFormValue</a> method of
+<a href="/pkg/net/http/#Request"><code>Request</code></a> is like
+<a href="/pkg/net/http/#Request.FormValue"><code>FormValue</code></a> but ignores URL parameters.
+The <a href="/pkg/net/http/#CloseNotifier"><code>CloseNotifier</code></a> interface provides a mechanism
+for a server handler to discover when a client has disconnected.
+The <code>ServeMux</code> type now has a
+<a href="/pkg/net/http/#ServeMux.Handler"><code>Handler</code></a> method to access a path's
+<code>Handler</code> without executing it.
+The <code>Transport</code> can now cancel an in-flight request with
+<a href="/pkg/net/http/#Transport.CancelRequest"><code>CancelRequest</code></a>.
+Finally, the Transport is now more aggressive at closing TCP connections when
+a <a href="/pkg/net/http/#Response"><code>Response.Body</code></a> is closed before
+being fully consumed.
+</li>
+
+<li>
+The new <a href="/pkg/net/http/cookiejar/"><code>net/http/cookiejar</code></a> package provides the basics for managing HTTP cookies.
+</li>
+
+<li>
+The <a href="/pkg/net/mail/"><code>net/mail</code></a> package has two new functions,
+<a href="/pkg/net/mail/#ParseAddress"><code>ParseAddress</code></a> and
+<a href="/pkg/net/mail/#ParseAddressList"><code>ParseAddressList</code></a>,
+to parse RFC 5322-formatted mail addresses into
+<a href="/pkg/net/mail/#Address"><code>Address</code></a> structures.
+</li>
+
+<li>
+The <a href="/pkg/net/smtp/"><code>net/smtp</code></a> package's
+<a href="/pkg/net/smtp/#Client"><code>Client</code></a> type has a new method,
+<a href="/pkg/net/smtp/#Client.Hello"><code>Hello</code></a>,
+which transmits a <code>HELO</code> or <code>EHLO</code> message to the server.
 </li>
 
 <li>
@@ -638,17 +945,14 @@ has two new functions,
 which do ASCII-only trimming of leading and trailing spaces.
 </li>
 
-<li> TODO:
-<code>net</code>: DialOption, DialOpt, ListenUnixgram, LookupNS, IPConn.ReadMsgIP, IPConn.WriteMsgIP, UDPConn.ReadMsgUDP, UDPConn.WriteMsgUDP, UnixConn.CloseRead, UnixConn.CloseWrite
+<li>
+The new method <a href="/pkg/os/#FileMode.IsRegular"><code>os.FileMode.IsRegular</code></a> makes it easy to ask if a file is a plain file.
 </li>
 
 <li>
-The new method <a href="/pkg/os/#FileMode.IsRegular"><code>os.FileMode.IsRegular</code> </a> makes it easy to ask if a file is a plain file.
-</li>
-
-<li>
-The <a href="/pkg/image/jpeg/"><code>image/jpeg</code></a> package now
-reads progressive JPEG files and handles a few more subsampling configurations.
+The <a href="/pkg/os/signal/"><code>os/signal</code></a> package has a new function,
+<a href="/pkg/os/signal/#Stop"><code>Stop</code></a>, which stops the package delivering
+any further signals to the channel.
 </li>
 
 <li>
@@ -686,7 +990,7 @@ The <a href="/pkg/strings/"><code>strings</code></a> package has two new functio
 <a href="/pkg/strings/#TrimPrefix"><code>TrimPrefix</code></a>
 and
 <a href="/pkg/strings/#TrimSuffix"><code>TrimSuffix</code></a>
-with self-evident properties, and the the new method
+with self-evident properties, and the new method
 <a href="/pkg/strings/#Reader.WriteTo"><code>Reader.WriteTo</code></a> so the
 <a href="/pkg/strings/#Reader"><code>Reader</code></a>
 type now implements the
@@ -699,8 +1003,11 @@ The <a href="/pkg/syscall/"><code>syscall</code></a> package has received many u
 
 <li>
 The <a href="/pkg/testing/"><code>testing</code></a> package now automates the generation of allocation
-statistics in benchmarks using the new
-<a href="/pkg/testing/#AllocsPerRun"><code>AllocsPerRun</code></a> function and the
+statistics in tests and benchmarks using the new
+<a href="/pkg/testing/#AllocsPerRun"><code>AllocsPerRun</code></a> function. And the
+<a href="/pkg/testing/#B.ReportAllocs"><code>ReportAllocs</code></a>
+method on <a href="/pkg/testing/#B"><code>testing.B</code></a> will enable printing of
+memory allocation statistics for the calling benchmark. It also introduces the
 <a href="/pkg/testing/#BenchmarkResult.AllocsPerOp"><code>AllocsPerOp</code></a> method of
 <a href="/pkg/testing/#BenchmarkResult"><code>BenchmarkResult</code></a>.
 There is also a new
@@ -718,16 +1025,25 @@ In the <a href="/pkg/text/template/"><code>text/template</code></a>
 and
 <a href="/pkg/html/template/"><code>html/template</code></a> packages,
 templates can now use parentheses to group the elements of pipelines, simplifying the construction of complex pipelines.
-TODO: Link to example.
+Also, as part of the new parser, the
+<a href="/pkg/text/template/parse/#Node"><code>Node</code></a> interface got two new methods to provide
+better error reporting.
+Although this violates the Go 1 compatibility rules,
+no existing code should be affected because this interface is explicitly intended only to be used
+by the
+<a href="/pkg/text/template/"><code>text/template</code></a>
+and
+<a href="/pkg/html/template/"><code>html/template</code></a>
+packages and there are safeguards to guarantee that.
+</li>
+
+<li>
+The implementation of the <a href="/pkg/unicode/"><code>unicode</code></a> package has been updated to Unicode version 6.2.0.
 </li>
 
 <li>
 In the <a href="/pkg/unicode/utf8/"><code>unicode/utf8</code></a> package,
 the new function <a href="/pkg/unicode/utf8/#ValidRune"><code>ValidRune</code></a> reports whether the rune is a valid Unicode code point.
 To be valid, a rune must be in range and not be a surrogate half.
-</li>
-
-<li>
-The implementation of the <a href="/pkg/unicode/"><code>unicode</code></a> package has been updated to Unicode version 6.2.0.
 </li>
 </ul>

@@ -66,6 +66,7 @@ var (
 	templateDir    = flag.String("templates", "", "directory containing alternate template files")
 	showPlayground = flag.Bool("play", false, "enable playground in web interface")
 	showExamples   = flag.Bool("ex", false, "show examples in command line mode")
+	declLinks      = flag.Bool("links", true, "link identifiers to their declarations")
 
 	// search index
 	indexEnabled  = flag.Bool("index", false, "enable search index")
@@ -274,17 +275,23 @@ func infoSnippet_htmlFunc(info SpotInfo) string {
 	return `<span class="alert">no snippet text available</span>`
 }
 
-func nodeFunc(node interface{}, fset *token.FileSet) string {
+func nodeFunc(info *PageInfo, node interface{}) string {
 	var buf bytes.Buffer
-	writeNode(&buf, fset, node)
+	writeNode(&buf, info.FSet, node)
 	return buf.String()
 }
 
-func node_htmlFunc(node interface{}, fset *token.FileSet) string {
+func node_htmlFunc(info *PageInfo, node interface{}, linkify bool) string {
 	var buf1 bytes.Buffer
-	writeNode(&buf1, fset, node)
+	writeNode(&buf1, info.FSet, node)
+
 	var buf2 bytes.Buffer
-	FormatText(&buf2, buf1.Bytes(), -1, true, "", nil)
+	if n, _ := node.(ast.Node); n != nil && linkify && *declLinks {
+		LinkifyText(&buf2, buf1.Bytes(), n)
+	} else {
+		FormatText(&buf2, buf1.Bytes(), -1, true, "", nil)
+	}
+
 	return buf2.String()
 }
 
@@ -335,14 +342,14 @@ func stripExampleSuffix(name string) string {
 	return name
 }
 
-func example_textFunc(funcName string, examples []*doc.Example, fset *token.FileSet, indent string) string {
+func example_textFunc(info *PageInfo, funcName, indent string) string {
 	if !*showExamples {
 		return ""
 	}
 
 	var buf bytes.Buffer
 	first := true
-	for _, eg := range examples {
+	for _, eg := range info.Examples {
 		name := stripExampleSuffix(eg.Name)
 		if name != funcName {
 			continue
@@ -356,7 +363,7 @@ func example_textFunc(funcName string, examples []*doc.Example, fset *token.File
 		// print code
 		cnode := &printer.CommentedNode{Node: eg.Code, Comments: eg.Comments}
 		var buf1 bytes.Buffer
-		writeNode(&buf1, fset, cnode)
+		writeNode(&buf1, info.FSet, cnode)
 		code := buf1.String()
 		// Additional formatting if this is a function body.
 		if n := len(code); n >= 2 && code[0] == '{' && code[n - 1] == '}' {
@@ -376,9 +383,9 @@ func example_textFunc(funcName string, examples []*doc.Example, fset *token.File
 	return buf.String()
 }
 
-func example_htmlFunc(funcName string, examples []*doc.Example, fset *token.FileSet) string {
+func example_htmlFunc(info *PageInfo, funcName string) string {
 	var buf bytes.Buffer
-	for _, eg := range examples {
+	for _, eg := range info.Examples {
 		name := stripExampleSuffix(eg.Name)
 
 		if name != funcName {
@@ -387,7 +394,7 @@ func example_htmlFunc(funcName string, examples []*doc.Example, fset *token.File
 
 		// print code
 		cnode := &printer.CommentedNode{Node: eg.Code, Comments: eg.Comments}
-		code := node_htmlFunc(cnode, fset)
+		code := node_htmlFunc(info, cnode, true)
 		out := eg.Output
 		wholeFile := true
 
@@ -409,7 +416,7 @@ func example_htmlFunc(funcName string, examples []*doc.Example, fset *token.File
 		play := ""
 		if eg.Play != nil && *showPlayground {
 			var buf bytes.Buffer
-			if err := format.Node(&buf, fset, eg.Play); err != nil {
+			if err := format.Node(&buf, info.FSet, eg.Play); err != nil {
 				log.Print(err)
 			} else {
 				play = buf.String()
@@ -474,19 +481,33 @@ func pkgLinkFunc(path string) string {
 	return pkgHandler.pattern[1:] + relpath // remove trailing '/' for relative URL
 }
 
-func posLink_urlFunc(node ast.Node, fset *token.FileSet) string {
+// n must be an ast.Node or a *doc.Note
+func posLink_urlFunc(info *PageInfo, n interface{}) string {
+	var pos, end token.Pos
+
+	switch n := n.(type) {
+	case ast.Node:
+		pos = n.Pos()
+		end = n.End()
+	case *doc.Note:
+		pos = n.Pos
+		end = n.End
+	default:
+		panic(fmt.Sprintf("wrong type for posLink_url template formatter: %T", n))
+	}
+
 	var relpath string
 	var line int
-	var low, high int // selection
+	var low, high int // selection offset range
 
-	if p := node.Pos(); p.IsValid() {
-		pos := fset.Position(p)
-		relpath = pos.Filename
-		line = pos.Line
-		low = pos.Offset
+	if pos.IsValid() {
+		p := info.FSet.Position(pos)
+		relpath = p.Filename
+		line = p.Line
+		low = p.Offset
 	}
-	if p := node.End(); p.IsValid() {
-		high = fset.Position(p).Offset
+	if end.IsValid() {
+		high = info.FSet.Position(end).Offset
 	}
 
 	var buf bytes.Buffer
@@ -522,7 +543,8 @@ var fmap = template.FuncMap{
 	// various helpers
 	"filename": filenameFunc,
 	"repeat":   strings.Repeat,
-	// accss to FileInfos (directory listings)
+
+	// access to FileInfos (directory listings)
 	"fileInfoName": fileInfoNameFunc,
 	"fileInfoTime": fileInfoTimeFunc,
 	// access to search result information
@@ -1016,6 +1038,23 @@ func collectExamples(pkg *ast.Package, testfiles map[string]*ast.File) []*doc.Ex
 	return examples
 }
 
+// poorMansImporter returns a (dummy) package object named
+// by the last path component of the provided package path
+// (as is the convention for packages). This is sufficient
+// to resolve package identifiers without doing an actual
+// import. It never returns an error.
+//
+func poorMansImporter(imports map[string]*ast.Object, path string) (*ast.Object, error) {
+	pkg := imports[path]
+	if pkg == nil {
+		// note that strings.LastIndex returns -1 if there is no "/"
+		pkg = ast.NewObj(ast.Pkg, path[strings.LastIndex(path, "/")+1:])
+		pkg.Data = ast.NewScope(nil) // required by ast.NewPackage for dot-import
+		imports[path] = pkg
+	}
+	return pkg, nil
+}
+
 // getPageInfo returns the PageInfo for a package directory abspath. If the
 // parameter genAST is set, an AST containing only the package exports is
 // computed (PageInfo.PAst), otherwise package documentation (PageInfo.Doc)
@@ -1024,8 +1063,8 @@ func collectExamples(pkg *ast.Package, testfiles map[string]*ast.File) []*doc.Ex
 // directories, PageInfo.Dirs is nil. If an error occurred, PageInfo.Err is
 // set to the respective error but the error is not logged.
 //
-func (h *docServer) getPageInfo(abspath, relpath string, mode PageInfoMode) (info PageInfo) {
-	info.Dirname = abspath
+func (h *docServer) getPageInfo(abspath, relpath string, mode PageInfoMode) *PageInfo {
+	info := &PageInfo{Dirname: abspath}
 
 	// Restrict to the package files that would be used when building
 	// the package on this system.  This makes sure that if there are
@@ -1042,7 +1081,7 @@ func (h *docServer) getPageInfo(abspath, relpath string, mode PageInfoMode) (inf
 	// continue if there are no Go source files; we still want the directory info
 	if _, nogo := err.(*build.NoGoError); err != nil && !nogo {
 		info.Err = err
-		return
+		return info
 	}
 
 	// collect package files
@@ -1065,9 +1104,11 @@ func (h *docServer) getPageInfo(abspath, relpath string, mode PageInfoMode) (inf
 		files, err := parseFiles(fset, abspath, pkgfiles)
 		if err != nil {
 			info.Err = err
-			return
+			return info
 		}
-		pkg := &ast.Package{Name: pkgname, Files: files}
+
+		// ignore any errors - they are due to unresolved identifiers
+		pkg, _ := ast.NewPackage(fset, files, poorMansImporter, nil)
 
 		// extract package documentation
 		info.FSet = fset
@@ -1139,7 +1180,7 @@ func (h *docServer) getPageInfo(abspath, relpath string, mode PageInfoMode) (inf
 	info.DirTime = timestamp
 	info.DirFlat = mode & flatDir != 0
 
-	return
+	return info
 }
 
 func (h *docServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -1471,6 +1512,8 @@ func readIndex(filenames string) error {
 	matches, err := filepath.Glob(filenames)
 	if err != nil {
 		return err
+	} else if matches == nil {
+		return fmt.Errorf("no index files match %q", filenames)
 	}
 	sort.Strings(matches) // make sure files are in the right order
 	files := make([]io.Reader,0, len(matches))

@@ -15,14 +15,18 @@ package math
 // unnecessary overflow and underflow.
 //
 // Special cases are:
-//	Hypot(p, q) = +Inf if p or q is infinite
-//	Hypot(p, q) = NaN if p or q is NaN
+//	Hypot(±Inf, q) = +Inf
+//	Hypot(p, ±Inf) = +Inf
+//	Hypot(NaN, q) = NaN
+//	Hypot(p, NaN) = NaN
 
 // Hypot 返回 Sqrt(p*p + q*q)，小心避免不必要的向上溢出和向下溢出。
 //
 // 特殊情况为：
-//	若 p 或 q 为 Inf，则 Hypot(p, q) = +Inf
-//	若 p 或 q 为 NaN，则 Hypot(p, q) = NaN
+//	Hypot(±Inf, q) = +Inf
+//	Hypot(p, ±Inf) = +Inf
+//	Hypot(NaN, q)  = NaN
+//	Hypot(p, NaN)  = NaN
 func Hypot(p, q float64) float64
 
 func hypot(p, q float64) float64 {

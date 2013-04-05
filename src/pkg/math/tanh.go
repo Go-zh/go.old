@@ -96,7 +96,7 @@ var tanhQ = [...]float64{
 	4.84406305325125486048E3,
 }
 
-// Tanh computes the hyperbolic tangent of x.
+// Tanh returns the hyperbolic tangent of x.
 //
 // Special cases are:
 //	Tanh(±0) = ±0

@@ -155,7 +155,7 @@ struct	Type
 	Type*	orig;		// original type (type literal or predefined type)
 	int		lineno;
 
-	// TFUNCT
+	// TFUNC
 	uchar	thistuple;
 	uchar	outtuple;
 	uchar	intuple;
@@ -394,6 +394,7 @@ struct	Pkg
 	uchar	imported;	// export data of this package was parsed
 	char	exported;	// import line written in export data
 	char	direct;	// imported directly
+	char	safe;	// whether the package is marked as safe
 };
 
 typedef	struct	Iter	Iter;

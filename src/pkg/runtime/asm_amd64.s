@@ -37,6 +37,7 @@ nocpuinfo:
 	JZ	needtls
 	// g0 already in DI
 	MOVQ	DI, CX	// Win64 uses CX for first parameter
+	MOVQ	$setmg_gcc<>(SB), SI
 	CALL	AX
 	CMPL	runtime·iswindows(SB), $0
 	JEQ ok
@@ -682,6 +683,13 @@ settls:
 	MOVQ	BX, g(CX)
 	RET
 
+// void setmg_gcc(M*, G*); set m and g called from gcc.
+TEXT setmg_gcc<>(SB),7,$0
+	get_tls(AX)
+	MOVQ	DI, m(AX)
+	MOVQ	SI, g(AX)
+	RET
+
 // check that SP is in range [g->stackbase, g->stackguard)
 TEXT runtime·stackcheck(SB), 7, $0
 	get_tls(CX)
@@ -737,7 +745,7 @@ TEXT runtime·stackguard(SB),7,$0
 	get_tls(CX)
 	MOVQ	g(CX), BX
 	MOVQ	g_stackguard(BX), DX
-	MOVQ	DX, guard+8(FP)
+	MOVQ	DX, limit+8(FP)
 	RET
 
 GLOBL runtime·tls0(SB), $64
@@ -899,3 +907,115 @@ TEXT shifts(SB),7,$0
 	QUAD $0xffff0f0e0d0c0b0a
 	QUAD $0x0807060504030201
 	QUAD $0xff0f0e0d0c0b0a09
+
+TEXT runtime·memeq(SB),7,$0
+	MOVQ	a+0(FP), SI
+	MOVQ	b+8(FP), DI
+	MOVQ	count+16(FP), BX
+	JMP	runtime·memeqbody(SB)
+
+
+TEXT bytes·Equal(SB),7,$0
+	MOVQ	a_len+8(FP), BX
+	MOVQ	b_len+32(FP), CX
+	XORQ	AX, AX
+	CMPQ	BX, CX
+	JNE	eqret
+	MOVQ	a+0(FP), SI
+	MOVQ	b+24(FP), DI
+	CALL	runtime·memeqbody(SB)
+eqret:
+	MOVB	AX, ret+48(FP)
+	RET
+
+// a in SI
+// b in DI
+// count in BX
+TEXT runtime·memeqbody(SB),7,$0
+	XORQ	AX, AX
+
+	CMPQ	BX, $8
+	JB	small
+	
+	// 64 bytes at a time using xmm registers
+hugeloop:
+	CMPQ	BX, $64
+	JB	bigloop
+	MOVOU	(SI), X0
+	MOVOU	(DI), X1
+	MOVOU	16(SI), X2
+	MOVOU	16(DI), X3
+	MOVOU	32(SI), X4
+	MOVOU	32(DI), X5
+	MOVOU	48(SI), X6
+	MOVOU	48(DI), X7
+	PCMPEQB	X1, X0
+	PCMPEQB	X3, X2
+	PCMPEQB	X5, X4
+	PCMPEQB	X7, X6
+	PAND	X2, X0
+	PAND	X6, X4
+	PAND	X4, X0
+	PMOVMSKB X0, DX
+	ADDQ	$64, SI
+	ADDQ	$64, DI
+	SUBQ	$64, BX
+	CMPL	DX, $0xffff
+	JEQ	hugeloop
+	RET
+
+	// 8 bytes at a time using 64-bit register
+bigloop:
+	CMPQ	BX, $8
+	JBE	leftover
+	MOVQ	(SI), CX
+	MOVQ	(DI), DX
+	ADDQ	$8, SI
+	ADDQ	$8, DI
+	SUBQ	$8, BX
+	CMPQ	CX, DX
+	JEQ	bigloop
+	RET
+
+	// remaining 0-8 bytes
+leftover:
+	MOVQ	-8(SI)(BX*1), CX
+	MOVQ	-8(DI)(BX*1), DX
+	CMPQ	CX, DX
+	SETEQ	AX
+	RET
+
+small:
+	CMPQ	BX, $0
+	JEQ	equal
+
+	LEAQ	0(BX*8), CX
+	NEGQ	CX
+
+	CMPB	SI, $0xf8
+	JA	si_high
+
+	// load at SI won't cross a page boundary.
+	MOVQ	(SI), SI
+	JMP	si_finish
+si_high:
+	// address ends in 11111xxx.  Load up to bytes we want, move to correct position.
+	MOVQ	-8(SI)(BX*1), SI
+	SHRQ	CX, SI
+si_finish:
+
+	// same for DI.
+	CMPB	DI, $0xf8
+	JA	di_high
+	MOVQ	(DI), DI
+	JMP	di_finish
+di_high:
+	MOVQ	-8(DI)(BX*1), DI
+	SHRQ	CX, DI
+di_finish:
+
+	SUBQ	SI, DI
+	SHLQ	CX, DI
+equal:
+	SETEQ	AX
+	RET
