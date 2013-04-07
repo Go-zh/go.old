@@ -27,42 +27,42 @@ package math
 //
 // Method :
 //   1. Argument Reduction: find k and f such that
-//			x = 2**k * (1+f),
-//	   where  sqrt(2)/2 < 1+f < sqrt(2) .
+//          x = 2**k * (1+f),
+//     where  sqrt(2)/2 < 1+f < sqrt(2) .
 //
 //   2. Approximation of log(1+f).
-//	Let s = f/(2+f) ; based on log(1+f) = log(1+s) - log(1-s)
-//		 = 2s + 2/3 s**3 + 2/5 s**5 + .....,
-//	     	 = 2s + s*R
+//  Let s = f/(2+f) ; based on log(1+f) = log(1+s) - log(1-s)
+//       = 2s + 2/3 s**3 + 2/5 s**5 + .....,
+//           = 2s + s*R
 //      We use a special Reme algorithm on [0,0.1716] to generate
-//	a polynomial of degree 14 to approximate R.  The maximum error
-//	of this polynomial approximation is bounded by 2**-58.45. In
-//	other words,
-//		        2      4      6      8      10      12      14
-//	    R(z) ~ L1*s +L2*s +L3*s +L4*s +L5*s  +L6*s  +L7*s
-//	(the values of L1 to L7 are listed in the program) and
-//	    |      2          14          |     -58.45
-//	    | L1*s +...+L7*s    -  R(z) | <= 2
-//	    |                             |
-//	Note that 2s = f - s*f = f - hfsq + s*hfsq, where hfsq = f*f/2.
-//	In order to guarantee error in log below 1ulp, we compute log by
-//		log(1+f) = f - s*(f - R)		(if f is not too large)
-//		log(1+f) = f - (hfsq - s*(hfsq+R)).	(better accuracy)
+//  a polynomial of degree 14 to approximate R.  The maximum error
+//  of this polynomial approximation is bounded by 2**-58.45. In
+//  other words,
+//              2      4      6      8      10      12      14
+//      R(z) ~ L1*s +L2*s +L3*s +L4*s +L5*s  +L6*s  +L7*s
+//  (the values of L1 to L7 are listed in the program) and
+//      |      2          14          |     -58.45
+//      | L1*s +...+L7*s    -  R(z) | <= 2
+//      |                             |
+//  Note that 2s = f - s*f = f - hfsq + s*hfsq, where hfsq = f*f/2.
+//  In order to guarantee error in log below 1ulp, we compute log by
+//      log(1+f) = f - s*(f - R)        (if f is not too large)
+//      log(1+f) = f - (hfsq - s*(hfsq+R)). (better accuracy)
 //
-//	3. Finally,  log(x) = k*Ln2 + log(1+f).
-//			    = k*Ln2_hi+(f-(hfsq-(s*(hfsq+R)+k*Ln2_lo)))
-//	   Here Ln2 is split into two floating point number:
-//			Ln2_hi + Ln2_lo,
-//	   where n*Ln2_hi is always exact for |n| < 2000.
+//  3. Finally,  log(x) = k*Ln2 + log(1+f).
+//              = k*Ln2_hi+(f-(hfsq-(s*(hfsq+R)+k*Ln2_lo)))
+//     Here Ln2 is split into two floating point number:
+//          Ln2_hi + Ln2_lo,
+//     where n*Ln2_hi is always exact for |n| < 2000.
 //
 // Special cases:
-//	log(x) is NaN with signal if x < 0 (including -INF) ;
-//	log(+INF) is +INF; log(0) is -INF with signal;
-//	log(NaN) is that NaN with no signal.
+//  log(x) is NaN with signal if x < 0 (including -INF) ;
+//  log(+INF) is +INF; log(0) is -INF with signal;
+//  log(NaN) is that NaN with no signal.
 //
 // Accuracy:
-//	according to an error analysis, the error is always less than
-//	1 ulp (unit in the last place).
+//  according to an error analysis, the error is always less than
+//  1 ulp (unit in the last place).
 //
 // Constants:
 // The hexadecimal values are the intended ones for the following
@@ -70,13 +70,77 @@ package math
 // compiler will convert from decimal to binary accurately enough
 // to produce the hexadecimal values shown.
 
+// 原始C代码、详细注释、下面的常量以及此通知来自
+// FreeBSD 的 /usr/src/lib/msun/src/e_log.c 文件。
+// 此Go代码为原始C代码的简化版本。
+//
+//（版权声明见上。）
+//
+// __ieee754_log(x)
+// 返回 x 的对数
+//
+// 方法：
+//   1. 实参换算：
+//      寻找 k 和 f 使得
+//          x = 2**k * (1+f)，
+//      其中 sqrt(2)/2 < 1+f < sqrt(2)。
+//
+//   2. log(1+f) 的近似值。
+//      设 s = f/(2+f)，基于 log(1+f) = log(1+s) - log(1-s)，我们有
+//         s = 2s + 2/3 s**3 + 2/5 s**5 + ...
+//           = 2s + s*R
+//      我们在 [0, 0.1716] 中使用了特殊的雷默算法，生成14阶多项式来逼近 R。
+//      此多项式近似值的最大误差临界于 2**-58.45。换句话说，
+//
+//                      2     4     6     8     10     12     14
+//           R(z) ~ L1*s +L2*s +L3*s +L4*s +L5*s  +L6*s  +L7*s
+//                     （L1 至 L7 的值已在程序中列出）
+//      且
+//           |     2         14       |     -58.45
+//           | L1*s +...+L7*s  - R(z) | <= 2
+//           |                        |
+//
+//      注意 2s = f - s*f = f - hfsq + s*hfsq，其中 hfsq = f*f/2。
+//      为确保 log 的误差小于 1ulp，我们通过下式来计算 log：
+//      若 f 不算太大，就采用
+//           log(1+f) = f - s*(f - R)，
+//      若需更高的精度，则采用
+//           log(1+f) = f - (hfsq - s*(hfsq+R))。
+//
+//   3. 最后，
+//           log(x) = k*Ln2 + log(1+f)
+//                  = k*Ln2_hi+(f-(hfsq-(s*(hfsq+R)+k*Ln2_lo)))
+//      此处 Ln2 被分为两个浮点数：
+//           Ln2_hi + Ln2_lo，
+//      其中 n*Ln2_hi 总是满足 |n| < 2000。
+//
+// 特殊情况：
+//      若 x < 0（包括 -INF），则
+//         log(x)    为带符号 NaN；
+//         log(+INF) 为 +INF；
+//         log(0)    为 -INF；
+//         log(NaN)  为无符号 NaN。
+//
+// 精度：
+//      取决于误差分析，误差总是小于 1 ulp（末位单元）(unit in the last place)。
+//
+//（后文信息只与C源码相关，故不作翻译。）
+
 // Log returns the natural logarithm of x.
 //
 // Special cases are:
-//	Log(+Inf) = +Inf
-//	Log(0) = -Inf
+//  Log(+Inf) = +Inf
+//  Log(0) = -Inf
+//  Log(x < 0) = NaN
+//  Log(NaN) = NaN
+
+// Log 返回 x 的自然对数。
+//
+// 特殊情况为
+//	Log(+Inf)  = +Inf
+//	Log(0)     = -Inf
 //	Log(x < 0) = NaN
-//	Log(NaN) = NaN
+//	Log(NaN)   = NaN
 func Log(x float64) float64
 
 func log(x float64) float64 {
@@ -93,6 +157,7 @@ func log(x float64) float64 {
 	)
 
 	// special cases
+	// 特殊情况
 	switch {
 	case IsNaN(x) || IsInf(x, 1):
 		return x
@@ -103,6 +168,7 @@ func log(x float64) float64 {
 	}
 
 	// reduce
+	// 换算
 	f1, ki := Frexp(x)
 	if f1 < Sqrt2/2 {
 		f1 *= 2
@@ -112,6 +178,7 @@ func log(x float64) float64 {
 	k := float64(ki)
 
 	// compute
+	// 计算
 	s := f / (2 + f)
 	s2 := s * s
 	s4 := s2 * s2

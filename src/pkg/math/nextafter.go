@@ -11,7 +11,7 @@ package math
 //      Nextafter(NaN, y) = NaN
 //      Nextafter(x, NaN) = NaN
 
-// Nextafter 返回 x 之后直到 y 的下一个可表示的值。若 x == y，则返回 x。
+// Nextafter 返回从 x 到 y 的下一个可表示的值。若 x == y，则返回 x。
 //
 // 特殊情况为：
 //	Nextafter(NaN, y) = NaN

@@ -6,6 +6,9 @@ package math
 
 // Log10 returns the decimal logarithm of x.
 // The special cases are the same as for Log.
+
+// Log10 返回 x 的十进制对数。
+// 特殊情况与 Log 相同。
 func Log10(x float64) float64
 
 func log10(x float64) float64 {
@@ -14,6 +17,9 @@ func log10(x float64) float64 {
 
 // Log2 returns the binary logarithm of x.
 // The special cases are the same as for Log.
+
+// Log2 返回 x 的二进制对数。
+// 特殊情况与 Log 相同。
 func Log2(x float64) float64
 
 func log2(x float64) float64 {
