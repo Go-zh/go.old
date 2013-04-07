@@ -6,7 +6,7 @@
 //
 // The PNG specification is at http://www.w3.org/TR/PNG/.
 
-// png包实现了PNG图像的编码和解码。
+// png 包实现了PNG图像的编码和解码.
 //
 // PNG的具体说明在http://www.w3.org/TR/PNG/。
 package png
