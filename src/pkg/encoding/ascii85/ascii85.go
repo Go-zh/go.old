@@ -4,6 +4,9 @@
 
 // Package ascii85 implements the ascii85 data encoding
 // as used in the btoa tool and Adobe's PostScript and PDF document formats.
+
+// ascii85 包是对 ascii85 的数据编码的实现.
+// 被用于 btoa ( binary to ascii )工具， Adobe 的 PostScript 和PDF文档格式。
 package ascii85
 
 import (
@@ -15,6 +18,10 @@ import (
  * Encoder
  */
 
+/*
+ * 编码器
+ */
+
 // Encode encodes src into at most MaxEncodedLen(len(src))
 // bytes of dst, returning the actual number of bytes written.
 //
@@ -24,6 +31,15 @@ import (
 //
 // Often, ascii85-encoded data is wrapped in <~ and ~> symbols.
 // Encode does not add these.
+
+// Encode 编码源的最多 MaxEncodedLen(len(src)) 字节的到目标，
+// 返回实际的写入字节数。
+//
+// 通过对最后分段使用特殊的编码来操作4字节的数据块，所以 Encode 
+// 用在大型数据流的私有块上是不合适的。用 NewEncoder() 替代。
+//
+// 通常， ascii85 编码的数据用符号 <~ 和 ~> 括起来。
+// Encode 不加这些。
 func Encode(dst, src []byte) int {
 	if len(src) == 0 {
 		return 0
@@ -37,7 +53,7 @@ func Encode(dst, src []byte) int {
 		dst[3] = 0
 		dst[4] = 0
 
-		// Unpack 4 bytes into uint32 to repack into base 85 5-byte.
+		// Unpack 4 bytes into uint32 to repack into base 85 5-byte.   // 解包4字节到 uint32 重新打包到基于85的5字节。
 		var v uint32
 		switch len(src) {
 		default:
@@ -53,7 +69,7 @@ func Encode(dst, src []byte) int {
 			v |= uint32(src[0]) << 24
 		}
 
-		// Special case: zero (!!!!!) shortens to z.
+		// Special case: zero (!!!!!) shortens to z.   // 特殊情况： 0 缩短到 z 。
 		if v == 0 && len(src) >= 4 {
 			dst[0] = 'z'
 			dst = dst[1:]
@@ -62,13 +78,13 @@ func Encode(dst, src []byte) int {
 			continue
 		}
 
-		// Otherwise, 5 base 85 digits starting at !.
+		// Otherwise, 5 base 85 digits starting at !.   //否则，5基于数字85开始。
 		for i := 4; i >= 0; i-- {
 			dst[i] = '!' + byte(v%85)
 			v /= 85
 		}
 
-		// If src was short, discard the low destination bytes.
+		// If src was short, discard the low destination bytes.   // 若源被缩短，舍弃低位目标字节。
 		m := 5
 		if len(src) < 4 {
 			m -= 4 - len(src)
@@ -83,6 +99,8 @@ func Encode(dst, src []byte) int {
 }
 
 // MaxEncodedLen returns the maximum length of an encoding of n source bytes.
+
+// MaxEncodedLen 返回 n 源字节编码的最大长度.
 func MaxEncodedLen(n int) int { return (n + 3) / 4 * 5 }
 
 // NewEncoder returns a new ascii85 stream encoder.  Data written to
@@ -90,14 +108,18 @@ func MaxEncodedLen(n int) int { return (n + 3) / 4 * 5 }
 // Ascii85 encodings operate in 32-bit blocks; when finished
 // writing, the caller must Close the returned encoder to flush any
 // trailing partial block.
+
+// NewEncoder 返回一个新的 ascii85 流编码器.
+// 写入到返回的写入器中的数据将被编码，然后写入到 w 中。
+// Ascii85 编码在32位块中操作；当完成写入时，调用者必须关闭返回的编码器，去除所有尾部块。
 func NewEncoder(w io.Writer) io.WriteCloser { return &encoder{w: w} }
 
 type encoder struct {
 	err  error
 	w    io.Writer
-	buf  [4]byte    // buffered data waiting to be encoded
-	nbuf int        // number of bytes in buf
-	out  [1024]byte // output buffer
+	buf  [4]byte    // buffered data waiting to be encoded   //缓冲数据等待被编码
+	nbuf int        // number of bytes in buf   //缓冲区中的字节数
+	out  [1024]byte // output buffer   //输出缓冲
 }
 
 func (e *encoder) Write(p []byte) (n int, err error) {
@@ -105,7 +127,7 @@ func (e *encoder) Write(p []byte) (n int, err error) {
 		return 0, e.err
 	}
 
-	// Leading fringe.
+	// Leading fringe.   //开头边缘。
 	if e.nbuf > 0 {
 		var i int
 		for i = 0; i < len(p) && e.nbuf < 4; i++ {
@@ -124,7 +146,7 @@ func (e *encoder) Write(p []byte) (n int, err error) {
 		e.nbuf = 0
 	}
 
-	// Large interior chunks.
+	// Large interior chunks.   // 扩大内部块。
 	for len(p) >= 4 {
 		nn := len(e.out) / 5 * 4
 		if nn > len(p) {
@@ -141,7 +163,7 @@ func (e *encoder) Write(p []byte) (n int, err error) {
 		p = p[nn:]
 	}
 
-	// Trailing fringe.
+	// Trailing fringe.   // 后续边缘。
 	for i := 0; i < len(p); i++ {
 		e.buf[i] = p[i]
 	}
@@ -152,8 +174,11 @@ func (e *encoder) Write(p []byte) (n int, err error) {
 
 // Close flushes any pending output from the encoder.
 // It is an error to call Write after calling Close.
+
+// Close 清除编码器中的所有待输出数据.
+// 这是一个调用关闭之后再调用写入的错误处理。
 func (e *encoder) Close() error {
-	// If there's anything left in the buffer, flush it out
+	// If there's anything left in the buffer, flush it out   //若缓冲中有剩余，清除。
 	if e.err == nil && e.nbuf > 0 {
 		nout := Encode(e.out[0:], e.buf[0:e.nbuf])
 		e.nbuf = 0
@@ -164,6 +189,10 @@ func (e *encoder) Close() error {
 
 /*
  * Decoder
+ */
+
+/*
+ *解码器
  */
 
 type CorruptInputError int64
@@ -186,6 +215,15 @@ func (e CorruptInputError) Error() string {
 //
 // NewDecoder wraps an io.Reader interface around Decode.
 //
+
+// Decode 从源解码到目标，返回写入目标和源消耗的字节数.
+// 若源包含无效 ascii85 数据， Decode 将返回成功写入的字节数和 CorruptInputError 函数。
+// Decode 忽略源中的空格和控制字符。
+// 通常，ascii85 编码数据用 <~ 和 ~> 符号括起来。 Decode 期望这些被调用器去除。
+//
+// 若 flush 为真， Decode 会假定源表现为输入流结束并立即处理，而不是等待另一个32位块的结束。
+//
+// NewDecoder 包含一个 io.Reader 接口，区别于 Decode 。
 func Decode(dst, src []byte, flush bool) (ndst, nsrc int, err error) {
 	var v uint32
 	var nb int
@@ -219,17 +257,17 @@ func Decode(dst, src []byte, flush bool) (ndst, nsrc int, err error) {
 	if flush {
 		nsrc = len(src)
 		if nb > 0 {
-			// The number of output bytes in the last fragment
-			// is the number of leftover input bytes - 1:
-			// the extra byte provides enough bits to cover
-			// the inefficiency of the encoding for the block.
+			// The number of output bytes in the last fragment   // 最有一个分片里面输出字节的数目
+			// is the number of leftover input bytes - 1:        // 等于剩余收入字节数 - 1 :
+			// the extra byte provides enough bits to cover      // 额外的字节提供足够的位数覆盖
+			// the inefficiency of the encoding for the block.   // 无效数据块编码
 			if nb == 1 {
 				return 0, 0, CorruptInputError(len(src))
 			}
 			for i := nb; i < 5; i++ {
-				// The short encoding truncated the output value.
-				// We have to assume the worst case values (digit 84)
-				// in order to ensure that the top bits are correct.
+				// The short encoding truncated the output value.       // 短编码缩短了输出值。
+				// We have to assume the worst case values (digit 84)   // 我们必须假设最坏的情况，值（数字 84）
+				// in order to ensure that the top bits are correct.    // 为了确保最高位正确。
 				v = v*85 + 84
 			}
 			for i := 0; i < nb-1; i++ {
@@ -243,16 +281,18 @@ func Decode(dst, src []byte, flush bool) (ndst, nsrc int, err error) {
 }
 
 // NewDecoder constructs a new ascii85 stream decoder.
+
+// NewDecoder 构造一个新的 ascii85 流解码器.
 func NewDecoder(r io.Reader) io.Reader { return &decoder{r: r} }
 
 type decoder struct {
 	err     error
 	readErr error
 	r       io.Reader
-	end     bool       // saw end of message
-	buf     [1024]byte // leftover input
+	end     bool       // saw end of message   // 消息结束。
+	buf     [1024]byte // leftover input       // 剩余输入。
 	nbuf    int
-	out     []byte // leftover decoded output
+	out     []byte // leftover decoded output   // 剩余解码输出。
 	outbuf  [1024]byte
 }
 
@@ -265,25 +305,25 @@ func (d *decoder) Read(p []byte) (n int, err error) {
 	}
 
 	for {
-		// Copy leftover output from last decode.
+		// Copy leftover output from last decode.   // 从最后解码复制剩余输出。
 		if len(d.out) > 0 {
 			n = copy(p, d.out)
 			d.out = d.out[n:]
 			return
 		}
 
-		// Decode leftover input from last read.
+		// Decode leftover input from last read.   // Decode 最后读入的剩余输出。
 		var nn, nsrc, ndst int
 		if d.nbuf > 0 {
 			ndst, nsrc, d.err = Decode(d.outbuf[0:], d.buf[0:d.nbuf], d.readErr != nil)
 			if ndst > 0 {
 				d.out = d.outbuf[0:ndst]
 				d.nbuf = copy(d.buf[0:], d.buf[nsrc:d.nbuf])
-				continue // copy out and return
+				continue // copy out and return   //复制输出和返回
 			}
 		}
 
-		// Out of input, out of decoded output.  Check errors.
+		// Out of input, out of decoded output.  Check errors.   // 输入的 out ，已解码输出的 out 。检查错误。
 		if d.err != nil {
 			return 0, d.err
 		}
@@ -292,7 +332,7 @@ func (d *decoder) Read(p []byte) (n int, err error) {
 			return 0, d.err
 		}
 
-		// Read more data.
+		// Read more data.   // 读取更多数据。
 		nn, d.readErr = d.r.Read(d.buf[d.nbuf:])
 		d.nbuf += nn
 	}
