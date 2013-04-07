@@ -5,6 +5,8 @@
 package png
 
 // paeth implements the Paeth filter function, as per the PNG specification.
+
+// paeth实现了Paeth过滤器的功能，这是每个PNG都附带的信息。
 func paeth(a, b, c uint8) uint8 {
 	// This is an optimized version of the sample code in the PNG spec.
 	// For example, the sample code starts with:
@@ -36,6 +38,9 @@ func paeth(a, b, c uint8) uint8 {
 
 // filterPaeth applies the Paeth filter to the cdat slice.
 // cdat is the current row's data, pdat is the previous row's data.
+
+// filterPaeth将Paeth过滤器作用在cdat切片上。
+// cdat是当前行数的数据，pdat是前一行的数据。
 func filterPaeth(cdat, pdat []byte, bytesPerPixel int) {
 	var a, b, c, pa, pb, pc int
 	for i := 0; i < bytesPerPixel; i++ {
