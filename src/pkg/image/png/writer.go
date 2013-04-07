@@ -25,6 +25,8 @@ type encoder struct {
 }
 
 // Big-endian.
+
+// 大头端。
 func writeUint32(b []uint8, u uint32) {
 	b[0] = uint8(u >> 24)
 	b[1] = uint8(u >> 16)
@@ -37,6 +39,8 @@ type opaquer interface {
 }
 
 // Returns whether or not the image is fully opaque.
+
+// 返回是否image是完全不透明。
 func opaque(m image.Image) bool {
 	if o, ok := m.(opaquer); ok {
 		return o.Opaque()
@@ -54,6 +58,8 @@ func opaque(m image.Image) bool {
 }
 
 // The absolute value of a byte interpreted as a signed int8.
+
+// 字节上的绝对值是以一个int8来表示的。
 func abs8(d uint8) int {
 	if d < 128 {
 		return int(d)
@@ -153,6 +159,12 @@ func (e *encoder) writePLTEAndTRNS(p color.Palette) {
 //
 // This method should only be called from writeIDATs (via writeImage).
 // No other code should treat an encoder as an io.Writer.
+
+// encode实现了io.Writer，它是由PNG IDAT块写的，每个Write调用都包含了一个8-byte的头和4-byte
+// 的CRC检查计算和。由于writeIDATs使用一个bufio.Writer，每个调用都相对少使用。
+//
+// 这个方法应该限制只能被writeIDATs调用（通过writeImage）。
+// 其他的代码不需要将encoder当做io.Writer来使用。
 func (e *encoder) Write(b []byte) (int, error) {
 	e.writeChunk(b, "IDAT")
 	if e.err != nil {
@@ -163,6 +175,9 @@ func (e *encoder) Write(b []byte) (int, error) {
 
 // Chooses the filter to use for encoding the current row, and applies it.
 // The return value is the index of the filter and also of the row in cr that has had it applied.
+
+// 选择filter来编码当前的行。
+// 返回值是filter的索引，也是cr的作用filter的那一行。
 func filter(cr *[nFilter][]byte, pr []byte, bpp int) int {
 	// We try all five filter types, and pick the one that minimizes the sum of absolute differences.
 	// This is the same heuristic that libpng uses, although the filters are attempted in order of
@@ -413,6 +428,8 @@ func writeImage(w io.Writer, m image.Image, cb int) error {
 }
 
 // Write the actual image data to one or more IDAT chunks.
+
+// 将实际的图片数据写入到一个或者多个IDAT块。
 func (e *encoder) writeIDATs() {
 	if e.err != nil {
 		return
@@ -430,6 +447,9 @@ func (e *encoder) writeIEND() { e.writeChunk(nil, "IEND") }
 
 // Encode writes the Image m to w in PNG format. Any Image may be encoded, but
 // images that are not image.NRGBA might be encoded lossily.
+
+// Encode将图片m以PNG的格式写到w中。任何图片都可以被编码，但是哪些不是image.NRGBA的图片编码
+// 可能是有损的。
 func Encode(w io.Writer, m image.Image) error {
 	// Obviously, negative widths and heights are invalid. Furthermore, the PNG
 	// spec section 11.2.2 says that zero is invalid. Excessively large images are

@@ -16,7 +16,7 @@ type testpair struct {
 }
 
 var pairs = []testpair{
-	// Wikipedia example
+	// Wikipedia example   // 维基例子
 	{
 		"Man is distinguished, not only by his reason, but by this singular passion from " +
 			"other animals, which is a lust of the mind, that by a perseverance of delight in " +
@@ -28,7 +28,7 @@ var pairs = []testpair{
 			"l(DId<j@<?3r@:F%a+D58'ATD4$Bl@l3De:,-DJs`8ARoFb/0JMK@qB4^F!,R<AKZ&-DfTqBG%G\n" +
 			">uD.RTpAKYo'+CT/5+Cei#DII?(E,9)oF*2M7/c\n",
 	},
-	// Special case when shortening !!!!! to z.
+	// Special case when shortening !!!!! to z.   // 缩短!!!!! 到 z 时的特殊情况。
 	{
 		"\000\000\000\000",
 		"z",

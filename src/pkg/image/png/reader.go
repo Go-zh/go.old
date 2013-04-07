@@ -5,6 +5,10 @@
 // Package png implements a PNG image decoder and encoder.
 //
 // The PNG specification is at http://www.w3.org/TR/PNG/.
+
+// png 包实现了PNG图像的编码和解码.
+//
+// PNG的具体说明在http://www.w3.org/TR/PNG/。
 package png
 
 import (
@@ -19,6 +23,8 @@ import (
 )
 
 // Color type, as per the PNG spec.
+
+// 颜色类型，和每个PNG说明的类型一致。
 const (
 	ctGrayscale      = 0
 	ctTrueColor      = 2
@@ -28,6 +34,8 @@ const (
 )
 
 // A cb is a combination of color type and bit depth.
+
+// cb就是颜色类型和位深的组合。
 const (
 	cbInvalid = iota
 	cbG1
@@ -48,6 +56,8 @@ const (
 )
 
 // Filter type, as per the PNG spec.
+
+// 过滤器类型，每个PNG图片都带有的信息。
 const (
 	ftNone    = 0
 	ftSub     = 1
@@ -62,6 +72,11 @@ const (
 // chunks must appear in that order. There may be multiple IDAT chunks, and
 // IDAT chunks must be sequential (i.e. they may not have any other chunks
 // between them).
+// http://www.w3.org/TR/PNG/#5ChunkOrdering
+
+// 解码阶段。
+// PNG的说明文档中说，IHDR，PLTE（如果存在的话），IDAT和IEND的块必须按照顺序进行排列。
+// 可能有多个IDAT块，并且IDAT块必须是顺序的（例如，在IDAT块中不能有其他的块）。
 // http://www.w3.org/TR/PNG/#5ChunkOrdering
 const (
 	dsStart = iota
@@ -87,6 +102,8 @@ type decoder struct {
 }
 
 // A FormatError reports that the input is not a valid PNG.
+
+// FormatError会提示输入并不是一个合法的PNG。
 type FormatError string
 
 func (e FormatError) Error() string { return "png: invalid format: " + string(e) }
@@ -94,6 +111,8 @@ func (e FormatError) Error() string { return "png: invalid format: " + string(e)
 var chunkOrderError = FormatError("chunk out of order")
 
 // An UnsupportedError reports that the input uses a valid but unimplemented PNG feature.
+
+// UnsupportedError会提示输入使用一个合法的，但是未实现的PNG特性。
 type UnsupportedError string
 
 func (e UnsupportedError) Error() string { return "png: unsupported feature: " + string(e) }
@@ -250,6 +269,12 @@ func (d *decoder) parsetRNS(length uint32) error {
 // immediately before the first Read call is that d.r is positioned between the
 // first IDAT and xxx, and the decoder state immediately after the last Read
 // call is that d.r is positioned between yy and crc1.
+
+// Read实现了一个或者多个IDAT块，多个IDAT块就像一个连续的流（减去了头和尾的中间的块）。如果PNG数据
+// 是像这样的：
+//   ... len0 IDAT xxx crc0 len1 IDAT yy crc1 len2 IEND crc2
+// 这个reader就代表xxxyy。对于格式化好的PNG数据，在第一次调用Read之前，decoder是定位在第一个IDAT
+// 和xxx之间。在最后一次调用Read之后，decoder就定位在yy和crc1之间。
 func (d *decoder) Read(p []byte) (int, error) {
 	if len(p) == 0 {
 		return 0, nil
@@ -281,6 +306,8 @@ func (d *decoder) Read(p []byte) (int, error) {
 }
 
 // decode decodes the IDAT data into an image.
+
+// decode解码IDAT数据生成一个image。
 func (d *decoder) decode() (image.Image, error) {
 	r, err := zlib.NewReader(d)
 	if err != nil {
@@ -634,6 +661,8 @@ func Decode(r io.Reader) (image.Image, error) {
 
 // DecodeConfig returns the color model and dimensions of a PNG image without
 // decoding the entire image.
+
+// DecodeConfig返回颜色模型，没有解码整个图像，获得了PNG图片的尺寸。
 func DecodeConfig(r io.Reader) (image.Config, error) {
 	d := &decoder{
 		r:   r,
