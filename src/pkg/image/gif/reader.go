@@ -5,6 +5,10 @@
 // Package gif implements a GIF image decoder.
 //
 // The GIF specification is at http://www.w3.org/Graphics/GIF/spec-gif89a.txt.
+
+// gif 包实现了GIF图片的解码.
+//
+// GIF的说明文档在 http://www.w3.org/Graphics/GIF/spec-gif89a.txt。
 package gif
 
 import (
@@ -23,12 +27,16 @@ var (
 )
 
 // If the io.Reader does not also have ReadByte, then decode will introduce its own buffering.
+
+// 如果io.Reader没有ReadByte，解码操作就会使用它自己的缓存。
 type reader interface {
 	io.Reader
 	io.ByteReader
 }
 
 // Masks etc.
+
+// 各种Mask。
 const (
 	// Fields.
 	fColorMapFollows = 1 << 7
@@ -43,6 +51,8 @@ const (
 )
 
 // Section indicators.
+
+// Section的指标。
 const (
 	sExtension       = 0x21
 	sImageDescriptor = 0x2C
@@ -50,6 +60,8 @@ const (
 )
 
 // Extensions.
+
+// 扩展。
 const (
 	eText           = 0x01 // Plain Text
 	eGraphicControl = 0xF9 // Graphic Control
@@ -58,10 +70,14 @@ const (
 )
 
 // decoder is the type used to decode a GIF file.
+
+// decoder是用于解码一个GIF文件的结构。
 type decoder struct {
 	r reader
 
 	// From header.
+
+	// 从头部开始
 	vers            string
 	width           int
 	height          int
@@ -72,19 +88,29 @@ type decoder struct {
 	delayTime       int
 
 	// Unused from header.
+
+	// header没有使用的属性。
 	aspect byte
 
 	// From image descriptor.
+
+	// 从图像的descriptor得到。
 	imageFields byte
 
 	// From graphics control.
+
+	// 从图像control得到。
 	transparentIndex byte
 
 	// Computed.
+
+	// 计算出来的。
 	pixelSize      uint
 	globalColorMap color.Palette
 
 	// Used when decoding.
+
+	// 当解码的时候用到。
 	delay []int
 	image []*image.Paletted
 	tmp   [1024]byte // must be at least 768 so we can read color map
@@ -96,6 +122,11 @@ type decoder struct {
 // blocking.  After the LZW decoder completes, there will be a 0-byte
 // block remaining (0, ()), which is consumed when checking that the
 // blockReader is exhausted.
+
+// blockReader解析GIF图像数据的块结构，整个图像包括了(n, (n bytes))的数据块，
+// 其中1 <= n <= 255。 这是给LZW解码器用的reader，因此解码器就不需要处理数据块了。
+// 在LZW解码器操作完成之后，那里就只剩的(0,())这样0-byte的数据块了，
+// 这些数据块只有确认了blockReader全部执行了之后才会被消耗回收。
 type blockReader struct {
 	r     reader
 	slice []byte
@@ -131,6 +162,8 @@ func (b *blockReader) Read(p []byte) (int, error) {
 }
 
 // decode reads a GIF image from r and stores the result in d.
+
+// decode从r中读取一个GIF图像，并且存储解析数据到d上。
 func (d *decoder) decode(r io.Reader, configOnly bool) error {
 	// Add buffering if r does not provide ReadByte.
 	if rr, ok := r.(reader); ok {
@@ -368,11 +401,15 @@ func (d *decoder) readBlock() (int, error) {
 }
 
 // interlaceScan defines the ordering for a pass of the interlace algorithm.
+
+// interlaceScan定义了各行扫描算法的顺序。
 type interlaceScan struct {
 	skip, start int
 }
 
 // interlacing represents the set of scans in an interlaced GIF image.
+
+// interlacing代表了一个隔行扫描的扫描集合。
 var interlacing = []interlaceScan{
 	{8, 0}, // Group 1 : Every 8th. row, starting with row 0.
 	{8, 4}, // Group 2 : Every 8th. row, starting with row 4.
@@ -381,6 +418,8 @@ var interlacing = []interlaceScan{
 }
 
 // uninterlace rearranges the pixels in m to account for interlaced input.
+
+// uninterlace为了交替扫描输入，重新排列了m中的像素。
 func uninterlace(m *image.Paletted) {
 	var nPix []uint8
 	dx := m.Bounds().Dx()
@@ -400,6 +439,8 @@ func uninterlace(m *image.Paletted) {
 
 // Decode reads a GIF image from r and returns the first embedded
 // image as an image.Image.
+
+// Decode从r中读取一个GIF图像，然后返回的image.Image是第一个嵌入的图。
 func Decode(r io.Reader) (image.Image, error) {
 	var d decoder
 	if err := d.decode(r, false); err != nil {
@@ -409,6 +450,8 @@ func Decode(r io.Reader) (image.Image, error) {
 }
 
 // GIF represents the possibly multiple images stored in a GIF file.
+
+// GIF代表一个GIF文件上的多个图像。
 type GIF struct {
 	Image     []*image.Paletted // The successive images.
 	Delay     []int             // The successive delay times, one per frame, in 100ths of a second.
@@ -417,6 +460,8 @@ type GIF struct {
 
 // DecodeAll reads a GIF image from r and returns the sequential frames
 // and timing information.
+
+// DecodeAll 从r上读取一个GIF图片，并且返回顺序的帧和时间信息。
 func DecodeAll(r io.Reader) (*GIF, error) {
 	var d decoder
 	if err := d.decode(r, false); err != nil {
@@ -432,6 +477,8 @@ func DecodeAll(r io.Reader) (*GIF, error) {
 
 // DecodeConfig returns the global color model and dimensions of a GIF image
 // without decoding the entire image.
+
+// DecodeConfig不需要解码整个图像就可以返回全局的颜色模型和GIF图片的尺寸。
 func DecodeConfig(r io.Reader) (image.Config, error) {
 	var d decoder
 	if err := d.decode(r, true); err != nil {

@@ -5,6 +5,8 @@
 package color
 
 // RGBToYCbCr converts an RGB triple to a Y'CbCr triple.
+
+// RGBToYCbCr将RGB的三重色转换为Y'CbCr模型的三重色。
 func RGBToYCbCr(r, g, b uint8) (uint8, uint8, uint8) {
 	// The JFIF specification says:
 	//	Y' =  0.2990*R + 0.5870*G + 0.1140*B
@@ -36,6 +38,8 @@ func RGBToYCbCr(r, g, b uint8) (uint8, uint8, uint8) {
 }
 
 // YCbCrToRGB converts a Y'CbCr triple to an RGB triple.
+
+// YCbCrToRGB将Y'CbCr上的三重色转变成RGB的三重色。
 func YCbCrToRGB(y, cb, cr uint8) (uint8, uint8, uint8) {
 	// The JFIF specification says:
 	//	R = Y' + 1.40200*(Cr-128)
@@ -77,6 +81,14 @@ func YCbCrToRGB(y, cb, cr uint8) (uint8, uint8, uint8) {
 // Conversion between RGB and Y'CbCr is lossy and there are multiple, slightly
 // different formulae for converting between the two. This package follows
 // the JFIF specification at http://www.w3.org/Graphics/JPEG/jfif3.pdf.
+
+// YCbCr代表了完全不透明的24-bit的Y'CbCr的颜色，它的每个亮度和每两个色度分量是8位的。
+//
+// JPEG，VP8，MPEG家族和其他一些解码器使用这个颜色模式。每个解码器经常将YUV和Y'CbCr同等使用，
+// 但是严格来说，YUV只是用于分析视频信号，Y' (luma)是Y (luminance)伽玛校正之后的结果。
+//
+// RGB和Y'CbCr之间的转换是有损的，并且转换的时候有许多细微的不同。这个包是遵循JFIF的说明：
+// http://www.w3.org/Graphics/JPEG/jfif3.pdf。
 type YCbCr struct {
 	Y, Cb, Cr uint8
 }
@@ -87,6 +99,8 @@ func (c YCbCr) RGBA() (uint32, uint32, uint32, uint32) {
 }
 
 // YCbCrModel is the Model for Y'CbCr colors.
+
+// YCbCrModel是Y'CbCr颜色的模型。
 var YCbCrModel Model = ModelFunc(yCbCrModel)
 
 func yCbCrModel(c Color) Color {

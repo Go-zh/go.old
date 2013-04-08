@@ -3,20 +3,31 @@
 // license that can be found in the LICENSE file.
 
 // Package color implements a basic color library.
+
+// color 包实现了基本的颜色库。
 package color
 
 // Color can convert itself to alpha-premultiplied 16-bits per channel RGBA.
 // The conversion may be lossy.
+
+// Color可以将它自己转化成每个RGBA通道都预乘透明度。
+// 这种转化可能是有损的。
 type Color interface {
 	// RGBA returns the alpha-premultiplied red, green, blue and alpha values
 	// for the color. Each value ranges within [0, 0xFFFF], but is represented
 	// by a uint32 so that multiplying by a blend factor up to 0xFFFF will not
 	// overflow.
+
+	// RGBA返回预乘透明度的红，绿，蓝和颜色的透明度。每个值都在[0, 0xFFFF]范围内，
+	// 但是每个值都被uint32代表，这样可以乘以一个综合值来保证不会达到0xFFFF而溢出。
 	RGBA() (r, g, b, a uint32)
 }
 
 // RGBA represents a traditional 32-bit alpha-premultiplied color,
 // having 8 bits for each of red, green, blue and alpha.
+
+// RGBA代表一个传统的32位的预乘透明度的颜色，
+// 它的每个红，绿，蓝，和透明度都是个8bit的数值。
 type RGBA struct {
 	R, G, B, A uint8
 }
@@ -35,6 +46,9 @@ func (c RGBA) RGBA() (r, g, b, a uint32) {
 
 // RGBA64 represents a 64-bit alpha-premultiplied color,
 // having 16 bits for each of red, green, blue and alpha.
+
+// RGBA64代表一个64位的预乘透明度的颜色，
+// 它的每个红，绿，蓝，和透明度都是个8bit的数值。
 type RGBA64 struct {
 	R, G, B, A uint16
 }
@@ -44,6 +58,8 @@ func (c RGBA64) RGBA() (r, g, b, a uint32) {
 }
 
 // NRGBA represents a non-alpha-premultiplied 32-bit color.
+
+// NRGBA代表一个没有32位透明度加乘的颜色。
 type NRGBA struct {
 	R, G, B, A uint8
 }
@@ -68,6 +84,9 @@ func (c NRGBA) RGBA() (r, g, b, a uint32) {
 
 // NRGBA64 represents a non-alpha-premultiplied 64-bit color,
 // having 16 bits for each of red, green, blue and alpha.
+
+// NRGBA64代表无透明度加乘的64-bit的颜色，
+// 它的每个红，绿，蓝，和透明度都是个16bit的数值。
 type NRGBA64 struct {
 	R, G, B, A uint16
 }
@@ -87,6 +106,8 @@ func (c NRGBA64) RGBA() (r, g, b, a uint32) {
 }
 
 // Alpha represents an 8-bit alpha color.
+
+// Alpha代表一个8-bit的透明度。
 type Alpha struct {
 	A uint8
 }
@@ -98,6 +119,8 @@ func (c Alpha) RGBA() (r, g, b, a uint32) {
 }
 
 // Alpha16 represents a 16-bit alpha color.
+
+// Alpha16代表一个16位的透明度。
 type Alpha16 struct {
 	A uint16
 }
@@ -108,6 +131,8 @@ func (c Alpha16) RGBA() (r, g, b, a uint32) {
 }
 
 // Gray represents an 8-bit grayscale color.
+
+// Gray代表一个8-bit的灰度。
 type Gray struct {
 	Y uint8
 }
@@ -119,6 +144,8 @@ func (c Gray) RGBA() (r, g, b, a uint32) {
 }
 
 // Gray16 represents a 16-bit grayscale color.
+
+// Gray16代表了一个16-bit的灰度。
 type Gray16 struct {
 	Y uint16
 }
@@ -130,11 +157,16 @@ func (c Gray16) RGBA() (r, g, b, a uint32) {
 
 // Model can convert any Color to one from its own color model. The conversion
 // may be lossy.
+
+// Model可以在它自己的颜色模型中将一种颜色转化到另一种。
+// 这种转换可能是有损的。
 type Model interface {
 	Convert(c Color) Color
 }
 
 // ModelFunc returns a Model that invokes f to implement the conversion.
+
+// ModelFunc返回一个Model，它可以调用f来实现转换。
 func ModelFunc(f func(Color) Color) Model {
 	// Note: using *modelFunc as the implementation
 	// means that callers can still use comparisons
@@ -153,6 +185,8 @@ func (m *modelFunc) Convert(c Color) Color {
 }
 
 // Models for the standard color types.
+
+// 基本的颜色模型。
 var (
 	RGBAModel    Model = ModelFunc(rgbaModel)
 	RGBA64Model  Model = ModelFunc(rgba64Model)
@@ -251,6 +285,8 @@ func gray16Model(c Color) Color {
 }
 
 // Palette is a palette of colors.
+
+// Palette是颜色的调色板。
 type Palette []Color
 
 func diff(a, b uint32) uint32 {
@@ -261,6 +297,8 @@ func diff(a, b uint32) uint32 {
 }
 
 // Convert returns the palette color closest to c in Euclidean R,G,B space.
+
+// Convert在Euclidean R,G,B空间中找到最接近c的调色板。
 func (p Palette) Convert(c Color) Color {
 	if len(p) == 0 {
 		return nil
@@ -270,6 +308,8 @@ func (p Palette) Convert(c Color) Color {
 
 // Index returns the index of the palette color closest to c in Euclidean
 // R,G,B space.
+
+// Index在Euclidean R,G,B空间中找到最接近c的调色板对应的索引。
 func (p Palette) Index(c Color) int {
 	cr, cg, cb, _ := c.RGBA()
 	// Shift by 1 bit to avoid potential uint32 overflow in sum-squared-difference.
@@ -295,6 +335,8 @@ func (p Palette) Index(c Color) int {
 }
 
 // Standard colors.
+
+// 标准的颜色。
 var (
 	Black       = Gray16{0}
 	White       = Gray16{0xffff}
