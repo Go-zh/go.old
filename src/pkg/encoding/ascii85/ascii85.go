@@ -5,8 +5,8 @@
 // Package ascii85 implements the ascii85 data encoding
 // as used in the btoa tool and Adobe's PostScript and PDF document formats.
 
-// ascii85 °üÊÇ¶Ô ascii85 µÄÊı¾İ±àÂëµÄÊµÏÖ.
-// ±»ÓÃÓÚ btoa ( binary to ascii )¹¤¾ß£¬ Adobe µÄ PostScript ºÍPDFÎÄµµ¸ñÊ½¡£
+// ascii85 åŒ…æ˜¯å¯¹ ascii85 çš„æ•°æ®ç¼–ç çš„å®ç°.
+// è¢«ç”¨äº btoa ( binary to ascii )å·¥å…·ï¼Œ Adobe çš„ PostScript å’ŒPDFæ–‡æ¡£æ ¼å¼ã€‚
 package ascii85
 
 import (
@@ -19,7 +19,7 @@ import (
  */
 
 /*
- * ±àÂëÆ÷
+ * ç¼–ç å™¨
  */
 
 // Encode encodes src into at most MaxEncodedLen(len(src))
@@ -32,14 +32,14 @@ import (
 // Often, ascii85-encoded data is wrapped in <~ and ~> symbols.
 // Encode does not add these.
 
-// Encode ±àÂëÔ´µÄ×î¶à MaxEncodedLen(len(src)) ×Ö½ÚµÄµ½Ä¿±ê£¬
-// ·µ»ØÊµ¼ÊµÄĞ´Èë×Ö½ÚÊı¡£
+// Encode ç¼–ç æºçš„æœ€å¤š MaxEncodedLen(len(src)) å­—èŠ‚çš„åˆ°ç›®æ ‡ï¼Œ
+// è¿”å›å®é™…çš„å†™å…¥å­—èŠ‚æ•°ã€‚
 //
-// Í¨¹ı¶Ô×îºó·Ö¶ÎÊ¹ÓÃÌØÊâµÄ±àÂëÀ´²Ù×÷4×Ö½ÚµÄÊı¾İ¿é£¬ËùÒÔ Encode 
-// ÓÃÔÚ´óĞÍÊı¾İÁ÷µÄË½ÓĞ¿éÉÏÊÇ²»ºÏÊÊµÄ¡£ÓÃ NewEncoder() Ìæ´ú¡£
+// é€šè¿‡å¯¹æœ€ååˆ†æ®µä½¿ç”¨ç‰¹æ®Šçš„ç¼–ç æ¥æ“ä½œ4å­—èŠ‚çš„æ•°æ®å—ï¼Œæ‰€ä»¥ Encode 
+// ç”¨åœ¨å¤§å‹æ•°æ®æµçš„ç§æœ‰å—ä¸Šæ˜¯ä¸åˆé€‚çš„ã€‚ç”¨ NewEncoder() æ›¿ä»£ã€‚
 //
-// Í¨³££¬ ascii85 ±àÂëµÄÊı¾İÓÃ·ûºÅ <~ ºÍ ~> À¨ÆğÀ´¡£
-// Encode ²»¼ÓÕâĞ©¡£
+// é€šå¸¸ï¼Œ ascii85 ç¼–ç çš„æ•°æ®ç”¨ç¬¦å· <~ å’Œ ~> æ‹¬èµ·æ¥ã€‚
+// Encode ä¸åŠ è¿™äº›ã€‚
 func Encode(dst, src []byte) int {
 	if len(src) == 0 {
 		return 0
@@ -53,7 +53,7 @@ func Encode(dst, src []byte) int {
 		dst[3] = 0
 		dst[4] = 0
 
-		// Unpack 4 bytes into uint32 to repack into base 85 5-byte.   // ½â°ü4×Ö½Úµ½ uint32 ÖØĞÂ´ò°üµ½»ùÓÚ85µÄ5×Ö½Ú¡£
+		// Unpack 4 bytes into uint32 to repack into base 85 5-byte.   // è§£åŒ…4å­—èŠ‚åˆ° uint32 é‡æ–°æ‰“åŒ…åˆ°åŸºäº85çš„5å­—èŠ‚ã€‚
 		var v uint32
 		switch len(src) {
 		default:
@@ -69,7 +69,7 @@ func Encode(dst, src []byte) int {
 			v |= uint32(src[0]) << 24
 		}
 
-		// Special case: zero (!!!!!) shortens to z.   // ÌØÊâÇé¿ö£º 0 Ëõ¶Ìµ½ z ¡£
+		// Special case: zero (!!!!!) shortens to z.   // ç‰¹æ®Šæƒ…å†µï¼š 0 ç¼©çŸ­åˆ° z ã€‚
 		if v == 0 && len(src) >= 4 {
 			dst[0] = 'z'
 			dst = dst[1:]
@@ -78,13 +78,13 @@ func Encode(dst, src []byte) int {
 			continue
 		}
 
-		// Otherwise, 5 base 85 digits starting at !.   //·ñÔò£¬5»ùÓÚÊı×Ö85¿ªÊ¼¡£
+		// Otherwise, 5 base 85 digits starting at !.   // å¦åˆ™ï¼Œ 5 åŸºäºæ•°å­— 85 å¼€å§‹ã€‚
 		for i := 4; i >= 0; i-- {
 			dst[i] = '!' + byte(v%85)
 			v /= 85
 		}
 
-		// If src was short, discard the low destination bytes.   // ÈôÔ´±»Ëõ¶Ì£¬ÉáÆúµÍÎ»Ä¿±ê×Ö½Ú¡£
+		// If src was short, discard the low destination bytes.   // è‹¥æºè¢«ç¼©çŸ­ï¼Œèˆå¼ƒä½ä½ç›®æ ‡å­—èŠ‚ã€‚
 		m := 5
 		if len(src) < 4 {
 			m -= 4 - len(src)
@@ -100,7 +100,7 @@ func Encode(dst, src []byte) int {
 
 // MaxEncodedLen returns the maximum length of an encoding of n source bytes.
 
-// MaxEncodedLen ·µ»Ø n Ô´×Ö½Ú±àÂëµÄ×î´ó³¤¶È.
+// MaxEncodedLen è¿”å› n æºå­—èŠ‚ç¼–ç çš„æœ€å¤§é•¿åº¦.
 func MaxEncodedLen(n int) int { return (n + 3) / 4 * 5 }
 
 // NewEncoder returns a new ascii85 stream encoder.  Data written to
@@ -109,17 +109,17 @@ func MaxEncodedLen(n int) int { return (n + 3) / 4 * 5 }
 // writing, the caller must Close the returned encoder to flush any
 // trailing partial block.
 
-// NewEncoder ·µ»ØÒ»¸öĞÂµÄ ascii85 Á÷±àÂëÆ÷.
-// Ğ´Èëµ½·µ»ØµÄĞ´ÈëÆ÷ÖĞµÄÊı¾İ½«±»±àÂë£¬È»ºóĞ´Èëµ½ w ÖĞ¡£
-// Ascii85 ±àÂëÔÚ32Î»¿éÖĞ²Ù×÷£»µ±Íê³ÉĞ´ÈëÊ±£¬µ÷ÓÃÕß±ØĞë¹Ø±Õ·µ»ØµÄ±àÂëÆ÷£¬È¥³ıËùÓĞÎ²²¿¿é¡£
+// NewEncoder è¿”å›ä¸€ä¸ªæ–°çš„ ascii85 æµç¼–ç å™¨.
+// å†™å…¥åˆ°è¿”å›çš„å†™å…¥å™¨ä¸­çš„æ•°æ®å°†è¢«ç¼–ç ï¼Œç„¶åå†™å…¥åˆ° w ä¸­ã€‚
+// Ascii85 ç¼–ç åœ¨32ä½å—ä¸­æ“ä½œï¼›å½“å®Œæˆå†™å…¥æ—¶ï¼Œè°ƒç”¨è€…å¿…é¡»å…³é—­è¿”å›çš„ç¼–ç å™¨ï¼Œå»é™¤æ‰€æœ‰å°¾éƒ¨å—ã€‚
 func NewEncoder(w io.Writer) io.WriteCloser { return &encoder{w: w} }
 
 type encoder struct {
 	err  error
 	w    io.Writer
-	buf  [4]byte    // buffered data waiting to be encoded   //»º³åÊı¾İµÈ´ı±»±àÂë
-	nbuf int        // number of bytes in buf   //»º³åÇøÖĞµÄ×Ö½ÚÊı
-	out  [1024]byte // output buffer   //Êä³ö»º³å
+	buf  [4]byte    // buffered data waiting to be encoded   // ç¼“å†²æ•°æ®ç­‰å¾…è¢«ç¼–ç 
+	nbuf int        // number of bytes in buf   // ç¼“å†²åŒºä¸­çš„å­—èŠ‚æ•°
+	out  [1024]byte // output buffer   // è¾“å‡ºç¼“å†²
 }
 
 func (e *encoder) Write(p []byte) (n int, err error) {
@@ -127,7 +127,7 @@ func (e *encoder) Write(p []byte) (n int, err error) {
 		return 0, e.err
 	}
 
-	// Leading fringe.   //¿ªÍ·±ßÔµ¡£
+	// Leading fringe.   // å¼€å¤´è¾¹ç¼˜ã€‚
 	if e.nbuf > 0 {
 		var i int
 		for i = 0; i < len(p) && e.nbuf < 4; i++ {
@@ -146,7 +146,7 @@ func (e *encoder) Write(p []byte) (n int, err error) {
 		e.nbuf = 0
 	}
 
-	// Large interior chunks.   // À©´óÄÚ²¿¿é¡£
+	// Large interior chunks.   // æ‰©å¤§å†…éƒ¨å—ã€‚
 	for len(p) >= 4 {
 		nn := len(e.out) / 5 * 4
 		if nn > len(p) {
@@ -163,7 +163,7 @@ func (e *encoder) Write(p []byte) (n int, err error) {
 		p = p[nn:]
 	}
 
-	// Trailing fringe.   // ºóĞø±ßÔµ¡£
+	// Trailing fringe.   // åç»­è¾¹ç¼˜ã€‚
 	for i := 0; i < len(p); i++ {
 		e.buf[i] = p[i]
 	}
@@ -175,10 +175,10 @@ func (e *encoder) Write(p []byte) (n int, err error) {
 // Close flushes any pending output from the encoder.
 // It is an error to call Write after calling Close.
 
-// Close Çå³ı±àÂëÆ÷ÖĞµÄËùÓĞ´ıÊä³öÊı¾İ.
-// ÕâÊÇÒ»¸öµ÷ÓÃ¹Ø±ÕÖ®ºóÔÙµ÷ÓÃĞ´ÈëµÄ´íÎó´¦Àí¡£
+// Close æ¸…é™¤ç¼–ç å™¨ä¸­çš„æ‰€æœ‰å¾…è¾“å‡ºæ•°æ®.
+// è¿™æ˜¯ä¸€ä¸ªè°ƒç”¨å…³é—­ä¹‹åå†è°ƒç”¨å†™å…¥çš„é”™è¯¯å¤„ç†ã€‚
 func (e *encoder) Close() error {
-	// If there's anything left in the buffer, flush it out   //Èô»º³åÖĞÓĞÊ£Óà£¬Çå³ı¡£
+	// If there's anything left in the buffer, flush it out   // è‹¥ç¼“å†²ä¸­æœ‰å‰©ä½™ï¼Œæ¸…é™¤ã€‚
 	if e.err == nil && e.nbuf > 0 {
 		nout := Encode(e.out[0:], e.buf[0:e.nbuf])
 		e.nbuf = 0
@@ -192,7 +192,7 @@ func (e *encoder) Close() error {
  */
 
 /*
- *½âÂëÆ÷
+ *è§£ç å™¨
  */
 
 type CorruptInputError int64
@@ -216,14 +216,14 @@ func (e CorruptInputError) Error() string {
 // NewDecoder wraps an io.Reader interface around Decode.
 //
 
-// Decode ´ÓÔ´½âÂëµ½Ä¿±ê£¬·µ»ØĞ´ÈëÄ¿±êºÍÔ´ÏûºÄµÄ×Ö½ÚÊı.
-// ÈôÔ´°üº¬ÎŞĞ§ ascii85 Êı¾İ£¬ Decode ½«·µ»Ø³É¹¦Ğ´ÈëµÄ×Ö½ÚÊıºÍ CorruptInputError º¯Êı¡£
-// Decode ºöÂÔÔ´ÖĞµÄ¿Õ¸ñºÍ¿ØÖÆ×Ö·û¡£
-// Í¨³££¬ascii85 ±àÂëÊı¾İÓÃ <~ ºÍ ~> ·ûºÅÀ¨ÆğÀ´¡£ Decode ÆÚÍûÕâĞ©±»µ÷ÓÃÆ÷È¥³ı¡£
+// Decode ä»æºè§£ç åˆ°ç›®æ ‡ï¼Œè¿”å›å†™å…¥ç›®æ ‡å’Œæºæ¶ˆè€—çš„å­—èŠ‚æ•°.
+// è‹¥æºåŒ…å«æ— æ•ˆ ascii85 æ•°æ®ï¼Œ Decode å°†è¿”å›æˆåŠŸå†™å…¥çš„å­—èŠ‚æ•°å’Œ CorruptInputError å‡½æ•°ã€‚
+// Decode å¿½ç•¥æºä¸­çš„ç©ºæ ¼å’Œæ§åˆ¶å­—ç¬¦ã€‚
+// é€šå¸¸ï¼Œascii85 ç¼–ç æ•°æ®ç”¨ <~ å’Œ ~> ç¬¦å·æ‹¬èµ·æ¥ã€‚ Decode æœŸæœ›è¿™äº›è¢«è°ƒç”¨å™¨å»é™¤ã€‚
 //
-// Èô flush ÎªÕæ£¬ Decode »á¼Ù¶¨Ô´±íÏÖÎªÊäÈëÁ÷½áÊø²¢Á¢¼´´¦Àí£¬¶ø²»ÊÇµÈ´ıÁíÒ»¸ö32Î»¿éµÄ½áÊø¡£
+// è‹¥ flush ä¸ºçœŸï¼Œ Decode ä¼šå‡å®šæºè¡¨ç°ä¸ºè¾“å…¥æµç»“æŸå¹¶ç«‹å³å¤„ç†ï¼Œè€Œä¸æ˜¯ç­‰å¾…å¦ä¸€ä¸ª32ä½å—çš„ç»“æŸã€‚
 //
-// NewDecoder °üº¬Ò»¸ö io.Reader ½Ó¿Ú£¬Çø±ğÓÚ Decode ¡£
+// NewDecoder åŒ…å«ä¸€ä¸ª io.Reader æ¥å£ï¼ŒåŒºåˆ«äº Decode ã€‚
 func Decode(dst, src []byte, flush bool) (ndst, nsrc int, err error) {
 	var v uint32
 	var nb int
@@ -257,17 +257,17 @@ func Decode(dst, src []byte, flush bool) (ndst, nsrc int, err error) {
 	if flush {
 		nsrc = len(src)
 		if nb > 0 {
-			// The number of output bytes in the last fragment   // ×îÓĞÒ»¸ö·ÖÆ¬ÀïÃæÊä³ö×Ö½ÚµÄÊıÄ¿
-			// is the number of leftover input bytes - 1:        // µÈÓÚÊ£ÓàÊÕÈë×Ö½ÚÊı - 1 :
-			// the extra byte provides enough bits to cover      // ¶îÍâµÄ×Ö½ÚÌá¹©×ã¹»µÄÎ»Êı¸²¸Ç
-			// the inefficiency of the encoding for the block.   // ÎŞĞ§Êı¾İ¿é±àÂë
+			// The number of output bytes in the last fragment   // æœ€æœ‰ä¸€ä¸ªåˆ†ç‰‡é‡Œé¢è¾“å‡ºå­—èŠ‚çš„æ•°ç›®
+			// is the number of leftover input bytes - 1:        // ç­‰äºå‰©ä½™æ”¶å…¥å­—èŠ‚æ•° - 1 :
+			// the extra byte provides enough bits to cover      // é¢å¤–çš„å­—èŠ‚æä¾›è¶³å¤Ÿçš„ä½æ•°è¦†ç›–
+			// the inefficiency of the encoding for the block.   // æ— æ•ˆæ•°æ®å—ç¼–ç 
 			if nb == 1 {
 				return 0, 0, CorruptInputError(len(src))
 			}
 			for i := nb; i < 5; i++ {
-				// The short encoding truncated the output value.       // ¶Ì±àÂëËõ¶ÌÁËÊä³öÖµ¡£
-				// We have to assume the worst case values (digit 84)   // ÎÒÃÇ±ØĞë¼ÙÉè×î»µµÄÇé¿ö£¬Öµ£¨Êı×Ö 84£©
-				// in order to ensure that the top bits are correct.    // ÎªÁËÈ·±£×î¸ßÎ»ÕıÈ·¡£
+				// The short encoding truncated the output value.       // çŸ­ç¼–ç ç¼©çŸ­äº†è¾“å‡ºå€¼ã€‚
+				// We have to assume the worst case values (digit 84)   // æˆ‘ä»¬å¿…é¡»å‡è®¾æœ€åçš„æƒ…å†µï¼Œå€¼ï¼ˆæ•°å­— 84ï¼‰
+				// in order to ensure that the top bits are correct.    // ä¸ºäº†ç¡®ä¿æœ€é«˜ä½æ­£ç¡®ã€‚
 				v = v*85 + 84
 			}
 			for i := 0; i < nb-1; i++ {
@@ -282,17 +282,17 @@ func Decode(dst, src []byte, flush bool) (ndst, nsrc int, err error) {
 
 // NewDecoder constructs a new ascii85 stream decoder.
 
-// NewDecoder ¹¹ÔìÒ»¸öĞÂµÄ ascii85 Á÷½âÂëÆ÷.
+// NewDecoder æ„é€ ä¸€ä¸ªæ–°çš„ ascii85 æµè§£ç å™¨.
 func NewDecoder(r io.Reader) io.Reader { return &decoder{r: r} }
 
 type decoder struct {
 	err     error
 	readErr error
 	r       io.Reader
-	end     bool       // saw end of message   // ÏûÏ¢½áÊø¡£
-	buf     [1024]byte // leftover input       // Ê£ÓàÊäÈë¡£
+	end     bool       // saw end of message   // æ¶ˆæ¯ç»“æŸã€‚
+	buf     [1024]byte // leftover input       // å‰©ä½™è¾“å…¥ã€‚
 	nbuf    int
-	out     []byte // leftover decoded output   // Ê£Óà½âÂëÊä³ö¡£
+	out     []byte // leftover decoded output   // å‰©ä½™è§£ç è¾“å‡ºã€‚
 	outbuf  [1024]byte
 }
 
@@ -305,25 +305,25 @@ func (d *decoder) Read(p []byte) (n int, err error) {
 	}
 
 	for {
-		// Copy leftover output from last decode.   // ´Ó×îºó½âÂë¸´ÖÆÊ£ÓàÊä³ö¡£
+		// Copy leftover output from last decode.   // ä»æœ€åè§£ç å¤åˆ¶å‰©ä½™è¾“å‡ºã€‚
 		if len(d.out) > 0 {
 			n = copy(p, d.out)
 			d.out = d.out[n:]
 			return
 		}
 
-		// Decode leftover input from last read.   // Decode ×îºó¶ÁÈëµÄÊ£ÓàÊä³ö¡£
+		// Decode leftover input from last read.   // Decode æœ€åè¯»å…¥çš„å‰©ä½™è¾“å‡ºã€‚
 		var nn, nsrc, ndst int
 		if d.nbuf > 0 {
 			ndst, nsrc, d.err = Decode(d.outbuf[0:], d.buf[0:d.nbuf], d.readErr != nil)
 			if ndst > 0 {
 				d.out = d.outbuf[0:ndst]
 				d.nbuf = copy(d.buf[0:], d.buf[nsrc:d.nbuf])
-				continue // copy out and return   //¸´ÖÆÊä³öºÍ·µ»Ø
+				continue // copy out and return   //å¤åˆ¶è¾“å‡ºå’Œè¿”å›
 			}
 		}
 
-		// Out of input, out of decoded output.  Check errors.   // ÊäÈëµÄ out £¬ÒÑ½âÂëÊä³öµÄ out ¡£¼ì²é´íÎó¡£
+		// Out of input, out of decoded output.  Check errors.   // è¾“å…¥çš„ out ï¼Œå·²è§£ç è¾“å‡ºçš„ out ã€‚æ£€æŸ¥é”™è¯¯ã€‚
 		if d.err != nil {
 			return 0, d.err
 		}
@@ -332,7 +332,7 @@ func (d *decoder) Read(p []byte) (n int, err error) {
 			return 0, d.err
 		}
 
-		// Read more data.   // ¶ÁÈ¡¸ü¶àÊı¾İ¡£
+		// Read more data.   // è¯»å–æ›´å¤šæ•°æ®ã€‚
 		nn, d.readErr = d.r.Read(d.buf[d.nbuf:])
 		d.nbuf += nn
 	}
