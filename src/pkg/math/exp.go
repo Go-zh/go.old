@@ -90,8 +90,8 @@ package math
 // 返回 x 的指数。
 //
 // 方法：
-//   1. 实参换算：
-//      将 x 换算为 r，使得 |r| <= 0.5*ln2 ~ 0.34658。
+//   1. 实参转换：
+//      将 x 转换为 r，使得 |r| <= 0.5*ln2 ~ 0.34658。
 //      给定 x，寻找 r 以及整数 k 使得
 //
 //               x = k*ln2 + r,  |r| <= 0.5*ln2。
@@ -131,7 +131,7 @@ package math
 //      对于有限的实参，只有 exp(0)=1 是精确的。
 //
 // 精度：
-//      取决于误差分析，其误差总是小于1 ulp（末位单元）(unit in the last place)。
+//      取决于误差分析，其误差总是小于1 ulp（末位单元）。
 //
 // 其它信息：
 //      对于IEEE双精度浮点数
@@ -234,7 +234,7 @@ func exp2(x float64) float64 {
 	// argument reduction; x = r×lg(e) + k with |r| ≤ ln(2)/2.
 	// computed as r = hi - lo for extra precision.
 
-	// 实参换算；x = r×lg(e) + k 其中 |r| ≤ ln(2)/2。
+	// 实参转换；x = r×lg(e) + k 其中 |r| ≤ ln(2)/2。
 	// 通过 r = hi - lo 计算来获取额外的精度。
 	var k int
 	switch {

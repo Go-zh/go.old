@@ -59,6 +59,8 @@ package math
 // http://www.netlib.org/cephes/cmath.tgz 处获取。
 // 此Go代码为原始C代码的一个版本。
 //
+//（版权声明见上。）
+//
 // atan.c
 // TODO(osc): 译法正确？
 // 反转圆形正切（反正切）
@@ -71,7 +73,7 @@ package math
 // 返回正切值为 x 的，介于 -pi/2 和 +pi/2 之间的弧度角。
 //
 // TODO(osc): 译法正确？
-// 将三个区间的范围换算为从零到 0.66 的区间。逼近式使用形式为 x + x**3 P(x)/Q(x)
+// 将三个区间的范围转换为从零到 0.66 的区间。逼近式使用形式为 x + x**3 P(x)/Q(x)
 // 的4/5阶有理函数。
 //
 // 精度：
@@ -79,8 +81,6 @@ package math
 //    算法      范围     # 测试次数  峰值     均方根
 //    DEC       -10, 10    50000     2.4e-17  8.3e-18
 //    IEEE      -10, 10    10^6      1.8e-16  5.0e-17
-//
-//（版权声明见上。）
 
 // xatan evaluates a series valid in the range [0, 0.66].
 
@@ -107,7 +107,7 @@ func xatan(x float64) float64 {
 // satan reduces its argument (known to be positive)
 // to the range [0, 0.66] and calls xatan.
 
-// satan 将其实参（已知为正值）换算至区间 [0, 0.66] 内并调用 xatan。
+// satan 将其实参（已知为正值）转换至区间 [0, 0.66] 内并调用 xatan。
 func satan(x float64) float64 {
 	const (
 		Morebits = 6.123233995736765886130e-17 // pi/2 = PIO2 + Morebits

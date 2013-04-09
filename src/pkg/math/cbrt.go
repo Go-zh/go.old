@@ -57,7 +57,7 @@ func Cbrt(x float64) float64 {
 		sign = true
 	}
 	// Reduce argument and estimate cube root
-	// 换算实参并估计立方根
+	// 转换实参并估计立方根
 	f, e := Frexp(x) // 0.5 <= f < 1.0
 	m := e % 3
 	if m > 0 {

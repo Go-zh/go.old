@@ -83,6 +83,61 @@ package math
 //
 //       See HP-15C Advanced Functions Handbook, p.193.
 
+// 原始C代码、详细注释、下面的常量以及此通知来自
+// FreeBSD 的 /usr/src/lib/msun/src/s_log1p.c 文件。
+// 此Go代码为原始C代码的简化版本。
+//
+//（版权声明见上。）
+//
+// double log1p(double x)
+//
+// 方法：
+//   1. 实参转换：
+//      寻找 k 和 f 使得
+//          1+x = 2**k * (1+f)，
+//      其中 sqrt(2)/2 < 1+f < sqrt(2)。
+//
+//      注：若 k=0，则 f=x 是精确的。然而，若 k!=0，那么 f 可能无法精确地表示。
+//      这种情况下，需要一个修正项。设 u=1+x 的近似值，c = (1+x)-u，那么
+//      log(1+x) - log(u) ~ c/u。我们据此可计算 log(u)，并加上修正项 c/u。
+//      （注：当 x > 2**53 时，该函数可简单地返回 log(x)）
+//
+//   2. log1p(f) 的逼近式：
+//      设 s = f/(2+f)，基于 log(1+f) = log(1+s) - log(1-s)，我们有
+//           = 2s + 2/3 s**3 + 2/5 s**5 + .....，
+//           = 2s + s*R
+//      我们在 [0,0.1716] 上使用特殊的雷默算法来生成14阶的多项式，以此来逼近 R。
+//      此多项逼近式的最大误差以 2**-58.45 为界。换句话说，
+//                      2      4      6      8      10      12      14
+//          R(z) ~ Lp1*s +Lp2*s +Lp3*s +Lp4*s +Lp5*s  +Lp6*s  +Lp7*s
+//         （Lp1 至 Lp7 的值已在程序中列出）
+//      且
+//          |      2          14       |     -58.45
+//          | Lp1*s +...+Lp7*s  - R(z) | <= 2
+//          |                          |
+//      注意 2s = f - s*f = f - hfsq + s*hfsq，其中 hfsq = f*f/2。
+//      为确保 log 中的误差小于 1ulp，我们通过下式来计算 log：
+//              log1p(f) = f - (hfsq - s*(hfsq+R))
+//
+//   3. 最后，
+//           log1p(x) = k*ln2 + log1p(f)
+//                    = k*ln2_hi+(f-(hfsq-(s*(hfsq+R)+k*ln2_lo)))
+//      此处 ln2 被分为两个浮点数：
+//           ln2_hi + ln2_lo
+//      其中对于 |n| < 2000，n*ln2_hi 总是精确的。
+//
+// 特殊情况：
+//      若 x < -1（包括 -INF），则
+//         log1p(x)    为带符号 NaN；
+//         log1p(+INF) 为 +INF；
+//         log1p(-1)   为 -INF；
+//         log1p(NaN)  为无符号 NaN。
+//
+// 精度：
+//      取决于误差分析，误差总是小于 1 ulp（末位单元）。
+//
+//（后文信息只与C源码相关，故不作翻译。）
+
 // Log1p returns the natural logarithm of 1 plus its argument x.
 // It is more accurate than Log(1 + x) when x is near zero.
 //
@@ -92,6 +147,16 @@ package math
 //	Log1p(-1) = -Inf
 //	Log1p(x < -1) = NaN
 //	Log1p(NaN) = NaN
+
+// Log1p 返回 1 加其实参 x 的自然对数。
+// 当 x 接近 0 时，该函数比 Log(1 + x) 精确。
+//
+// 特殊情况为：
+//	Log1p(+Inf)   = +Inf
+//	Log1p(±0)     = ±0
+//	Log1p(-1)     = -Inf
+//	Log1p(x < -1) = NaN
+//	Log1p(NaN)    = NaN
 func Log1p(x float64) float64
 
 func log1p(x float64) float64 {
@@ -113,7 +178,9 @@ func log1p(x float64) float64 {
 	)
 
 	// special cases
+	// 特殊情况
 	switch {
+	// 包括 -Inf
 	case x < -1 || IsNaN(x): // includes -Inf
 		return NaN()
 	case x == -1:
@@ -154,6 +221,7 @@ func log1p(x float64) float64 {
 			if k > 0 {
 				c = 1.0 - (u - x)
 			} else {
+				// 修正项
 				c = x - (u - 1.0) // correction term
 				c /= u
 			}
@@ -164,11 +232,12 @@ func log1p(x float64) float64 {
 			c = 0
 		}
 		iu &= 0x000fffffffffffff
+		// Sqrt(2) 尾数
 		if iu < 0x0006a09e667f3bcd { // mantissa of Sqrt(2)
-			u = Float64frombits(iu | 0x3ff0000000000000) // normalize u
+			u = Float64frombits(iu | 0x3ff0000000000000) // normalize u // 规范化 u
 		} else {
 			k += 1
-			u = Float64frombits(iu | 0x3fe0000000000000) // normalize u/2
+			u = Float64frombits(iu | 0x3fe0000000000000) // normalize u/2 // 规范化 u/2
 			iu = (0x0010000000000000 - iu) >> 2
 		}
 		f = u - 1.0 // Sqrt(2)/2 < u < Sqrt(2)
@@ -184,6 +253,7 @@ func log1p(x float64) float64 {
 				return float64(k)*Ln2Hi + c
 			}
 		}
+		// 避免除法
 		R = hfsq * (1.0 - 0.66666666666666666*f) // avoid division
 		if k == 0 {
 			return f - R

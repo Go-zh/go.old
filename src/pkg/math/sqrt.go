@@ -188,7 +188,7 @@ func sqrt(x float64) float64 {
 	// generate sqrt(x) bit by bit
 	// 逐位生成 sqrt(x)
 	ix <<= 1
-	var q, s uint64               // q = sqrt(x)
+	var q, s uint64 // q = sqrt(x)
 	// r = 将位从最高有效位移至最低有效位
 	r := uint64(1 << (shift + 1)) // r = moving bit from MSB to LSB
 	for r != 0 {

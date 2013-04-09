@@ -88,6 +88,71 @@ package math
 //
 //
 
+// 原始C代码、详细注释、下面的常量以及此通知来自
+// FreeBSD 的 /usr/src/lib/msun/src/e_lgamma_r.c 文件
+// 此Go代码为原始C代码的一个版本。
+//
+//（版权声明见上。）
+// __ieee754_lgamma_r(x, signgamp)
+// 对数伽马函数的可重入版本以及为用户提供的 Gamma(x) 的符号指针。
+//
+// 方法
+//   1. 对于 0 < x <= 8 的实参转换：
+//      由于 gamma(1+s)=s*gamma(s)，对于 x 在 [0,8] 中，我们可通过下式将 x
+//      转换为 [1.5,2.5] 中的数字：
+//              lgamma(1+s) = log(s) + lgamma(s)
+//      例如，
+//              lgamma(7.3) = log(6.3) + lgamma(6.3)
+//                          = log(6.3*5.3) + lgamma(5.3)
+//                          = log(6.3*5.3*4.3*3.3*2.3) + lgamma(2.3)
+//   2. lgamma 的多项逼近式通过舍入其最小值（ymin=1.461632144968362245）来维护其单调性。
+//      在 [ymin-0.23, ymin+0.27]（例如 [1.23164,1.73163]）上，使用：
+//              设      z = x-ymin；
+//              lgamma(x) = -1.214862905358496078218 + z**2*poly(z)
+//              poly(z) 为一个 14 阶多项式。
+//   2. 主区间 [2,3] 中的有理逼近式
+//      我们使用以下逼近式
+//              s = x-2.0；
+//              lgamma(x) = 0.5*s + s*P(s)/Q(s)
+//      和精度
+//              |P/Q - (lgamma(x)-0.5s)| < 2**-61.71
+//      我们的算法基于以下观察
+//
+//                             zeta(2)-1    2    zeta(3)-1    3
+// lgamma(2+s) = s*(1-Euler) + --------- * s  -  --------- * s  + ...
+//                                 2                 3
+//
+//      其中 Euler = 0.5772156649... 为欧拉常数，它非常接近于 0.5。
+//
+//   3. 对于 x>=8，我们有
+//      lgamma(x)~(x-0.5)log(x)-x+0.5*log(2pi)+1/(12x)-1/(360x**3)+....
+//      （更好的公式：
+//         lgamma(x)~(x-0.5)*(log(x)-1)-.5*(log(2pi)-1) + ...）
+//      设 z = 1/x，那么我们逼近
+//              f(z) = lgamma(x) - (x-0.5)(log(x)-1)
+//      需通过
+//                                  3       5             11
+//              w = w0 + w1*z + w2*z  + w3*z  + ... + w6*z
+//      其中
+//              |w - f(z)| < 2**-58.74
+//
+//   4. 对于负值 x，根据（G 为伽马函数）
+//              -x*G(-x)*G(x) = pi/sin(pi*x)，
+//      我们有
+//              G(x) = pi/(sin(pi*x)*(-x)*G(-x))
+//      由于 G(-x) 为负值，对于 x<0 有 sign(G(x)) = sign(sin(pi*x))
+//      因此，对于 x<0，signgam = sign(sin(pi*x)) 且
+//              lgamma(x) = log(|Gamma(x)|)
+//                        = log(pi/(|x*sin(pi*x)|)) - lgamma(-x);
+//      注：在对 sin(pi*(-x)) 的计算中，应当避免直接计算 pi*(-x)。
+//
+//   5. 特殊情况：
+//        对于很小的 s，lgamma(2+s) ~ s*(1-Euler)
+//                      lgamma(1)=lgamma(2)=0
+//        对于很小的 x，lgamma(x) ~ -log(x)
+//                      lgamma(0) = lgamma(inf) = inf
+//                      lgamma(-integer) = ±inf
+
 var _lgamA = [...]float64{
 	7.72156649015328655494e-02, // 0x3FB3C467E37DB0C8
 	3.22467033424113591611e-01, // 0x3FD4A34CC4A60FAD
@@ -171,6 +236,15 @@ var _lgamW = [...]float64{
 //	Lgamma(-integer) = +Inf
 //	Lgamma(-Inf) = -Inf
 //	Lgamma(NaN) = NaN
+
+// Lgamma 返回 Gamma(x) 的自然对数和符号（-1 或 +1）。
+//
+// 特殊情况为：
+//	Lgamma(+Inf)     = +Inf
+//	Lgamma(0)        = +Inf
+//	Lgamma(-integer) = +Inf
+//	Lgamma(-Inf)     = -Inf
+//	Lgamma(NaN)      = NaN
 func Lgamma(x float64) (lgamma float64, sign int) {
 	const (
 		Ymin  = 1.461632144968362245
@@ -181,9 +255,11 @@ func Lgamma(x float64) (lgamma float64, sign int) {
 		Tc    = 1.46163214496836224576e+00  // 0x3FF762D86356BE3F
 		Tf    = -1.21486290535849611461e-01 // 0xBFBF19B9BCC38A42
 		// Tt = -(tail of Tf)
+		// Tt = -（Tf 的尾部）
 		Tt = -3.63867699703950536541e-18 // 0xBC50C7CAA48A971F
 	)
 	// special cases
+	// 特殊情况
 	sign = 1
 	switch {
 	case IsNaN(x):
@@ -203,6 +279,7 @@ func Lgamma(x float64) (lgamma float64, sign int) {
 		neg = true
 	}
 
+	// 若 |x| < 2**-70，返回 -log(|x|)
 	if x < Tiny { // if |x| < 2**-70, return -log(|x|)
 		if neg {
 			sign = -1
@@ -212,12 +289,14 @@ func Lgamma(x float64) (lgamma float64, sign int) {
 	}
 	var nadj float64
 	if neg {
+		// |x| >= 2**52，必须为负整数
 		if x >= Two52 { // |x| >= 2**52, must be -integer
 			lgamma = Inf(1)
 			return
 		}
 		t := sinPi(x)
 		if t == 0 {
+			// 负整数
 			lgamma = Inf(1) // -integer
 			return
 		}
@@ -228,9 +307,11 @@ func Lgamma(x float64) (lgamma float64, sign int) {
 	}
 
 	switch {
+	// 清理 1 和 2
 	case x == 1 || x == 2: // purge off 1 and 2
 		lgamma = 0
 		return
+	// 使用 lgamma(x) = lgamma(x+1) - log(x)
 	case x < 2: // use lgamma(x) = lgamma(x+1) - log(x)
 		var y float64
 		var i int
@@ -271,6 +352,7 @@ func Lgamma(x float64) (lgamma float64, sign int) {
 		case 1:
 			z := y * y
 			w := z * y
+			// 并行计算
 			p1 := _lgamT[0] + w*(_lgamT[3]+w*(_lgamT[6]+w*(_lgamT[9]+w*_lgamT[12]))) // parallel comp
 			p2 := _lgamT[1] + w*(_lgamT[4]+w*(_lgamT[7]+w*(_lgamT[10]+w*_lgamT[13])))
 			p3 := _lgamT[2] + w*(_lgamT[5]+w*(_lgamT[8]+w*(_lgamT[11]+w*_lgamT[14])))
@@ -321,6 +403,8 @@ func Lgamma(x float64) (lgamma float64, sign int) {
 }
 
 // sinPi(x) is a helper function for negative x
+
+// sinPi(x) 为用于负 x 的辅助函数
 func sinPi(x float64) float64 {
 	const (
 		Two52 = 1 << 52 // 0x4330000000000000 ~4.5036e+15
@@ -331,17 +415,21 @@ func sinPi(x float64) float64 {
 	}
 
 	// argument reduction
+	// 实参转换
 	z := Floor(x)
 	var n int
+	// 不精确
 	if z != x { // inexact
 		x = Mod(x, 2)
 		n = int(x * 4)
 	} else {
+		// x 必须为偶数
 		if x >= Two53 { // x must be even
 			x = 0
 			n = 0
 		} else {
 			if x < Two52 {
+				// 精确
 				z = x + Two52 // exact
 			}
 			n = int(1 & Float64bits(z))

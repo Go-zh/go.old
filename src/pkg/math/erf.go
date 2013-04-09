@@ -8,7 +8,7 @@ package math
 	Floating-point error function and complementary error function.
 */
 /*
-	浮点误差函数与补余误差函数。
+	浮点误差函数与互补误差函数。
 */
 
 // The original C code and the long comment below are

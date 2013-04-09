@@ -113,6 +113,93 @@ package math
 // to produce the hexadecimal values shown.
 //
 
+// 原始C代码、详细注释、下面的常量以及此通知来自
+// FreeBSD 的 /usr/src/lib/msun/src/s_expm1.c 文件。
+// 此Go代码为原始C代码的简化版本。
+//
+//（版权声明见上。）
+//
+// expm1(x)
+// 返回 exp(x)-1，即 x 的指数减 1。
+//
+// 方法：
+//   1. 实参转换：
+//      给定 x，寻找 r 以及整数 k 使得
+//
+//               x = k*ln2 + r,  |r| <= 0.5*ln2 ~ 0.34658
+//
+//      当将其舍入为浮点数时，此处会计算修正项 c 来补偿 r 中的误差。
+//
+//   2. 在区间 [0,0.34658] 上通过特殊的函数逼近 expm1(r)：
+//      由于
+//          r*(exp(r)+1)/(exp(r)-1) = 2+ r**2/6 - r**4/360 + ...
+//      我们通过
+//          r*(exp(r)+1)/(exp(r)-1) = 2+ r**2/6 * R1(r*r)
+//      来定义 R1(r*r)，即
+//          R1(r**2) = 6/r *((exp(r)+1)/(exp(r)-1) - 2/r)
+//                   = 6/r * ( 1 + 2.0*(1/(exp(r)-1) - 1/r))
+//                   = 1 - r**2/60 + r**4/2520 - r**6/100800 + ...
+//      我们在 [0,0.347] 上使用特殊的雷默算法，为 r*r 生成一个5阶多项式，
+//      以此来逼近 R1。此多项逼近式的最大误差以 2**-61 为界。换言之，
+//           R1(z) ~ 1.0 + Q1*z + Q2*z**2 + Q3*z**3 + Q4*z**4 + Q5*z**5
+//      其中 Q1 = -1.6666666666666567384E-2，
+//           Q2 =  3.9682539681370365873E-4，
+//           Q3 = -9.9206344733435987357E-6，
+//           Q4 =  2.5051361420808517002E-7，
+//           Q5 = -6.2843505682382617102E-9；
+//      （这里的 z=r*r，Q1 至 Q5 的值已在上方列出。）
+//      误差限定于
+//          |                  5           |     -61
+//          | 1.0+Q1*z+...+Q5*z   -  R1(z) | <= 2
+//          |                              |
+//
+//      expm1(r) = exp(r)-1 通过以下特殊方式计算，该式可最小化舍入误差积累：
+//                             2     3
+//                            r     r    [ 3 - (R1 + R1*r/2)  ]
+//            expm1(r) = r + --- + --- * [--------------------]
+//                            2     2    [ 6 - r*(3 - R1*r/2) ]
+//
+//      为补偿实参转换中的误差，我们使用
+//              expm1(r+c) = expm1(r) + c + expm1(r)*c
+//                         ~ expm1(r) + c + r*c
+//      因此 c+r*c 将作为修正项加上 expm1(r+c)。现在重新调整此项来避免优化过度：
+//                      (      2                                    2 )
+//                      ({  ( r    [ R1 -  (3 - R1*r/2) ]  )  }    r  )
+//       expm1(r+c)~r - ({r*(--- * [--------------------]-c)-c} - --- )
+//                      ({  ( 2    [ 6 - r*(3 - R1*r/2) ]  )  }    2  )
+//                      (                                             )
+//
+//                 = r - E
+//   3. 按比例缩减以获得 expm1(x)：
+//      根据第一步，我们有
+//         expm1(x) = 2**k*[expm1(r)+1] - 1
+//               或 = 2**k*[expm1(r) + (1-2**-k)]
+//   4. 实现注记：
+//      (A). 为避免一次乘法，我们将系数 Qi 扩大至 Qi*2**i，并将 z 替换为 (x**2)/2。
+//      (B). 为达到最大精度，我们通过以下方法来计算 expm1(x)：
+//        (1). 若 x < -56*ln2， 返回 -1.0（若 x!=inf 就降低精确度）
+//        (2). 若 k=0，         返回 r-E
+//        (3). 若 k=-1，        返回 0.5*(r-E)-0.5
+//        (4). 若 k=1：
+//                若 r < -0.25，返回 2*((r+0.5)- E)
+//                否则，        返回 1.0+2.0*(r-E);
+//        (5). 若 (k<-2||k>56)，返回 2**k(1-(E-r)) - 1 (or exp(x)-1)
+//        (6). 若 k <= 20，     返回 2**k((1-2**-k)-(E-r))，否则
+//        (7).                  返回 2**k(1-((E+2**-k)-r))
+//
+// 特殊情况：
+//      expm1(INF)  为 INF，expm1(NaN) 为 NaN；
+//      expm1(-INF) 为 -1，且对于有限的实参，只有 expm1(0)=0 精确。
+//
+// 精度：
+//      取决于误差分析，其误差总是小于1 ulp（末位单元）。
+//
+// Misc. info.
+//      For IEEE double
+//          if x >  7.09782712893383973096e+02 then expm1(x) overflow
+//
+//（后文信息只与C源码相关，故不作翻译。）
+
 // Expm1 returns e**x - 1, the base-e exponential of x minus 1.
 // It is more accurate than Exp(x) - 1 when x is near zero.
 //
@@ -121,6 +208,15 @@ package math
 //	Expm1(-Inf) = -1
 //	Expm1(NaN) = NaN
 // Very large values overflow to -1 or +Inf.
+
+// Expm1 返回 e**x - 1，即以 e 为底的 x 次幂减一。
+// 当 x 接近 0 时，该函数比 Exp(x) - 1 更精确。
+//
+// 特殊情况为：
+//	Expm1(+Inf) = +Inf
+//	Expm1(-Inf) = -1
+//	Expm1(NaN)  = NaN
+// 非常大的值会溢出为 -1 或 +Inf。
 func Expm1(x float64) float64
 
 func expm1(x float64) float64 {
@@ -134,6 +230,7 @@ func expm1(x float64) float64 {
 		InvLn2     = 1.44269504088896338700e+00 // 0x3ff71547652b82fe
 		Tiny       = 1.0 / (1 << 54)            // 2**-54 = 0x3c90000000000000
 		// scaled coefficients related to expm1
+		// 扩大与 expm1 相关的系数
 		Q1 = -3.33333333333331316428e-02 // 0xBFA11111111110F4
 		Q2 = 1.58730158725481460165e-03  // 0x3F5A01A019FE5585
 		Q3 = -7.93650757867487942473e-05 // 0xBF14CE199EAADBB7
@@ -142,6 +239,7 @@ func expm1(x float64) float64 {
 	)
 
 	// special cases
+	// 特殊情况
 	switch {
 	case IsInf(x, 1) || IsNaN(x):
 		return x
@@ -157,20 +255,26 @@ func expm1(x float64) float64 {
 	}
 
 	// filter out huge argument
+	// 过滤出大的实参
 	if absx >= Ln2X56 { // if |x| >= 56 * ln2
 		if absx >= Othreshold { // if |x| >= 709.78...
+			// 溢出
 			return Inf(1) // overflow
 		}
 		if sign {
+			// x < -56*ln2，返回 -1.0
 			return -1 // x < -56*ln2, return -1.0
 		}
 	}
 
 	// argument reduction
+	// 实参转换
 	var c float64
 	var k int
+	// 若 |x| > 0.5 * ln2
 	if absx > Ln2Half { // if  |x| > 0.5 * ln2
 		var hi, lo float64
+		// 且 |x| < 1.5 * ln2
 		if absx < Ln2HalfX3 { // and |x| < 1.5 * ln2
 			if !sign {
 				hi = x - Ln2Hi
@@ -188,11 +292,13 @@ func expm1(x float64) float64 {
 				k = int(InvLn2*x - 0.5)
 			}
 			t := float64(k)
+			// t * Ln2Hi 在此处是精确的
 			hi = x - t*Ln2Hi // t * Ln2Hi is exact here
 			lo = t * Ln2Lo
 		}
 		x = hi - lo
 		c = (hi - x) - lo
+		// 当 |x| < 2**-54 时，返回 x
 	} else if absx < Tiny { // when |x| < 2**-54, return x
 		return x
 	} else {
@@ -200,6 +306,7 @@ func expm1(x float64) float64 {
 	}
 
 	// x is now in primary range
+	// x 现在主范围内
 	hfx := 0.5 * x
 	hxs := x * hfx
 	r1 := 1 + hxs*(Q1+hxs*(Q2+hxs*(Q3+hxs*(Q4+hxs*Q5))))
@@ -216,22 +323,27 @@ func expm1(x float64) float64 {
 				return -2 * (e - (x + 0.5))
 			}
 			return 1 + 2*(x-e)
+			// 满足以返回 exp(x)-1
 		case k <= -2 || k > 56: // suffice to return exp(x)-1
 			y := 1 - (e - x)
+			// 为 y 的指数加 k
 			y = Float64frombits(Float64bits(y) + uint64(k)<<52) // add k to y's exponent
 			return y - 1
 		}
 		if k < 20 {
 			t := Float64frombits(0x3ff0000000000000 - (0x20000000000000 >> uint(k))) // t=1-2**-k
 			y := t - (e - x)
+			// 为 y 的指数加 k
 			y = Float64frombits(Float64bits(y) + uint64(k)<<52) // add k to y's exponent
 			return y
 		}
 		t := Float64frombits(uint64((0x3ff - k) << 52)) // 2**-k
 		y := x - (e + t)
 		y += 1
+		// 为 y 的指数加 k
 		y = Float64frombits(Float64bits(y) + uint64(k)<<52) // add k to y's exponent
 		return y
 	}
+	// c 为 0
 	return x - (x*e - hxs) // c is 0
 }

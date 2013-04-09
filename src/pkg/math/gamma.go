@@ -63,6 +63,42 @@ package math
 //   Stephen L. Moshier
 //   moshier@na-net.ornl.gov
 
+// 原始C代码、详细注释、下面的常量以及此通知来自
+// http://netlib.sandia.gov/cephes/cprob/gamma.c
+// 此Go代码为原始C代码的简化版本。
+//
+//（版权声明见上。）
+//
+//      tgamma.c
+//
+//      伽马函数
+//
+// 概览：
+//
+// double x, y, tgamma();
+// extern int signgam;
+//
+// y = tgamma( x );
+//
+// 描述：
+//
+// 返回实参的伽马函数。其结果能正确地处理正负，且其符号（+1 或 -1）也能以名为
+// signgam 的全局（外部）变量返回。该变量亦可由对数伽马函数 lgamma() 填充。
+//
+// 实参 |x| <= 34 可通过循环转换，此函数也可通过一个 6/7 阶有理函数在区间 (2,3)
+// 内逼近。大数实参可通过斯特灵公式处理。大负数实参可通过反射公式变为正数。
+//
+// 精度：
+//
+//                      相对误差：
+//    算法     范围      # 测试次数   峰值      均方根
+//    DEC     -34, 34      10000      1.3e-16   2.5e-17
+//    IEEE   -170,-33      20000      2.3e-15   3.3e-16
+//    IEEE    -33, 33      20000      9.4e-16   2.2e-16
+//    IEEE     33, 171.6   20000      2.3e-15   3.2e-16
+//
+// 测试范围之外的实参误差将会大于被指数函数放大的误差。
+
 var _gamP = [...]float64{
 	1.60119522476751861407e-04,
 	1.19135147006586384913e-03,
@@ -92,6 +128,9 @@ var _gamS = [...]float64{
 
 // Gamma function computed by Stirling's formula.
 // The polynomial is valid for 33 <= x <= 172.
+
+// 伽马函数通过斯特灵公式计算。
+// 此多项式只对 33 <= x <= 172 有效。
 func stirling(x float64) float64 {
 	const (
 		SqrtTwoPi   = 2.506628274631000502417
@@ -100,6 +139,7 @@ func stirling(x float64) float64 {
 	w := 1 / x
 	w = 1 + w*((((_gamS[0]*w+_gamS[1])*w+_gamS[2])*w+_gamS[3])*w+_gamS[4])
 	y := Exp(x)
+	// 避免 Pow() 溢出
 	if x > MaxStirling { // avoid Pow() overflow
 		v := Pow(x, 0.5*x-0.25)
 		y = v * (v / y)
@@ -119,9 +159,20 @@ func stirling(x float64) float64 {
 //	Gamma(x) = NaN for integer x < 0
 //	Gamma(-Inf) = NaN
 //	Gamma(NaN) = NaN
+
+// Gamma 返回 x 的伽马函数。
+//
+// 特殊情况为：
+//	Gamma(+Inf) = +Inf
+//	Gamma(+0)   = +Inf
+//	Gamma(-0)   = -Inf
+//	Gamma(x)    = NaN（对于整数 x < 0）
+//	Gamma(-Inf) = NaN
+//	Gamma(NaN)  = NaN
 func Gamma(x float64) float64 {
 	const Euler = 0.57721566490153286060651209008240243104215933593992 // A001620
 	// special cases
+	// 特殊情况
 	switch {
 	case isNegInt(x) || IsInf(x, -1) || IsNaN(x):
 		return NaN()
@@ -157,6 +208,7 @@ func Gamma(x float64) float64 {
 	}
 
 	// Reduce argument
+	// 转换实参
 	z := 1.0
 	for x >= 3 {
 		x = x - 1

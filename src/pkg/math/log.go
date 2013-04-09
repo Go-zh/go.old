@@ -80,12 +80,12 @@ package math
 // 返回 x 的对数
 //
 // 方法：
-//   1. 实参换算：
+//   1. 实参转换：
 //      寻找 k 和 f 使得
 //          x = 2**k * (1+f)，
 //      其中 sqrt(2)/2 < 1+f < sqrt(2)。
 //
-//   2. log(1+f) 的近似值。
+//   2. log(1+f) 的逼近式。
 //      设 s = f/(2+f)，基于 log(1+f) = log(1+s) - log(1-s)，我们有
 //         s = 2s + 2/3 s**3 + 2/5 s**5 + ...
 //           = 2s + s*R
@@ -112,7 +112,7 @@ package math
 //                  = k*Ln2_hi+(f-(hfsq-(s*(hfsq+R)+k*Ln2_lo)))
 //      此处 Ln2 被分为两个浮点数：
 //           Ln2_hi + Ln2_lo，
-//      其中 n*Ln2_hi 总是满足 |n| < 2000。
+//      其中对于 |n| < 2000，n*Ln2_hi 总是精确的。
 //
 // 特殊情况：
 //      若 x < 0（包括 -INF），则
@@ -122,7 +122,7 @@ package math
 //         log(NaN)  为无符号 NaN。
 //
 // 精度：
-//      取决于误差分析，误差总是小于 1 ulp（末位单元）(unit in the last place)。
+//      取决于误差分析，误差总是小于 1 ulp（末位单元）。
 //
 //（后文信息只与C源码相关，故不作翻译。）
 
@@ -168,7 +168,7 @@ func log(x float64) float64 {
 	}
 
 	// reduce
-	// 换算
+	// 转换
 	f1, ki := Frexp(x)
 	if f1 < Sqrt2/2 {
 		f1 *= 2

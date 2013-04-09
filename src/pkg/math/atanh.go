@@ -44,7 +44,7 @@ package math
 //
 // __ieee754_atanh(x)
 // 方法：
-//	1. 通过 atanh(-x) = -atanh(x) 将 x 换算成正值
+//	1. 通过 atanh(-x) = -atanh(x) 将 x 转换成正值
 //	2. 对于 x>=0.5
 //	            1              2x                          x
 //	atanh(x) = --- * log(1 + -------) = 0.5 * log1p(2 * --------)
