@@ -35,10 +35,9 @@ package math
 // __ieee754_remainder(x,y)
 // 返回：
 //      若以无限精度运算，则返回 x REM y  =  x - [x/y]*y，其中 [x/y]
-//      为最接近 x/y 的（无限位）整数（若有两种选择，取偶数）is the (infinite bit)
-//      integer nearest x/y (in half way cases, choose the even one).
-// Method :
-//      Based on Mod() returning  x - [x/y]chopped * y  exactly.
+//      为最接近 x/y 的（无限位）整数（若有两种选择，取偶数）
+// 方法：
+//      基于 Mod() 精确地返回 x - [x/y]chopped * y。
 
 // Remainder returns the IEEE 754 floating-point remainder of x/y.
 //
@@ -48,6 +47,15 @@ package math
 //	Remainder(x, 0) = NaN
 //	Remainder(x, ±Inf) = x
 //	Remainder(x, NaN) = NaN
+
+// Remainder 返回IEEE 754标准 x/y 的余数。
+//
+// 特殊情况为：
+//	Remainder(±Inf, y) = NaN
+//	Remainder(NaN, y)  = NaN
+//	Remainder(x, 0)    = NaN
+//	Remainder(x, ±Inf) = x
+//	Remainder(x, NaN)  = NaN
 func Remainder(x, y float64) float64
 
 func remainder(x, y float64) float64 {
@@ -56,6 +64,7 @@ func remainder(x, y float64) float64 {
 		HalfMax = MaxFloat64 / 2
 	)
 	// special cases
+	// 特殊情况
 	switch {
 	case IsNaN(x) || IsNaN(y) || IsInf(x, 0) || y == 0:
 		return NaN()
@@ -74,6 +83,7 @@ func remainder(x, y float64) float64 {
 		return 0
 	}
 	if y <= HalfMax {
+		// 现在 x < 2y
 		x = Mod(x, y+y) // now x < 2y
 	}
 	if y < Tiny {

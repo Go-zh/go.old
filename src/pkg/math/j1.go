@@ -7,6 +7,9 @@ package math
 /*
 	Bessel function of the first and second kinds of order one.
 */
+/*
+	一阶第一、二类贝塞尔函数。
+*/
 
 // The original C code and the long comment below are
 // from FreeBSD's /usr/src/lib/msun/src/e_j1.c and
@@ -66,11 +69,74 @@ package math
 //         where x1 = x-3*pi/4. It is better to compute sin(x1),cos(x1)
 //         by method mentioned above.
 
+// 原始C代码、详细注释、下面的常量以及此通知来自
+// FreeBSD 的 /usr/src/lib/msun/src/e_j1.c 文件。
+// 此Go代码为原始C代码的简化版本。
+//
+//（版权声明见上。）
+//
+// __ieee754_j1(x), __ieee754_y1(x)
+// 一阶第一、二类贝塞尔函数。
+//
+// 方法 -- j1(x)：
+//      1. 对于很小的 x，我们使用
+//              j1(x) = x/2 - x**3/16 + x**5/384 - ...
+//
+//      2. 根据 j1(x)=-j1(-x) 将 x 转换为 |x|，且
+//         对于 x 在 (0,2) 中，有
+//              j1(x) = x/2 + x*z*R0/S0，其中 z = x*x；
+//         （精度：|j1/x-1/2-R0/S0| < 2**-61.51）
+//         对于 x 在 (2,inf) 中，有
+//              j1(x) = sqrt(2/(pi*x))*(p1(x)*cos(x1)-q1(x)*sin(x1))
+//              y1(x) = sqrt(2/(pi*x))*(p1(x)*sin(x1)+q1(x)*cos(x1))
+//         其中 x1 = x-3*pi/4。最好通过以下方式计算 sin(x0) 和 cos(x0)：
+//              cos(x1) =  cos(x)cos(3pi/4)+sin(x)sin(3pi/4)
+//                      =  1/sqrt(2) * (sin(x) - cos(x))
+//              sin(x1) =  sin(x)cos(3pi/4)-cos(x)sin(3pi/4)
+//                      = -1/sqrt(2) * (sin(x) + cos(x))
+//         （为避免相互抵消，使用
+//              sin(x) +- cos(x) = -cos(2x)/(sin(x) -+ cos(x))
+//           来计算较差的那个。)
+//
+//      3. 特殊情况
+//              j1(NaN) = NaN
+//              j1(0)   = 0
+//              j1(inf) = 0
+//
+// 方法 -- y1(x)：
+//      1. 对于 x<=0：
+//              y1(0)   = -Inf
+//              y1(x<0) =  NaN
+//
+//      2. 对于 x<2：
+//         由于
+//              y1(x) = 2/pi*(j1(x)*(ln(x/2)+Euler)-1/x-x/2+5/64*x**3-...)
+//         因此
+//              y1(x)-2/pi*j1(x)*ln(x)-1/x
+//         为奇函数。
+//         我们通过以下函数来逼近 y1：
+//              y1(x) = x*U(z)/V(z) + (2/pi)*(j1(x)*ln(x)-1/x)，z = x**2
+//         其中对于 x 在 [0,2] 中（绝对误差小于 2**-65.89），
+//              U(z) = U0[0] + U0[1]*z + ... + U0[4]*z**4
+//              V(z) = 1  + v0[0]*z + ... + v0[4]*z**5
+//         注：对于很小的 x，1/x 优于 y1，因此
+//              y1(tiny) = -2/pi/tiny（选择 tiny<2**-54）
+//
+//      3. 对于 x>=2：
+//              y1(x) = sqrt(2/(pi*x))*(p1(x)*sin(x1)+q1(x)*cos(x1))
+//         其中 x1 = x-3*pi/4。最好通过上面提到的方式来计算 sin(x0) 和 cos(x0)。
+
 // J1 returns the order-one Bessel function of the first kind.
 //
 // Special cases are:
 //	J1(±Inf) = 0
 //	J1(NaN) = NaN
+
+// J1 返回一阶第一类贝塞尔函数。
+//
+// 特殊情况为
+//	J1(±Inf) = 0
+//	J1(NaN)  = NaN
 func J1(x float64) float64 {
 	const (
 		TwoM27 = 1.0 / (1 << 27) // 2**-27 0x3e40000000000000
@@ -87,6 +153,7 @@ func J1(x float64) float64 {
 		S05 = 1.23542274426137913908e-11  // 0x3DAB2ACFCFB97ED8
 	)
 	// special cases
+	// 特殊情况
 	switch {
 	case IsNaN(x):
 		return x
@@ -105,6 +172,7 @@ func J1(x float64) float64 {
 		cc := s - c
 
 		// make sure x+x does not overflow
+		// 确认 x+x 不会溢出
 		if x < MaxFloat64/2 {
 			z := Cos(x + x)
 			if s*c > 0 {
@@ -131,6 +199,7 @@ func J1(x float64) float64 {
 		return z
 	}
 	if x < TwoM27 { // |x|<2**-27
+		// 若 x!=0 必要，则非精确值
 		return 0.5 * x // inexact if x!=0 necessary
 	}
 	z := x * x
@@ -151,6 +220,14 @@ func J1(x float64) float64 {
 //	Y1(0) = -Inf
 //	Y1(x < 0) = NaN
 //	Y1(NaN) = NaN
+
+// Y1 返回一阶第二类贝塞尔函数。
+//
+// 特殊情况为：
+//	Y1(+Inf) = 0
+//	Y1(0)    = -Inf
+//	Y1(x<0)  = NaN
+//	Y1(NaN)  = NaN
 func Y1(x float64) float64 {
 	const (
 		TwoM54 = 1.0 / (1 << 54)             // 2**-54 0x3c90000000000000
@@ -167,6 +244,7 @@ func Y1(x float64) float64 {
 		V04    = 1.66559246207992079114e-11  // 0x3DB25039DACA772A
 	)
 	// special cases
+	// 特殊情况
 	switch {
 	case x < 0 || IsNaN(x):
 		return NaN()
@@ -182,6 +260,7 @@ func Y1(x float64) float64 {
 		cc := s - c
 
 		// make sure x+x does not overflow
+		// 确认 x+x 不会溢出
 		if x < MaxFloat64/2 {
 			z := Cos(x + x)
 			if s*c > 0 {
@@ -200,6 +279,17 @@ func Y1(x float64) float64 {
 		// To avoid cancellation, use
 		//     sin(x) +- cos(x) = -cos(2x)/(sin(x) -+ cos(x))
 		// to compute the worse one.
+
+		// y1(x) = sqrt(2/(pi*x))*(p1(x)*sin(x0)+q1(x)*cos(x0))
+		// 其中 x0 = x-3pi/4
+		//     更好的公式：
+		//         cos(x0) = cos(x)cos(3pi/4)+sin(x)sin(3pi/4)
+		//                 =  1/sqrt(2) * (sin(x) - cos(x))
+		//         sin(x0) = sin(x)cos(3pi/4)-cos(x)sin(3pi/4)
+		//                 = -1/sqrt(2) * (cos(x) + sin(x))
+		// 为避免相互抵消，通过
+		//     sin(x) +- cos(x) = -cos(2x)/(sin(x) -+ cos(x))
+		// 来计算较差的那个。
 
 		var z float64
 		if x > Two129 {
@@ -228,6 +318,16 @@ func Y1(x float64) float64 {
 //       S = 1 + ps0*s**2 + ... + ps4*s**10
 // and
 //      | pone(x)-1-R/S | <= 2**(-60.06)
+
+// 对于 x >= 8，pone 的渐进表达式为
+//		1 + 15/128 s**2 - 4725/2**15 s**4 - ...，其中 s = 1/x.
+// 我们通过
+//		pone(x) = 1 + (R/S)
+// 来逼近 pone，其中
+//		R = pr0 + pr1*s**2 + pr2*s**4 + ... + pr5*s**10
+//		S = 1 + ps0*s**2 + ... + ps4*s**10
+// 且
+//		| pone(x)-1-R/S | <= 2**(-60.06)
 
 // for x in [inf, 8]=1/[0,0.125]
 var p1R8 = [6]float64{
@@ -327,6 +427,16 @@ func pone(x float64) float64 {
 //       S = 1 + qs1*s**2 + ... + qs6*s**12
 // and
 //      | qone(x)/s -0.375-R/S | <= 2**(-61.13)
+
+// 对于 x >= 8，qone 的渐进表达式为
+//		3/8 s - 105/1024 s**3 - ...，其中 s = 1/x。
+// 我们通过
+//		qone(x) = s*(0.375 + (R/S))
+// 来逼近 qone，其中
+//		R = qr1*s**2 + qr2*s**4 + ... + qr5*s**10
+//		S = 1 + qs1*s**2 + ... + qs6*s**12
+// 且
+//		| qone(x)/s -0.375-R/S | <= 2**(-61.13)
 
 // for x in [inf, 8] = 1/[0,0.125]
 var q1R8 = [6]float64{

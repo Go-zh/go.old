@@ -71,11 +71,11 @@ package math
 // Atanh 返回 x 的反双曲正切值。
 //
 // 特殊情况为：
-//	                       Atanh(1)   = +Inf
-//	                       Atanh(±0)  = ±0
-//	                       Atanh(-1)  = -Inf
-//	若 x < -1 或 x > 1，则 Atanh(x)   = NaN
-//	                       Atanh(NaN) = NaN
+//	Atanh(1)   = +Inf
+//	Atanh(±0)  = ±0
+//	Atanh(-1)  = -Inf
+//	Atanh(x)   = NaN（若 x < -1 或 x > 1）
+//	Atanh(NaN) = NaN
 func Atanh(x float64) float64 {
 	const NearZero = 1.0 / (1 << 28) // 2**-28
 	// special cases

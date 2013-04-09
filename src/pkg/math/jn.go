@@ -7,6 +7,9 @@ package math
 /*
 	Bessel function of the first and second kinds of order n.
 */
+/*
+	n 阶第一、二类贝塞尔函数。
+*/
 
 // The original C code and the long comment below are
 // from FreeBSD's /usr/src/lib/msun/src/e_jn.c and
@@ -45,17 +48,47 @@ package math
 //      that forward recursion is used for all
 //      values of n>1.
 
+// 原始C代码、详细注释、下面的常量以及此通知来自
+// FreeBSD 的 /usr/src/lib/msun/src/e_jn.c 文件。
+// 此Go代码为原始C代码的简化版本。
+//
+//（版权声明见上。）
+//
+// __ieee754_jn(n, x), __ieee754_yn(n, x)
+// n 阶第一、二类浮点贝塞尔函数。
+//
+// 特殊情况：
+//      y0(0)=y1(0)=yn(n,0) = 带除以零符号的 -inf；
+//      y0(-ve)=y1(-ve)=yn(n,-ve) = 带无效符号的 NaN。
+// 注：
+// 关于 jn(n,x), yn(n,x)
+//      对于 n=0，会调用 j0(x)，
+//      对于 n=1，会调用 j1(x)。
+//      对于 n<x，会从 j0(x) 和 j1(x) 的值开始继续递归。
+//      对于 n>x，一个逼近 j(n,x)/j(n-1,x) 分数会被求值，接着会从 j(n,x)
+//      的猜测值开始往回递归。j(0,x) 的结果值会与真实值进行比较，以此修正
+//      j(n,x) 的猜测值。
+//
+//      yn(n,x) 除了会对所有的 n>1 都使用继续递归外，各方面都与 jn 类似。
+
 // Jn returns the order-n Bessel function of the first kind.
 //
 // Special cases are:
 //	Jn(n, ±Inf) = 0
 //	Jn(n, NaN) = NaN
+
+// Jn 返回 n 阶第一类贝塞尔函数。
+//
+// 特殊情况为：
+//	Jn(n, ±Inf) = 0
+//	Jn(n, NaN)  = NaN
 func Jn(n int, x float64) float64 {
 	const (
 		TwoM29 = 1.0 / (1 << 29) // 2**-29 0x3e10000000000000
 		Two302 = 1 << 302        // 2**302 0x52D0000000000000
 	)
 	// special cases
+	// 特殊情况
 	switch {
 	case IsNaN(x):
 		return x
@@ -63,7 +96,7 @@ func Jn(n int, x float64) float64 {
 		return 0
 	}
 	// J(-n, x) = (-1)**n * J(n, x), J(n, -x) = (-1)**n * J(n, x)
-	// Thus, J(-n, x) = J(n, -x)
+	// 因此 J(-n, x) = J(n, -x)
 
 	if n == 0 {
 		return J0(x)
@@ -81,19 +114,21 @@ func Jn(n int, x float64) float64 {
 	if x < 0 {
 		x = -x
 		if n&1 == 1 {
+			// 奇数 n 与负数 x
 			sign = true // odd n and negative x
 		}
 	}
 	var b float64
 	if float64(n) <= x {
 		// Safe to use J(n+1,x)=2n/x *J(n,x)-J(n-1,x)
+		// 为保证安全，使用 J(n+1,x)=2n/x *J(n,x)-J(n-1,x)
 		if x >= Two302 { // x > 2**302
 
 			// (x >> n**2)
 			//          Jn(x) = cos(x-(2n+1)*pi/4)*sqrt(2/x*pi)
 			//          Yn(x) = sin(x-(2n+1)*pi/4)*sqrt(2/x*pi)
-			//          Let s=sin(x), c=cos(x),
-			//              xn=x-(2n+1)*pi/4, sqt2 = sqrt(2),then
+			//          设 s=sin(x), c=cos(x),
+			//              xn=x-(2n+1)*pi/4, sqt2 = sqrt(2)，那么
 			//
 			//                 n    sin(xn)*sqt2    cos(xn)*sqt2
 			//              ----------------------------------
@@ -117,6 +152,7 @@ func Jn(n int, x float64) float64 {
 		} else {
 			b = J1(x)
 			for i, a := 1, J0(x); i < n; i++ {
+				// 避免溢出
 				a, b = b, b*(float64(i+i)/x)-a // avoid underflow
 			}
 		}
@@ -124,7 +160,11 @@ func Jn(n int, x float64) float64 {
 		if x < TwoM29 { // x < 2**-29
 			// x is tiny, return the first Taylor expansion of J(n,x)
 			// J(n,x) = 1/n!*(x/2)**n  - ...
+			//
+			// 若 x 很小，就返回 J(n,x) 的第一泰勒表达式
+			// J(n,x) = 1/n!*(x/2)**n  - ...
 
+			// 溢出
 			if n > 33 { // underflow
 				b = 0
 			} else {
@@ -166,7 +206,35 @@ func Jn(n int, x float64) float64 {
 			// When Q(k) > 1e9	good for double
 			// When Q(k) > 1e17	good for quadruple
 
+			// 使用往回递归
+			//                      x      x**2      x**2
+			//  J(n,x)/J(n-1,x) =  ----   ------   ------   .....
+			//                      2n  - 2(n+1) - 2(n+2)
+			//
+			//                      1      1        1
+			//  （对于很大的 x）=  ----  ------   ------   .....
+			//                      2n   2(n+1)   2(n+2)
+			//                      -- - ------ - ------ -
+			//                       x     x         x
+			//
+			// 设 w = 2n/x，h=2/x，那么以上系数等于下面的分数：
+			//                  1
+			//      = -----------------------
+			//                     1
+			//         w - -----------------
+			//                        1
+			//              w+h - ---------
+			//                     w+2h - ...
+			//
+			// 为决定需要多少项，设
+			// Q(0) = w, Q(1) = w(w+h) - 1，
+			// Q(k) = (w+k*h)*Q(k-1) - Q(k-2)，
+			// 当 Q(k) > 1e4  时，单项最好
+			// 当 Q(k) > 1e9  时，双项最好
+			// 当 Q(k) > 1e17 时，四项最好
+
 			// determine k
+			// 决定 k
 			w := float64(n+n) / x
 			h := 2 / x
 			q0 := w
@@ -193,6 +261,13 @@ func Jn(n int, x float64) float64 {
 			//  then recurrent value may overflow and the result is
 			//  likely underflow to zero
 
+			//  估值 log((2/x)**n*n!) = n*log(2/x)+n*ln(n)
+			//  因此，若 n*(log(2n/x)) > ...
+			//  单项 8.8722839355e+01
+			//  双项 7.09782712893383973096e+02
+			//  四项 1.1356523406294143949491931077970765006170e+04
+			//  那么循环值可能溢出，且其结果与向下溢出为零类似。
+
 			tmp := float64(n)
 			v := 2 / x
 			tmp = tmp * Log(Abs(v*tmp))
@@ -208,6 +283,7 @@ func Jn(n int, x float64) float64 {
 					a, b = b, b*di/x-a
 					di -= 2
 					// scale b to avoid spurious overflow
+					// 变换 b 以避免假溢出
 					if b > 1e100 {
 						a /= b
 						t /= b
@@ -232,9 +308,19 @@ func Jn(n int, x float64) float64 {
 //	Yn(n < 0, 0) = +Inf if n is odd, -Inf if n is even
 //	Y1(n, x < 0) = NaN
 //	Y1(n, NaN) = NaN
+
+// Yn 返回 n 阶第二类贝塞尔函数。
+//
+// 特殊情况为：
+//	Yn(n, +Inf)  = 0
+//	Yn(n > 0, 0) = -Inf
+//	Yn(n < 0, 0) = 若 n 为奇数则为 +Inf，若 n 为偶数则为 -Inf
+//	Y1(n, x < 0) = NaN
+//	Y1(n, NaN)   = NaN
 func Yn(n int, x float64) float64 {
 	const Two302 = 1 << 302 // 2**302 0x52D0000000000000
 	// special cases
+	// 特殊情况
 	switch {
 	case x < 0 || IsNaN(x):
 		return NaN()
@@ -255,6 +341,7 @@ func Yn(n int, x float64) float64 {
 	if n < 0 {
 		n = -n
 		if n&1 == 1 {
+			// 若 n < 0 且 |n| 为奇数，则 sign 为 true
 			sign = true // sign true if n < 0 && |n| odd
 		}
 	}
@@ -267,17 +354,17 @@ func Yn(n int, x float64) float64 {
 	var b float64
 	if x >= Two302 { // x > 2**302
 		// (x >> n**2)
-		//	    Jn(x) = cos(x-(2n+1)*pi/4)*sqrt(2/x*pi)
-		//	    Yn(x) = sin(x-(2n+1)*pi/4)*sqrt(2/x*pi)
-		//	    Let s=sin(x), c=cos(x),
-		//		xn=x-(2n+1)*pi/4, sqt2 = sqrt(2),then
+		//		Jn(x) = cos(x-(2n+1)*pi/4)*sqrt(2/x*pi)
+		//		Yn(x) = sin(x-(2n+1)*pi/4)*sqrt(2/x*pi)
+		//		设 s=sin(x), c=cos(x),
+		//		xn=x-(2n+1)*pi/4, sqt2 = sqrt(2)，那么
 		//
-		//		   n	sin(xn)*sqt2	cos(xn)*sqt2
+		//			n	sin(xn)*sqt2	cos(xn)*sqt2
 		//		----------------------------------
-		//		   0	 s-c		 c+s
-		//		   1	-s-c 		-c+s
-		//		   2	-s+c		-c-s
-		//		   3	 s+c		 c-s
+		//			0		 s-c		 c+s
+		//			1		-s-c		-c+s
+		//			2		-s+c		-c-s
+		//			3		 s+c		 c-s
 
 		var temp float64
 		switch n & 3 {
@@ -295,6 +382,7 @@ func Yn(n int, x float64) float64 {
 		a := Y0(x)
 		b = Y1(x)
 		// quit if b is -inf
+		// 若 b 为 -Inf，就退出
 		for i := 1; i < n && !IsInf(b, -1); i++ {
 			a, b = b, (float64(i+i)/x)*b-a
 		}

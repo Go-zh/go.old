@@ -7,6 +7,9 @@ package math
 /*
 	Bessel function of the first and second kinds of order zero.
 */
+/*
+	零阶第一、二类贝塞尔函数。
+*/
 
 // The original C code and the long comment below are
 // from FreeBSD's /usr/src/lib/msun/src/e_j0.c and
@@ -67,12 +70,77 @@ package math
 //      3. Special cases: y0(0)=-inf, y0(x<0)=NaN, y0(inf)=0.
 //
 
+// 原始C代码、详细注释、下面的常量以及此通知来自
+// FreeBSD 的 /usr/src/lib/msun/src/e_j0.c 文件。
+// 此Go代码为原始C代码的简化版本。
+//
+//（版权声明见上。）
+//
+// __ieee754_j0(x), __ieee754_y0(x)
+// 零阶第一、二类贝塞尔函数。
+//
+// 方法 -- j0(x)：
+//      1. 对于很小的 x，我们使用
+//              j0(x) = 1 - x**2/4 + x**4/64 - ...
+//
+//      2. 根据 j0(x)=j0(-x)，将 x 转换为 |x|，且
+//         对于 x 在 (0,2) 中，有
+//              j0(x) = 1-z/4+ z**2*R0/S0，其中 z = x*x；
+//         （精度：|j0-1+z/4-z**2R0/S0| < 2**-63.67）
+//         对于 x 在 (2,inf) 中，有
+//              j0(x) = sqrt(2/(pi*x))*(p0(x)*cos(x0)-q0(x)*sin(x0))
+//         其中 x0 = x-pi/4。最好通过以下方式计算 sin(x0) 和 cos(x0)：
+//              cos(x0) = cos(x)cos(pi/4)+sin(x)sin(pi/4)
+//                      = 1/sqrt(2) * (cos(x) + sin(x))
+//              sin(x0) = sin(x)cos(pi/4)-cos(x)sin(pi/4)
+//                      = 1/sqrt(2) * (sin(x) - cos(x))
+//         （为避免相互抵消，通过
+//              sin(x) +- cos(x) = -cos(2x)/(sin(x) -+ cos(x))
+//           来计算较差的那个。)
+//
+//      3. 特殊情况：
+//              J0(NaN) = NaN
+//              J0(0)   = 1
+//              J0(Inf) = 0
+//
+// 方法 -- y0(x)：
+//      1. 对于 x<2：
+//         由于
+//              y0(x) = 2/pi*(j0(x)*(ln(x/2)+Euler) + x**2/4 - ...)
+//         因此
+//              y0(x)-2/pi*j0(x)*ln(x) 为偶函数。
+//
+//         我们使用以下函数来逼近 y0：
+//              y0(x) = U(z)/V(z) + (2/pi)*(j0(x)*ln(x))，z= x**2
+//         其中
+//              U(z) = u00 + u01*z + ... + u06*z**6
+//              V(z) = 1  + v01*z + ... + v04*z**4
+//              逼近式的绝对误差以 2**-72 为界。
+//         注：对于很小的 x，U/V = u0 且 j0(x)~1，因此
+//              y0(tiny) = u0 + (2/pi)*ln(tiny)，（选择 tiny<2**-27）
+//
+//      2. 对于 x>=2：
+//              y0(x) = sqrt(2/(pi*x))*(p0(x)*cos(x0)+q0(x)*sin(x0))
+//         其中 x0 = x-pi/4。最好通过上面提到的方式来计算 sin(x0) 和 cos(x0)。
+//
+//      3. 特殊情况：
+//              y0(0)   = -inf
+//              y0(x<0) = NaN
+//              y0(inf) = 0
+
 // J0 returns the order-zero Bessel function of the first kind.
 //
 // Special cases are:
 //	J0(±Inf) = 0
 //	J0(0) = 1
 //	J0(NaN) = NaN
+
+// J0 返回第一类零阶贝塞尔函数。
+//
+// 特殊情况为：
+//	J0(±Inf) = 0
+//	J0(0)    = 1
+//	J0(NaN)  = NaN
 func J0(x float64) float64 {
 	const (
 		Huge   = 1e300
@@ -80,6 +148,7 @@ func J0(x float64) float64 {
 		TwoM13 = 1.0 / (1 << 13) // 2**-13 0x3f20000000000000
 		Two129 = 1 << 129        // 2**129 0x4800000000000000
 		// R0/S0 on [0, 2]
+		// R0/S0 在 [0, 2] 上
 		R02 = 1.56249999999999947958e-02  // 0x3F8FFFFFFFFFFFFD
 		R03 = -1.89979294238854721751e-04 // 0xBF28E6A5B61AC6E9
 		R04 = 1.82954049532700665670e-06  // 0x3EBEB1D10C503919
@@ -90,6 +159,7 @@ func J0(x float64) float64 {
 		S04 = 1.16614003333790000205e-09  // 0x3E1408BCF4745D8F
 	)
 	// special cases
+	// 特殊情况
 	switch {
 	case IsNaN(x):
 		return x
@@ -108,6 +178,7 @@ func J0(x float64) float64 {
 		cc := s + c
 
 		// make sure x+x does not overflow
+		// 确定 x+x 不会溢出
 		if x < MaxFloat64/2 {
 			z := -Cos(x + x)
 			if s*c < 0 {
@@ -153,6 +224,14 @@ func J0(x float64) float64 {
 //	Y0(0) = -Inf
 //	Y0(x < 0) = NaN
 //	Y0(NaN) = NaN
+
+// Y0 返回第二类零阶贝塞尔函数。
+//
+// 特殊情况为：
+//	Y0(+Inf) = 0
+//	Y0(0)    = -Inf
+//	Y0(x<0)  = NaN
+//	Y0(NaN)  = NaN
 func Y0(x float64) float64 {
 	const (
 		TwoM27 = 1.0 / (1 << 27)             // 2**-27 0x3e40000000000000
@@ -170,6 +249,7 @@ func Y0(x float64) float64 {
 		V04    = 4.41110311332675467403e-10  // 0x3DFE50183BD6D9EF
 	)
 	// special cases
+	// 特殊情况
 	switch {
 	case x < 0 || IsNaN(x):
 		return NaN()
@@ -192,6 +272,17 @@ func Y0(x float64) float64 {
 		//     sin(x) +- cos(x) = -cos(2x)/(sin(x) -+ cos(x))
 		// to compute the worse one.
 
+		// y0(x) = sqrt(2/(pi*x))*(p0(x)*sin(x0)+q0(x)*cos(x0))
+		//     其中 x0 = x-pi/4
+		// 更好的公式：
+		//     cos(x0) = cos(x)cos(pi/4)+sin(x)sin(pi/4)
+		//             =  1/sqrt(2) * (sin(x) + cos(x))
+		//     sin(x0) = sin(x)cos(3pi/4)-cos(x)sin(3pi/4)
+		//             =  1/sqrt(2) * (sin(x) - cos(x))
+		// 为避免相互抵消，通过
+		//     sin(x) +- cos(x) = -cos(2x)/(sin(x) -+ cos(x))
+		// 来计算较差的那个。
+
 		s, c := Sincos(x)
 		ss := s - c
 		cc := s + c
@@ -200,6 +291,7 @@ func Y0(x float64) float64 {
 		// y0(x) = 1/sqrt(pi) * (P(0,x)*ss + Q(0,x)*cc) / sqrt(x)
 
 		// make sure x+x does not overflow
+		// 确认 x+x 不会溢出
 		if x < MaxFloat64/2 {
 			z := -Cos(x + x)
 			if s*c < 0 {
@@ -236,7 +328,18 @@ func Y0(x float64) float64 {
 // and
 //      | pzero(x)-1-R/S | <= 2  ** ( -60.26)
 
+// pzero 的渐近级数表达式为
+//		1 - 9/128 s**2 + 11025/98304 s**4 - ...，其中 s = 1/x。
+// 对于 x >= 2，我们通过
+//		pzero(x) = 1 + (R/S)
+// 来逼近 pzero，其中
+//		R = pR0 + pR1*s**2 + pR2*s**4 + ... + pR5*s**10
+//		S = 1 + pS0*s**2 + ... + pS4*s**10
+// 且
+//		| pzero(x)-1-R/S | <= 2  ** ( -60.26)
+
 // for x in [inf, 8]=1/[0,0.125]
+// 对于 x 在 [inf, 8]=1/[0,0.125] 中
 var p0R8 = [6]float64{
 	0.00000000000000000000e+00,  // 0x0000000000000000
 	-7.03124999999900357484e-02, // 0xBFB1FFFFFFFFFD32
@@ -254,6 +357,7 @@ var p0S8 = [5]float64{
 }
 
 // for x in [8,4.5454]=1/[0.125,0.22001]
+// 对于 x 在 [8,4.5454]=1/[0.125,0.22001] 中
 var p0R5 = [6]float64{
 	-1.14125464691894502584e-11, // 0xBDA918B147E495CC
 	-7.03124940873599280078e-02, // 0xBFB1FFFFE69AFBC6
@@ -271,6 +375,7 @@ var p0S5 = [5]float64{
 }
 
 // for x in [4.547,2.8571]=1/[0.2199,0.35001]
+// 对于 x 在 [4.547,2.8571]=1/[0.2199,0.35001] 中
 var p0R3 = [6]float64{
 	-2.54704601771951915620e-09, // 0xBE25E1036FE1AA86
 	-7.03119616381481654654e-02, // 0xBFB1FFF6F7C0E24B
@@ -288,6 +393,7 @@ var p0S3 = [5]float64{
 }
 
 // for x in [2.8570,2]=1/[0.3499,0.5]
+// 对于 x 在 [2.8570,2]=1/[0.3499,0.5] 中
 var p0R2 = [6]float64{
 	-8.87534333032526411254e-08, // 0xBE77D316E927026D
 	-7.03030995483624743247e-02, // 0xBFB1FF62495E1E42
@@ -335,7 +441,18 @@ func pzero(x float64) float64 {
 // and
 //      | qzero(x)/s +1.25-R/S | <= 2**(-61.22)
 
+// 对于 x >= 8，qzero 的渐近表达式为
+//		-1/8 s + 75/1024 s**3 - ..., where s = 1/x。
+// 我们通过
+//		qzero(x) = s*(-1.25 + (R/S))
+// 来逼近 qzero，其中
+//		R = qR0 + qR1*s**2 + qR2*s**4 + ... + qR5*s**10
+//		S = 1 + qS0*s**2 + ... + qS5*s**12
+// 且
+//		| qzero(x)/s +1.25-R/S | <= 2**(-61.22)
+
 // for x in [inf, 8]=1/[0,0.125]
+// 对于 x 在 [inf, 8]=1/[0,0.125] 中
 var q0R8 = [6]float64{
 	0.00000000000000000000e+00, // 0x0000000000000000
 	7.32421874999935051953e-02, // 0x3FB2BFFFFFFFFE2C
@@ -354,6 +471,7 @@ var q0S8 = [6]float64{
 }
 
 // for x in [8,4.5454]=1/[0.125,0.22001]
+// 对于 x 在 [8,4.5454]=1/[0.125,0.22001] 中
 var q0R5 = [6]float64{
 	1.84085963594515531381e-11, // 0x3DB43D8F29CC8CD9
 	7.32421766612684765896e-02, // 0x3FB2BFFFD172B04C
@@ -372,6 +490,7 @@ var q0S5 = [6]float64{
 }
 
 // for x in [4.547,2.8571]=1/[0.2199,0.35001]
+// 对于 x 在 [4.547,2.8571]=1/[0.2199,0.35001] 中
 var q0R3 = [6]float64{
 	4.37741014089738620906e-09, // 0x3E32CD036ADECB82
 	7.32411180042911447163e-02, // 0x3FB2BFEE0E8D0842
@@ -390,6 +509,7 @@ var q0S3 = [6]float64{
 }
 
 // for x in [2.8570,2]=1/[0.3499,0.5]
+// 对于 x 在 [2.8570,2]=1/[0.3499,0.5] 中
 var q0R2 = [6]float64{
 	1.50444444886983272379e-07, // 0x3E84313B54F76BDB
 	7.32234265963079278272e-02, // 0x3FB2BEC53E883E34

@@ -42,26 +42,26 @@ func isOddInt(x float64) bool {
 // Pow 返回 x**y，即以 x 为底的 y 次幂。
 //
 // 特殊情况为（按顺序）：
-//	对于任何 x，    有 Pow(x, ±0) = 1
-//	对于任何 y，    有 Pow(1, y)  = 1
-//	对于任何 x，    有 Pow(x, 1)  = x
-//	                   Pow(NaN, y) = NaN
-//	                   Pow(x, NaN) = NaN
-//	                   Pow(±0, -Inf) = +Inf
-//	                   Pow(±0, +Inf) = +0
-//	对于奇整数       y < 0，有 Pow(±0, y) = ±Inf
-//	对于有限非奇整数 y < 0，有 Pow(±0, y) = +Inf
-//	对于奇整数       y > 0，有 Pow(±0, y) = ±0
-//	对于有限非奇整数 y > 0，有 Pow(±0, y) = +0
-//	                 Pow(-1, ±Inf) = 1
-//	对于 |x| > 1，有 Pow(x, +Inf) = +Inf
-//	对于 |x| > 1，有 Pow(x, -Inf) = +0
-//	对于 |x| < 1，有 Pow(x, +Inf) = +0
-//	对于 |x| < 1，有 Pow(x, -Inf) = +Inf
-//	对于   y > 0，有 Pow(+Inf, y) = +Inf
-//	对于   y < 0，有 Pow(+Inf, y) = +0 for y < 0
-//	                 Pow(-Inf, y) = Pow(-0, -y)
-//	对于有限数 x < 0 和有限非整数 y，有 Pow(x, y) = NaN
+//	Pow(x, ±0)    = 1   （对于任何 x）
+//	Pow(1, y)     = 1   （对于任何 y）
+//	Pow(x, 1)     = x   （对于任何 x）
+//	Pow(NaN, y)   = NaN
+//	Pow(x, NaN)   = NaN
+//	Pow(±0, y)    = ±Inf（对于奇整数 y < 0）
+//	Pow(±0, -Inf) = +Inf
+//	Pow(±0, +Inf) = +0
+//	Pow(±0, y)    = +Inf（对于有限非奇整数 y < 0）
+//	Pow(±0, y)    = ±0  （对于奇整数 y > 0）
+//	Pow(±0, y)    = +0  （对于有限非奇整数 y >）
+//	Pow(-1, ±Inf) = 1
+//	Pow(x, +Inf)  = +Inf（对于 |x| > 1）
+//	Pow(x, -Inf)  = +0  （对于 |x| > 1）
+//	Pow(x, +Inf)  = +0  （对于 |x| < 1）
+//	Pow(x, -Inf)  = +Inf（对于 |x| < 1）
+//	Pow(+Inf, y)  = +Inf（对于 y > 0）
+//	Pow(+Inf, y)  = +0  （对于 y < 0）
+//	Pow(-Inf, y)  = Pow(-0, -y)
+//	Pow(x, y)     = NaN （对于有限数 x < 0 和有限非整数 y）
 func Pow(x, y float64) float64 {
 	switch {
 	case y == 0 || x == 1:
