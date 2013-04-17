@@ -1,35 +1,77 @@
 <!--{
+	"Title": "如何编写Go代码"
+}-->
+<!--{
 	"Title": "How to Write Go Code"
 }-->
 
+<div class="english">
 <h2 id="Introduction">Introduction</h2>
+</div>
 
+<h2 id="前言">前言</h2>
+
+<div class="english">
 <p>
 This document demonstrates the development of a simple Go package and
 introduces the <a href="/cmd/go/">go tool</a>, the standard way to fetch,
 build, and install Go packages and commands.
 </p>
+</div>
 
+<p>
+本文档展示了一个简单Go包的开发，并介绍了用<a href="/cmd/go/">go工具</a>来获取、
+构建并安装Go包及命令的标准方式。
+</p>
+
+<div class="english">
 <p>
 The <code>go</code> tool requires you to organize your code in a specific
 way. Please read this document carefully.
 It explains the simplest way to get up and running with your Go installation.
 </p>
+</div>
 
+<p>
+<code>go</code> 工具需要你按照指定的方式来组织代码。请仔细阅读本文档，
+它说明了如何以最简单的方式来准备并运行你的Go安装。
+</p>
+
+<div class="english">
 <p>
 A similar explanation is available as a
 <a href="http://www.youtube.com/watch?v=XCsL89YtqCs">screencast</a>.
 </p>
+</div>
+
+<p>
+类似的视频讲解可在<a href="http://www.youtube.com/watch?v=XCsL89YtqCs">此处</a>观看。
+</p>
 
 
+<div class="english">
 <h2 id="Organization">Code organization</h2>
+</div>
 
+<h2 id="组织">代码的组织</h2>
+
+<div class="english">
 <h3 id="Workspaces">Workspaces</h3>
+</div>
 
+<h3 id="工作空间">工作空间</h3>
+
+<div class="english">
 <p>
 The <code>go</code> tool is designed to work with open source code maintained
 in public repositories. Although you don't need to publish your code, the model
 for how the environment is set up works the same whether you do or not.
+</p>
+</div>
+
+<p>
+<code>go</code> 工具为公共代码仓库中维护的开源代码而设计。
+尽管你不需要公布你的代码，但无论如何，此模型对于如何设置工作环境是相同的。
 </p>
 
 <p>
