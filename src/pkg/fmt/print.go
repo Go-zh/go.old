@@ -56,7 +56,7 @@ type State interface {
 }
 
 // Formatter is the interface implemented by values with a custom formatter.
-// The implementation of Format may call Sprintf or Fprintf(f) etc.
+// The implementation of Format may call Sprint(f) or Fprint(f) etc.
 // to generate its output.
 
 // Formatter 接口由带有定制的格式化器的值所实现。
@@ -68,11 +68,12 @@ type Formatter interface {
 // Stringer is implemented by any value that has a String method,
 // which defines the ``native'' format for that value.
 // The String method is used to print values passed as an operand
-// to a %s or %v format or to an unformatted printer such as Print.
+// to any format that accepts a string or to an unformatted printer
+// such as Print.
 
 // Stringer 接口由任何拥有 String 方法的值所实现，该方法定义了该值的“原生”格式。
-// String 方法用于打印值，该值已作为操作数传至 %s 或 %v 进行格式化，
-// 或已传至像 Print 这样的无格式化的打印器。
+// String 方法用于打印值，该值可作为操作数传至任何接受字符串的格式，或像
+// Print 这样的未格式化打印器。
 type Stringer interface {
 	String() string
 }

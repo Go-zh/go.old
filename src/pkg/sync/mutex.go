@@ -104,6 +104,7 @@ func (m *Mutex) Lock() {
 // Mutex，然后安排其它Go程来解锁。
 func (m *Mutex) Unlock() {
 	if raceenabled {
+		_ = m.state
 		raceRelease(unsafe.Pointer(m))
 	}
 

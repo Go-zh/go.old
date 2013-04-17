@@ -164,7 +164,7 @@ func runTests() ([]byte, error) {
 	// 由于该测试会包含大量相同地址上的数据竞争，因此它是必要的（该测试是简单的，
 	// 内存会不断被重复利用。
 	for _, env := range os.Environ() {
-		if strings.HasPrefix(env, "GOMAXPROCS=") {
+		if strings.HasPrefix(env, "GOMAXPROCS=") || strings.HasPrefix(env, "GOGCTRACE=") {
 			continue
 		}
 		cmd.Env = append(cmd.Env, env)

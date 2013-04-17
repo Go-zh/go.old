@@ -695,6 +695,7 @@ runtime·dropm(void)
 
 	// Undo whatever initialization minit did during needm.
 	runtime·unminit();
+	m->seh = nil;  // reset dangling typed pointer
 
 	// Clear m and g, and return m to the extra list.
 	// After the call to setmg we can only call nosplit functions.
@@ -870,6 +871,13 @@ handoffp(P *p)
 		return;
 	}
 	if(runtime·sched.runqsize) {
+		runtime·unlock(&runtime·sched);
+		startm(p, false);
+		return;
+	}
+	// If this is the last running P and nobody is polling network,
+	// need to wakeup another M to poll network.
+	if(runtime·sched.npidle == runtime·gomaxprocs-1 && runtime·atomicload64(&runtime·sched.lastpoll) != 0) {
 		runtime·unlock(&runtime·sched);
 		startm(p, false);
 		return;
@@ -1177,6 +1185,7 @@ park0(G *gp)
 	if(m->waitunlockf) {
 		m->waitunlockf(m->waitlock);
 		m->waitunlockf = nil;
+		m->waitlock = nil;
 	}
 	if(m->lockedg) {
 		stoplockedm();

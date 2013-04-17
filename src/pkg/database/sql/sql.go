@@ -1533,10 +1533,10 @@ func (rs *Rows) Close() error {
 	}
 	rs.closed = true
 	err := rs.rowsi.Close()
-	rs.releaseConn(err)
 	if rs.closeStmt != nil {
 		rs.closeStmt.Close()
 	}
+	rs.releaseConn(err)
 	return err
 }
 

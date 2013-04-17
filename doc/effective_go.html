@@ -1570,7 +1570,7 @@ _, present := timeZone[tz]
 <p>
 To delete a map entry, use the <code>delete</code>
 built-in function, whose arguments are the map and the key to be deleted.
-It's safe to do this this even if the key is already absent
+It's safe to do this even if the key is already absent
 from the map.
 </p>
 <pre>
@@ -2555,7 +2555,7 @@ if _, ok := val.(json.Marshaler); ok {
 
 <p>
 One place this situation arises is when it is necessary to guarantee within the package implementing the type that
-it it actually satisfies the interface.
+it actually satisfies the interface.
 If a type—for example,
 <code><a href="/pkg/encoding/json/#RawMessage">json.RawMessage</a></code>—needs
 a custom its JSON representation, it should implement

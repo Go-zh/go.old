@@ -34,6 +34,7 @@ const rwmutexMaxReaders = 1 << 30
 // RLock 为 rw 的读取将其锁定。
 func (rw *RWMutex) RLock() {
 	if raceenabled {
+		_ = rw.w.state
 		raceDisable()
 	}
 	if atomic.AddInt32(&rw.readerCount, 1) < 0 {
@@ -56,6 +57,7 @@ func (rw *RWMutex) RLock() {
 // 若 rw 并没有为读取而锁定，调用 RUnlock 就会引发一个运行时错误。
 func (rw *RWMutex) RUnlock() {
 	if raceenabled {
+		_ = rw.w.state
 		raceReleaseMerge(unsafe.Pointer(&rw.writerSem))
 		raceDisable()
 	}
@@ -85,6 +87,7 @@ func (rw *RWMutex) RUnlock() {
 // 为确保该锁最终可用，已阻塞的 Lock 调用会从获得的锁中排除新的读取器。
 func (rw *RWMutex) Lock() {
 	if raceenabled {
+		_ = rw.w.state
 		raceDisable()
 	}
 	// First, resolve competition with other writers.
@@ -122,6 +125,7 @@ func (rw *RWMutex) Lock() {
 // RLock（Lock）一个 RWMutex，然后安排其它Go程来 RUnlock（Unlock）它。
 func (rw *RWMutex) Unlock() {
 	if raceenabled {
+		_ = rw.w.state
 		raceRelease(unsafe.Pointer(&rw.readerSem))
 		raceRelease(unsafe.Pointer(&rw.writerSem))
 		raceDisable()

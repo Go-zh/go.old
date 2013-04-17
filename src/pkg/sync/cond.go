@@ -84,6 +84,7 @@ func NewCond(l Locker) *Cond {
 //
 func (c *Cond) Wait() {
 	if raceenabled {
+		_ = c.m.state
 		raceDisable()
 	}
 	c.m.Lock()
@@ -111,6 +112,7 @@ func (c *Cond) Wait() {
 // during the call.在调用其间可以保存 c.L，但并没有必要。
 func (c *Cond) Signal() {
 	if raceenabled {
+		_ = c.m.state
 		raceDisable()
 	}
 	c.m.Lock()
@@ -142,6 +144,7 @@ func (c *Cond) Signal() {
 // during the call.在调用其间可以保存 c.L，但并没有必要。
 func (c *Cond) Broadcast() {
 	if raceenabled {
+		_ = c.m.state
 		raceDisable()
 	}
 	c.m.Lock()

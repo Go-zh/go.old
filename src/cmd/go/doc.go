@@ -398,6 +398,9 @@ the file pattern "*_test.go".  These additional files can contain test functions
 benchmark functions, and example functions.  See 'go help testfunc' for more.
 Each listed package causes the execution of a separate test binary.
 
+Test files that declare a package with the suffix "_test" will be compiled as a
+separate package, and then linked and run with the main test binary.
+
 By default, go test needs no arguments.  It compiles and tests the package
 with source in the current directory, including tests, and runs the tests.
 
@@ -407,6 +410,7 @@ non-test installation.
 In addition to the build flags, the flags handled by 'go test' itself are:
 
 	-c  Compile the test binary to pkg.test but do not run it.
+	    (Where pkg is the last element of the package's import path.)
 
 	-i
 	    Install packages that are dependencies of the test.
@@ -582,7 +586,7 @@ a revision control system.
 
 A few common code hosting sites have special syntax:
 
-	BitBucket (Mercurial)
+	Bitbucket (Git, Mercurial)
 
 		import "bitbucket.org/user/project"
 		import "bitbucket.org/user/project/sub/directory"
