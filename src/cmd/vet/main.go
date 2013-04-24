@@ -94,14 +94,14 @@ func main() {
 			skip := 0
 			if colon := strings.LastIndex(name, ":"); colon > 0 {
 				var err error
-				skip, err = strconv.Atoi(name[colon + 1:])
+				skip, err = strconv.Atoi(name[colon+1:])
 				if err != nil {
 					errorf(`illegal format for "Func:N" argument %q; %s`, name, err)
 				}
 				name = name[:colon]
 			}
 			name = strings.ToLower(name)
-			if name[len(name) - 1] == 'f' {
+			if name[len(name)-1] == 'f' {
 				printfList[name] = skip
 			} else {
 				printList[name] = skip
@@ -259,14 +259,14 @@ func walkDir(root string) {
 // errorf formats the error to standard error, adding program
 // identification and a newline, and exits.
 func errorf(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, "vet: " + format + "\n", args...)
+	fmt.Fprintf(os.Stderr, "vet: "+format+"\n", args...)
 	os.Exit(2)
 }
 
 // warnf formats the error to standard error, adding program
 // identification and a newline, but does not exit.
 func warnf(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, "vet: " + format + "\n", args...)
+	fmt.Fprintf(os.Stderr, "vet: "+format+"\n", args...)
 	setExit(1)
 }
 
@@ -283,7 +283,7 @@ func Printf(format string, args ...interface{}) {
 	if !*verbose {
 		return
 	}
-	fmt.Printf(format + "\n", args...)
+	fmt.Printf(format+"\n", args...)
 }
 
 // Bad reports an error and sets the exit code..
@@ -311,12 +311,12 @@ func (f *File) loc(pos token.Pos) string {
 
 // Warn reports an error but does not set the exit code.
 func (f *File) Warn(pos token.Pos, args ...interface{}) {
-	fmt.Fprint(os.Stderr, f.loc(pos) + fmt.Sprintln(args...))
+	fmt.Fprint(os.Stderr, f.loc(pos)+fmt.Sprintln(args...))
 }
 
 // Warnf reports a formatted error but does not set the exit code.
 func (f *File) Warnf(pos token.Pos, format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, f.loc(pos) + format + "\n", args...)
+	fmt.Fprintf(os.Stderr, f.loc(pos)+format+"\n", args...)
 }
 
 // walkFile walks the file's tree.

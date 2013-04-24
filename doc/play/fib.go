@@ -1,6 +1,6 @@
 package main
 
-import ""fmt
+import "fmt"
 
 // fib 返回一个函数，该函数返回连续的斐波纳契数。
 func fib() func() int {

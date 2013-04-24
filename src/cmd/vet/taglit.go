@@ -110,7 +110,7 @@ func pkgPath(f *File, pkgName string) (path string) {
 			}
 		} else {
 			// Catch `import "pkgName"` or `import "foo/bar/pkgName"`.
-			if s == pkgName || strings.HasSuffix(s, "/" + pkgName) {
+			if s == pkgName || strings.HasSuffix(s, "/"+pkgName) {
 				return s
 			}
 		}

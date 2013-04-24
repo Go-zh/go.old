@@ -143,7 +143,7 @@ func (f *File) checkPrintf(call *ast.CallExpr, name string, formatIndex int) {
 				continue
 			}
 			// If we've run out of args, print after loop will pick that up.
-			if argNum + nargs <= len(call.Args) {
+			if argNum+nargs <= len(call.Args) {
 				f.checkPrintfArg(call, verb, flags, argNum, nargs)
 			}
 			argNum += nargs
@@ -165,7 +165,7 @@ func (f *File) checkPrintf(call *ast.CallExpr, name string, formatIndex int) {
 // arguments it consumes.
 func (f *File) parsePrintfVerb(call *ast.CallExpr, format string) (verb rune, flags []byte, nbytes, nargs int) {
 	// There's guaranteed a percent sign.
-	flags = make([]byte,0, 5)
+	flags = make([]byte, 0, 5)
 	nbytes = 1
 	end := len(format)
 	// There may be flags.
@@ -211,7 +211,7 @@ FlagLoop:
 type printfArgType int
 
 const (
-	argBool printfArgType = 1<<iota
+	argBool printfArgType = 1 << iota
 	argInt
 	argRune
 	argString
@@ -284,7 +284,7 @@ func (f *File) checkPrintfArg(call *ast.CallExpr, verb rune, flags []byte, argNu
 			}
 			for _, v := range printVerbs {
 				if v.verb == verb {
-					arg := call.Args[argNum + nargs - 1]
+					arg := call.Args[argNum+nargs-1]
 					if !f.matchArgType(v.typ, arg) {
 						typeString := ""
 						if typ := f.pkg.types[arg]; typ != nil {
@@ -341,7 +341,7 @@ func (f *File) checkPrint(call *ast.CallExpr, name string, firstArg int) {
 	}
 	if isLn {
 		// The last item, if a string, should not have a newline.
-		arg = args[len(call.Args) - 1]
+		arg = args[len(call.Args)-1]
 		if lit, ok := arg.(*ast.BasicLit); ok && lit.Kind == token.STRING {
 			if strings.HasSuffix(lit.Value, `\n"`) {
 				f.Badf(call.Pos(), "%s call ends with newline", name)

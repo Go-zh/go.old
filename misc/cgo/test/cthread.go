@@ -38,7 +38,7 @@ func testCthread(t *testing.T) {
 	sum.i = 0
 	C.doAdd(10, 6)
 
-	want := 10*(10 - 1)/2*6
+	want := 10 * (10 - 1) / 2 * 6
 	if sum.i != want {
 		t.Fatalf("sum=%d, want %d", sum.i, want)
 	}

@@ -63,7 +63,7 @@ var (
 	writeIndex = flag.Bool("write_index", false, "write index to a file; the file name must be specified with -index_files")
 
 	// network
-	httpAddr   = flag.String("http", "", "HTTP service address (e.g., '" + defaultAddr + "')")
+	httpAddr   = flag.String("http", "", "HTTP service address (e.g., '"+defaultAddr+"')")
 	serverAddr = flag.String("server", "", "webserver address for command line searches")
 
 	// layout control
@@ -78,16 +78,16 @@ var (
 func serveError(w http.ResponseWriter, r *http.Request, relpath string, err error) {
 	w.WriteHeader(http.StatusNotFound)
 	servePage(w, Page{
-			Title:    "File " + relpath,
-			Subtitle: relpath,
-			Body:     applyTemplate(errorHTML, "errorHTML", err), // err may contain an absolute path!
-		})
+		Title:    "File " + relpath,
+		Subtitle: relpath,
+		Body:     applyTemplate(errorHTML, "errorHTML", err), // err may contain an absolute path!
+	})
 }
 
 func usage() {
 	fmt.Fprintf(os.Stderr,
-					"usage: godoc package [name ...]\n" +
-							"	godoc -http=" + defaultAddr + "\n")
+		"usage: godoc package [name ...]\n"+
+			"	godoc -http="+defaultAddr+"\n")
 	flag.PrintDefaults()
 	os.Exit(2)
 }
@@ -468,5 +468,5 @@ type httpWriter struct {
 	code int
 }
 
-func (w *httpWriter) Header() http.Header { return w.h }
+func (w *httpWriter) Header() http.Header  { return w.h }
 func (w *httpWriter) WriteHeader(code int) { w.code = code }

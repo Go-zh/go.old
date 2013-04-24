@@ -76,9 +76,9 @@ func (r *Repo) Log() ([]HgLog, error) {
 	r.Lock()
 	defer r.Unlock()
 	data, _, err := runLog(*cmdTimeout, nil, r.Path, r.hgCmd("log",
-			"--encoding=utf-8",
-				"--limit=" + strconv.Itoa(N),
-				"--template=" + xmlLogTemplate)...,
+		"--encoding=utf-8",
+		"--limit="+strconv.Itoa(N),
+		"--template="+xmlLogTemplate)...,
 	)
 	if err != nil {
 		return nil, err
@@ -87,7 +87,7 @@ func (r *Repo) Log() ([]HgLog, error) {
 	var logStruct struct {
 		Log []HgLog
 	}
-	err = xml.Unmarshal([]byte("<Top>" + data + "</Top>"), &logStruct)
+	err = xml.Unmarshal([]byte("<Top>"+data+"</Top>"), &logStruct)
 	if err != nil {
 		log.Printf("unmarshal hg log: %v", err)
 		return nil, err
@@ -102,7 +102,7 @@ func (r *Repo) FullHash(rev string) (string, error) {
 	s, _, err := runLog(*cmdTimeout, nil, r.Path,
 		r.hgCmd("log",
 			"--encoding=utf-8",
-				"--rev=" + rev,
+			"--rev="+rev,
 			"--limit=1",
 			"--template={node}")...,
 	)

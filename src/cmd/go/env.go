@@ -26,7 +26,7 @@ each named variable on its own line.
 }
 
 type envVar struct {
-	name,    value string
+	name, value string
 }
 
 func mkEnv() []envVar {

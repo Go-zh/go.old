@@ -238,7 +238,7 @@ func splitQuotedFields(s string) ([]string, error) {
 				return nil, fmt.Errorf("unterminated %c string", quote)
 			}
 			f = append(f, s[:i])
-			s = s[i + 1:]
+			s = s[i+1:]
 			continue
 		}
 		i := 0
@@ -363,7 +363,7 @@ type builder struct {
 	work        string               // the temporary work directory (ends in filepath.Separator)
 	actionCache map[cacheKey]*action // a cache of already-constructed actions
 	mkdirCache  map[string]bool      // a cache of created directories
-	print       func (args ...interface{}) (int, error)
+	print       func(args ...interface{}) (int, error)
 
 	output    sync.Mutex
 	scriptDir string // current directory in printed script
@@ -382,8 +382,8 @@ type action struct {
 	args       []string      // additional args for runProgram
 	testOutput *bytes.Buffer // test output buffer
 
-	f          func (*builder, *action) error // the action itself (nil = no-op)
-	ignoreFail bool                           // whether to run f even if dependencies fail
+	f          func(*builder, *action) error // the action itself (nil = no-op)
+	ignoreFail bool                          // whether to run f even if dependencies fail
 
 	// Generated files, directories.
 	link   bool   // target is executable, not just package
@@ -499,7 +499,7 @@ func goFilesPackage(gofiles []string) *Package {
 
 	if pkg.Name == "main" {
 		_, elem := filepath.Split(gofiles[0])
-		exe := elem[:len(elem) - len(".go")] + exeSuffix
+		exe := elem[:len(elem)-len(".go")] + exeSuffix
 		if *buildO == "" {
 			*buildO = exe
 		}
@@ -616,7 +616,7 @@ func (b *builder) action(mode buildMode, depMode buildMode, p *Package) *action 
 func actionList(root *action) []*action {
 	seen := map[*action]bool{}
 	all := []*action{}
-	var walk func (*action)
+	var walk func(*action)
 	walk = func(a *action) {
 		if seen[a] {
 			return
@@ -768,7 +768,7 @@ func (b *builder) build(a *action) (err error) {
 	}
 
 	if a.p.Standard && a.p.ImportPath == "runtime" && buildContext.Compiler == "gc" &&
-			!hasString(a.p.HFiles, "zasm_" + buildContext.GOOS + "_" + buildContext.GOARCH + ".h") {
+		!hasString(a.p.HFiles, "zasm_"+buildContext.GOOS+"_"+buildContext.GOARCH+".h") {
 		return fmt.Errorf("%s/%s must be bootstrapped using make.bash", buildContext.GOOS, buildContext.GOARCH)
 	}
 
@@ -871,18 +871,18 @@ func (b *builder) build(a *action) (err error) {
 	for _, file := range a.p.HFiles {
 		switch {
 		case strings.HasSuffix(file, _goos_goarch):
-			targ := file[:len(file) - len(_goos_goarch)] + "_GOOS_GOARCH.h"
-			if err := b.copyFile(a, obj + targ, filepath.Join(a.p.Dir, file), 0666); err != nil {
+			targ := file[:len(file)-len(_goos_goarch)] + "_GOOS_GOARCH.h"
+			if err := b.copyFile(a, obj+targ, filepath.Join(a.p.Dir, file), 0666); err != nil {
 				return err
 			}
 		case strings.HasSuffix(file, _goarch):
-			targ := file[:len(file) - len(_goarch)] + "_GOARCH.h"
-			if err := b.copyFile(a, obj + targ, filepath.Join(a.p.Dir, file), 0666); err != nil {
+			targ := file[:len(file)-len(_goarch)] + "_GOARCH.h"
+			if err := b.copyFile(a, obj+targ, filepath.Join(a.p.Dir, file), 0666); err != nil {
 				return err
 			}
 		case strings.HasSuffix(file, _goos):
-			targ := file[:len(file) - len(_goos)] + "_GOOS.h"
-			if err := b.copyFile(a, obj + targ, filepath.Join(a.p.Dir, file), 0666); err != nil {
+			targ := file[:len(file)-len(_goos)] + "_GOOS.h"
+			if err := b.copyFile(a, obj+targ, filepath.Join(a.p.Dir, file), 0666); err != nil {
 				return err
 			}
 		}
@@ -894,8 +894,8 @@ func (b *builder) build(a *action) (err error) {
 	}
 
 	for _, file := range cfiles {
-		out := file[:len(file) - len(".c")] + "." + objExt
-		if err := buildToolchain.cc(b, a.p, obj, obj + out, file); err != nil {
+		out := file[:len(file)-len(".c")] + "." + objExt
+		if err := buildToolchain.cc(b, a.p, obj, obj+out, file); err != nil {
 			return err
 		}
 		objects = append(objects, out)
@@ -903,8 +903,8 @@ func (b *builder) build(a *action) (err error) {
 
 	// Assemble .s files.
 	for _, file := range sfiles {
-		out := file[:len(file) - len(".s")] + "." + objExt
-		if err := buildToolchain.asm(b, a.p, obj, obj + out, file); err != nil {
+		out := file[:len(file)-len(".s")] + "." + objExt
+		if err := buildToolchain.asm(b, a.p, obj, obj+out, file); err != nil {
 			return err
 		}
 		objects = append(objects, out)
@@ -931,7 +931,7 @@ func (b *builder) build(a *action) (err error) {
 		// The compiler only cares about direct imports, but the
 		// linker needs the whole dependency tree.
 		all := actionList(a)
-		all = all[:len(all) - 1] // drop a
+		all = all[:len(all)-1] // drop a
 		if err := buildToolchain.ld(b, a.p, a.target, all, a.objpkg, objects); err != nil {
 			return err
 		}
@@ -1016,9 +1016,9 @@ func (b *builder) includeArgs(flag string, all []*action) []string {
 		if dir := a1.pkgdir; dir == a1.p.build.PkgRoot && !incMap[dir] {
 			incMap[dir] = true
 			if _, ok := buildToolchain.(gccgoToolchain); ok {
-				dir = filepath.Join(dir, "gccgo_" + goos + "_" + goarch)
+				dir = filepath.Join(dir, "gccgo_"+goos+"_"+goarch)
 			} else {
-				dir = filepath.Join(dir, goos + "_" + goarch)
+				dir = filepath.Join(dir, goos+"_"+goarch)
 				if buildRace {
 					dir += "_race"
 				}
@@ -1065,16 +1065,16 @@ func (b *builder) copyFile(a *action, dst, src string, perm os.FileMode) error {
 	}
 
 	os.Remove(dst)
-	df, err := os.OpenFile(dst, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, perm)
+	df, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
 	if err != nil && toolIsWindows {
 		// Windows does not allow deletion of a binary file
 		// while it is executing.  Try to move it out of the way.
 		// If the remove fails, which is likely, we'll try again the
 		// next time we do an install of this binary.
-		if err := os.Rename(dst, dst + "~"); err == nil {
+		if err := os.Rename(dst, dst+"~"); err == nil {
 			os.Remove(dst + "~")
 		}
-		df, err = os.OpenFile(dst, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, perm)
+		df, err = os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
 	}
 	if err != nil {
 		return err
@@ -1090,15 +1090,15 @@ func (b *builder) copyFile(a *action, dst, src string, perm os.FileMode) error {
 }
 
 var objectMagic = [][]byte{
-	{'!', '<', 'a', 'r', 'c', 'h', '>', '\n'}, // Package archive
-	{'\x7F', 'E', 'L', 'F'}, // ELF
-	{0xFE, 0xED, 0xFA, 0xCE}, // Mach-O big-endian 32-bit
-	{0xFE, 0xED, 0xFA, 0xCF}, // Mach-O big-endian 64-bit
-	{0xCE, 0xFA, 0xED, 0xFE}, // Mach-O little-endian 32-bit
-	{0xCF, 0xFA, 0xED, 0xFE}, // Mach-O little-endian 64-bit
+	{'!', '<', 'a', 'r', 'c', 'h', '>', '\n'},        // Package archive
+	{'\x7F', 'E', 'L', 'F'},                          // ELF
+	{0xFE, 0xED, 0xFA, 0xCE},                         // Mach-O big-endian 32-bit
+	{0xFE, 0xED, 0xFA, 0xCF},                         // Mach-O big-endian 64-bit
+	{0xCE, 0xFA, 0xED, 0xFE},                         // Mach-O little-endian 32-bit
+	{0xCF, 0xFA, 0xED, 0xFE},                         // Mach-O little-endian 64-bit
 	{0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x04, 0x00}, // PE (Windows) as generated by 6l/8l
-	{0x00, 0x00, 0x01, 0xEB}, // Plan 9 i386
-	{0x00, 0x00, 0x8a, 0x97}, // Plan 9 amd64
+	{0x00, 0x00, 0x01, 0xEB},                         // Plan 9 i386
+	{0x00, 0x00, 0x8a, 0x97},                         // Plan 9 amd64
 }
 
 func isObject(s string) bool {
@@ -1132,7 +1132,7 @@ func isObject(s string) bool {
 func (b *builder) fmtcmd(dir string, format string, args ...interface{}) string {
 	cmd := fmt.Sprintf(format, args...)
 	if dir != "" && dir != "/" {
-		cmd = strings.Replace(" " + cmd, " " + dir, " .", -1)[1:]
+		cmd = strings.Replace(" "+cmd, " "+dir, " .", -1)[1:]
 		if b.scriptDir != dir {
 			b.scriptDir = dir
 			cmd = "cd " + dir + "\n" + cmd
@@ -1178,10 +1178,10 @@ func (b *builder) showOutput(dir, desc, out string) {
 	prefix := "# " + desc
 	suffix := "\n" + out
 	if reldir := shortPath(dir); reldir != dir {
-		suffix = strings.Replace(suffix, " " + dir, " " + reldir, -1)
-		suffix = strings.Replace(suffix, "\n" + dir, "\n" + reldir, -1)
+		suffix = strings.Replace(suffix, " "+dir, " "+reldir, -1)
+		suffix = strings.Replace(suffix, "\n"+dir, "\n"+reldir, -1)
 	}
-	suffix = strings.Replace(suffix, " " + b.work, " $WORK", -1)
+	suffix = strings.Replace(suffix, " "+b.work, " $WORK", -1)
 
 	b.output.Lock()
 	defer b.output.Unlock()
@@ -1317,7 +1317,7 @@ func (b *builder) runOut(dir string, desc string, env []string, cmdargs ...inter
 		// http://golang.org/issue/3001
 		//
 		if err != nil && nbusy < 3 && strings.Contains(err.Error(), "text file busy") {
-			time.Sleep(100*time.Millisecond<<uint(nbusy))
+			time.Sleep(100 * time.Millisecond << uint(nbusy))
 			nbusy++
 			continue
 		}
@@ -1487,7 +1487,7 @@ func (gcToolchain) gc(b *builder, p *Package, obj string, importArgs []string, g
 		gcargs = append(gcargs, "-complete")
 	}
 
-	args := stringList(tool(archChar + "g"), "-o", ofile, buildGcflags, gcargs, "-D", p.localPrefix, importArgs)
+	args := stringList(tool(archChar+"g"), "-o", ofile, buildGcflags, gcargs, "-D", p.localPrefix, importArgs)
 	for _, f := range gofiles {
 		args = append(args, mkAbs(p.Dir, f))
 	}
@@ -1559,10 +1559,10 @@ func (gccgoToolchain) gc(b *builder, p *Package, obj string, importArgs []string
 	gcargs := []string{"-g"}
 	gcargs = append(gcargs, b.gccArchArgs()...)
 	if pkgpath := gccgoPkgpath(p); pkgpath != "" {
-		gcargs = append(gcargs, "-fgo-pkgpath=" + pkgpath)
+		gcargs = append(gcargs, "-fgo-pkgpath="+pkgpath)
 	}
 	if p.localPrefix != "" {
-		gcargs = append(gcargs, "-fgo-relative-import-path=" + p.localPrefix)
+		gcargs = append(gcargs, "-fgo-relative-import-path="+p.localPrefix)
 	}
 	args := stringList("gccgo", importArgs, "-c", gcargs, "-o", ofile, buildGccgoflags)
 	for _, f := range gofiles {
@@ -1577,7 +1577,7 @@ func (gccgoToolchain) asm(b *builder, p *Package, obj, ofile, sfile string) erro
 	sfile = mkAbs(p.Dir, sfile)
 	defs := []string{"-D", "GOOS_" + goos, "-D", "GOARCH_" + goarch}
 	if pkgpath := gccgoCleanPkgpath(p); pkgpath != "" {
-		defs = append(defs, `-D`, `GOPKGPATH="` + pkgpath + `"`)
+		defs = append(defs, `-D`, `GOPKGPATH="`+pkgpath+`"`)
 	}
 	defs = append(defs, b.gccArchArgs()...)
 	return b.run(p.Dir, p.ImportPath, nil, "gccgo", "-I", obj, "-o", ofile, defs, sfile)
@@ -1587,7 +1587,7 @@ func (gccgoToolchain) pkgpath(basedir string, p *Package) string {
 	end := filepath.FromSlash(p.ImportPath + ".a")
 	afile := filepath.Join(basedir, end)
 	// add "lib" to the final element
-	return filepath.Join(filepath.Dir(afile), "lib" + filepath.Base(afile))
+	return filepath.Join(filepath.Dir(afile), "lib"+filepath.Base(afile))
 }
 
 func (gccgoToolchain) pack(b *builder, p *Package, objDir, afile string, ofiles []string) error {
@@ -1646,7 +1646,7 @@ func (gccgoToolchain) cc(b *builder, p *Package, objdir, ofile, cfile string) er
 	defs := []string{"-D", "GOOS_" + goos, "-D", "GOARCH_" + goarch}
 	defs = append(defs, b.gccArchArgs()...)
 	if pkgpath := gccgoCleanPkgpath(p); pkgpath != "" {
-		defs = append(defs, `-D`, `GOPKGPATH="` + pkgpath + `"`)
+		defs = append(defs, `-D`, `GOPKGPATH="`+pkgpath+`"`)
 	}
 	// TODO: Support using clang here (during gccgo build)?
 	return b.run(p.Dir, p.ImportPath, nil, "gcc", "-Wall", "-g",
@@ -1664,7 +1664,7 @@ func gccgoCleanPkgpath(p *Package) string {
 	clean := func(r rune) rune {
 		switch {
 		case 'A' <= r && r <= 'Z', 'a' <= r && r <= 'z',
-				'0' <= r && r <= '9':
+			'0' <= r && r <= '9':
 			return r
 		}
 		return '_'
@@ -1694,7 +1694,7 @@ func (b *builder) libgcc(p *Package) (string, error) {
 		return "", fmt.Errorf("gcc -print-libgcc-file-name: %v (%s)", err, f)
 	}
 	if buildN {
-		s := fmt.Sprintf("LIBGCC=$(%s)\n", buf.Next(buf.Len() - 1))
+		s := fmt.Sprintf("LIBGCC=$(%s)\n", buf.Next(buf.Len()-1))
 		b.print = prev
 		b.print(s)
 		return "$LIBGCC", nil
@@ -1800,7 +1800,7 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, gccfiles []string) (outGo,
 	if pkgs := p.CgoPkgConfig; len(pkgs) > 0 {
 		out, err := b.runOut(p.Dir, p.ImportPath, nil, "pkg-config", "--cflags", pkgs)
 		if err != nil {
-			b.showOutput(p.Dir, "pkg-config --cflags " + strings.Join(pkgs, " "), string(out))
+			b.showOutput(p.Dir, "pkg-config --cflags "+strings.Join(pkgs, " "), string(out))
 			b.print(err.Error() + "\n")
 			return nil, nil, errPrintedOutput
 		}
@@ -1809,7 +1809,7 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, gccfiles []string) (outGo,
 		}
 		out, err = b.runOut(p.Dir, p.ImportPath, nil, "pkg-config", "--libs", pkgs)
 		if err != nil {
-			b.showOutput(p.Dir, "pkg-config --libs " + strings.Join(pkgs, " "), string(out))
+			b.showOutput(p.Dir, "pkg-config --libs "+strings.Join(pkgs, " "), string(out))
 			b.print(err.Error() + "\n")
 			return nil, nil, errPrintedOutput
 		}
@@ -1826,9 +1826,9 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, gccfiles []string) (outGo,
 	gofiles := []string{obj + "_cgo_gotypes.go"}
 	cfiles := []string{"_cgo_main.c", "_cgo_export.c"}
 	for _, fn := range p.CgoFiles {
-		f := cgoRe.ReplaceAllString(fn[:len(fn) - 2], "_")
-		gofiles = append(gofiles, obj + f + "cgo1.go")
-		cfiles = append(cfiles, f + "cgo2.c")
+		f := cgoRe.ReplaceAllString(fn[:len(fn)-2], "_")
+		gofiles = append(gofiles, obj+f+"cgo1.go")
+		cfiles = append(cfiles, f+"cgo2.c")
 	}
 	defunC := obj + "_cgo_defun.c"
 
@@ -1857,7 +1857,7 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, gccfiles []string) (outGo,
 	if _, ok := buildToolchain.(gccgoToolchain); ok {
 		cgoflags = append(cgoflags, "-gccgo")
 		if pkgpath := gccgoPkgpath(p); pkgpath != "" {
-			cgoflags = append(cgoflags, "-gccgopkgpath=" + pkgpath)
+			cgoflags = append(cgoflags, "-gccgopkgpath="+pkgpath)
 		}
 		objExt = "o"
 	}
@@ -1906,8 +1906,8 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, gccfiles []string) (outGo,
 	}
 
 	for _, cfile := range cfiles {
-		ofile := obj + cfile[:len(cfile) - 1] + "o"
-		if err := b.gcc(p, ofile, cgoCFLAGS, obj + cfile); err != nil {
+		ofile := obj + cfile[:len(cfile)-1] + "o"
+		if err := b.gcc(p, ofile, cgoCFLAGS, obj+cfile); err != nil {
 			return nil, nil, err
 		}
 		linkobj = append(linkobj, ofile)
@@ -1916,7 +1916,7 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, gccfiles []string) (outGo,
 		}
 	}
 	for _, file := range gccfiles {
-		ofile := obj + cgoRe.ReplaceAllString(file[:len(file) - 1], "_") + "o"
+		ofile := obj + cgoRe.ReplaceAllString(file[:len(file)-1], "_") + "o"
 		if err := b.gcc(p, ofile, cgoCFLAGS, file); err != nil {
 			return nil, nil, err
 		}
@@ -1932,7 +1932,7 @@ func (b *builder) cgo(p *Package, cgoExe, obj string, gccfiles []string) (outGo,
 		return nil, nil, err
 	}
 	if goarch == "arm" && goos == "linux" { // but we don't need -pie for normal cgo programs
-		cgoLDFLAGS = cgoLDFLAGS[0 : len(cgoLDFLAGS) - 1]
+		cgoLDFLAGS = cgoLDFLAGS[0 : len(cgoLDFLAGS)-1]
 	}
 
 	if _, ok := buildToolchain.(gccgoToolchain); ok {
@@ -2041,7 +2041,7 @@ func (b *builder) swigOne(p *Package, file, obj string, cxx bool, intgosize stri
 	if cxx {
 		n = 8 // length of ".swigcxx"
 	}
-	base := file[:len(file) - n]
+	base := file[:len(file)-n]
 	goFile := base + ".go"
 	cBase := base + "_gc."
 	gccBase := base + "_wrap."
@@ -2084,14 +2084,14 @@ func (b *builder) swigOne(p *Package, file, obj string, cxx bool, intgosize stri
 	if !gccgo {
 		// cc
 		cObj = obj + cBase + archChar
-		if err := buildToolchain.cc(b, p, obj, cObj, obj + cBase + "c"); err != nil {
+		if err := buildToolchain.cc(b, p, obj, cObj, obj+cBase+"c"); err != nil {
 			return "", "", err
 		}
 	}
 
 	// gcc
 	gccObj := obj + gccBase + "o"
-	if err := b.gcc(p, gccObj, []string{"-g", "-fPIC", "-O2"}, obj + gccBase + gccExt); err != nil {
+	if err := b.gcc(p, gccObj, []string{"-g", "-fPIC", "-O2"}, obj+gccBase+gccExt); err != nil {
 		return "", "", err
 	}
 
@@ -2116,8 +2116,8 @@ func (b *builder) swigOne(p *Package, file, obj string, cxx bool, intgosize stri
 type actionQueue []*action
 
 // Implement heap.Interface
-func (q *actionQueue) Len() int { return len(*q) }
-func (q *actionQueue) Swap(i, j int) { (*q)[i], (*q)[j] = (*q)[j], (*q)[i] }
+func (q *actionQueue) Len() int           { return len(*q) }
+func (q *actionQueue) Swap(i, j int)      { (*q)[i], (*q)[j] = (*q)[j], (*q)[i] }
 func (q *actionQueue) Less(i, j int) bool { return (*q)[i].priority < (*q)[j].priority }
 func (q *actionQueue) Push(x interface{}) { *q = append(*q, x.(*action)) }
 func (q *actionQueue) Pop() interface{} {

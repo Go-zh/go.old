@@ -43,7 +43,7 @@ type delayTime struct {
 
 func (dt *delayTime) backoff(max time.Duration) {
 	dt.mutex.Lock()
-	v := dt.value.(time.Duration)*2
+	v := dt.value.(time.Duration) * 2
 	if v > max {
 		v = max
 	}
@@ -69,9 +69,9 @@ var (
 	declLinks      = flag.Bool("links", true, "link identifiers to their declarations")
 
 	// search index
-	indexEnabled  = flag.Bool("index", false, "enable search index")
-	indexFiles    = flag.String("index_files", "", "glob pattern specifying index files;" +
-			"if not empty, the index is read from these files in sorted order")
+	indexEnabled = flag.Bool("index", false, "enable search index")
+	indexFiles   = flag.String("index_files", "", "glob pattern specifying index files;"+
+		"if not empty, the index is read from these files in sorted order")
 	maxResults    = flag.Int("maxresults", 10000, "maximum number of full text search results shown")
 	indexThrottle = flag.Float64("index_throttle", 0.75, "index throttle value; 0.0 = no time allocated, 1.0 = full throttle")
 
@@ -164,7 +164,7 @@ func (p *tconv) Write(data []byte) (n int, err error) {
 				p.indent += *tabwidth
 			case '\n':
 				p.indent = 0
-				if _, err = p.output.Write(data[n : n + 1]); err != nil {
+				if _, err = p.output.Write(data[n : n+1]); err != nil {
 					return
 				}
 			case ' ':
@@ -180,7 +180,7 @@ func (p *tconv) Write(data []byte) (n int, err error) {
 			if b == '\n' {
 				p.state = indenting
 				p.indent = 0
-				if _, err = p.output.Write(data[pos : n + 1]); err != nil {
+				if _, err = p.output.Write(data[pos : n+1]); err != nil {
 					return
 				}
 			}
@@ -320,7 +320,7 @@ const punchCardWidth = 80
 
 func comment_textFunc(comment, indent, preIndent string) string {
 	var buf bytes.Buffer
-	doc.ToText(&buf, comment, indent, preIndent, punchCardWidth - 2*len(indent))
+	doc.ToText(&buf, comment, indent, preIndent, punchCardWidth-2*len(indent))
 	return buf.String()
 }
 
@@ -335,7 +335,7 @@ var exampleOutputRx = regexp.MustCompile(`(?i)//[[:space:]]*output:`)
 // while keeping uppercase Braz in Foo_Braz.
 func stripExampleSuffix(name string) string {
 	if i := strings.LastIndex(name, "_"); i != -1 {
-		if i < len(name) - 1 && !startsWithUppercase(name[i + 1:]) {
+		if i < len(name)-1 && !startsWithUppercase(name[i+1:]) {
 			name = name[:i]
 		}
 	}
@@ -366,9 +366,9 @@ func example_textFunc(info *PageInfo, funcName, indent string) string {
 		writeNode(&buf1, info.FSet, cnode)
 		code := buf1.String()
 		// Additional formatting if this is a function body.
-		if n := len(code); n >= 2 && code[0] == '{' && code[n - 1] == '}' {
+		if n := len(code); n >= 2 && code[0] == '{' && code[n-1] == '}' {
 			// remove surrounding braces
-			code = code[1 : n - 1]
+			code = code[1 : n-1]
 			// unindent
 			code = strings.Replace(code, "\n    ", "\n", -1)
 		}
@@ -399,10 +399,10 @@ func example_htmlFunc(info *PageInfo, funcName string) string {
 		wholeFile := true
 
 		// Additional formatting if this is a function body.
-		if n := len(code); n >= 2 && code[0] == '{' && code[n - 1] == '}' {
+		if n := len(code); n >= 2 && code[0] == '{' && code[n-1] == '}' {
 			wholeFile = false
 			// remove surrounding braces
-			code = code[1 : n - 1]
+			code = code[1 : n-1]
 			// unindent
 			code = strings.Replace(code, "\n    ", "\n", -1)
 			// remove output comment
@@ -429,8 +429,8 @@ func example_htmlFunc(info *PageInfo, funcName string) string {
 		}
 
 		err := exampleHTML.Execute(&buf, struct {
-				Name,    Doc,    Code,    Play,    Output string
-			}{eg.Name, eg.Doc, code, play, out})
+			Name, Doc, Code, Play, Output string
+		}{eg.Name, eg.Doc, code, play, out})
 		if err != nil {
 			log.Print(err)
 		}
@@ -464,9 +464,9 @@ func noteTitle(note string) string {
 
 func splitExampleName(s string) (name, suffix string) {
 	i := strings.LastIndex(s, "_")
-	if 0 <= i && i < len(s) - 1 && !startsWithUppercase(s[i + 1:]) {
+	if 0 <= i && i < len(s)-1 && !startsWithUppercase(s[i+1:]) {
 		name = s[:i]
-		suffix = " (" + strings.Title(s[i + 1:]) + ")"
+		suffix = " (" + strings.Title(s[i+1:]) + ")"
 		return
 	}
 	name = s
@@ -705,10 +705,10 @@ func serveHTMLDoc(w http.ResponseWriter, r *http.Request, abspath, relpath strin
 	}
 
 	servePage(w, Page{
-			Title:    meta.Title,
-			Subtitle: meta.Subtitle,
-			Body:     src,
-		})
+		Title:    meta.Title,
+		Subtitle: meta.Subtitle,
+		Body:     src,
+	})
 }
 
 func applyTemplate(t *template.Template, name string, data interface{}) []byte {
@@ -765,10 +765,10 @@ func serveTextFile(w http.ResponseWriter, r *http.Request, abspath, relpath, tit
 	fmt.Fprintf(&buf, `<p><a href="/%s?m=text">View as plain text</a></p>`, htmlpkg.EscapeString(relpath))
 
 	servePage(w, Page{
-			Title:    title + " " + relpath,
-			Tabtitle: relpath,
-			Body:     buf.Bytes(),
-		})
+		Title:    title + " " + relpath,
+		Tabtitle: relpath,
+		Body:     buf.Bytes(),
+	})
 }
 
 func serveDirectory(w http.ResponseWriter, r *http.Request, abspath, relpath string) {
@@ -783,10 +783,10 @@ func serveDirectory(w http.ResponseWriter, r *http.Request, abspath, relpath str
 	}
 
 	servePage(w, Page{
-			Title:    "Directory " + relpath,
-			Tabtitle: relpath,
-			Body:     applyTemplate(dirlistHTML, "dirlistHTML", list),
-		})
+		Title:    "Directory " + relpath,
+		Tabtitle: relpath,
+		Body:     applyTemplate(dirlistHTML, "dirlistHTML", list),
+	})
 }
 
 func serveFile(w http.ResponseWriter, r *http.Request) {
@@ -811,7 +811,7 @@ func serveFile(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(relpath, "/index.html") {
 			// We'll show index.html for the directory.
 			// Use the dir/ version as canonical instead of dir/index.html.
-			http.Redirect(w, r, r.URL.Path[0:len(r.URL.Path) - len("index.html")], http.StatusMovedPermanently)
+			http.Redirect(w, r, r.URL.Path[0:len(r.URL.Path)-len("index.html")], http.StatusMovedPermanently)
 			return
 		}
 		serveHTMLDoc(w, r, abspath, relpath)
@@ -872,11 +872,11 @@ const builtinPkgPath = "builtin"
 type PageInfoMode uint
 
 const (
-	noFiltering PageInfoMode = 1<<iota // do not filter exports
-	allMethods                         // show all embedded methods
-	showSource                         // show source code, do not extract documentation
-	noHtml                             // show result in textual form, do not generate HTML
-	flatDir                            // show directory in a flat (non-indented) manner
+	noFiltering PageInfoMode = 1 << iota // do not filter exports
+	allMethods                           // show all embedded methods
+	showSource                           // show source code, do not extract documentation
+	noHtml                               // show result in textual form, do not generate HTML
+	flatDir                              // show directory in a flat (non-indented) manner
 )
 
 // modeNames defines names for each PageInfoMode flag.
@@ -1112,13 +1112,13 @@ func (h *docServer) getPageInfo(abspath, relpath string, mode PageInfoMode) *Pag
 
 		// extract package documentation
 		info.FSet = fset
-		if mode & showSource == 0 {
+		if mode&showSource == 0 {
 			// show extracted documentation
 			var m doc.Mode
-			if mode & noFiltering != 0 {
+			if mode&noFiltering != 0 {
 				m = doc.AllDecls
 			}
-			if mode & allMethods != 0 {
+			if mode&allMethods != 0 {
 				m |= doc.AllMethods
 			}
 			info.PDoc = doc.New(pkg, pathpkg.Clean(relpath), m) // no trailing '/' in importpath
@@ -1150,7 +1150,7 @@ func (h *docServer) getPageInfo(abspath, relpath string, mode PageInfoMode) *Pag
 			// show source code
 			// TODO(gri) Consider eliminating export filtering in this mode,
 			//           or perhaps eliminating the mode altogether.
-			if mode & noFiltering == 0 {
+			if mode&noFiltering == 0 {
 				packageExports(fset, pkg)
 			}
 			info.PAst = ast.MergePackageFiles(pkg, 0)
@@ -1178,7 +1178,7 @@ func (h *docServer) getPageInfo(abspath, relpath string, mode PageInfoMode) *Pag
 	}
 	info.Dirs = dir.listing(true)
 	info.DirTime = timestamp
-	info.DirFlat = mode & flatDir != 0
+	info.DirFlat = mode&flatDir != 0
 
 	return info
 }
@@ -1201,7 +1201,7 @@ func (h *docServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if mode & noHtml != 0 {
+	if mode&noHtml != 0 {
 		serveText(w, applyTemplate(packageText, "packageText", info))
 		return
 	}
@@ -1239,11 +1239,11 @@ func (h *docServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	servePage(w, Page{
-			Title:    title,
-			Tabtitle: tabtitle,
-			Subtitle: subtitle,
-			Body:     applyTemplate(packageHTML, "packageHTML", info),
-		})
+		Title:    title,
+		Tabtitle: tabtitle,
+		Subtitle: subtitle,
+		Body:     applyTemplate(packageHTML, "packageHTML", info),
+	})
 }
 
 // ----------------------------------------------------------------------------
@@ -1294,7 +1294,7 @@ func lookup(query string) (result SearchResult) {
 			// maxResults results and thus the result may be incomplete (to be
 			// precise, we should remove one result from the result set, but
 			// nobody is going to count the results on the result page).
-			result.Found, result.Textual = index.LookupRegexp(rx, *maxResults + 1)
+			result.Found, result.Textual = index.LookupRegexp(rx, *maxResults+1)
 			result.Complete = result.Found <= *maxResults
 			if !result.Complete {
 				result.Found-- // since we looked for maxResults+1
@@ -1319,7 +1319,7 @@ func search(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.FormValue("q"))
 	result := lookup(query)
 
-	if getPageInfoMode(r) & noHtml != 0 {
+	if getPageInfoMode(r)&noHtml != 0 {
 		serveText(w, applyTemplate(searchText, "searchText", result))
 		return
 	}
@@ -1332,11 +1332,11 @@ func search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	servePage(w, Page{
-			Title:    title,
-			Tabtitle: query,
-			Query:    query,
-			Body:     applyTemplate(searchHTML, "searchHTML", result),
-		})
+		Title:    title,
+		Tabtitle: query,
+		Query:    query,
+		Body:     applyTemplate(searchHTML, "searchHTML", result),
+	})
 }
 
 // ----------------------------------------------------------------------------
@@ -1363,11 +1363,11 @@ func extractMetadata(b []byte) (meta Metadata, tail []byte, err error) {
 	if end < 0 {
 		return
 	}
-	b = b[len(jsonStart) - 1 : end + 1] // drop leading <!-- and include trailing }
+	b = b[len(jsonStart)-1 : end+1] // drop leading <!-- and include trailing }
 	if err = json.Unmarshal(b, &meta); err != nil {
 		return
 	}
-	tail = tail[end + len(jsonEnd):]
+	tail = tail[end+len(jsonEnd):]
 	return
 }
 
@@ -1376,7 +1376,7 @@ func extractMetadata(b []byte) (meta Metadata, tail []byte, err error) {
 //
 func updateMetadata() {
 	metadata := make(map[string]*Metadata)
-	var scan func (string) // scan is recursive
+	var scan func(string) // scan is recursive
 	scan = func(dir string) {
 		fis, err := fs.ReadDir(dir)
 		if err != nil {
@@ -1440,7 +1440,7 @@ func refreshMetadataLoop() {
 	for {
 		<-refreshMetadataSignal
 		updateMetadata()
-		time.Sleep(10*time.Second) // at most once every 10 seconds
+		time.Sleep(10 * time.Second) // at most once every 10 seconds
 	}
 }
 
@@ -1456,7 +1456,7 @@ func metadataFor(relpath string) *Metadata {
 		}
 		// Try with or without trailing slash.
 		if strings.HasSuffix(relpath, "/") {
-			relpath = relpath[:len(relpath) - 1]
+			relpath = relpath[:len(relpath)-1]
 		} else {
 			relpath = relpath + "/"
 		}
@@ -1488,7 +1488,7 @@ func indexUpToDate() bool {
 // feedDirnames feeds the directory names of all directories
 // under the file system given by root to channel c.
 //
-func feedDirnames(root *RWValue, c chan <- string) {
+func feedDirnames(root *RWValue, c chan<- string) {
 	if dir, _ := root.get(); dir != nil {
 		for d := range dir.(*Directory).iter(false) {
 			c <- d.Path
@@ -1516,7 +1516,7 @@ func readIndex(filenames string) error {
 		return fmt.Errorf("no index files match %q", filenames)
 	}
 	sort.Strings(matches) // make sure files are in the right order
-	files := make([]io.Reader,0, len(matches))
+	files := make([]io.Reader, 0, len(matches))
 	for _, filename := range matches {
 		f, err := os.Open(filename)
 		if err != nil {
@@ -1569,10 +1569,10 @@ func indexer() {
 			// index possibly out of date - make a new one
 			updateIndex()
 		}
-		delay := 60*time.Second // by default, try every 60s
+		delay := 60 * time.Second // by default, try every 60s
 		if *testDir != "" {
 			// in test mode, try once a second for fast startup
-			delay = 1*time.Second
+			delay = 1 * time.Second
 		}
 		time.Sleep(delay)
 	}

@@ -266,8 +266,8 @@ type DB struct {
 	closed   bool
 	dep      map[finalCloser]depSet
 	// conn 输出的最近一次栈跟踪；仅用于调试。
-	lastPut  map[*driverConn]string // stacktrace of last conn's put; debug only
-	maxIdle  int                    // zero means defaultMaxIdleConns; negative means 0
+	lastPut map[*driverConn]string // stacktrace of last conn's put; debug only
+	maxIdle int                    // zero means defaultMaxIdleConns; negative means 0
 	// 零表示 defaultMaxIdleConns；负值表示0
 }
 

@@ -40,7 +40,7 @@ func checkRangeLoop(f *File, n *ast.RangeStmt) {
 		return
 	}
 	var last *ast.CallExpr
-	switch s := sl[len(sl) - 1].(type) {
+	switch s := sl[len(sl)-1].(type) {
 	case *ast.GoStmt:
 		last = s.Call
 	case *ast.DeferStmt:
@@ -53,13 +53,13 @@ func checkRangeLoop(f *File, n *ast.RangeStmt) {
 		return
 	}
 	ast.Inspect(lit.Body, func(n ast.Node) bool {
-			id, ok := n.(*ast.Ident)
-			if !ok || id.Obj == nil {
-				return true
-			}
-			if key != nil && id.Obj == key.Obj || val != nil && id.Obj == val.Obj {
-				f.Warn(id.Pos(), "range variable", id.Name, "enclosed by function")
-			}
+		id, ok := n.(*ast.Ident)
+		if !ok || id.Obj == nil {
 			return true
-		})
+		}
+		if key != nil && id.Obj == key.Obj || val != nil && id.Obj == val.Obj {
+			f.Warn(id.Pos(), "range variable", id.Name, "enclosed by function")
+		}
+		return true
+	})
 }

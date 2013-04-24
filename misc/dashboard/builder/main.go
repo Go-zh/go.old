@@ -24,8 +24,8 @@ const (
 	codePyScript     = "misc/dashboard/googlecode_upload.py"
 	hgUrl            = "https://code.google.com/p/go/"
 	mkdirPerm        = 0750
-	waitInterval     = 30*time.Second // time to wait before checking for new revs
-	pkgBuildInterval = 24*time.Hour   // rebuild packages every 24 hours
+	waitInterval     = 30 * time.Second // time to wait before checking for new revs
+	pkgBuildInterval = 24 * time.Hour   // rebuild packages every 24 hours
 )
 
 // These variables are copied from the gobuilder's environment
@@ -40,9 +40,9 @@ var extraEnv = []string{
 
 type Builder struct {
 	goroot       *Repo
-	name            string
-	goos,    goarch string
-	key             string
+	name         string
+	goos, goarch string
+	key          string
 }
 
 var (
@@ -244,7 +244,7 @@ func (b *Builder) buildHash(hash string) error {
 	log.Println(b.name, "building", hash)
 
 	// create place in which to do work
-	workpath := filepath.Join(*buildroot, b.name + "-" + hash[:12])
+	workpath := filepath.Join(*buildroot, b.name+"-"+hash[:12])
 	if err := os.Mkdir(workpath, mkdirPerm); err != nil {
 		return err
 	}
@@ -323,7 +323,7 @@ func (b *Builder) failBuild() bool {
 
 	log.Printf("fail %s %s\n", b.name, hash)
 
-	if err := b.recordResult(false, "", hash, "", "auto-fail mode run by " + os.Getenv("USER"), 0); err != nil {
+	if err := b.recordResult(false, "", hash, "", "auto-fail mode run by "+os.Getenv("USER"), 0); err != nil {
 		log.Print(err)
 	}
 	return true
@@ -365,7 +365,7 @@ func (b *Builder) buildSubrepos(goRoot, goPath, goHash string) {
 // and runs 'go test -short pkg/...'. It returns the build log and any error.
 func (b *Builder) buildSubrepo(goRoot, goPath, pkg, hash string) (string, error) {
 	goTool := filepath.Join(goRoot, "bin", "go")
-	env := append(b.envv(), "GOROOT=" + goRoot, "GOPATH=" + goPath)
+	env := append(b.envv(), "GOROOT="+goRoot, "GOPATH="+goPath)
 
 	// add $GOROOT/bin and $GOPATH/bin to PATH
 	for i, e := range env {
@@ -378,7 +378,7 @@ func (b *Builder) buildSubrepo(goRoot, goPath, pkg, hash string) (string, error)
 	}
 
 	// fetch package and dependencies
-	log, ok, err := runLog(*cmdTimeout, env, goPath, goTool, "get", "-d", pkg + "/...")
+	log, ok, err := runLog(*cmdTimeout, env, goPath, goTool, "get", "-d", pkg+"/...")
 	if err == nil && !ok {
 		err = fmt.Errorf("go exited with status 1")
 	}
@@ -393,7 +393,7 @@ func (b *Builder) buildSubrepo(goRoot, goPath, pkg, hash string) (string, error)
 	}
 
 	// test the package
-	log, ok, err = runLog(*buildTimeout, env, goPath, goTool, "test", "-short", pkg + "/...")
+	log, ok, err = runLog(*buildTimeout, env, goPath, goTool, "test", "-short", pkg+"/...")
 	if err == nil && !ok {
 		err = fmt.Errorf("go exited with status 1")
 	}
@@ -406,20 +406,15 @@ func (b *Builder) envv() []string {
 		return b.envvWindows()
 	}
 	e := []string{
-<<<<<<< local
-			"GOOS=" + b.goos,
-			"GOARCH=" + b.goarch,
-=======
 		"GOOS=" + b.goos,
 		"GOHOSTOS=" + b.goos,
 		"GOARCH=" + b.goarch,
 		"GOHOSTARCH=" + b.goarch,
->>>>>>> other
 		"GOROOT_FINAL=/usr/local/go",
 	}
 	for _, k := range extraEnv {
 		if s, ok := getenvOk(k); ok {
-			e = append(e, k + "=" + s)
+			e = append(e, k+"="+s)
 		}
 	}
 	return e
@@ -448,7 +443,7 @@ func (b *Builder) envvWindows() []string {
 	}
 	var e []string
 	for name, v := range start {
-		e = append(e, name + "=" + v)
+		e = append(e, name+"="+v)
 		skip[name] = true
 	}
 	for _, kv := range os.Environ() {
@@ -539,8 +534,8 @@ func commitPoll(repo *Repo, pkg, key string) {
 	// Non-empty parent has form 1234:hashhashhash; we want full hash.
 	for i := range logs {
 		l := &logs[i]
-		if l.Parent == "" && i + 1 < len(logs) {
-			l.Parent = logs[i + 1].Hash
+		if l.Parent == "" && i+1 < len(logs) {
+			l.Parent = logs[i+1].Hash
 		} else if l.Parent != "" {
 			l.Parent, _ = repo.FullHash(l.Parent)
 		}
