@@ -146,7 +146,7 @@ func (c *conn) closeNotify() <-chan bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.closeNotifyc == nil {
-		c.closeNotifyc = make(chan bool)
+		c.closeNotifyc = make(chan bool, 1)
 		if c.hijackedv {
 			// to obey the function signature, even though
 			// it'll never receive a value.
@@ -1222,9 +1222,9 @@ func Redirect(w ResponseWriter, r *Request, urlStr string, code int) {
 			}
 
 			// clean up but preserve trailing slash
-			trailing := urlStr[len(urlStr)-1] == '/'
+			trailing := strings.HasSuffix(urlStr, "/")
 			urlStr = path.Clean(urlStr)
-			if trailing && urlStr[len(urlStr)-1] != '/' {
+			if trailing && !strings.HasSuffix(urlStr, "/") {
 				urlStr += "/"
 			}
 			urlStr += query
@@ -1492,7 +1492,7 @@ type Server struct {
 
 	// TLSNextProto optionally specifies a function to take over
 	// ownership of the provided TLS connection when an NPN
-	// protocol upgrade has occured.  The map key is the protocol
+	// protocol upgrade has occurred.  The map key is the protocol
 	// name negotiated. The Handler argument should be used to
 	// handle HTTP requests and will initialize the Request's TLS
 	// and RemoteAddr if not already set.  The connection is

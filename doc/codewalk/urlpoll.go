@@ -87,7 +87,7 @@ func (r *Resource) Poll() string {
 	return resp.Status
 }
 
-// Sleep sleeps for an appropriate interval (dependant on error state)
+// Sleep sleeps for an appropriate interval (dependent on error state)
 // before sending the Resource to done.
 
 // Sleep 在将 Resource 发送到 done 之前休眠一段适当的时间（取决于错误状态）。

@@ -33,10 +33,9 @@ const (
 var extraEnv = []string{
 	"CC",
 	"GOARM",
-	"GOHOSTARCH",
-	"GOHOSTOS",
 	"PATH",
 	"TMPDIR",
+	"USER",
 }
 
 type Builder struct {
@@ -407,8 +406,15 @@ func (b *Builder) envv() []string {
 		return b.envvWindows()
 	}
 	e := []string{
+<<<<<<< local
 			"GOOS=" + b.goos,
 			"GOARCH=" + b.goarch,
+=======
+		"GOOS=" + b.goos,
+		"GOHOSTOS=" + b.goos,
+		"GOARCH=" + b.goarch,
+		"GOHOSTARCH=" + b.goarch,
+>>>>>>> other
 		"GOROOT_FINAL=/usr/local/go",
 	}
 	for _, k := range extraEnv {
@@ -423,7 +429,9 @@ func (b *Builder) envv() []string {
 func (b *Builder) envvWindows() []string {
 	start := map[string]string{
 		"GOOS":         b.goos,
+		"GOHOSTOS":     b.goos,
 		"GOARCH":       b.goarch,
+		"GOHOSTARCH":   b.goarch,
 		"GOROOT_FINAL": `c:\go`,
 		"GOBUILDEXIT":  "1", // exit all.bat with completion status.
 	}

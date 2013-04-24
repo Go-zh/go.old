@@ -21,6 +21,15 @@ package builtin
 // bool 是布尔值的集合，即 true 和 false。
 type bool bool
 
+// true and false are the two untyped boolean values.
+
+// true 和 false 是两个无类型布尔值。
+const (
+	// 无类型布尔。
+	true  = 0 == 0 // Untyped bool.
+	false = 0 != 0 // Untyped bool.
+)
+
 // uint8 is the set of all unsigned 8-bit integers.
 // Range: 0 through 255.
 

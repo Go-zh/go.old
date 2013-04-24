@@ -137,59 +137,59 @@ To give you an idea of how a workspace looks in practice, here's an example:
 <div class="english">
 <pre>
 bin/
-	streak                         # command executable
-	todo                           # command executable
+    streak                         # command executable
+    todo                           # command executable
 pkg/
-	linux_amd64/
-		code.google.com/p/goauth2/
-			oauth.a                # package object
-		github.com/nf/todo/
-			task.a                 # package object
+    linux_amd64/
+        code.google.com/p/goauth2/
+            oauth.a                # package object
+        github.com/nf/todo/
+            task.a                 # package object
 src/
-	code.google.com/p/goauth2/
-		.hg/                       # mercurial repository metadata
-		oauth/
-			oauth.go               # package source
-			oauth_test.go          # test source
-	github.com/nf/
-		streak/
-		.git/                  # git repository metadata
-			oauth.go               # command source
-			streak.go              # command source
-		todo/
-		.git/                  # git repository metadata
-			task/
-				task.go            # package source
-			todo.go                # command source
+    code.google.com/p/goauth2/
+        .hg/                       # mercurial repository metadata
+        oauth/
+            oauth.go               # package source
+            oauth_test.go          # test source
+    github.com/nf/
+        streak/
+            .git/                  # git repository metadata
+            oauth.go               # command source
+            streak.go              # command source
+        todo/
+            .git/                  # git repository metadata
+            task/
+                task.go            # package source
+            todo.go                # command source
 </pre>
 </div>
 
 <pre>
 bin/
-	streak                         # 可执行命令
-	todo                           # 可执行命令
+    streak                         # 可执行命令
+    todo                           # 可执行命令
 pkg/
-	linux_amd64/
-		code.google.com/p/goauth2/
-			oauth.a                # 包对象
-		github.com/nf/todo/
-			task.a                 # 包对象
+    linux_amd64/
+        code.google.com/p/goauth2/
+            oauth.a                # 包对象
+        github.com/nf/todo/
+            task.a                 # 包对象
 src/
-	code.google.com/p/goauth2/
-		.hg/                       # mercurial 代码库元数据
-		oauth/
-			oauth.go               # 包源码
-			oauth_test.go          # 测试源码
-	github.com/nf/
-		streak/
-		.git/                  # git 代码库元数据
-			oauth.go               # 命令源码
-			streak.go              # 命令源码
-		todo/
-		.git/                  # git 代码库元数据
-			task/
-				task.go            # 包源码
-			todo.go                # 命令源码
+    code.google.com/p/goauth2/
+        .hg/                       # mercurial 代码库元数据
+        oauth/
+            oauth.go               # 包源码
+            oauth_test.go          # 测试源码
+    github.com/nf/
+        streak/
+        .git/                      # git 代码库元数据
+            oauth.go               # 命令源码
+            streak.go              # 命令源码
+        todo/
+        .git/                      # git 代码库元数据
+            task/
+                task.go            # 包源码
+            todo.go                # 命令源码
 </pre>
 
 <div class="english">
@@ -722,33 +722,33 @@ After the steps above, your workspace should look like this:
 <div class="english">
 <pre>
 bin/
-	hello              # command executable
+    hello              # command executable
 pkg/
-	linux_amd64/       # this will reflect your OS and architecture
-		github.com/user/
-			newmath.a  # package object
+    linux_amd64/       # this will reflect your OS and architecture
+        github.com/user/
+            newmath.a  # package object
 src/
-	github.com/user/
-		hello/
-			hello.go   # command source
-		newmath/
-			sqrt.go    # package source
+    github.com/user/
+        hello/
+            hello.go   # command source
+        newmath/
+            sqrt.go    # package source
 </pre>
 </div>
 
 <pre>
 bin/
-	hello              # 可执行命令
+    hello              # 可执行命令
 pkg/
-	linux_amd64/       # 这里会反映出你的操作系统和架构
-		github.com/user/
-			newmath.a  # 包对象
+    linux_amd64/       # 这里会反映出你的操作系统和架构
+        github.com/user/
+            newmath.a  # 包对象
 src/
-	github.com/user/
-		hello/
-			hello.go   # 命令源码
-		newmath/
-			sqrt.go    # 包源码
+    github.com/user/
+        hello/
+            hello.go   # 命令源码
+        newmath/
+            sqrt.go    # 包源码
 </pre>
 
 <div class="english">
@@ -1026,7 +1026,7 @@ fetch and behaves the same as <code>go install</code>.)
 <div class="english">
 <p>
 After issuing the above <code>go get</code> command, the workspace directory
-tree should now now look like this:
+tree should now look like this:
 </p>
 </div>
 
@@ -1037,51 +1037,51 @@ tree should now now look like this:
 <div class="english">
 <pre>
 bin/
-	hello                 # command executable
+    hello                 # command executable
 pkg/
-	linux_amd64/
-		code.google.com/p/go.example/
-			newmath.a     # package object
-		github.com/user/
-			newmath.a     # package object
+    linux_amd64/
+        code.google.com/p/go.example/
+            newmath.a     # package object
+        github.com/user/
+            newmath.a     # package object
 src/
-	code.google.com/p/go.example/
-		hello/
-			hello.go      # command source
-		newmath/
-			sqrt.go       # package source
-			sqrt_test.go  # test source
-	github.com/user/
-		hello/
-			hello.go      # command source
-		newmath/
-			sqrt.go       # package source
-			sqrt_test.go  # test source
+    code.google.com/p/go.example/
+        hello/
+            hello.go      # command source
+        newmath/
+            sqrt.go       # package source
+            sqrt_test.go  # test source
+    github.com/user/
+        hello/
+            hello.go      # command source
+        newmath/
+            sqrt.go       # package source
+            sqrt_test.go  # test source
 </pre>
 </div>
 
 <pre>
 bin/
-	hello                 # 可执行命令
+    hello                 # 可执行命令
 pkg/
-	linux_amd64/
-		code.google.com/p/go.example/
-			newmath.a     # 包对象
-		github.com/user/
-			newmath.a     # 包对象
+    linux_amd64/
+        code.google.com/p/go.example/
+            newmath.a     # 包对象
+        github.com/user/
+            newmath.a     # 包对象
 src/
-	code.google.com/p/go.example/
-		hello/
-			hello.go      # 命令源码
-		newmath/
-			sqrt.go       # 包源码
-			sqrt_test.go  # 测试源码
-	github.com/user/
-		hello/
-			hello.go      # 命令源码
-		newmath/
-			sqrt.go       # 包源码
-			sqrt_test.go  # 测试源码
+    code.google.com/p/go.example/
+        hello/
+            hello.go      # 命令源码
+        newmath/
+            sqrt.go       # 包源码
+            sqrt_test.go  # 测试源码
+    github.com/user/
+        hello/
+            hello.go      # 命令源码
+        newmath/
+            sqrt.go       # 包源码
+            sqrt_test.go  # 测试源码
 </pre>
 
 <div class="english">
