@@ -64,8 +64,8 @@ compile/link model to generate executable binaries.
 
 <p>
 Go是通用型的编程语言，它为系统编程而设计。它是强类型化的语言，具有垃圾回收机制，
-并显式支持并发编程。程序由<b>包</b>构造，以此来提供高效的依赖管理功能。
-既有实现使用传统的“编译-链接”模型来生成可执行的二进制文件。
+并显式地支持并发编程。程序由<b>包</b>构造，以此来提供高效的依赖管理功能。
+既有实现使用传统的“编译-链接”模型，生成可执行的二进制文件。
 </p>
 
 <div class="english">
@@ -168,8 +168,13 @@ language.
 单个字符 <code>…</code>（不同于三个字符 <code>...</code>）并非Go语言本身的标记。
 </p>
 
+<div class="english">
 <h2 id="Source_code_representation">Source code representation</h2>
+</div>
 
+<h2 id="源码的表示">源码的表示</h2>
+
+<div class="english">
 <p>
 Source code is Unicode text encoded in
 <a href="http://en.wikipedia.org/wiki/UTF-8">UTF-8</a>. The text is not
@@ -179,6 +184,15 @@ those are treated as two code points.  For simplicity, this document
 will use the unqualified term <i>character</i> to refer to a Unicode code point
 in the source text.
 </p>
+</div>
+
+<p>
+Source code is Unicode text encoded in
+源码是采用<a href="http://en.wikipedia.org/wiki/UTF-8">UTF-8</a>编码的Unicode文本。
+该文本是非标准化的，因此单一的着重号码点不同于结合了字母与着重号的字符结构，
+那些应视作两个码点。为简单起见，本文档将使用非正式的术语<b>字符</b>在源文本中指代Unicode码点。
+</p>
+
 <p>
 Each code point is distinct; for instance, upper and lower case letters
 are different characters.

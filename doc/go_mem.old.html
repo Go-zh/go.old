@@ -437,10 +437,7 @@ because the channel is closed.
 </div>
 
 <p class="rule">
-The closing of a channel happens before a receive that returns a zero value
-because the channel is closed.
-信道在接收到零值后将会关闭。
-信道的关闭发生在接收之后，由于该信道已被关闭，
+若在信道关闭后进行接收，接收者就会收到该信道返回的零值。
 </p>
 
 <div class="english">
