@@ -1110,7 +1110,7 @@ asmbelfsetup(void)
 void
 asmbelf(vlong symo)
 {
-	int a, o;
+	vlong a, o;
 	vlong startva, resoff;
 	ElfEhdr *eh;
 	ElfPhdr *ph, *pph, *pnote;
@@ -1421,9 +1421,7 @@ elfobj:
 		sh->size = elfstrsize;
 		sh->addralign = 1;
 
-		// TODO(rsc): Enable for linkmode == LinkExternal too, once we know it works.
-		if(linkmode != LinkExternal)
-			dwarfaddelfheaders();
+		dwarfaddelfheaders();
 	}
 
 	/* Main header */

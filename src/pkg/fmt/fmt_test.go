@@ -533,6 +533,9 @@ var fmttests = []struct {
 	// 复数格式化用于在数组中为将来的条目留下加号，以产生 +2+0i 和 +3+0i 而非 2+0i 和 3+0i
 	{"%v", []complex64{1, 2, 3}, "[(1+0i) (2+0i) (3+0i)]"},
 	{"%v", []complex128{1, 2, 3}, "[(1+0i) (2+0i) (3+0i)]"},
+
+	// Incomplete format specification caused crash.
+	{"%.", 3, "%!.(int=3)"},
 }
 
 func TestSprintf(t *testing.T) {
