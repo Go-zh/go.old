@@ -842,7 +842,6 @@ func (db *DB) queryConn(dc *driverConn, releaseConn func(error), query string, a
 			// Note: ownership of dc passes to the *Rows, to be freed
 			// with releaseConn.
 			rows := &Rows{
-				db:          db,
 				dc:          dc,
 				releaseConn: releaseConn,
 				rowsi:       rowsi,
@@ -872,7 +871,6 @@ func (db *DB) queryConn(dc *driverConn, releaseConn func(error), query string, a
 	// Note: ownership of ci passes to the *Rows, to be freed
 	// with releaseConn.
 	rows := &Rows{
-		db:          db,
 		dc:          dc,
 		releaseConn: releaseConn,
 		rowsi:       rowsi,
@@ -1357,7 +1355,6 @@ func (s *Stmt) Query(args ...interface{}) (*Rows, error) {
 	// Note: ownership of ci passes to the *Rows, to be freed
 	// with releaseConn.
 	rows := &Rows{
-		db:    s.db,
 		dc:    dc,
 		rowsi: rowsi,
 		// releaseConn set below
@@ -1487,7 +1484,6 @@ func (s *Stmt) finalClose() error {
 //     err = rows.Err() // get any error encountered during iteration
 //     ...
 type Rows struct {
-	db          *DB
 	dc          *driverConn // owned; must call releaseConn when closed to release // 已经存在的连接；当释放连接的时候必须调用 releaseConn
 	releaseConn func(error)
 	rowsi       driver.Rows
