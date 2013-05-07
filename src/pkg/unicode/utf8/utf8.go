@@ -429,9 +429,6 @@ func EncodeRune(p []byte, r rune) int {
 // RuneCount returns the number of runes in p.  Erroneous and short
 // encodings are treated as single runes of width 1 byte.
 
-// RuneCount returns the number of runes in p.  Erroneous and short
-// encodings are treated as single runes of width 1 byte.
-
 // RuneCount 返回 p 中的符文数。
 // 错误编码和短编码将被视作宽度为1字节的单个符文。
 func RuneCount(p []byte) int {
@@ -461,7 +458,6 @@ func RuneCountInString(s string) (n int) {
 // RuneStart reports whether the byte could be the first byte of
 // an encoded rune.  Second and subsequent bytes always have the top
 // two bits set to 10.
-
 
 // RuneStart 报告该字节是否为符文编码的第一个字节。
 // 第二个及后续字节的最高两位总是置为 10。
