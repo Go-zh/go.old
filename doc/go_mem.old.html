@@ -801,7 +801,7 @@ instead of <code>"hello, world"</code>.
 </div>
 
 <p>
-但没有保证，在 <code>doprint</code> 中，对 <code>done</code> 的写入进行观测就意味着对
+但这里不保证在 <code>doprint</code> 中，对 <code>done</code> 的写入进行观测蕴含对
 <code>a</code> 的写入进行观测。这个版本可以（错误地）打印出一个空字符串而非 <code>"hello, world"</code>。
 </p>
 
@@ -846,16 +846,8 @@ guaranteed to finish.
 </div>
 
 <p>
-As before, there is no guarantee that, in <code>main</code>,
-observing the write to <code>done</code>
-implies observing the write to <code>a</code>, so this program could
-print an empty string too.
-Worse, there is no guarantee that the write to <code>done</code> will ever
-be observed by <code>main</code>, since there are no synchronization
-events between the two threads.  The loop in <code>main</code> is not
-guaranteed to finish.
-和前面一样，此程序没有保证，在 <code>main</code> 中，对 <code>done</code>
-的写入进行观测就意味着对 <code>a</code> 的写入进行观测，因此该程序也会打印出一个空字符串。
+和前面一样，这里不保证在 <code>main</code> 中对 <code>done</code> 的写入进行的观测，
+蕴含对 <code>a</code> 的写入也进行观测，因此该程序也会打印出一个空字符串。
 更糟的是，无法保证在两个线程之间没有同步事件时，对 <code>done</code> 的写入永远能被
 <code>main</code> 所观测到。<code>main</code> 中的循环无法保证能够结束。
 </p>
