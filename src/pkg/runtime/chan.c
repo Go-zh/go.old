@@ -11,8 +11,6 @@
 #define	MAXALIGN	7
 #define	NOSELGEN	1
 
-static	int32	debug	= 0;
-
 typedef	struct	WaitQ	WaitQ;
 typedef	struct	SudoG	SudoG;
 typedef	struct	Select	Select;
@@ -58,6 +56,8 @@ uint32 runtime·Hchansize = sizeof(Hchan);
 
 enum
 {
+	debug = 0,
+
 	// Scase.kind
 	CaseRecv,
 	CaseSend,
@@ -809,16 +809,27 @@ sellock(Select *sel)
 static void
 selunlock(Select *sel)
 {
-	uint32 i;
-	Hchan *c, *c0;
+	int32 i, n, r;
+	Hchan *c;
 
-	c = nil;
-	for(i=sel->ncase; i-->0;) {
-		c0 = sel->lockorder[i];
-		if(c0 && c0 != c) {
-			c = c0;
-			runtime·unlock(c);
-		}
+	// We must be very careful here to not touch sel after we have unlocked
+	// the last lock, because sel can be freed right after the last unlock.
+	// Consider the following situation.
+	// First M calls runtime·park() in runtime·selectgo() passing the sel.
+	// Once runtime·park() has unlocked the last lock, another M makes
+	// the G that calls select runnable again and schedules it for execution.
+	// When the G runs on another M, it locks all the locks and frees sel.
+	// Now if the first M touches sel, it will access freed memory.
+	n = (int32)sel->ncase;
+	r = 0;
+	// skip the default case
+	if(n>0 && sel->lockorder[0] == nil)
+		r = 1;
+	for(i = n-1; i >= r; i--) {
+		c = sel->lockorder[i];
+		if(i>0 && sel->lockorder[i-1] == c)
+			continue;  // will unlock it on the next iteration
+		runtime·unlock(c);
 	}
 }
 
