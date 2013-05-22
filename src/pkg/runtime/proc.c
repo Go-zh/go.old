@@ -1232,6 +1232,7 @@ static void
 goexit0(G *gp)
 {
 	gp->status = Gdead;
+	gp->fnstart = nil;
 	gp->m = nil;
 	gp->lockedm = nil;
 	m->curg = nil;
@@ -1370,6 +1371,8 @@ runtime·exitsyscall(void)
 		runtime·unlock(&runtime·sched);
 		if(p) {
 			acquirep(p);
+			m->p->tick++;
+			g->status = Grunning;
 			g->gcstack = (uintptr)nil;
 			g->gcsp = (uintptr)nil;
 			return;
@@ -1491,7 +1494,7 @@ runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerp
 	G *newg;
 	int32 siz;
 
-//printf("newproc1 %p %p narg=%d nret=%d\n", fn, argp, narg, nret);
+//runtime·printf("newproc1 %p %p narg=%d nret=%d\n", fn->fn, argp, narg, nret);
 	siz = narg + nret;
 	siz = (siz+7) & ~7;
 

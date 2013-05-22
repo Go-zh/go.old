@@ -251,8 +251,14 @@ func (f *File) readConsole(b []byte) (n int, err error) {
 		return 0, nil
 	}
 	if len(f.readbuf) == 0 {
+		// syscall.ReadConsole seems to fail, if given large buffer.
+		// So limit the buffer to 16000 characters.
+		numBytes := len(b)
+		if numBytes > 16000 {
+			numBytes = 16000
+		}
 		// get more input data from os
-		wchars := make([]uint16, len(b))
+		wchars := make([]uint16, numBytes)
 		var p *uint16
 		if len(b) > 0 {
 			p = &wchars[0]

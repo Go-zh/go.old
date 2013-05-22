@@ -13,14 +13,12 @@ import (
 )
 
 func runtime_pollServerInit()
-func runtime_pollOpen(fd int) (uintptr, int)
+func runtime_pollOpen(fd uintptr) (uintptr, int)
 func runtime_pollClose(ctx uintptr)
 func runtime_pollWait(ctx uintptr, mode int) int
 func runtime_pollReset(ctx uintptr, mode int) int
 func runtime_pollSetDeadline(ctx uintptr, d int64, mode int)
 func runtime_pollUnblock(ctx uintptr)
-
-var canCancelIO = true // used for testing current package
 
 type pollDesc struct {
 	runtimeCtx uintptr
@@ -28,12 +26,9 @@ type pollDesc struct {
 
 var serverInit sync.Once
 
-func sysInit() {
-}
-
 func (pd *pollDesc) Init(fd *netFD) error {
 	serverInit.Do(runtime_pollServerInit)
-	ctx, errno := runtime_pollOpen(fd.sysfd)
+	ctx, errno := runtime_pollOpen(uintptr(fd.sysfd))
 	if errno != 0 {
 		return syscall.Errno(errno)
 	}

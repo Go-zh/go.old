@@ -799,7 +799,11 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 			sliceptr = (Slice*)(stack_top.b + pc[1]);
 			if(sliceptr->cap != 0) {
 				obj = sliceptr->array;
-				objti = pc[2] | PRECISE | LOOP;
+				// Can't use slice element type for scanning,
+				// because if it points to an array embedded
+				// in the beginning of a struct,
+				// we will scan the whole struct as the slice.
+				// So just obtain type info from heap.
 			}
 			pc += 3;
 			break;
@@ -1450,11 +1454,18 @@ addstackroots(G *gp)
 			// be scanned.  No other live values should be on the
 			// stack.
 			f = runtime·findfunc((uintptr)gp->fnstart->fn);
-			if(f->args > 0) {
+			if(f->args != 0) {
 				if(thechar == '5')
 					sp += sizeof(uintptr);
-				addroot((Obj){sp, f->args, 0});
-			}
+				// If the size of the arguments is known
+				// scan just the incoming arguments.
+				// Otherwise, scan everything between the
+				// top and the bottom of the stack.
+				if(f->args > 0)
+					addroot((Obj){sp, f->args, 0});
+				else
+					addroot((Obj){sp, (byte*)stk - sp, 0}); 
+			} 
 			return;
 		}
 	}
