@@ -12,6 +12,8 @@ import (
 )
 
 // Validate the constants redefined from unicode.
+
+// 验证 unicode 包中对常量的重定义。
 func init() {
 	if MaxRune != unicode.MaxRune {
 		panic("utf8.MaxRune is wrong")
@@ -22,6 +24,8 @@ func init() {
 }
 
 // Validate the constants redefined from unicode.
+
+// 验证 unicode 包中对常量的重定义。
 func TestConstants(t *testing.T) {
 	if MaxRune != unicode.MaxRune {
 		t.Errorf("utf8.MaxRune is wrong: %x should be %x", MaxRune, unicode.MaxRune)
@@ -56,8 +60,8 @@ var utf8map = []Utf8Map{
 	{0x07ff, "\xdf\xbf"},
 	{0x0800, "\xe0\xa0\x80"},
 	{0x0801, "\xe0\xa0\x81"},
-	{0xd7ff, "\xed\x9f\xbf"}, // last code point before surrogate half.
-	{0xe000, "\xee\x80\x80"}, // first code point after surrogate half.
+	{0xd7ff, "\xed\x9f\xbf"}, // last code point before surrogate half. // 半替代值前的最后一个码点。
+	{0xe000, "\xee\x80\x80"}, // first code point after surrogate half. // 半替代值后的第一个码点。
 	{0xfffe, "\xef\xbf\xbe"},
 	{0xffff, "\xef\xbf\xbf"},
 	{0x10000, "\xf0\x90\x80\x80"},
@@ -68,8 +72,8 @@ var utf8map = []Utf8Map{
 }
 
 var surrogateMap = []Utf8Map{
-	{0xd800, "\xed\xa0\x80"}, // surrogate min decodes to (RuneError, 1)
-	{0xdfff, "\xed\xbf\xbf"}, // surrogate max decodes to (RuneError, 1)
+	{0xd800, "\xed\xa0\x80"}, // surrogate min decodes to (RuneError, 1) // 解码为 (RuneError, 1) 的最小替代值
+	{0xdfff, "\xed\xbf\xbf"}, // surrogate max decodes to (RuneError, 1) // 解码为 (RuneError, 1) 的最大替代值
 }
 
 var testStrings = []string{
@@ -128,6 +132,7 @@ func TestDecodeRune(t *testing.T) {
 		}
 
 		// there's an extra byte that bytes left behind - make sure trailing byte works
+		// 这是字节序列留下的一个额外字节 - 以确保尾字节可以工作。
 		r, size = DecodeRune(b[0:cap(b)])
 		if r != m.r || size != len(b) {
 			t.Errorf("DecodeRune(%q) = %#04x, %d want %#04x, %d", b, r, size, m.r, len(b))
@@ -139,6 +144,7 @@ func TestDecodeRune(t *testing.T) {
 		}
 
 		// make sure missing bytes fail
+		// 确保缺少字节的序列失败。
 		wantsize := 1
 		if wantsize >= len(b) {
 			wantsize = 0
@@ -154,6 +160,7 @@ func TestDecodeRune(t *testing.T) {
 		}
 
 		// make sure bad sequences fail
+		// 确保坏的序列失败。
 		if len(b) == 1 {
 			b[0] = 0x80
 		} else {
@@ -189,6 +196,8 @@ func TestDecodeSurrogateRune(t *testing.T) {
 
 // Check that DecodeRune and DecodeLastRune correspond to
 // the equivalent range loop.
+
+// 检查 DecodeRune 与 DecodeLastRune 是否对应于等价的 range 循环。
 func TestSequencing(t *testing.T) {
 	for _, ts := range testStrings {
 		for _, m := range utf8map {
