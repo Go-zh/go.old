@@ -197,7 +197,7 @@ func TestDecodeSurrogateRune(t *testing.T) {
 // Check that DecodeRune and DecodeLastRune correspond to
 // the equivalent range loop.
 
-// 检查 DecodeRune 与 DecodeLastRune 是否对应于等价的 range 循环。
+// 检查 DecodeRune 与 DecodeLastRune 是否和等价的 range 循环相对应。
 func TestSequencing(t *testing.T) {
 	for _, ts := range testStrings {
 		for _, m := range utf8map {
@@ -211,6 +211,9 @@ func TestSequencing(t *testing.T) {
 // Check that a range loop and a []int conversion visit the same runes.
 // Not really a test of this package, but the assumption is used here and
 // it's good to verify
+
+// 检查 range 循环与 []int 转换所访问的符文是否相同。
+// 它并不是针对此包的真正测试，但将此假设用在这里是个不错的验证。
 func TestIntConversion(t *testing.T) {
 	for _, ts := range testStrings {
 		runes := []rune(ts)
@@ -289,6 +292,8 @@ func testSequence(t *testing.T, s string) {
 }
 
 // Check that negative runes encode as U+FFFD.
+
+// 检查是否会将负值的符文编码为 U+FFFD。
 func TestNegativeRune(t *testing.T) {
 	errorbuf := make([]byte, UTFMax)
 	errorbuf = errorbuf[0:EncodeRune(errorbuf, RuneError)]
@@ -365,12 +370,12 @@ var validTests = []ValidTest{
 	{string([]byte{66, 250, 67}), false},
 	{"a\uFFFDb", true},
 	{string("\xF4\x8F\xBF\xBF"), true},      // U+10FFFF
-	{string("\xF4\x90\x80\x80"), false},     // U+10FFFF+1; out of range
-	{string("\xF7\xBF\xBF\xBF"), false},     // 0x1FFFFF; out of range
-	{string("\xFB\xBF\xBF\xBF\xBF"), false}, // 0x3FFFFFF; out of range
-	{string("\xc0\x80"), false},             // U+0000 encoded in two bytes: incorrect
-	{string("\xed\xa0\x80"), false},         // U+D800 high surrogate (sic)
-	{string("\xed\xbf\xbf"), false},         // U+DFFF low surrogate (sic)
+	{string("\xF4\x90\x80\x80"), false},     // U+10FFFF+1; out of range // U+10FFFF+1；超出范围
+	{string("\xF7\xBF\xBF\xBF"), false},     // 0x1FFFFF; out of range   // 0x1FFFFF；  超出范围
+	{string("\xFB\xBF\xBF\xBF\xBF"), false}, // 0x3FFFFFF; out of range  // 0x3FFFFFF； 超出范围
+	{string("\xc0\x80"), false},             // U+0000 encoded in two bytes: incorrect // U+0000 被编码为两个字节：错误
+	{string("\xed\xa0\x80"), false},         // U+D800 high surrogate (sic) // U+D800 高位替代值（规定如此）
+	{string("\xed\xbf\xbf"), false},         // U+DFFF low surrogate (sic)  // U+DFFF 低位替代值（规定如此）
 }
 
 func TestValid(t *testing.T) {

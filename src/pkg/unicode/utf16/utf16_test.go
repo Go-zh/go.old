@@ -12,6 +12,8 @@ import (
 )
 
 // Validate the constants redefined from unicode.
+
+// 验证 unicode 包中对常量的重定义。
 func TestConstants(t *testing.T) {
 	if MaxRune != unicode.MaxRune {
 		t.Errorf("utf16.maxRune is wrong: %x should be %x", MaxRune, unicode.MaxRune)
