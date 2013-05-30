@@ -1,11 +1,22 @@
 <!--{
+	"Title": "Go 1.1发行注记",
+	"Path":  "/doc/go1.1",
+	"Template": true
+}-->
+
+<!--{
 	"Title": "Go 1.1 Release Notes",
 	"Path":  "/doc/go1.1",
 	"Template": true
 }-->
 
+<div class="english">
 <h2 id="introduction">Introduction to Go 1.1</h2>
+</div>
 
+<h2 id="introduction">Go1.1简介</h2>
+
+<div class="english">
 <p>
 The release of <a href="/doc/go1.html">Go version 1</a> (Go 1 or Go 1.0 for short)
 in March of 2012 introduced a new period
@@ -17,7 +28,15 @@ then—1.0.1, 1.0.2, and 1.0.3—have been issued.
 These point releases fixed known bugs but made
 no non-critical changes to the implementation.
 </p>
+</div>
 
+<p>
+2012年发布的<a href="/doc/go1.html">Go版本1</a> （简称Go 1或Go 1.0）将Go语言及其库的稳定性带入了一个新阶段。
+这种稳定性的提升有助于促进全球Go用户社区及相关系统的成长。从Go 1.1开始发布了若干版本，如1.0.1、1.0.2和1.0.3，
+每次都发布都会修改一些内容。但只是修改已知的Bug，而没有在实现上做关键性的改动。
+</p>
+
+<div class="english">
 <p>
 This new release, Go 1.1, keeps the <a href="/doc/go1compat.html">promise
 of compatibility</a> but adds a couple of significant
@@ -31,7 +50,17 @@ sometimes dramatic speedups for many of our test programs.
 We trust that many of our users' programs will also see improvements
 just by updating their Go installation and recompiling.
 </p>
+</div>
 
+<p>
+新发布的Go 1.1版本继续遵守了<a href="/doc/go1compat.html">对兼容性的保证</a>，
+但添加了一些内容，如几个重要的语言改动（这些改动向后兼容）、对语言库的一系列改动（向后兼容）
+并对编译器、语言库、运行时实现上作了较多的工作。这些改动主要关注于性能的提升。
+虽然作为性能测试的基准不能完全确定，但依然能发现有显著，甚至是非常引人注目的速度提升。
+我们也相信许多用户在更新其Go语言编译器并重新编译程序后，也能发现这种性能上的提升。
+</p>
+
+<div class="english">
 <p>
 This document summarizes the changes between Go 1 and Go 1.1.
 Very little if any code will need modification to run with Go 1.1,
@@ -41,9 +70,21 @@ Details appear below; see the discussion of
 <a href="#int">64-bit ints</a> and <a href="#unicode_literals">Unicode literals</a>
 in particular.
 </p>
+</div>
 
+<p>
+本文总结了从Go 1到Go1.1的变化。从Go 1迁移到Go 1.1基本不需要对已有的代码进行修改。
+但使用Go 1.1时，可能会遇到一些不常见的问题，这里有必要指出来。详细内容请参考后面
+<a href="#int">64-bit ints</a> 和<a href="#unicode_literals">Unicode literals</a>章节
+</p>
+
+<div class="english">
 <h2 id="language">Changes to the language</h2>
+</div>
 
+<h2 id="language">语言的改动</h2>
+
+<div class="english">
 <p>
 <a href="/doc/go1compat.html">The Go compatibility document</a> promises
 that programs written to the Go 1 language specification will continue to operate,
@@ -52,11 +93,27 @@ In the interest of firming up the specification, though, there are
 details about some error cases that have been clarified.
 There are also some new language features.
 </p>
-
-<h3 id="divzero">Integer division by zero</h3>
+</div>
 
 <p>
+Go1.1中新的编译器遵循<a href="/doc/go1compat.html">Go兼容性文档</a>，所以仍可继续使用Go 1语言规范编写的程序。
+尽管要致力于维护Go语言规范的稳定，但针对语言规范中的一些错误仍然需要对兼容性文档进行澄清修改。这次改动也为语言添加了一些新特性。
+</p>
+
+<div class="english">
+<h3 id="divzero">Integer division by zero</h3>
+</div>
+
+<h3 id="divzero">整数除以零</h3>
+
+<div class="english">
+<p>
 In Go 1, integer division by a constant zero produced a run-time panic:
+</p>
+</div>
+
+<p>
+在Go 1中，整数除以常量零将产生运行时panic：
 </p>
 
 <pre>
@@ -65,20 +122,42 @@ func f(x int) int {
 }
 </pre>
 
+<div class="english">
 <p>
 In Go 1.1, an integer division by constant zero is not a legal program, so it is a compile-time error.
 </p>
+</div>
+
+<p>
+在Go 1.1中，整数除以常量零将不再是一个合法的程序，即现在这是一个编译期错误。
+</p>
+
+<div class="english">
+<h3 id="unicode_literals">Surrogates in Unicode literals</h3>
+</div>
 
 <h3 id="unicode_literals">Surrogates in Unicode literals</h3>
 
+<div class="english">
 <p>
 The definition of string and rune literals has been refined to exclude surrogate halves from the
 set of valid Unicode code points.
 See the <a href="#unicode">Unicode</a> section for more information.
 </p>
+</div>
 
+<p>
+细化了string和rune单字的定义，将surrogate halves排除在合法Unicode编码之外。
+详细信息参考<a href="#unicode">Unicode</a>一节。
+</p>
+
+<div class="english">
 <h3 id="method_values">Method values</h3>
+</div>
 
+<h3 id="method_values">方法值</h3>
+
+<div class="english">
 <p>
 Go 1.1 now implements
 <a href="/ref/spec#Method_values">method values</a>,
@@ -91,6 +170,13 @@ the expression
 a method value, is a function that will always write to <code>w</code>; it is equivalent to
 a function literal closing over <code>w</code>:
 </p>
+</div>
+
+<p>
+Go 1.1现在实现了<a href="/ref/spec#Method_values">方法值</a>，可将函数绑定到特定接收者的值上。
+例如，给定一个<a href="/pkg/bufio/#Writer"><code>Writer</code></a>值 <code>w</code>，表达式
+<code>w.Write</code>即为一个方法值，作为一个向<code>w</code>写内容的函数，这等同于字面上附属到<code>w</code>上的函数。
+</p>
 
 <pre>
 func (p []byte) (n int, err error) {
@@ -98,11 +184,18 @@ func (p []byte) (n int, err error) {
 }
 </pre>
 
+<div class="english">
 <p>
 Method values are distinct from method expressions, which generate functions
 from methods of a given type; the method expression <code>(*bufio.Writer).Write</code>
 is equivalent to a function with an extra first argument, a receiver of type
 <code>(*bufio.Writer)</code>:
+</p>
+</div>
+
+<p>
+方法值与方法表达式不同，方法值是从方法中以给定的类型生成函数；而方法表达式 <code>(*bufio.Writer).Write</code>
+等同于用额外的参数（即<code>(*bufio.Writer)</code>）表示接收的类型的函数：
 </p>
 
 <pre>
@@ -111,49 +204,97 @@ func (w *bufio.Writer, p []byte) (n int, err error) {
 }
 </pre>
 
+<div class="english">
 <p>
 <em>Updating</em>: No existing code is affected; the change is strictly backward-compatible.
 </p>
-
-<h3 id="return">Return requirements</h3>
+</div>
 
 <p>
-Before Go 1.1, a function that returned a value needed an explicit "return" 
+<em>更新</em>：已有代码不受影响，这个改动是严格向后兼容的。
+</p>
+
+<div class="english">
+<h3 id="return">Return requirements</h3>
+</div>
+
+<h3 id="return">对Return的要求</h3>
+
+<div class="english">
+<p>
+Before Go 1.1, a function that returned a value needed an explicit "return"
 or call to <code>panic</code> at
 the end of the function; this was a simple way to make the programmer
 be explicit about the meaning of the function. But there are many cases
 where a final "return" is clearly unnecessary, such as a function with
 only an infinite "for" loop.
 </p>
+</div>
 
+<p>
+在Go 1.1之前，如果要在函数中返回一个值，则需要在函数末尾显式的使用“return”或调用<code>panic</code>。
+这可让开发者以最简单的方式理解函数的概念。但也有许多情况下明显不需要“return”，如只含有一个无限“for”循环的函数。
+</p>
+
+<div class="english">
 <p>
 In Go 1.1, the rule about final "return" statements is more permissive.
 It introduces the concept of a
 <a href="/ref/spec/#Terminating_statements"><em>terminating statement</em></a>,
 a statement that is guaranteed to be the last one a function executes.
-Examples include 
+Examples include
 "for" loops with no condition and "if-else"
 statements in which each half ends in a "return".
 If the final statement of a function can be shown <em>syntactically</em> to
 be a terminating statement, no final "return" statement is needed.
 </p>
+</div>
 
+<p>
+在Go 1.1中，对函数中最后的return语句的使用更加宽松。其引入了
+<a href="/ref/spec/#Terminating_statements"><em>终止语句</em></a>
+的概念，函数最后执行的必须是这条终止语句。例如无限“for”循环和只有一个return的“if-else”语句。
+如果函数最后一个语句<em>在语法上</em>认为是终止语句，那么就不需要“return”语句了。
+</p>
+
+<div class="english">
 <p>
 Note that the rule is purely syntactic: it pays no attention to the values in the
 code and therefore requires no complex analysis.
 </p>
+</div>
 
+<p>
+注意这条规则纯粹是语法上的：其不关心代码中的值，所以不需要复杂的分析。
+</p>
+
+<div class="english">
 <p>
 <em>Updating</em>: The change is backward-compatible, but existing code
 with superfluous "return" statements and calls to <code>panic</code> may
 be simplified manually.
 Such code can be identified by <code>go vet</code>.
 </p>
+</div>
 
+<p>
+<em>更新</em>：这则改动是向后兼容的，但已有代码中含有多余的“return”语句或调用<code>panic</code>的，
+需要手动简化。可通过<code>go vet</code>工具标出并找到这些代码。
+</p>
+
+<div class="english">
 <h2 id="impl">Changes to the implementations and tools</h2>
+</div>
 
+<h2 id="impl">实现和工具的改变</h2>
+
+<div class="english">
 <h3 id="gccgo">Status of gccgo</h3>
+</div>
 
+<h3 id="gccgo">gccgo的状态</h3>
+
+<div class="english">
 <p>
 The GCC release schedule does not coincide with the Go release schedule, so some skew is inevitable in
 <code>gccgo</code>'s releases.
@@ -162,9 +303,19 @@ Its library is a little behind the release, but the biggest difference is that m
 Sometime around May 2013, we expect 4.8.1 of GCC to ship with a <code>gccgo</code>
 providing a complete Go 1.1 implementaiton.
 </p>
+</div>
 
+<p>
+GCC发行时间表与Go发行时间表并不一致，所以<code>gccgo</code>的发行版不可避免的与Go有些错位。2013年3月发布的GCC4.8.0版本中的<code>gccgo</code>支持大部分Go 1.1特性。gccgo的库的开发有点落后，但最大的不同是未实现方法值。希望在2013年5月份，能在GCC 4.8.1中看到包含对Go 1.1完整支持的<code>gccgo</code>。
+</p>
+
+<div class="english">
 <h3 id="gc_flag">Command-line flag parsing</h3>
+</div>
 
+<h3 id="gc_flag">命令行参数解析</h3>
+
+<div class="english">
 <p>
 In the gc tool chain, the compilers and linkers now use the
 same command-line flag parsing rules as the Go flag package, a departure
@@ -172,11 +323,23 @@ from the traditional Unix flag parsing. This may affect scripts that invoke
 the tool directly.
 For example,
 <code>go tool 6c -Fw -Dfoo</code> must now be written
-<code>go tool 6c -F -w -D foo</code>. 
+<code>go tool 6c -F -w -D foo</code>.
+</p>
+</div>
+
+<p>
+在gc工具链中，编译器和链接器现在使用的是Go flag包中定义的相同的命令行参数解析规则，该规则与传统的Unix参数解析不同。
+这或许会影响到直接调用工具的脚本。例如，以往的<code>go tool 6c -Fw -Dfoo</code>现在必须写为
+<code>go tool 6c -F -w -D foo</code>。
 </p>
 
+<div class="english">
 <h3 id="int">Size of int on 64-bit platforms</h3>
+</div>
 
+<h3 id="int">64位平台上int的大小</h3>
+
+<div class="english">
 <p>
 The language allows the implementation to choose whether the <code>int</code> type and
 <code>uint</code> types are 32 or 64 bits. Previous Go implementations made <code>int</code>
@@ -186,7 +349,16 @@ now make
 Among other things, this enables the allocation of slices with
 more than 2 billion elements on 64-bit platforms.
 </p>
+</div>
 
+<p>
+新的Go语言允许实现根据平台的不同，选择将<code>int</code>和<code>uint</code>类型设为32位或64位的。
+之前的Go语言实现将所有平台上的<code>int</code>和<code>uint</code>固定为32位。选择gc和gccgo的实现都让<code>int</code>
+和<code>uint</code>在AMD64/x86-64这样的64位平台拥有64位的长度。
+除此之外Among other things，这也让64位的平台上的sclice可以分配超过20亿个元素。
+</p>
+
+<div class="english">
 <p>
 <em>Updating</em>:
 Most programs will be unaffected by this change.
@@ -197,41 +369,91 @@ However, programs that contain implicit assumptions
 that <code>int</code> is only 32 bits may change behavior.
 For example, this code prints a positive number on 64-bit systems and
 a negative one on 32-bit systems:
+</p>
+</div>
 
+<p>
+<em>更新</em>:
+大部分程序不受这条改动的影响。由于Go不允许在不同的<a href="/ref/spec/#Numeric_types">数值类型</a>直接进行隐式的转换，
+所以这条改动不会影响已有程序的编译，但那些隐式假设int为32位的代码可能受到影响。如下面的代码在64位系统上输出正数，在32位系统上输出负数。
+</p>
+
+<div class="english">
 <pre>
 x := ^uint32(0) // x is 0xffffffff
 i := int(x)     // i is -1 on 32-bit systems, 0xffffffff on 64-bit
 fmt.Println(i)
 </pre>
+</div>
 
+<pre>
+x := ^uint32(0) // x 为 0xffffffff
+i := int(x)     // 在32位平台上，x为-1；在64位平台上，x为0xffffffff
+fmt.Println(i)
+</pre>
+
+<div class="english">
 <p>Portable code intending 32-bit sign extension (yielding <code>-1</code> on all systems)
 would instead say:
+</p>
+</div>
+
+<p>
+要保留32的符号（在所有系统上都是<code>-1</code>）应该用下面的具有可移植性的代码代替：
 </p>
 
 <pre>
 i := int(int32(x))
 </pre>
 
+<div class="english">
 <h3 id="heap">Heap size on 64-bit architectures</h3>
+</div>
 
+<h3 id="heap">64位架构上的堆的大小</h3>
+
+<div class="english">
 <p>
 On 64-bit architectures, the maximum heap size has been enlarged substantially,
 from a few gigabytes to several tens of gigabytes.
 (The exact details depend on the system and may change.)
 </p>
+</div>
 
+<p>
+在64位架构上，堆的最大值可以不停的扩大，从几GB带数十GB。（具体细节根据系统的不同而有不同）。
+</p>
+
+<div class="english">
 <p>
 On 32-bit architectures, the heap size has not changed.
 </p>
+</div>
 
+<p>
+在32位架构上，不能改变堆的大小。
+</p>
+
+<div class="english">
 <p>
 <em>Updating</em>:
 This change should have no effect on existing programs beyond allowing them
 to run with larger heaps.
 </p>
+</div>
+
+<p>
+<em>更新</em>:
+除了运行在非常大的堆上的程序，其他程序不受此更新影响。
+</p>
+
+<div class="english">
+<h3 id="unicode">Unicode</h3>
+</div>
 
 <h3 id="unicode">Unicode</h3>
 
+<div class="english">
 <p>
 To make it possible to represent code points greater than 65535 in UTF-16,
 Unicode defines <em>surrogate halves</em>,
@@ -245,9 +467,26 @@ treated as an encoding error and will yield the replacement rune,
 <a href="/pkg/unicode/utf8/#RuneError"><code>utf8.RuneError</code></a>,
 U+FFFD.
 </p>
+</div>
 
 <p>
+为了能表示UTF-16中大于65535的编码，Unicdoe定义了<em>surrogate halves</em>，
+即定义一个范围的编码，用于表示UTF-16中大数值的集合。
+如果出于其他目的，在代用范围内的编码是非法的。
+在Go 1.1中，可通过编译器、库和运行时来获得honored by这种限制：
+当以UTF-8编码时，或编码为独立的UTF-16时，surrogate half是非法的rune值。
+当需要这类问题时，如将rune转成UTF-8，将其视为编码错误并转为替代的rune，即<a href="/pkg/unicode/utf8/#RuneError"><code>utf8.RuneError</code></a>,
+U+FFFD。
+</p>
+
+<div class="english">
+<p>
 This program,
+</p>
+</div>
+
+<p>
+这个程序，
 </p>
 
 <pre>
@@ -258,10 +497,17 @@ func main() {
 }
 </pre>
 
+<div class="english">
 <p>
 printed <code>"\ud800"</code> in Go 1.0, but prints <code>"\ufffd"</code> in Go 1.1.
 </p>
+</div>
 
+<p>
+在Go 1.0中输出<code>"\ud800"</code>，但在Go 1.1中输出<code>"\ufffd"</code>。
+</p>
+
+<div class="english">
 <p>
 Surrogate-half Unicode values are now illegal in rune and string constants, so constants such as
 <code>'\ud800'</code> and <code>"\ud800"</code> are now rejected by the compilers.
@@ -270,23 +516,51 @@ such strings can still be created, as in <code>"\xed\xa0\x80"</code>.
 However, when such a string is decoded as a sequence of runes, as in a range loop, it will yield only <code>utf8.RuneError</code>
 values.
 </p>
+</div>
 
+<p>
+Surrogate-half Unicode值现在在rune和常量字符串中是非法的，所以编译器现在将拒绝如
+<code>'\ud800'</code>和<code>"\ud800"</code>这样的常量。
+当遍写以UTF-8编码的字节，仍可创建这些字符串，如<code>"\xed\xa0\x80"</code>。
+但将这样的字符串在一个范围循环中解码为rune序列时，仍将只会生成<code>utf8.RuneError</code>值。
+</p>
+
+<div class="english">
 <p>
 The Unicode byte order mark U+FEFF, encoded in UTF-8, is now permitted as the first
 character of a Go source file.
 Even though its appearance in the byte-order-free UTF-8 encoding is clearly unnecessary,
 some editors add the mark as a kind of "magic number" identifying a UTF-8 encoded file.
 </p>
+</div>
 
+<p>
+Unicode字节顺序标志，即UTF-8下的U+FFFE下可以作为Go源码的第一个字符出现。
+虽然在字节顺序未设定的 UTF-8 编码中，完全不必要这个字符，但有些编辑器会将其作为“魔法数值”添加进去，
+用来标识一个UTF-8编码的文件。
+</p>
+
+<div class="english">
 <p>
 <em>Updating</em>:
 Most programs will be unaffected by the surrogate change.
 Programs that depend on the old behavior should be modified to avoid the issue.
 The byte-order-mark change is strictly backward-compatible.
 </p>
+</div>
 
+<p>
+<em>更新</em>：
+更新：大多数程序不会受到代用改动的影响。基于旧的行为的程序应当通过修改来避免问题。字节顺序标识的变更是严格向后兼容的。
+</p>
+
+<div class="english">
 <h3 id="race">Race detector</h3>
+</div>
 
+<h3 id="race">竞争检测器</h3>
+
+<div class="english">
 <p>
 A major addition to the tools is a <em>race detector</em>, a way to
 find bugs in programs caused by concurrent access of the same
@@ -294,13 +568,27 @@ variable, where at least one of the accesses is a write.
 This new facility is built into the <code>go</code> tool.
 For now, it is only available on Linux, Mac OS X, and Windows systems with
 64-bit x86 processors.
-To enable it, set the <code>-race</code> flag when building or testing your program 
+To enable it, set the <code>-race</code> flag when building or testing your program
 (for instance, <code>go test -race</code>).
 The race detector is documented in <a href="/doc/articles/race_detector.html">a separate article</a>.
 </p>
+</div>
 
+<p>
+Go工具中一个主要的变化是添加了<em>竞争检测器race detector</em>，用于检测由于同步访问一个变量，
+其中至少有一个访问在进行写操作导致的bug。这个新工具已经编译进<code>go tool</code>中。
+不过目前只能在Linux、Mac OS X和Windows 64位的x86系统上使用。可通过在构建或测试程序时，设置<code>-race</code>
+标志来启动这个功能（例如，<code>go test -race</code>）。关于race detector的文档，
+参考 <a href="/doc/articles/race_detector.html">这篇文章</a>.
+</p>
+
+<div class="english">
 <h3 id="gc_asm">The gc assemblers</h3>
+</div>
 
+<h3 id="gc_asm">gc汇编器</h3>
+
+<div class="english">
 <p>
 Due to the change of the <a href="#int"><code>int</code></a> to 64 bits and
 a new internal <a href="http://golang.org/s/go11func">representation of functions</a>,
@@ -308,47 +596,82 @@ the arrangement of function arguments on the stack has changed in the gc tool ch
 Functions written in assembly will need to be revised at least
 to adjust frame pointer offsets.
 </p>
+</div>
 
+<p>
+由于将<a href="#int"><code>int</code></a>改为64位，以及新的内部<a href="http://golang.org/s/go11func">函数表示</a>，
+gc工具链中，必须修改在栈中安排函数参数的方式。需要重新审视生成的汇编编写的函数，至少要调整其框架指针的偏移量。
+</p>
+
+<div class="english">
 <p>
 <em>Updating</em>:
 The <code>go vet</code> command now checks that functions implemented in assembly
 match the Go function prototypes they implement.
 </p>
+</div>
 
+<p>
+<em>更新</em>:
+<code>go vet</code>命令现在可用来检查用汇编实现的函数符合其原先实现的Go函数原型。
+</p>
+
+<div class="english">
 <h3 id="gocmd">Changes to the go command</h3>
+</div>
 
+<h3 id="gocmd">Go命令的改动</h3>
+
+<div class="english">
 <p>
 The <a href="/cmd/go/"><code>go</code></a> command has acquired several
 changes intended to improve the experience for new Go users.
 </p>
+</div>
 
+<p>
+为了改善Go用户体验，这次对<a href="/cmd/go/"><code>go</code></a>命令行功能进行了若干修改。
+</p>
+
+<div class="english">
 <p>
 First, when compiling, testing, or running Go code, the <code>go</code> command will now give more detailed error messages,
 including a list of paths searched, when a package cannot be located.
+</p>
+</div>
+
+<p>
+首先，在编译、测试或运行Go代码时，若无法定位某个软件包，<code>go</code>命令现在将给出更多信息，包括一系列的搜索路径。
 </p>
 
 <pre>
 $ go build foo/quxx
 can't load package: package foo/quxx: cannot find package "foo/quxx" in any of:
         /home/you/go/src/pkg/foo/quxx (from $GOROOT)
-        /home/you/src/foo/quxx (from $GOPATH) 
+        /home/you/src/foo/quxx (from $GOPATH)
 </pre>
 
+<div class="english">
 <p>
 Second, the <code>go get</code> command no longer allows <code>$GOROOT</code>
 as the default destination when downloading package source.
 To use the <code>go get</code>
 command, a <a href="/doc/code.html#GOPATH">valid <code>$GOPATH</code></a> is now required.
 </p>
+</div>
+
+<p>
+其次，在下载源码包时，不再允许<code>go get</code>命令将<code>$GOROOT</code>作为默认目标文件夹。
+要使用<code>go get</code>时，需要一个合法的<a href="/doc/code.html#GOPATH"> <code>$GOPATH</code></a>。
+</p>
 
 <pre>
 $ GOPATH= go get code.google.com/p/foo/quxx
-package code.google.com/p/foo/quxx: cannot download, $GOPATH not set. For more details see: go help gopath 
+package code.google.com/p/foo/quxx: cannot download, $GOPATH not set. For more details see: go help gopath
 </pre>
 
 <p>
-Finally, as a result of the previous change, the <code>go get</code> command will also fail
-when <code>$GOPATH</code> and <code>$GOROOT</code> are set to the same value. 
+最后，由于前面的改动，如果现在将<code>$GOPATH</code>和<code>$GOROOT</code>设置为相同值的时候，执行<code>go get</code>命令时将报错。
 </p>
 
 <pre>
@@ -357,23 +680,41 @@ warning: GOPATH set to GOROOT (/home/you/go) has no effect
 package code.google.com/p/foo/quxx: cannot download, $GOPATH must not be set to $GOROOT. For more details see: go help gopath
 </pre>
 
+<div class="english">
 <h3 id="gotest">Changes to the go test command</h3>
+</div>
 
+<h3 id="gotest">go test命令的改动</h3>
+
+<div class="english">
 <p>
 The <a href="/cmd/go/#hdr-Test_packages"><code>go test</code></a>
 command no longer deletes the binary when run with profiling enabled,
 to make it easier to analyze the profile.
 The implementation sets the <code>-c</code> flag automatically, so after running,
 </p>
+</div>
+
+<p>
+当启用profiling时，<a href="/cmd/go/#hdr-Test_packages"><code>go test</code></a>命令不再删除二进制文件，
+因此可以更方便的分析profile。Go 1.1中默认自动设置<code>-c</code>，所以在运行下面代码后，
+</p>
 
 <pre>
 $ go test -cpuprofile cpuprof.out mypackage
 </pre>
 
+<div class="english">
 <p>
 the file <code>mypackage.test</code> will be left in the directory where <code>go test</code> was run.
 </p>
+</div>
 
+<p>
+<code>mypackage.test</code>文件将保留在<code>go test</code>运行的目录中。
+</p>
+
+<div class="english">
 <p>
 The <a href="/cmd/go/#hdr-Test_packages"><code>go test</code></a>
 command can now generate profiling information
@@ -387,9 +728,22 @@ option of
 <code>go test</code>.
 Run <code>go help test</code> for more information.
 </p>
+</div>
 
+<p>
+<a href="/cmd/go/#hdr-Test_packages"><code>go test</code></a>命令现在还可生成profiling信息，用于报告goroutine阻塞的
+位置，即程序停下来等待某个事件的位置，如channel通讯。
+这些信息以<em>blocking profile</em>形式表示，可通过<code>go test</code>的<code>-blockprofile</code>选项启用。
+可运行<code>go help test</code>获得更多信息。
+</p>
+
+<div class="english">
 <h3 id="gofix">Changes to the go fix command</h3>
+</div>
 
+<h3 id="gofix">go fix命令的改动</h3>
+
+<div class="english">
 <p>
 The <a href="/cmd/fix/"><code>fix</code></a> command, usually run as
 <code>go fix</code>, no longer applies fixes to update code from
@@ -397,62 +751,139 @@ before Go 1 to use Go 1 APIs.
 To update pre-Go 1 code to Go 1.1, use a Go 1.0 tool chain
 to convert the code to Go 1.0 first.
 </p>
+</div>
 
+<p>
+<a href="/cmd/fix/"><code>fix</code></a>命令通常以<code>go fix</code>的形式使用，
+不再提供将Go 1之前的代码更新到Go 1的API的功能。
+如果需要将Go 1之前的代码转成Go 1.1，需要先使用Go 1.0工具链将这些代码转成Go 1.0。
+</p>
+
+<div class="english">
 <h3 id="tags">Build constraints</h3>
+</div>
 
+<h3 id="tags">构建约束</h3>
+
+<div class="english">
 <p>
 The "<code>go1.1</code>" tag has been added to the list of default
 <a href="/pkg/go/build/#hdr-Build_Constraints">build constraints</a>.
 This permits packages to take advantage of the new features in Go 1.1 while
 remaining compatible with earlier versions of Go.
 </p>
+</div>
 
 <p>
+“<code>go1.1</code>”标签添加了一系列的默认的
+<a href="/pkg/go/build/#hdr-Build_Constraints">构建约束</a>。
+这允许函数包即可利用Go 1.1新特性的优点，也保留对早期Go版本的支持。
+</p>
+
+<div class="english">
+<p>
 To build a file only with Go 1.1 and above, add this build constraint:
+</p>
+</div>
+
+<p>
+若要构建只支持Go1.1及更新版本的文件，可添加这样的构建约束：
 </p>
 
 <pre>
 // +build go1.1
 </pre>
 
+<div class="english">
 <p>
 To build a file only with Go 1.0.x, use the converse constraint:
+</p>
+</div>
+
+<p>
+若要构建只支持Go 1.0.x的文件，使用相反的约束：
 </p>
 
 <pre>
 // +build !go1.1
 </pre>
 
+<div class="english">
 <h3 id="platforms">Additional platforms</h3>
+</div>
 
+<h3 id="platforms">其他平台的支持</h3>
+
+<div class="english">
 <p>
 The Go 1.1 tool chain adds experimental support for <code>freebsd/arm</code>,
-<code>netbsd/386</code>, <code>netbsd/amd64</code>, <code>netbsd/arm</code>, 
+<code>netbsd/386</code>, <code>netbsd/amd64</code>, <code>netbsd/arm</code>,
 <code>openbsd/386</code> and <code>openbsd/amd64</code> platforms.
 </p>
+</div>
 
+<p>
+Go 1.1 工具链实验性的支持<code>freebsd/arm</code>、
+<code>netbsd/386</code>、<code>netbsd/amd64</code>、<code>netbsd/arm</code>,
+<code>openbsd/386</code>和<code>openbsd/amd64</code>平台。
+</p>
+
+<div class="english">
 <p>
 An ARMv6 or later processor is required for <code>freebsd/arm</code> or
 <code>netbsd/arm</code>.
 </p>
+</div>
 
+<p>
+针对ARMv6或以后的处理器，需要使用<code>freebsd/arm</code> or
+<code>netbsd/arm</code>。
+</p>
+
+<div class="english">
 <p>
 Go 1.1 adds experimental support for <code>cgo</code> on <code>linux/arm</code>.
 </p>
+</div>
 
+<p>
+Go 1.1为<code>linux/arm</code>提供了实现性的 <code>cgo</code>支持。
+</p>
+
+<div class="english">
 <h3 id="crosscompile">Cross compilation</h3>
+</div>
 
+<h3 id="crosscompile">交叉编译</h3>
+
+<div class="english">
 <p>
 When cross-compiling, the <code>go</code> tool will disable <code>cgo</code>
 support by default.
 </p>
+</div>
 
+<p>
+在交叉编译时，<code>go</code>默认将关闭<code>cgo</code>支持。
+</p>
+
+<div class="english">
 <p>
 To explicitly enable <code>cgo</code>, set <code>CGO_ENABLED=1</code>.
 </p>
+</div>
 
+<p>
+可设置<code>CGO_ENABLED=1</code>来显式启动<code>cgo</code>。
+</p>
+
+<div class="english">
 <h2 id="performance">Performance</h2>
+</div>
 
+<h2 id="performance">性能</h2>
+
+<div class="english">
 <p>
 The performance of code compiled with the Go 1.1 gc tool suite should be noticeably
 better for most Go programs.
@@ -461,7 +892,15 @@ much more, but occasionally less or even non-existent.
 There are too many small performance-driven tweaks through the tools and libraries
 to list them all here, but the following major changes are worth noting:
 </p>
+</div>
 
+<p>
+对于大部分Go程序来说，使用Go 1.1 gc工具套件编译的代码将有显著的性能提升。
+一般来说，与Go 1.0相比，Go 1.1将带来30%-40%的性能提升，有时候会更多，但偶尔也会有出现提升很少甚至没有提升的情况。
+对工具和库有太多小的性能上的改动，无法在这一一列举，不过这里还是列出一些值得关注的改动：
+</p>
+
+<div class="english">
 <ul>
 <li>The gc compilers generate better code in many cases, most noticeably for
 floating point on the 32-bit Intel architecture.</li>
@@ -478,11 +917,27 @@ on 32-bit architectures.</li>
 <li>Due to tighter coupling of the run-time and network libraries, fewer
 context switches are required on network operations.</li>
 </ul>
+</div>
 
+<ul>
+<li>gc编译器在大部分情况下能生成更好的代码，尤其是针对32位Intel架构下浮点运算。</li>
+<li>gc编译器将执行更多的内联操作，包括在运行期执行的一些操作，如执行
+<a href="/pkg/builtin/#append"><code>append</code></a>操作或接口转换。</li>
+<li>Go maps有了新的实现，显著的降低了内存占用和CPU运算时间。</li>
+<li>垃圾回收器的实现更加并行化，可降低在多CPU上运行程序的延迟。</li>
+<li>垃圾回收器也更加精确，这将占用少量的CPU时间，但可有效的减少堆的大小，特别是针对32位架构。</li>
+<li>通过更紧密的结合运行时和network库之间的联系，在进行网络操作时，将减少上下文的切换。</li>
+</ul>
+
+<div class="english">
 <h2 id="library">Changes to the standard library</h2>
+</div>
+
+<h2 id="library">标准库的改动</h2>
 
 <h3 id="bufio_scanner">bufio.Scanner</h3>
 
+<div class="english">
 <p>
 The various routines to scan textual input in the
 <a href="/pkg/bufio/"><code>bufio</code></a>
@@ -501,6 +956,16 @@ input such as pathologically long lines, and having a simple
 default: line-oriented input, with each line stripped of its terminator.
 Here is code to reproduce the input a line at a time:
 </p>
+</div>
+
+<p>
+在进行简单操作时，<a href="/pkg/bufio/"><code>bufio</code></a>包中许多处理文本输入的函数如
+<a href="/pkg/bufio/#Reader.ReadBytes"><code>ReadBytes</code></a>、
+<a href="/pkg/bufio/#Reader.ReadString"><code>ReadString</code></a>，
+特别是<a href="/pkg/bufio/#Reader.ReadLine"><code>ReadLine</code></a>都显的过于复杂。
+在Go 1.1中，新添加了<a href="/pkg/bufio/#Scanner"><code>Scanner</code></a>类型。可方便的用于进行简单的输入操作，
+如将输入读取为一行或空格终止的字符。例如遇到有问题的很长的文本行，可以通过终止读取来简化这些问题的处理，该类型也提供了简单的默认行为：基于行的输入，读取的每一行都剔除了分隔标识。下面的代码展示了每次输入一行的方法：
+</p>
 
 <pre>
 scanner := bufio.NewScanner(os.Stdin)
@@ -512,15 +977,22 @@ if err := scanner.Err(); err != nil {
 }
 </pre>
 
+<div class="english">
 <p>
 Scanning behavior can be adjusted through a function to control subdividing the input
 (see the documentation for <a href="/pkg/bufio/#SplitFunc"><code>SplitFunc</code></a>),
 but for tough problems or the need to continue past errors, the older interface
 may still be required.
 </p>
+</div>
+
+<p>
+可以通过一个函数控制输入的行为，如控制输入的每个部分（参阅<a href="/pkg/bufio/#SplitFunc"><code>SplitFunc</code></a>的文档），但是对于复杂的问题或需要持续传递错误的输入行为，可能还是需要原有接口。
+</p>
 
 <h3 id="net">net</h3>
 
+<div class="english">
 <p>
 The protocol-specific resolvers in the <a href="/pkg/net/"><code>net</code></a> package were formerly
 lax about the network name passed in.
@@ -534,7 +1006,13 @@ The same is true of the other protocol-specific resolvers <a href="/pkg/net/#Res
 <a href="/pkg/net/#ResolveUDPAddr"><code>ResolveUDPAddr</code></a>, and
 <a href="/pkg/net/#ResolveUnixAddr"><code>ResolveUnixAddr</code></a>.
 </p>
+</div>
 
+<p>
+之前，在<a href="/pkg/net/"><code>net</code></a>包中针对特定协议的解析器对传递入的网络名很宽松。虽然文档明确指出对于<a href="/pkg/net/#ResolveTCPAddr"><code>ResolveTCPAddr</code></a>合法的网络名只有<code>"tcp"</code>、<code>"tcp4"</code>和<code>"tcp6"</code>，但在Go 1.0的实现中可接受任何字符串。而Go 1.1的实现，如果网络名不是上面列出的这些字符串，就会返回一个错误。对于其他特定协议的解析器，如<a href="/pkg/net/#ResolveIPAddr"><code>ResolveIPAddr</code></a>、<a href="/pkg/net/#ResolveUDPAddr"><code>ResolveUDPAddr</code></a>和<a href="/pkg/net/#ResolveUnixAddr"><code>ResolveUnixAddr</code></a>也是一样。
+</p>
+
+<div class="english">
 <p>
 The previous implementation of
 <a href="/pkg/net/#ListenUnixgram"><code>ListenUnixgram</code></a>
@@ -546,11 +1024,20 @@ The Go 1.1 implementation instead returns a
 to allow reading and writing
 with its
 <a href="/pkg/net/#UnixConn.ReadFrom"><code>ReadFrom</code></a>
-and 
+and
 <a href="/pkg/net/#UnixConn.WriteTo"><code>WriteTo</code></a>
 methods.
 </p>
+</div>
 
+<p>
+在之前<a href="/pkg/net/#ListenUnixgram"><code>ListenUnixgram</code></a>的实现中，其返回一个
+<a href="/pkg/net/#UDPConn"><code>UDPConn</code></a>作为接收连接的端点。
+在Go 1.1的实现里，用<a href="/pkg/net/#UnixConn"><code>UnixConn</code></a>来代替，这允许用它的
+<a href="/pkg/net/#UnixConn.ReadFrom"><code>ReadFrom</code></a>和<a href="/pkg/net/#UnixConn.WriteTo"><code>WriteTo</code></a>方法读写。
+</p>
+
+<div class="english">
 <p>
 The data structures
 <a href="/pkg/net/#IPAddr"><code>IPAddr</code></a>,
@@ -562,7 +1049,19 @@ instead of tagged literals (<code>net.TCPAddr{IP: ip, Port: port}</code>)
 will break due to the new field.
 The Go 1 compatibility rules allow this change: client code must use tagged literals to avoid such breakages.
 </p>
+</div>
 
+<p>
+数据结构<a href="/pkg/net/#IPAddr"><code>IPAddr</code></a>、
+<a href="/pkg/net/#TCPAddr"><code>TCPAddr</code></a>和
+<a href="/pkg/net/#UDPAddr"><code>UDPAddr</code></a>
+添加了一个名为Zone的新的字符串字段。
+如果代码使用没有标签的复合文法（例如<code>net.TCPAddr{ip, port}</code>），
+而不是有标签的文法（<code>net.TCPAddr{IP: ip, Port: port}</code>），那么由于这个新字段，程序将出错。
+Go1的兼容性规则允许这个变化：客户端代码必须使用标签化的文法以避免这种破坏。
+</p>
+
+<div class="english">
 <p>
 <em>Updating</em>:
 To correct breakage caused by the new struct field,
@@ -570,13 +1069,27 @@ To correct breakage caused by the new struct field,
 More generally, <code>go vet</code> will identify composite literals that
 should be revised to use field tags.
 </p>
+</div>
+
+<p>
+<em>更新</em>:
+为了修正由于新的结构体字段带来的破坏，<code>go fix</code>将会重写这些类型的代码并添加标签。
+更普遍的方法是通过<code>go vet</code>标识出所有应当使用字段标签的复合文法。
+</p>
 
 <h3 id="reflect">reflect</h3>
 
+<div class="english">
 <p>
 The <a href="/pkg/reflect/"><code>reflect</code></a> package has several significant additions.
 </p>
+</div>
 
+<p>
+<a href="/pkg/reflect/"><code>reflect</code></a>包有若干重大改进。
+</p>
+
+<div class="english">
 <p>
 It is now possible to run a "select" statement using
 the <code>reflect</code> package; see the description of
@@ -585,7 +1098,14 @@ and
 <a href="/pkg/reflect/#SelectCase"><code>SelectCase</code></a>
 for details.
 </p>
+</div>
 
+<p>
+现在可用<code>reflect</code>包运行“select”语句；参阅<a href="/pkg/reflect/#Select"><code>Select</code></a>
+和<a href="/pkg/reflect/#SelectCase"><code>SelectCase</code></a>了解更多细节。
+</p>
+
+<div class="english">
 <p>
 The new method
 <a href="/pkg/reflect/#Value.Convert"><code>Value.Convert</code></a>
@@ -596,7 +1116,15 @@ on a
 <a href="/pkg/reflect/#Value"><code>Value</code></a>
 (or test for its possibility).
 </p>
+</div>
 
+<p>
+新的方法<a href="/pkg/reflect/#Value.Convert"><code>Value.Convert</code></a>
+（或<a href="/pkg/reflect/#Type"><code>Type.ConvertibleTo</code></a>）
+提供了对<a href="/pkg/reflect/#Value"><code>Value</code></a>进行Go转换和类型断言操作（或者是检测这种可能性）的功能。
+</p>
+
+<div class="english">
 <p>
 The new function
 <a href="/pkg/reflect/#MakeFunc"><code>MakeFunc</code></a>
@@ -605,7 +1133,15 @@ creates a wrapper function to make it easier to call a function with existing
 doing the standard Go conversions among the arguments, for instance
 to pass an actual <code>int</code> to a formal <code>interface{}</code>.
 </p>
+</div>
 
+<p>
+新函数<a href="/pkg/reflect/#MakeFunc"><code>MakeFunc</code></a>创建了封装函数，
+可更方便的在已有<a href="/pkg/reflect/#Value"><code>Values</code></a>上调用函数，
+该封装函数可用于标准的Go参数的转换，例如将一个int传递为interface{}。
+</p>
+
+<div class="english">
 <p>
 Finally, the new functions
 <a href="/pkg/reflect/#ChanOf"><code>ChanOf</code></a>,
@@ -617,9 +1153,18 @@ construct new
 from existing types, for example to construct the type <code>[]T</code> given
 only <code>T</code>.
 </p>
+</div>
+
+<p>
+最后，新函数 <a href="/pkg/reflect/#ChanOf"><code>ChanOf</code></a>、
+<a href="/pkg/reflect/#MapOf"><code>MapOf</code></a>和<a href="/pkg/reflect/#SliceOf"><code>SliceOf</code></a>
+可以从已有类型中构造新<a href="/pkg/reflect/#Type"><code>Types</code></a>，例如在仅提供<code>[]T</code>的情况下构造<code>[]T</code>。
+</p>
 
 
 <h3 id="time">time</h3>
+
+<div class="english">
 <p>
 On FreeBSD, Linux, NetBSD, OS X and OpenBSD, previous versions of the
 <a href="/pkg/time/"><code>time</code></a> package
@@ -636,13 +1181,30 @@ and
 that can be used to remove precision from a time before passing it to
 external storage.
 </p>
+</div>
 
+<p>
+在FreeBSD, Linux, NetBSD, OS X and OpenBSD上，以前版本的<a href="/pkg/time/"><code>time</code></a>包以微秒的精度返回时间。
+现在在Go 1.1的实现中，以纳秒为精度返回时间。
+程序以微秒为精度向外部格式写入时间并再次读取，可能希望恢复原先的值，但由于精度问题将产生损失。
+<a href="/pkg/time/#Time"><code>Time</code></a>有两个新方法，
+<a href="/pkg/time/#Time.Round"><code>Round</code></a>和<a href="/pkg/time/#Time.Truncate"><code>Truncate</code></a>
+，可以用来在向外部存储写入时间前，从时间里去除精度。
+</p>
+
+<div class="english">
 <p>
 The new method
 <a href="/pkg/time/#Time.YearDay"><code>YearDay</code></a>
 returns the one-indexed integral day number of the year specified by the time value.
 </p>
+</div>
 
+<p>
+新方法<a href="/pkg/time/#Time.YearDay"><code>YearDay</code></a>将根据指定的time值返回返回某天在一年中的一维索引。
+</p>
+
+<div class="english">
 <p>
 The
 <a href="/pkg/time/#Timer"><code>Timer</code></a>
@@ -650,7 +1212,14 @@ type has a new method
 <a href="/pkg/time/#Timer.Reset"><code>Reset</code></a>
 that modifies the timer to expire after a specified duration.
 </p>
+</div>
 
+<p>
+<a href="/pkg/time/#Timer"><code>Timer</code></a>类型有一个新方法
+<a href="/pkg/time/#Timer.Reset"><code>Reset</code></a>，让定时器在指定的间隔后过期。
+</p>
+
+<div class="english">
 <p>
 Finally, the new function
 <a href="/pkg/time/#ParseInLocation"><code>ParseInLocation</code></a>
@@ -660,14 +1229,35 @@ but parses the time in the context of a location (time zone), ignoring
 time zone information in the parsed string.
 This function addresses a common source of confusion in the time API.
 </p>
+</div>
 
+<p>
+最后，一个新函数<a href="/pkg/time/#ParseInLocation"><code>ParseInLocation</code></a>
+与已有的<a href="/pkg/time/#Parse"><code>Parse</code></a>类似，
+如果传入的字符串中包含有时区信息，这个函数会忽略解析的字符串中的时区信息。
+这个函数解决了时间API中常见的混乱情况。
+</p>
+
+<div class="english">
 <p>
 <em>Updating</em>:
 Code that needs to read and write times using an external format with
 lower precision should be modified to use the new methods.
+</p>
+</div>
 
+<p>
+<em>更新</em>:
+对于那些使用更低精度的外部格式来读写时间的代码，应当修改并使用新的方法。
+</p>
+
+<div class="english">
 <h3 id="exp_old">Exp and old subtrees moved to go.exp and go.text subrepositories</h3>
+</div>
 
+<h3 id="exp_old">Exp和旧的子代码树移动到go.exp和go.text子版本库中</h3>
+
+<div class="english">
 <p>
 To make it easier for binary distributions to access them if desired, the <code>exp</code>
 and <code>old</code> source subtrees, which are not included in binary distributions,
@@ -675,31 +1265,61 @@ have been moved to the new <code>go.exp</code> subrepository at
 <code>code.google.com/p/go.exp</code>. To access the <code>ssa</code> package,
 for example, run
 </p>
+</div>
+
+<p>
+为了在需要的时候让用户更方便的访问软件的二进制发布版，在二进制发布版中将不包括<code>exp</code>
+和<code>old</code>子源码树，这些源码移动到<code>code.google.com/p/go.exp</code>上的<code>go.exp</code>子版本库中。
+如要访问<code>ssa</code>包，如下，运行
+</p>
 
 <pre>
 $ go get code.google.com/p/go.exp/ssa
 </pre>
 
+<div class="english">
 <p>
 and then in Go source,
+</p>
+</div>
+
+<p>
+这样在Go代码中使用
 </p>
 
 <pre>
 import "code.google.com/p/go.exp/ssa"
 </pre>
 
+<div class="english">
 <p>
 The old package <code>exp/norm</code> has also been moved, but to a new repository
 <code>go.text</code>, where the Unicode APIs and other text-related packages will
 be developed.
 </p>
+</div>
 
+<p>
+旧的包<code>exp/norm</code>也迁移到了新的版本库<code>go.text</code>中，这里包含了将要开发的Unicode API和其他文本相关的包。
+</p>
+
+<div class="english">
 <h3 id="new_packages">New packages</h3>
+</div>
 
+<h3 id="new_packages">新的函数包</h3>
+
+<div class="english">
 <p>
 There are three new packages.
 </p>
+</div>
 
+<p>
+Go 1.1中新添加了3个函数包.
+</p>
+
+<div class="english">
 <ul>
 <li>
 The <a href="/pkg/go/format/"><code>go/format</code></a> package provides
@@ -723,16 +1343,49 @@ The <a href="/pkg/runtime/race/"><code>runtime/race</code></a> package provides 
 It is internal to the race detector and does not otherwise export any user-visible functionality.
 </li>
 </ul>
+</div>
 
+<ul>
+<li>
+<a href="/pkg/go/format/"><code>go/format</code></a>包提供了方便的途径，获得
+<a href="/cmd/go/#hdr-Run_gofmt_on_package_sources"><code>go fmt</code></a>命令中的格式化功能。
+其中包含两个函数，
+<a href="/pkg/go/format/#Node"><code>Node</code></a>用于格式化Go解析器的
+<a href="/pkg/go/ast/#Node"><code>Node</code></a>，而<a href="/pkg/go/format/#Source"><code>Source</code></a>
+用于将所有的Go源码格式化为标准的形式，就如同<a href="/cmd/go/#hdr-Run_gofmt_on_package_sources"><code>go fmt</code></a>命令做的那样。
+</li>
+
+<li>
+<a href="/pkg/net/http/cookiejar/"><code>net/http/cookiejar</code></a>包提供了管理HTTTP cookies的基本方法。
+</li>
+
+<li>
+<a href="/pkg/runtime/race/"><code>runtime/race</code></a> 包提供了较为底层数据竞争检测的工具。
+这是数据竞争检测器内部实现，并不导出任何用户可见的功能。
+</li>
+</ul>
+</ul>
+
+<div class="english">
 <h3 id="minor_library_changes">Minor changes to the library</h3>
+</div>
 
+<h3 id="minor_library_changes">标准库的微小改动</h3>
+
+<div class="english">
 <p>
 The following list summarizes a number of minor changes to the library, mostly additions.
 See the relevant package documentation for more information about each change.
 </p>
+</div>
+
+<p>
+下面总结性的列出了标准库中微小改动，大部分是添加了一些函数。可参阅相关包的文档了解更多关于每个包中的改动信息。
+</p>
 
 <ul>
-<li> 
+<div class="english">
+<li>
 The <a href="/pkg/bytes/"><code>bytes</code></a> package has two new functions,
 <a href="/pkg/bytes/#TrimPrefix"><code>TrimPrefix</code></a>
 and
@@ -745,10 +1398,21 @@ provides some control over memory allocation inside the buffer.
 Finally, the
 <a href="/pkg/bytes/#Reader"><code>Reader</code></a> type now has a
 <a href="/pkg/strings/#Reader.WriteTo"><code>WriteTo</code></a> method
-so it implements the 
+so it implements the
 <a href="/pkg/io/#WriterTo"><code>io.WriterTo</code></a> interface.
 </li>
+</div>
 
+<li>
+<a href="/pkg/bytes/"><code>bytes</code></a>包添加了两个新函数，
+<a href="/pkg/bytes/#TrimPrefix"><code>TrimPrefix</code></a>和
+<a href="/pkg/bytes/#TrimSuffix"><code>TrimSuffix</code></a>，从名称上就能知道其用途。
+同样，<a href="/pkg/bytes/#Buffer"><code>Buffer</code></a> 类型有一个新方法<a href="/pkg/bytes/#Buffer.Grow"><code>Grow</code></a>，
+提供了一些在控制缓存内部内存分配的功能。最后，<a href="/pkg/bytes/#Reader"><code>Reader</code></a>
+类型现在有<a href="/pkg/strings/#Reader.WriteTo"><code>WriteTo</code></a>方法，因此它也实现了<a href="/pkg/io/#WriterTo"><code>io.WriterTo</code></a>接口。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/compress/gzip/"><code>compress/gzip</code></a> package has
 a new <a href="/pkg/compress/gzip/#Writer.Flush"><code>Flush</code></a>
@@ -756,12 +1420,28 @@ method for its
 <a href="/pkg/compress/gzip/#Writer"><code>Writer</code></a>
 type that flushes its underlying <code>flate.Writer</code>.
 </li>
+</div>
 
+<li>
+<a href="/pkg/compress/gzip/"><code>compress/gzip</code></a>包为其中的
+<a href="/pkg/compress/gzip/#Writer"><code>Writer</code></a>类型添加了新的
+<a href="/pkg/compress/gzip/#Writer.Flush"><code>Flush</code></a>方法，用于刷新其底层的
+<code>flate.Writer</code>。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/crypto/hmac/"><code>crypto/hmac</code></a> package has a new function,
 <a href="/pkg/crypto/hmac/#Equal"><code>Equal</code></a>, to compare two MACs.
 </li>
+</div>
 
+<li>
+<a href="/pkg/crypto/hmac/"><code>crypto/hmac</code></a>添加了新函数
+<a href="/pkg/crypto/hmac/#Equal"><code>Equal</code></a>，用来比较两个MAC。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/crypto/x509/"><code>crypto/x509</code></a> package
 now supports PEM blocks (see
@@ -769,16 +1449,32 @@ now supports PEM blocks (see
 and a new function
 <a href="/pkg/crypto/x509/#ParseECPrivateKey"><code>ParseECPrivateKey</code></a> to parse elliptic curve private keys.
 </li>
+</div>
 
 <li>
+<a href="/pkg/crypto/x509/"><code>crypto/x509</code></a>包现在支持PEM块
+（实例请参阅<a href="/pkg/crypto/x509/#DecryptPEMBlock"><code>DecryptPEMBlock</code></a>），
+并添加了一个新函数<a href="/pkg/crypto/x509/#ParseECPrivateKey"><code>ParseECPrivateKey</code></a>用来解析椭圆曲线私钥。
+</li>
+
+<div class="english">
+<li>
 The <a href="/pkg/database/sql/"><code>database/sql</code></a> package
-has a new 
+has a new
 <a href="/pkg/database/sql/#DB.Ping"><code>Ping</code></a>
 method for its
 <a href="/pkg/database/sql/#DB"><code>DB</code></a>
 type that tests the health of the connection.
 </li>
+</div>
 
+<li>
+<a href="/pkg/database/sql/"><code>database/sql</code></a>包为其中的
+<a href="/pkg/database/sql/#DB"><code>DB</code></a>类型添加了新的
+<a href="/pkg/database/sql/#DB.Ping"><code>Ping</code></a>方法，用于检测连接的健康状况。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/database/sql/driver/"><code>database/sql/driver</code></a> package
 has a new
@@ -787,7 +1483,15 @@ interface that a
 <a href="/pkg/database/sql/driver/#Conn"><code>Conn</code></a>
 may implement to improve performance.
 </li>
+</div>
 
+<li>
+<a href="/pkg/database/sql/driver/"><code>database/sql/driver</code></a>包添加了一个新的
+<a href="/pkg/database/sql/driver/#Queryer"><code>Queryer</code></a>接口，
+这样<a href="/pkg/database/sql/driver/#Conn"><code>Conn</code></a>可以通过实现该接口来提升性能。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/encoding/json/"><code>encoding/json</code></a> package's
 <a href="/pkg/encoding/json/#Decoder"><code>Decoder</code></a>
@@ -800,7 +1504,17 @@ to unmarshal a value into the new type
 <a href="/pkg/encoding/json/#Number"><code>Number</code></a>,
 a string, rather than a float64.
 </li>
+</div>
 
+<li>
+<a href="/pkg/encoding/json/"><code>encoding/json</code></a>包的
+<a href="/pkg/encoding/json/#Decoder"><code>Decoder</code></a>添加了新方法
+<a href="/pkg/encoding/json/#Decoder.Buffered"><code>Buffered</code></a>，用来提供访问在其缓存内剩余数据的功能，
+同样新方法<a href="/pkg/encoding/json/#Decoder.UseNumber"><code>UseNumber</code></a>
+将一个值解码为新类型<a href="/pkg/encoding/json/#Number"><code>Number</code></a>，该类型其实是字符串，而不是float64。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/encoding/xml/"><code>encoding/xml</code></a> package
 has a new function,
@@ -811,13 +1525,30 @@ and a method on
 <a href="/pkg/encoding/xml/#Encoder.Indent"><code>Indent</code></a>,
 to specify indented output.
 </li>
+</div>
 
+<li>
+<a href="/pkg/encoding/xml/"><code>encoding/xml</code></a>包中添加了一个新函数
+<a href="/pkg/encoding/xml/#EscapeText"><code>EscapeText</code></a>，
+用于输出escape过的XMLwhich writes escaped XML output,，<a href="/pkg/encoding/xml/#Encoder"><code>Encoder</code></a>的方法
+<a href="/pkg/encoding/xml/#Encoder.Indent"><code>Indent</code></a>则专门用于输出带缩进的格式。
+</li>
+
+<div class="english">
 <li>
 In the <a href="/pkg/go/ast/"><code>go/ast</code></a> package, a
 new type <a href="/pkg/go/ast/#CommentMap"><code>CommentMap</code></a>
 and associated methods makes it easier to extract and process comments in Go programs.
 </li>
+</div>
 
+<li>
+在<a href="/pkg/go/ast/"><code>go/ast</code></a>包中，新类型
+<a href="/pkg/go/ast/#CommentMap"><code>CommentMap</code></a>
+和与其关联的方法可以更加方便得从Go程序中分离和处理注释。
+</li>
+
+<div class="english">
 <li>
 In the <a href="/pkg/go/doc/"><code>go/doc</code></a> package,
 the parser now keeps better track of stylized annotations such as <code>TODO(joe)</code>
@@ -825,18 +1556,39 @@ throughout the code,
 information that the <a href="/cmd/godoc/"><code>godoc</code></a>
 command can filter or present according to the value of the <code>-notes</code> flag.
 </li>
+</div>
 
+<li>
+在<a href="/pkg/go/doc/"><code>go/doc</code></a>包中，
+解析器现在可以更好的跟踪一些如<code>TODO(joe)</code>这样的格式化标识，
+<a href="/cmd/godoc/"><code>godoc</code></a>命令可以根据<code>-notes</code>参数选择过滤或呈现这些信息。
+</li>
+
+<div class="english">
 <li>
 The undocumented and only partially implemented "noescape" feature of the
 <a href="/pkg/html/template/"><code>html/template</code></a>
 package has been removed; programs that depend on it will break.
 </li>
+</div>
 
+<li>
+<a href="/pkg/html/template/"><code>html/template</code></a>
+包中，移除了没有文档并且只部分实现的“noescape”特性；那些依赖它的程序会被破坏。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/image/jpeg/"><code>image/jpeg</code></a> package now
 reads progressive JPEG files and handles a few more subsampling configurations.
 </li>
+</div>
 
+<li>
+<a href="/pkg/image/jpeg/"><code>image/jpeg</code></a>现在可以读取预加载JPEG文件，并且处理某些二次抽样配置信息。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/io/"><code>io</code></a> package now exports the
 <a href="/pkg/io/#ByteWriter"><code>io.ByteWriter</code></a> interface to capture the common
@@ -844,12 +1596,28 @@ functionality of writing a byte at a time.
 It also exports a new error, <a href="/pkg/io/#ErrNoProgress"><code>ErrNoProgress</code></a>,
 used to indicate a <code>Read</code> implementation is looping without delivering data.
 </li>
+</div>
 
+<li>
+<a href="/pkg/io/"><code>io</code></a>包现在将
+<a href="/pkg/io/#ByteWriter"><code>io.ByteWriter</code></a>接口导出，用以满足一次写一个字节这样的常见功能。
+同时还导出了新的error，<a href="/pkg/io/#ErrNoProgress"><code>ErrNoProgress</code></a>
+用来指出<code>Read</code>实现是否在循环而没有发出数据。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/log/syslog/"><code>log/syslog</code></a> package now provides better support
 for OS-specific logging features.
 </li>
+</div>
 
+
+<li>
+<a href="/pkg/log/syslog/"><code>log/syslog</code></a>包现在提供了对操作系统特定的日志特性更好的支持。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/math/big/"><code>math/big</code></a> package's
 <a href="/pkg/math/big/#Int"><code>Int</code></a> type
@@ -871,7 +1639,22 @@ can do the same with <code>float64</code> using
 and
 <a href="/pkg/math/big/#Rat.SetFloat64"><code>SetFloat64</code></a>.
 </li>
+</div>
 
+<li>
+<a href="/pkg/math/big/"><code>math/big</code></a>包的
+<a href="/pkg/math/big/#Int"><code>Int</code></a>类型现在有了方法
+<a href="/pkg/math/big/#Int.MarshalJSON"><code>MarshalJSON</code></a>和
+<a href="/pkg/math/big/#Int.UnmarshalJSON"><code>UnmarshalJSON</code></a>，
+用来在JSON格式间进行转换。
+同样，<a href="/pkg/math/big/#Int"><code>Int</code></a>现在可以通过
+<a href="/pkg/math/big/#Int.Uint64"><code>Uint64</code></a>和
+<a href="/pkg/math/big/#Int.SetUint64"><code>SetUint64</code></a>直接在<code>uint64</code>直接进行转换，
+而<a href="/pkg/math/big/#Rat"><code>Rat</code></a>通过 <a href="/pkg/math/big/#Rat.Float64"><code>Float64</code></a>
+和<a href="/pkg/math/big/#Rat.SetFloat64"><code>SetFloat64</code></a>可执行相同的操作。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/mime/multipart/"><code>mime/multipart</code></a> package
 has a new method for its
@@ -882,7 +1665,18 @@ The <a href="/pkg/mime/multipart/#Reader"><code>Reader</code></a> also now
 transparently decodes any <code>quoted-printable</code> parts and removes
 the <code>Content-Transfer-Encoding</code> header when doing so.
 </li>
+</div>
 
+<li>
+<a href="/pkg/mime/multipart/"><code>mime/multipart</code></a>
+包的<a href="/pkg/mime/multipart/#Writer"><code>Writer</code></a>
+添加了新的方法，<a href="/pkg/mime/multipart/#Writer.SetBoundary"><code>SetBoundary</code></a>
+用来定义包输出的边界分隔。
+<a href="/pkg/mime/multipart/#Reader"><code>Reader</code></a>现在也transparently decodes any <code>quoted-printable</code> parts and removes
+the <code>Content-Transfer-Encoding</code> header when doing so.
+</li>
+
+<div class="english">
 <li>
 The
 <a href="/pkg/net/"><code>net</code></a> package's
@@ -894,13 +1688,28 @@ rather than a
 clearly a mistake in Go 1.0.
 Since this API change fixes a bug, it is permitted by the Go 1 compatibility rules.
 </li>
+</div>
 
+<li>
+修改了<a href="/pkg/net/"><code>net</code></a>包的<a href="/pkg/net/#ListenUnixgram"><code>ListenUnixgram</code></a>
+函数返回值类型：现在它返回<a href="/pkg/net/#UnixConn"><code>UnixConn</code></a>
+而不是 UDPConn，这明显是Go 1.0的一个错误。因此对这个API的变更修复了一个Bug，符合Go 1的兼容性规则。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/net/"><code>net</code></a> package includes a new type,
 <a href="/pkg/net/#Dialer"><code>Dialer</code></a>, to supply options to
 <a href="/pkg/net/#Dialer.Dial"><code>Dial</code></a>.
 </li>
+</div>
 
+<li>
+The <a href="/pkg/net/"><code>net</code></a> 包添加了一个新类型，<a href="/pkg/net/#Dialer"><code>Dialer</code></a>
+为<a href="/pkg/net/#Dialer.Dial"><code>Dial</code></a>增加选项。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/net/"><code>net</code></a> package adds support for
 link-local IPv6 addresses with zone qualifiers, such as <code>fe80::1%lo0</code>.
@@ -914,35 +1723,75 @@ record the zone in a new field, and functions that expect string forms of these 
 <a href="/pkg/net/#ResolveTCPAddr"><code>ResolveTCPAddr</code></a>,
 now accept the zone-qualified form.
 </li>
+</div>
 
+<li>
+<a href="/pkg/net/"><code>net</code></a>增加了带时区验证的本地IPv6地址的支持，如<code>fe80::1%lo0</code>。
+地址结构体<a href="/pkg/net/#IPAddr"><code>IPAddr</code></a>、
+<a href="/pkg/net/#UDPAddr"><code>UDPAddr</code></a>和
+<a href="/pkg/net/#TCPAddr"><code>TCPAddr</code></a>将时区信息记录在一个新的字段里，
+那些需要字符串格式作为地址的函数，例如<a href="/pkg/net/#Dial"><code>Dial</code></a>、
+<a href="/pkg/net/#ResolveIPAddr"><code>ResolveIPAddr</code></a>、
+<a href="/pkg/net/#ResolveUDPAddr"><code>ResolveUDPAddr</code></a>和
+<a href="/pkg/net/#ResolveTCPAddr"><code>ResolveTCPAddr</code></a>现在接收zone-qualified form
+ 和 ResolveTCPAddr 现在接受带区域验证的格式。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/net/"><code>net</code></a> package adds
 <a href="/pkg/net/#LookupNS"><code>LookupNS</code></a> to its suite of resolving functions.
 <code>LookupNS</code> returns the <a href="/pkg/net/#NS">NS records</a> for a host name.
 </li>
+</div>
 
 <li>
-The <a href="/pkg/net/"><code>net</code></a> package adds protocol-specific 
+<a href="/pkg/net/"><code>net</code></a>包添加了<a href="/pkg/net/#LookupNS"><code>LookupNS</code></a>
+作为解析函数。<code>LookupNS</code>根据主机名返回一个<a href="/pkg/net/#NS">NS records</a>。
+</li>
+
+<div class="english">
+<li>
+The <a href="/pkg/net/"><code>net</code></a> package adds protocol-specific
 packet reading and writing methods to
 <a href="/pkg/net/#IPConn"><code>IPConn</code></a>
 (<a href="/pkg/net/#IPConn.ReadMsgIP"><code>ReadMsgIP</code></a>
-and <a href="/pkg/net/#IPConn.WriteMsgIP"><code>WriteMsgIP</code></a>) and 
+and <a href="/pkg/net/#IPConn.WriteMsgIP"><code>WriteMsgIP</code></a>) and
 <a href="/pkg/net/#UDPConn"><code>UDPConn</code></a>
 (<a href="/pkg/net/#UDPConn.ReadMsgUDP"><code>ReadMsgUDP</code></a> and
 <a href="/pkg/net/#UDPConn.WriteMsgUDP"><code>WriteMsgUDP</code></a>).
 These are specialized versions of <a href="/pkg/net/#PacketConn"><code>PacketConn</code></a>'s
 <code>ReadFrom</code> and <code>WriteTo</code> methods that provide access to out-of-band data associated
 with the packets.
- </li>
- 
- <li>
+</li>
+</div>
+
+<li>
+<a href="/pkg/net/"><code>net</code></a>包向<a href="/pkg/net/#IPConn"><code>IPConn</code></a>
+（<a href="/pkg/net/#IPConn.ReadMsgIP"><code>ReadMsgIP</code></a>和<a href="/pkg/net/#IPConn.WriteMsgIP"><code>WriteMsgIP</code></a>
+）和<a href="/pkg/net/#UDPConn"><code>UDPConn</code></a>（<a href="/pkg/net/#UDPConn.ReadMsgUDP"><code>ReadMsgUDP</code></a>和
+<a href="/pkg/net/#UDPConn.WriteMsgUDP"><code>WriteMsgUDP</code></a>）
+添加了针对特定协议的读写方法。还有个<a href="/pkg/net/#PacketConn"><code>PacketConn</code></a>特别版本的<code>ReadFrom</code>和<code>WriteTo</code>方法，
+用于访问数据包的带外数据。
+</li>
+
+<div class="english">
+<li>
 The <a href="/pkg/net/"><code>net</code></a> package adds methods to
-<a href="/pkg/net/#UnixConn"><code>UnixConn</code></a> to allow closing half of the connection 
+<a href="/pkg/net/#UnixConn"><code>UnixConn</code></a> to allow closing half of the connection
 (<a href="/pkg/net/#UnixConn.CloseRead"><code>CloseRead</code></a> and
 <a href="/pkg/net/#UnixConn.CloseWrite"><code>CloseWrite</code></a>),
 matching the existing methods of <a href="/pkg/net/#TCPConn"><code>TCPConn</code></a>.
 </li>
- 
+</div>
+
+<li>
+<a href="/pkg/net/"><code>net</code></a>为<a href="/pkg/net/#UnixConn"><code>UnixConn</code></a>
+添加了方法以便半关闭连接（<a href="/pkg/net/#UnixConn.CloseRead"><code>CloseRead</code></a>和
+<a href="/pkg/net/#UnixConn.CloseWrite"><code>CloseWrite</code></a>），这与<a href="/pkg/net/#TCPConn"><code>TCPConn</code></a>已有的方法相同。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/net/http/"><code>net/http</code></a> package includes several new additions.
 <a href="/pkg/net/http/#ParseTime"><code>ParseTime</code></a> parses a time string, trying
@@ -961,7 +1810,20 @@ Finally, the Transport is now more aggressive at closing TCP connections when
 a <a href="/pkg/net/http/#Response"><code>Response.Body</code></a> is closed before
 being fully consumed.
 </li>
+</div>
 
+<li>
+<a href="/pkg/net/http/"><code>net/http</code></a>包新添加了若干内容。
+<a href="/pkg/net/http/#ParseTime"><code>ParseTime</code></a>用于以若干种常见的HTTP时间格式尝试去解析一个时间字符串。
+<a href="/pkg/net/http/#Request"><code>Request</code></a>的<a href="/pkg/net/http/#Request"><code>Request</code></a>
+方法与<a href="/pkg/net/http/#Request.FormValue"><code>FormValue</code></a>相似，但忽略了URL参数。
+<a href="/pkg/net/http/#CloseNotifier"><code>CloseNotifier</code></a>接口为服务器处理发现某个用户断开连接提供了一种机制。
+<code>ServeMux</code>类型选择有了<a href="/pkg/net/http/#ServeMux.Handler"><code>Handler</code></a> 方法可以在不执行的情况下
+获得<code>Handler</code>的路径。
+当<a href="/pkg/net/http/#Response"><code>Response.Body</code></a>消耗完之前关闭，那么<code>Transport</code>就更倾向于关闭TCP连接。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/net/mail/"><code>net/mail</code></a> package has two new functions,
 <a href="/pkg/net/mail/#ParseAddress"><code>ParseAddress</code></a> and
@@ -969,14 +1831,30 @@ The <a href="/pkg/net/mail/"><code>net/mail</code></a> package has two new funct
 to parse RFC 5322-formatted mail addresses into
 <a href="/pkg/net/mail/#Address"><code>Address</code></a> structures.
 </li>
+</div>
 
+<li>
+<a href="/pkg/net/mail/"><code>net/mail</code></a>包有了两个新函数，
+<a href="/pkg/net/mail/#ParseAddress"><code>ParseAddress</code></a>和
+<a href="/pkg/net/mail/#ParseAddressList"><code>ParseAddressList</code></a>，
+用来解析将RFC 5322格式化地址到<a href="/pkg/net/mail/#Address"><code>Address</code></a>结构体中。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/net/smtp/"><code>net/smtp</code></a> package's
 <a href="/pkg/net/smtp/#Client"><code>Client</code></a> type has a new method,
 <a href="/pkg/net/smtp/#Client.Hello"><code>Hello</code></a>,
 which transmits a <code>HELO</code> or <code>EHLO</code> message to the server.
 </li>
+</div>
 
+<li>
+<a href="/pkg/net/smtp/"><code>net/smtp</code></a>包的<a href="/pkg/net/smtp/#Client"><code>Client</code></a>
+类型有了一个新的方法<a href="/pkg/net/smtp/#Client.Hello"><code>Hello</code></a>，用于向服务器发送<code>HELO</code>或<code>EHLO</code>消息。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/net/textproto/"><code>net/textproto</code></a> package
 has two new functions,
@@ -984,17 +1862,38 @@ has two new functions,
 <a href="/pkg/net/textproto/#TrimString"><code>TrimString</code></a>,
 which do ASCII-only trimming of leading and trailing spaces.
 </li>
+</div>
 
+<li>
+<a href="/pkg/net/textproto/"><code>net/textproto</code></a>包有两个新函数，
+<a href="/pkg/net/textproto/#TrimBytes"><code>TrimBytes</code></a>和
+<a href="/pkg/net/textproto/#TrimString"><code>TrimString</code></a>，用来去除全ASCII字符中首尾的空格。
+</li>
+
+<div class="english">
 <li>
 The new method <a href="/pkg/os/#FileMode.IsRegular"><code>os.FileMode.IsRegular</code></a> makes it easy to ask if a file is a plain file.
 </li>
+</div>
 
+<li>
+新方法<a href="/pkg/os/#FileMode.IsRegular"><code>os.FileMode.IsRegular</code></a>可以简单的确定一个文件是否是普通文件。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/os/signal/"><code>os/signal</code></a> package has a new function,
 <a href="/pkg/os/signal/#Stop"><code>Stop</code></a>, which stops the package delivering
 any further signals to the channel.
 </li>
+</div>
 
+<li>
+<a href="/pkg/os/signal/"><code>os/signal</code></a>包添加了一个新函数
+<a href="/pkg/os/signal/#Stop"><code>Stop</code></a>，用来停止包向channel发送任何信号。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/regexp/"><code>regexp</code></a> package
 now supports Unix-original leftmost-longest matches through the
@@ -1003,7 +1902,14 @@ method, while
 <a href="/pkg/regexp/#Regexp.Split"><code>Regexp.Split</code></a> slices
 strings into pieces based on separators defined by the regular expression.
 </li>
+</div>
 
+<li>
+<a href="/pkg/regexp/"><code>regexp</code></a>包现在通过<a href="/pkg/regexp/#Regexp.Longest"><code>Regexp.Longest</code></a>
+支持Unix原生的最左最长匹配，而<a href="/pkg/regexp/#Regexp.Split"><code>Regexp.Split</code></a> 则使用正则表达式定义的分离器将字符串分解成组。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/runtime/debug/"><code>runtime/debug</code></a> package
 has three new functions regarding memory usage.
@@ -1016,15 +1922,31 @@ function retrieves statistics about the collector; and
 provides a programmatic way to control how often the collector runs,
 including disabling it altogether.
 </li>
+</div>
 
+<li>
+<a href="/pkg/runtime/debug/"><code>runtime/debug</code></a>添加了三个关于内存使用的新函数。
+<a href="/pkg/runtime/debug/#FreeOSMemory"><code>FreeOSMemory</code></a>函数触发垃圾回收，并尝试将未使用的内存退回操作系统；
+<a href="/pkg/runtime/debug/#ReadGCStats"><code>ReadGCStats</code></a> 获得垃圾回收器的统计信息；
+而<a href="/pkg/runtime/debug/#SetGCPercent"><code>SetGCPercent</code></a>以可编程的途径来控制垃圾回收器的执行频率，也可以永远禁止其执行。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/sort/"><code>sort</code></a> package has a new function,
 <a href="/pkg/sort/#Reverse"><code>Reverse</code></a>.
-Wrapping the argument of a call to 
+Wrapping the argument of a call to
 <a href="/pkg/sort/#Sort"><code>sort.Sort</code></a>
 with a call to <code>Reverse</code> causes the sort order to be reversed.
 </li>
+</div>
 
+<li>
+<a href="/pkg/sort/"><code>sort</code></a>包中添加了一个新函数，<a href="/pkg/sort/#Reverse"><code>Reverse</code></a>。
+对参数进行封装并调用<a href="/pkg/sort/#Sort"><code>sort.Sort</code></a>。调用<code>Reverse</code>可让排序结果反续。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/strings/"><code>strings</code></a> package has two new functions,
 <a href="/pkg/strings/#TrimPrefix"><code>TrimPrefix</code></a>
@@ -1036,7 +1958,18 @@ with self-evident properties, and the new method
 type now implements the
 <a href="/pkg/io/#WriterTo"><code>io.WriterTo</code></a> interface.
 </li>
+</div>
 
+<li>
+<a href="/pkg/strings/"><code>strings</code></a>包有两个新函数，
+<a href="/pkg/strings/#TrimPrefix"><code>TrimPrefix</code></a>和
+<a href="/pkg/strings/#TrimSuffix"><code>TrimSuffix</code></a>，含义很明显
+还有新方法<a href="/pkg/strings/#Reader.WriteTo"><code>Reader.WriteTo</code></a>，让
+<a href="/pkg/strings/#Reader"><code>Reader</code></a>实现了
+<a href="/pkg/io/#WriterTo"><code>io.WriterTo</code></a>接口。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/syscall/"><code>syscall</code></a> package's
 <a href="/pkg/syscall/#Fchflags"><code>Fchflags</code></a> function on various BSDs
@@ -1044,11 +1977,19 @@ The <a href="/pkg/syscall/"><code>syscall</code></a> package's
 It now takes an int as the first parameter instead of a string.
 Since this API change fixes a bug, it is permitted by the Go 1 compatibility rules.
 </li>
+</div>
+
 <li>
-The <a href="/pkg/syscall/"><code>syscall</code></a> package also has received many updates
-to make it more inclusive of constants and system calls for each supported operating system.
+<a href="/pkg/syscall/"><code>syscall</code></a>包的<a href="/pkg/syscall/#Fchflags"><code>Fchflags</code></a>
+函数在许多BSD平台上（包括Darwin）改变了签名。现在该函数用int作为第一个参数，而不是字符串。
+由于这个API改动修复了一个Bug，所以其也遵循了Go 1兼容性规则。
 </li>
 
+<li>
+<a href="/pkg/syscall/"><code>syscall</code></a>包也接收了许多更新，让其更加包含对每个支持的操作系统中更多的系统调用和常量。
+</li>
+
+<div class="english">
 <li>
 The <a href="/pkg/testing/"><code>testing</code></a> package now automates the generation of allocation
 statistics in tests and benchmarks using the new
@@ -1067,7 +2008,22 @@ and a new
 <a href="/pkg/testing/#T"><code>testing.T</code></a>
 to simplify skipping an inappropriate test.
 </li>
+</div>
 
+<li>
+<a href="/pkg/testing/"><code>testing</code></a>包现在可使用新的
+<a href="/pkg/testing/#AllocsPerRun"><code>AllocsPerRun</code></a>方法自动生成测试和基准中的内存分配统计信息。
+<a href="/pkg/testing/#B"><code>testing.B</code></a>中的
+<a href="/pkg/testing/#B.ReportAllocs"><code>ReportAllocs</code></a>函数和
+<a href="/pkg/testing/#BenchmarkResult"><code>BenchmarkResult</code></a>的
+<a href="/pkg/testing/#BenchmarkResult.AllocsPerOp"><code>AllocsPerOp</code></a>方法
+可用来为标准检查程序输出内存分配的统计信息。
+还有<a href="/pkg/testing/#Verbose"><code>Verbose</code></a>函数来检测<code>-v</code>命令行参数的状态，以及
+<a href="/pkg/testing/#B"><code>testing.B</code></a> 和<a href="/pkg/testing/#T"><code>testing.T</code></a>
+的新方法<a href="/pkg/testing/#B.Skip"><code>Skip</code></a>来简单跳过一些不必要的测试。
+</li>
+
+<div class="english">
 <li>
 In the <a href="/pkg/text/template/"><code>text/template</code></a>
 and
@@ -1084,14 +2040,41 @@ and
 <a href="/pkg/html/template/"><code>html/template</code></a>
 packages and there are safeguards to guarantee that.
 </li>
+</div>
 
+<li>
+在<a href="/pkg/text/template/"><code>text/template</code></a>
+和<a href="/pkg/html/template/"><code>html/template</code></a>包中，
+模板现在可以用圆括号来对字符序列分组，简化了创建复杂的字符序列的过程。
+同时，作为新的解析器的一部分，
+<a href="/pkg/text/template/parse/#Node"><code>Node</code></a>
+接口有两个方法用来提供更好的错误报告。尽管这样违背了Go 1兼容性规则，但由于这个接口被明确期望只有
+<a href="/pkg/text/template/"><code>text/template</code></a>和
+<a href="/pkg/html/template/"><code>html/template</code></a>包使用，而其安全机制保证了这点，
+所以应当没有代码会受到影响。
+</li>
+
+<div class="english">
 <li>
 The implementation of the <a href="/pkg/unicode/"><code>unicode</code></a> package has been updated to Unicode version 6.2.0.
 </li>
+</div>
 
+<li>
+<a href="/pkg/unicode/"><code>unicode</code></a>包的实现已经更新到Unicode6.2.0标准。
+</li>
+
+<div class="english">
 <li>
 In the <a href="/pkg/unicode/utf8/"><code>unicode/utf8</code></a> package,
 the new function <a href="/pkg/unicode/utf8/#ValidRune"><code>ValidRune</code></a> reports whether the rune is a valid Unicode code point.
 To be valid, a rune must be in range and not be a surrogate half.
+</li>
+</div>
+
+<li>
+在<a href="/pkg/unicode/utf8/"><code>unicode/utf8</code></a>包中，
+新函数<a href="/pkg/unicode/utf8/#ValidRune"><code>ValidRune</code></a>用来指出
+一个rune是否是合法的Unicode编码值。为了确保合法，rune的值必须在合法的Unicode编码值范围内，且不能为半个代用符。
 </li>
 </ul>
