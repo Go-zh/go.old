@@ -131,7 +131,7 @@ func test4() {
 
 // Check that closures can set output arguments.
 // Run g().  If it panics, return x; else return deflt.
-func try(g func (), deflt interface{}) (x interface{}) {
+func try(g func(), deflt interface{}) (x interface{}) {
 	defer func() {
 		if v := recover(); v != nil {
 			x = v
@@ -143,7 +143,7 @@ func try(g func (), deflt interface{}) (x interface{}) {
 
 // Check that closures can set output arguments.
 // Run g().  If it panics, return x; else return deflt.
-func try1(g func (), deflt interface{}) (x interface{}) {
+func try1(g func(), deflt interface{}) (x interface{}) {
 	defer func() {
 		if v := recover(); v != nil {
 			x = v

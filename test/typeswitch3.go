@@ -18,26 +18,24 @@ type I interface {
 	M()
 }
 
-func main(){
+func main() {
 	var x I
 	switch x.(type) {
-	case string:	// ERROR "impossible"
+	case string: // ERROR "impossible"
 		println("FAIL")
 	}
-	
+
 	// Issue 2700: if the case type is an interface, nothing is impossible
-	
+
 	var r io.Reader
-	
+
 	_, _ = r.(io.Writer)
-	
+
 	switch r.(type) {
 	case io.Writer:
 	}
-	
+
 	// Issue 2827.
-	switch _ := r.(type) {  // ERROR "invalid variable name _|no new variables"
+	switch _ := r.(type) { // ERROR "invalid variable name _|no new variables"
 	}
 }
-
-

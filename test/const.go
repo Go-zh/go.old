@@ -13,10 +13,10 @@ import "os"
 const (
 	c0      = 0
 	cm1     = -1
-	chuge   = 1<<100
+	chuge   = 1 << 100
 	chuge_1 = chuge - 1
-	c1      = chuge>>100
-	c3div2  = 3/2
+	c1      = chuge >> 100
+	c3div2  = 3 / 2
 	c1e3    = 1e3
 
 	ctrue  = true
@@ -26,10 +26,10 @@ const (
 const (
 	f0              = 0.0
 	fm1             = -1.
-	fhuge   float64 = 1<<100
+	fhuge   float64 = 1 << 100
 	fhuge_1 float64 = chuge - 1
-	f1      float64 = chuge>>100
-	f3div2          = 3./2.
+	f1      float64 = chuge >> 100
+	f3div2          = 3. / 2.
 	f1e3    float64 = 1e3
 )
 
@@ -43,8 +43,8 @@ func ints() {
 	assert(c0 == 0, "c0")
 	assert(c1 == 1, "c1")
 	assert(chuge > chuge_1, "chuge")
-	assert(chuge_1 + 1 == chuge, "chuge 1")
-	assert(chuge + cm1 + 1 == chuge, "cm1")
+	assert(chuge_1+1 == chuge, "chuge 1")
+	assert(chuge+cm1+1 == chuge, "cm1")
 	assert(c3div2 == 1, "3/2")
 	assert(c1e3 == 1000, "c1e3 int")
 	assert(c1e3 == 1e3, "c1e3 float")
@@ -87,8 +87,8 @@ func floats() {
 	if os.Getenv("GOSSAINTERP") == "" {
 		assert(fhuge == fhuge_1, "fhuge") // float64 can't distinguish fhuge, fhuge_1.
 	}
-	assert(fhuge_1 + 1 == fhuge, "fhuge 1")
-	assert(fhuge + fm1 + 1 == fhuge, "fm1")
+	assert(fhuge_1+1 == fhuge, "fhuge 1")
+	assert(fhuge+fm1+1 == fhuge, "fm1")
 	assert(f3div2 == 1.5, "3./2.")
 	assert(f1e3 == 1000, "f1e3 int")
 	assert(f1e3 == 1.e3, "f1e3 float")

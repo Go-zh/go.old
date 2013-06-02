@@ -8,11 +8,11 @@
 
 package main
 
-func mine(int b) int {	// ERROR "undefined.*b"
-	return b + 2	// ERROR "undefined.*b"
+func mine(int b) int { // ERROR "undefined.*b"
+	return b + 2 // ERROR "undefined.*b"
 }
 
 func main() {
 	mine()
-	c = mine()	// ERROR "undefined.*c" "cannot assign to c"
+	c = mine() // ERROR "undefined.*c" "cannot assign to c"
 }

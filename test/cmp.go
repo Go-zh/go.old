@@ -133,7 +133,7 @@ func main() {
 	{
 		c := make(chan int)
 		c1 := (<-chan int)(c)
-		c2 := (chan <- int)(c)
+		c2 := (chan<- int)(c)
 		istrue(c == c1)
 		istrue(c == c2)
 		istrue(c1 == c)
@@ -419,7 +419,7 @@ func p4() {
 	m[ib] = 1
 }
 
-func shouldPanic(f func ()) {
+func shouldPanic(f func()) {
 	defer func() {
 		if recover() == nil {
 			panic("function should panic")

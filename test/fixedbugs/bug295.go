@@ -6,12 +6,12 @@
 
 package main
 
-import . "testing"  // defines top-level T
+import . "testing" // defines top-level T
 
 type S struct {
 	T int
 }
 
 func main() {
-	_ = &S{T: 1}	// should work
+	_ = &S{T: 1} // should work
 }

@@ -19,7 +19,7 @@ func main() {
 func p1() {
 	var s *S
 	var i I
-	var e interface {}
+	var e interface{}
 	e = s
 	i = e.(I)
 	_ = i

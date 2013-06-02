@@ -73,7 +73,7 @@ func main() {
 	f4 := I2.Sum
 	eq(f4(t1, a, 17), 27)
 	eq(f4(t2, a, 18), 28)
-	
+
 	mt1 := method4a.T1(4)
 	mt2 := &method4a.T2{4}
 

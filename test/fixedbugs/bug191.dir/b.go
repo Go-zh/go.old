@@ -5,7 +5,7 @@
 package b
 
 func init() {
-	println("b");
+	println("b")
 }
 
-type V int;
+type V int

@@ -48,7 +48,7 @@ func main() {
 
 	// Optimization should be good for at least 2x, but be forgiving.
 	// On the ARM simulator we see closer to 1.5x.
-	speedup := float64(tslow)/float64(tfast)
+	speedup := float64(tslow) / float64(tfast)
 	want := 1.8
 	if runtime.GOARCH == "arm" {
 		want = 1.3

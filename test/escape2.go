@@ -80,7 +80,7 @@ func foo12(yyy **int) { // ERROR "leaking param: yyy"
 	xxx = yyy
 }
 
-// Must treat yyy as leaking because *yyy leaks, and the escape analysis 
+// Must treat yyy as leaking because *yyy leaks, and the escape analysis
 // summaries in exported metadata do not distinguish these two cases.
 func foo13(yyy **int) { // ERROR "leaking param: yyy"
 	*xxx = *yyy
@@ -1293,15 +1293,15 @@ func F4(x []byte)
 func G() {
 	var buf1 [10]byte
 	F1(buf1[:]) // ERROR "buf1 does not escape"
-	
+
 	var buf2 [10]byte // ERROR "moved to heap: buf2"
-	F2(buf2[:]) // ERROR "buf2 escapes to heap"
+	F2(buf2[:])       // ERROR "buf2 escapes to heap"
 
 	var buf3 [10]byte
 	F3(buf3[:]) // ERROR "buf3 does not escape"
-	
+
 	var buf4 [10]byte // ERROR "moved to heap: buf4"
-	F4(buf4[:]) // ERROR "buf4 escapes to heap"
+	F4(buf4[:])       // ERROR "buf4 escapes to heap"
 }
 
 type Tm struct {
@@ -1313,9 +1313,9 @@ func (t *Tm) M() { // ERROR "t does not escape"
 
 func foo141() {
 	var f func()
-	
+
 	t := new(Tm) // ERROR "escapes to heap"
-	f = t.M // ERROR "t.M does not escape"
+	f = t.M      // ERROR "t.M does not escape"
 	_ = f
 }
 
@@ -1323,7 +1323,7 @@ var gf func()
 
 func foo142() {
 	t := new(Tm) // ERROR "escapes to heap"
-	gf = t.M // ERROR "t.M escapes to heap"
+	gf = t.M     // ERROR "t.M escapes to heap"
 }
 
 // issue 3888.

@@ -106,20 +106,20 @@ var answers = [...]int{
 }
 
 var (
-	copy_zero = zero
-	copy_one = one
-	copy_pi = pi
-	copy_slice = slice
-	copy_sliceInt = sliceInt
-	copy_hello = hello
-	copy_bytes = bytes
+	copy_zero            = zero
+	copy_one             = one
+	copy_pi              = pi
+	copy_slice           = slice
+	copy_sliceInt        = sliceInt
+	copy_hello           = hello
+	copy_bytes           = bytes
 	copy_four, copy_five = four, five
-	copy_x, copy_y = x, y
-	copy_nilslice = nilslice
-	copy_nilmap = nilmap
-	copy_nilfunc = nilfunc
-	copy_nilchan = nilchan
-	copy_nilptr = nilptr
+	copy_x, copy_y       = x, y
+	copy_nilslice        = nilslice
+	copy_nilmap          = nilmap
+	copy_nilfunc         = nilfunc
+	copy_nilchan         = nilchan
+	copy_nilptr          = nilptr
 )
 
 var copy_a = a
@@ -266,6 +266,8 @@ type T1 int
 
 func (t *T1) M() {}
 
-type Mer interface { M() }
+type Mer interface {
+	M()
+}
 
 var _ Mer = (*T1)(nil)

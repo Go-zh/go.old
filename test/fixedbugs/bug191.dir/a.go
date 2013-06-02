@@ -5,8 +5,7 @@
 package a
 
 func init() {
-	println("a");
+	println("a")
 }
 
-type T int;
-
+type T int

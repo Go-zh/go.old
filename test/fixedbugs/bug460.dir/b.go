@@ -11,4 +11,3 @@ var x a.Foo
 func main() {
 	x.int = 20 // ERROR "unexported field"
 }
-

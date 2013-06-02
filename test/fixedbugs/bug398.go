@@ -9,16 +9,20 @@
 package p
 
 type I1 interface {
-      F() interface{I1}
+	F() interface {
+		I1
+	}
 }
 
 type I2 interface {
-      F() interface{I2}
-}       
+	F() interface {
+		I2
+	}
+}
 
 var v1 I1
 var v2 I2
 
 func f() bool {
-       return v1 == v2
+	return v1 == v2
 }

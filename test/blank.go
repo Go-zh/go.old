@@ -18,7 +18,7 @@ import _ "fmt"
 var call string
 
 type T struct {
-	_,    _,    _ int
+	_, _, _ int
 }
 
 func (T) _() {
@@ -110,7 +110,7 @@ func main() {
 	// exp/ssa/interp doesn't yet skip blank fields in struct
 	// equivalence.  It also cannot support unsafe.Pointer.
 	if os.Getenv("GOSSAINTERP") == "" {
-		type T1 struct{ x,    y,    z int }
+		type T1 struct{ x, y, z int }
 		t1 := *(*T)(unsafe.Pointer(&T1{1, 2, 3}))
 		t2 := *(*T)(unsafe.Pointer(&T1{4, 5, 6}))
 		if t1 != t2 {

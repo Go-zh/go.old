@@ -9,10 +9,10 @@
 
 package main
 
-import "bufio"	// GCCGO_ERROR "previous|not used"
-import bufio "os"	// ERROR "redeclared|redefinition|incompatible" "imported and not used"
+import "bufio"    // GCCGO_ERROR "previous|not used"
+import bufio "os" // ERROR "redeclared|redefinition|incompatible" "imported and not used"
 
 import (
-	"fmt"	// GCCGO_ERROR "previous|not used"
-	fmt "math"	// ERROR "redeclared|redefinition|incompatible" "imported and not used"
+	"fmt"      // GCCGO_ERROR "previous|not used"
+	fmt "math" // ERROR "redeclared|redefinition|incompatible" "imported and not used"
 )

@@ -12,8 +12,8 @@ package main
 import (
 	"fmt"
 	"math"
-	"time"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -21,7 +21,7 @@ func main() {
 	// Test that NaNs in maps don't go quadratic.
 	t := func(n int) time.Duration {
 		var u0 syscall.Rusage
-		if err := syscall.Getrusage(0,  &u0); err != nil {
+		if err := syscall.Getrusage(0, &u0); err != nil {
 			panic(err)
 		}
 		m := map[float64]int{}
@@ -33,7 +33,7 @@ func main() {
 			panic("wrong size map after nan insertion")
 		}
 		var u1 syscall.Rusage
-		if err := syscall.Getrusage(0,  &u1); err != nil {
+		if err := syscall.Getrusage(0, &u1); err != nil {
 			panic(err)
 		}
 		return time.Duration(u1.Utime.Nano() - u0.Utime.Nano())

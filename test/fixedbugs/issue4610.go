@@ -14,4 +14,3 @@ func main() {
 	var foo bar
 	_ = &foo{} // ERROR "is not a type"
 }
-

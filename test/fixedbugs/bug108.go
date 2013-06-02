@@ -5,7 +5,8 @@
 // license that can be found in the LICENSE file.
 
 package main
+
 func f() {
-	v := 1 << 1025;		// ERROR "overflow|stupid shift"
+	v := 1 << 1025 // ERROR "overflow|stupid shift"
 	_ = v
 }

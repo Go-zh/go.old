@@ -18,7 +18,10 @@ type T3 struct{ z []int }
 
 var t3 T3
 
-type T4 struct { _ []int; a float64 }
+type T4 struct {
+	_ []int
+	a float64
+}
 
 var t4 T4
 

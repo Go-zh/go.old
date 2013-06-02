@@ -26,7 +26,7 @@ func whatis(x interface{}) string {
 		w()
 	}:
 		return "rw"
-	case interface {	// GCCGO_ERROR "duplicate"
+	case interface { // GCCGO_ERROR "duplicate"
 		w()
 		r()
 	}: // GC_ERROR "duplicate"
