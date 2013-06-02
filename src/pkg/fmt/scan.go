@@ -226,12 +226,12 @@ type ss struct {
 
 // ssave 保存了 ss 中需要在递归扫描时保存并恢复的部分。
 type ssave struct {
-	validSave  bool // is or was a part of an actual ss.     // 是或曾是原来 ss 的一部分。
-	nlIsEnd    bool // whether newline terminates scan       // 终止扫描的地方是否为换行符
-	nlIsSpace  bool // whether newline counts as white space // 换行符是否计为空白符
-	fieldLimit int  // max value of ss.count for this field; fieldLimit <= limit // 该字段为 ss.count 的最大值；fieldLimit <= limit
-	limit      int  // max value of ss.count.                // ss.count 的最大值
-	maxWid     int  // width of this field.                  // 该字段的宽度。
+	validSave bool // is or was a part of an actual ss.     // 是或曾是原来 ss 的一部分。
+	nlIsEnd   bool // whether newline terminates scan       // 终止扫描的地方是否为换行符
+	nlIsSpace bool // whether newline counts as white space // 换行符是否计为空白符
+	argLimit  int  // max value of ss.count for this arg; argLimit <= limit // 该字段为 ss.count 的最大值；argLimit <= limit
+	limit     int  // max value of ss.count.                // ss.count 的最大值
+	maxWid    int  // width of this field.                  // 该字段的宽度。
 }
 
 // The Read method is only in ScanState so that ScanState
@@ -253,7 +253,7 @@ func (s *ss) ReadRune() (r rune, size int, err error) {
 		s.peekRune = -1
 		return
 	}
-	if s.atEOF || s.nlIsEnd && s.prevRune == '\n' || s.count >= s.fieldLimit {
+	if s.atEOF || s.nlIsEnd && s.prevRune == '\n' || s.count >= s.argLimit {
 		err = io.EOF
 		return
 	}
@@ -475,7 +475,7 @@ func newScanState(r io.Reader, nlIsSpace, nlIsEnd bool) (s *ss, old ssave) {
 	s, ok := r.(*ss)
 	if ok {
 		old = s.ssave
-		s.limit = s.fieldLimit
+		s.limit = s.argLimit
 		s.nlIsEnd = nlIsEnd || s.nlIsEnd
 		s.nlIsSpace = nlIsSpace
 		return
@@ -493,7 +493,7 @@ func newScanState(r io.Reader, nlIsSpace, nlIsEnd bool) (s *ss, old ssave) {
 	s.peekRune = -1
 	s.atEOF = false
 	s.limit = hugeWid
-	s.fieldLimit = hugeWid
+	s.argLimit = hugeWid
 	s.maxWid = hugeWid
 	s.validSave = true
 	s.count = 0
@@ -575,8 +575,8 @@ func (s *ss) token(skipSpace bool, f func(rune) bool) []byte {
 // typeError indicates that the type of the operand did not match the format
 
 // typeError 表明操作数的类型与格式不匹配。
-func (s *ss) typeError(field interface{}, expected string) {
-	s.errorString("expected field of type pointer to " + expected + "; found " + reflect.TypeOf(field).String())
+func (s *ss) typeError(arg interface{}, expected string) {
+	s.errorString("expected argument of type pointer to " + expected + "; found " + reflect.TypeOf(arg).String())
 }
 
 var complexError = errors.New("syntax error scanning complex number")
@@ -1092,12 +1092,12 @@ const hugeWid = 1 << 30
 // scanOne scans a single value, deriving the scanner from the type of the argument.
 
 // scanOne 扫描单个值，从实参的类型导出扫描器。
-func (s *ss) scanOne(verb rune, field interface{}) {
+func (s *ss) scanOne(verb rune, arg interface{}) {
 	s.buf = s.buf[:0]
 	var err error
 	// If the parameter has its own Scan method, use that.
 	// 若该形参有它自己的 Scan 方法，就用它。
-	if v, ok := field.(Scanner); ok {
+	if v, ok := arg.(Scanner); ok {
 		err = v.Scan(s, verb)
 		if err != nil {
 			if err == io.EOF {
@@ -1108,7 +1108,7 @@ func (s *ss) scanOne(verb rune, field interface{}) {
 		return
 	}
 
-	switch v := field.(type) {
+	switch v := arg.(type) {
 	case *bool:
 		*v = s.scanBool(verb)
 	case *complex64:
@@ -1220,8 +1220,8 @@ func errorHandler(errp *error) {
 // doScan 进行真正的扫描工作而无需格式字符串。
 func (s *ss) doScan(a []interface{}) (numProcessed int, err error) {
 	defer errorHandler(&err)
-	for _, field := range a {
-		s.scanOne('v', field)
+	for _, arg := range a {
+		s.scanOne('v', arg)
 		numProcessed++
 	}
 	// Check for newline if required.
@@ -1335,9 +1335,9 @@ func (s *ss) doScanf(format string, a []interface{}) (numProcessed int, err erro
 		if !widPresent {
 			s.maxWid = hugeWid
 		}
-		s.fieldLimit = s.limit
-		if f := s.count + s.maxWid; f < s.fieldLimit {
-			s.fieldLimit = f
+		s.argLimit = s.limit
+		if f := s.count + s.maxWid; f < s.argLimit {
+			s.argLimit = f
 		}
 
 		c, w := utf8.DecodeRuneInString(format[i:])
@@ -1347,11 +1347,11 @@ func (s *ss) doScanf(format string, a []interface{}) (numProcessed int, err erro
 			s.errorString("too few operands for format %" + format[i-w:])
 			break
 		}
-		field := a[numProcessed]
+		arg := a[numProcessed]
 
-		s.scanOne(c, field)
+		s.scanOne(c, arg)
 		numProcessed++
-		s.fieldLimit = s.limit
+		s.argLimit = s.limit
 	}
 	if numProcessed < len(a) {
 		s.errorString("too many operands")

@@ -24,6 +24,7 @@ var (
 	nilBytes        = []byte("nil")
 	mapBytes        = []byte("map[")
 	missingBytes    = []byte("(MISSING)")
+	badIndexBytes   = []byte("(BADINDEX)")
 	panicBytes      = []byte("(PANIC=")
 	extraBytes      = []byte("%!(EXTRA ")
 	irparenBytes    = []byte("i)")
@@ -130,16 +131,22 @@ type pp struct {
 	panicking bool
 	erroring  bool // printing an error condition // 打印错误条件
 	buf       buffer
-	// field holds the current item, as an interface{}.
-	// field 将当前条目作为 interface{} 类型的值保存。
-	field interface{}
+	// arg holds the current item, as an interface{}.
+	// arg 将当前条目作为 interface{} 类型的值保存。
+	arg interface{}
 	// value holds the current item, as a reflect.Value, and will be
 	// the zero Value if the item has not been reflected.
 	// value 将当前条目作为 reflect.Value 类型的值保存；若该条目未被反射，则为
 	// Value 类型的零值。
-	value   reflect.Value
-	runeBuf [utf8.UTFMax]byte
-	fmt     fmt
+	value reflect.Value
+	// reordered records whether the format string used argument reordering.
+	// reordered 记录该格式字符串是否用实参来重新排序。
+	reordered bool
+	// goodArgNum records whether all reordering directives were valid.
+	// goodArgNum 记录所有重新排序的指令是否均有效。
+	goodArgNum bool
+	runeBuf    [utf8.UTFMax]byte
+	fmt        fmt
 }
 
 // A cache holds a set of reusable objects.
@@ -203,7 +210,7 @@ func (p *pp) free() {
 		return
 	}
 	p.buf = p.buf[:0]
-	p.field = nil
+	p.arg = nil
 	p.value = reflect.Value{}
 	ppFree.put(p)
 }
@@ -251,9 +258,9 @@ func (p *pp) Write(b []byte) (ret int, err error) {
 func Fprintf(w io.Writer, format string, a ...interface{}) (n int, err error) {
 	p := newPrinter()
 	p.doPrintf(format, a)
-	n64, err := w.Write(p.buf)
+	n, err = w.Write(p.buf)
 	p.free()
-	return int(n64), err
+	return
 }
 
 // Printf formats according to a format specifier and writes to standard output.
@@ -297,9 +304,9 @@ func Errorf(format string, a ...interface{}) error {
 func Fprint(w io.Writer, a ...interface{}) (n int, err error) {
 	p := newPrinter()
 	p.doPrint(a, false, false)
-	n64, err := w.Write(p.buf)
+	n, err = w.Write(p.buf)
 	p.free()
-	return int(n64), err
+	return
 }
 
 // Print formats using the default formats for its operands and writes to standard output.
@@ -342,9 +349,9 @@ func Sprint(a ...interface{}) string {
 func Fprintln(w io.Writer, a ...interface{}) (n int, err error) {
 	p := newPrinter()
 	p.doPrint(a, true, true)
-	n64, err := w.Write(p.buf)
+	n, err = w.Write(p.buf)
 	p.free()
-	return int(n64), err
+	return
 }
 
 // Println formats using the default formats for its operands and writes to standard output.
@@ -371,8 +378,8 @@ func Sprintln(a ...interface{}) string {
 	return s
 }
 
-// getField gets the i'th arg of the struct value.
-// If the arg itself is an interface, return a value for
+// getField gets the i'th field of the struct value.
+// If the field is itself is an interface, return a value for
 // the thing inside the interface, not the interface itself.
 
 // 获取结构值的第 i 个实参。
@@ -416,10 +423,10 @@ func (p *pp) badVerb(verb rune) {
 	p.add(verb)
 	p.add('(')
 	switch {
-	case p.field != nil:
-		p.buf.WriteString(reflect.TypeOf(p.field).String())
+	case p.arg != nil:
+		p.buf.WriteString(reflect.TypeOf(p.arg).String())
 		p.add('=')
-		p.printField(p.field, 'v', false, false, 0)
+		p.printArg(p.arg, 'v', false, false, 0)
 	case p.value.IsValid():
 		p.buf.WriteString(p.value.Type().String())
 		p.add('=')
@@ -651,7 +658,7 @@ func (p *pp) fmtBytes(v []byte, verb rune, goSyntax bool, typ reflect.Type, dept
 					p.buf.WriteByte(' ')
 				}
 			}
-			p.printField(c, 'v', p.fmt.plus, goSyntax, depth+1)
+			p.printArg(c, 'v', p.fmt.plus, goSyntax, depth+1)
 		}
 		if goSyntax {
 			p.buf.WriteByte('}')
@@ -725,7 +732,7 @@ var (
 	uintptrBits = reflect.TypeOf(uintptr(0)).Bits()
 )
 
-func (p *pp) catchPanic(field interface{}, verb rune) {
+func (p *pp) catchPanic(arg interface{}, verb rune) {
 	if err := recover(); err != nil {
 		// If it's a nil pointer, just say "<nil>". The likeliest causes are a
 		// Stringer that fails to guard against nil or a nil pointer for a
@@ -733,7 +740,7 @@ func (p *pp) catchPanic(field interface{}, verb rune) {
 		//
 		// 若它是一个 nil 指针，只需显示“<nil>”即可。最可能的原因就是一个 Stringer
 		// 未能防止 nil 或值接收器的 nil 指针，这两种情况下，“<nil>”是个不错的结果。
-		if v := reflect.ValueOf(field); v.Kind() == reflect.Ptr && v.IsNil() {
+		if v := reflect.ValueOf(arg); v.Kind() == reflect.Ptr && v.IsNil() {
 			p.buf.Write(nilAngleBytes)
 			return
 		}
@@ -741,15 +748,15 @@ func (p *pp) catchPanic(field interface{}, verb rune) {
 		// value will print itself nicely.
 		// 否则打印一个简明的panic消息。多数情况下panic值自己会打印得很好。
 		if p.panicking {
-			// Nested panics; the recursion in printField cannot succeed.
-			// 嵌套panic；printField 中的递归无法成功。
+			// Nested panics; the recursion in printArg cannot succeed.
+			// 嵌套 printArg 中的递归无法成功。
 			panic(err)
 		}
 		p.buf.WriteByte('%')
 		p.add(verb)
 		p.buf.Write(panicBytes)
 		p.panicking = true
-		p.printField(err, 'v', false, false, 0)
+		p.printArg(err, 'v', false, false, 0)
 		p.panicking = false
 		p.buf.WriteByte(')')
 	}
@@ -761,10 +768,10 @@ func (p *pp) handleMethods(verb rune, plus, goSyntax bool, depth int) (wasString
 	}
 	// Is it a Formatter?
 	// 判断是否为 Formatter。
-	if formatter, ok := p.field.(Formatter); ok {
+	if formatter, ok := p.arg.(Formatter); ok {
 		handled = true
 		wasString = false
-		defer p.catchPanic(p.field, verb)
+		defer p.catchPanic(p.arg, verb)
 		formatter.Format(p, verb)
 		return
 	}
@@ -773,15 +780,14 @@ func (p *pp) handleMethods(verb rune, plus, goSyntax bool, depth int) (wasString
 	if plus {
 		p.fmt.plus = false
 	}
-
-	// If we're doing Go syntax and the field knows how to supply it, take care of it now.
-	// 如果我们正在处理Go语法而 field 知道如何提供它，那就现在弄好它。
+	// If we're doing Go syntax and the argument knows how to supply it, take care of it now.
+	// 如果我们正在处理Go语法而实参知道如何提供它，那就现在弄好它。
 	if goSyntax {
 		p.fmt.sharp = false
-		if stringer, ok := p.field.(GoStringer); ok {
+		if stringer, ok := p.arg.(GoStringer); ok {
 			wasString = false
 			handled = true
-			defer p.catchPanic(p.field, verb)
+			defer p.catchPanic(p.arg, verb)
 			// Print the result of GoString unadorned.
 			// 纯粹地打印 GoString 的值。
 			p.fmtString(stringer.GoString(), 's', false)
@@ -803,19 +809,19 @@ func (p *pp) handleMethods(verb rune, plus, goSyntax bool, depth int) (wasString
 			//
 			// 它是 error 还是 Stringer？一下主体中的重复是必须的：
 			// 设置 wasString 和 handled 并推迟 catchPanic 必须发生在调用此方法之前。
-			switch v := p.field.(type) {
+			switch v := p.arg.(type) {
 			case error:
 				wasString = false
 				handled = true
-				defer p.catchPanic(p.field, verb)
-				p.printField(v.Error(), verb, plus, false, depth)
+				defer p.catchPanic(p.arg, verb)
+				p.printArg(v.Error(), verb, plus, false, depth)
 				return
 
 			case Stringer:
 				wasString = false
 				handled = true
-				defer p.catchPanic(p.field, verb)
-				p.printField(v.String(), verb, plus, false, depth)
+				defer p.catchPanic(p.arg, verb)
+				p.printArg(v.String(), verb, plus, false, depth)
 				return
 			}
 		}
@@ -824,11 +830,11 @@ func (p *pp) handleMethods(verb rune, plus, goSyntax bool, depth int) (wasString
 	return
 }
 
-func (p *pp) printField(field interface{}, verb rune, plus, goSyntax bool, depth int) (wasString bool) {
-	p.field = field
+func (p *pp) printArg(arg interface{}, verb rune, plus, goSyntax bool, depth int) (wasString bool) {
+	p.arg = arg
 	p.value = reflect.Value{}
 
-	if field == nil {
+	if arg == nil {
 		if verb == 'T' || verb == 'v' {
 			p.fmt.pad(nilAngleBytes)
 		} else {
@@ -843,10 +849,10 @@ func (p *pp) printField(field interface{}, verb rune, plus, goSyntax bool, depth
 	// %T（值的类型）与 %p（其地址）是特殊的；我们总是首先处理它。
 	switch verb {
 	case 'T':
-		p.printField(reflect.TypeOf(field).String(), 's', false, false, 0)
+		p.printArg(reflect.TypeOf(arg).String(), 's', false, false, 0)
 		return false
 	case 'p':
-		p.fmtPointer(reflect.ValueOf(field), verb, goSyntax)
+		p.fmtPointer(reflect.ValueOf(arg), verb, goSyntax)
 		return false
 	}
 
@@ -869,7 +875,7 @@ func (p *pp) printField(field interface{}, verb rune, plus, goSyntax bool, depth
 
 	// Some types can be done without reflection.
 	// 有些类型可以不用反射就能完成。
-	switch f := field.(type) {
+	switch f := arg.(type) {
 	case bool:
 		p.fmtBool(f, verb)
 	case float32:
@@ -920,15 +926,15 @@ func (p *pp) printField(field interface{}, verb rune, plus, goSyntax bool, depth
 		}
 		// Need to use reflection
 		// 需要使用反射。
-		return p.printReflectValue(reflect.ValueOf(field), verb, plus, goSyntax, depth)
+		return p.printReflectValue(reflect.ValueOf(arg), verb, plus, goSyntax, depth)
 	}
-	p.field = nil
+	p.arg = nil
 	return
 }
 
-// printValue is like printField but starts with a reflect value, not an interface{} value.
+// printValue is like printArg but starts with a reflect value, not an interface{} value.
 
-// printValue 类似于 printField，但它以一个反射值开始，而非 interface{} 值。
+// printValue 类似于 printArg，但它以一个反射值开始，而非 interface{} 值。
 func (p *pp) printValue(value reflect.Value, verb rune, plus, goSyntax bool, depth int) (wasString bool) {
 	if !value.IsValid() {
 		if verb == 'T' || verb == 'v' {
@@ -945,7 +951,7 @@ func (p *pp) printValue(value reflect.Value, verb rune, plus, goSyntax bool, dep
 	// %T（值的类型）与 %p（其地址）是特殊的；我们总是首先处理它。
 	switch verb {
 	case 'T':
-		p.printField(value.Type().String(), 's', false, false, 0)
+		p.printArg(value.Type().String(), 's', false, false, 0)
 		return false
 	case 'p':
 		p.fmtPointer(value, verb, goSyntax)
@@ -953,12 +959,12 @@ func (p *pp) printValue(value reflect.Value, verb rune, plus, goSyntax bool, dep
 	}
 
 	// Handle values with special methods.
-	// Call always, even when field == nil, because handleMethods clears p.fmt.plus for us.
+	// Call always, even when arg == nil, because handleMethods clears p.fmt.plus for us.
 	// 用特殊的方法处理值。
-	// 即使 field == nil 时也总是调用，因为 handleMethods 为我们清理了 p.fmt.plus。
-	p.field = nil // Make sure it's cleared, for safety. // 为安全起见，确认它是否已被清理。
+	// 即使 arg == nil 时也总是调用，因为 handleMethods 为我们清理了 p.fmt.plus。
+	p.arg = nil // Make sure it's cleared, for safety. // 为安全起见，确认它是否已被清理。
 	if value.CanInterface() {
-		p.field = value.Interface()
+		p.arg = value.Interface()
 	}
 	if wasString, handled := p.handleMethods(verb, plus, goSyntax, depth); handled {
 		return wasString
@@ -967,7 +973,7 @@ func (p *pp) printValue(value reflect.Value, verb rune, plus, goSyntax bool, dep
 	return p.printReflectValue(value, verb, plus, goSyntax, depth)
 }
 
-// printReflectValue is the fallback for both printField and printValue.
+// printReflectValue is the fallback for both printArg and printValue.
 // It uses reflect to print the value.
 
 // printReflectValue 是 printField 和 printValue 二者的备用方案。
@@ -1140,21 +1146,60 @@ BigSwitch:
 	return wasString
 }
 
-// intFromArg gets the fieldnumth element of a. On return, isInt reports whether the argument has type int.
+// intFromArg gets the argNumth element of a. On return, isInt reports whether the argument has type int.
 
-// intFromArg 获取 a 中的 fieldnumth 元素，isInt 报告了该实参是否拥有 int 类型。
-func intFromArg(a []interface{}, end, i, fieldnum int) (num int, isInt bool, newi, newfieldnum int) {
-	newi, newfieldnum = end, fieldnum
-	if i < end && fieldnum < len(a) {
-		num, isInt = a[fieldnum].(int)
-		newi, newfieldnum = i+1, fieldnum+1
+// intFromArg 获取 a 中的 argNumth 元素，isInt 报告了该实参是否拥有 int 类型。
+func intFromArg(a []interface{}, argNum int) (num int, isInt bool, newArgNum int) {
+	newArgNum = argNum
+	if argNum < len(a) {
+		num, isInt = a[argNum].(int)
+		newArgNum = argNum + 1
 	}
 	return
 }
 
+// parseArgNumber returns the value of the bracketed number, minus 1
+// (explicit argument numbers are one-indexed but we want zero-indexed).
+// The opening bracket is known to be present at format[0].
+// The returned values are the index, the number of bytes to consume
+// up to the closing paren, if present, and whether the number parsed
+// ok. The bytes to consume will be 1 if no closing paren is present.
+func parseArgNumber(format string) (index int, wid int, ok bool) {
+	// Find closing parenthesis
+	for i := 1; i < len(format); i++ {
+		if format[i] == ']' {
+			width, ok, newi := parsenum(format, 1, i)
+			if !ok || newi != i {
+				return 0, i + 1, false
+			}
+			return width - 1, i + 1, true // arg numbers are one-indexed and skip paren.
+		}
+	}
+	return 0, 1, false
+}
+
+// argNumber returns the next argument to evaluate, which is either the value of the passed-in
+// argNum or the value of the bracketed integer that begins format[i:]. It also returns
+// the new value of i, that is, the index of the next byte of the format to process.
+func (p *pp) argNumber(argNum int, format string, i int, numArgs int) (newArgNum, newi int, found bool) {
+	if len(format) <= i || format[i] != '[' {
+		return argNum, i, false
+	}
+	p.reordered = true
+	index, wid, ok := parseArgNumber(format[i:])
+	if ok && 0 <= index && index < numArgs {
+		return index, i + wid, true
+	}
+	p.goodArgNum = false
+	return argNum, i + wid, true
+}
+
 func (p *pp) doPrintf(format string, a []interface{}) {
 	end := len(format)
-	fieldnum := 0 // we process one field per non-trivial format // 我们为每个非平凡格式都处理一个字段。
+	argNum := 0         // we process one argument per non-trivial format // 我们为每个非平凡格式都处理一个实参。
+	afterIndex := false // previous item in format was an index like [3]. // 格式中的前一项是否为类似于 [3] 的下标。
+	p.reordered = false
+	p.goodArgNum = true
 	for i := 0; i < end; {
 		lasti := i
 		for i < end && format[i] != '%' {
@@ -1170,7 +1215,7 @@ func (p *pp) doPrintf(format string, a []interface{}) {
 
 		// Process one verb // 处理个占位符
 		i++
-		// flags and widths // 标记和宽度
+		// Do we have flags? // 是否有标记？
 		p.fmt.clearflags()
 	F:
 		for ; i < end; i++ {
@@ -1189,32 +1234,54 @@ func (p *pp) doPrintf(format string, a []interface{}) {
 				break F
 			}
 		}
-		// do we have width?
+
+		// Do we have an explicit argument index?
+		// 有显式的实参下标么？
+		argNum, i, afterIndex = p.argNumber(argNum, format, i, len(a))
+
+		// Do we have width?
 		// 有宽度不？
 		if i < end && format[i] == '*' {
-			p.fmt.wid, p.fmt.widPresent, i, fieldnum = intFromArg(a, end, i, fieldnum)
+			i++
+			p.fmt.wid, p.fmt.widPresent, argNum = intFromArg(a, argNum)
 			if !p.fmt.widPresent {
 				p.buf.Write(badWidthBytes)
 			}
+			afterIndex = false
 		} else {
 			p.fmt.wid, p.fmt.widPresent, i = parsenum(format, i, end)
+			if afterIndex && p.fmt.widPresent { // "%[3]2d"
+				p.goodArgNum = false
+			}
 		}
-		// do we have precision?
+		// Do we have precision?
 		// 有精度不？
 		if i+1 < end && format[i] == '.' {
-			if format[i+1] == '*' {
-				p.fmt.prec, p.fmt.precPresent, i, fieldnum = intFromArg(a, end, i+1, fieldnum)
+			i++
+			if afterIndex { // "%[3].2d"
+				p.goodArgNum = false
+			}
+			argNum, i, afterIndex = p.argNumber(argNum, format, i, len(a))
+			if format[i] == '*' {
+				i++
+				p.fmt.prec, p.fmt.precPresent, argNum = intFromArg(a, argNum)
 				if !p.fmt.precPresent {
 					p.buf.Write(badPrecBytes)
 				}
+				afterIndex = false
 			} else {
-				p.fmt.prec, p.fmt.precPresent, i = parsenum(format, i+1, end)
+				p.fmt.prec, p.fmt.precPresent, i = parsenum(format, i, end)
 				if !p.fmt.precPresent {
 					p.fmt.prec = 0
 					p.fmt.precPresent = true
 				}
 			}
 		}
+
+		if !afterIndex {
+			argNum, i, afterIndex = p.argNumber(argNum, format, i, len(a))
+		}
+
 		if i >= end {
 			p.buf.Write(noVerbBytes)
 			continue
@@ -1227,30 +1294,38 @@ func (p *pp) doPrintf(format string, a []interface{}) {
 			p.buf.WriteByte('%') // We ignore width and prec. // 我们忽略宽度和精度。
 			continue
 		}
-		if fieldnum >= len(a) { // out of operands // 超过操作数
+		if !p.goodArgNum {
+			p.buf.WriteByte('%')
+			p.add(c)
+			p.buf.Write(badIndexBytes)
+			continue
+		} else if argNum >= len(a) { // out of operands // 超过操作数
 			p.buf.WriteByte('%')
 			p.add(c)
 			p.buf.Write(missingBytes)
 			continue
 		}
-		field := a[fieldnum]
-		fieldnum++
+		arg := a[argNum]
+		argNum++
 
 		goSyntax := c == 'v' && p.fmt.sharp
 		plus := c == 'v' && p.fmt.plus
-		p.printField(field, c, plus, goSyntax, 0)
+		p.printArg(arg, c, plus, goSyntax, 0)
 	}
 
-	if fieldnum < len(a) {
+	// Check for extra arguments unless the call accessed the arguments
+	// out of order, in which case it's too expensive to detect if they've all
+	// been used and arguably OK if they're not.
+	if !p.reordered && argNum < len(a) {
 		p.buf.Write(extraBytes)
-		for ; fieldnum < len(a); fieldnum++ {
-			field := a[fieldnum]
-			if field != nil {
-				p.buf.WriteString(reflect.TypeOf(field).String())
+		for ; argNum < len(a); argNum++ {
+			arg := a[argNum]
+			if arg != nil {
+				p.buf.WriteString(reflect.TypeOf(arg).String())
 				p.buf.WriteByte('=')
 			}
-			p.printField(field, 'v', false, false, 0)
-			if fieldnum+1 < len(a) {
+			p.printArg(arg, 'v', false, false, 0)
+			if argNum+1 < len(a) {
 				p.buf.Write(commaSpaceBytes)
 			}
 		}
@@ -1260,18 +1335,18 @@ func (p *pp) doPrintf(format string, a []interface{}) {
 
 func (p *pp) doPrint(a []interface{}, addspace, addnewline bool) {
 	prevString := false
-	for fieldnum := 0; fieldnum < len(a); fieldnum++ {
+	for argNum := 0; argNum < len(a); argNum++ {
 		p.fmt.clearflags()
 		// always add spaces if we're doing Println
 		// 若我们执行 Println 就总是添加空格
-		field := a[fieldnum]
-		if fieldnum > 0 {
-			isString := field != nil && reflect.TypeOf(field).Kind() == reflect.String
+		arg := a[argNum]
+		if argNum > 0 {
+			isString := arg != nil && reflect.TypeOf(arg).Kind() == reflect.String
 			if addspace || !isString && !prevString {
 				p.buf.WriteByte(' ')
 			}
 		}
-		prevString = p.printField(field, 'v', false, false, 0)
+		prevString = p.printArg(arg, 'v', false, false, 0)
 	}
 	if addnewline {
 		p.buf.WriteByte('\n')

@@ -937,7 +937,8 @@ func (p *Package) cgoType(e ast.Expr) *Type {
 		return &Type{Size: p.PtrSize, Align: p.PtrSize, C: c("%s*", x.C)}
 	case *ast.ArrayType:
 		if t.Len == nil {
-			return &Type{Size: p.PtrSize + 8, Align: p.PtrSize, C: c("GoSlice")}
+			// Slice: pointer, len, cap.
+			return &Type{Size: p.PtrSize * 3, Align: p.PtrSize, C: c("GoSlice")}
 		}
 	case *ast.StructType:
 		// TODO
@@ -974,8 +975,7 @@ func (p *Package) cgoType(e ast.Expr) *Type {
 			return &Type{Size: p.PtrSize, Align: p.PtrSize, C: c("GoUintptr")}
 		}
 		if t.Name == "string" {
-			// The string data is 1 pointer + 1 int, but this always
-			// rounds to 2 pointers due to alignment.
+			// The string data is 1 pointer + 1 (pointer-sized) int.
 			return &Type{Size: 2 * p.PtrSize, Align: p.PtrSize, C: c("GoString")}
 		}
 		if t.Name == "error" {
@@ -1028,8 +1028,17 @@ __cgo_size_assert(double, 8)
 `
 
 const builtinProlog = `
-typedef struct { char *p; int n; } _GoString_;
-typedef struct { char *p; int n; int c; } _GoBytes_;
+/* Define intgo when compiling with GCC.  */
+#ifdef __PTRDIFF_TYPE__
+typedef __PTRDIFF_TYPE__ intgo;
+#elif defined(_LP64)
+typedef long long intgo;
+#else
+typedef int intgo;
+#endif
+
+typedef struct { char *p; intgo n; } _GoString_;
+typedef struct { char *p; intgo n; intgo c; } _GoBytes_;
 _GoString_ GoString(char *p);
 _GoString_ GoStringN(char *p, int l);
 _GoBytes_ GoBytes(void *p, int n);
@@ -1103,11 +1112,11 @@ struct __go_string GoString(char *p) {
 	return __go_byte_array_to_string(p, len);
 }
 
-struct __go_string GoStringN(char *p, intgo n) {
+struct __go_string GoStringN(char *p, int32_t n) {
 	return __go_byte_array_to_string(p, n);
 }
 
-Slice GoBytes(char *p, intgo n) {
+Slice GoBytes(char *p, int32_t n) {
 	struct __go_string s = { (const unsigned char *)p, n };
 	return __go_string_to_byte_array(s);
 }
@@ -1134,9 +1143,9 @@ typedef double GoFloat64;
 typedef __complex float GoComplex64;
 typedef __complex double GoComplex128;
 
-typedef struct { char *p; int n; } GoString;
+typedef struct { char *p; GoInt n; } GoString;
 typedef void *GoMap;
 typedef void *GoChan;
 typedef struct { void *t; void *v; } GoInterface;
-typedef struct { void *data; int len; int cap; } GoSlice;
+typedef struct { void *data; GoInt len; GoInt cap; } GoSlice;
 `

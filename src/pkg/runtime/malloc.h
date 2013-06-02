@@ -285,15 +285,18 @@ struct MCacheList
 
 struct MCache
 {
-	MCacheList list[NumSizeClasses];
+	// The following members are accessed on every malloc,
+	// so they are grouped here for better caching.
+	int32 next_sample;	// trigger heap sample after allocating this many bytes
 	intptr local_cachealloc;	// bytes allocated (or freed) from cache since last lock of heap
+	// The rest is not accessed on every malloc.
+	MCacheList list[NumSizeClasses];
 	intptr local_objects;	// objects allocated (or freed) from cache since last lock of heap
 	intptr local_alloc;	// bytes allocated (or freed) since last lock of heap
 	uintptr local_total_alloc;	// bytes allocated (even if freed) since last lock of heap
 	uintptr local_nmalloc;	// number of mallocs since last lock of heap
 	uintptr local_nfree;	// number of frees since last lock of heap
 	uintptr local_nlookup;	// number of pointer lookups since last lock of heap
-	int32 next_sample;	// trigger heap sample after allocating this many bytes
 	// Statistics about allocation size classes since last lock of heap
 	struct {
 		uintptr nmalloc;
@@ -302,7 +305,7 @@ struct MCache
 
 };
 
-void*	runtime·MCache_Alloc(MCache *c, int32 sizeclass, uintptr size, int32 zeroed);
+void	runtime·MCache_Refill(MCache *c, int32 sizeclass);
 void	runtime·MCache_Free(MCache *c, void *p, int32 sizeclass, uintptr size);
 void	runtime·MCache_ReleaseAll(MCache *c);
 
@@ -408,7 +411,8 @@ struct MHeap
 	uint32	nspancap;
 
 	// span lookup
-	MSpan *map[1<<MHeapMap_Bits];
+	MSpan**	spans;
+	uintptr	spans_mapped;
 
 	// range of addresses we might see in the heap
 	byte *bitmap;
@@ -429,7 +433,7 @@ struct MHeap
 	FixAlloc spanalloc;	// allocator for Span*
 	FixAlloc cachealloc;	// allocator for MCache*
 };
-extern MHeap *runtime·mheap;
+extern MHeap runtime·mheap;
 
 void	runtime·MHeap_Init(MHeap *h, void *(*allocator)(uintptr));
 MSpan*	runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, int32 acct, int32 zeroed);
@@ -439,9 +443,11 @@ MSpan*	runtime·MHeap_LookupMaybe(MHeap *h, void *v);
 void	runtime·MGetSizeClassInfo(int32 sizeclass, uintptr *size, int32 *npages, int32 *nobj);
 void*	runtime·MHeap_SysAlloc(MHeap *h, uintptr n);
 void	runtime·MHeap_MapBits(MHeap *h);
+void	runtime·MHeap_MapSpans(MHeap *h);
 void	runtime·MHeap_Scavenger(void);
 
 void*	runtime·mallocgc(uintptr size, uint32 flag, int32 dogc, int32 zeroed);
+void*	runtime·persistentalloc(uintptr size, uintptr align);
 int32	runtime·mlookup(void *v, byte **base, uintptr *size, MSpan **s);
 void	runtime·gc(int32 force);
 void	runtime·markallocated(void *v, uintptr n, bool noptr);
@@ -455,6 +461,7 @@ bool	runtime·blockspecial(void*);
 void	runtime·setblockspecial(void*, bool);
 void	runtime·purgecachedstats(MCache*);
 void*	runtime·cnew(Type*);
+void*	runtime·cnewarray(Type*, intgo);
 
 void	runtime·settype(void*, uintptr);
 void	runtime·settype_flush(M*, bool);

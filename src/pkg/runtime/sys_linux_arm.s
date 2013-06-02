@@ -127,8 +127,8 @@ TEXT runtime·munmap(SB),7,$0
 	SWI	$0
 	MOVW	$0xfffff001, R6
 	CMP 	R6, R0
-	MOVW.HI	$0, R9  // crash on syscall failure
-	MOVW.HI	R9, (R9)
+	MOVW.HI	$0, R8  // crash on syscall failure
+	MOVW.HI	R8, (R8)
 	RET
 
 TEXT runtime·madvise(SB),7,$0
@@ -278,19 +278,24 @@ TEXT runtime·sigaltstack(SB),7,$0
 	SWI	$0
 	MOVW	$0xfffff001, R6
 	CMP 	R6, R0
-	MOVW.HI	$0, R9  // crash on syscall failure
-	MOVW.HI	R9, (R9)
+	MOVW.HI	$0, R8  // crash on syscall failure
+	MOVW.HI	R8, (R8)
 	RET
 
 TEXT runtime·sigtramp(SB),7,$24
 	// this might be called in external code context,
 	// where g and m are not set.
 	// first save R0, because _cgo_load_gm will clobber it
-	// TODO(adonovan): call runtime·badsignal if m=0, like other platforms?
 	MOVW	R0, 4(R13)
 	MOVW	_cgo_load_gm(SB), R0
 	CMP 	$0, R0
 	BL.NE	(R0)
+
+	CMP 	$0, m
+	BNE 	3(PC)
+	// signal number is already prepared in 4(R13)
+	BL  	runtime·badsignal(SB)
+	RET
 
 	// save g
 	MOVW	g, R3

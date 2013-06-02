@@ -412,6 +412,7 @@ struct	Func
 	int32	frame;	// stack frame size
 	int32	args;	// in/out args size
 	int32	locals;	// locals size
+	Slice	ptrs;	// pointer map
 };
 
 // layout of Itab known to compilers
@@ -657,6 +658,7 @@ extern	G*	runtime·lastg;
 extern	M*	runtime·allm;
 extern	P**	runtime·allp;
 extern	int32	runtime·gomaxprocs;
+extern	uint32	runtime·needextram;
 extern	bool	runtime·singleproc;
 extern	uint32	runtime·panicking;
 extern	uint32	runtime·gcwaiting;		// gc is waiting to run
@@ -748,6 +750,7 @@ void	runtime·mpreinit(M*);
 void	runtime·minit(void);
 void	runtime·unminit(void);
 void	runtime·signalstack(byte*, int32);
+void	runtime·symtabinit(void);
 Func*	runtime·findfunc(uintptr);
 int32	runtime·funcline(Func*, uintptr);
 void*	runtime·stackalloc(uint32);
@@ -809,6 +812,7 @@ void	runtime·netpollready(G**, PollDesc*, int32);
 void	runtime·crash(void);
 
 #pragma	varargck	argpos	runtime·printf	1
+#pragma	varargck	type	"c"	int32
 #pragma	varargck	type	"d"	int32
 #pragma	varargck	type	"d"	uint32
 #pragma	varargck	type	"D"	int64
@@ -858,7 +862,7 @@ void	runtime·unlock(Lock*);
 void	runtime·noteclear(Note*);
 void	runtime·notesleep(Note*);
 void	runtime·notewakeup(Note*);
-void	runtime·notetsleep(Note*, int64);
+bool	runtime·notetsleep(Note*, int64);  // false - timeout
 
 /*
  * low-level synchronization for implementing the above

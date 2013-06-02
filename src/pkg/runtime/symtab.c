@@ -69,11 +69,6 @@ struct Sym
 
 static uintptr mainoffset;
 
-// A dynamically allocated string containing multiple substrings.
-// Individual strings are slices of hugestring.
-static String hugestring;
-static int32 hugestring_len;
-
 extern void main·main(void);
 
 static uintptr
@@ -193,14 +188,13 @@ static int32 nfunc;
 static byte **fname;
 static int32 nfname;
 
-static uint32 funcinit;
-static Lock funclock;
 static uintptr lastvalue;
 
 static void
 dofunc(Sym *sym)
 {
 	Func *f;
+	uintgo cap;
 	
 	switch(sym->symtype) {
 	case 't':
@@ -233,8 +227,24 @@ dofunc(Sym *sym)
 			func[nfunc-1].locals = sym->value;
 		else if(runtime·strcmp(sym->name, (byte*)".args") == 0)
 			func[nfunc-1].args = sym->value;
-		else {
-			runtime·printf("invalid 'm' symbol named '%s'\n", sym->name);
+		else if(runtime·strcmp(sym->name, (byte*)".nptrs") == 0) {
+			// TODO(cshapiro): use a dense representation for gc information
+			if(sym->value != func[nfunc-1].args/sizeof(uintptr)) {
+				runtime·printf("pointer map size and argument size disagree\n");
+				runtime·throw("mangled symbol table");
+			}
+			cap = ROUND(sym->value, 32) / 32;
+			func[nfunc-1].ptrs.array = runtime·mallocgc(cap*sizeof(uint32), FlagNoPointers|FlagNoGC, 0, 1);
+			func[nfunc-1].ptrs.len = 0;
+			func[nfunc-1].ptrs.cap = cap;
+		} else if(runtime·strcmp(sym->name, (byte*)".ptrs") == 0) {
+			if(func[nfunc-1].ptrs.len >= func[nfunc-1].ptrs.cap) {
+				runtime·printf("more pointer map entries read than argument words\n");
+				runtime·throw("mangled symbol table");
+			}
+			((uint32*)func[nfunc-1].ptrs.array)[func[nfunc-1].ptrs.len++] = sym->value;
+		} else {
+			runtime·printf("invalid '%c' symbol named '%s'\n", (int8)sym->symtype, sym->name);
 			runtime·throw("mangled symbol table");
 		}
 		break;
@@ -288,7 +298,6 @@ makepath(byte *buf, int32 nbuf, byte *path)
 	return p - buf;
 }
 
-// appends p to hugestring
 static String
 gostringn(byte *p, int32 l)
 {
@@ -296,16 +305,20 @@ gostringn(byte *p, int32 l)
 
 	if(l == 0)
 		return runtime·emptystring;
-	if(hugestring.str == nil) {
-		hugestring_len += l;
-		return runtime·emptystring;
-	}
-	s.str = hugestring.str + hugestring.len;
 	s.len = l;
-	hugestring.len += s.len;
+	s.str = runtime·persistentalloc(l, 1);
 	runtime·memmove(s.str, p, l);
 	return s;
 }
+
+static struct
+{
+	String srcstring;
+	int32 aline;
+	int32 delta;
+} *files;
+
+enum { maxfiles = 200 };
 
 // walk symtab accumulating path names for use by pc/ln table.
 // don't need the full generality of the z entry history stack because
@@ -314,12 +327,8 @@ gostringn(byte *p, int32 l)
 static void
 dosrcline(Sym *sym)
 {
+	#pragma dataflag 16 // no pointers
 	static byte srcbuf[1000];
-	static struct {
-		String srcstring;
-		int32 aline;
-		int32 delta;
-	} files[200];
 	static int32 incstart;
 	static int32 nfunc, nfile, nhist;
 	Func *f;
@@ -328,8 +337,6 @@ dosrcline(Sym *sym)
 	switch(sym->symtype) {
 	case 't':
 	case 'T':
-		if(hugestring.str == nil)
-			break;
 		if(runtime·strcmp(sym->name, (byte*)"etext") == 0)
 			break;
 		f = &func[nfunc++];
@@ -347,7 +354,7 @@ dosrcline(Sym *sym)
 			l = makepath(srcbuf, sizeof srcbuf, sym->name+1);
 			nhist = 0;
 			nfile = 0;
-			if(nfile == nelem(files))
+			if(nfile == maxfiles)
 				return;
 			files[nfile].srcstring = gostringn(srcbuf, l);
 			files[nfile].aline = 0;
@@ -358,7 +365,7 @@ dosrcline(Sym *sym)
 			if(srcbuf[0] != '\0') {
 				if(nhist++ == 0)
 					incstart = sym->value;
-				if(nhist == 0 && nfile < nelem(files)) {
+				if(nhist == 0 && nfile < maxfiles) {
 					// new top-level file
 					files[nfile].srcstring = gostringn(srcbuf, l);
 					files[nfile].aline = sym->value;
@@ -534,8 +541,8 @@ runtime·funcline_go(Func *f, uintptr targetpc, String retfile, intgo retline)
 	FLUSH(&retline);
 }
 
-static void
-buildfuncs(void)
+void
+runtime·symtabinit(void)
 {
 	extern byte etext[];
 
@@ -554,11 +561,12 @@ buildfuncs(void)
 	walksymtab(dofunc);
 
 	// Initialize tables.
-	// Can use FlagNoPointers - all pointers either point into sections of the executable
-	// or point into hugestring.
-	func = runtime·mallocgc((nfunc+1)*sizeof func[0], FlagNoPointers, 0, 1);
+	// Memory obtained from runtime·persistentalloc() is not scanned by GC,
+	// this is fine because all pointers either point into sections of the executable
+	// or also obtained from persistentmalloc().
+	func = runtime·persistentalloc((nfunc+1)*sizeof func[0], 0);
 	func[nfunc].entry = (uint64)etext;
-	fname = runtime·mallocgc(nfname*sizeof fname[0], FlagNoPointers, 0, 1);
+	fname = runtime·persistentalloc(nfname*sizeof fname[0], 0);
 	nfunc = 0;
 	lastvalue = 0;
 	walksymtab(dofunc);
@@ -567,13 +575,9 @@ buildfuncs(void)
 	splitpcln();
 
 	// record src file and line info for each func
-	walksymtab(dosrcline);  // pass 1: determine hugestring_len
-	hugestring.str = runtime·mallocgc(hugestring_len, FlagNoPointers, 0, 0);
-	hugestring.len = 0;
-	walksymtab(dosrcline);  // pass 2: fill and use hugestring
-
-	if(hugestring.len != hugestring_len)
-		runtime·throw("buildfunc: problem in initialization procedure");
+	files = runtime·malloc(maxfiles * sizeof(files[0]));
+	walksymtab(dosrcline);
+	files = nil;
 
 	m->nomemprof--;
 }
@@ -583,26 +587,6 @@ runtime·findfunc(uintptr addr)
 {
 	Func *f;
 	int32 nf, n;
-
-	// Use atomic double-checked locking,
-	// because when called from pprof signal
-	// handler, findfunc must run without
-	// grabbing any locks.
-	// (Before enabling the signal handler,
-	// SetCPUProfileRate calls findfunc to trigger
-	// the initialization outside the handler.)
-	// Avoid deadlock on fault during malloc
-	// by not calling buildfuncs if we're already in malloc.
-	if(!m->mallocing && !m->gcing) {
-		if(runtime·atomicload(&funcinit) == 0) {
-			runtime·lock(&funclock);
-			if(funcinit == 0) {
-				buildfuncs();
-				runtime·atomicstore(&funcinit, 1);
-			}
-			runtime·unlock(&funclock);
-		}
-	}
 
 	if(nfunc == 0)
 		return nil;

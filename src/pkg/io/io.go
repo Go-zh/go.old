@@ -480,10 +480,10 @@ func CopyN(dst Writer, src Reader, n int64) (written int64, err error) {
 // Because Copy is defined to read from src until EOF, it does
 // not treat an EOF from Read as an error to be reported.
 //
-// If dst implements the ReaderFrom interface,
-// the copy is implemented by calling dst.ReadFrom(src).
-// Otherwise, if src implements the WriterTo interface,
+// If src implements the WriterTo interface,
 // the copy is implemented by calling src.WriteTo(dst).
+// Otherwise, if dst implements the ReaderFrom interface,
+// the copy is implemented by calling dst.ReadFrom(src).
 
 // Copy 将 src 复制到 dst，直到在 src 上到达 EOF 或发生错误。
 // 它返回复制的字节数，如果有的话，还会返回在复制时遇到的第一个错误。
@@ -491,21 +491,21 @@ func CopyN(dst Writer, src Reader, n int64) (written int64, err error) {
 // 成功的 Copy 返回 err == nil，而非 err == EOF。由于 Copy 被定义为从 src
 // 读取直到 EOF 为止，因此它不会将来自 Read 的 EOF 当做错误来报告。
 //
-// 若 dst 实现了 ReaderFrom 接口，其复制操作可通过调用 dst.ReadFrom(src)
-// 实现。此外，若 dst 实现了 WriterTo 接口，其复制操作可通过调用
-// src.WriteTo(dst) 实现。
+// 若 src 实现了 WriterTo 接口，其复制操作可通过调用 src.WriteTo(dst) 实现。
+// 否则，若 dst 实现了 ReaderFrom 接口，其复制操作可通过调用 dst.ReadFrom(src) 实现。
 func Copy(dst Writer, src Reader) (written int64, err error) {
-	// If the writer has a ReadFrom method, use it to do the copy.
+	// If the reader has a WriteTo method, use it to do the copy.
 	// Avoids an allocation and a copy.
-	// 若该读取器拥有 ReadFrom 方法，就使用它来进行复制。
+	//
+	// 若该读取器拥有 WriteTo 方法，就使用它来进行复制。
 	// 避免一个分配和一个副本。
-	if rt, ok := dst.(ReaderFrom); ok {
-		return rt.ReadFrom(src)
-	}
-	// Similarly, if the reader has a WriteTo method, use it to do the copy.
-	// 类似地，若该读取器拥有 WriteTo 方法，就使用它来进行复制。
 	if wt, ok := src.(WriterTo); ok {
 		return wt.WriteTo(dst)
+	}
+	// Similarly, if the writer has a ReadFrom method, use it to do the copy.
+	// 类似地，若该写入器拥有 ReadFrom 方法，就使用它来进行复制。
+	if rt, ok := dst.(ReaderFrom); ok {
+		return rt.ReadFrom(src)
 	}
 	buf := make([]byte, 32*1024)
 	for {

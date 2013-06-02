@@ -65,6 +65,23 @@ runtime·MHeap_Init(MHeap *h, void *(*alloc)(uintptr))
 		runtime·MCentral_Init(&h->central[i], i);
 }
 
+void
+runtime·MHeap_MapSpans(MHeap *h)
+{
+	uintptr n;
+
+	// Map spans array, PageSize at a time.
+	n = (uintptr)h->arena_used;
+	if(sizeof(void*) == 8)
+		n -= (uintptr)h->arena_start;
+	n = n / PageSize * sizeof(h->spans[0]);
+	n = ROUND(n, PageSize);
+	if(h->spans_mapped >= n)
+		return;
+	runtime·SysMap((byte*)h->spans + h->spans_mapped, n - h->spans_mapped);
+	h->spans_mapped = n;
+}
+
 // Allocate a new span of npage pages from the heap
 // and record its size class in the HeapMap and HeapMapCache.
 MSpan*
@@ -73,7 +90,8 @@ runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, int32 acct, int32
 	MSpan *s;
 
 	runtime·lock(h);
-	runtime·purgecachedstats(m->mcache);
+	mstats.heap_alloc += m->mcache->local_cachealloc;
+	m->mcache->local_cachealloc = 0;
 	s = MHeap_AllocLocked(h, npage, sizeclass);
 	if(s != nil) {
 		mstats.heap_inuse += npage<<PageShift;
@@ -153,9 +171,9 @@ HaveSpan:
 		if(sizeof(void*) == 8)
 			p -= ((uintptr)h->arena_start>>PageShift);
 		if(p > 0)
-			h->map[p-1] = s;
-		h->map[p] = t;
-		h->map[p+t->npages-1] = t;
+			h->spans[p-1] = s;
+		h->spans[p] = t;
+		h->spans[p+t->npages-1] = t;
 		*(uintptr*)(t->start<<PageShift) = *(uintptr*)(s->start<<PageShift);  // copy "needs zeroing" mark
 		t->state = MSpanInUse;
 		MHeap_FreeLocked(h, t);
@@ -172,7 +190,7 @@ HaveSpan:
 	if(sizeof(void*) == 8)
 		p -= ((uintptr)h->arena_start>>PageShift);
 	for(n=0; n<npage; n++)
-		h->map[p+n] = s;
+		h->spans[p+n] = s;
 	return s;
 }
 
@@ -243,8 +261,8 @@ MHeap_Grow(MHeap *h, uintptr npage)
 	p = s->start;
 	if(sizeof(void*) == 8)
 		p -= ((uintptr)h->arena_start>>PageShift);
-	h->map[p] = s;
-	h->map[p + s->npages - 1] = s;
+	h->spans[p] = s;
+	h->spans[p + s->npages - 1] = s;
 	s->state = MSpanInUse;
 	MHeap_FreeLocked(h, s);
 	return true;
@@ -261,7 +279,7 @@ runtime·MHeap_Lookup(MHeap *h, void *v)
 	p = (uintptr)v;
 	if(sizeof(void*) == 8)
 		p -= (uintptr)h->arena_start;
-	return h->map[p >> PageShift];
+	return h->spans[p >> PageShift];
 }
 
 // Look up the span at the given address.
@@ -283,10 +301,8 @@ runtime·MHeap_LookupMaybe(MHeap *h, void *v)
 	q = p;
 	if(sizeof(void*) == 8)
 		q -= (uintptr)h->arena_start >> PageShift;
-	s = h->map[q];
-	if(s == nil || p < s->start || p - s->start >= s->npages)
-		return nil;
-	if(s->state != MSpanInUse)
+	s = h->spans[q];
+	if(s == nil || p < s->start || v >= s->limit || s->state != MSpanInUse)
 		return nil;
 	return s;
 }
@@ -296,7 +312,8 @@ void
 runtime·MHeap_Free(MHeap *h, MSpan *s, int32 acct)
 {
 	runtime·lock(h);
-	runtime·purgecachedstats(m->mcache);
+	mstats.heap_alloc += m->mcache->local_cachealloc;
+	m->mcache->local_cachealloc = 0;
 	mstats.heap_inuse -= s->npages<<PageShift;
 	if(acct) {
 		mstats.heap_alloc -= s->npages<<PageShift;
@@ -334,26 +351,26 @@ MHeap_FreeLocked(MHeap *h, MSpan *s)
 	p = s->start;
 	if(sizeof(void*) == 8)
 		p -= (uintptr)h->arena_start >> PageShift;
-	if(p > 0 && (t = h->map[p-1]) != nil && t->state != MSpanInUse) {
+	if(p > 0 && (t = h->spans[p-1]) != nil && t->state != MSpanInUse) {
 		tp = (uintptr*)(t->start<<PageShift);
 		*tp |= *sp;	// propagate "needs zeroing" mark
 		s->start = t->start;
 		s->npages += t->npages;
 		s->npreleased = t->npreleased; // absorb released pages
 		p -= t->npages;
-		h->map[p] = s;
+		h->spans[p] = s;
 		runtime·MSpanList_Remove(t);
 		t->state = MSpanDead;
 		runtime·FixAlloc_Free(&h->spanalloc, t);
 		mstats.mspan_inuse = h->spanalloc.inuse;
 		mstats.mspan_sys = h->spanalloc.sys;
 	}
-	if(p+s->npages < nelem(h->map) && (t = h->map[p+s->npages]) != nil && t->state != MSpanInUse) {
+	if((p+s->npages)*sizeof(h->spans[0]) < h->spans_mapped && (t = h->spans[p+s->npages]) != nil && t->state != MSpanInUse) {
 		tp = (uintptr*)(t->start<<PageShift);
 		*sp |= *tp;	// propagate "needs zeroing" mark
 		s->npages += t->npages;
 		s->npreleased += t->npreleased;
-		h->map[p + s->npages - 1] = s;
+		h->spans[p + s->npages - 1] = s;
 		runtime·MSpanList_Remove(t);
 		t->state = MSpanDead;
 		runtime·FixAlloc_Free(&h->spanalloc, t);
@@ -404,7 +421,7 @@ scavenge(uint64 now, uint64 limit)
 	uintptr sumreleased;
 	MHeap *h;
 	
-	h = runtime·mheap;
+	h = &runtime·mheap;
 	sumreleased = 0;
 	for(i=0; i < nelem(h->free); i++)
 		sumreleased += scavengelist(&h->free[i], now, limit);
@@ -447,7 +464,7 @@ runtime·MHeap_Scavenger(void)
 	if(env != nil)
 		trace = runtime·atoi(env) > 0;
 
-	h = runtime·mheap;
+	h = &runtime·mheap;
 	for(k=0;; k++) {
 		runtime·noteclear(&note);
 		runtime·entersyscallblock();
@@ -489,9 +506,9 @@ void
 runtime∕debug·freeOSMemory(void)
 {
 	runtime·gc(1);
-	runtime·lock(runtime·mheap);
+	runtime·lock(&runtime·mheap);
 	scavenge(~(uintptr)0, 0);
-	runtime·unlock(runtime·mheap);
+	runtime·unlock(&runtime·mheap);
 }
 
 // Initialize a new span with the given start and npages.

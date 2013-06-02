@@ -60,6 +60,7 @@ enum { MaxGomaxprocs = 1<<8 };
 
 Sched	runtime·sched;
 int32	runtime·gomaxprocs;
+uint32	runtime·needextram;
 bool	runtime·singleproc;
 bool	runtime·iscgo;
 uint32	runtime·gcwaiting;
@@ -132,10 +133,8 @@ runtime·schedinit(void)
 	runtime·goargs();
 	runtime·goenvs();
 
-	// For debugging:
-	// Allocate internal symbol table representation now,
-	// so that we don't need to call malloc when we crash.
-	// runtime·findfunc(0);
+	// Allocate internal symbol table representation now, we need it for GC anyway.
+	runtime·symtabinit();
 
 	runtime·sched.lastpoll = runtime·nanotime();
 	procs = 1;
@@ -475,11 +474,8 @@ runtime·mstart(void)
 
 	// Install signal handlers; after minit so that minit can
 	// prepare the thread to be able to handle the signals.
-	if(m == &runtime·m0) {
+	if(m == &runtime·m0)
 		runtime·initsig();
-		if(runtime·iscgo)
-			runtime·newextram();
-	}
 	
 	if(m->mstartfn)
 		m->mstartfn();
@@ -586,6 +582,14 @@ void
 runtime·needm(byte x)
 {
 	M *mp;
+
+	if(runtime·needextram) {
+		// Can happen if C/C++ code calls Go from a global ctor.
+		// Can not throw, because scheduler is not initialized yet.
+		runtime·write(2, "fatal error: cgo callback before cgo call\n",
+			sizeof("fatal error: cgo callback before cgo call\n")-1);
+		runtime·exit(1);
+	}
 
 	// Lock extra list, take head, unlock popped list.
 	// nilokay=false is safe here because of the invariant above,
@@ -1219,6 +1223,10 @@ gosched0(G *gp)
 }
 
 // Finishes execution of the current goroutine.
+// Need to mark it as nosplit, because it runs with sp > stackbase (as runtime·lessstack).
+// Since it does not return it does not matter.  But if it is preempted
+// at the split stack check, GC will complain about inconsistent sp.
+#pragma textflag 7
 void
 runtime·goexit(void)
 {
