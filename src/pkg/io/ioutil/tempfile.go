@@ -81,8 +81,9 @@ func TempFile(dir, prefix string) (f *os.File, err error) {
 // to remove the directory when no longer needed.
 
 // TempDir 在目录 dir 中创建一个名字以 prefix 开头的新的临时目录并返回该新目录的路径。
-// 若 dir 为空字符串，TempDir 就会为临时目录使用默认的目录（见 os.TempDir）。
-// 多程序同时调用 TempDir 将不会选择相同的目录。当该目录不再被需要时，调用者应负责将其移除。
+// 若 dir 为空字符串，TempDir 就会为临时文件（Unix将目录也视作文件）使用默认的目录（见
+// os.TempDir）。多程序同时调用 TempDir 将不会选择相同的目录。当该目录不再被需要时，
+// 调用者应负责将其移除。
 func TempDir(dir, prefix string) (name string, err error) {
 	if dir == "" {
 		dir = os.TempDir()
