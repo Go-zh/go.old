@@ -63,7 +63,7 @@ package math
 //
 // atan.c
 // TODO(osc): 译法正确？
-// 反转圆形正切（反正切）
+// 反转正切（反正切）
 //
 // 概览：
 // double x, y, atan();
