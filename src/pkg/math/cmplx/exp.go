@@ -47,7 +47,28 @@ import "math"
 //    DEC       -10,+10      8700       3.7e-17     1.1e-17
 //    IEEE      -10,+10     30000       3.0e-16     8.7e-17
 
+// 复数的指数函数
+//
+// 描述：
+//
+// 返回复数实参 z 的复数指数。
+//
+// 若
+//     z = x + iy,
+//     r = exp(x),
+// 则
+//     w = r cos y + i r sin y.
+//
+// 精度：
+//
+//                         相对误差:
+//    算法      范围       # 测试次数     峰值         均方根
+//    DEC       -10,+10      8700       3.7e-17     1.1e-17
+//    IEEE      -10,+10     30000       3.0e-16     8.7e-17
+
 // Exp returns e**x, the base-e exponential of x.
+
+// Exp 返回 e**x，即以 e 为低的 x 次幂。
 func Exp(x complex128) complex128 {
 	r := math.Exp(real(x))
 	s, c := math.Sincos(imag(x))

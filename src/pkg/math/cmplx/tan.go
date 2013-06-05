@@ -55,7 +55,35 @@ import "math"
 //    IEEE      -10,+10     30000       7.2e-16     1.2e-16
 // Also tested by ctan * ccot = 1 and catan(ctan(z))  =  z.
 
+// 复数的正切
+//
+// 描述：
+//
+// 若
+//     z = x + iy,
+//
+// 则
+//
+//           sin 2x  +  i sinh 2y
+//     w  =  --------------------.
+//            cos 2x  +  cosh 2y
+//
+// TODO(osc): 翻译是否正确？
+// 在实数轴上，分母为 Pi/2 的奇数倍相当于分母为零。该分母可通过这些点附近的泰勒级数求值。
+//
+// ctan(z) = -i ctanh(iz).
+//
+// 精度：
+//
+//                         相对误差:
+//    算法      范围       # 测试次数     峰值         均方根
+//    DEC       -10,+10      5200       7.1e-17     1.6e-17
+//    IEEE      -10,+10     30000       7.2e-16     1.2e-16
+// 此函数也通过了 ctan * ccot = 1 和 catan(ctan(z))  =  z 的测试。
+
 // Tan returns the tangent of x.
+
+// Tan 返回 x 的正切值。
 func Tan(x complex128) complex128 {
 	d := math.Cos(2*real(x)) + math.Cosh(2*imag(x))
 	if math.Abs(d) < 0.25 {
@@ -79,7 +107,21 @@ func Tan(x complex128) complex128 {
 // arithmetic   domain     # trials      peak         rms
 //    IEEE      -10,+10     30000       1.7e-14     2.4e-16
 
+// 复数的双曲正切
+//
+// 描述：
+//
+// tanh z = (sinh 2x  +  i sin 2y) / (cosh 2x + cos 2y) .
+//
+// 精度：
+//
+//                         相对误差:
+//    算法      范围       # 测试次数     峰值         均方根
+//    IEEE      -10,+10     30000       1.7e-14     2.4e-16
+
 // Tanh returns the hyperbolic tangent of x.
+
+// Tanh 返回 x 的双曲正切。
 func Tanh(x complex128) complex128 {
 	d := math.Cosh(2*real(x)) + math.Cos(2*imag(x))
 	if d == 0 {
@@ -89,9 +131,12 @@ func Tanh(x complex128) complex128 {
 }
 
 // Program to subtract nearest integer multiple of PI
+
+// 程序中减去最近的Pi的整数倍
 func reducePi(x float64) float64 {
 	const (
 		// extended precision value of PI:
+		// Pi的扩展精度值：
 		DP1 = 3.14159265160560607910E0   // ?? 0x400921fb54000000
 		DP2 = 1.98418714791870343106E-9  // ?? 0x3e210b4610000000
 		DP3 = 1.14423774522196636802E-17 // ?? 0x3c6a62633145c06e
@@ -107,6 +152,8 @@ func reducePi(x float64) float64 {
 }
 
 // Taylor series expansion for cosh(2y) - cos(2x)
+
+// cosh(2y) - cos(2x) 的泰勒级数展开式
 func tanSeries(z complex128) float64 {
 	const MACHEP = 1.0 / (1 << 53)
 	x := math.Abs(2 * real(z))
@@ -171,7 +218,33 @@ func tanSeries(z complex128) float64 {
 //    IEEE      -10,+10     30000       9.2e-16     1.2e-16
 // Also tested by ctan * ccot = 1 + i0.
 
+// 复数的反正切
+//
+// 描述
+//
+// 若
+//     z = x + iy,
+//
+// 则
+//
+//           sin 2x  -  i sinh 2y
+//     w  =  --------------------.
+//            cosh 2y  -  cos 2x
+//
+// TODO(osc): 翻译正确？
+// 在实数轴上，分母为 Pi/2 的偶数倍相当于分母为零。该分母可通过这些点附近的泰勒级数求值。
+//
+// 精度：
+//
+//                         相对误差:
+//    算法      范围       # 测试次数     峰值         均方根
+//    DEC       -10,+10      3000       6.5e-17     1.6e-17
+//    IEEE      -10,+10     30000       9.2e-16     1.2e-16
+// 此函数也通过了 ctan * ccot = 1 + 0i 的测试。
+
 // Cot returns the cotangent of x.
+
+// Cot 返回 x 的反正切值。
 func Cot(x complex128) complex128 {
 	d := math.Cosh(2*imag(x)) - math.Cos(2*real(x))
 	if math.Abs(d) < 0.25 {

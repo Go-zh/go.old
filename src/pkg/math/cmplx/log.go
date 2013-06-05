@@ -53,12 +53,39 @@ import "math"
 // In IEEE arithmetic the peak absolute error is 5.2e-16, rms
 // absolute error 1.0e-16.
 
+// 复数的自然对数
+//
+// 描述：
+//
+// 返回以 e（2.718...）为底复数实参 z 的复数对数。
+//
+// 若
+//       z = x + iy, r = sqrt( x**2 + y**2 ),
+// 则
+//       w = log(r) + i arctan(y/x).
+//
+// 其反正切范围从 -Pi 至 +Pi。
+//
+// 精度：
+//
+//                         相对误差:
+//    算法      范围       # 测试次数     峰值         均方根
+//    DEC       -10,+10      7000       8.5e-17     1.9e-17
+//    IEEE      -10,+10     30000       5.0e-15     1.1e-16
+//
+// 当 z 接近 1+0i 时可观察到较大的相对误差。
+// IEEE算法的峰值绝对误差为 5.2e-16，均方根绝对误差为 1.0e-16。
+
 // Log returns the natural logarithm of x.
+
+// Log 返回 x 的自然对数。
 func Log(x complex128) complex128 {
 	return complex(math.Log(Abs(x)), Phase(x))
 }
 
 // Log10 returns the decimal logarithm of x.
+
+// Log10 返回 x 的十进制对数。
 func Log10(x complex128) complex128 {
 	return math.Log10E * Log(x)
 }
