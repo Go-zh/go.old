@@ -66,12 +66,23 @@ type WaitGroup struct {
 // 或等待其它事件之前。具体见 WaitGroup 的示例。
 func (wg *WaitGroup) Add(delta int) {
 	if raceenabled {
-		_ = wg.m.state
-		raceReleaseMerge(unsafe.Pointer(wg))
+		_ = wg.m.state // trigger nil deref early
+		if delta < 0 {
+			// Synchronize decrements with Wait.
+			raceReleaseMerge(unsafe.Pointer(wg))
+		}
 		raceDisable()
 		defer raceEnable()
 	}
 	v := atomic.AddInt32(&wg.counter, int32(delta))
+	if raceenabled {
+		if delta > 0 && v == int32(delta) {
+			// The first increment must be synchronized with Wait.
+			// Need to model this as a read, because there can be
+			// several concurrent wg.counter transitions from 0.
+			raceRead(unsafe.Pointer(&wg.sema))
+		}
+	}
 	if v < 0 {
 		panic("sync: negative WaitGroup counter")
 	}
@@ -99,7 +110,7 @@ func (wg *WaitGroup) Done() {
 // Wait 阻塞 WaitGroup 直到其 counter 为零。
 func (wg *WaitGroup) Wait() {
 	if raceenabled {
-		_ = wg.m.state
+		_ = wg.m.state // trigger nil deref early
 		raceDisable()
 	}
 	if atomic.LoadInt32(&wg.counter) == 0 {
@@ -110,7 +121,14 @@ func (wg *WaitGroup) Wait() {
 		return
 	}
 	wg.m.Lock()
-	atomic.AddInt32(&wg.waiters, 1)
+	w := atomic.AddInt32(&wg.waiters, 1)
+	if raceenabled && w == 1 {
+		// Wait's must be synchronized with the first Add.
+		// Need to model this is as a write to race with the read in Add.
+		// As the consequence, can do the write only for the first waiter,
+		// otherwise concurrent Wait's will race with each other.
+		raceWrite(unsafe.Pointer(&wg.sema))
+	}
 	// This code is racing with the unlocked path in Add above.
 	// The code above modifies counter and then reads waiters.
 	// We must modify waiters and then read counter (the opposite order)

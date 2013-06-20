@@ -96,7 +96,7 @@ Go编译器支持三种指令集，以下为在不同的架构上，编译器特
 	<code>arm</code> (a.k.a. <code>ARM</code>); <code>5g,5l,5c,5a</code>
 </dt>
 <dd>
-	Supports only Linux binaries. Less widely used than the other ports and therefore not as thoroughly tested.
+	Supports Linux, FreeBSD and NetBSD binaries. Less widely used than the other ports.
 </dd>
 </dl>
 </div>
@@ -139,7 +139,7 @@ goroutines, such as stacks that grow and shrink on demand.
 
 <div class="english">
 <p>
-The compilers can target the FreeBSD, Linux, NetBSD, OpenBSD, OS X (Darwin),
+The compilers can target the FreeBSD, Linux, NetBSD, OpenBSD, OS X (Darwin), Plan 9,
 and Windows operating systems.
 The full set of supported combinations is listed in the discussion of
 <a href="#environment">environment variables</a> below.
@@ -147,7 +147,7 @@ The full set of supported combinations is listed in the discussion of
 </div>
 
 <p>
-该编译器可将FreeBSD、Linux、NetBSD、OpenBSD、OS X (Darwin)以及Windows作为目标。
+该编译器可将FreeBSD、Linux、NetBSD、OpenBSD、OS X (Darwin)、Plan 9以及Windows作为目标。
 它所支持组合的完整集将在下文的<a href="#环境">环境变量</a>讨论中列出。
 </p>
 </div>
@@ -528,10 +528,9 @@ to override the defaults.
 Go编译环境可通过环境变量定制。<i>构建无需它们</i>，但你或许希望设置一些来覆盖默认的值。
 </p>
 
-<blockquote>
-
 <div class="english">
-<p><code>$GOROOT</code></p>
+<ul>
+<li><code>$GOROOT</code>
 <p>
 The root of the Go tree, often <code>$HOME/go</code>.
 Its value is built into the tree when it is compiled, and
@@ -541,7 +540,7 @@ local copies of the repository.
 </p>
 </div>
 
-<p><code>$GOROOT</code></p>
+<li><code>$GOROOT</code>
 <p>
 Go树的根，一般为 <code>$HOME/go</code>。其值在编译时构建成树，默认为
 <code>all.bash</code> 所运行的目录的父目录。它一般无需设置，
@@ -549,7 +548,7 @@ Go树的根，一般为 <code>$HOME/go</code>。其值在编译时构建成树�
 </p>
 
 <div class="english">
-<p><code>$GOROOT_FINAL</code></p>
+<li><code>$GOROOT_FINAL</code>
 <p>
 The value assumed by installed binaries and scripts when
 <code>$GOROOT</code> is not set explicitly.
@@ -560,7 +559,7 @@ but move it elsewhere after the build, set
 </p>
 </div>
 
-<p><code>$GOROOT_FINAL</code></p>
+<li><code>$GOROOT_FINAL</code>
 <p>
 在 <code>$GOROOT</code> 未显式地设置时，其值由已安装二进制文件及脚本假定。
 它默认为 <code>$GOROOT</code> 的值。若你想在某个位置构建Go树而不在构建后移动它，
@@ -568,7 +567,7 @@ but move it elsewhere after the build, set
 </p>
 
 <div class="english">
-<p><code>$GOOS</code> and <code>$GOARCH</code></p>
+<li><code>$GOOS</code> and <code>$GOARCH</code>
 <p>
 The name of the target operating system and compilation architecture.
 These default to the values of <code>$GOHOSTOS</code> and
@@ -576,7 +575,7 @@ These default to the values of <code>$GOHOSTOS</code> and
 </p>
 </div>
 
-<p><code>$GOOS</code> 与 <code>$GOARCH</code></p>
+<li><code>$GOOS</code> 与 <code>$GOARCH</code>
 <p>
 目标操作系统与编译架构的名字。它们分别默认为 <code>$GOHOSTOS</code> 和
 <code>$GOHOSTARCH</code> 的值（将在下文描述）。
@@ -608,7 +607,7 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 
 <table cellpadding="0">
 <tr>
-<th width="50"><th align="left" width="100"><code>$GOOS</code></th> <th align="left" width="100"><code>$GOARCH</code></th> <th align="left"></th></th>
+<th width="50"></th><th align="left" width="100"><code>$GOOS</code></th> <th align="left" width="100"><code>$GOARCH</code></th>
 </tr>
 <tr>
 <td></td><td><code>darwin</code></td> <td><code>386</code></td>
@@ -621,6 +620,9 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 </tr>
 <tr>
 <td></td><td><code>freebsd</code></td> <td><code>amd64</code></td>
+</tr>
+<tr>
+<td></td><td><code>freebsd</code></td> <td><code>arm</code></td>
 </tr>
 <tr>
 <td></td><td><code>linux</code></td> <td><code>386</code></td>
@@ -638,6 +640,9 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 <td></td><td><code>netbsd</code></td> <td><code>amd64</code></td>
 </tr>
 <tr>
+<td></td><td><code>netbsd</code></td> <td><code>arm</code></td>
+</tr>
+<tr>
 <td></td><td><code>openbsd</code></td> <td><code>386</code></td>
 </tr>
 <tr>
@@ -645,6 +650,9 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 </tr>
 <tr>
 <td></td><td><code>plan9</code></td> <td><code>386</code></td>
+</tr>
+<tr>
+<td></td><td><code>plan9</code></td> <td><code>amd64</code></td>
 </tr>
 <tr>
 <td></td><td><code>windows</code></td> <td><code>386</code></td>
@@ -655,7 +663,7 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 </table>
 
 <div class="english">
-<p><code>$GOHOSTOS</code> and <code>$GOHOSTARCH</code></p>
+<li><code>$GOHOSTOS</code> and <code>$GOHOSTARCH</code>
 <p>
 The name of the host operating system and compilation architecture.
 These default to the local system's operating system and
@@ -663,7 +671,7 @@ architecture.
 </p>
 </div>
 
-<p><code>$GOHOSTOS</code> 与 <code>$GOHOSTARCH</code></p>
+<li><code>$GOHOSTOS</code> and <code>$GOHOSTARCH</code>
 <p>
 宿主操作系统与编译架构的名字。它们默认为本地系统的操作系统与架构。
 </p>
@@ -685,7 +693,7 @@ For example, you should not set <code>$GOHOSTARCH</code> to
 </p>
 
 <div class="english">
-<p><code>$GOBIN</code></p>
+<li><code>$GOBIN</code>
 <p>
 The location where Go binaries will be installed.
 The default is <code>$GOROOT/bin</code>.
@@ -697,7 +705,7 @@ installs all commands there.
 </div>
 
 </p>
-<code>$GOBIN</code>
+<li><code>$GOBIN</code>
 <p>
 Go二进制文件将安装的位置。它默认为 <code>$GOROOT/bin</code> 。
 在安装之后，你会想要为整理而将此目录添加到你的 <code>$PATH</code> 中，
@@ -706,22 +714,70 @@ Go二进制文件将安装的位置。它默认为 <code>$GOROOT/bin</code> 。
 </p>
 
 <div class="english">
-<p><code>$GOARM</code> (arm, default=6)</p>
+<li><code>$GO386</code> (for <code>386</code> only, default is auto-detected
+if built natively, <code>387</code> if not)
 <p>
-The ARM architecture version the run-time libraries should target.
-Setting <code>$GOARM</code> to 5 causes the linker to emit calls
-to a software floating point implementation instead of using
-hardware floating point support.
+This controls the code generated by 8g to use either the 387 floating-point unit
+(set to <code>387</code>) or SSE2 instructions (set to <code>sse2</code>) for
+floating point computations.
+</p>
+<ul>
+	<li><code>GO386=387</code>: use x87 for floating point operations; should support all x86 chips (Pentium MMX or later).
+	<li><code>GO386=sse2</code>: use SSE2 for floating point operations; has better performance than 387, but only available on Pentium 4/Opteron/Athlon 64 or later.
+</ul>
+</div>
+
+<li><code>$GO386</code>（仅用于 <code>386</code>，若为原生构建，则默认自动决定，否则为
+<code>387</code>）
+<p>
+它用于控制 8g 的代码生成，具体为387浮点运算单元（设置为 <code>387</code>），
+或用于浮点数计算的 SSE2 指令（设置为 <code>sse2</code>）。
+</p>
+<ul>
+	<li><code>GO386=387</code>：用x87来进行浮点运算；应该支持所有的x86芯片（奔腾MMX或更新）。
+	<li><code>GO386=sse2</code>: 用SSE2来进行浮点运算；性能比387更高，但只能在
+	Pentium 4/Opteron/Athlon 64或更新的芯片上运行。
+</ul>
+
+<div class="english">
+<li><code>$GOARM</code> (for <code>arm</code> only; default is auto-detected if building
+on the target processor, 6 if not)
+<p>
+This sets the ARM floating point co-processor architecture version the run-time
+should target. If you are compiling on the target system, its value will be auto-detected.
+</p>
+<ul>
+	<li><code>GOARM=5</code>: use software floating point; when CPU doesn't have VFP co-processor
+	<li><code>GOARM=6</code>: use VFPv1 only; default if cross compiling; usually ARM11 or better cores (VFPv2 or better is also supported)
+	<li><code>GOARM=7</code>: use VFPv3; usually Cortex-A cores
+</ul>
+<p>
+If in doubt, leave this variable unset, and adjust it if required
+when you first run the Go executable.
+The <a href="http://code.google.com/p/go-wiki/wiki/GoArm">GoARM</a> page
+on the <a href="http://code.google.com/p/go-wiki/w/list">Go community wiki</a>
+contains further details regarding Go's ARM support.
 </p>
 </div>
 
-<p><code>$GOARM</code> (arm, default=6)</p>
+<li><code>$GOARM</code>（仅用于 <code>arm</code>；若为原生构建，则默认自动决定，否则为
+<code>6</code>)
 <p>
-运行时库应当作为目标的ARM架构版本。将 <code>$GOARM</code>
-设置为5会引起连接器发出指令来调用软件浮点数实现，而非使用硬件浮点数支持。
+它设置了运行时目标的ARM浮点协助处理器架构的版本。若你在目标系统上编译，它将自动决定。
+</p>
+<ul>
+	<li><code>GOARM=5</code>：使用软浮点数；用于没有VFP协处理器的CPU
+	<li><code>GOARM=6</code>：仅使用VFPv1；交叉编译时的默认值；通常用于ARM11或更好的核心（也支持VFPv2或更好的核心）
+	<li><code>GOARM=7</code>：使用VFPv3；通常用于Cortex-A核心
+</ul>
+<p>
+若你不能确定，请保持此变量为未设置状态。当你第一次运行Go的可执行程序时，若有需要，它会自动调整。
+<a href="http://code.google.com/p/go-wiki/w/list">Go社区维基</a> 的
+<a href="http://code.google.com/p/go-wiki/wiki/GoArm">GoARM</a> 页面包含有关Go
+ARM支持更详细的信息。
 </p>
 
-</blockquote>
+</ul>
 
 <div class="english">
 <p>
@@ -753,10 +809,6 @@ something like this:
 </div>
 
 <p>
-If you choose to override the defaults,
-set these variables in your shell profile (<code>$HOME/.bashrc</code>,
-<code>$HOME/.profile</code>, or equivalent). The settings might look
-something like this:
 若你选择覆盖默认值，需要在你的shell配置（<code>$HOME/.bashrc</code>、<code>$HOME/.profile</code>、或等价文件）中设置这些变量。该设置看起来可能像这样：
 </p>
 

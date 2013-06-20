@@ -43,13 +43,13 @@ type Package struct {
 	CXXFiles       []string `json:",omitempty"` // .cc, .cpp and .cxx source files
 	HFiles         []string `json:",omitempty"` // .h, .hh, .hpp and .hxx source files
 	SFiles         []string `json:",omitempty"` // .s source files
-	SysoFiles      []string `json:",omitempty"` // .syso system object files added to package
 	SwigFiles      []string `json:",omitempty"` // .swig files
 	SwigCXXFiles   []string `json:",omitempty"` // .swigcxx files
+	SysoFiles      []string `json:",omitempty"` // .syso system object files added to package
 
 	// Cgo directives
-	CgoCPPFLAGS  []string `json:",omitempty"` // cgo: flags for C preprocessor
 	CgoCFLAGS    []string `json:",omitempty"` // cgo: flags for C compiler
+	CgoCPPFLAGS  []string `json:",omitempty"` // cgo: flags for C preprocessor
 	CgoCXXFLAGS  []string `json:",omitempty"` // cgo: flags for C++ compiler
 	CgoLDFLAGS   []string `json:",omitempty"` // cgo: flags for linker
 	CgoPkgConfig []string `json:",omitempty"` // cgo: pkg-config names
@@ -76,14 +76,22 @@ type Package struct {
 	deps         []*Package
 	gofiles      []string // GoFiles+CgoFiles+TestGoFiles+XTestGoFiles files, absolute paths
 	sfiles       []string
-	allgofiles   []string // gofiles + IgnoredGoFiles, absolute paths
-	target       string   // installed file for this package (may be executable)
-	fake         bool     // synthesized package
-	forceBuild   bool     // this package must be rebuilt
-	forceLibrary bool     // this package is a library (even if named "main")
-	local        bool     // imported via local path (./ or ../)
-	localPrefix  string   // interpret ./ and ../ imports relative to this prefix
-	exeName      string   // desired name for temporary executable
+	allgofiles   []string             // gofiles + IgnoredGoFiles, absolute paths
+	target       string               // installed file for this package (may be executable)
+	fake         bool                 // synthesized package
+	forceBuild   bool                 // this package must be rebuilt
+	forceLibrary bool                 // this package is a library (even if named "main")
+	local        bool                 // imported via local path (./ or ../)
+	localPrefix  string               // interpret ./ and ../ imports relative to this prefix
+	exeName      string               // desired name for temporary executable
+	coverMode    string               // preprocess Go source files with the coverage tool in this mode
+	coverVars    map[string]*CoverVar // variables created by coverage analysis
+}
+
+// CoverVar holds the name of the generated coverage variables targeting the named file.
+type CoverVar struct {
+	File string // local file name
+	Var  string // name of count struct
 }
 
 func (p *Package) copyBuild(pp *build.Package) {
@@ -104,11 +112,11 @@ func (p *Package) copyBuild(pp *build.Package) {
 	p.CXXFiles = pp.CXXFiles
 	p.HFiles = pp.HFiles
 	p.SFiles = pp.SFiles
-	p.SysoFiles = pp.SysoFiles
 	p.SwigFiles = pp.SwigFiles
 	p.SwigCXXFiles = pp.SwigCXXFiles
-	p.CgoCPPFLAGS = pp.CgoCPPFLAGS
+	p.SysoFiles = pp.SysoFiles
 	p.CgoCFLAGS = pp.CgoCFLAGS
+	p.CgoCPPFLAGS = pp.CgoCPPFLAGS
 	p.CgoCXXFLAGS = pp.CgoCXXFLAGS
 	p.CgoLDFLAGS = pp.CgoLDFLAGS
 	p.CgoPkgConfig = pp.CgoPkgConfig
@@ -278,11 +286,12 @@ func reusePackage(p *Package, stk *importStack) *Package {
 // isGoTool is the list of directories for Go programs that are installed in
 // $GOROOT/pkg/tool.
 var isGoTool = map[string]bool{
-	"cmd/api":                            true,
-	"cmd/cgo":                            true,
-	"cmd/fix":                            true,
-	"cmd/yacc":                           true,
-	"code.google.com/p/go.tools/cmd/vet": true,
+	"cmd/api":                              true,
+	"cmd/cgo":                              true,
+	"cmd/fix":                              true,
+	"cmd/yacc":                             true,
+	"code.google.com/p/go.tools/cmd/cover": true,
+	"code.google.com/p/go.tools/cmd/vet":   true,
 }
 
 // expandScanner expands a scanner.List error into all the errors in the list.

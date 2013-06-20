@@ -130,7 +130,6 @@ runtime·oldstack(void)
 	Stktop *top;
 	Gobuf label;
 	uint32 argsize;
-	uintptr cret;
 	byte *sp, *old;
 	uintptr *src, *dst, *dstend;
 	G *gp;
@@ -155,14 +154,15 @@ runtime·oldstack(void)
 	USED(goid);
 
 	label = top->gobuf;
-	gp->stackbase = (uintptr)top->stackbase;
-	gp->stackguard = (uintptr)top->stackguard;
+	gp->stackbase = top->stackbase;
+	gp->stackguard = top->stackguard;
+	gp->stackguard0 = gp->stackguard;
 	if(top->free != 0)
 		runtime·stackfree(old, top->free);
 
-	cret = m->cret;
+	label.ret = m->cret;
 	m->cret = 0;  // drop reference
-	runtime·gogo(&label, cret);
+	runtime·gogo(&label);
 }
 
 // Called from reflect·call or from runtime·morestack when a new
@@ -173,9 +173,10 @@ runtime·oldstack(void)
 void
 runtime·newstack(void)
 {
-	int32 framesize, minalloc, argsize;
+	int32 framesize, argsize;
 	Stktop *top;
-	byte *stk, *sp;
+	byte *stk;
+	uintptr sp;
 	uintptr *src, *dst, *dstend;
 	G *gp;
 	Gobuf label;
@@ -195,19 +196,11 @@ runtime·newstack(void)
 		runtime·throw("runtime: stack split argsize");
 	}
 
-	minalloc = 0;
 	reflectcall = framesize==1;
-	if(reflectcall) {
+	if(reflectcall)
 		framesize = 0;
-		// moreframesize_minalloc is only set in runtime·gc(),
-		// that calls newstack via reflect·call().
-		minalloc = m->moreframesize_minalloc;
-		m->moreframesize_minalloc = 0;
-		if(framesize < minalloc)
-			framesize = minalloc;
-	}
 
-	if(reflectcall && minalloc == 0 && m->morebuf.sp - sizeof(Stktop) - argsize - 32 > gp->stackguard) {
+	if(reflectcall && m->morebuf.sp - sizeof(Stktop) - argsize - 32 > gp->stackguard) {
 		// special case: called from reflect.call (framesize==1)
 		// to call code with an arbitrary argument size,
 		// and we have enough space on the current stack.
@@ -233,14 +226,14 @@ runtime·newstack(void)
 			framesize, argsize, m->morepc, m->moreargp, m->morebuf.pc, m->morebuf.sp, top, gp->stackbase);
 	}
 
-	top->stackbase = (byte*)gp->stackbase;
-	top->stackguard = (byte*)gp->stackguard;
+	top->stackbase = gp->stackbase;
+	top->stackguard = gp->stackguard;
 	top->gobuf = m->morebuf;
 	top->argp = m->moreargp;
 	top->argsize = argsize;
 	top->free = free;
 	m->moreargp = nil;
-	m->morebuf.pc = nil;
+	m->morebuf.pc = (uintptr)nil;
 	m->morebuf.sp = (uintptr)nil;
 
 	// copy flag from panic
@@ -249,8 +242,9 @@ runtime·newstack(void)
 
 	gp->stackbase = (uintptr)top;
 	gp->stackguard = (uintptr)stk + StackGuard;
+	gp->stackguard0 = gp->stackguard;
 
-	sp = (byte*)top;
+	sp = (uintptr)top;
 	if(argsize > 0) {
 		sp -= argsize;
 		dst = (uintptr*)sp;
@@ -267,13 +261,26 @@ runtime·newstack(void)
 
 	// Continue as if lessstack had just called m->morepc
 	// (the PC that decided to grow the stack).
-	label.sp = (uintptr)sp;
-	label.pc = (byte*)runtime·lessstack;
+	runtime·memclr((byte*)&label, sizeof label);
+	label.sp = sp;
+	label.pc = (uintptr)runtime·lessstack;
 	label.g = m->curg;
 	if(reflectcall)
-		runtime·gogocallfn(&label, (FuncVal*)m->morepc);
-	else
-		runtime·gogocall(&label, m->morepc, m->cret);
+		runtime·gostartcallfn(&label, (FuncVal*)m->morepc);
+	else {
+		// The stack growth code saves ctxt (not ret) in m->cret.
+		runtime·gostartcall(&label, m->morepc, (void*)m->cret);
+		m->cret = 0;
+	}
+	runtime·gogo(&label);
 
 	*(int32*)345 = 123;	// never return
+}
+
+// adjust Gobuf as if it executed a call to fn
+// and then did an immediate gosave.
+void
+runtime·gostartcallfn(Gobuf *gobuf, FuncVal *fv)
+{
+	runtime·gostartcall(gobuf, fv->fn, fv);
 }

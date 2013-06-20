@@ -11,11 +11,13 @@ import (
 	"io"
 	"io/ioutil"
 	. "os"
+	osexec "os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
 	"testing"
+	"text/template"
 	"time"
 )
 
@@ -1113,4 +1115,89 @@ func TestStatDirModeExec(t *testing.T) {
 	if dir.Mode()&mode != mode {
 		t.Errorf("Stat %q: mode %#o want %#o", path, dir.Mode()&mode, mode)
 	}
+}
+
+func TestReadAtEOF(t *testing.T) {
+	f := newFile("TestReadAtEOF", t)
+	defer Remove(f.Name())
+	defer f.Close()
+
+	_, err := f.ReadAt(make([]byte, 10), 0)
+	switch err {
+	case io.EOF:
+		// all good
+	case nil:
+		t.Fatalf("ReadAt succeeded")
+	default:
+		t.Fatalf("ReadAt failed: %s", err)
+	}
+}
+
+func testKillProcess(t *testing.T, processKiller func(p *Process)) {
+	dir, err := ioutil.TempDir("", "go-build")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer RemoveAll(dir)
+
+	src := filepath.Join(dir, "main.go")
+	f, err := Create(src)
+	if err != nil {
+		t.Fatalf("Failed to create %v: %v", src, err)
+	}
+	st := template.Must(template.New("source").Parse(`
+package main
+import "time"
+func main() {
+	time.Sleep(time.Second)
+}
+`))
+	err = st.Execute(f, nil)
+	if err != nil {
+		f.Close()
+		t.Fatalf("Failed to execute template: %v", err)
+	}
+	f.Close()
+
+	exe := filepath.Join(dir, "main.exe")
+	output, err := osexec.Command("go", "build", "-o", exe, src).CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to build exe %v: %v %v", exe, err, string(output))
+	}
+
+	cmd := osexec.Command(exe)
+	err = cmd.Start()
+	if err != nil {
+		t.Fatalf("Failed to start test process: %v", err)
+	}
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		processKiller(cmd.Process)
+	}()
+	err = cmd.Wait()
+	if err == nil {
+		t.Errorf("Test process succeeded, but expected to fail")
+	}
+}
+
+func TestKillStartProcess(t *testing.T) {
+	testKillProcess(t, func(p *Process) {
+		err := p.Kill()
+		if err != nil {
+			t.Fatalf("Failed to kill test process: %v", err)
+		}
+	})
+}
+
+func TestKillFindProcess(t *testing.T) {
+	testKillProcess(t, func(p *Process) {
+		p2, err := FindProcess(p.Pid)
+		if err != nil {
+			t.Fatalf("Failed to find test process: %v", err)
+		}
+		err = p2.Kill()
+		if err != nil {
+			t.Fatalf("Failed to kill test process: %v", err)
+		}
+	})
 }

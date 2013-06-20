@@ -420,11 +420,11 @@ reswitch:
 				goto error;
 			}
 			t->bound = mpgetfix(v.u.xval);
-			if(t->bound < 0) {
-				yyerror("array bound must be non-negative");
-				goto error;
-			} else if(doesoverflow(v, types[TINT])) {
+			if(doesoverflow(v, types[TINT])) {
 				yyerror("array bound is too large"); 
+				goto error;
+			} else if(t->bound < 0) {
+				yyerror("array bound must be non-negative");
 				goto error;
 			}
 		}
@@ -1650,6 +1650,10 @@ reswitch:
 		if(curfn->type->outnamed && n->list == nil)
 			goto ret;
 		typecheckaste(ORETURN, nil, 0, getoutargx(curfn->type), n->list, "return argument");
+		goto ret;
+	
+	case ORETJMP:
+		ok |= Etop;
 		goto ret;
 
 	case OSELECT:
@@ -3282,6 +3286,7 @@ isterminating(NodeList *l, int top)
 
 	case OGOTO:
 	case ORETURN:
+	case ORETJMP:
 	case OPANIC:
 	case OXFALL:
 		return 1;

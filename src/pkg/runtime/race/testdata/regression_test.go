@@ -160,3 +160,35 @@ func noRaceReturn(c chan int) (a, b int) {
 	}()
 	return a, 10
 }
+
+func issue5431() {
+	var p **inltype
+	if inlinetest(p).x && inlinetest(p).y {
+	} else if inlinetest(p).x || inlinetest(p).y {
+	}
+}
+
+type inltype struct {
+	x, y bool
+}
+
+func inlinetest(p **inltype) *inltype {
+	return *p
+}
+
+type iface interface {
+	Foo() *struct{ b bool }
+}
+
+type Int int
+
+func (i Int) Foo() *struct{ b bool } {
+	return &struct{ b bool }{false}
+}
+
+func TestNoRaceForInfiniteLoop(t *testing.T) {
+	var x Int
+	// interface conversion causes nodes to be put on init list
+	for iface(x).Foo().b {
+	}
+}

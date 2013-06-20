@@ -50,9 +50,10 @@ init1(Node *n, NodeList **out)
 	case PFUNC:
 		break;
 	default:
-		if(isblank(n) && n->defn != N && n->defn->initorder == InitNotStarted) {
-			n->defn->initorder = InitDone;
-			*out = list(*out, n->defn);
+		if(isblank(n) && n->curfn == N && n->defn != N && n->defn->initorder == InitNotStarted) {
+			// blank names initialization is part of init() but not
+			// when they are inside a function.
+			break;
 		}
 		return;
 	}
@@ -62,7 +63,7 @@ init1(Node *n, NodeList **out)
 	if(n->initorder == InitPending) {
 		if(n->class == PFUNC)
 			return;
-		
+
 		// if there have already been errors printed,
 		// those errors probably confused us and
 		// there might not be a loop.  let the user
@@ -127,8 +128,8 @@ init1(Node *n, NodeList **out)
 				init2(n->defn->right, out);
 				if(debug['j'])
 					print("%S\n", n->sym);
-				if(!staticinit(n, out)) {
-if(debug['%']) dump("nonstatic", n->defn);
+				if(isblank(n) || !staticinit(n, out)) {
+					if(debug['%']) dump("nonstatic", n->defn);
 					*out = list(*out, n->defn);
 				}
 			} else if(0) {
@@ -149,6 +150,7 @@ if(debug['%']) dump("nonstatic", n->defn);
 			n->defn->initorder = InitDone;
 			for(l=n->defn->rlist; l; l=l->next)
 				init1(l->n, out);
+			if(debug['%']) dump("nonstatic", n->defn);
 			*out = list(*out, n->defn);
 			break;
 		}

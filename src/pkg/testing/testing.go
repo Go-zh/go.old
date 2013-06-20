@@ -23,10 +23,10 @@
 // Functions of the form
 //     func BenchmarkXxx(*testing.B)
 // are considered benchmarks, and are executed by the "go test" command when
-// the -test.bench flag is provided. Benchmarks are run sequentially.
+// its -bench flag is provided. Benchmarks are run sequentially.
 //
 // For a description of the testing flags, see
-// http://golang.org/cmd/go/#Description_of_testing_flags.
+// http://golang.org/cmd/go/#hdr-Description_of_testing_flags.
 //
 // A sample benchmark function looks like this:
 //     func BenchmarkHello(b *testing.B) {
@@ -114,8 +114,16 @@ var (
 	// full test of the package.
 	short = flag.Bool("test.short", false, "run smaller test suite to save time")
 
+	// The directory in which to create profile files and the like. When run from
+	// "go test", the binary always runs in the source directory for the package;
+	// this flag lets "go test" tell the binary to write the files in the directory where
+	// the "go test" command is run.
+	outputDir = flag.String("test.outputdir", "", "directory in which to write profiles")
+
 	// Report as tests are run; default is silent for success.
 	chatty           = flag.Bool("test.v", false, "verbose: print additional output")
+	coverMode        = flag.String("test.covermode", "", "cover mode: set, count, atomic; default is none")
+	coverProfile     = flag.String("test.coverprofile", "", "write a coveraage profile to the named file after execution")
 	match            = flag.String("test.run", "", "regular expression to select tests and examples to run")
 	memProfile       = flag.String("test.memprofile", "", "write a memory profile to the named file after execution")
 	memProfileRate   = flag.Int("test.memprofilerate", 0, "if >=0, sets runtime.MemProfileRate")
@@ -466,7 +474,7 @@ func before() {
 		runtime.MemProfileRate = *memProfileRate
 	}
 	if *cpuProfile != "" {
-		f, err := os.Create(*cpuProfile)
+		f, err := os.Create(toOutputDir(*cpuProfile))
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "testing: %s", err)
 			return
@@ -489,27 +497,60 @@ func after() {
 		pprof.StopCPUProfile() // flushes profile to disk
 	}
 	if *memProfile != "" {
-		f, err := os.Create(*memProfile)
+		f, err := os.Create(toOutputDir(*memProfile))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "testing: %s", err)
-			return
+			fmt.Fprintf(os.Stderr, "testing: %s\n", err)
+			os.Exit(2)
 		}
 		if err = pprof.WriteHeapProfile(f); err != nil {
-			fmt.Fprintf(os.Stderr, "testing: can't write %s: %s", *memProfile, err)
+			fmt.Fprintf(os.Stderr, "testing: can't write %s: %s\n", *memProfile, err)
+			os.Exit(2)
 		}
 		f.Close()
 	}
 	if *blockProfile != "" && *blockProfileRate >= 0 {
-		f, err := os.Create(*blockProfile)
+		f, err := os.Create(toOutputDir(*blockProfile))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "testing: %s", err)
-			return
+			fmt.Fprintf(os.Stderr, "testing: %s\n", err)
+			os.Exit(2)
 		}
 		if err = pprof.Lookup("block").WriteTo(f, 0); err != nil {
-			fmt.Fprintf(os.Stderr, "testing: can't write %s: %s", *blockProfile, err)
+			fmt.Fprintf(os.Stderr, "testing: can't write %s: %s\n", *blockProfile, err)
+			os.Exit(2)
 		}
 		f.Close()
 	}
+	if *coverMode != "" {
+		coverReport()
+	}
+}
+
+// toOutputDir returns the file name relocated, if required, to outputDir.
+// Simple implementation to avoid pulling in path/filepath.
+func toOutputDir(path string) string {
+	if *outputDir == "" || path == "" {
+		return path
+	}
+	if runtime.GOOS == "windows" {
+		// On Windows, it's clumsy, but we can be almost always correct
+		// by just looking for a drive letter and a colon.
+		// Absolute paths always have a drive letter (ignoring UNC).
+		// Problem: if path == "C:A" and outputdir == "C:\Go" it's unclear
+		// what to do, but even then path/filepath doesn't help.
+		// TODO: Worth doing better? Probably not, because we're here only
+		// under the management of go test.
+		if len(path) >= 2 {
+			letter, colon := path[0], path[1]
+			if ('a' <= letter && letter <= 'z' || 'A' <= letter && letter <= 'Z') && colon == ':' {
+				// If path starts with a drive letter we're stuck with it regardless.
+				return path
+			}
+		}
+	}
+	if os.IsPathSeparator(path[0]) {
+		return path
+	}
+	return fmt.Sprintf("%s%c%s", *outputDir, os.PathSeparator, path)
 }
 
 var timer *time.Timer

@@ -27,12 +27,16 @@ var usageMessage = `Usage of go test:
   -bench="": passes -test.bench to test
   -benchmem=false: print memory allocation statistics for benchmarks
   -benchtime=1s: passes -test.benchtime to test
+  -cover=false: enable coverage analysis
+  -covermode="set": passes -test.covermode to test if -cover
+  -coverprofile="": passes -test.coverprofile to test if -cover
   -cpu="": passes -test.cpu to test
   -cpuprofile="": passes -test.cpuprofile to test
   -memprofile="": passes -test.memprofile to test
   -memprofilerate=0: passes -test.memprofilerate to test
   -blockprofile="": pases -test.blockprofile to test
   -blockprofilerate=0: passes -test.blockprofilerate to test
+  -outputdir=$PWD: passes -test.outputdir to test
   -parallel=0: passes -test.parallel to test
   -run="": passes -test.run to test
   -short=false: passes -test.short to test
@@ -62,6 +66,7 @@ var testFlagDefn = []*testFlagSpec{
 	{name: "c", boolVar: &testC},
 	{name: "file", multiOK: true},
 	{name: "i", boolVar: &testI},
+	{name: "cover", boolVar: &testCover},
 
 	// build flags.
 	{name: "a", boolVar: &buildA},
@@ -80,12 +85,15 @@ var testFlagDefn = []*testFlagSpec{
 	{name: "bench", passToTest: true},
 	{name: "benchmem", boolVar: new(bool), passToTest: true},
 	{name: "benchtime", passToTest: true},
+	{name: "covermode"},
+	{name: "coverprofile", passToTest: true},
 	{name: "cpu", passToTest: true},
 	{name: "cpuprofile", passToTest: true},
 	{name: "memprofile", passToTest: true},
 	{name: "memprofilerate", passToTest: true},
 	{name: "blockprofile", passToTest: true},
 	{name: "blockprofilerate", passToTest: true},
+	{name: "outputdir", passToTest: true},
 	{name: "parallel", passToTest: true},
 	{name: "run", passToTest: true},
 	{name: "short", boolVar: new(bool), passToTest: true},
@@ -104,6 +112,7 @@ var testFlagDefn = []*testFlagSpec{
 //	go test -x math
 func testFlags(args []string) (packageNames, passToTest []string) {
 	inPkg := false
+	outputDir := ""
 	for i := 0; i < len(args); i++ {
 		if !strings.HasPrefix(args[i], "-") {
 			if !inPkg && packageNames == nil {
@@ -137,7 +146,7 @@ func testFlags(args []string) (packageNames, passToTest []string) {
 		var err error
 		switch f.name {
 		// bool flags.
-		case "a", "c", "i", "n", "x", "v", "work", "race":
+		case "a", "c", "i", "n", "x", "v", "race", "cover", "work":
 			setBoolFlag(f.boolVar, value)
 		case "p":
 			setIntFlag(&buildP, value)
@@ -169,6 +178,19 @@ func testFlags(args []string) (packageNames, passToTest []string) {
 			testTimeout = value
 		case "blockprofile", "cpuprofile", "memprofile":
 			testProfile = true
+		case "coverprofile":
+			testCover = true
+			testProfile = true
+		case "covermode":
+			switch value {
+			case "set", "count", "atomic":
+				testCoverMode = value
+			default:
+				fatalf("invalid flag argument for -cover: %q", value)
+			}
+			testCover = true
+		case "outputdir":
+			outputDir = value
 		}
 		if extraWord {
 			i++
@@ -176,6 +198,20 @@ func testFlags(args []string) (packageNames, passToTest []string) {
 		if f.passToTest {
 			passToTest = append(passToTest, "-test."+f.name+"="+value)
 		}
+	}
+	if testCover {
+		if testCoverMode == "" {
+			testCoverMode = "set"
+		}
+		passToTest = append(passToTest, "-test.covermode", testCoverMode)
+	}
+	// Tell the test what directory we're running in, so it can write the profiles there.
+	if testProfile && outputDir == "" {
+		dir, err := os.Getwd()
+		if err != nil {
+			fatalf("error from os.Getwd: %s", err)
+		}
+		passToTest = append(passToTest, "-test.outputdir", dir)
 	}
 	return
 }

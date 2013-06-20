@@ -32,7 +32,7 @@ func init() {
 
 var cmdTest = &Command{
 	CustomFlags: true,
-	UsageLine:   "test [-c] [-i] [build flags] [packages] [flags for test binary]",
+	UsageLine:   "test [-c] [-i] [build and test flags] [packages] [flags for test binary]",
 	Short:       "test packages",
 	Long: `
 'Go test' automates testing the packages named by the import paths.
@@ -46,8 +46,10 @@ It prints a summary of the test results in the format:
 followed by detailed output for each failed package.
 
 'Go test' recompiles each package along with any files with names matching
-the file pattern "*_test.go".  These additional files can contain test functions,
-benchmark functions, and example functions.  See 'go help testfunc' for more.
+the file pattern "*_test.go". 
+Files whose names begin with "_" (including "_test.go") or "." are ignored.
+These additional files can contain test functions, benchmark functions, and
+example functions.  See 'go help testfunc' for more.
 Each listed package causes the execution of a separate test binary.
 
 Test files that declare a package with the suffix "_test" will be compiled as a
@@ -70,6 +72,11 @@ In addition to the build flags, the flags handled by 'go test' itself are:
 
 The test binary also accepts flags that control execution of the test; these
 flags are also accessible by 'go test'.  See 'go help testflag' for details.
+
+If the test binary needs any other flags, they should be presented after the
+package names. The go tool treats as a flag the first argument that begins with
+a minus sign that it does not recognize itself; that argument and all subsequent
+arguments are passed as arguments to the test binary.
 
 For more about build flags, see 'go help build'.
 For more about specifying packages, see 'go help packages'.
@@ -119,6 +126,26 @@ control the execution of any test:
 	    if -test.blockprofile is set without this flag, all blocking events
 	    are recorded, equivalent to -test.blockprofilerate=1.
 
+	-cover
+	    Enable coverage analysis.
+	    TODO: This feature is not yet fully implemented.
+
+	-covermode set,count,atomic
+	    Set the mode for coverage analysis for the package[s]
+	    being tested. The default is "set".
+	    The values:
+		set: bool: does this statement run?
+		count: int: how many times does this statement run?
+		atomic: int: count, but correct in multithreaded tests;
+			significantly more expensive.
+	    Implies -cover.
+	    Sets -v. TODO: This will change.
+
+	-coverprofile cover.out
+	    Write a coverage profile to the specified file after all tests
+	    have passed.
+	    Implies -cover.
+
 	-cpu 1,2,4
 	    Specify a list of GOMAXPROCS values for which the tests or
 	    benchmarks should be executed.  The default is the current value
@@ -138,6 +165,10 @@ control the execution of any test:
 	    and set the environment variable GOGC=off to disable the
 	    garbage collector, provided the test can run in the available
 	    memory without garbage collection.
+
+	-outputdir directory
+	    Place output files from profiling in the specified directory,
+	    by default the directory in which "go test" is running.
 
 	-parallel n
 	    Allow parallel execution of test functions that call t.Parallel.
@@ -230,6 +261,8 @@ See the documentation of the testing package for more information.
 
 var (
 	testC            bool     // -c flag
+	testCover        bool     // -cover flag
+	testCoverMode    string   // -covermode flag
 	testProfile      bool     // some profiling flag
 	testI            bool     // -i flag
 	testV            bool     // -v flag
@@ -417,6 +450,15 @@ func runTest(cmd *Command, args []string) {
 	b.do(root)
 }
 
+func contains(x []string, s string) bool {
+	for _, t := range x {
+		if t == s {
+			return true
+		}
+	}
+	return false
+}
+
 func (b *builder) test(p *Package) (buildAction, runAction, printAction *action, err error) {
 	if len(p.TestGoFiles)+len(p.XTestGoFiles) == 0 {
 		build := &action{p: p}
@@ -450,6 +492,19 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 			return nil, nil, nil, p1.Error
 		}
 		ximports = append(ximports, p1)
+
+		// In coverage mode, we rewrite the package p's sources.
+		// All code that imports p must be rebuilt with the updated
+		// copy, or else coverage will at the least be incomplete
+		// (and sometimes we get link errors due to the mismatch as well).
+		// The external test itself imports package p, of course, but
+		// we make sure that sees the new p. Any other code in the test
+		// - that is, any code imported by the external test that in turn
+		// imports p - needs to be rebuilt too. For now, just report
+		// that coverage is unavailable.
+		if testCover && contains(p1.Deps, p.ImportPath) {
+			return nil, nil, nil, fmt.Errorf("coverage analysis cannot handle package (%s_test imports %s imports %s)", p.Name, path, p.ImportPath)
+		}
 	}
 	stk.pop()
 
@@ -487,12 +542,18 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 	if err := b.mkdir(ptestDir); err != nil {
 		return nil, nil, nil, err
 	}
-	if err := writeTestmain(filepath.Join(testDir, "_testmain.go"), p); err != nil {
+
+	if testCover {
+		p.coverMode = testCoverMode
+		p.coverVars = declareCoverVars(p.ImportPath, p.GoFiles...)
+	}
+
+	if err := writeTestmain(filepath.Join(testDir, "_testmain.go"), p, p.coverVars); err != nil {
 		return nil, nil, nil, err
 	}
 
 	// Test package.
-	if len(p.TestGoFiles) > 0 {
+	if len(p.TestGoFiles) > 0 || testCover {
 		ptest = new(Package)
 		*ptest = *p
 		ptest.GoFiles = nil
@@ -622,6 +683,22 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 	}
 
 	return pmainAction, runAction, printAction, nil
+}
+
+var coverIndex = 0
+
+// declareCoverVars attaches the required cover variables names
+// to the files, to be used when annotating the files.
+func declareCoverVars(importPath string, files ...string) map[string]*CoverVar {
+	coverVars := make(map[string]*CoverVar)
+	for _, file := range files {
+		coverVars[file] = &CoverVar{
+			File: filepath.Join(importPath, file),
+			Var:  fmt.Sprintf("GoCover_%d", coverIndex),
+		}
+		coverIndex++
+	}
+	return coverVars
 }
 
 // runTest is the action for running a test binary.
@@ -762,9 +839,10 @@ func isTest(name, prefix string) bool {
 
 // writeTestmain writes the _testmain.go file for package p to
 // the file named out.
-func writeTestmain(out string, p *Package) error {
+func writeTestmain(out string, p *Package, coverVars map[string]*CoverVar) error {
 	t := &testFuncs{
-		Package: p,
+		Package:   p,
+		CoverVars: coverVars,
 	}
 	for _, file := range p.TestGoFiles {
 		if err := t.load(filepath.Join(p.Dir, file), "_test", &t.NeedTest); err != nil {
@@ -797,6 +875,11 @@ type testFuncs struct {
 	Package    *Package
 	NeedTest   bool
 	NeedXtest  bool
+	CoverVars  map[string]*CoverVar
+}
+
+func (t *testFuncs) CoverEnabled() bool {
+	return testCover
 }
 
 type testFunc struct {
@@ -856,7 +939,7 @@ import (
 	"regexp"
 	"testing"
 
-{{if .NeedTest}}
+{{if or .CoverEnabled .NeedTest}}
 	_test {{.Package.ImportPath | printf "%q"}}
 {{end}}
 {{if .NeedXtest}}
@@ -896,7 +979,46 @@ func matchString(pat, str string) (result bool, err error) {
 	return matchRe.MatchString(str), nil
 }
 
+{{if .CoverEnabled}}
+
+// Only updated by init functions, so no need for atomicity.
+var (
+	coverCounters = make(map[string][]uint32)
+	coverBlocks = make(map[string][]testing.CoverBlock)
+)
+
+func init() {
+	{{range $file, $cover := .CoverVars}}
+	coverRegisterFile({{printf "%q" $cover.File}}, _test.{{$cover.Var}}.Count[:], _test.{{$cover.Var}}.Pos[:], _test.{{$cover.Var}}.NumStmt[:])
+	{{end}}
+}
+
+func coverRegisterFile(fileName string, counter []uint32, pos []uint32, numStmts []uint16) {
+	if 3*len(counter) != len(pos) || len(counter) != len(numStmts) {
+		panic("coverage: mismatched sizes")
+	}
+	if coverCounters[fileName] != nil {
+		panic("coverage: duplicate counter array for " + fileName)
+	}
+	coverCounters[fileName] = counter
+	block := make([]testing.CoverBlock, len(counter))
+	for i := range counter {
+		block[i] = testing.CoverBlock{
+			Line0: pos[3*i+0],
+			Col0: uint16(pos[3*i+2]),
+			Line1: pos[3*i+1],
+			Col1: uint16(pos[3*i+2]>>16),
+			Stmts: numStmts[i],
+		}
+	}
+	coverBlocks[fileName] = block
+}
+{{end}}
+
 func main() {
+{{if .CoverEnabled}}
+	testing.RegisterCover(coverCounters, coverBlocks)
+{{end}}
 	testing.Main(matchString, tests, benchmarks, examples)
 }
 

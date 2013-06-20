@@ -20,6 +20,11 @@ ulimit -c 0
 [ "$(ulimit -H -n)" == "unlimited" ] || ulimit -S -n $(ulimit -H -n)
 [ "$(ulimit -H -d)" == "unlimited" ] || ulimit -S -d $(ulimit -H -d)
 
+# Thread count limit on NetBSD 7.
+if ulimit -T &> /dev/null; then
+	[ "$(ulimit -H -T)" == "unlimited" ] || ulimit -S -T $(ulimit -H -T)
+fi
+
 # allow all.bash to avoid double-build of everything
 rebuild=true
 if [ "$1" = "--no-rebuild" ]; then
@@ -106,6 +111,12 @@ esac
 [ "$GOHOSTOS" == windows ] ||
 (xcd ../misc/cgo/testso
 ./test.bash
+) || exit $?
+
+[ "$CGO_ENABLED" != 1 ] ||
+[ "$GOHOSTOS-$GOARCH" != linux-amd64 ] ||
+(xcd ../misc/cgo/testasan
+go run main.go
 ) || exit $?
 
 (xcd ../doc/progs

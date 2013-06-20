@@ -4,7 +4,7 @@
 
 #include "zasm_GOOS_GOARCH.h"
 
-TEXT _rt0_amd64(SB),7,$-8
+TEXT _rt0_go(SB),7,$-8
 	// copy arguments forward on an even stack
 	MOVQ	DI, AX		// argc
 	MOVQ	SI, BX		// argv
@@ -18,6 +18,7 @@ TEXT _rt0_amd64(SB),7,$-8
 	MOVQ	$runtime·g0(SB), DI
 	LEAQ	(-64*1024+104)(SP), BX
 	MOVQ	BX, g_stackguard(DI)
+	MOVQ	BX, g_stackguard0(DI)
 	MOVQ	SP, g_stackbase(DI)
 
 	// find out information about the processor we're on
@@ -39,6 +40,10 @@ nocpuinfo:
 	MOVQ	DI, CX	// Win64 uses CX for first parameter
 	MOVQ	$setmg_gcc<>(SB), SI
 	CALL	AX
+	// update stackguard after _cgo_init
+	MOVQ	$runtime·g0(SB), CX
+	MOVQ	g_stackguard0(CX), AX
+	MOVQ	AX, g_stackguard(CX)
 	CMPL	runtime·iswindows(SB), $0
 	JEQ ok
 
@@ -116,57 +121,29 @@ TEXT runtime·gosave(SB), 7, $0
 	MOVQ	BX, gobuf_sp(AX)
 	MOVQ	0(SP), BX		// caller's PC
 	MOVQ	BX, gobuf_pc(AX)
+	MOVQ	$0, gobuf_ret(AX)
+	MOVQ	$0, gobuf_ctxt(AX)
 	get_tls(CX)
 	MOVQ	g(CX), BX
 	MOVQ	BX, gobuf_g(AX)
 	RET
 
-// void gogo(Gobuf*, uintptr)
+// void gogo(Gobuf*)
 // restore state from Gobuf; longjmp
 TEXT runtime·gogo(SB), 7, $0
-	MOVQ	16(SP), AX		// return 2nd arg
 	MOVQ	8(SP), BX		// gobuf
 	MOVQ	gobuf_g(BX), DX
 	MOVQ	0(DX), CX		// make sure g != nil
 	get_tls(CX)
 	MOVQ	DX, g(CX)
 	MOVQ	gobuf_sp(BX), SP	// restore SP
+	MOVQ	gobuf_ret(BX), AX
+	MOVQ	gobuf_ctxt(BX), DX
+	MOVQ	$0, gobuf_sp(BX)	// clear to help garbage collector
+	MOVQ	$0, gobuf_ret(BX)
+	MOVQ	$0, gobuf_ctxt(BX)
 	MOVQ	gobuf_pc(BX), BX
 	JMP	BX
-
-// void gogocall(Gobuf*, void (*fn)(void), uintptr r0)
-// restore state from Gobuf but then call fn.
-// (call fn, returning to state in Gobuf)
-TEXT runtime·gogocall(SB), 7, $0
-	MOVQ	24(SP), DX	// context
-	MOVQ	16(SP), AX		// fn
-	MOVQ	8(SP), BX		// gobuf
-	MOVQ	gobuf_g(BX), DI
-	get_tls(CX)
-	MOVQ	DI, g(CX)
-	MOVQ	0(DI), CX	// make sure g != nil
-	MOVQ	gobuf_sp(BX), SP	// restore SP
-	MOVQ	gobuf_pc(BX), BX
-	PUSHQ	BX
-	JMP	AX
-	POPQ	BX	// not reached
-
-// void gogocallfn(Gobuf*, FuncVal*)
-// restore state from Gobuf but then call fn.
-// (call fn, returning to state in Gobuf)
-TEXT runtime·gogocallfn(SB), 7, $0
-	MOVQ	16(SP), DX		// fn
-	MOVQ	8(SP), BX		// gobuf
-	MOVQ	gobuf_g(BX), AX
-	get_tls(CX)
-	MOVQ	AX, g(CX)
-	MOVQ	0(AX), CX	// make sure g != nil
-	MOVQ	gobuf_sp(BX), SP	// restore SP
-	MOVQ	gobuf_pc(BX), BX
-	PUSHQ	BX
-	MOVQ	0(DX), BX
-	JMP	BX
-	POPQ	BX	// not reached
 
 // void mcall(void (*fn)(G*))
 // Switch to m->g0's stack, call fn(g).
@@ -176,7 +153,7 @@ TEXT runtime·mcall(SB), 7, $0
 	MOVQ	fn+0(FP), DI
 	
 	get_tls(CX)
-	MOVQ	g(CX), AX	// save state in g->gobuf
+	MOVQ	g(CX), AX	// save state in g->sched
 	MOVQ	0(SP), BX	// caller's PC
 	MOVQ	BX, (g_sched+gobuf_pc)(AX)
 	LEAQ	8(SP), BX	// caller's SP
@@ -190,7 +167,7 @@ TEXT runtime·mcall(SB), 7, $0
 	JNE	2(PC)
 	CALL	runtime·badmcall(SB)
 	MOVQ	SI, g(CX)	// g = m->g0
-	MOVQ	(g_sched+gobuf_sp)(SI), SP	// sp = m->g0->gobuf.sp
+	MOVQ	(g_sched+gobuf_sp)(SI), SP	// sp = m->g0->sched.sp
 	PUSHQ	AX
 	CALL	DI
 	POPQ	AX
@@ -500,11 +477,16 @@ TEXT runtime·jmpdefer(SB), 7, $0
 	MOVQ	0(DX), BX
 	JMP	BX	// but first run the deferred function
 
-// Dummy function to use in saved gobuf.PC,
-// to match SP pointing at a return address.
-// The gobuf.PC is unused by the contortions here
-// but setting it to return will make the traceback code work.
-TEXT return<>(SB),7,$0
+// Save state of caller into g->sched. Smashes R8, R9.
+TEXT gosave<>(SB),7,$0
+	get_tls(R8)
+	MOVQ	g(R8), R8
+	MOVQ	0(SP), R9
+	MOVQ	R9, (g_sched+gobuf_pc)(R8)
+	LEAQ	8(SP), R9
+	MOVQ	R9, (g_sched+gobuf_sp)(R8)
+	MOVQ	$0, (g_sched+gobuf_ret)(R8)
+	MOVQ	$0, (g_sched+gobuf_ctxt)(R8)
 	RET
 
 // asmcgocall(void(*fn)(void*), void *arg)
@@ -524,10 +506,8 @@ TEXT runtime·asmcgocall(SB),7,$0
 	MOVQ	m_g0(BP), SI
 	MOVQ	g(CX), DI
 	CMPQ	SI, DI
-	JEQ	6(PC)
-	MOVQ	SP, (g_sched+gobuf_sp)(DI)
-	MOVQ	$return<>(SB), (g_sched+gobuf_pc)(DI)
-	MOVQ	DI, (g_sched+gobuf_g)(DI)
+	JEQ	4(PC)
+	CALL	gosave<>(SB)
 	MOVQ	SI, g(CX)
 	MOVQ	(g_sched+gobuf_sp)(SI), SP
 
@@ -600,11 +580,11 @@ havem:
 	// Switch to m->curg stack and call runtime.cgocallbackg
 	// with the three arguments.  Because we are taking over
 	// the execution of m->curg but *not* resuming what had
-	// been running, we need to save that information (m->curg->gobuf)
+	// been running, we need to save that information (m->curg->sched)
 	// so that we can restore it when we're done. 
-	// We can restore m->curg->gobuf.sp easily, because calling
+	// We can restore m->curg->sched.sp easily, because calling
 	// runtime.cgocallbackg leaves SP unchanged upon return.
-	// To save m->curg->gobuf.pc, we push it onto the stack.
+	// To save m->curg->sched.pc, we push it onto the stack.
 	// This has the added benefit that it looks to the traceback
 	// routine like cgocallbackg is going to return to that
 	// PC (because we defined cgocallbackg to have
@@ -636,7 +616,7 @@ havem:
 	MOVQ	DI, SP
 	CALL	runtime·cgocallbackg(SB)
 
-	// Restore g->gobuf (== m->curg->gobuf) from saved values.
+	// Restore g->sched (== m->curg->sched) from saved values.
 	get_tls(CX)
 	MOVQ	g(CX), SI
 	MOVQ	24(SP), BP

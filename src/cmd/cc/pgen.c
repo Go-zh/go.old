@@ -75,7 +75,7 @@ codgen(Node *n, Node *nn)
 	 */
 	for(n1 = nn;; n1 = n1->left) {
 		if(n1 == Z) {
-			diag(nn, "cant find function name");
+			diag(nn, "can't find function name");
 			return;
 		}
 		if(n1->op == ONAME)
@@ -85,6 +85,7 @@ codgen(Node *n, Node *nn)
 
 	p = gtext(n1->sym, stkoff);
 	sp = p;
+	gins(ALOCALS, Z, nodconst(stkoff));
 
 	/*
 	 * isolate first argument

@@ -108,7 +108,7 @@ enum
 	// Tunable constants.
 	MaxSmallSize = 32<<10,
 
-	FixAllocChunk = 128<<10,	// Chunk size for FixAlloc
+	FixAllocChunk = 16<<10,		// Chunk size for FixAlloc
 	MaxMHeapList = 1<<(20 - PageShift),	// Maximum page length for fixed-size list in MHeap.
 	HeapAllocChunk = 1<<20,		// Chunk size for heap growth
 
@@ -153,8 +153,7 @@ struct MLink
 
 // SysAlloc obtains a large chunk of zeroed memory from the
 // operating system, typically on the order of a hundred kilobytes
-// or a megabyte.  If the pointer argument is non-nil, the caller
-// wants a mapping there or nowhere.
+// or a megabyte.
 //
 // SysUnused notifies the operating system that the contents
 // of the memory region are no longer needed and can be reused
@@ -189,7 +188,6 @@ void*	runtime·SysReserve(void *v, uintptr nbytes);
 struct FixAlloc
 {
 	uintptr size;
-	void *(*alloc)(uintptr);
 	void (*first)(void *arg, byte *p);	// called first time p is returned
 	void *arg;
 	MLink *list;
@@ -199,7 +197,7 @@ struct FixAlloc
 	uintptr sys;	// bytes obtained from system
 };
 
-void	runtime·FixAlloc_Init(FixAlloc *f, uintptr size, void *(*alloc)(uintptr), void (*first)(void*, byte*), void *arg);
+void	runtime·FixAlloc_Init(FixAlloc *f, uintptr size, void (*first)(void*, byte*), void *arg);
 void*	runtime·FixAlloc_Alloc(FixAlloc *f);
 void	runtime·FixAlloc_Free(FixAlloc *f, void *p);
 
@@ -287,22 +285,15 @@ struct MCache
 {
 	// The following members are accessed on every malloc,
 	// so they are grouped here for better caching.
-	int32 next_sample;	// trigger heap sample after allocating this many bytes
+	int32 next_sample;		// trigger heap sample after allocating this many bytes
 	intptr local_cachealloc;	// bytes allocated (or freed) from cache since last lock of heap
 	// The rest is not accessed on every malloc.
 	MCacheList list[NumSizeClasses];
-	intptr local_objects;	// objects allocated (or freed) from cache since last lock of heap
-	intptr local_alloc;	// bytes allocated (or freed) since last lock of heap
-	uintptr local_total_alloc;	// bytes allocated (even if freed) since last lock of heap
-	uintptr local_nmalloc;	// number of mallocs since last lock of heap
-	uintptr local_nfree;	// number of frees since last lock of heap
-	uintptr local_nlookup;	// number of pointer lookups since last lock of heap
-	// Statistics about allocation size classes since last lock of heap
-	struct {
-		uintptr nmalloc;
-		uintptr nfree;
-	} local_by_size[NumSizeClasses];
-
+	// Local allocator stats, flushed during GC.
+	uintptr local_nlookup;		// number of pointer lookups
+	uintptr local_largefree;	// bytes freed for large objects (>MaxSmallSize)
+	uintptr local_nlargefree;	// number of frees for large objects (>MaxSmallSize)
+	uintptr local_nsmallfree[NumSizeClasses];	// number of frees for small objects (<=MaxSmallSize)
 };
 
 void	runtime·MCache_Refill(MCache *c, int32 sizeclass);
@@ -432,10 +423,15 @@ struct MHeap
 
 	FixAlloc spanalloc;	// allocator for Span*
 	FixAlloc cachealloc;	// allocator for MCache*
+
+	// Malloc stats.
+	uint64 largefree;	// bytes freed for large objects (>MaxSmallSize)
+	uint64 nlargefree;	// number of frees for large objects (>MaxSmallSize)
+	uint64 nsmallfree[NumSizeClasses];	// number of frees for small objects (<=MaxSmallSize)
 };
 extern MHeap runtime·mheap;
 
-void	runtime·MHeap_Init(MHeap *h, void *(*allocator)(uintptr));
+void	runtime·MHeap_Init(MHeap *h);
 MSpan*	runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, int32 acct, int32 zeroed);
 void	runtime·MHeap_Free(MHeap *h, MSpan *s, int32 acct);
 MSpan*	runtime·MHeap_Lookup(MHeap *h, void *v);

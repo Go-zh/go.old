@@ -1385,54 +1385,41 @@ addroot(Obj obj)
 	work.nroot++;
 }
 
-// Scan a stack frame.  Normally, this scans the locals area,
-// belonging to the current frame, and the arguments area, belonging
-// to the calling frame.  When the arguments area size is unknown, the
-// arguments area scanning is delayed and the doframe parameter
-// signals that the previously scanned activation has an unknown
-// argument size.  When *doframe is true, the possible arguments area
-// for the callee, located between the stack pointer and the bottom of
-// the locals area, is additionally scanned.  Otherwise, this area is
-// ignored, as it must have been scanned when the callee was scanned.
+// Scan a stack frame: local variables and function arguments/results.
 static void
-addframeroots(Func *f, byte*, byte *sp, void *doframe)
+addframeroots(Stkframe *frame, void*)
 {
-	byte *fp, *ap;
-	uintptr outs;
-	int32 i, j, rem;
+	Func *f;
+	byte *ap;
+	int32 i, j, nuintptr;
 	uint32 w, b;
 
-	if(thechar == '5')
-		sp += sizeof(uintptr);
-	fp = sp + f->frame;
-	if(f->locals == 0 || *(bool*)doframe == true)
-		// Scan the entire stack frame.
-		addroot((Obj){sp, f->frame - sizeof(uintptr), 0});
-	else if(f->locals > 0) {
-		// Scan the locals area.
-		outs = f->frame - sizeof(uintptr) - f->locals;
-		addroot((Obj){sp + outs, f->locals, 0});
-	}
-	if(f->args > 0) {
-		// Scan the arguments area.
-		if(f->ptrs.array != nil) {
-			ap = fp;
-			rem = f->args / sizeof(uintptr);
-			for(i = 0; i < f->ptrs.len; i++) {
-				w = ((uint32*)f->ptrs.array)[i];
-				b = 1;
-				for((j = (rem < 32) ? rem : 32); j > 0; j--) {
-					if(w & b)
-						addroot((Obj){ap, sizeof(uintptr), 0});
-					b <<= 1;
-					ap += sizeof(uintptr);
-				}
-				rem -= 32;
+	// Scan local variables if stack frame has been allocated.
+	if(frame->varlen > 0)
+		addroot((Obj){frame->varp, frame->varlen, 0});
+
+	// Scan arguments.
+	// Use pointer information if known.
+	f = frame->fn;
+	if(f->args > 0 && f->ptrs.array != nil) {
+		ap = frame->argp;
+		nuintptr = f->args / sizeof(uintptr);
+		for(i = 0; i < f->ptrs.len; i++) {
+			w = ((uint32*)f->ptrs.array)[i];
+			b = 1;
+			j = nuintptr;
+			if(j > 32)
+				j = 32;
+			for(; j > 0; j--) {
+				if(w & b)
+					addroot((Obj){ap, sizeof(uintptr), 0});
+				b <<= 1;
+				ap += sizeof(uintptr);
 			}
-		} else
-			addroot((Obj){fp, f->args, 0});
-	}
-	*(bool*)doframe = (f->args == ArgsSizeUnknown);
+			nuintptr -= 32;
+		}
+	} else
+		addroot((Obj){frame->argp, frame->arglen, 0});
 }
 
 static void
@@ -1441,12 +1428,12 @@ addstackroots(G *gp)
 	M *mp;
 	int32 n;
 	Stktop *stk;
-	byte *sp, *guard, *pc;
-	Func *f;
-	bool doframe;
+	uintptr sp, guard, pc, lr;
+	void *base;
+	uintptr size;
 
 	stk = (Stktop*)gp->stackbase;
-	guard = (byte*)gp->stackguard;
+	guard = gp->stackguard;
 
 	if(gp == g)
 		runtime·throw("can't scan our own stack");
@@ -1458,51 +1445,36 @@ addstackroots(G *gp)
 		// as schedlock and may have needed to start a new stack segment.
 		// Use the stack segment and stack pointer at the time of
 		// the system call instead, since that won't change underfoot.
-		sp = (byte*)gp->gcsp;
+		sp = gp->gcsp;
 		pc = gp->gcpc;
+		lr = 0;
 		stk = (Stktop*)gp->gcstack;
-		guard = (byte*)gp->gcguard;
+		guard = gp->gcguard;
 	} else {
 		// Scanning another goroutine's stack.
 		// The goroutine is usually asleep (the world is stopped).
-		sp = (byte*)gp->sched.sp;
+		sp = gp->sched.sp;
 		pc = gp->sched.pc;
-		if(ScanStackByFrames && pc == (byte*)runtime·goexit && gp->fnstart != nil) {
-			// The goroutine has not started. However, its incoming
-			// arguments are live at the top of the stack and must
-			// be scanned.  No other live values should be on the
-			// stack.
-			f = runtime·findfunc((uintptr)gp->fnstart->fn);
-			if(f->args != 0) {
-				if(thechar == '5')
-					sp += sizeof(uintptr);
-				// If the size of the arguments is known
-				// scan just the incoming arguments.
-				// Otherwise, scan everything between the
-				// top and the bottom of the stack.
-				if(f->args > 0)
-					addroot((Obj){sp, f->args, 0});
-				else
-					addroot((Obj){sp, (byte*)stk - sp, 0}); 
-			} 
-			return;
-		}
+		lr = gp->sched.lr;
+
+		// For function about to start, context argument is a root too.
+		if(gp->sched.ctxt != 0 && runtime·mlookup(gp->sched.ctxt, &base, &size, nil))
+			addroot((Obj){base, size, 0});
 	}
 	if(ScanStackByFrames) {
 		USED(stk);
 		USED(guard);
-		doframe = false;
-		runtime·gentraceback(pc, sp, nil, gp, 0, nil, 0x7fffffff, addframeroots, &doframe);
+		runtime·gentraceback(pc, sp, lr, gp, 0, nil, 0x7fffffff, addframeroots, nil);
 	} else {
 		USED(pc);
 		n = 0;
 		while(stk) {
-			if(sp < guard-StackGuard || (byte*)stk < sp) {
+			if(sp < guard-StackGuard || (uintptr)stk < sp) {
 				runtime·printf("scanstack inconsistent: g%D#%d sp=%p not in [%p,%p]\n", gp->goid, n, sp, guard-StackGuard, stk);
 				runtime·throw("scanstack");
 			}
-			addroot((Obj){sp, (byte*)stk - sp, (uintptr)defaultProg | PRECISE | LOOP});
-			sp = (byte*)stk->gobuf.sp;
+			addroot((Obj){(byte*)sp, (uintptr)stk - sp, (uintptr)defaultProg | PRECISE | LOOP});
+			sp = stk->gobuf.sp;
 			guard = stk->stackguard;
 			stk = (Stktop*)stk->stackbase;
 			n++;
@@ -1569,8 +1541,10 @@ addroots(void)
 		case Gdead:
 			break;
 		case Grunning:
-			if(gp != g)
+			if(gp != m->curg)
 				runtime·throw("mark - world not stopped");
+			if(g != m->g0)
+				runtime·throw("gc not on g0");
 			addstackroots(gp);
 			break;
 		case Grunnable:
@@ -1604,9 +1578,7 @@ handlespecial(byte *p, uintptr size)
 	runtime·lock(&finlock);
 	if(finq == nil || finq->cnt == finq->cap) {
 		if(finc == nil) {
-			finc = runtime·SysAlloc(PageSize);
-			if(finc == nil)
-				runtime·throw("runtime: cannot allocate memory");
+			finc = runtime·persistentalloc(PageSize, 0);
 			finc->cap = (PageSize - sizeof(FinBlock)) / sizeof(Finalizer) + 1;
 			finc->alllink = allfin;
 			allfin = finc;
@@ -1711,8 +1683,8 @@ sweepspan(ParFor *desc, uint32 idx)
 			runtime·unmarkspan(p, 1<<PageShift);
 			*(uintptr*)p = (uintptr)0xdeaddeaddeaddeadll;	// needs zeroing
 			runtime·MHeap_Free(&runtime·mheap, s, 1);
-			c->local_alloc -= size;
-			c->local_nfree++;
+			c->local_nlargefree++;
+			c->local_largefree += size;
 		} else {
 			// Free small object.
 			switch(compression) {
@@ -1733,11 +1705,8 @@ sweepspan(ParFor *desc, uint32 idx)
 	}
 
 	if(nfree) {
-		c->local_by_size[cl].nfree += nfree;
-		c->local_alloc -= size * nfree;
-		c->local_nfree += nfree;
+		c->local_nsmallfree[cl] += nfree;
 		c->local_cachealloc -= nfree * size;
-		c->local_objects -= nfree;
 		runtime·MCentral_FreeSpan(&runtime·mheap.central[cl], s, nfree, head.next, end);
 	}
 }
@@ -1855,13 +1824,28 @@ runtime·gchelper(void)
 static int32 gcpercent = GcpercentUnknown;
 
 static void
-cachestats(GCStats *stats)
+cachestats(void)
+{
+	MCache *c;
+	P *p, **pp;
+
+	for(pp=runtime·allp; p=*pp; pp++) {
+		c = p->mcache;
+		if(c==nil)
+			continue;
+		runtime·purgecachedstats(c);
+	}
+}
+
+static void
+updatememstats(GCStats *stats)
 {
 	M *mp;
+	MSpan *s;
 	MCache *c;
 	P *p, **pp;
 	int32 i;
-	uint64 stacks_inuse;
+	uint64 stacks_inuse, smallfree;
 	uint64 *src, *dst;
 
 	if(stats)
@@ -1877,13 +1861,65 @@ cachestats(GCStats *stats)
 			runtime·memclr((byte*)&mp->gcstats, sizeof(mp->gcstats));
 		}
 	}
+	mstats.stacks_inuse = stacks_inuse;
+
+	// Calculate memory allocator stats.
+	// During program execution we only count number of frees and amount of freed memory.
+	// Current number of alive object in the heap and amount of alive heap memory
+	// are calculated by scanning all spans.
+	// Total number of mallocs is calculated as number of frees plus number of alive objects.
+	// Similarly, total amount of allocated memory is calculated as amount of freed memory
+	// plus amount of alive heap memory.
+	mstats.alloc = 0;
+	mstats.total_alloc = 0;
+	mstats.nmalloc = 0;
+	mstats.nfree = 0;
+	for(i = 0; i < nelem(mstats.by_size); i++) {
+		mstats.by_size[i].nmalloc = 0;
+		mstats.by_size[i].nfree = 0;
+	}
+
+	// Flush MCache's to MCentral.
 	for(pp=runtime·allp; p=*pp; pp++) {
 		c = p->mcache;
 		if(c==nil)
 			continue;
-		runtime·purgecachedstats(c);
+		runtime·MCache_ReleaseAll(c);
 	}
-	mstats.stacks_inuse = stacks_inuse;
+
+	// Aggregate local stats.
+	cachestats();
+
+	// Scan all spans and count number of alive objects.
+	for(i = 0; i < runtime·mheap.nspan; i++) {
+		s = runtime·mheap.allspans[i];
+		if(s->state != MSpanInUse)
+			continue;
+		if(s->sizeclass == 0) {
+			mstats.nmalloc++;
+			mstats.alloc += s->elemsize;
+		} else {
+			mstats.nmalloc += s->ref;
+			mstats.by_size[s->sizeclass].nmalloc += s->ref;
+			mstats.alloc += s->ref*s->elemsize;
+		}
+	}
+
+	// Aggregate by size class.
+	smallfree = 0;
+	mstats.nfree = runtime·mheap.nlargefree;
+	for(i = 0; i < nelem(mstats.by_size); i++) {
+		mstats.nfree += runtime·mheap.nsmallfree[i];
+		mstats.by_size[i].nfree = runtime·mheap.nsmallfree[i];
+		mstats.by_size[i].nmalloc += runtime·mheap.nsmallfree[i];
+		smallfree += runtime·mheap.nsmallfree[i] * runtime·class_to_size[i];
+	}
+	mstats.nmalloc += mstats.nfree;
+
+	// Calculate derived stats.
+	mstats.total_alloc = mstats.alloc + runtime·mheap.largefree + smallfree;
+	mstats.heap_alloc = mstats.alloc;
+	mstats.heap_objects = mstats.nmalloc - mstats.nfree;
 }
 
 // Structure of arguments passed to function gc().
@@ -1938,7 +1974,10 @@ runtime·gc(int32 force)
 		return;
 
 	if(gcpercent == GcpercentUnknown) {	// first time through
-		gcpercent = readgogc();
+		runtime·lock(&runtime·mheap);
+		if(gcpercent == GcpercentUnknown)
+			gcpercent = readgogc();
+		runtime·unlock(&runtime·mheap);
 
 		p = runtime·getenv("GOGCTRACE");
 		if(p != nil)
@@ -2001,11 +2040,9 @@ runtime·gc(int32 force)
 static void
 mgc(G *gp)
 {
-	gp->status = Grunnable;
 	gc(gp->param);
-	gp->status = Grunning;
 	gp->param = nil;
-	runtime·gogo(&gp->sched, 0);
+	runtime·gogo(&gp->sched);
 }
 
 static void
@@ -2029,7 +2066,7 @@ gc(struct gc_args *args)
 	heap0 = 0;
 	obj0 = 0;
 	if(gctrace) {
-		cachestats(nil);
+		updatememstats(nil);
 		heap0 = mstats.heap_alloc;
 		obj0 = mstats.nmalloc - mstats.nfree;
 	}
@@ -2079,17 +2116,9 @@ gc(struct gc_args *args)
 	if(work.nproc > 1)
 		runtime·notesleep(&work.alldone);
 
-	cachestats(&stats);
-
-	stats.nprocyield += work.sweepfor->nprocyield;
-	stats.nosyield += work.sweepfor->nosyield;
-	stats.nsleep += work.sweepfor->nsleep;
-
+	cachestats();
 	mstats.next_gc = mstats.heap_alloc+mstats.heap_alloc*gcpercent/100;
 	m->gcing = 0;
-
-	heap1 = mstats.heap_alloc;
-	obj1 = mstats.nmalloc - mstats.nfree;
 
 	t4 = runtime·nanotime();
 	mstats.last_gc = t4;
@@ -2100,6 +2129,14 @@ gc(struct gc_args *args)
 		runtime·printf("pause %D\n", t4-t0);
 
 	if(gctrace) {
+		updatememstats(&stats);
+		heap1 = mstats.heap_alloc;
+		obj1 = mstats.nmalloc - mstats.nfree;
+
+		stats.nprocyield += work.sweepfor->nprocyield;
+		stats.nosyield += work.sweepfor->nosyield;
+		stats.nsleep += work.sweepfor->nsleep;
+
 		runtime·printf("gc%d(%d): %D+%D+%D ms, %D -> %D MB %D -> %D (%D-%D) objects,"
 				" %D(%D) handoff, %D(%D) steal, %D/%D/%D yields\n",
 			mstats.numgc, work.nproc, (t2-t1)/1000000, (t3-t2)/1000000, (t1-t0+t4-t3)/1000000,
@@ -2144,7 +2181,7 @@ runtime·ReadMemStats(MStats *stats)
 	runtime·semacquire(&runtime·worldsema);
 	m->gcing = 1;
 	runtime·stoptheworld();
-	cachestats(nil);
+	updatememstats(nil);
 	*stats = mstats;
 	m->gcing = 0;
 	runtime·semrelease(&runtime·worldsema);

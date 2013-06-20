@@ -122,8 +122,20 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 	if(debug['w'] > 1)
 		dump("racewalk-before", n);
 	setlineno(n);
-	if(init == nil || init == &n->ninit)
+	if(init == nil)
 		fatal("racewalk: bad init list");
+	if(init == &n->ninit) {
+		// If init == &n->ninit and n->ninit is non-nil,
+		// racewalknode might append it to itself.
+		// nil it out and handle it separately before putting it back.
+		l = n->ninit;
+		n->ninit = nil;
+		racewalklist(l, nil);
+		racewalknode(&n, &l, wr, skip);  // recurse with nil n->ninit
+		appendinit(&n, l);
+		*np = n;
+		return;
+	}
 
 	racewalklist(n->ninit, nil);
 
@@ -255,9 +267,7 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 		// side effects are safe.
 		// n->right may not be executed,
 		// so instrumentation goes to n->right->ninit, not init.
-		l = nil;
-		racewalknode(&n->right, &l, wr, 0);
-		appendinit(&n->right, l);
+		racewalknode(&n->right, &n->right->ninit, wr, 0);
 		goto ret;
 
 	case ONAME:
@@ -364,6 +374,7 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 	case OIF:
 	case OCALLMETH:
 	case ORETURN:
+	case ORETJMP:
 	case OSWITCH:
 	case OSELECT:
 	case OEMPTY:
@@ -395,12 +406,8 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 ret:
 	if(n->op != OBLOCK)  // OBLOCK is handled above in a special way.
 		racewalklist(n->list, init);
-	l = nil;
-	racewalknode(&n->ntest, &l, 0, 0);
-	n->ninit = concat(n->ninit, l);
-	l = nil;
-	racewalknode(&n->nincr, &l, 0, 0);
-	n->ninit = concat(n->ninit, l);
+	racewalknode(&n->ntest, &n->ntest->ninit, 0, 0);
+	racewalknode(&n->nincr, &n->nincr->ninit, 0, 0);
 	racewalklist(n->nbody, nil);
 	racewalklist(n->nelse, nil);
 	racewalklist(n->rlist, nil);
@@ -432,8 +439,8 @@ static int
 callinstr(Node **np, NodeList **init, int wr, int skip)
 {
 	Node *f, *b, *n;
-	Type *t, *t1;
-	int class, res, hascalls;
+	Type *t;
+	int class, hascalls;
 
 	n = *np;
 	//print("callinstr for %+N [ %O ] etype=%E class=%d\n",
@@ -444,33 +451,6 @@ callinstr(Node **np, NodeList **init, int wr, int skip)
 	t = n->type;
 	if(isartificial(n))
 		return 0;
-	if(t->etype == TSTRUCT) {
-		// TODO: instrument arrays similarly.
-		// PARAMs w/o PHEAP are not interesting.
-		if(n->class == PPARAM || n->class == PPARAMOUT)
-			return 0;
-		res = 0;
-		hascalls = 0;
-		foreach(n, hascallspred, &hascalls);
-		if(hascalls) {
-			n = detachexpr(n, init);
-			*np = n;
-		}
-		for(t1=t->type; t1; t1=t1->down) {
-			if(t1->sym && strcmp(t1->sym->name, "_")) {
-				n = treecopy(n);
-				f = nod(OXDOT, n, newname(t1->sym));
-				f->type = t1;
-				if(f->type->etype == TFIELD)
-					f->type = f->type->type;
-				if(callinstr(&f, init, wr, 0)) {
-					typecheck(&f, Erv);
-					res = 1;
-				}
-			}
-		}
-		return res;
-	}
 
 	b = basenod(n);
 	// it skips e.g. stores to ... parameter array
@@ -491,7 +471,11 @@ callinstr(Node **np, NodeList **init, int wr, int skip)
 		}
 		n = treecopy(n);
 		makeaddable(n);
-		f = mkcall(wr ? "racewrite" : "raceread", T, init, uintptraddr(n));
+		if(t->etype == TSTRUCT || isfixedarray(t)) {
+			f = mkcall(wr ? "racewriterange" : "racereadrange", T, init, uintptraddr(n),
+					nodintconst(t->width));
+		} else
+			f = mkcall(wr ? "racewrite" : "raceread", T, init, uintptraddr(n));
 		*init = list(*init, f);
 		return 1;
 	}

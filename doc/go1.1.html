@@ -329,7 +329,8 @@ For example,
 
 <p>
 在gc工具链中，编译器和链接器现在使用的是Go flag包中定义的相同的命令行参数解析规则，该规则与传统的Unix参数解析不同。
-这或许会影响到直接调用工具的脚本。例如，以往的<code>go tool 6c -Fw -Dfoo</code>现在必须写为
+这或许会影响到直接调用工具的脚本。例如，以往的
+<code>go tool 6c -Fw -Dfoo</code> 现在必须写为
 <code>go tool 6c -F -w -D foo</code>。
 </p>
 
@@ -670,9 +671,18 @@ $ GOPATH= go get code.google.com/p/foo/quxx
 package code.google.com/p/foo/quxx: cannot download, $GOPATH not set. For more details see: go help gopath
 </pre>
 
+<div class="english">
 <p>
-最后，由于前面的改动，如果现在将<code>$GOPATH</code>和<code>$GOROOT</code>设置为相同值的时候，执行<code>go get</code>命令时将报错。
+Finally, as a result of the previous change, the <code>go get</code> command will also fail
+when <code>$GOPATH</code> and <code>$GOROOT</code> are set to the same value.
 </p>
+</div>
+
+<p>
+最后，由于前面的改动，如果现在将 <code>$GOPATH</code> 和 <code>$GOROOT</code>
+设置为相同值的时候，执行 <code>go get</code> 命令时将报错。
+</p>
+
 
 <pre>
 $ GOPATH=$GOROOT go get code.google.com/p/foo/quxx

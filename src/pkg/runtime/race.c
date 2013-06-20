@@ -16,8 +16,8 @@ void runtime∕race·Finalize(void);
 void runtime∕race·FinalizerGoroutine(uintptr racectx);
 void runtime∕race·Read(uintptr racectx, void *addr, void *pc);
 void runtime∕race·Write(uintptr racectx, void *addr, void *pc);
-void runtime∕race·ReadRange(uintptr racectx, void *addr, uintptr sz, uintptr step, void *pc);
-void runtime∕race·WriteRange(uintptr racectx, void *addr, uintptr sz, uintptr step, void *pc);
+void runtime∕race·ReadRange(uintptr racectx, void *addr, uintptr sz, void *pc);
+void runtime∕race·WriteRange(uintptr racectx, void *addr, uintptr sz, void *pc);
 void runtime∕race·FuncEnter(uintptr racectx, void *pc);
 void runtime∕race·FuncExit(uintptr racectx);
 void runtime∕race·Malloc(uintptr racectx, void *p, uintptr sz, void *pc);
@@ -77,6 +77,17 @@ runtime·racewrite(uintptr addr)
 	}
 }
 
+#pragma textflag 7
+void
+runtime·racewriterange(uintptr addr, uintptr sz)
+{
+	if(!onstack(addr)) {
+		m->racecall = true;
+		runtime∕race·WriteRange(g->racectx, (void*)addr, sz, runtime·getcallerpc(&addr));
+		m->racecall = false;
+	}
+}
+
 // Called from instrumented code.
 // If we split stack, getcallerpc() can return runtime·lessstack().
 #pragma textflag 7
@@ -86,6 +97,17 @@ runtime·raceread(uintptr addr)
 	if(!onstack(addr)) {
 		m->racecall = true;
 		runtime∕race·Read(g->racectx, (void*)addr, runtime·getcallerpc(&addr));
+		m->racecall = false;
+	}
+}
+
+#pragma textflag 7
+void
+runtime·racereadrange(uintptr addr, uintptr sz)
+{
+	if(!onstack(addr)) {
+		m->racecall = true;
+		runtime∕race·ReadRange(g->racectx, (void*)addr, sz, runtime·getcallerpc(&addr));
 		m->racecall = false;
 	}
 }
@@ -189,7 +211,7 @@ runtime·racereadpc(void *addr, void *callpc, void *pc)
 }
 
 static void
-rangeaccess(void *addr, uintptr size, uintptr step, uintptr callpc, uintptr pc, bool write)
+rangeaccess(void *addr, uintptr size, uintptr callpc, uintptr pc, bool write)
 {
 	uintptr racectx;
 
@@ -202,9 +224,9 @@ rangeaccess(void *addr, uintptr size, uintptr step, uintptr callpc, uintptr pc, 
 			runtime∕race·FuncEnter(racectx, (void*)callpc);
 		}
 		if(write)
-			runtime∕race·WriteRange(racectx, addr, size, step, (void*)pc);
+			runtime∕race·WriteRange(racectx, addr, size, (void*)pc);
 		else
-			runtime∕race·ReadRange(racectx, addr, size, step, (void*)pc);
+			runtime∕race·ReadRange(racectx, addr, size, (void*)pc);
 		if(callpc)
 			runtime∕race·FuncExit(racectx);
 		m->racecall = false;
@@ -212,15 +234,15 @@ rangeaccess(void *addr, uintptr size, uintptr step, uintptr callpc, uintptr pc, 
 }
 
 void
-runtime·racewriterangepc(void *addr, uintptr sz, uintptr step, void *callpc, void *pc)
+runtime·racewriterangepc(void *addr, uintptr sz, void *callpc, void *pc)
 {
-	rangeaccess(addr, sz, step, (uintptr)callpc, (uintptr)pc, true);
+	rangeaccess(addr, sz, (uintptr)callpc, (uintptr)pc, true);
 }
 
 void
-runtime·racereadrangepc(void *addr, uintptr sz, uintptr step, void *callpc, void *pc)
+runtime·racereadrangepc(void *addr, uintptr sz, void *callpc, void *pc)
 {
-	rangeaccess(addr, sz, step, (uintptr)callpc, (uintptr)pc, false);
+	rangeaccess(addr, sz, (uintptr)callpc, (uintptr)pc, false);
 }
 
 void
@@ -328,6 +350,22 @@ void
 runtime·RaceWrite(void *addr)
 {
 	memoryaccess(addr, 0, (uintptr)runtime·getcallerpc(&addr), true);
+}
+
+// func RaceReadRange(addr unsafe.Pointer, len int)
+#pragma textflag 7
+void
+runtime·RaceReadRange(void *addr, intgo len)
+{
+	rangeaccess(addr, len, 0, (uintptr)runtime·getcallerpc(&addr), false);
+}
+
+// func RaceWriteRange(addr unsafe.Pointer, len int)
+#pragma textflag 7
+void
+runtime·RaceWriteRange(void *addr, intgo len)
+{
+	rangeaccess(addr, len, 0, (uintptr)runtime·getcallerpc(&addr), true);
 }
 
 // func RaceDisable()

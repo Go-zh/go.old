@@ -146,6 +146,7 @@ caninl(Node *fn)
 
 	fn->nname->inl = fn->nbody;
 	fn->nbody = inlcopylist(fn->nname->inl);
+	fn->nname->inldcl = inlcopylist(fn->nname->defn->dcl);
 
 	// hack, TODO, check for better way to link method nodes back to the thing with the ->inl
 	// this is so export can find the body of a method
@@ -197,6 +198,7 @@ ishairy(Node *n, int *budget)
 	case ODEFER:
 	case ODCLTYPE:  // can't print yet
 	case ODCLCONST:  // can't print yet
+	case ORETJMP:
 		return 1;
 
 		break;
@@ -558,8 +560,8 @@ mkinlcall1(Node **np, Node *fn, int isddd)
 
 //dumplist("ninit pre", ninit);
 
-	if (fn->defn) // local function
-		dcl = fn->defn->dcl;
+	if(fn->defn) // local function
+		dcl = fn->inldcl;
 	else // imported function
 		dcl = fn->dcl;
 

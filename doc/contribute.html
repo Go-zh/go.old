@@ -234,20 +234,45 @@ you are a committer (see below), but Mercurial complains if it is missing.
 </div>
 
 <p>
-除非你是提交者（见下），否者 <code>username</code> 信息将不会被使用，但如果没有的话，Mercurial会发牢骚。
+除非你是一个提交者，否则 <code>username</code> 不会被使用（见下），但没它的话Mercurial会抱怨的。
 </p>
 
 <div class="english">
+<h3>Understanding the extension</h3>
+</div>
+
+<h3>了解此扩展</h3>
+
+<div class="english">
+<p>After adding the code review extension, you can run</p>
+</div>
+
+<p>在添加此代码审核扩展后，你可以运行</p>
+
+<pre>
+$ hg help codereview
+</pre>
+
+<div class="english">
+<p>to learn more about its commands. To learn about a specific code-review-specific
+command such as <code>change</code>, run</p>
+</div>
+
+<p>来了解此命令的更多信息。要了解代码审核中某个具体的命令，例如 <code>change</code>，只需运行</p>
+
+<pre>
+$ hg help change
+</pre>
+
+<div class="english">
 <p>
-After adding the extension, <code>hg help codereview</code>
-will show documentation for its commands. As the codereview extension is only
-enabled for your checkout in <code>$GOROOT</code>, the remainder of this
-document assumes you are inside <code>$GOROOT</code> when issuing commands.
+As the codereview extension is only enabled for your checkout
+in <code>$GOROOT</code>, the remainder of this document assumes you
+are inside <code>$GOROOT</code> when issuing commands.
 </p>
 </div>
 
 <p>
-添加此扩展后，执行 <code>hg help codereview</code> 会显示该扩展的命令文档。
 仅当你在 <code>$GOROOT</code> 中检出源码时，codereview扩展才会启用，后文假设你已经在
 <code>$GOROOT</code> 中了。
 </p>

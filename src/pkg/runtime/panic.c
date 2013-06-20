@@ -214,7 +214,7 @@ runtime·panic(Eface e)
 	p = runtime·mal(sizeof *p);
 	p->arg = e;
 	p->link = g->panic;
-	p->stackbase = (byte*)g->stackbase;
+	p->stackbase = g->stackbase;
 	g->panic = p;
 
 	for(;;) {
@@ -254,11 +254,11 @@ static void
 recovery(G *gp)
 {
 	void *argp;
-	void *pc;
+	uintptr pc;
 	
 	// Info about defer passed in G struct.
 	argp = (void*)gp->sigcode0;
-	pc = (void*)gp->sigcode1;
+	pc = (uintptr)gp->sigcode1;
 
 	// Unwind to the stack frame with d's arguments in it.
 	runtime·unwindstack(gp, argp);
@@ -277,7 +277,8 @@ recovery(G *gp)
 	else
 		gp->sched.sp = (uintptr)argp - 2*sizeof(uintptr);
 	gp->sched.pc = pc;
-	runtime·gogo(&gp->sched, 1);
+	gp->sched.ret = 1;
+	runtime·gogo(&gp->sched);
 }
 
 // Free stack frames until we hit the last one
@@ -292,12 +293,13 @@ runtime·unwindstack(G *gp, byte *sp)
 	if(g == gp)
 		runtime·throw("unwindstack on self");
 
-	while((top = (Stktop*)gp->stackbase) != nil && top->stackbase != nil) {
+	while((top = (Stktop*)gp->stackbase) != 0 && top->stackbase != 0) {
 		stk = (byte*)gp->stackguard - StackGuard;
 		if(stk <= sp && sp < (byte*)gp->stackbase)
 			break;
-		gp->stackbase = (uintptr)top->stackbase;
-		gp->stackguard = (uintptr)top->stackguard;
+		gp->stackbase = top->stackbase;
+		gp->stackguard = top->stackguard;
+		gp->stackguard0 = gp->stackguard;
 		if(top->free != 0)
 			runtime·stackfree(stk, top->free);
 	}
@@ -412,7 +414,7 @@ runtime·dopanic(int32 unused)
 		if(g != m->g0) {
 			runtime·printf("\n");
 			runtime·goroutineheader(g);
-			runtime·traceback(runtime·getcallerpc(&unused), runtime·getcallersp(&unused), 0, g);
+			runtime·traceback((uintptr)runtime·getcallerpc(&unused), (uintptr)runtime·getcallersp(&unused), 0, g);
 		}
 		if(!didothers) {
 			didothers = true;

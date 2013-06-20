@@ -321,13 +321,13 @@ which calls strings.Join. The struct being passed to the template is:
         CXXFiles []string       // .cc, .cxx and .cpp source files
         HFiles   []string       // .h, .hh, .hpp and .hxx source files
         SFiles   []string       // .s source files
-        SysoFiles []string      // .syso object files to add to archive
         SwigFiles []string      // .swig files
         SwigCXXFiles []string   // .swigcxx files
+        SysoFiles []string      // .syso object files to add to archive
 
         // Cgo directives
-        CgoCPPFLAGS  []string // cgo: flags for C preprocessor
         CgoCFLAGS    []string // cgo: flags for C compiler
+        CgoCPPFLAGS  []string // cgo: flags for C preprocessor
         CgoCXXFLAGS  []string // cgo: flags for C++ compiler
         CgoLDFLAGS   []string // cgo: flags for linker
         CgoPkgConfig []string // cgo: pkg-config names
@@ -373,6 +373,7 @@ Usage:
 	go run [build flags] gofiles... [arguments...]
 
 Run compiles and runs the main package comprising the named Go source files.
+A Go source file is defined to be a file ending in a literal ".go" suffix.
 
 For more about build flags, see 'go help build'.
 
@@ -383,7 +384,7 @@ Test packages
 
 Usage:
 
-	go test [-c] [-i] [build flags] [packages] [flags for test binary]
+	go test [-c] [-i] [build and test flags] [packages] [flags for test binary]
 
 'Go test' automates testing the packages named by the import paths.
 It prints a summary of the test results in the format:
@@ -396,8 +397,10 @@ It prints a summary of the test results in the format:
 followed by detailed output for each failed package.
 
 'Go test' recompiles each package along with any files with names matching
-the file pattern "*_test.go".  These additional files can contain test functions,
-benchmark functions, and example functions.  See 'go help testfunc' for more.
+the file pattern "*_test.go".
+Files whose names begin with "_" (including "_test.go") or "." are ignored.
+These additional files can contain test functions, benchmark functions, and
+example functions.  See 'go help testfunc' for more.
 Each listed package causes the execution of a separate test binary.
 
 Test files that declare a package with the suffix "_test" will be compiled as a
@@ -420,6 +423,11 @@ In addition to the build flags, the flags handled by 'go test' itself are:
 
 The test binary also accepts flags that control execution of the test; these
 flags are also accessible by 'go test'.  See 'go help testflag' for details.
+
+If the test binary needs any other flags, they should be presented after the
+package names. The go tool treats as a flag the first argument that begins with
+a minus sign that it does not recognize itself; that argument and all subsequent
+arguments are passed as arguments to the test binary.
 
 For more about build flags, see 'go help build'.
 For more about specifying packages, see 'go help packages'.
@@ -459,7 +467,7 @@ Usage:
 
 Vet runs the Go vet command on the packages named by the import paths.
 
-For more about vet, see 'godoc vet'.
+For more about vet, see 'godoc code.google.com/p/go.tools/cmd/vet'.
 For more about specifying packages, see 'go help packages'.
 
 To run the vet tool with specific options, run 'go tool vet'.
@@ -577,6 +585,8 @@ As a special case, if the package list is a list of .go files from a
 single directory, the command is applied to a single synthesized
 package made up of exactly those files, ignoring any build constraints
 in those files and ignoring any other files in the directory.
+
+File names that begin with "." or "_" are ignored by the go tool.
 
 
 Remote import path syntax
@@ -732,6 +742,26 @@ control the execution of any test:
 	    if -test.blockprofile is set without this flag, all blocking events
 	    are recorded, equivalent to -test.blockprofilerate=1.
 
+	-cover
+	    Enable coverage analysis.
+	    TODO: This feature is not yet fully implemented.
+
+	-covermode set,count,atomic
+	    Set the mode for coverage analysis for the package[s]
+	    being tested. The default is "set".
+	    The values:
+		set: bool: does this statement run?
+		count: int: how many times does this statement run?
+		atomic: int: count, but correct in multithreaded tests;
+			significantly more expensive.
+	    Implies -cover.
+	    Sets -v. TODO: This will change.
+
+	-coverprofile cover.out
+	    Write a coverage profile to the specified file after all tests
+	    have passed.
+	    Implies -cover.
+
 	-cpu 1,2,4
 	    Specify a list of GOMAXPROCS values for which the tests or
 	    benchmarks should be executed.  The default is the current value
@@ -751,6 +781,10 @@ control the execution of any test:
 	    and set the environment variable GOGC=off to disable the
 	    garbage collector, provided the test can run in the available
 	    memory without garbage collection.
+
+	-outputdir directory
+	    Place output files from profiling in the specified directory,
+	    by default the directory in which "go test" is running.
 
 	-parallel n
 	    Allow parallel execution of test functions that call t.Parallel.

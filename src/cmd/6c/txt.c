@@ -158,9 +158,7 @@ gclean(void)
 			continue;
 		if(s->type == types[TENUM])
 			continue;
-		textflag = s->dataflag;
 		gpseudo(AGLOBL, s, nodconst(s->type->width));
-		textflag = 0;
 	}
 	nextpc();
 	p->as = AEND;
@@ -1190,7 +1188,7 @@ print("botch in doindex\n");
 	else if(n->left->op == OREGISTER)
 		idx.ptr = n->left->reg;
 	else if(n->left->op != OADDR) {
-		reg[D_BP]++;	// cant be used as a base
+		reg[D_BP]++;	// can't be used as a base
 		regalloc(&nod1, &qregnode, Z);
 		cgen(n->left, &nod1);
 		idx.ptr = nod1.reg;
@@ -1502,8 +1500,16 @@ gpseudo(int a, Sym *s, Node *n)
 	p->as = a;
 	p->from.type = D_EXTERN;
 	p->from.sym = s;
-	p->from.scale = textflag;
-	textflag = 0;
+
+	switch(a) {
+	case ATEXT:
+		p->from.scale = textflag;
+		textflag = 0;
+		break;
+	case AGLOBL:
+		p->from.scale = s->dataflag;
+		break;
+	}
 
 	if(s->class == CSTATIC)
 		p->from.type = D_STATIC;
