@@ -987,6 +987,10 @@ func (x *Int) Bit(i int) uint {
 // That is, if b is 1 SetBit sets z = x | (1 << i);
 // if b is 0 SetBit sets z = x &^ (1 << i). If b is not 0 or 1,
 // SetBit will panic.
+
+// SetBit 将 z 置为 x，将 x 的第 i 位置为 b（0 或 1）。
+// 换言之，若 b 为 1，SetBit 会置 z = x | (1 << i)；若 b 为 0，SetBit
+// 会置 z = x &^ (1 << i)。若 b 非 0 或 1，SetBit 就会引发派错。
 func (z *Int) SetBit(x *Int, i int, b uint) *Int {
 	if i < 0 {
 		panic("negative bit index")
@@ -1004,6 +1008,8 @@ func (z *Int) SetBit(x *Int, i int, b uint) *Int {
 }
 
 // And sets z = x & y and returns z.
+
+// And 置 z = x & y 并返回 z。
 func (z *Int) And(x, y *Int) *Int {
 	if x.neg == y.neg {
 		if x.neg {
@@ -1011,6 +1017,7 @@ func (z *Int) And(x, y *Int) *Int {
 			x1 := nat(nil).sub(x.abs, natOne)
 			y1 := nat(nil).sub(y.abs, natOne)
 			z.abs = z.abs.add(z.abs.or(x1, y1), natOne)
+			// 若 x 和 y 为负数，则 z 不能为零。
 			z.neg = true // z cannot be zero if x and y are negative
 			return z
 		}
@@ -1023,6 +1030,7 @@ func (z *Int) And(x, y *Int) *Int {
 
 	// x.neg != y.neg
 	if x.neg {
+		// & 是对称的
 		x, y = y, x // & is symmetric
 	}
 
@@ -1034,6 +1042,8 @@ func (z *Int) And(x, y *Int) *Int {
 }
 
 // AndNot sets z = x &^ y and returns z.
+
+// AndNot 置 z = x &^ y 并返回 z。
 func (z *Int) AndNot(x, y *Int) *Int {
 	if x.neg == y.neg {
 		if x.neg {
@@ -1055,6 +1065,7 @@ func (z *Int) AndNot(x, y *Int) *Int {
 		// (-x) &^ y == ^(x-1) &^ y == ^(x-1) & ^y == ^((x-1) | y) == -(((x-1) | y) + 1)
 		x1 := nat(nil).sub(x.abs, natOne)
 		z.abs = z.abs.add(z.abs.or(x1, y.abs), natOne)
+		// 若 x 为负数且 y 为正数，则 z 不能为零。
 		z.neg = true // z cannot be zero if x is negative and y is positive
 		return z
 	}
@@ -1067,6 +1078,8 @@ func (z *Int) AndNot(x, y *Int) *Int {
 }
 
 // Or sets z = x | y and returns z.
+
+// Or 置 z = x | y 并返回 z。
 func (z *Int) Or(x, y *Int) *Int {
 	if x.neg == y.neg {
 		if x.neg {
@@ -1074,6 +1087,7 @@ func (z *Int) Or(x, y *Int) *Int {
 			x1 := nat(nil).sub(x.abs, natOne)
 			y1 := nat(nil).sub(y.abs, natOne)
 			z.abs = z.abs.add(z.abs.and(x1, y1), natOne)
+			// 若 x 和 y 为负数，则 z 不能为零。
 			z.neg = true // z cannot be zero if x and y are negative
 			return z
 		}
@@ -1086,17 +1100,21 @@ func (z *Int) Or(x, y *Int) *Int {
 
 	// x.neg != y.neg
 	if x.neg {
+		// | 是对称的
 		x, y = y, x // | is symmetric
 	}
 
 	// x | (-y) == x | ^(y-1) == ^((y-1) &^ x) == -(^((y-1) &^ x) + 1)
 	y1 := nat(nil).sub(y.abs, natOne)
 	z.abs = z.abs.add(z.abs.andNot(y1, x.abs), natOne)
+	// 若 x 或 y 之一为负数，则 z 不能为零
 	z.neg = true // z cannot be zero if one of x or y is negative
 	return z
 }
 
 // Xor sets z = x ^ y and returns z.
+
+// Xor 置 z = x ^ y 并返回 z。
 func (z *Int) Xor(x, y *Int) *Int {
 	if x.neg == y.neg {
 		if x.neg {
@@ -1116,17 +1134,21 @@ func (z *Int) Xor(x, y *Int) *Int {
 
 	// x.neg != y.neg
 	if x.neg {
+		// ^ 是对称的
 		x, y = y, x // ^ is symmetric
 	}
 
 	// x ^ (-y) == x ^ ^(y-1) == ^(x ^ (y-1)) == -((x ^ (y-1)) + 1)
 	y1 := nat(nil).sub(y.abs, natOne)
 	z.abs = z.abs.add(z.abs.xor(x.abs, y1), natOne)
+	// 若 x 或 y 中只有一个为负数，则 z 不能为零。
 	z.neg = true // z cannot be zero if only one of x or y is negative
 	return z
 }
 
 // Not sets z = ^x and returns z.
+
+// Not 置 z = ^x 并返回 z。
 func (z *Int) Not(x *Int) *Int {
 	if x.neg {
 		// ^(-x) == ^(^(x-1)) == x-1
@@ -1137,18 +1159,23 @@ func (z *Int) Not(x *Int) *Int {
 
 	// ^x == -x-1 == -(x+1)
 	z.abs = z.abs.add(x.abs, natOne)
+	// 若 x 为正数，则 z 不能为零
 	z.neg = true // z cannot be zero if x is positive
 	return z
 }
 
 // Gob codec version. Permits backward-compatible changes to the encoding.
+
+// Gob 编解码器版本。允许对编码进行向前兼容的更改。
 const intGobVersion byte = 1
 
 // GobEncode implements the gob.GobEncoder interface.
+
+// GobEncode 实现了 gob.GobEncoder 接口。
 func (x *Int) GobEncode() ([]byte, error) {
-	buf := make([]byte, 1+len(x.abs)*_S) // extra byte for version and sign bit
+	buf := make([]byte, 1+len(x.abs)*_S) // extra byte for version and sign bit // 版本和符号位的扩展字节
 	i := x.abs.bytes(buf) - 1            // i >= 0
-	b := intGobVersion << 1              // make space for sign bit
+	b := intGobVersion << 1              // make space for sign bit // 为符号位留下空间
 	if x.neg {
 		b |= 1
 	}
@@ -1157,6 +1184,8 @@ func (x *Int) GobEncode() ([]byte, error) {
 }
 
 // GobDecode implements the gob.GobDecoder interface.
+
+// GobDecode 实现了 gob.GobDecoder 接口。
 func (z *Int) GobDecode(buf []byte) error {
 	if len(buf) == 0 {
 		return errors.New("Int.GobDecode: no data")
@@ -1171,12 +1200,16 @@ func (z *Int) GobDecode(buf []byte) error {
 }
 
 // MarshalJSON implements the json.Marshaler interface.
+
+// MarshalJSON 实现了 json.Marshaler 接口。
 func (x *Int) MarshalJSON() ([]byte, error) {
 	// TODO(gri): get rid of the []byte/string conversions
 	return []byte(x.String()), nil
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface.
+
+// UnmarshalJSON 实现了 json.Unmarshaler 接口。
 func (z *Int) UnmarshalJSON(x []byte) error {
 	// TODO(gri): get rid of the []byte/string conversions
 	_, ok := z.SetString(string(x), 0)
