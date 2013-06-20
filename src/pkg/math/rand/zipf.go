@@ -12,6 +12,8 @@ package rand
 import "math"
 
 // A Zipf generates Zipf distributed variates.
+
+// Zipf 生成齐夫分布变量。
 type Zipf struct {
 	r            *Rand
 	imax         float64

@@ -11,6 +11,13 @@ package rand
  * DP Mitchell and JA Reeds
  */
 
+/*
+ * 均匀分布
+ *
+ * 算法来自
+ * DP Mitchell 和 JA Reeds
+ */
+
 const (
 	_LEN  = 607
 	_TAP  = 273
@@ -23,6 +30,10 @@ const (
 )
 
 var (
+	// cooked random numbers
+	// the state of the rng
+	// after 780e10 iterations
+	//
 	// cooked random numbers
 	// the state of the rng
 	// after 780e10 iterations

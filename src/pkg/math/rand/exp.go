@@ -16,6 +16,14 @@ import (
  * http://www.jstatsoft.org/v05/i08/paper [pdf]
  */
 
+/*
+ * 指数分布
+ *
+ * 见《生成随机变量的通灵塔方法》
+ * (Marsaglia & Tsang, 2000)
+ * http://www.jstatsoft.org/v05/i08/paper [pdf]
+ */
+
 const (
 	re = 7.69711747013104972
 )
@@ -28,6 +36,14 @@ const (
 //
 //  sample = ExpFloat64() / desiredRateParameter
 //
+
+// ExpFloat64 按照率参数（lambda）为 1，均值为 1/lambda (1) 来返回一个在区间
+// (0, +math.MaxFloat64] 内程指数分布的 float64。要以不同的率参数产生一个分布，
+// 调用者只需通过：
+//
+//	范例 = ExpFloat64() / 所需的率参数
+//
+// 来调整输出即可。
 func (r *Rand) ExpFloat64() float64 {
 	for {
 		j := r.Uint32()

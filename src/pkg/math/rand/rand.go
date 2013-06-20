@@ -3,6 +3,8 @@
 // license that can be found in the LICENSE file.
 
 // Package rand implements pseudo-random number generators.
+
+// rand 包实现了伪随机数生成器.
 package rand
 
 import "sync"

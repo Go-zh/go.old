@@ -16,6 +16,14 @@ import (
  * http://www.jstatsoft.org/v05/i08/paper [pdf]
  */
 
+/*
+ * 正态分布
+ *
+ * 见《生成随机变量的通灵塔方法》
+ * (Marsaglia & Tsang, 2000)
+ * http://www.jstatsoft.org/v05/i08/paper [pdf]
+ */
+
 const (
 	rn = 3.442619855899
 )
@@ -35,18 +43,28 @@ func absInt32(i int32) uint32 {
 //
 //  sample = NormFloat64() * desiredStdDev + desiredMean
 //
+
+// NormFloat64 按照标准正态分布（均值 = 0，标准差 = 1）来返回一个在区间
+// (0, +math.MaxFloat64] 内程正态分布的 float64。要产生一个不同的正态分布，
+// 调用者只需通过：
+//
+//	范例 = NormFloat64() * 所需的标准差 + 所需的均值
+//
+// 来调整输出即可。
 func (r *Rand) NormFloat64() float64 {
 	for {
-		j := int32(r.Uint32()) // Possibly negative
+		j := int32(r.Uint32()) // Possibly negative // 可能为负值
 		i := j & 0x7F
 		x := float64(j) * float64(wn[i])
 		if absInt32(j) < kn[i] {
 			// This case should be hit better than 99% of the time.
+			// 这种情况被命中的概率应该大于 99%。
 			return x
 		}
 
 		if i == 0 {
 			// This extra work is only required for the base strip.
+			// 这些额外的工作只有基带需要。
 			for {
 				x = -math.Log(r.Float64()) * (1.0 / rn)
 				y := -math.Log(r.Float64())
