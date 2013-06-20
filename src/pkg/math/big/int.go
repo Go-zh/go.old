@@ -930,6 +930,8 @@ func (z *Int) ModInverse(g, p *Int) *Int {
 }
 
 // Lsh sets z = x << n and returns z.
+
+// Lsh 置 z = x << n 并返回 z。
 func (z *Int) Lsh(x *Int, n uint) *Int {
 	z.abs = z.abs.shl(x.abs, n)
 	z.neg = x.neg
@@ -937,12 +939,16 @@ func (z *Int) Lsh(x *Int, n uint) *Int {
 }
 
 // Rsh sets z = x >> n and returns z.
+
+// Rsh 置 z = x >> n 并返回 z。
 func (z *Int) Rsh(x *Int, n uint) *Int {
 	if x.neg {
 		// (-x) >> s == ^(x-1) >> s == ^((x-1) >> s) == -(((x-1) >> s) + 1)
+		// 不会向下溢出，因为 |x| > 0
 		t := z.abs.sub(x.abs, natOne) // no underflow because |x| > 0
 		t = t.shr(t, n)
 		z.abs = t.add(t, natOne)
+		// 若 x 为负数，则 z 不能为零
 		z.neg = true // z cannot be zero if x is negative
 		return z
 	}
@@ -954,10 +960,14 @@ func (z *Int) Rsh(x *Int, n uint) *Int {
 
 // Bit returns the value of the i'th bit of x. That is, it
 // returns (x>>i)&1. The bit index i must be >= 0.
+
+// Bit 返回 x 第 i 位的值。换言之，它返回 (x>>i)&1。位下标 i 必须 >= 0。
 func (x *Int) Bit(i int) uint {
 	if i == 0 {
 		// optimization for common case: odd/even test of x
+		// 一般情况的优化：x 的奇/偶性测试
 		if len(x.abs) > 0 {
+			// 位 0 与 -x 相同
 			return uint(x.abs[0] & 1) // bit 0 is same for -x
 		}
 		return 0
