@@ -6,32 +6,43 @@
 // arithmetic operations on word vectors. Needed for platforms without
 // assembly implementations of these routines.
 
+// 此文件通过字向量的方式提供了基本多精度算术运算的Go实现.
+// 有些平台并未提供这些程序的汇编实现，因而需要此文件。
+
 package big
 
 // A Word represents a single digit of a multi-precision unsigned integer.
+
+// Word 表示多精度无符号整数的单个数字。
 type Word uintptr
 
 const (
 	// Compute the size _S of a Word in bytes.
+	// 计算一个 Word 的字节大小 _S。
 	_m    = ^Word(0)
 	_logS = _m>>8&1 + _m>>16&1 + _m>>32&1
 	_S    = 1 << _logS
 
-	_W = _S << 3 // word size in bits
-	_B = 1 << _W // digit base
-	_M = _B - 1  // digit mask
+	_W = _S << 3 // word size in bits // 字的位数大小
+	_B = 1 << _W // digit base        // 数字的进制
+	_M = _B - 1  // digit mask        // 数字的掩码
 
-	_W2 = _W / 2   // half word size in bits
-	_B2 = 1 << _W2 // half digit base
-	_M2 = _B2 - 1  // half digit mask
+	_W2 = _W / 2   // half word size in bits // 半字的位数大小
+	_B2 = 1 << _W2 // half digit base        // 半数字的进制
+	_M2 = _B2 - 1  // half digit mask        // 半数字的掩码
 )
 
 // ----------------------------------------------------------------------------
 // Elementary operations on words
 //
 // These operations are used by the vector operations below.
+// 字的基本运算
+//
+// 这些运算通过下面的向量运算进行。
 
 // z1<<_W + z0 = x+y+c, with c == 0 or 1
+
+// z1<<_W + z0 = x+y+c，其中 c == 0 或 1
 func addWW_g(x, y, c Word) (z1, z0 Word) {
 	yc := y + c
 	z0 = x + yc
@@ -42,6 +53,8 @@ func addWW_g(x, y, c Word) (z1, z0 Word) {
 }
 
 // z1<<_W + z0 = x-y-c, with c == 0 or 1
+
+// z1<<_W + z0 = x-y-c，其中  c == 0 或 1
 func subWW_g(x, y, c Word) (z1, z0 Word) {
 	yc := y + c
 	z0 = x - yc
@@ -53,6 +66,9 @@ func subWW_g(x, y, c Word) (z1, z0 Word) {
 
 // z1<<_W + z0 = x*y
 // Adapted from Warren, Hacker's Delight, p. 132.
+
+// z1<<_W + z0 = x*y
+// 改编自 Warren 的《Hacker's Delight》第132页。
 func mulWW_g(x, y Word) (z1, z0 Word) {
 	x0 := x & _M2
 	x1 := x >> _W2
@@ -78,6 +94,8 @@ func mulAddWWW_g(x, y, c Word) (z1, z0 Word) {
 }
 
 // Length of x in bits.
+
+// x 的位数长度。
 func bitLen_g(x Word) (n int) {
 	for ; x >= 0x8000; x >>= 16 {
 		n += 16
@@ -103,17 +121,26 @@ func bitLen_g(x Word) (n int) {
 // log2 computes the integer binary logarithm of x.
 // The result is the integer n for which 2^n <= x < 2^(n+1).
 // If x == 0, the result is -1.
+
+// log2 计算以 2 为底 x 的整数对数。
+// 其结果为整数 n，满足 2^n <= x < 2^(n+1)。
+// 若 x == 0，则结果为 -1。
 func log2(x Word) int {
 	return bitLen(x) - 1
 }
 
 // Number of leading zeros in x.
+
+// x 的前导零数。
 func leadingZeros(x Word) uint {
 	return uint(_W - bitLen(x))
 }
 
 // q = (u1<<_W + u0 - r)/y
 // Adapted from Warren, Hacker's Delight, p. 152.
+
+// q = (u1<<_W + u0 - r)/y
+// 改编自 Warren 的《Hacker's Delight》第152页。
 func divWW_g(u1, u0, v Word) (q, r Word) {
 	if u1 >= v {
 		return 1<<_W - 1, 1<<_W - 1

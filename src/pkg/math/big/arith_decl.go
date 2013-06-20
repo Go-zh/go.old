@@ -5,6 +5,8 @@
 package big
 
 // implemented in arith_$GOARCH.s
+
+// 在 arith_$GOARCH.s 中实现。
 func mulWW(x, y Word) (z1, z0 Word)
 func divWW(x1, x0, y Word) (q, r Word)
 func addVV(z, x, y []Word) (c Word)
