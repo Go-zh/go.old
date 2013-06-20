@@ -5,7 +5,7 @@
 // Package cmplx provides basic constants and mathematical functions for
 // complex numbers.
 
-// cmplx 包为复数提供了基本的常量和数学函数。
+// cmplx 包为复数提供了基本的常量和数学函数.
 package cmplx
 
 import "math"
