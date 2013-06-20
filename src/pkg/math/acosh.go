@@ -49,8 +49,8 @@ package math
 //	              acosh(x) := log1p(t+sqrt(2.0*t+t*t))； 其中 t=x-1。
 //
 // 特殊情况：
-//	若 x<1，则 acosh(x)   为带符号 NaN。
-//	           acosh(NaN) 为无符号 NaN。
+//	若 x<1，则 acosh(x)   为带信号 NaN。
+//	          acosh(NaN) 为无信号 NaN。
 //
 
 // Acosh returns the inverse hyperbolic cosine of x.

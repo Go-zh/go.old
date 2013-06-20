@@ -116,10 +116,10 @@ package math
 //
 // 特殊情况：
 //      若 x < 0（包括 -INF），则
-//         log(x)    为带符号 NaN；
-//         log(+INF) 为 +INF；
-//         log(0)    为 -INF；
-//         log(NaN)  为无符号 NaN。
+//         log(x)    为带信号  NaN；
+//         log(+INF) 为      +INF；
+//         log(0)    为带信号 -INF；
+//         log(NaN)  为无信号  NaN。
 //
 // 精度：
 //      取决于误差分析，误差总是小于 1 ulp（末位单元）。

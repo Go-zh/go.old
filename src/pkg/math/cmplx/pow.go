@@ -53,7 +53,7 @@ import "math"
 // 精度：
 //
 //                         相对误差:
-//    算法      范围       # 测试次数     峰值         均方根
+//    算法      范围         测试次数     峰值         均方根
 //    IEEE      -10,+10     30000       9.4e-15     1.5e-15
 
 // Pow returns x**y, the base-x exponential of y.

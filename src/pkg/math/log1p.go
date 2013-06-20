@@ -128,10 +128,10 @@ package math
 //
 // 特殊情况：
 //      若 x < -1（包括 -INF），则
-//         log1p(x)    为带符号 NaN；
-//         log1p(+INF) 为 +INF；
-//         log1p(-1)   为 -INF；
-//         log1p(NaN)  为无符号 NaN。
+//         log1p(x)    为带信号  NaN；
+//         log1p(+INF) 为      +INF；
+//         log1p(-1)   为带信号 -INF；
+//         log1p(NaN)  为无信号  NaN。
 //
 // 精度：
 //      取决于误差分析，误差总是小于 1 ulp（末位单元）。

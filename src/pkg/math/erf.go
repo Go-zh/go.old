@@ -8,7 +8,7 @@ package math
 	Floating-point error function and complementary error function.
 */
 /*
-	浮点误差函数与互补误差函数。
+	浮点误差函数与余误差函数。
 */
 
 // The original C code and the long comment below are
@@ -375,7 +375,7 @@ func Erf(x float64) float64 {
 //	Erfc(-Inf) = 2
 //	Erfc(NaN) = NaN
 
-// Erfc 返回 x 的互补误差函数。
+// Erfc 返回 x 的余误差函数。
 //
 // 特殊情况为：
 //	Erfc(+Inf) = 0

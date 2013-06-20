@@ -26,7 +26,7 @@ package math
 //
 // 特殊情况为：
 //	Asin(±0) = ±0
-//	Asin(x)  = NaN（若 x < -1 或 x >）
+//	Asin(x)  = NaN（若 x < -1 或 x > 1）
 func Asin(x float64) float64
 
 func asin(x float64) float64 {
