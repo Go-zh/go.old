@@ -60,7 +60,7 @@ func ceil(x float64) float64 {
 //	Trunc(±Inf) = ±Inf
 //	Trunc(NaN) = NaN
 
-// Trunc 返回 x 的整数值
+// Trunc 返回 x 的整数部分
 //
 // 特殊情况为：
 //	Trunc(±0)   = ±0

@@ -11,7 +11,7 @@ package math
 //	Logb(0) = -Inf
 //	Logb(NaN) = NaN
 
-// Logb 返回 x 的二进制指数。
+// Logb 返回以 2 为底 x 的指数。
 //
 // 特殊情况为：
 //	Logb(±Inf) = +Inf
@@ -38,7 +38,7 @@ func Logb(x float64) float64 {
 //	Ilogb(0) = MinInt32
 //	Ilogb(NaN) = MaxInt32
 
-// Ilogb 将 x 的二进制指数作为整数返回。
+// Ilogb 将以 2 为底 x 的指数作为整数返回。
 //
 // 特殊情况为：
 //	Ilogb(±Inf) = MaxInt32
@@ -61,7 +61,7 @@ func Ilogb(x float64) int {
 // logb returns the binary exponent of x. It assumes x is finite and
 // non-zero.
 
-// logb 返回 x 的二进制指数。它假定 x 为有限非零数。
+// logb 返回以 2 为底 x 的指数。它假定 x 为有限非零数。
 func ilogb(x float64) int {
 	x, exp := normalize(x)
 	return int((Float64bits(x)>>shift)&mask) - bias + exp

@@ -15,7 +15,8 @@ const (
 
 // Inf returns positive infinity if sign >= 0, negative infinity if sign < 0.
 
-// Inf 返回无穷大值。若 sign >= 0，则返回正无穷大；若 sign < 0，则返回负无穷大。
+// Inf 返回无穷大值（infinity）。若 sign >= 0，则返回正无穷大（positive infinity）；
+// 若 sign < 0，则返回负无穷大（negative infinity）。
 func Inf(sign int) float64 {
 	var v uint64
 	if sign >= 0 {
@@ -28,12 +29,12 @@ func Inf(sign int) float64 {
 
 // NaN returns an IEEE 754 ``not-a-number'' value.
 
-// NaN 返回IEEE 754定义的“非数值”。
+// NaN 返回IEEE 754定义的“非数值”（Not-a-Number）。
 func NaN() float64 { return Float64frombits(uvnan) }
 
 // IsNaN returns whether f is an IEEE 754 ``not-a-number'' value.
 
-// IsNaN 判断 f 是否为IEEE 754定义的“非数值”。
+// IsNaN 判断 f 是否为IEEE 754定义的“非数值”（Not-a-Number）。
 func IsNaN(f float64) (is bool) {
 	// IEEE 754 says that only NaNs satisfy f != f.
 	// To avoid the floating-point hardware, could use:
