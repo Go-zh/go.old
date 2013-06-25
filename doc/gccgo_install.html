@@ -67,17 +67,26 @@ will include Go support.
 
 <div class="english">
 <p>
-The GCC 4.7.0 release includes Go support that is very close to
-<a href="/doc/go1.html">Go 1</a>.  Due to release timing it will not
-include the last few changes to the Go 1 libraries.  The GCC 4.7.1
-release should include a complete Go 1 compiler and libraries.
+The GCC 4.7.1 release and all later 4.7 releases include a complete
+<a href="/doc/go1.html">Go 1</a> compiler and libraries.
 </p>
 </div>
 
 <p>
-GCC 4.7.0 正式版包含了非常接近<a href="/doc/go1.html">Go 1</a>的Go支持。
-但由于发布时间的问题，它将不会包含最近几个Go1库的更改。GCC 4.7.1
-正式版应该会包含完整的Go 1编译器与库。
+GCC 4.7.1和所有比4.7更新的发行版都包含有完整的<a href="/doc/go1.html">Go 1</a>编译器和库。
+</p>
+
+<div class="english">
+<p>
+Due to timing, the GCC 4.8.0 and 4.8.1 releases are close to but not
+identical to Go 1.1.  The GCC 4.8.2 release is expected to include a
+complete Go 1.1.1 implementation.
+</p>
+</div>
+
+<p>
+由于时间关系，虽然GCC 4.8.0和4.8.1发行版都与Go 1.1很接近，但并不完全相同。
+GCC 4.8.2发行版预计会包含完整的Go 1.1.1实现。
 </p>
 
 <div class="english">
@@ -240,12 +249,15 @@ described on
 the <a href="http://gcc.gnu.org/install/prerequisites.html">gcc web
 site</a>.  It is important to install all the prerequisites before
 running the gcc <code>configure</code> script.
+The prerequisite libraries can be conveniently downloaded using the
+script <code>contrib/download_prerequisites</code> in the GCC sources.
 </p>
 </div>
 
 <p>
-构建GCC需要一些先决条件，其描述在<a href="http://gcc.gnu.org/install/prerequisites.html">gcc网站</a>上。
-在运行GCC的 <code>configure</code> 脚本前，设置所有的先决条件是很重要的。
+构建GCC需满足一些前提，其描述在<a href="http://gcc.gnu.org/install/prerequisites.html">gcc网站</a>上。
+在运行GCC的 <code>configure</code> 脚本前，安装好所有的依赖库是很重要的，你可以用GCC源码中的
+<code>contrib/download_prerequisites</code> 脚本来方便地下载它们。
 </p>
 
 <div class="english">
@@ -289,11 +301,11 @@ make install
 
 <div class="english">
 <p>
-Current versions of Ubuntu and current versions of gcc disagree on
+Current versions of Ubuntu and versions of GCC before 4.8 disagree on
 where system libraries and header files are found.  This is not a
-gccgo issue, and we hope this will be resolved soon.  Until it is,
-setting these environment variables while configuring and building
-gccgo may fix the problem.
+gccgo issue.  When building older versions of GCC, setting these
+environment variables while configuring and building gccgo may fix the
+problem.
 </p>
 </div>
 
@@ -595,14 +607,14 @@ gccgo编译器会在当前目录中寻找导入文件。在更复杂的情况下
 
 <div class="english">
 <p>
-The gccgo compiler does not currently (2012-03-20) record
+The gccgo compiler does not currently (2013-06-20) record
 the file name of imported packages in the object file. You must
 arrange for the imported data to be linked into the program.
 </p>
 </div>
 
 <p>
-gccgo编译器当前（2012-03-20）还不能记录对象文件中已导入包的文件名。
+gccgo编译器当前（2013-06-20）还不能记录对象文件中已导入包的文件名。
 你必须为链接到程序的导入数据进行安排。
 </p>
 
@@ -731,10 +743,16 @@ struct __go_slice {
 
 <div class="english">
 <p>
-The type of a Go function with no receiver is equivalent to a C function
-whose parameter types are equivalent.  When a Go function returns more
-than one value, the C function returns a struct.  For example, these
-functions have equivalent types:
+The type of a Go function is a pointer to a struct (this is
+<b style="color: red;">subject to change</b>).  The first field in the
+struct points to the code of the function, which will be equivalent to
+a pointer to a C function whose parameter types are equivalent, with
+an additional trailing parameter.  The trailing parameter is the
+closure, and the argument to pass is a pointer to the Go function
+struct.
+
+When a Go function returns more than one value, the C function returns
+a struct.  For example, these functions are roughly equivalent:
 </p>
 </div>
 
@@ -745,21 +763,8 @@ C函数返回一个结构。例如，以下函数拥有等价的类型：
 
 <pre>
 func GoFunction(int) (int, float64)
-struct { int i; float64 f; } CFunction(int)
+struct { int i; float64 f; } CFunction(int, void*)
 </pre>
-
-<div class="english">
-<p>
-A pointer to a Go function is equivalent to a pointer to a C function
-when the functions have equivalent types (this is
-<b style="color: red;">subject to change</b>).
-</p>
-</div>
-
-<p>
-当Go与C函数拥有等价的类型时，指向Go函数的指针等价于指向C函数的指针
-（<b style="color: red;">本条目需要修改</b>）。
-</p>
 
 <div class="english">
 <p>
@@ -865,6 +870,22 @@ i := c_open(&amp;name[0], syscall.O_RDONLY, 0);
 
 <div class="english">
 <p>
+Note that if the C function can block, such as in a call
+to <code>read</code>, calling the C function may block the Go program.
+Unless you have a clear understanding of what you are doing, all calls
+between C and Go should be implemented through cgo or SWIG, as for
+the <code>gc</code> compiler.
+</p>
+</div>
+
+<p>
+注意，若该C函数可被阻塞（例如对 <code>read</code> 的调用），那么调用它可能会阻塞Go程序。
+除非你很清楚自己在做什么，否则所有在C和Go之间的调用都应当用 <code>gc</code> 编译器
+通过 cgo 或 SWIG 来实现。
+</p>
+
+<div class="english">
+<p>
 The name of Go functions accessed from C is subject to change. At present
 the name of a Go function that does not have a receiver is
 <code>prefix.package.Functionname</code>. The prefix is set by
@@ -880,7 +901,6 @@ a GCC extension.
 <code>prefix.package.Functionname</code>。在该包被编译后，该前缀通过
 <code>-fgo-prefix</code> 选项设置；若该选项未被使用，则默认为 <code>go</code>。
 要从C调用该函数，你必须使用一个GCC扩展来设置名字。
-
 </p>
 
 <pre>

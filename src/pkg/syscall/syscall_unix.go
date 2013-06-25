@@ -152,6 +152,102 @@ func Write(fd int, p []byte) (n int, err error) {
 	return
 }
 
+// For testing: clients can set this flag to force
+// creation of IPv6 sockets to return EAFNOSUPPORT.
+var SocketDisableIPv6 bool
+
+type Sockaddr interface {
+	sockaddr() (ptr uintptr, len _Socklen, err error) // lowercase; only we can define Sockaddrs
+}
+
+type SockaddrInet4 struct {
+	Port int
+	Addr [4]byte
+	raw  RawSockaddrInet4
+}
+
+type SockaddrInet6 struct {
+	Port   int
+	ZoneId uint32
+	Addr   [16]byte
+	raw    RawSockaddrInet6
+}
+
+type SockaddrUnix struct {
+	Name string
+	raw  RawSockaddrUnix
+}
+
+func Bind(fd int, sa Sockaddr) (err error) {
+	ptr, n, err := sa.sockaddr()
+	if err != nil {
+		return err
+	}
+	return bind(fd, ptr, n)
+}
+
+func Connect(fd int, sa Sockaddr) (err error) {
+	ptr, n, err := sa.sockaddr()
+	if err != nil {
+		return err
+	}
+	return connect(fd, ptr, n)
+}
+
+func Getpeername(fd int) (sa Sockaddr, err error) {
+	var rsa RawSockaddrAny
+	var len _Socklen = SizeofSockaddrAny
+	if err = getpeername(fd, &rsa, &len); err != nil {
+		return
+	}
+	return anyToSockaddr(&rsa)
+}
+
+func GetsockoptInt(fd, level, opt int) (value int, err error) {
+	var n int32
+	vallen := _Socklen(4)
+	err = getsockopt(fd, level, opt, uintptr(unsafe.Pointer(&n)), &vallen)
+	return int(n), err
+}
+
+func Recvfrom(fd int, p []byte, flags int) (n int, from Sockaddr, err error) {
+	var rsa RawSockaddrAny
+	var len _Socklen = SizeofSockaddrAny
+	if n, err = recvfrom(fd, p, flags, &rsa, &len); err != nil {
+		return
+	}
+	if rsa.Addr.Family != AF_UNSPEC {
+		from, err = anyToSockaddr(&rsa)
+	}
+	return
+}
+
+func Sendto(fd int, p []byte, flags int, to Sockaddr) (err error) {
+	ptr, n, err := to.sockaddr()
+	if err != nil {
+		return err
+	}
+	return sendto(fd, p, flags, ptr, n)
+}
+
+func Socket(domain, typ, proto int) (fd int, err error) {
+	if domain == AF_INET6 && SocketDisableIPv6 {
+		return -1, EAFNOSUPPORT
+	}
+	fd, err = socket(domain, typ, proto)
+	return
+}
+
+func Socketpair(domain, typ, proto int) (fd [2]int, err error) {
+	var fdx [2]int32
+	err = socketpair(domain, typ, proto, &fdx)
+	if err == nil {
+		fd[0] = int(fdx[0])
+		fd[1] = int(fdx[1])
+	}
+	return
+}
+
 func Sendfile(outfd int, infd int, offset *int64, count int) (written int, err error) {
 	if raceenabled {
 		raceReleaseMerge(unsafe.Pointer(&ioSync))

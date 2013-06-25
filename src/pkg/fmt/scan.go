@@ -921,7 +921,7 @@ func (s *ss) convertFloat(str string, n int) float64 {
 			}
 			s.error(err)
 		}
-		n, err := strconv.Atoi(str[p+1:])
+		m, err := strconv.Atoi(str[p+1:])
 		if err != nil {
 			// Put full string into error.
 			// 将整个字符串转为错误。
@@ -930,7 +930,7 @@ func (s *ss) convertFloat(str string, n int) float64 {
 			}
 			s.error(err)
 		}
-		return math.Ldexp(f, n)
+		return math.Ldexp(f, m)
 	}
 	f, err := strconv.ParseFloat(str, n)
 	if err != nil {
@@ -1014,8 +1014,7 @@ func (s *ss) quotedString() string {
 				// 在一个合法的反斜杠转义中，无论多长，
 				// 只有紧跟反斜杠之后的转义本身才可以是反斜杠或引号。
 				// 因此我们之需要保证第一个字符在反斜杠之后即可。
-				r := s.mustReadRune()
-				s.buf.WriteRune(r)
+				s.buf.WriteRune(s.mustReadRune())
 			} else if r == '"' {
 				break
 			}

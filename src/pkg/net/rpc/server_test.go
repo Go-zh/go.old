@@ -84,6 +84,7 @@ func listenTCP() (net.Listener, string) {
 
 func startServer() {
 	Register(new(Arith))
+	RegisterName("net.rpc.Arith", new(Arith))
 
 	var l net.Listener
 	l, serverAddr = listenTCP()
@@ -97,6 +98,7 @@ func startServer() {
 func startNewServer() {
 	newServer = NewServer()
 	newServer.Register(new(Arith))
+	newServer.RegisterName("net.rpc.Arith", new(Arith))
 
 	var l net.Listener
 	l, newServerAddr = listenTCP()
@@ -125,6 +127,7 @@ func testRPC(t *testing.T, addr string) {
 	if err != nil {
 		t.Fatal("dialing", err)
 	}
+	defer client.Close()
 
 	// Synchronous calls
 	args := &Args{7, 8}
@@ -233,6 +236,17 @@ func testRPC(t *testing.T, addr string) {
 	if reply.C != args.A*args.B {
 		t.Errorf("Mul: expected %d got %d", reply.C, args.A*args.B)
 	}
+
+	// ServiceName contain "." character
+	args = &Args{7, 8}
+	reply = new(Reply)
+	err = client.Call("net.rpc.Arith.Add", args, reply)
+	if err != nil {
+		t.Errorf("Add: expected no error but got string %q", err.Error())
+	}
+	if reply.C != args.A+args.B {
+		t.Errorf("Add: expected %d got %d", reply.C, args.A+args.B)
+	}
 }
 
 func TestHTTP(t *testing.T) {
@@ -253,6 +267,7 @@ func testHTTPRPC(t *testing.T, path string) {
 	if err != nil {
 		t.Fatal("dialing", err)
 	}
+	defer client.Close()
 
 	// Synchronous calls
 	args := &Args{7, 8}
@@ -329,6 +344,7 @@ func TestServeRequest(t *testing.T) {
 
 func testServeRequest(t *testing.T, server *Server) {
 	client := CodecEmulator{server: server}
+	defer client.Close()
 
 	args := &Args{7, 8}
 	reply := new(Reply)
@@ -411,6 +427,7 @@ func (WriteFailCodec) Close() error {
 
 func TestSendDeadlock(t *testing.T) {
 	client := NewClientWithCodec(WriteFailCodec(0))
+	defer client.Close()
 
 	done := make(chan bool)
 	go func() {
@@ -449,6 +466,8 @@ func countMallocs(dial func() (*Client, error), t *testing.T) float64 {
 	if err != nil {
 		t.Fatal("error dialing", err)
 	}
+	defer client.Close()
+
 	args := &Args{7, 8}
 	reply := new(Reply)
 	return testing.AllocsPerRun(100, func() {
@@ -496,6 +515,8 @@ func (writeCrasher) Write(p []byte) (int, error) {
 func TestClientWriteError(t *testing.T) {
 	w := &writeCrasher{done: make(chan bool)}
 	c := NewClient(w)
+	defer c.Close()
+
 	res := false
 	err := c.Call("foo", 1, &res)
 	if err == nil {
@@ -552,6 +573,7 @@ func benchmarkEndToEnd(dial func() (*Client, error), b *testing.B) {
 	if err != nil {
 		b.Fatal("error dialing:", err)
 	}
+	defer client.Close()
 
 	// Synchronous calls
 	args := &Args{7, 8}
@@ -587,6 +609,7 @@ func benchmarkEndToEndAsync(dial func() (*Client, error), b *testing.B) {
 	if err != nil {
 		b.Fatal("error dialing:", err)
 	}
+	defer client.Close()
 
 	// Asynchronous calls
 	args := &Args{7, 8}
