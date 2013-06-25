@@ -76,7 +76,7 @@ type int16 int16
 // Range: -2147483648 through 2147483647.
 
 // int32 是所有带符号32位整数的集合。
-// 范围：-32768 至 32767。
+// 范围：-2147483648 至 2147483647。
 type int32 int32
 
 // int64 is the set of all signed 64-bit integers.
