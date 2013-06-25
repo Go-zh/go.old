@@ -18,11 +18,27 @@
 // returning a result other than *Int or *Rat take one of the operands as
 // the receiver.
 //
+
+// big 包实现了（大数的）高精度运算.
+// 它支持以下数值类型：
+//
+//	- Int	带符号整数
+//	- Rat	有理数
+//
+// 典型的方法形式如下：
+//
+//	func (z *Int) Op(x, y *Int) *Int	（*Rat 同理）
+//
+// 它实现了像 z = x Op y 这样的操作，并将其结果作为接收者；若接收者为操作数之一，
+// 其值可能会被覆盖（而内存则会被重用）。为保留操作，其结果也会被返回。若该方法返回除
+// *Int 或 *Rat 之外的结果，其中一个操作数将被作为接收者。
 package big
 
 // This file contains operations on unsigned multi-precision integers.
 // These are the building blocks for the operations on signed integers
 // and rationals.
+
+// 此文件包含了对无符号高精度整数的操作。以下为用于带符号整数和有理数操作的基础构建。
 
 import (
 	"errors"
@@ -44,6 +60,17 @@ import (
 // always normalized before returning the final result. The normalized
 // representation of 0 is the empty or nil slice (length = 0).
 //
+
+// 无符号整数 x 的形式为
+//
+//	x = x[n-1]*_B^(n-1) + x[n-2]*_B^(n-2) + ... + x[1]*_B + x[0]
+//
+// 其中 0 <= x[i] < _B 且 0 <= i < n，它存储在长度为 n 的切片中，数字 x[i]
+// 为该切片的元素。
+//
+// 若该切片不包含前导的数字 0，则该数即为标准化的。在运算过程中可能会出现非标准值，
+// 但在返回最终结果之前，它们的形式总会被标准化。0 的标准化表示为空的或 nil
+// 切片（即长度为0）。
 type nat []Word
 
 var (
@@ -68,11 +95,13 @@ func (z nat) norm() nat {
 
 func (z nat) make(n int) nat {
 	if n <= cap(z) {
+		// 重用 z
 		return z[0:n] // reuse z
 	}
 	// Choosing a good value for e has significant performance impact
 	// because it increases the chance that a value can be reused.
-	const e = 4 // extra capacity
+	// 选择一个好的 e 值对性能有着显著的影响，因为它能增加该值被重用的机会。
+	const e = 4 // extra capacity // 额外的容量
 	return make(nat, n, n+e)
 }
 
@@ -87,17 +116,20 @@ func (z nat) setWord(x Word) nat {
 
 func (z nat) setUint64(x uint64) nat {
 	// single-digit values
+	// 单数字的值
 	if w := Word(x); uint64(w) == x {
 		return z.setWord(w)
 	}
 
 	// compute number of words n required to represent x
+	// 计算表示 x 所需的字数 n
 	n := 0
 	for t := x; t > 0; t >>= _W {
 		n++
 	}
 
 	// split x into n words
+	// 将 x 分割为 n 个字
 	z = z.make(n)
 	for i := range z {
 		z[i] = Word(x & _M)
@@ -122,9 +154,11 @@ func (z nat) add(x, y nat) nat {
 		return z.add(y, x)
 	case m == 0:
 		// n == 0 because m >= n; result is 0
+		// 因为 m >= n，所以 n == 0；结果为 0
 		return z.make(0)
 	case n == 0:
 		// result is x
+		// 结果为 x
 		return z.set(x)
 	}
 	// m > 0
@@ -148,9 +182,11 @@ func (z nat) sub(x, y nat) nat {
 		panic("underflow")
 	case m == 0:
 		// n == 0 because m >= n; result is 0
+		// 因为 m >= n，所以 n == 0；结果为 0
 		return z.make(0)
 	case n == 0:
 		// result is x
+		// 结果为 x
 		return z.set(x)
 	}
 	// m > 0
@@ -197,6 +233,7 @@ func (x nat) cmp(y nat) (r int) {
 func (z nat) mulAddWW(x nat, y, r Word) nat {
 	m := len(x)
 	if m == 0 || y == 0 {
+		// 结果为 r
 		return z.setWord(r) // result is r
 	}
 	// m > 0
@@ -209,7 +246,11 @@ func (z nat) mulAddWW(x nat, y, r Word) nat {
 
 // basicMul multiplies x and y and leaves the result in z.
 // The (non-normalized) result is placed in z[0 : len(x) + len(y)].
+
+// basicMul 计算 x 和 y 的乘积并将结果留给 z。
+// （非标准化的）结果存放在 z[0 : len(x) + len(y)] 中。
 func basicMul(z, x, y nat) {
+	// 初始化 z
 	z[0 : len(x)+len(y)].clear() // initialize z
 	for i, d := range y {
 		if d != 0 {
@@ -220,6 +261,9 @@ func basicMul(z, x, y nat) {
 
 // Fast version of z[0:n+n>>1].add(z[0:n+n>>1], x[0:n]) w/o bounds checks.
 // Factored out for readability - do not use outside karatsuba.
+
+// z[0:n+n>>1].add(z[0:n+n>>1], x[0:n]) 无边界检查的快速版本。
+// 分离出来以提高可读性 - 不要使用 karatsuba 之外的算法。
 func karatsubaAdd(z, x nat, n int) {
 	if c := addVV(z[0:n], z, x); c != 0 {
 		addVW(z[n:n+n>>1], z[n:], c)
@@ -227,6 +271,8 @@ func karatsubaAdd(z, x nat, n int) {
 }
 
 // Like karatsubaAdd, but does subtract.
+
+// 类似于 karatsubaAdd，但它进行减法。
 func karatsubaSub(z, x nat, n int) {
 	if c := subVV(z[0:n], z, x); c != 0 {
 		subVW(z[n:n+n>>1], z[n:], c)
