@@ -5947,7 +5947,7 @@ For example, in this program, there are two unused imports
 (<code>fmt</code> and <code>io</code>)
 and an unused variable (<code>greeting</code>).
 </p>
-{{code "/doc/progs/unused1.go" `/package/` `$`}}
+{{code "/doc/progs/eff_unused1.go" `/package/` `$`}}
 <p>
 Top-level blank declarations referring to the packages
 will silence the unused import errors.
@@ -5956,7 +5956,7 @@ the imports, as a reminder to clean things up later.
 Similarly, assigning <code>greeting</code> to a blank identifier
 will silence the unused variable error.
 </p>
-{{code "/doc/progs/unused2.go" `/package/` `$`}}
+{{code "/doc/progs/eff_unused2.go" `/package/` `$`}}
 
 <h3 id="blank_import">Import for side effect</h3>
 
