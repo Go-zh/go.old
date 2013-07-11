@@ -74,7 +74,7 @@ func IsInf(f float64, sign int) bool {
 // satisfying x == y × 2**exp. It assumes x is finite and non-zero.
 
 // TDOD(osc): normalize =?
-// normalize 返回一个普通数 y 和一个指数 exp，使得它们满足 x == y × 2**exp。
+// normalize 返回一个规范数 y 和一个指数 exp，使得它们满足 x == y × 2**exp。
 // 该函数假定 x 为有限的非零数值。
 func normalize(x float64) (y float64, exp int) {
 	const SmallestNormal = 2.2250738585072014e-308 // 2**-1022

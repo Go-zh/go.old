@@ -14,7 +14,7 @@ package math
 //	Frexp(±Inf) = ±Inf, 0
 //	Frexp(NaN) = NaN, 0
 
-// Frexp 将 f 分解为一个正常化的小数和一个 2 的整数次幂。
+// Frexp 将 f 分解为一个规范化的小数和一个 2 的整数次幂。
 // 它返回的 frac 和 exp 满足 f == frac × 2**exp，且 frac 的绝对值在区间 [½, 1) 内。
 //
 // 特殊情况为：
