@@ -1,10 +1,20 @@
 <!--{
+	"Title": "实效Go编程",
+	"Template": true
+}-->
+
+<!--{
 	"Title": "Effective Go",
 	"Template": true
 }-->
 
+<div class="english">
 <h2 id="introduction">Introduction</h2>
+</div>
 
+<h2 id="简介">简介</h2>
+
+<div class="english">
 <p>
 Go is a new language.  Although it borrows ideas from
 existing languages,
@@ -24,7 +34,18 @@ programming in Go, such as naming, formatting, program
 construction, and so on, so that programs you write
 will be easy for other Go programmers to understand.
 </p>
+</div>
 
+<p>
+Go 是一门全新的语言。尽管它从既有的语言中借鉴了许多理念，但其与众不同的特性，
+使得使用Go编程在本质上就不同于其它语言。将现有的C++或Java程序直译为Go
+程序并不能令人满意——毕竟Java程序是用Java编写的，而不是Go。
+另一方面，若从Go的角度去分析问题，你就能编写出同样可行但大不相同的程序。
+换句话说，要想将Go程序写得好，就必须理解其特性和风格。了解命名、格式化、
+程序结构等既定规则也同样重要，这样你编写的程序才能更容易被其他程序员所理解。
+</p>
+
+<div class="english">
 <p>
 This document gives tips for writing clear, idiomatic Go code.
 It augments the <a href="/ref/spec">language specification</a>,
@@ -33,9 +54,21 @@ and <a href="/doc/code.html">How to Write Go Code</a>,
 all of which you
 should read first.
 </p>
+</div>
 
+<p>
+本文档就如何编写清晰、地道的Go代码提供了一些技巧。它是对<a href="/ref/spec">语言规范</a>、
+<a href="https://go-tour-zh.appspot.com/">Go语言之旅</a>以及
+<a href="/doc/code.html">如何使用Go编程</a>的补充说明，因此我们建议您先阅读这些文档。
+</p>
+
+<div class="english">
 <h3 id="examples">Examples</h3>
+</div>
 
+<h3 id="示例">示例</h3>
+
+<div class="english">
 <p>
 The <a href="/src/pkg/">Go package sources</a>
 are intended to serve not
@@ -51,10 +84,25 @@ might be implemented, the documentation, code and examples in the
 library can provide answers, ideas and
 background.
 </p>
+</div>
+
+<p>
+<a href="/src/pkg/">Go包的源码</a>不仅是核心库，同时也是学习如何使用Go语言的示例源码。
+此外，其中的一些包还包含了可工作的，独立的可执行示例，你可以直接在
+<a href="http://golang.org">golang.org</a>网站上运行它们，比如
+<a href="http://zh.golanger.com/pkg/strings/#example_Map">这个例子</a>
+（单击文字“示例”来展开它）。如果你有任何关于某些问题如何解决，或某些东西如何实现的疑问，
+也可以从中获取相关的答案、思路以及后台实现。
+</p>
 
 
+<div class="english">
 <h2 id="formatting">Formatting</h2>
+</div>
 
+<h2 id="格式化">格式化</h2>
+
+<div class="english">
 <p>
 Formatting issues are the most contentious
 but the least consequential.
@@ -65,7 +113,15 @@ if everyone adheres to the same style.
 The problem is how to approach this Utopia without a long
 prescriptive style guide.
 </p>
+</div>
 
+<p>
+格式化问题总是充满了争议，但却始终没有形成统一的定论。虽说人们可以适应不同的编码风格，
+但抛弃这种适应过程岂不更好？若所有人都遵循相同的编码风格，在这类问题上浪费的时间将会更少。
+问题就在于如何实现这种设想，而无需冗长的语言风格规范。
+</p>
+
+<div class="english">
 <p>
 With Go we take an unusual
 approach and let the machine
@@ -82,41 +138,93 @@ situation, run <code>gofmt</code>; if the answer doesn't
 seem right, rearrange your program (or file a bug about <code>gofmt</code>),
 don't work around it.
 </p>
+</div>
 
+<p>
+在Go中我们另辟蹊径，让机器来处理大部分的格式化问题。<code>gofmt</code>
+程序（也可用 <code>go fmt</code>，它以包为处理对象而非源文件）将Go程序按照标准风格缩进、
+对齐，保留注释并在需要时重新格式化。若你想知道如何处理一些新的代码布局，请尝试运行
+<code>gofmt</code>；若结果仍不尽人意，请重新组织你的程序（或提交有关 <code>gofmt</code>
+的Bug），而不必为此纠结。
+</p>
+
+<div class="english">
 <p>
 As an example, there's no need to spend time lining up
 the comments on the fields of a structure.
 <code>Gofmt</code> will do that for you.  Given the
 declaration
 </p>
+</div>
 
+<p>
+举例来说，你无需花时间将结构体中的字段注释对齐，<code>gofmt</code> 将为你代劳。
+假如有以下声明：
+</p>
+
+<div class="english">
 <pre>
 type T struct {
     name string // name of the object
     value int // its value
 }
 </pre>
+</div>
 
+<pre>
+type T struct {
+    name string // 对象名
+    value int // 对象值
+}
+</pre>
+
+<div class="english">
 <p>
 <code>gofmt</code> will line up the columns:
 </p>
+</div>
 
+<p>
+<code>gofmt</code> 会将它按列对齐为：
+</p>
+
+<div class="english">
 <pre>
 type T struct {
     name    string // name of the object
     value   int    // its value
 }
 </pre>
+</div>
 
+<pre>
+type T struct {
+    name    string // 对象名
+    value   int    // 对象值
+}
+</pre>
+
+<div class="english">
 <p>
 All Go code in the standard packages has been formatted with <code>gofmt</code>.
 </p>
+</div>
 
+<p>
+标准包中所有的Go代码都已经用 <code>gofmt</code> 格式化过了。
+</p>
 
+<div class="english">
 <p>
 Some formatting details remain.  Very briefly:
 </p>
+</div>
 
+<p>
+还有一些关于格式化的细节，它们非常简短：
+</p>
+
+<div class="english">
 <dl>
     <dt>Indentation</dt>
     <dd>We use tabs for indentation and <code>gofmt</code> emits them by default.
@@ -139,9 +247,35 @@ x&lt;&lt;8 + y&lt;&lt;16
     means what the spacing implies, unlike in the other languages.
     </dd>
 </dl>
+</div>
 
+<dl>
+    <dt>缩进</dt>
+    <dd>
+    我们使用制表符（tab）缩进，<code>gofmt</code> 默认也使用它。在你认为确实有必要时再使用空格。
+    </dd>
+    <dt>行的长度</dt>
+    <dd>
+    Go对行的长度没有限制，别担心打孔纸不够长。如果一行实在太长，也可进行折行并插入适当的tab缩进。
+    </dd>
+    <dt>括号</dt>
+    <dd>
+    比起C和Java，Go所需的括号更少：控制结构（<code>if</code>、<code>for</code> 和
+    <code>switch</code>）在语法上并不需要圆括号。此外，操作符优先级处理变得更加简洁，因此
+<pre>
+x&lt;&lt;8 + y&lt;&lt;16
+</pre>
+    正表述了空格符所传达的含义。
+    </dd>
+</dl>
+
+<div class="english">
 <h2 id="commentary">Commentary</h2>
+</div>
 
+<h2 id="注释">注释</h2>
+
+<div class="english">
 <p>
 Go provides C-style <code>/* */</code> block comments
 and C++-style <code>//</code> line comments.
@@ -149,7 +283,14 @@ Line comments are the norm;
 block comments appear mostly as package comments, but
 are useful within an expression or to disable large swaths of code.
 </p>
+</div>
 
+<p>
+Go语言支持C风格的块注释 <code>/* */</code> 和C++风格的行注释 <code>//</code>。
+行注释更为常用，而块注释则主要用作包的注释，当然也可在禁用一大段代码时使用。
+</p>
+
+<div class="english">
 <p>
 The program—and web server—<code>godoc</code> processes
 Go source files to extract documentation about the contents of the
@@ -158,6 +299,13 @@ Comments that appear before top-level declarations, with no intervening newlines
 are extracted along with the declaration to serve as explanatory text for the item.
 The nature and style of these comments determines the
 quality of the documentation <code>godoc</code> produces.
+</p>
+</div>
+
+<p>
+<code>godoc</code> 既是一个程序，又是一个Web服务器，它对Go的源码进行处理，并提取包中的文档内容。
+出现在顶级声明之前，且与该声明之间没有空行的注释，将与该声明一起被提取出来，作为该条目的说明文档。
+这些注释的类型和风格决定了 <code>godoc</code> 生成的文档质量。
 </p>
 
 <p>
