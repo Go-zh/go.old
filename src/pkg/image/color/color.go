@@ -289,13 +289,6 @@ func gray16Model(c Color) Color {
 // Palette是颜色的调色板。
 type Palette []Color
 
-func diff(a, b uint32) uint32 {
-	if a > b {
-		return a - b
-	}
-	return b - a
-}
-
 // Convert returns the palette color closest to c in Euclidean R,G,B space.
 
 // Convert在Euclidean R,G,B空间中找到最接近c的调色板。
@@ -311,19 +304,20 @@ func (p Palette) Convert(c Color) Color {
 
 // Index在Euclidean R,G,B空间中找到最接近c的调色板对应的索引。
 func (p Palette) Index(c Color) int {
+	// A batch version of this computation is in image/draw/draw.go.
+
 	cr, cg, cb, _ := c.RGBA()
-	// Shift by 1 bit to avoid potential uint32 overflow in sum-squared-difference.
-	cr >>= 1
-	cg >>= 1
-	cb >>= 1
 	ret, bestSSD := 0, uint32(1<<32-1)
 	for i, v := range p {
 		vr, vg, vb, _ := v.RGBA()
-		vr >>= 1
-		vg >>= 1
-		vb >>= 1
-		dr, dg, db := diff(cr, vr), diff(cg, vg), diff(cb, vb)
-		ssd := (dr * dr) + (dg * dg) + (db * db)
+		// We shift by 1 bit to avoid potential uint32 overflow in
+		// sum-squared-difference.
+		delta := (int32(cr) - int32(vr)) >> 1
+		ssd := uint32(delta * delta)
+		delta = (int32(cg) - int32(vg)) >> 1
+		ssd += uint32(delta * delta)
+		delta = (int32(cb) - int32(vb)) >> 1
+		ssd += uint32(delta * delta)
 		if ssd < bestSSD {
 			if ssd == 0 {
 				return i

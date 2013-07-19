@@ -157,11 +157,12 @@ TestAtomic64(void)
 	z64 = 42;
 	x64 = 0;
 	PREFETCH(&z64);
-	if(runtime·cas64(&z64, &x64, 1))
+	if(runtime·cas64(&z64, x64, 1))
 		runtime·throw("cas64 failed");
-	if(x64 != 42)
+	if(x64 != 0)
 		runtime·throw("cas64 failed");
-	if(!runtime·cas64(&z64, &x64, 1))
+	x64 = 42;
+	if(!runtime·cas64(&z64, x64, 1))
 		runtime·throw("cas64 failed");
 	if(x64 != 42 || z64 != 1)
 		runtime·throw("cas64 failed");
@@ -193,7 +194,7 @@ runtime·check(void)
 	uint64 h;
 	float32 i, i1;
 	float64 j, j1;
-	void* k;
+	byte *k, *k1;
 	uint16* l;
 	struct x1 {
 		byte x;
@@ -231,6 +232,17 @@ runtime·check(void)
 		runtime·throw("cas3");
 	if(z != 4)
 		runtime·throw("cas4");
+
+	k = (byte*)0xfedcb123;
+	if(sizeof(void*) == 8)
+		k = (byte*)((uintptr)k<<10);
+	if(runtime·casp((void**)&k, nil, nil))
+		runtime·throw("casp1");
+	k1 = k+1;
+	if(!runtime·casp((void**)&k, k, k1))
+		runtime·throw("casp2");
+	if(k != k1)
+		runtime·throw("casp3");
 
 	*(uint64*)&j = ~0ULL;
 	if(j == j)
@@ -282,12 +294,11 @@ runtime·Caller(intgo skip, uintptr retpc, String retfile, intgo retline, bool r
 		retbool = true;  // have retpc at least
 	} else {
 		retpc = rpc[1];
-		retfile = f->src;
 		pc = retpc;
 		g = runtime·findfunc(rpc[0]);
 		if(pc > f->entry && (g == nil || g->entry != (uintptr)runtime·sigpanic))
 			pc--;
-		retline = runtime·funcline(f, pc);
+		retline = runtime·funcline(f, pc, &retfile);
 		retbool = true;
 	}
 	FLUSH(&retpc);
@@ -364,4 +375,35 @@ runtime∕pprof·runtime_cyclesPerSecond(int64 res)
 {
 	res = runtime·tickspersecond();
 	FLUSH(&res);
+}
+
+DebugVars	runtime·debug;
+
+static struct {
+	int8*	name;
+	int32*	value;
+} dbgvar[] = {
+	{"gctrace", &runtime·debug.gctrace},
+};
+
+void
+runtime·parsedebugvars(void)
+{
+	byte *p;
+	int32 i, n;
+
+	p = runtime·getenv("GODEBUG");
+	if(p == nil)
+		return;
+	for(;;) {
+		for(i=0; i<nelem(dbgvar); i++) {
+			n = runtime·findnull((byte*)dbgvar[i].name);
+			if(runtime·mcmp(p, (byte*)dbgvar[i].name, n) == 0 && p[n] == '=')
+				*dbgvar[i].value = runtime·atoi(p+n+1);
+		}
+		p = runtime·strstr(p, (byte*)",");
+		if(p == nil)
+			break;
+		p++;
+	}
 }

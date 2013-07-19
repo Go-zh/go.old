@@ -93,6 +93,30 @@ func TestYieldLocked(t *testing.T) {
 	<-c
 }
 
+func TestGoroutineParallelism(t *testing.T) {
+	const P = 4
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(P))
+	for try := 0; try < 10; try++ {
+		done := make(chan bool)
+		x := uint32(0)
+		for p := 0; p < P; p++ {
+			// Test that all P goroutines are scheduled at the same time
+			go func(p int) {
+				for i := 0; i < 3; i++ {
+					expected := uint32(P*i + p)
+					for atomic.LoadUint32(&x) != expected {
+					}
+					atomic.StoreUint32(&x, expected+1)
+				}
+				done <- true
+			}(p)
+		}
+		for p := 0; p < P; p++ {
+			<-done
+		}
+	}
+}
+
 func TestBlockLocked(t *testing.T) {
 	const N = 10
 	c := make(chan bool)
@@ -157,10 +181,129 @@ func TestTimerFairness2(t *testing.T) {
 	<-done
 }
 
+// The function is used to test preemption at split stack checks.
+// Declaring a var avoids inlining at the call site.
+var preempt = func() int {
+	var a [128]int
+	sum := 0
+	for _, v := range a {
+		sum += v
+	}
+	return sum
+}
+
+func TestPreemption(t *testing.T) {
+	t.Skip("preemption is disabled")
+	// Test that goroutines are preempted at function calls.
+	const N = 5
+	c := make(chan bool)
+	var x uint32
+	for g := 0; g < 2; g++ {
+		go func(g int) {
+			for i := 0; i < N; i++ {
+				for atomic.LoadUint32(&x) != uint32(g) {
+					preempt()
+				}
+				atomic.StoreUint32(&x, uint32(1-g))
+			}
+			c <- true
+		}(g)
+	}
+	<-c
+	<-c
+}
+
+func TestPreemptionGC(t *testing.T) {
+	t.Skip("preemption is disabled")
+	// Test that pending GC preempts running goroutines.
+	const P = 5
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(P + 1))
+	var stop uint32
+	for i := 0; i < P; i++ {
+		go func() {
+			for atomic.LoadUint32(&stop) == 0 {
+				preempt()
+			}
+		}()
+	}
+	for i := 0; i < 10; i++ {
+		runtime.Gosched()
+		runtime.GC()
+	}
+	atomic.StoreUint32(&stop, 1)
+}
+
 func stackGrowthRecursive(i int) {
 	var pad [128]uint64
 	if i != 0 && pad[0] == 0 {
 		stackGrowthRecursive(i - 1)
+	}
+}
+
+func TestPreemptSplitBig(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping in -short mode")
+	}
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(2))
+	stop := make(chan int)
+	go big(stop)
+	for i := 0; i < 3; i++ {
+		time.Sleep(10 * time.Microsecond) // let big start running
+		runtime.GC()
+	}
+	close(stop)
+}
+
+func big(stop chan int) int {
+	n := 0
+	for {
+		// delay so that gc is sure to have asked for a preemption
+		for i := 0; i < 1e9; i++ {
+			n++
+		}
+
+		// call bigframe, which used to miss the preemption in its prologue.
+		bigframe(stop)
+
+		// check if we've been asked to stop.
+		select {
+		case <-stop:
+			return n
+		}
+	}
+}
+
+func bigframe(stop chan int) int {
+	// not splitting the stack will overflow.
+	// small will notice that it needs a stack split and will
+	// catch the overflow.
+	var x [8192]byte
+	return small(stop, &x)
+}
+
+func small(stop chan int, x *[8192]byte) int {
+	for i := range x {
+		x[i] = byte(i)
+	}
+	sum := 0
+	for i := range x {
+		sum += int(x[i])
+	}
+
+	// keep small from being a leaf function, which might
+	// make it not do any stack check at all.
+	nonleaf(stop)
+
+	return sum
+}
+
+func nonleaf(stop chan int) bool {
+	// do something that won't be inlined:
+	select {
+	case <-stop:
+		return true
+	default:
+		return false
 	}
 }
 

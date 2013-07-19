@@ -438,6 +438,7 @@ dostkoff(void)
 		}
 
 		q = P;
+		q1 = P;
 		if((p->from.scale & NOSPLIT) && autoffset >= StackSmall)
 			diag("nosplit func likely to overflow stack");
 
@@ -497,34 +498,84 @@ dostkoff(void)
 				q1->pcond = p;
 			}
 
-			if(autoffset < StackBig) {  // do we need to call morestack?
-				if(autoffset <= StackSmall) {
-					// small stack
-					p = appendp(p);
-					p->as = ACMPQ;
-					p->from.type = D_SP;
-					p->to.type = D_INDIR+D_CX;
-				} else {
-					// large stack
-					p = appendp(p);
-					p->as = ALEAQ;
-					p->from.type = D_INDIR+D_SP;
-					p->from.offset = -(autoffset-StackSmall);
-					p->to.type = D_AX;
-
-					p = appendp(p);
-					p->as = ACMPQ;
-					p->from.type = D_AX;
-					p->to.type = D_INDIR+D_CX;
-				}
-
-				// common
+			q1 = P;
+			if(autoffset <= StackSmall) {
+				// small stack: SP <= stackguard
+				//	CMPQ SP, stackguard
 				p = appendp(p);
-				p->as = AJHI;
+				p->as = ACMPQ;
+				p->from.type = D_SP;
+				p->to.type = D_INDIR+D_CX;
+			} else if(autoffset <= StackBig) {
+				// large stack: SP-framesize <= stackguard-StackSmall
+				//	LEAQ -xxx(SP), AX
+				//	CMPQ AX, stackguard
+				p = appendp(p);
+				p->as = ALEAQ;
+				p->from.type = D_INDIR+D_SP;
+				p->from.offset = -(autoffset-StackSmall);
+				p->to.type = D_AX;
+
+				p = appendp(p);
+				p->as = ACMPQ;
+				p->from.type = D_AX;
+				p->to.type = D_INDIR+D_CX;
+			} else {
+				// Such a large stack we need to protect against wraparound.
+				// If SP is close to zero:
+				//	SP-stackguard+StackGuard <= framesize + (StackGuard-StackSmall)
+				// The +StackGuard on both sides is required to keep the left side positive:
+				// SP is allowed to be slightly below stackguard. See stack.h.
+				//
+				// Preemption sets stackguard to StackPreempt, a very large value.
+				// That breaks the math above, so we have to check for that explicitly.
+				//	MOVQ	stackguard, CX
+				//	CMPQ	CX, $StackPreempt
+				//	JEQ	label-of-call-to-morestack
+				//	LEAQ	StackGuard(SP), AX
+				//	SUBQ	CX, AX
+				//	CMPQ	AX, $(autoffset+(StackGuard-StackSmall))
+
+				p = appendp(p);
+				p->as = AMOVQ;
+				p->from.type = D_INDIR+D_CX;
+				p->from.offset = 0;
+				p->to.type = D_SI;
+
+				p = appendp(p);
+				p->as = ACMPQ;
+				p->from.type = D_SI;
+				p->to.type = D_CONST;
+				p->to.offset = StackPreempt;
+
+				p = appendp(p);
+				p->as = AJEQ;
 				p->to.type = D_BRANCH;
-				p->to.offset = 4;
-				q = p;
-			}
+				q1 = p;
+
+				p = appendp(p);
+				p->as = ALEAQ;
+				p->from.type = D_INDIR+D_SP;
+				p->from.offset = StackGuard;
+				p->to.type = D_AX;
+				
+				p = appendp(p);
+				p->as = ASUBQ;
+				p->from.type = D_SI;
+				p->to.type = D_AX;
+				
+				p = appendp(p);
+				p->as = ACMPQ;
+				p->from.type = D_AX;
+				p->to.type = D_CONST;
+				p->to.offset = autoffset+(StackGuard-StackSmall);
+			}					
+
+			// common
+			p = appendp(p);
+			p->as = AJHI;
+			p->to.type = D_BRANCH;
+			q = p;
 
 			// If we ask for more stack, we'll get a minimum of StackMin bytes.
 			// We need a stack frame large enough to hold the top-of-stack data,
@@ -538,7 +589,10 @@ dostkoff(void)
 			if(StackTop + textarg + PtrSize + autoffset + PtrSize + StackLimit >= StackMin)
 				moreconst1 = autoffset;
 			moreconst2 = textarg;
-
+			if(moreconst2 == 1) // special marker
+				moreconst2 = 0;
+			if((moreconst2&7) != 0)
+				diag("misaligned argument size in stack split");
 			// 4 varieties varieties (const1==0 cross const2==0)
 			// and 6 subvarieties of (const1==0 and const2!=0)
 			p = appendp(p);
@@ -591,10 +645,17 @@ dostkoff(void)
 				p->pcond = pmorestack[3];
 				p->to.sym = symmorestack[3];
 			}
+			
+			p = appendp(p);
+			p->as = AJMP;
+			p->to.type = D_BRANCH;
+			p->pcond = cursym->text->link;
 		}
 
 		if(q != P)
 			q->pcond = p->link;
+		if(q1 != P)
+			q1->pcond = q->link;
 
 		if(autoffset) {
 			p = appendp(p);

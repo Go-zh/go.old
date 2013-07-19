@@ -49,8 +49,8 @@
 %left	'+' '-'
 %left	'*' '/' '%'
 %token	<lval>	LTYPE0 LTYPE1 LTYPE2 LTYPE3 LTYPE4
-%token	<lval>	LTYPEC LTYPED LTYPEN LTYPER LTYPET LTYPEG
-%token	<lval>	LTYPES LTYPEM LTYPEI LTYPEXC LTYPEX LTYPERT
+%token	<lval>	LTYPEC LTYPED LTYPEN LTYPER LTYPET LTYPEG LTYPEPC
+%token	<lval>	LTYPES LTYPEM LTYPEI LTYPEXC LTYPEX LTYPERT LTYPEF
 %token	<lval>	LCONST LFP LPC LSB
 %token	<lval>	LBREG LLREG LSREG LFREG LMREG LXREG
 %token	<dval>	LFCONST
@@ -58,8 +58,9 @@
 %token	<sym>	LNAME LLAB LVAR
 %type	<lval>	con con2 expr pointer offset
 %type	<gen>	mem imm imm2 reg nam rel rem rim rom omem nmem
-%type	<gen2>	nonnon nonrel nonrem rimnon rimrem remrim spec10 spec11
+%type	<gen2>	nonnon nonrel nonrem rimnon rimrem remrim
 %type	<gen2>	spec1 spec2 spec3 spec4 spec5 spec6 spec7 spec8 spec9
+%type	<gen2>	spec10 spec11 spec12 spec13
 %%
 prog:
 |	prog 
@@ -115,6 +116,8 @@ inst:
 |	LTYPEX spec9	{ outcode($1, &$2); }
 |	LTYPERT spec10	{ outcode($1, &$2); }
 |	LTYPEG spec11	{ outcode($1, &$2); }
+|	LTYPEPC spec12	{ outcode($1, &$2); }
+|	LTYPEF spec13	{ outcode($1, &$2); }
 
 nonnon:
 	{
@@ -306,6 +309,26 @@ spec11:	/* GLOBL */
 		$$.from = $1;
 		$$.from.scale = $3;
 		$$.to = $5;
+	}
+
+spec12:	/* PCDATA */
+	rim ',' rim
+	{
+		if($1.type != D_CONST || $3.type != D_CONST)
+			yyerror("arguments to PCDATA must be integer constants");
+		$$.from = $1;
+		$$.to = $3;
+	}
+
+spec13:	/* FUNCDATA */
+	rim ',' rim
+	{
+		if($1.type != D_CONST)
+			yyerror("index for FUNCDATA must be integer constant");
+		if($3.type != D_EXTERN && $3.type != D_STATIC)
+			yyerror("value for FUNCDATA must be symbol reference");
+		$$.from = $1;
+		$$.to = $3;
 	}
 
 rem:
@@ -605,11 +628,19 @@ con2:
 	}
 |	LCONST '-' LCONST
 	{
+		// Change explicit 0 argument size to 1
+		// so that we can distinguish it from missing.
+		if($3 == 0)
+			$3 = 1;
 		$$ = ($1 & 0xffffffffLL) +
 			(($3 & 0xffffLL) << 32);
 	}
 |	'-' LCONST '-' LCONST
 	{
+		// Change explicit 0 argument size to 1
+		// so that we can distinguish it from missing.
+		if($4 == 0)
+			$4 = 1;
 		$$ = (-$2 & 0xffffffffLL) +
 			(($4 & 0xffffLL) << 32);
 	}

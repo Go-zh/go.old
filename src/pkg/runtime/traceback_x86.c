@@ -10,29 +10,32 @@
 
 void runtime·deferproc(void);
 void runtime·newproc(void);
-void runtime·newstack(void);
 void runtime·morestack(void);
 void runtime·sigpanic(void);
 
 // This code is also used for the 386 tracebacks.
 // Use uintptr for an appropriate word-sized integer.
 
+static String unknown = { (uint8*)"?", 1 };
+
 // Generic traceback.  Handles runtime stack prints (pcbuf == nil),
 // the runtime.Callers function (pcbuf != nil), as well as the garbage
 // collector (callback != nil).  A little clunky to merge these, but avoids
 // duplicating the code and all its subtlety.
 int32
-runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, uintptr *pcbuf, int32 max, void (*callback)(Stkframe*, void*), void *v)
+runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, uintptr *pcbuf, int32 max, void (*callback)(Stkframe*, void*), void *v, bool printall)
 {
-	int32 i, n, sawnewstack;
+	int32 i, n, nprint, line;
 	uintptr tracepc;
 	bool waspanic, printing;
-	Func *f, *f2;
+	Func *f, *flr;
 	Stkframe frame;
 	Stktop *stk;
+	String file;
 
 	USED(lr0);
 
+	nprint = 0;
 	runtime·memclr((byte*)&frame, sizeof frame);
 	frame.pc = pc0;
 	frame.sp = sp0;
@@ -45,9 +48,18 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 		frame.pc = *(uintptr*)frame.sp;
 		frame.sp += sizeof(uintptr);
 	}
+	
+	f = runtime·findfunc(frame.pc);
+	if(f == nil) {
+		if(callback != nil) {
+			runtime·printf("runtime: unknown pc %p\n", frame.pc);
+			runtime·throw("unknown pc");
+		}
+		return 0;
+	}
+	frame.fn = f;
 
 	n = 0;
-	sawnewstack = 0;
 	stk = (Stktop*)gp->stackbase;
 	while(n < max) {
 		// Typically:
@@ -63,45 +75,65 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 			frame.sp = stk->gobuf.sp;
 			frame.lr = 0;
 			frame.fp = 0;
-			if(printing && runtime·showframe(nil, gp == m->curg))
+			frame.fn = nil;
+			if(printing && runtime·showframe(nil, gp))
 				runtime·printf("----- stack segment boundary -----\n");
 			stk = (Stktop*)stk->stackbase;
+
+			f = runtime·findfunc(frame.pc);
+			if(f == nil) {
+				runtime·printf("runtime: unknown pc %p after stack split\n", frame.pc);
+				if(callback != nil)
+					runtime·throw("unknown pc");
+			}
+			frame.fn = f;
 			continue;
 		}
-		if(frame.pc <= 0x1000 || (frame.fn = f = runtime·findfunc(frame.pc)) == nil) {
-			if(callback != nil)
-				runtime·throw("unknown pc");
-			break;
-		}
+		f = frame.fn;
 
 		// Found an actual function.
 		// Derive frame pointer and link register.
 		if(frame.fp == 0) {
-			frame.fp = frame.sp;
-			if(frame.pc > f->entry && f->frame >= sizeof(uintptr))
-				frame.fp += f->frame;
-			else
-				frame.fp += sizeof(uintptr);
+			frame.fp = frame.sp + runtime·funcspdelta(f, frame.pc);
+			frame.fp += sizeof(uintptr); // caller PC
 		}
-		if(frame.lr == 0)
-			frame.lr = ((uintptr*)frame.fp)[-1];
+		if(runtime·topofstack(f)) {
+			frame.lr = 0;
+			flr = nil;
+		} else {
+			if(frame.lr == 0)
+				frame.lr = ((uintptr*)frame.fp)[-1];
+			flr = runtime·findfunc(frame.lr);
+			if(flr == nil) {
+				runtime·printf("runtime: unexpected return pc for %s called from %p\n", runtime·funcname(f), frame.lr);
+				if(callback != nil)
+					runtime·throw("unknown caller pc");
+			}
+		}
 
 		// Derive size of arguments.
-		frame.argp = (byte*)frame.fp;
-		frame.arglen = 0;
-		if(f->args != ArgsSizeUnknown)
-			frame.arglen = f->args;
-		else if(runtime·haszeroargs(f->entry))
-			frame.arglen = 0;
-		else if(frame.lr == (uintptr)runtime·lessstack)
-			frame.arglen = stk->argsize;
-		else if(f->entry == (uintptr)runtime·deferproc || f->entry == (uintptr)runtime·newproc)
-			frame.arglen = 2*sizeof(uintptr) + *(int32*)frame.argp;
-		else if((f2 = runtime·findfunc(frame.lr)) != nil && f2->frame >= sizeof(uintptr))
-			frame.arglen = f2->frame; // conservative overestimate
-		else {
-			runtime·printf("runtime: unknown argument frame size for %S\n", f->name);
-			runtime·throw("invalid stack");
+		// Most functions have a fixed-size argument block,
+		// so we can use metadata about the function f.
+		// Not all, though: there are some variadic functions
+		// in package runtime, and for those we use call-specific
+		// metadata recorded by f's caller.
+		if(callback != nil || printing) {
+			frame.argp = (byte*)frame.fp;
+			if(f->args != ArgsSizeUnknown)
+				frame.arglen = f->args;
+			else if(flr == nil)
+				frame.arglen = 0;
+			else if(frame.lr == (uintptr)runtime·lessstack)
+				frame.arglen = stk->argsize;
+			else if((i = runtime·funcarglen(flr, frame.lr)) >= 0)
+				frame.arglen = i;
+			else {
+				runtime·printf("runtime: unknown argument frame size for %s called from %p [%s]\n",
+					runtime·funcname(f), frame.lr, flr ? runtime·funcname(flr) : "?");
+				if(callback != nil)
+					runtime·throw("invalid stack");
+				frame.arglen = 0;
+			}
 		}
 
 		// Derive location and size of local variables.
@@ -116,8 +148,9 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 			frame.varlen = frame.fp - sizeof(uintptr) - frame.sp;
 		} else {
 			if(f->locals > frame.fp - sizeof(uintptr) - frame.sp) {
-				runtime·printf("runtime: inconsistent locals=%p frame=%p fp=%p sp=%p for %S\n", (uintptr)f->locals, (uintptr)f->frame, frame.fp, frame.sp, f->name);
-				runtime·throw("invalid stack");
+				runtime·printf("runtime: inconsistent locals=%p frame=%p fp=%p sp=%p for %s\n", (uintptr)f->locals, (uintptr)f->frame, frame.fp, frame.sp, runtime·funcname(f));
+				if(callback != nil)
+					runtime·throw("invalid stack");
 			}
 			frame.varp = (byte*)frame.fp - sizeof(uintptr) - f->locals;
 			frame.varlen = f->locals;
@@ -133,7 +166,7 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 		if(callback != nil)
 			callback(&frame, v);
 		if(printing) {
-			if(runtime·showframe(f, gp == m->curg)) {
+			if(printall || runtime·showframe(f, gp)) {
 				// Print during crash.
 				//	main(0x1, 0x2, 0x3)
 				//		/home/rsc/go/src/runtime/x.go:23 +0xf
@@ -141,23 +174,25 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 				tracepc = frame.pc;	// back up to CALL instruction for funcline.
 				if(n > 0 && frame.pc > f->entry && !waspanic)
 					tracepc--;
-				if(m->throwing && gp == m->curg)
-					runtime·printf("[fp=%p] ", frame.fp);
-				runtime·printf("%S(", f->name);
-				for(i = 0; i < f->args/sizeof(uintptr); i++) {
-					if(i != 0)
-						runtime·prints(", ");
-					runtime·printhex(((uintptr*)frame.argp)[i]);
-					if(i >= 4) {
+				runtime·printf("%s(", runtime·funcname(f));
+				for(i = 0; i < frame.arglen/sizeof(uintptr); i++) {
+					if(i >= 5) {
 						runtime·prints(", ...");
 						break;
 					}
+					if(i != 0)
+						runtime·prints(", ");
+					runtime·printhex(((uintptr*)frame.argp)[i]);
 				}
 				runtime·prints(")\n");
-				runtime·printf("\t%S:%d", f->src, runtime·funcline(f, tracepc));
+				line = runtime·funcline(f, tracepc, &file);
+				runtime·printf("\t%S:%d", file, line);
 				if(frame.pc > f->entry)
 					runtime·printf(" +%p", (uintptr)(frame.pc - f->entry));
+				if(m->throwing && gp == m->curg)
+					runtime·printf(" fp=%p", frame.fp);
 				runtime·printf("\n");
+				nprint++;
 			}
 		}
 		n++;
@@ -165,64 +200,44 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 	skipped:
 		waspanic = f->entry == (uintptr)runtime·sigpanic;
 
-		if(f->entry == (uintptr)runtime·deferproc || f->entry == (uintptr)runtime·newproc)
-			frame.fp += 2*sizeof(uintptr);
-
-		if(f->entry == (uintptr)runtime·newstack)
-			sawnewstack = 1;
-
-		if(printing && f->entry == (uintptr)runtime·morestack && gp == m->g0 && sawnewstack) {
-			// The fact that we saw newstack means that morestack
-			// has managed to record its information in m, so we can
-			// use it to keep unwinding the stack.
-			runtime·printf("----- morestack called from goroutine %D -----\n", m->curg->goid);
-			frame.pc = (uintptr)m->morepc;
-			frame.sp = m->morebuf.sp - sizeof(void*);
-			frame.lr = m->morebuf.pc;
-			frame.fp = m->morebuf.sp;
-			sawnewstack = 0;
-			gp = m->curg;
-			stk = (Stktop*)gp->stackbase;
-			continue;
-		}
-
-		if(printing && f->entry == (uintptr)runtime·lessstack && gp == m->g0) {
-			// Lessstack is running on scheduler stack.  Switch to original goroutine.
-			runtime·printf("----- lessstack called from goroutine %D -----\n", m->curg->goid);
-			gp = m->curg;
-			stk = (Stktop*)gp->stackbase;
-			frame.sp = stk->gobuf.sp;
-			frame.pc = stk->gobuf.pc;
-			frame.fp = 0;
-			frame.lr = 0;
-			continue;
-		}
-
 		// Do not unwind past the bottom of the stack.
-		if(frame.pc == (uintptr)runtime·goexit || f->entry == (uintptr)runtime·mstart || f->entry == (uintptr)_rt0_go)
+		if(flr == nil)
 			break;
 
 		// Unwind to next frame.
+		frame.fn = flr;
 		frame.pc = frame.lr;
 		frame.lr = 0;
 		frame.sp = frame.fp;
 		frame.fp = 0;
 	}
 	
-	// Show what created goroutine, except main goroutine (goid 1).
-	if(printing && (frame.pc = gp->gopc) != 0 && (f = runtime·findfunc(frame.pc)) != nil
-			&& runtime·showframe(f, gp == m->curg) && gp->goid != 1) {
-		runtime·printf("created by %S\n", f->name);
-		tracepc = frame.pc;	// back up to CALL instruction for funcline.
-		if(n > 0 && frame.pc > f->entry)
-			tracepc--;
-		runtime·printf("\t%S:%d", f->src, runtime·funcline(f, tracepc));
-		if(frame.pc > f->entry)
-			runtime·printf(" +%p", (uintptr)(frame.pc - f->entry));
-		runtime·printf("\n");
-	}
+	if(pcbuf == nil && callback == nil)
+		n = nprint;
 	
 	return n;
+}
+
+static void
+printcreatedby(G *gp)
+{
+	int32 line;
+	String file;
+	uintptr pc, tracepc;
+	Func *f;
+
+	// Show what created goroutine, except main goroutine (goid 1).
+	if((pc = gp->gopc) != 0 && (f = runtime·findfunc(pc)) != nil && gp->goid != 1) {
+		runtime·printf("created by %s\n", runtime·funcname(f));
+		tracepc = pc;	// back up to CALL instruction for funcline.
+		if(pc > f->entry)
+			tracepc--;
+		line =  runtime·funcline(f, tracepc, &file);
+		runtime·printf("\t%S:%d", file, line);
+		if(pc > f->entry)
+			runtime·printf(" +%p", (uintptr)(pc - f->entry));
+		runtime·printf("\n");
+	}
 }
 
 void
@@ -235,7 +250,12 @@ runtime·traceback(uintptr pc, uintptr sp, uintptr lr, G *gp)
 		pc = gp->sched.pc;
 		sp = gp->sched.sp;
 	}
-	runtime·gentraceback(pc, sp, 0, gp, 0, nil, 100, nil, nil);
+	
+	// Print traceback. By default, omits runtime frames.
+	// If that means we print nothing at all, repeat forcing all frames printed.
+	if(runtime·gentraceback(pc, sp, 0, gp, 0, nil, 100, nil, nil, false) == 0)
+		runtime·gentraceback(pc, sp, 0, gp, 0, nil, 100, nil, nil, true);
+	printcreatedby(gp);
 }
 
 int32
@@ -246,5 +266,5 @@ runtime·callers(int32 skip, uintptr *pcbuf, int32 m)
 	sp = runtime·getcallersp(&skip);
 	pc = (uintptr)runtime·getcallerpc(&skip);
 
-	return runtime·gentraceback(pc, sp, 0, g, skip, pcbuf, m, nil, nil);
+	return runtime·gentraceback(pc, sp, 0, g, skip, pcbuf, m, nil, nil, false);
 }

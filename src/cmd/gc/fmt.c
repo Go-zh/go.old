@@ -415,6 +415,8 @@ Zconv(Fmt *fp)
 
 	s = sp->s;
 	se = s + sp->len;
+
+	// NOTE: Keep in sync with ../ld/go.c:/^Zconv.
 	while(s < se) {
 		n = chartorune(&r, s);
 		s += n;
@@ -1022,6 +1024,8 @@ static int opprec[] = {
 	[OSLICE] = 8,
 	[OSLICESTR] = 8,
 	[OSLICEARR] = 8,
+	[OSLICE3] = 8,
+	[OSLICE3ARR] = 8,
 	[ODOTINTER] = 8,
 	[ODOTMETH] = 8,
 	[ODOTPTR] = 8,
@@ -1295,6 +1299,8 @@ exprfmt(Fmt *f, Node *n, int prec)
 	case OSLICE:
 	case OSLICESTR:
 	case OSLICEARR:
+	case OSLICE3:
+	case OSLICE3ARR:
 		exprfmt(f, n->left, nprec);
 		return fmtprint(f, "[%N]", n->right);
 

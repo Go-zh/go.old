@@ -391,17 +391,23 @@ func TestMarshal(t *testing.T) {
 	}
 }
 
+var badUTF8 = []struct {
+	in, out string
+}{
+	{"hello\xffworld", `"hello\ufffdworld"`},
+	{"", `""`},
+	{"\xff", `"\ufffd"`},
+	{"\xff\xff", `"\ufffd\ufffd"`},
+	{"a\xffb", `"a\ufffdb"`},
+	{"\xe6\x97\xa5\xe6\x9c\xac\xff\xaa\x9e", `"日本\ufffd\ufffd\ufffd"`},
+}
+
 func TestMarshalBadUTF8(t *testing.T) {
-	s := "hello\xffworld"
-	b, err := Marshal(s)
-	if err == nil {
-		t.Fatal("Marshal bad UTF8: no error")
-	}
-	if len(b) != 0 {
-		t.Fatal("Marshal returned data")
-	}
-	if _, ok := err.(*InvalidUTF8Error); !ok {
-		t.Fatalf("Marshal did not return InvalidUTF8Error: %T %v", err, err)
+	for _, tt := range badUTF8 {
+		b, err := Marshal(tt.in)
+		if string(b) != tt.out || err != nil {
+			t.Errorf("Marshal(%q) = %#q, %v, want %#q, nil", tt.in, b, err, tt.out)
+		}
 	}
 }
 
@@ -568,14 +574,14 @@ func TestUnmarshalPtrPtr(t *testing.T) {
 }
 
 func TestEscape(t *testing.T) {
-	const input = `"foobar"<html>`
-	const expected = `"\"foobar\"\u003chtml\u003e"`
+	const input = `"foobar"<html>` + " [\u2028 \u2029]"
+	const expected = `"\"foobar\"\u003chtml\u003e [\u2028 \u2029]"`
 	b, err := Marshal(input)
 	if err != nil {
 		t.Fatalf("Marshal error: %v", err)
 	}
 	if s := string(b); s != expected {
-		t.Errorf("Encoding of [%s] was [%s], want [%s]", input, s, expected)
+		t.Errorf("Encoding of [%s]:\n got [%s]\nwant [%s]", input, s, expected)
 	}
 }
 

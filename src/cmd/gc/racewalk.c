@@ -51,6 +51,18 @@ ispkgin(const char **pkgs, int n)
 	return 0;
 }
 
+static int
+isforkfunc(Node *fn)
+{
+	// Special case for syscall.forkAndExecInChild.
+	// In the child, this function must not acquire any locks, because
+	// they might have been locked at the time of the fork.  This means
+	// no rescheduling, no malloc calls, and no new stack segments.
+	// Race instrumentation does all of the above.
+	return myimportpath != nil && strcmp(myimportpath, "syscall") == 0 &&
+		strcmp(fn->nname->sym->name, "forkAndExecInChild") == 0;
+}
+
 void
 racewalk(Node *fn)
 {
@@ -58,7 +70,7 @@ racewalk(Node *fn)
 	Node *nodpc;
 	char s[1024];
 
-	if(ispkgin(omit_pkgs, nelem(omit_pkgs)))
+	if(ispkgin(omit_pkgs, nelem(omit_pkgs)) || isforkfunc(fn))
 		return;
 
 	if(!ispkgin(noinst_pkgs, nelem(noinst_pkgs))) {
@@ -304,6 +316,8 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 
 	case OSLICE:
 	case OSLICEARR:
+	case OSLICE3:
+	case OSLICE3ARR:
 		// Seems to only lead to double instrumentation.
 		//racewalknode(&n->left, init, 0, 0);
 		goto ret;
@@ -319,10 +333,6 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 
 	case OITAB:
 		racewalknode(&n->left, init, 0, 0);
-		goto ret;
-
-	case OTYPESW:
-		racewalknode(&n->right, init, 0, 0);
 		goto ret;
 
 	// should not appear in AST by now
@@ -400,6 +410,7 @@ racewalknode(Node **np, NodeList **init, int wr, int skip)
 	case ONONAME:
 	case OLITERAL:
 	case OSLICESTR:  // always preceded by bounds checking, avoid double instrumentation.
+	case OTYPESW:    // ignored by code generation, do not instrument.
 		goto ret;
 	}
 

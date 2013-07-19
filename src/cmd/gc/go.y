@@ -23,6 +23,8 @@
 #include <libc.h>
 #include "go.h"
 
+static int isrelease = -1;
+
 static void fixlbrace(int);
 %}
 %union	{
@@ -193,6 +195,10 @@ import_stmt:
 
 		if(my->name[0] == '.') {
 			importdot(ipkg, pack);
+			break;
+		}
+		if(strcmp(my->name, "init") == 0) {
+			yyerror("cannot import package as init - init must be a func");
 			break;
 		}
 		if(my->name[0] == '_' && my->name[1] == '\0')
@@ -949,6 +955,21 @@ pexpr_no_paren:
 |	pexpr '[' oexpr ':' oexpr ']'
 	{
 		$$ = nod(OSLICE, $1, nod(OKEY, $3, $5));
+	}
+|	pexpr '[' oexpr ':' oexpr ':' oexpr ']'
+	{
+		// Make sure we don't accidentally release this experimental feature.
+		// http://golang.org/s/go12slice.
+		if(isrelease < 0)
+			isrelease = strstr(getgoversion(), "release") != nil;
+		if(isrelease)
+			yyerror("3-index slice not available in release");
+
+		if($5 == N)
+			yyerror("middle index required in 3-index slice");
+		if($7 == N)
+			yyerror("final index required in 3-index slice");
+		$$ = nod(OSLICE3, $1, nod(OKEY, $3, nod(OKEY, $5, $7)));
 	}
 |	pseudocall
 |	convtype '(' expr ocomma ')'

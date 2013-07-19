@@ -592,8 +592,12 @@ func (b *builder) action(mode buildMode, depMode buildMode, p *Package) *action 
 		// Imported via local path.  No permanent target.
 		mode = modeBuild
 	}
-	a.objdir = filepath.Join(b.work, a.p.ImportPath, "_obj") + string(filepath.Separator)
-	a.objpkg = buildToolchain.pkgpath(b.work, a.p)
+	work := p.pkgdir
+	if work == "" {
+		work = b.work
+	}
+	a.objdir = filepath.Join(work, a.p.ImportPath, "_obj") + string(filepath.Separator)
+	a.objpkg = buildToolchain.pkgpath(work, a.p)
 	a.link = p.Name == "main"
 
 	switch mode {
@@ -814,8 +818,8 @@ func (b *builder) build(a *action) (err error) {
 		for _, file := range a.p.GoFiles {
 			sourceFile := filepath.Join(a.p.Dir, file)
 			cover := a.p.coverVars[file]
-			if cover == nil {
-				// Not covering this file
+			if cover == nil || isTestFile(file) {
+				// Not covering this file.
 				gofiles = append(gofiles, file)
 				continue
 			}

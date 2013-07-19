@@ -50,28 +50,30 @@
      LTYPER = 266,
      LTYPET = 267,
      LTYPEG = 268,
-     LTYPES = 269,
-     LTYPEM = 270,
-     LTYPEI = 271,
-     LTYPEXC = 272,
-     LTYPEX = 273,
-     LTYPERT = 274,
-     LCONST = 275,
-     LFP = 276,
-     LPC = 277,
-     LSB = 278,
-     LBREG = 279,
-     LLREG = 280,
-     LSREG = 281,
-     LFREG = 282,
-     LMREG = 283,
-     LXREG = 284,
-     LFCONST = 285,
-     LSCONST = 286,
-     LSP = 287,
-     LNAME = 288,
-     LLAB = 289,
-     LVAR = 290
+     LTYPEPC = 269,
+     LTYPES = 270,
+     LTYPEM = 271,
+     LTYPEI = 272,
+     LTYPEXC = 273,
+     LTYPEX = 274,
+     LTYPERT = 275,
+     LTYPEF = 276,
+     LCONST = 277,
+     LFP = 278,
+     LPC = 279,
+     LSB = 280,
+     LBREG = 281,
+     LLREG = 282,
+     LSREG = 283,
+     LFREG = 284,
+     LMREG = 285,
+     LXREG = 286,
+     LFCONST = 287,
+     LSCONST = 288,
+     LSP = 289,
+     LNAME = 290,
+     LLAB = 291,
+     LVAR = 292
    };
 #endif
 /* Tokens.  */
@@ -86,28 +88,30 @@
 #define LTYPER 266
 #define LTYPET 267
 #define LTYPEG 268
-#define LTYPES 269
-#define LTYPEM 270
-#define LTYPEI 271
-#define LTYPEXC 272
-#define LTYPEX 273
-#define LTYPERT 274
-#define LCONST 275
-#define LFP 276
-#define LPC 277
-#define LSB 278
-#define LBREG 279
-#define LLREG 280
-#define LSREG 281
-#define LFREG 282
-#define LMREG 283
-#define LXREG 284
-#define LFCONST 285
-#define LSCONST 286
-#define LSP 287
-#define LNAME 288
-#define LLAB 289
-#define LVAR 290
+#define LTYPEPC 269
+#define LTYPES 270
+#define LTYPEM 271
+#define LTYPEI 272
+#define LTYPEXC 273
+#define LTYPEX 274
+#define LTYPERT 275
+#define LTYPEF 276
+#define LCONST 277
+#define LFP 278
+#define LPC 279
+#define LSB 280
+#define LBREG 281
+#define LLREG 282
+#define LSREG 283
+#define LFREG 284
+#define LMREG 285
+#define LXREG 286
+#define LFCONST 287
+#define LSCONST 288
+#define LSP 289
+#define LNAME 290
+#define LLAB 291
+#define LVAR 292
 
 
 
@@ -124,7 +128,7 @@ typedef union YYSTYPE
 	Gen2	gen2;
 }
 /* Line 1529 of yacc.c.  */
-#line 128 "y.tab.h"
+#line 132 "y.tab.h"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1

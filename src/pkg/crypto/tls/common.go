@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"io"
+	"math/big"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,7 @@ const (
 	VersionSSL30 = 0x0300
 	VersionTLS10 = 0x0301
 	VersionTLS11 = 0x0302
+	VersionTLS12 = 0x0303
 )
 
 const (
@@ -27,7 +29,7 @@ const (
 	maxHandshake    = 65536        // maximum handshake we support (protocol max is 16 MB)
 
 	minVersion = VersionSSL30
-	maxVersion = VersionTLS11
+	maxVersion = VersionTLS12
 )
 
 // TLS record types.
@@ -63,12 +65,13 @@ const (
 
 // TLS extension numbers
 var (
-	extensionServerName      uint16 = 0
-	extensionStatusRequest   uint16 = 5
-	extensionSupportedCurves uint16 = 10
-	extensionSupportedPoints uint16 = 11
-	extensionSessionTicket   uint16 = 35
-	extensionNextProtoNeg    uint16 = 13172 // not IANA assigned
+	extensionServerName          uint16 = 0
+	extensionStatusRequest       uint16 = 5
+	extensionSupportedCurves     uint16 = 10
+	extensionSupportedPoints     uint16 = 11
+	extensionSignatureAlgorithms uint16 = 13
+	extensionSessionTicket       uint16 = 35
+	extensionNextProtoNeg        uint16 = 13172 // not IANA assigned
 )
 
 // TLS Elliptic Curves
@@ -96,8 +99,40 @@ const (
 	certTypeDSSSign    = 2 // A certificate containing a DSA key
 	certTypeRSAFixedDH = 3 // A certificate containing a static DH key
 	certTypeDSSFixedDH = 4 // A certificate containing a static DH key
+
+	// See RFC4492 sections 3 and 5.5.
+	certTypeECDSASign      = 64 // A certificate containing an ECDSA-capable public key, signed with ECDSA.
+	certTypeRSAFixedECDH   = 65 // A certificate containing an ECDH-capable public key, signed with RSA.
+	certTypeECDSAFixedECDH = 66 // A certificate containing an ECDH-capable public key, signed with ECDSA.
+
 	// Rest of these are reserved by the TLS spec
 )
+
+// Hash functions for TLS 1.2 (See RFC 5246, section A.4.1)
+const (
+	hashSHA1   uint8 = 2
+	hashSHA256 uint8 = 4
+)
+
+// Signature algorithms for TLS 1.2 (See RFC 5246, section A.4.1)
+const (
+	signatureRSA   uint8 = 1
+	signatureECDSA uint8 = 3
+)
+
+// signatureAndHash mirrors the TLS 1.2, SignatureAndHashAlgorithm struct. See
+// RFC 5246, section A.4.1.
+type signatureAndHash struct {
+	hash, signature uint8
+}
+
+// supportedSignatureAlgorithms contains the signature and hash algorithms that
+// the code can advertise as supported both in a TLS 1.2 ClientHello and
+// CertificateRequest.
+var supportedSignatureAlgorithms = []signatureAndHash{
+	{hashSHA256, signatureRSA},
+	{hashSHA256, signatureECDSA},
+}
 
 // ConnectionState records basic TLS details about the connection.
 type ConnectionState struct {
@@ -345,7 +380,7 @@ func (c *Config) BuildNameToCertificate() {
 // A Certificate is a chain of one or more certificates, leaf first.
 type Certificate struct {
 	Certificate [][]byte
-	PrivateKey  crypto.PrivateKey // supported types: *rsa.PrivateKey
+	PrivateKey  crypto.PrivateKey // supported types: *rsa.PrivateKey, *ecdsa.PrivateKey
 	// OCSPStaple contains an optional OCSP response which will be served
 	// to clients that request it.
 	OCSPStaple []byte
@@ -367,6 +402,13 @@ type handshakeMessage interface {
 	marshal() []byte
 	unmarshal([]byte) bool
 }
+
+// TODO(jsing): Make these available to both crypto/x509 and crypto/tls.
+type dsaSignature struct {
+	R, S *big.Int
+}
+
+type ecdsaSignature dsaSignature
 
 var emptyConfig Config
 

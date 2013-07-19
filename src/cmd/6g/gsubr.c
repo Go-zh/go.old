@@ -31,9 +31,11 @@
 #include <u.h>
 #include <libc.h>
 #include "gg.h"
+#include "../../pkg/runtime/funcdata.h"
 
 // TODO(rsc): Can make this bigger if we move
 // the text segment up higher in 6l for all GOOS.
+// At the same time, can raise StackBig in ../../pkg/runtime/stack.h.
 vlong unmappedzero = 4096;
 
 void
@@ -215,6 +217,16 @@ gtrack(Sym *s)
 	p->from.type = D_EXTERN;
 	p->from.index = D_NONE;
 	p->from.sym = s;
+}
+
+void
+gargsize(vlong size)
+{
+	Node n1, n2;
+	
+	nodconst(&n1, types[TINT32], PCDATA_ArgSize);
+	nodconst(&n2, types[TINT32], size);
+	gins(APCDATA, &n1, &n2);
 }
 
 void

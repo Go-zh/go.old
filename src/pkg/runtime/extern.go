@@ -21,10 +21,11 @@ is GOGC=100. Setting GOGC=off disables the garbage collector entirely.
 The runtime/debug package's SetGCPercent function allows changing this
 percentage at run time. See http://golang.org/pkg/runtime/debug/#SetGCPercent.
 
-The GOGCTRACE variable controls debug output from the garbage collector.
-Setting GOGCTRACE=1 causes the garbage collector to emit a single line to standard
+The GODEBUG variable controls debug output from the runtime. GODEBUG value is
+a comma-separated list of name=val pairs. Supported names are:
+gctrace: setting gctrace=1 causes the garbage collector to emit a single line to standard
 error at each collection, summarizing the amount of memory collected and the
-length of the pause. Setting GOGCTRACE=2 emits the same summary but also
+length of the pause. Setting gctrace=2 emits the same summary but also
 repeats each collection.
 
 The GOMAXPROCS variable limits the number of operating system threads that
@@ -128,18 +129,8 @@ func Caller(skip int) (pc uintptr, file string, line int, ok bool)
 // 若为1则表示 Callers 的调用者。它返回写入到 pc 中的项数。
 func Callers(skip int, pc []uintptr) int
 
-type Func struct { // Keep in sync with runtime.h:struct Func // 与 runtime.h:struct Func 保持同步
-	name   string
-	typ    string  // go type string            // go 的类型字符串
-	src    string  // src file name             // src 文件名
-	pcln   []byte  // pc/ln tab for this func   // 此函数的 pc/ln 表
-	entry  uintptr // entry pc                  // pc 的条目 entry
-	pc0    uintptr // starting pc, ln for table // 起始于 pc，ln 为表
-	ln0    int32
-	frame  int32   // stack frame size          // 栈帧 frame 的大小
-	args   int32   // in/out args size          // in/out 实参 args 的大小
-	locals int32   // locals size               // 局部变量 locals 的大小
-	ptrs   []int32 // pointer map               // 指针映射
+type Func struct {
+	opaque struct{} // unexported field to disallow conversions // 用未导出字段来进制转换
 }
 
 // FuncForPC returns a *Func describing the function that contains the
@@ -151,12 +142,16 @@ func FuncForPC(pc uintptr) *Func
 // Name returns the name of the function.
 
 // Name 返回该函数的名称
-func (f *Func) Name() string { return f.name }
+func (f *Func) Name() string {
+	return funcname_go(f)
+}
 
 // Entry returns the entry address of the function.
 
 // Entry 返回该项函数的地址。
-func (f *Func) Entry() uintptr { return f.entry }
+func (f *Func) Entry() uintptr {
+	return funcentry_go(f)
+}
 
 // FileLine returns the file name and line number of the
 // source code corresponding to the program counter pc.
@@ -173,6 +168,8 @@ func (f *Func) FileLine(pc uintptr) (file string, line int) {
 
 // 在 symtab.c 中实现
 func funcline_go(*Func, uintptr) (string, int)
+func funcname_go(*Func) string
+func funcentry_go(*Func) uintptr
 
 // SetFinalizer sets the finalizer associated with x to f.
 // When the garbage collector finds an unreachable block

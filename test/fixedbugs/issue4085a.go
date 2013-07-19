@@ -10,7 +10,7 @@ type T []int
 
 func main() {
 	_ = make(T, -1)    // ERROR "negative"
-	_ = make(T, 0.5)   // ERROR "constant 0.5 truncated to integer"
+	_ = make(T, 0.5)   // ERROR "constant 0.5 truncated to integer|non-integer len argument"
 	_ = make(T, 1.0)   // ok
 	_ = make(T, 1<<63) // ERROR "len argument too large"
 	_ = make(T, 0, -1) // ERROR "negative cap"

@@ -55,21 +55,23 @@
      LTYPEG = 271,
      LTYPEXC = 272,
      LTYPEX = 273,
-     LCONST = 274,
-     LFP = 275,
-     LPC = 276,
-     LSB = 277,
-     LBREG = 278,
-     LLREG = 279,
-     LSREG = 280,
-     LFREG = 281,
-     LXREG = 282,
-     LFCONST = 283,
-     LSCONST = 284,
-     LSP = 285,
-     LNAME = 286,
-     LLAB = 287,
-     LVAR = 288
+     LTYPEPC = 274,
+     LTYPEF = 275,
+     LCONST = 276,
+     LFP = 277,
+     LPC = 278,
+     LSB = 279,
+     LBREG = 280,
+     LLREG = 281,
+     LSREG = 282,
+     LFREG = 283,
+     LXREG = 284,
+     LFCONST = 285,
+     LSCONST = 286,
+     LSP = 287,
+     LNAME = 288,
+     LLAB = 289,
+     LVAR = 290
    };
 #endif
 /* Tokens.  */
@@ -89,21 +91,23 @@
 #define LTYPEG 271
 #define LTYPEXC 272
 #define LTYPEX 273
-#define LCONST 274
-#define LFP 275
-#define LPC 276
-#define LSB 277
-#define LBREG 278
-#define LLREG 279
-#define LSREG 280
-#define LFREG 281
-#define LXREG 282
-#define LFCONST 283
-#define LSCONST 284
-#define LSP 285
-#define LNAME 286
-#define LLAB 287
-#define LVAR 288
+#define LTYPEPC 274
+#define LTYPEF 275
+#define LCONST 276
+#define LFP 277
+#define LPC 278
+#define LSB 279
+#define LBREG 280
+#define LLREG 281
+#define LSREG 282
+#define LFREG 283
+#define LXREG 284
+#define LFCONST 285
+#define LSCONST 286
+#define LSP 287
+#define LNAME 288
+#define LLAB 289
+#define LVAR 290
 
 
 
@@ -124,7 +128,7 @@ typedef union YYSTYPE
 	Gen2	gen2;
 }
 /* Line 1529 of yacc.c.  */
-#line 128 "y.tab.h"
+#line 132 "y.tab.h"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1

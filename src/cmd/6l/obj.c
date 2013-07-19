@@ -542,6 +542,7 @@ loop:
 		addhist(p->line, D_FILE);		/* 'z' */
 		if(p->to.offset)
 			addhist(p->to.offset, D_FILE1);	/* 'Z' */
+		savehist(p->line, p->to.offset);
 		histfrogp = 0;
 		goto loop;
 
@@ -690,6 +691,7 @@ loop:
 			s->gotype = fromgotype;
 		}
 		s->type = STEXT;
+		s->hist = gethist();
 		s->value = pc;
 		s->args = p->to.offset >> 32;
 		s->nptrs = -1;

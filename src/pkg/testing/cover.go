@@ -22,17 +22,23 @@ type CoverBlock struct {
 	Stmts uint16
 }
 
-var (
-	coverCounters map[string][]uint32
-	coverBlocks   map[string][]CoverBlock
-)
+var cover Cover
 
-// RegisterCover records the coverage data accumulators for the tests.
+// Cover records information about test coverage checking.
 // NOTE: This struct is internal to the testing infrastructure and may change.
 // It is not covered (yet) by the Go 1 compatibility guidelines.
-func RegisterCover(c map[string][]uint32, b map[string][]CoverBlock) {
-	coverCounters = c
-	coverBlocks = b
+type Cover struct {
+	Mode            string
+	Counters        map[string][]uint32
+	Blocks          map[string][]CoverBlock
+	CoveredPackages string
+}
+
+// RegisterCover records the coverage data accumulators for the tests.
+// NOTE: This function is internal to the testing infrastructure and may change.
+// It is not covered (yet) by the Go 1 compatibility guidelines.
+func RegisterCover(c Cover) {
+	cover = c
 }
 
 // mustBeNil checks the error and, if present, reports it and exits.
@@ -50,22 +56,13 @@ func coverReport() {
 	if *coverProfile != "" {
 		f, err = os.Create(toOutputDir(*coverProfile))
 		mustBeNil(err)
-		fmt.Fprintf(f, "mode: %s\n", *coverMode)
+		fmt.Fprintf(f, "mode: %s\n", cover.Mode)
 		defer func() { mustBeNil(f.Close()) }()
 	}
 
 	var active, total int64
-	packageName := ""
-	for name, counts := range coverCounters {
-		if packageName == "" {
-			// Package name ends at last slash.
-			for i, c := range name {
-				if c == '/' {
-					packageName = name[:i]
-				}
-			}
-		}
-		blocks := coverBlocks[name]
+	for name, counts := range cover.Counters {
+		blocks := cover.Blocks[name]
 		for i, count := range counts {
 			stmts := int64(blocks[i].Stmts)
 			total += stmts
@@ -85,8 +82,5 @@ func coverReport() {
 	if total == 0 {
 		total = 1
 	}
-	if packageName == "" {
-		packageName = "package"
-	}
-	fmt.Printf("test coverage for %s: %.1f%% of statements\n", packageName, 100*float64(active)/float64(total))
+	fmt.Printf("coverage: %.1f%% of statements%s\n", 100*float64(active)/float64(total), cover.CoveredPackages)
 }

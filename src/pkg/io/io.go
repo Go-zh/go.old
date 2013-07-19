@@ -135,16 +135,23 @@ type Closer interface {
 // Seek sets the offset for the next Read or Write to offset,
 // interpreted according to whence: 0 means relative to the origin of
 // the file, 1 means relative to the current offset, and 2 means
-// relative to the end.  Seek returns the new offset and an Error, if
+// relative to the end.  Seek returns the new offset and an error, if
 // any.
+//
+// Seeking to a negative offset is an error. Seeking to any positive
+// offset is legal, but the behavior of subsequent I/O operations on
+// the underlying object is implementation-dependent.
 
 // Seeker 接口包装了基本的 Seek 方法。
 //
 // Seek 将 offset 置为下一个 Read 或 Write 的偏移量 ，它的解释取决于 whence：
 // 0 表示相对于文件的起始处，1 表示相对于当前的偏移，而 2 表示相对于其结尾处。
 // Seek 返回新的偏移量和一个错误，如果有的话。
+//
+// 对负数偏移量进行 Seek 会产生错误。对任何正数偏移量进行 Seek 是合法的，但对底层类型的后续
+// I/O 操作行为则取决于具体实现。
 type Seeker interface {
-	Seek(offset int64, whence int) (ret int64, err error)
+	Seek(offset int64, whence int) (int64, error)
 }
 
 // ReadWriter is the interface that groups the basic Read and Write methods.
@@ -601,7 +608,7 @@ func (s *SectionReader) Read(p []byte) (n int, err error) {
 var errWhence = errors.New("Seek: invalid whence")
 var errOffset = errors.New("Seek: invalid offset")
 
-func (s *SectionReader) Seek(offset int64, whence int) (ret int64, err error) {
+func (s *SectionReader) Seek(offset int64, whence int) (int64, error) {
 	switch whence {
 	default:
 		return 0, errWhence
@@ -612,7 +619,7 @@ func (s *SectionReader) Seek(offset int64, whence int) (ret int64, err error) {
 	case 2:
 		offset += s.limit
 	}
-	if offset < s.base || offset > s.limit {
+	if offset < s.base {
 		return 0, errOffset
 	}
 	s.off = offset

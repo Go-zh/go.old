@@ -50,11 +50,11 @@
 %left	'*' '/' '%'
 %token	<lval>	LTYPE1 LTYPE2 LTYPE3 LTYPE4 LTYPE5
 %token	<lval>	LTYPE6 LTYPE7 LTYPE8 LTYPE9 LTYPEA
-%token	<lval>	LTYPEB LTYPEC LTYPED LTYPEE LTYPEF
+%token	<lval>	LTYPEB LTYPEC LTYPED LTYPEE
 %token	<lval>	LTYPEG LTYPEH LTYPEI LTYPEJ LTYPEK
 %token	<lval>	LTYPEL LTYPEM LTYPEN LTYPEBX LTYPEPLD
 %token	<lval>	LCONST LSP LSB LFP LPC
-%token	<lval>	LTYPEX LR LREG LF LFREG LC LCREG LPSR LFCR
+%token	<lval>	LTYPEX LTYPEPC LTYPEF LR LREG LF LFREG LC LCREG LPSR LFCR
 %token	<lval>	LCOND LS LAT
 %token	<dval>	LFCONST
 %token	<sval>	LSCONST
@@ -223,6 +223,16 @@ inst:
 	{
 		outcode($1, Always, &$2, $4, &$6);
 	}
+|	LTYPEB name ',' con ',' imm '-' con
+	{
+		// Change explicit 0 argument size to 1
+		// so that we can distinguish it from missing.
+		if($8 == 0)
+			$8 = 1;
+		$6.type = D_CONST2;
+		$6.offset2 = $8;
+		outcode($1, Always, &$2, $4, &$6);
+	}
 /*
  * DATA
  */
@@ -308,6 +318,26 @@ inst:
 |	LTYPEPLD oreg
 	{
 		outcode($1, Always, &$2, NREG, &nullgen);
+	}
+/*
+ * PCDATA
+ */
+|	LTYPEPC gen ',' gen
+	{
+		if($2.type != D_CONST || $4.type != D_CONST)
+			yyerror("arguments to PCDATA must be integer constants");
+		outcode($1, Always, &$2, NREG, &$4);
+	}
+/*
+ * FUNCDATA
+ */
+|	LTYPEF gen ',' gen
+	{
+		if($2.type != D_CONST)
+			yyerror("index for FUNCDATA must be integer constant");
+		if($4.type != D_EXTERN && $4.type != D_STATIC)
+			yyerror("value for FUNCDATA must be symbol reference");
+ 		outcode($1, Always, &$2, NREG, &$4);
 	}
 /*
  * END

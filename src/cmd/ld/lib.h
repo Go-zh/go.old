@@ -33,15 +33,23 @@ enum
 	Sxxx,
 
 	/* order here is order in output file */
+	/* readonly, executable */
 	STEXT,
+	SELFRXSECT,
+	
+	/* readonly, non-executable */
 	STYPE,
 	SSTRING,
 	SGOSTRING,
+	SGOFUNC,
 	SRODATA,
+	SFUNCTAB,
 	STYPELINK,
-	SSYMTAB,
+	SSYMTAB, // TODO: move to unmapped section
 	SPCLNTAB,
 	SELFROSECT,
+	
+	/* writable, non-executable */
 	SMACHOPLT,
 	SELFSECT,
 	SMACHO,	/* Mach-O __nl_symbol_ptr */
@@ -54,12 +62,14 @@ enum
 	SNOPTRBSS,
 	STLSBSS,
 
+	/* not mapped */
 	SXREF,
 	SMACHOSYMSTR,
 	SMACHOSYMTAB,
 	SMACHOINDIRECTPLT,
 	SMACHOINDIRECTGOT,
 	SFILE,
+	SFILEPATH,
 	SCONST,
 	SDYNIMPORT,
 	SHOSTOBJ,
@@ -122,9 +132,14 @@ struct Section
 	uvlong	rellen;
 };
 
+typedef struct Hist Hist;
+
+#pragma incomplete struct Hist
+
 extern	char	symname[];
 extern	char	**libdir;
 extern	int	nlibdir;
+extern	int	version;
 
 EXTERN	char*	INITENTRY;
 EXTERN	char*	thestring;
@@ -177,6 +192,7 @@ enum
 };
 
 EXTERN	Segment	segtext;
+EXTERN	Segment	segrodata;
 EXTERN	Segment	segdata;
 EXTERN	Segment	segdwarf;
 
@@ -186,6 +202,9 @@ void	addlibpath(char *srcref, char *objref, char *file, char *pkg);
 Section*	addsection(Segment*, char*, int);
 void	copyhistfrog(char *buf, int nbuf);
 void	addhist(int32 line, int type);
+void	savehist(int32 line, int32 off);
+Hist*	gethist(void);
+void	getline(Hist*, int32 line, int32 *f, int32 *l);
 void	asmlc(void);
 void	histtoauto(void);
 void	collapsefrog(Sym *s);
@@ -243,10 +262,11 @@ vlong	addpcrelplus(Sym*, Sym*, vlong);
 vlong	addsize(Sym*, Sym*);
 vlong	setaddrplus(Sym*, vlong, Sym*, vlong);
 vlong	setaddr(Sym*, vlong, Sym*);
-void	setuint8(Sym*, vlong, uint8);
-void	setuint16(Sym*, vlong, uint16);
-void	setuint32(Sym*, vlong, uint32);
-void	setuint64(Sym*, vlong, uint64);
+vlong	setuint8(Sym*, vlong, uint8);
+vlong	setuint16(Sym*, vlong, uint16);
+vlong	setuint32(Sym*, vlong, uint32);
+vlong	setuint64(Sym*, vlong, uint64);
+vlong	setuintxx(Sym*, vlong, uint64, vlong);
 void	asmsym(void);
 void	asmelfsym(void);
 void	asmplan9sym(void);
@@ -276,6 +296,7 @@ void	hostobjs(void);
 void	hostlink(void);
 char*	estrdup(char*);
 void*	erealloc(void*, long);
+Sym*	defgostring(char*);
 
 int	pathchar(void);
 void*	mal(uint32);

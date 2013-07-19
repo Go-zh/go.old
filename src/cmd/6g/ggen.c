@@ -36,7 +36,7 @@ markautoused(Prog* p)
 	}
 }
 
-// Fixup instructions after compactframe has moved all autos around.
+// Fixup instructions after allocauto (formerly compactframe) has moved all autos around.
 void
 fixautoused(Prog *p)
 {
@@ -70,9 +70,23 @@ fixautoused(Prog *p)
 void
 ginscall(Node *f, int proc)
 {
+	int32 arg;
 	Prog *p;
 	Node reg, con;
 	Node r1;
+
+	if(f->type != T)
+		setmaxarg(f->type);
+
+	arg = -1;
+	if(f->type != T && ((f->sym != S && f->sym->pkg == runtimepkg) || proc == 1 || proc == 2)) {
+		arg = f->type->argwid;
+		if(proc == 1 || proc == 2)
+			arg += 2*widthptr;
+	}
+
+	if(arg != -1)
+		gargsize(arg);
 
 	switch(proc) {
 	default:
@@ -82,6 +96,19 @@ ginscall(Node *f, int proc)
 	case 0:	// normal call
 	case -1:	// normal call but no return
 		if(f->op == ONAME && f->class == PFUNC) {
+			if(f == deferreturn) {
+				// Deferred calls will appear to be returning to
+				// the CALL deferreturn(SB) that we are about to emit.
+				// However, the stack trace code will show the line
+				// of the instruction byte before the return PC. 
+				// To avoid that being an unrelated instruction,
+				// insert an x86 NOP that we will have the right line number.
+				// x86 NOP 0x90 is really XCHG AX, AX; use that description
+				// because the NOP pseudo-instruction would be removed by
+				// the linker.
+				nodreg(&reg, types[TINT], D_AX);
+				gins(AXCHGL, &reg, &reg);
+			}
 			p = gins(ACALL, N, f);
 			afunclit(&p->to, f);
 			if(proc == -1 || noreturn(p))
@@ -130,6 +157,9 @@ ginscall(Node *f, int proc)
 		}
 		break;
 	}
+
+	if(arg != -1)
+		gargsize(-1);
 }
 
 /*
@@ -189,14 +219,11 @@ cgen_callinter(Node *n, Node *res, int proc)
 		gins(ALEAQ, &nodo, &nodr);	// REG = &(32+offset(REG)) -- i.tab->fun[f]
 	}
 
-	// BOTCH nodr.type = fntype;
 	nodr.type = n->left->type;
 	ginscall(&nodr, proc);
 
 	regfree(&nodr);
 	regfree(&nodo);
-
-	setmaxarg(n->left->type);
 }
 
 /*
@@ -223,8 +250,6 @@ cgen_call(Node *n, int proc)
 
 	genlist(n->list);		// assign the args
 	t = n->left->type;
-
-	setmaxarg(t);
 
 	// call tempname pointer
 	if(n->left->ullman >= UINF) {

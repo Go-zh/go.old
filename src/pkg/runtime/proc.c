@@ -87,7 +87,6 @@ static void procresize(int32);
 static void acquirep(P*);
 static P* releasep(void);
 static void newm(void(*)(void), P*);
-static void goidle(void);
 static void stopm(void);
 static void startm(P*, bool);
 static void handoffp(P*);
@@ -95,12 +94,11 @@ static void wakep(void);
 static void stoplockedm(void);
 static void startlockedm(G*);
 static void sysmon(void);
-static uint32 retake(uint32*);
+static uint32 retake(int64);
 static void inclocked(int32);
 static void checkdead(void);
 static void exitsyscall0(G*);
 static void park0(G*);
-static void gosched0(G*);
 static void goexit0(G*);
 static void gfput(P*, G*);
 static G* gfget(P*);
@@ -134,6 +132,7 @@ runtime·schedinit(void)
 
 	runtime·goargs();
 	runtime·goenvs();
+	runtime·parsedebugvars();
 
 	// Allocate internal symbol table representation now, we need it for GC anyway.
 	runtime·symtabinit();
@@ -234,14 +233,25 @@ runtime·tracebackothers(G *me)
 	int32 traceback;
 
 	traceback = runtime·gotraceback(nil);
+	
+	// Show the current goroutine first, if we haven't already.
+	if((gp = m->curg) != nil && gp != me) {
+		runtime·printf("\n");
+		runtime·goroutineheader(gp);
+		runtime·traceback(gp->sched.pc, gp->sched.sp, gp->sched.lr, gp);
+	}
+
 	for(gp = runtime·allg; gp != nil; gp = gp->alllink) {
-		if(gp == me || gp->status == Gdead)
+		if(gp == me || gp == m->curg || gp->status == Gdead)
 			continue;
 		if(gp->issystem && traceback < 2)
 			continue;
 		runtime·printf("\n");
 		runtime·goroutineheader(gp);
-		runtime·traceback(gp->sched.pc, gp->sched.sp, 0, gp);
+		if(gp->status == Grunning)
+			runtime·printf("\tgoroutine running on other thread; stack unavailable\n");
+		else
+			runtime·traceback(gp->sched.pc, gp->sched.sp, gp->sched.lr, gp);
 	}
 }
 
@@ -284,6 +294,8 @@ runtime·ready(G *gp)
 	if(runtime·atomicload(&runtime·sched.npidle) != 0 && runtime·atomicload(&runtime·sched.nmspinning) == 0)  // TODO: fast atomic
 		wakep();
 	m->locks--;
+	if(m->locks == 0 && g->preempt)  // restore the preemption request in case we've cleared it in newstack
+		g->stackguard0 = StackPreempt;
 }
 
 int32
@@ -354,6 +366,7 @@ runtime·stoptheworld(void)
 	runtime·lock(&runtime·sched);
 	runtime·sched.stopwait = runtime·gomaxprocs;
 	runtime·atomicstore((uint32*)&runtime·gcwaiting, 1);
+	preemptall();
 	// stop current P
 	m->p->status = Pgcstop;
 	runtime·sched.stopwait--;
@@ -372,10 +385,16 @@ runtime·stoptheworld(void)
 	wait = runtime·sched.stopwait > 0;
 	runtime·unlock(&runtime·sched);
 
-	// wait for remaining P's to stop voluntary
+	// wait for remaining P's to stop voluntarily
 	if(wait) {
-		runtime·notesleep(&runtime·sched.stopnote);
-		runtime·noteclear(&runtime·sched.stopnote);
+		for(;;) {
+			// wait for 100us, then try to re-preempt in case of any races
+			if(runtime·notetsleep(&runtime·sched.stopnote, 100*1000)) {
+				runtime·noteclear(&runtime·sched.stopnote);
+				break;
+			}
+			preemptall();
+		}
 	}
 	if(runtime·sched.stopwait)
 		runtime·throw("stoptheworld: not stopped");
@@ -458,6 +477,8 @@ runtime·starttheworld(void)
 		newm(mhelpgc, nil);
 	}
 	m->locks--;
+	if(m->locks == 0 && g->preempt)  // restore the preemption request in case we've cleared it in newstack
+		g->stackguard0 = StackPreempt;
 }
 
 // Called to start an M.
@@ -547,6 +568,8 @@ runtime·allocm(P *p)
 	if(p == m->p)
 		releasep();
 	m->locks--;
+	if(m->locks == 0 && g->preempt)  // restore the preemption request in case we've cleared it in newstack
+		g->stackguard0 = StackPreempt;
 
 	return mp;
 }
@@ -656,6 +679,7 @@ runtime·newextram(void)
 	gp = runtime·malg(4096);
 	gp->sched.pc = (uintptr)runtime·goexit;
 	gp->sched.sp = gp->stackbase;
+	gp->sched.lr = 0;
 	gp->sched.g = gp;
 	gp->status = Gsyscall;
 	mp->curg = gp;
@@ -990,6 +1014,7 @@ execute(G *gp)
 		runtime·throw("execute: bad g status");
 	}
 	gp->status = Grunning;
+	gp->preempt = false;
 	gp->stackguard0 = gp->stackguard;
 	m->p->tick++;
 	m->curg = gp;
@@ -1115,6 +1140,25 @@ stop:
 	goto top;
 }
 
+static void
+resetspinning(void)
+{
+	int32 nmspinning;
+
+	if(m->spinning) {
+		m->spinning = false;
+		nmspinning = runtime·xadd(&runtime·sched.nmspinning, -1);
+		if(nmspinning < 0)
+			runtime·throw("findrunnable: negative nmspinning");
+	} else
+		nmspinning = runtime·atomicload(&runtime·sched.nmspinning);
+
+	// M wakeup policy is deliberately somewhat conservative (see nmspinning handling),
+	// so see if we need to wakeup another P here.
+	if (nmspinning == 0 && runtime·atomicload(&runtime·sched.npidle) > 0)
+		wakep();
+}
+
 // Injects the list of runnable G's into the scheduler.
 // Can run concurrently with GC.
 static void
@@ -1166,28 +1210,22 @@ top:
 		runtime·lock(&runtime·sched);
 		gp = globrunqget(m->p, 1);
 		runtime·unlock(&runtime·sched);
+		if(gp)
+			resetspinning();
 	}
 	if(gp == nil) {
 		gp = runqget(m->p);
 		if(gp && m->spinning)
 			runtime·throw("schedule: spinning with local work");
 	}
-	if(gp == nil)
-		gp = findrunnable();
-
-	if(m->spinning) {
-		m->spinning = false;
-		runtime·xadd(&runtime·sched.nmspinning, -1);
+	if(gp == nil) {
+		gp = findrunnable();  // blocks until work is available
+		resetspinning();
 	}
 
-	// M wakeup policy is deliberately somewhat conservative (see nmspinning handling),
-	// so see if we need to wakeup another M here.
-	if (m->p->runqhead != m->p->runqtail &&
-		runtime·atomicload(&runtime·sched.nmspinning) == 0 &&
-		runtime·atomicload(&runtime·sched.npidle) > 0)  // TODO: fast atomic
-		wakep();
-
 	if(gp->lockedm) {
+		// Hands off own p to the locked m,
+		// then blocks waiting for a new p.
 		startlockedm(gp);
 		goto top;
 	}
@@ -1229,12 +1267,12 @@ park0(G *gp)
 void
 runtime·gosched(void)
 {
-	runtime·mcall(gosched0);
+	runtime·mcall(runtime·gosched0);
 }
 
 // runtime·gosched continuation on g0.
-static void
-gosched0(G *gp)
+void
+runtime·gosched0(G *gp)
 {
 	gp->status = Grunnable;
 	gp->m = nil;
@@ -1402,6 +1440,8 @@ runtime·exitsyscall(void)
 		// so okay to clear gcstack and gcsp.
 		g->gcstack = (uintptr)nil;
 		g->gcsp = (uintptr)nil;
+		if(g->preempt)  // restore the preemption request in case we've cleared it in newstack
+			g->stackguard0 = StackPreempt;
 		return;
 	}
 
@@ -1419,6 +1459,8 @@ runtime·exitsyscall(void)
 			g->status = Grunning;
 			g->gcstack = (uintptr)nil;
 			g->gcsp = (uintptr)nil;
+			if(g->preempt)  // restore the preemption request in case we've cleared it in newstack
+				g->stackguard0 = StackPreempt;
 			return;
 		}
 	}
@@ -1589,6 +1631,8 @@ runtime·newproc1(FuncVal *fn, byte *argp, int32 narg, int32 nret, void *callerp
 	if(runtime·atomicload(&runtime·sched.npidle) != 0 && runtime·atomicload(&runtime·sched.nmspinning) == 0 && fn->fn != runtime·main)  // TODO: fast atomic
 		wakep();
 	m->locks--;
+	if(m->locks == 0 && g->preempt)  // restore the preemption request in case we've cleared it in newstack
+		g->stackguard0 = StackPreempt;
 	return newg;
 }
 
@@ -1830,7 +1874,7 @@ runtime·sigprof(uint8 *pc, uint8 *sp, uint8 *lr, G *gp)
 		runtime·unlock(&prof);
 		return;
 	}
-	n = runtime·gentraceback((uintptr)pc, (uintptr)sp, (uintptr)lr, gp, 0, prof.pcbuf, nelem(prof.pcbuf), nil, nil);
+	n = runtime·gentraceback((uintptr)pc, (uintptr)sp, (uintptr)lr, gp, 0, prof.pcbuf, nelem(prof.pcbuf), nil, nil, false);
 	if(n > 0)
 		prof.fn(prof.pcbuf, n);
 	runtime·unlock(&prof);
@@ -2027,7 +2071,6 @@ sysmon(void)
 	uint32 idle, delay;
 	int64 now, lastpoll;
 	G *gp;
-	uint32 ticks[MaxGomaxprocs];
 
 	idle = 0;  // how many cycles in succession we had not wokeup somebody
 	delay = 0;
@@ -2059,19 +2102,29 @@ sysmon(void)
 			injectglist(gp);
 		}
 		// retake P's blocked in syscalls
-		if(retake(ticks))
+		// and preempt long running G's
+		if(retake(now))
 			idle = 0;
 		else
 			idle++;
 	}
 }
 
+typedef struct Pdesc Pdesc;
+struct Pdesc
+{
+	uint32	tick;
+	int64	when;
+};
+static Pdesc pdesc[MaxGomaxprocs];
+
 static uint32
-retake(uint32 *ticks)
+retake(int64 now)
 {
 	uint32 i, s, n;
 	int64 t;
 	P *p;
+	Pdesc *pd;
 
 	n = 0;
 	for(i = 0; i < runtime·gomaxprocs; i++) {
@@ -2079,24 +2132,34 @@ retake(uint32 *ticks)
 		if(p==nil)
 			continue;
 		t = p->tick;
-		if(ticks[i] != t) {
-			ticks[i] = t;
+		pd = &pdesc[i];
+		if(pd->tick != t) {
+			pd->tick = t;
+			pd->when = now;
 			continue;
 		}
 		s = p->status;
-		if(s != Psyscall)
-			continue;
-		if(p->runqhead == p->runqtail && runtime·atomicload(&runtime·sched.nmspinning) + runtime·atomicload(&runtime·sched.npidle) > 0)  // TODO: fast atomic
-			continue;
-		// Need to increment number of locked M's before the CAS.
-		// Otherwise the M from which we retake can exit the syscall,
-		// increment nmidle and report deadlock.
-		inclocked(-1);
-		if(runtime·cas(&p->status, s, Pidle)) {
-			n++;
-			handoffp(p);
+		if(s == Psyscall) {
+			// Retake P from syscall if it's there for more than 1 sysmon tick (20us).
+			// But only if there is other work to do.
+			if(p->runqhead == p->runqtail &&
+				runtime·atomicload(&runtime·sched.nmspinning) + runtime·atomicload(&runtime·sched.npidle) > 0)
+				continue;
+			// Need to increment number of locked M's before the CAS.
+			// Otherwise the M from which we retake can exit the syscall,
+			// increment nmidle and report deadlock.
+			inclocked(-1);
+			if(runtime·cas(&p->status, s, Pidle)) {
+				n++;
+				handoffp(p);
+			}
+			inclocked(1);
+		} else if(s == Prunning) {
+			// Preempt G if it's running for more than 10ms.
+			if(pd->when + 10*1000*1000 > now)
+				continue;
+			preemptone(p);
 		}
-		inclocked(1);
 	}
 	return n;
 }
@@ -2131,12 +2194,19 @@ preemptone(P *p)
 	M *mp;
 	G *gp;
 
+// Preemption requires more robust traceback routines.
+// For now, disable.
+// The if(1) silences a compiler warning about the rest of the
+// function being unreachable.
+if(1) return;
+
 	mp = p->m;
 	if(mp == nil || mp == m)
 		return;
 	gp = mp->curg;
 	if(gp == nil || gp == mp->g0)
 		return;
+	gp->preempt = true;
 	gp->stackguard0 = StackPreempt;
 }
 
@@ -2446,12 +2516,16 @@ runtime·testSchedLocalQueueSteal(void)
 	}
 }
 
-bool
-runtime·haszeroargs(uintptr pc)
-{
-	return pc == (uintptr)runtime·goexit ||
-		pc == (uintptr)runtime·mcall ||
-		pc == (uintptr)runtime·mstart ||
-		pc == (uintptr)_rt0_go;
-}
+extern void runtime·morestack(void);
 
+// Does f mark the top of a goroutine stack?
+bool
+runtime·topofstack(Func *f)
+{
+	return f->entry == (uintptr)runtime·goexit ||
+		f->entry == (uintptr)runtime·mstart ||
+		f->entry == (uintptr)runtime·mcall ||
+		f->entry == (uintptr)runtime·morestack ||
+		f->entry == (uintptr)runtime·lessstack ||
+		f->entry == (uintptr)_rt0_go;
+}

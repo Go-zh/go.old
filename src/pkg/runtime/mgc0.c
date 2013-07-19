@@ -82,8 +82,6 @@ enum {
 //
 uint32 runtime·worldsema = 1;
 
-static int32 gctrace;
-
 typedef struct Obj Obj;
 struct Obj
 {
@@ -1385,6 +1383,8 @@ addroot(Obj obj)
 	work.nroot++;
 }
 
+extern byte pclntab[]; // base for f->ptrsoff
+
 // Scan a stack frame: local variables and function arguments/results.
 static void
 addframeroots(Stkframe *frame, void*)
@@ -1392,7 +1392,7 @@ addframeroots(Stkframe *frame, void*)
 	Func *f;
 	byte *ap;
 	int32 i, j, nuintptr;
-	uint32 w, b;
+	uint32 w, b, *ptrs;
 
 	// Scan local variables if stack frame has been allocated.
 	if(frame->varlen > 0)
@@ -1401,11 +1401,12 @@ addframeroots(Stkframe *frame, void*)
 	// Scan arguments.
 	// Use pointer information if known.
 	f = frame->fn;
-	if(f->args > 0 && f->ptrs.array != nil) {
+	if(f->args > 0 && f->ptrslen > 0) {
 		ap = frame->argp;
 		nuintptr = f->args / sizeof(uintptr);
-		for(i = 0; i < f->ptrs.len; i++) {
-			w = ((uint32*)f->ptrs.array)[i];
+		ptrs = (uint32*)(pclntab + f->ptrsoff);
+		for(i = 0; i < f->ptrslen; i++) {
+			w = ptrs[i];
 			b = 1;
 			j = nuintptr;
 			if(j > 32)
@@ -1464,7 +1465,7 @@ addstackroots(G *gp)
 	if(ScanStackByFrames) {
 		USED(stk);
 		USED(guard);
-		runtime·gentraceback(pc, sp, lr, gp, 0, nil, 0x7fffffff, addframeroots, nil);
+		runtime·gentraceback(pc, sp, lr, gp, 0, nil, 0x7fffffff, addframeroots, nil, false);
 	} else {
 		USED(pc);
 		n = 0;
@@ -1950,7 +1951,6 @@ static FuncVal runfinqv = {runfinq};
 void
 runtime·gc(int32 force)
 {
-	byte *p;
 	struct gc_args a;
 	int32 i;
 
@@ -1978,10 +1978,6 @@ runtime·gc(int32 force)
 		if(gcpercent == GcpercentUnknown)
 			gcpercent = readgogc();
 		runtime·unlock(&runtime·mheap);
-
-		p = runtime·getenv("GOGCTRACE");
-		if(p != nil)
-			gctrace = runtime·atoi(p);
 	}
 	if(gcpercent < 0)
 		return;
@@ -2004,13 +2000,15 @@ runtime·gc(int32 force)
 	// the root set down a bit (g0 stacks are not scanned, and
 	// we don't need to scan gc's internal state).  Also an
 	// enabler for copyable stacks.
-	for(i = 0; i < (gctrace > 1 ? 2 : 1); i++) {
+	for(i = 0; i < (runtime·debug.gctrace > 1 ? 2 : 1); i++) {
 		if(g == m->g0) {
 			// already on g0
 			gc(&a);
 		} else {
 			// switch to g0, call gc(&a), then switch back
 			g->param = &a;
+			g->status = Gwaiting;
+			g->waitreason = "garbage collection";
 			runtime·mcall(mgc);
 		}
 		// record a new start time in case we're going around again
@@ -2018,6 +2016,7 @@ runtime·gc(int32 force)
 	}
 
 	// all done
+	m->gcing = 0;
 	runtime·semrelease(&runtime·worldsema);
 	runtime·starttheworld();
 
@@ -2035,6 +2034,8 @@ runtime·gc(int32 force)
 		// give the queued finalizers, if any, a chance to run
 		runtime·gosched();
 	}
+	if(g->preempt)  // restore the preemption request in case we've cleared it in newstack
+		g->stackguard0 = StackPreempt;
 }
 
 static void
@@ -2042,6 +2043,7 @@ mgc(G *gp)
 {
 	gc(gp->param);
 	gp->param = nil;
+	gp->status = Grunning;
 	runtime·gogo(&gp->sched);
 }
 
@@ -2065,7 +2067,7 @@ gc(struct gc_args *args)
 
 	heap0 = 0;
 	obj0 = 0;
-	if(gctrace) {
+	if(runtime·debug.gctrace) {
 		updatememstats(nil);
 		heap0 = mstats.heap_alloc;
 		obj0 = mstats.nmalloc - mstats.nfree;
@@ -2118,7 +2120,6 @@ gc(struct gc_args *args)
 
 	cachestats();
 	mstats.next_gc = mstats.heap_alloc+mstats.heap_alloc*gcpercent/100;
-	m->gcing = 0;
 
 	t4 = runtime·nanotime();
 	mstats.last_gc = t4;
@@ -2128,7 +2129,7 @@ gc(struct gc_args *args)
 	if(mstats.debuggc)
 		runtime·printf("pause %D\n", t4-t0);
 
-	if(gctrace) {
+	if(runtime·debug.gctrace) {
 		updatememstats(&stats);
 		heap1 = mstats.heap_alloc;
 		obj1 = mstats.nmalloc - mstats.nfree;

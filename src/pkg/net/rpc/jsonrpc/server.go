@@ -22,8 +22,7 @@ type serverCodec struct {
 	// temporary work space
 
 	// 临时工作空间
-	req  serverRequest
-	resp serverResponse
+	req serverRequest
 
 	// JSON-RPC clients can use arbitrary json values as request IDs.
 	// Package rpc expects uint64 request IDs.

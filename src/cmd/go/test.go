@@ -12,6 +12,7 @@ import (
 	"go/doc"
 	"go/parser"
 	"go/token"
+	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -129,7 +130,6 @@ control the execution of any test:
 
 	-cover
 	    Enable coverage analysis.
-	    TODO: This feature is not yet fully implemented.
 
 	-covermode set,count,atomic
 	    Set the mode for coverage analysis for the package[s]
@@ -139,13 +139,18 @@ control the execution of any test:
 		count: int: how many times does this statement run?
 		atomic: int: count, but correct in multithreaded tests;
 			significantly more expensive.
-	    Implies -cover.
-	    Sets -v. TODO: This will change.
+	    Sets -cover.
+
+	-coverpkg pkg1,pkg2,pkg3
+	    Apply coverage analysis in each test to the given list of packages.
+	    The default is for each test to analyze only the package being tested.
+	    Packages are specified as import paths.
+	    Sets -cover.
 
 	-coverprofile cover.out
 	    Write a coverage profile to the specified file after all tests
 	    have passed.
-	    Implies -cover.
+	    Sets -cover.
 
 	-cpu 1,2,4
 	    Specify a list of GOMAXPROCS values for which the tests or
@@ -261,14 +266,16 @@ See the documentation of the testing package for more information.
 }
 
 var (
-	testC            bool     // -c flag
-	testCover        bool     // -cover flag
-	testCoverMode    string   // -covermode flag
-	testProfile      bool     // some profiling flag
-	testI            bool     // -i flag
-	testV            bool     // -v flag
-	testFiles        []string // -file flag(s)  TODO: not respected
-	testTimeout      string   // -timeout flag
+	testC            bool       // -c flag
+	testCover        bool       // -cover flag
+	testCoverMode    string     // -covermode flag
+	testCoverPaths   []string   // -coverpkg flag
+	testCoverPkgs    []*Package // -coverpkg flag
+	testProfile      bool       // some profiling flag
+	testI            bool       // -i flag
+	testV            bool       // -v flag
+	testFiles        []string   // -file flag(s)  TODO: not respected
+	testTimeout      string     // -timeout flag
 	testArgs         []string
 	testBench        bool
 	testStreamOutput bool // show output as it is generated
@@ -276,6 +283,12 @@ var (
 
 	testKillTimeout = 10 * time.Minute
 )
+
+var testMainDeps = map[string]bool{
+	// Dependencies for testmain.
+	"testing": true,
+	"regexp":  true,
+}
 
 func runTest(cmd *Command, args []string) {
 	var pkgArgs []string
@@ -323,11 +336,11 @@ func runTest(cmd *Command, args []string) {
 	if testI {
 		buildV = testV
 
-		deps := map[string]bool{
-			// Dependencies for testmain.
-			"testing": true,
-			"regexp":  true,
+		deps := make(map[string]bool)
+		for dep := range testMainDeps {
+			deps[dep] = true
 		}
+
 		for _, p := range pkgs {
 			// Dependencies for each test.
 			for _, path := range p.Imports {
@@ -372,6 +385,34 @@ func runTest(cmd *Command, args []string) {
 	}
 
 	var builds, runs, prints []*action
+
+	if testCoverPaths != nil {
+		// Load packages that were asked about for coverage.
+		// packagesForBuild exits if the packages cannot be loaded.
+		testCoverPkgs = packagesForBuild(testCoverPaths)
+
+		// Warn about -coverpkg arguments that are not actually used.
+		used := make(map[string]bool)
+		for _, p := range pkgs {
+			used[p.ImportPath] = true
+			for _, dep := range p.Deps {
+				used[dep] = true
+			}
+		}
+		for _, p := range testCoverPkgs {
+			if !used[p.ImportPath] {
+				log.Printf("warning: no packages being tested depend on %s", p.ImportPath)
+			}
+		}
+
+		// Mark all the coverage packages for rebuilding with coverage.
+		for _, p := range testCoverPkgs {
+			p.Stale = true // rebuild
+			p.fake = true  // do not warn about rebuild
+			p.coverMode = testCoverMode
+			p.coverVars = declareCoverVars(p.ImportPath, p.GoFiles...)
+		}
+	}
 
 	// Prepare build + run + print actions for all packages being tested.
 	for _, p := range pkgs {
@@ -424,11 +465,22 @@ func runTest(cmd *Command, args []string) {
 	for _, p := range pkgs {
 		okBuild[p] = true
 	}
-
 	warned := false
 	for _, a := range actionList(root) {
-		if a.p != nil && a.f != nil && !okBuild[a.p] && !a.p.fake && !a.p.local {
-			okBuild[a.p] = true // don't warn again
+		if a.p == nil || okBuild[a.p] {
+			continue
+		}
+		okBuild[a.p] = true // warn at most once
+
+		// Don't warn about packages being rebuilt because of
+		// things like coverage analysis.
+		for _, p1 := range a.p.imports {
+			if p1.fake {
+				a.p.fake = true
+			}
+		}
+
+		if a.f != nil && !okBuild[a.p] && !a.p.fake && !a.p.local {
 			if !warned {
 				fmt.Fprintf(os.Stderr, "warning: building out-of-date packages:\n")
 				warned = true
@@ -493,19 +545,6 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 			return nil, nil, nil, p1.Error
 		}
 		ximports = append(ximports, p1)
-
-		// In coverage mode, we rewrite the package p's sources.
-		// All code that imports p must be rebuilt with the updated
-		// copy, or else coverage will at the least be incomplete
-		// (and sometimes we get link errors due to the mismatch as well).
-		// The external test itself imports package p, of course, but
-		// we make sure that sees the new p. Any other code in the test
-		// - that is, any code imported by the external test that in turn
-		// imports p - needs to be rebuilt too. For now, just report
-		// that coverage is unavailable.
-		if testCover && contains(p1.Deps, p.ImportPath) {
-			return nil, nil, nil, fmt.Errorf("coverage analysis cannot handle package (%s_test imports %s imports %s)", p.Name, path, p.ImportPath)
-		}
 	}
 	stk.pop()
 
@@ -544,17 +583,14 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 		return nil, nil, nil, err
 	}
 
-	if testCover {
-		p.coverMode = testCoverMode
-		p.coverVars = declareCoverVars(p.ImportPath, p.GoFiles...)
-	}
-
-	if err := writeTestmain(filepath.Join(testDir, "_testmain.go"), p, p.coverVars); err != nil {
-		return nil, nil, nil, err
-	}
+	// Should we apply coverage analysis locally,
+	// only for this package and only for this test?
+	// Yes, if -cover is on but -coverpkg has not specified
+	// a list of packages for global coverage.
+	localCover := testCover && testCoverPaths == nil
 
 	// Test package.
-	if len(p.TestGoFiles) > 0 || testCover {
+	if len(p.TestGoFiles) > 0 || localCover {
 		ptest = new(Package)
 		*ptest = *p
 		ptest.GoFiles = nil
@@ -577,6 +613,11 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 			m[k] = append(m[k], v...)
 		}
 		ptest.build.ImportPos = m
+
+		if localCover {
+			ptest.coverMode = testCoverMode
+			ptest.coverVars = declareCoverVars(ptest.ImportPath, ptest.GoFiles...)
+		}
 	} else {
 		ptest = p
 	}
@@ -610,6 +651,7 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 		Root:       p.Root,
 		imports:    []*Package{ptest},
 		build:      &build.Package{Name: "main"},
+		pkgdir:     testDir,
 		fake:       true,
 		Stale:      true,
 	}
@@ -619,15 +661,50 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 
 	// The generated main also imports testing and regexp.
 	stk.push("testmain")
-	ptesting := loadImport("testing", "", &stk, nil)
-	if ptesting.Error != nil {
-		return nil, nil, nil, ptesting.Error
+	for dep := range testMainDeps {
+		if ptest.ImportPath != dep {
+			p1 := loadImport("testing", "", &stk, nil)
+			if p1.Error != nil {
+				return nil, nil, nil, p1.Error
+			}
+			pmain.imports = append(pmain.imports, p1)
+		}
 	}
-	pregexp := loadImport("regexp", "", &stk, nil)
-	if pregexp.Error != nil {
-		return nil, nil, nil, pregexp.Error
+
+	if testCoverPkgs != nil {
+		// Add imports, but avoid duplicates.
+		seen := map[*Package]bool{p: true, ptest: true}
+		for _, p1 := range pmain.imports {
+			seen[p1] = true
+		}
+		for _, p1 := range testCoverPkgs {
+			if !seen[p1] {
+				seen[p1] = true
+				pmain.imports = append(pmain.imports, p1)
+			}
+		}
 	}
-	pmain.imports = append(pmain.imports, ptesting, pregexp)
+
+	if ptest != p && localCover {
+		// We have made modifications to the package p being tested
+		// and are rebuilding p (as ptest), writing it to the testDir tree.
+		// Arrange to rebuild, writing to that same tree, all packages q
+		// such that the test depends on q, and q depends on p.
+		// This makes sure that q sees the modifications to p.
+		// Strictly speaking, the rebuild is only necessary if the
+		// modifications to p change its export metadata, but
+		// determining that is a bit tricky, so we rebuild always.
+		//
+		// This will cause extra compilation, so for now we only do it
+		// when testCover is set. The conditions are more general, though,
+		// and we may find that we need to do it always in the future.
+		recompileForTest(pmain, p, ptest, testDir)
+	}
+
+	if err := writeTestmain(filepath.Join(testDir, "_testmain.go"), pmain, ptest); err != nil {
+		return nil, nil, nil, err
+	}
+
 	computeStale(pmain)
 
 	if ptest != p {
@@ -686,13 +763,66 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 	return pmainAction, runAction, printAction, nil
 }
 
+func recompileForTest(pmain, preal, ptest *Package, testDir string) {
+	// The "test copy" of preal is ptest.
+	// For each package that depends on preal, make a "test copy"
+	// that depends on ptest. And so on, up the dependency tree.
+	testCopy := map[*Package]*Package{preal: ptest}
+	for _, p := range packageList([]*Package{pmain}) {
+		// Copy on write.
+		didSplit := false
+		split := func() {
+			if didSplit {
+				return
+			}
+			didSplit = true
+			if p.pkgdir != testDir {
+				p1 := new(Package)
+				testCopy[p] = p1
+				*p1 = *p
+				p1.imports = make([]*Package, len(p.imports))
+				copy(p1.imports, p.imports)
+				p = p1
+				p.pkgdir = testDir
+				p.target = ""
+				p.fake = true
+				p.Stale = true
+			}
+		}
+
+		// Update p.deps and p.imports to use at test copies.
+		for i, dep := range p.deps {
+			if p1 := testCopy[dep]; p1 != nil && p1 != dep {
+				split()
+				p.deps[i] = p1
+			}
+		}
+		for i, imp := range p.imports {
+			if p1 := testCopy[imp]; p1 != nil && p1 != imp {
+				split()
+				p.imports[i] = p1
+			}
+		}
+	}
+}
+
 var coverIndex = 0
+
+// isTestFile reports whether the source file is a set of tests and should therefore
+// be excluded from coverage analysis.
+func isTestFile(file string) bool {
+	// We don't cover tests, only the code they test.
+	return strings.HasSuffix(file, "_test.go")
+}
 
 // declareCoverVars attaches the required cover variables names
 // to the files, to be used when annotating the files.
 func declareCoverVars(importPath string, files ...string) map[string]*CoverVar {
 	coverVars := make(map[string]*CoverVar)
 	for _, file := range files {
+		if isTestFile(file) {
+			continue
+		}
 		coverVars[file] = &CoverVar{
 			File: filepath.Join(importPath, file),
 			Var:  fmt.Sprintf("GoCover_%d", coverIndex),
@@ -807,10 +937,12 @@ func coveragePercentage(out []byte) string {
 	// The string looks like
 	//	test coverage for encoding/binary: 79.9% of statements
 	// Extract the piece from the percentage to the end of the line.
-	re := regexp.MustCompile(`test coverage for [^ ]+: (.*)\n`)
+	re := regexp.MustCompile(`coverage: (.*)\n`)
 	matches := re.FindSubmatch(out)
 	if matches == nil {
-		return "(missing coverage statistics)"
+		// Probably running "go test -cover" not "go test -cover fmt".
+		// The coverage output will appear in the output directly.
+		return ""
 	}
 	return fmt.Sprintf("\tcoverage: %s", matches[1])
 }
@@ -855,12 +987,24 @@ func isTest(name, prefix string) bool {
 	return !unicode.IsLower(rune)
 }
 
+type coverInfo struct {
+	Package *Package
+	Vars    map[string]*CoverVar
+}
+
 // writeTestmain writes the _testmain.go file for package p to
 // the file named out.
-func writeTestmain(out string, p *Package, coverVars map[string]*CoverVar) error {
+func writeTestmain(out string, pmain, p *Package) error {
+	var cover []coverInfo
+	for _, cp := range pmain.imports {
+		if cp.coverVars != nil {
+			cover = append(cover, coverInfo{cp, cp.coverVars})
+		}
+	}
+
 	t := &testFuncs{
-		Package:   p,
-		CoverVars: coverVars,
+		Package: p,
+		Cover:   cover,
 	}
 	for _, file := range p.TestGoFiles {
 		if err := t.load(filepath.Join(p.Dir, file), "_test", &t.NeedTest); err != nil {
@@ -893,11 +1037,31 @@ type testFuncs struct {
 	Package    *Package
 	NeedTest   bool
 	NeedXtest  bool
-	CoverVars  map[string]*CoverVar
+	Cover      []coverInfo
+}
+
+func (t *testFuncs) CoverMode() string {
+	return testCoverMode
 }
 
 func (t *testFuncs) CoverEnabled() bool {
 	return testCover
+}
+
+// Covered returns a string describing which packages are being tested for coverage.
+// If the covered package is the same as the tested package, it returns the empty string.
+// Otherwise it is a comma-separated human-readable list of packages beginning with
+// " in", ready for use in the coverage message.
+func (t *testFuncs) Covered() string {
+	if testCoverPaths == nil {
+		return ""
+	}
+	return " in " + strings.Join(testCoverPaths, ", ")
+}
+
+// Tested returns the name of the package being tested.
+func (t *testFuncs) Tested() string {
+	return t.Package.Name
 }
 
 type testFunc struct {
@@ -957,11 +1121,14 @@ import (
 	"regexp"
 	"testing"
 
-{{if or .CoverEnabled .NeedTest}}
+{{if .NeedTest}}
 	_test {{.Package.ImportPath | printf "%q"}}
 {{end}}
 {{if .NeedXtest}}
 	_xtest {{.Package.ImportPath | printf "%s_test" | printf "%q"}}
+{{end}}
+{{range $i, $p := .Cover}}
+	_cover{{$i}} {{$p.Package.ImportPath | printf "%q"}}
 {{end}}
 )
 
@@ -1006,8 +1173,10 @@ var (
 )
 
 func init() {
-	{{range $file, $cover := .CoverVars}}
-	coverRegisterFile({{printf "%q" $cover.File}}, _test.{{$cover.Var}}.Count[:], _test.{{$cover.Var}}.Pos[:], _test.{{$cover.Var}}.NumStmt[:])
+	{{range $i, $p := .Cover}}
+	{{range $file, $cover := $p.Vars}}
+	coverRegisterFile({{printf "%q" $cover.File}}, _cover{{$i}}.{{$cover.Var}}.Count[:], _cover{{$i}}.{{$cover.Var}}.Pos[:], _cover{{$i}}.{{$cover.Var}}.NumStmt[:])
+	{{end}}
 	{{end}}
 }
 
@@ -1016,7 +1185,8 @@ func coverRegisterFile(fileName string, counter []uint32, pos []uint32, numStmts
 		panic("coverage: mismatched sizes")
 	}
 	if coverCounters[fileName] != nil {
-		panic("coverage: duplicate counter array for " + fileName)
+		// Already registered.
+		return
 	}
 	coverCounters[fileName] = counter
 	block := make([]testing.CoverBlock, len(counter))
@@ -1035,7 +1205,12 @@ func coverRegisterFile(fileName string, counter []uint32, pos []uint32, numStmts
 
 func main() {
 {{if .CoverEnabled}}
-	testing.RegisterCover(coverCounters, coverBlocks)
+	testing.RegisterCover(testing.Cover{
+		Mode: {{printf "%q" .CoverMode}},
+		Counters: coverCounters,
+		Blocks: coverBlocks,
+		CoveredPackages: {{printf "%q" .Covered}},
+	})
 {{end}}
 	testing.Main(matchString, tests, benchmarks, examples)
 }

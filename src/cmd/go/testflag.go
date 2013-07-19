@@ -28,7 +28,8 @@ var usageMessage = `Usage of go test:
   -benchmem=false: print memory allocation statistics for benchmarks
   -benchtime=1s: passes -test.benchtime to test
   -cover=false: enable coverage analysis
-  -covermode="set": passes -test.covermode to test if -cover
+  -covermode="set": specifies mode for coverage analysis
+  -coverpkg="": comma-separated list of packages for coverage analysis
   -coverprofile="": passes -test.coverprofile to test if -cover
   -cpu="": passes -test.cpu to test
   -cpuprofile="": passes -test.cpuprofile to test
@@ -67,6 +68,7 @@ var testFlagDefn = []*testFlagSpec{
 	{name: "file", multiOK: true},
 	{name: "i", boolVar: &testI},
 	{name: "cover", boolVar: &testCover},
+	{name: "coverpkg"},
 
 	// build flags.
 	{name: "a", boolVar: &buildA},
@@ -113,6 +115,7 @@ var testFlagDefn = []*testFlagSpec{
 func testFlags(args []string) (packageNames, passToTest []string) {
 	inPkg := false
 	outputDir := ""
+	testCoverMode = "set"
 	for i := 0; i < len(args); i++ {
 		if !strings.HasPrefix(args[i], "-") {
 			if !inPkg && packageNames == nil {
@@ -178,6 +181,13 @@ func testFlags(args []string) (packageNames, passToTest []string) {
 			testTimeout = value
 		case "blockprofile", "cpuprofile", "memprofile":
 			testProfile = true
+		case "coverpkg":
+			testCover = true
+			if value == "" {
+				testCoverPaths = nil
+			} else {
+				testCoverPaths = strings.Split(value, ",")
+			}
 		case "coverprofile":
 			testCover = true
 			testProfile = true
@@ -199,12 +209,7 @@ func testFlags(args []string) (packageNames, passToTest []string) {
 			passToTest = append(passToTest, "-test."+f.name+"="+value)
 		}
 	}
-	if testCover {
-		if testCoverMode == "" {
-			testCoverMode = "set"
-		}
-		passToTest = append(passToTest, "-test.covermode", testCoverMode)
-	}
+
 	// Tell the test what directory we're running in, so it can write the profiles there.
 	if testProfile && outputDir == "" {
 		dir, err := os.Getwd()

@@ -53,7 +53,6 @@ typedef	struct	Gobuf		Gobuf;
 typedef	struct	Lock		Lock;
 typedef	struct	M		M;
 typedef	struct	P		P;
-typedef	struct	Mem		Mem;
 typedef	struct	Note		Note;
 typedef	struct	Slice		Slice;
 typedef	struct	Stktop		Stktop;
@@ -87,6 +86,7 @@ typedef	struct	ParFor		ParFor;
 typedef	struct	ParForThread	ParForThread;
 typedef	struct	CgoMal		CgoMal;
 typedef	struct	PollDesc	PollDesc;
+typedef	struct	DebugVars	DebugVars;
 
 /*
  * Per-CPU declaration.
@@ -253,6 +253,7 @@ struct	G
 	bool	issystem;	// do not output in stack dump
 	bool	isbackground;	// ignore in deadlock detector
 	bool	blockingsyscall;	// hint that the next syscall will block
+	bool	preempt;	// preemption signal, duplicates stackguard0 = StackPreempt
 	int8	raceignore;	// ignore race detection events
 	M*	m;		// for debuggers, but offset not hard-coded
 	M*	lockedm;
@@ -270,9 +271,7 @@ struct	G
 };
 struct	M
 {
-	// The offsets of these fields are known to (hard-coded in) libmach.
 	G*	g0;		// goroutine with scheduling stack
-	void	(*morepc)(void);
 	void*	moreargp;	// argument pointer for more stack
 	Gobuf	morebuf;	// gobuf arg to morestack
 
@@ -285,6 +284,7 @@ struct	M
 	uintptr	tls[4];		// thread-local storage (for x86 extern register)
 	void	(*mstartfn)(void);
 	G*	curg;		// current running goroutine
+	G*	caughtsig;	// goroutine running during fatal signal
 	P*	p;		// attached P for executing Go code (nil if not executing Go code)
 	P*	nextp;
 	int32	id;
@@ -402,21 +402,27 @@ enum
 	SigIgnored = 1<<6,	// the signal was ignored before we registered for it
 };
 
-// NOTE(rsc): keep in sync with extern.go:/type.Func.
-// Eventually, the loaded symbol table should be closer to this form.
+// Layout of in-memory per-function information prepared by linker
+// See http://golang.org/s/go12symtab.
+// Keep in sync with linker and with ../../libmach/sym.c
+// and with package debug/gosym.
 struct	Func
 {
-	String	name;
-	String	type;	// go type string
-	String	src;	// src file name
-	Slice	pcln;	// pc/ln tab for this func
-	uintptr	entry;	// entry pc
-	uintptr	pc0;	// starting pc, ln for table
-	int32	ln0;
-	int32	frame;	// stack frame size
+	uintptr	entry;	// start pc
+	int32	nameoff;	// function name
+	
+	// TODO: Remove these fields.
 	int32	args;	// in/out args size
 	int32	locals;	// locals size
-	Slice	ptrs;	// pointer map
+	int32	frame;	// legacy frame size; use pcsp if possible
+	int32	ptrsoff;
+	int32	ptrslen;
+
+	int32	pcsp;
+	int32	pcfile;
+	int32	pcln;
+	int32	npcdata;
+	int32	nfuncdata;
 };
 
 // layout of Itab known to compilers
@@ -525,6 +531,12 @@ struct CgoMal
 {
 	CgoMal	*next;
 	void	*alloc;
+};
+
+// Holds variables parsed from GODEBUG env var.
+struct DebugVars
+{
+	int32	gctrace;
 };
 
 /*
@@ -677,10 +689,11 @@ struct Stkframe
 	uintptr	varlen;	// number of bytes at varp
 };
 
-int32	runtime·gentraceback(uintptr, uintptr, uintptr, G*, int32, uintptr*, int32, void(*)(Stkframe*, void*), void*);
+int32	runtime·gentraceback(uintptr, uintptr, uintptr, G*, int32, uintptr*, int32, void(*)(Stkframe*, void*), void*, bool);
 void	runtime·traceback(uintptr pc, uintptr sp, uintptr lr, G* gp);
 void	runtime·tracebackothers(G*);
 bool	runtime·haszeroargs(uintptr pc);
+bool	runtime·topofstack(Func*);
 
 /*
  * external data
@@ -704,6 +717,7 @@ extern	uint32	runtime·maxstring;
 extern	uint32	runtime·Hchansize;
 extern	uint32	runtime·cpuid_ecx;
 extern	uint32	runtime·cpuid_edx;
+extern	DebugVars	runtime·debug;
 
 /*
  * common functions and data
@@ -755,7 +769,7 @@ int32	runtime·write(int32, void*, int32);
 int32	runtime·close(int32);
 int32	runtime·mincore(void*, uintptr, byte*);
 bool	runtime·cas(uint32*, uint32, uint32);
-bool	runtime·cas64(uint64*, uint64*, uint64);
+bool	runtime·cas64(uint64*, uint64, uint64);
 bool	runtime·casp(void**, void*, void*);
 // Don't confuse with XADD x86 instruction,
 // this one is actually 'addx', that is, add-and-fetch.
@@ -784,7 +798,10 @@ void	runtime·unminit(void);
 void	runtime·signalstack(byte*, int32);
 void	runtime·symtabinit(void);
 Func*	runtime·findfunc(uintptr);
-int32	runtime·funcline(Func*, uintptr);
+int32	runtime·funcline(Func*, uintptr, String*);
+int32	runtime·funcarglen(Func*, uintptr);
+int32	runtime·funcspdelta(Func*, uintptr);
+int8*	runtime·funcname(Func*);
 void*	runtime·stackalloc(uint32);
 void	runtime·stackfree(void*, uintptr);
 MCache*	runtime·allocmcache(void);
@@ -804,12 +821,14 @@ int32	runtime·mcount(void);
 int32	runtime·gcount(void);
 void	runtime·mcall(void(*)(G*));
 uint32	runtime·fastrand1(void);
+void	runtime·rewindmorestack(Gobuf*);
 
 void runtime·setmg(M*, G*);
 void runtime·newextram(void);
 void	runtime·exit(int32);
 void	runtime·breakpoint(void);
 void	runtime·gosched(void);
+void	runtime·gosched0(G*);
 void	runtime·park(void(*)(Lock*), Lock*, int8*);
 void	runtime·tsleep(int64, int8*);
 M*	runtime·newm(void);
@@ -841,6 +860,7 @@ int32	runtime·netpollopen(uintptr, PollDesc*);
 int32   runtime·netpollclose(uintptr);
 void	runtime·netpollready(G**, PollDesc*, int32);
 void	runtime·crash(void);
+void	runtime·parsedebugvars(void);
 void	_rt0_go(void);
 
 #pragma	varargck	argpos	runtime·printf	1
@@ -1016,7 +1036,7 @@ Hmap*	runtime·makemap_c(MapType*, int64);
 Hchan*	runtime·makechan_c(ChanType*, int64);
 void	runtime·chansend(ChanType*, Hchan*, byte*, bool*, void*);
 void	runtime·chanrecv(ChanType*, Hchan*, byte*, bool*, bool*);
-bool	runtime·showframe(Func*, bool);
+bool	runtime·showframe(Func*, G*);
 
 void	runtime·ifaceE2I(InterfaceType*, Eface, Iface*);
 

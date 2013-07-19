@@ -15,6 +15,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
+	"net/http"
 	. "net/http"
 	"net/http/httptest"
 	"net/url"
@@ -1573,6 +1574,77 @@ func TestProxyFromEnvironment(t *testing.T) {
 			t.Errorf("%v: got URL = %q, want %q", tt, url, tt.want)
 		}
 	}
+}
+
+func TestIdleConnChannelLeak(t *testing.T) {
+	var mu sync.Mutex
+	var n int
+
+	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+		mu.Lock()
+		n++
+		mu.Unlock()
+	}))
+	defer ts.Close()
+
+	tr := &Transport{
+		Dial: func(netw, addr string) (net.Conn, error) {
+			return net.Dial(netw, ts.Listener.Addr().String())
+		},
+	}
+	defer tr.CloseIdleConnections()
+
+	c := &Client{Transport: tr}
+
+	// First, without keep-alives.
+	for _, disableKeep := range []bool{true, false} {
+		tr.DisableKeepAlives = disableKeep
+		for i := 0; i < 5; i++ {
+			_, err := c.Get(fmt.Sprintf("http://foo-host-%d.tld/", i))
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		if got := tr.IdleConnChMapSizeForTesting(); got != 0 {
+			t.Fatalf("ForDisableKeepAlives = %v, map size = %d; want 0", disableKeep, got)
+		}
+	}
+}
+
+// Verify the status quo: that the Client.Post function coerces its
+// body into a ReadCloser if it's a Closer, and that the Transport
+// then closes it.
+func TestTransportClosesRequestBody(t *testing.T) {
+	defer afterTest(t)
+	ts := httptest.NewServer(http.HandlerFunc(func(w ResponseWriter, r *Request) {
+		io.Copy(ioutil.Discard, r.Body)
+	}))
+	defer ts.Close()
+
+	tr := &Transport{}
+	defer tr.CloseIdleConnections()
+	cl := &Client{Transport: tr}
+
+	closes := 0
+
+	res, err := cl.Post(ts.URL, "text/plain", countCloseReader{&closes, strings.NewReader("hello")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if closes != 1 {
+		t.Errorf("closes = %d; want 1", closes)
+	}
+}
+
+type countCloseReader struct {
+	n *int
+	io.Reader
+}
+
+func (cr countCloseReader) Close() error {
+	(*cr.n)++
+	return nil
 }
 
 // rgz is a gzip quine that uncompresses to itself.

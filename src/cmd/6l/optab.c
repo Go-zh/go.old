@@ -53,6 +53,16 @@ uchar	ynop[] =
 	Yxr,	Ynone,	Zpseudo,1,
 	0
 };
+uchar	yfuncdata[] =
+{
+	Yi32,	Ym,	Zpseudo,	0,
+	0
+};
+uchar	ypcdata[] = 
+{
+	Yi32,	Yi32,	Zpseudo,	0,
+	0
+};
 uchar	yxorb[] =
 {
 	Yi32,	Yal,	Zib_,	1,
@@ -247,8 +257,10 @@ uchar	yrb_mb[] =
 	Yrb,	Ymb,	Zr_m,	1,
 	0
 };
-uchar	yml_ml[] =
+uchar	yxchg[] =
 {
+	Yax,	Yrl,	Z_rp,	1,
+	Yrl,	Yax,	Zrp_,	1,
 	Yrl,	Yml,	Zr_m,	1,
 	Yml,	Yrl,	Zm_r,	1,
 	0
@@ -1174,9 +1186,9 @@ Optab optab[] =
 	{ AWAIT,	ynone,	Px, 0x9b },
 	{ AWORD,	ybyte,	Px, 2 },
 	{ AXCHGB,	yml_mb,	Pb, 0x86,0x86 },
-	{ AXCHGL,	yml_ml,	Px, 0x87,0x87 },
-	{ AXCHGQ,	yml_ml,	Pw, 0x87,0x87 },
-	{ AXCHGW,	yml_ml,	Pe, 0x87,0x87 },
+	{ AXCHGL,	yxchg,	Px, 0x90,0x90,0x87,0x87 },
+	{ AXCHGQ,	yxchg,	Pw, 0x90,0x90,0x87,0x87 },
+	{ AXCHGW,	yxchg,	Pe, 0x90,0x90,0x87,0x87 },
 	{ AXLAT,	ynone,	Px, 0xd7 },
 	{ AXORB,	yxorb,	Pb, 0x34,0x80,(06),0x30,0x32 },
 	{ AXORL,	yxorl,	Px, 0x83,(06),0x35,0x81,(06),0x31,0x33 },
@@ -1337,14 +1349,11 @@ Optab optab[] =
 	{ AAESKEYGENASSIST,	yaes2,	Pq, 0x3a,0xdf,(0) },
 
 	{ APSHUFD,	yaes2,	Pq,	0x70,(0) },
+	{ APCLMULQDQ,	yxshuf,	Pq, 0x3a,0x44,0 },
 
 	{ AUSEFIELD,	ynop,	Px, 0,0 },
-	{ ALOCALS },
-	{ ATYPE },
-	{ ANPTRS },
-	{ APTRS },
-
-	{ APCLMULQDQ,	yxshuf,	Pq, 0x3a,0x44,0 },
+	{ AFUNCDATA,	yfuncdata,	Px, 0,0 },
+	{ APCDATA,	ypcdata,	Px, 0,0 },
 
 	{ AEND },
 	0
