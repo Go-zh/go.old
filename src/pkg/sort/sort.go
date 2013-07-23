@@ -18,9 +18,14 @@ type Interface interface {
 	// Len is the number of elements in the collection.
 	// Len 为集合内元素的总数
 	Len() int
+<<<<<<< local
 	// Less returns whether the element with index i should sort
 	// before the element with index j.
 	// Less 返回索引为 i 的元素是否应排在索引为 j 的元素之前。
+=======
+	// Less reports whether the element with
+	// index i should sort before the element with index j.
+>>>>>>> other
 	Less(i, j int) bool
 	// Swap swaps the elements with indexes i and j.
 	// Swap 交换索引为 i 和 j 的元素

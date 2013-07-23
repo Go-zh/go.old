@@ -9,7 +9,6 @@ import (
 	"compress/bzip2"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"regexp/syntax"
@@ -65,13 +64,6 @@ import (
 //
 func TestRE2Search(t *testing.T) {
 	testRE2(t, "testdata/re2-search.txt")
-}
-
-func TestRE2Exhaustive(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping TestRE2Exhaustive during short test")
-	}
-	testRE2(t, "testdata/re2-exhaustive.txt.bz2")
 }
 
 func testRE2(t *testing.T, file string) {
@@ -650,11 +642,17 @@ func makeText(n int) []byte {
 		return text[:n]
 	}
 	text = make([]byte, n)
+	x := ^uint32(0)
 	for i := range text {
-		if rand.Intn(30) == 0 {
+		x += x
+		x ^= 1
+		if int32(x) < 0 {
+			x ^= 0x88888eef
+		}
+		if x%31 == 0 {
 			text[i] = '\n'
 		} else {
-			text[i] = byte(rand.Intn(0x7E+1-0x20) + 0x20)
+			text[i] = byte(x%(0x7E+1-0x20) + 0x20)
 		}
 	}
 	return text

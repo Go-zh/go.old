@@ -656,6 +656,8 @@ main(int argc, char **argv)
 	setvbuf(stdout, nil, _IOLBF, 0);
 	setvbuf(stderr, nil, _IOLBF, 0);
 
+	setenv("TERM", "dumb", 1); // disable escape codes in clang errors
+
 	binit(&b);
 	
 	slash = "/";
@@ -745,7 +747,7 @@ xstrrchr(char *p, int c)
 	return strrchr(p, c);
 }
 
-// xsamefile returns whether f1 and f2 are the same file (or dir)
+// xsamefile reports whether f1 and f2 are the same file (or dir)
 int
 xsamefile(char *f1, char *f2)
 {

@@ -32,7 +32,7 @@ func Inf(sign int) float64 {
 // NaN 返回IEEE 754定义的“非数值”（Not-a-Number）。
 func NaN() float64 { return Float64frombits(uvnan) }
 
-// IsNaN returns whether f is an IEEE 754 ``not-a-number'' value.
+// IsNaN reports whether f is an IEEE 754 ``not-a-number'' value.
 
 // IsNaN 判断 f 是否为IEEE 754定义的“非数值”（Not-a-Number）。
 func IsNaN(f float64) (is bool) {
@@ -48,10 +48,10 @@ func IsNaN(f float64) (is bool) {
 	return f != f
 }
 
-// IsInf returns whether f is an infinity, according to sign.
-// If sign > 0, IsInf returns whether f is positive infinity.
-// If sign < 0, IsInf returns whether f is negative infinity.
-// If sign == 0, IsInf returns whether f is either infinity.
+// IsInf reports whether f is an infinity, according to sign.
+// If sign > 0, IsInf reports whether f is positive infinity.
+// If sign < 0, IsInf reports whether f is negative infinity.
+// If sign == 0, IsInf reports whether f is either infinity.
 
 // IsInf 判断 f 是否为无穷大值，视 sign 而定。
 // 若 sign > 0，IsInf 就判断 f 是否为正无穷大。
@@ -73,7 +73,6 @@ func IsInf(f float64, sign int) bool {
 // normalize returns a normal number y and exponent exp
 // satisfying x == y × 2**exp. It assumes x is finite and non-zero.
 
-// TDOD(osc): normalize =?
 // normalize 返回一个规范数 y 和一个指数 exp，使得它们满足 x == y × 2**exp。
 // 该函数假定 x 为有限的非零数值。
 func normalize(x float64) (y float64, exp int) {

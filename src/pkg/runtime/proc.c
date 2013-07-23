@@ -1310,7 +1310,7 @@ goexit0(G *gp)
 	m->curg = nil;
 	m->lockedg = nil;
 	if(m->locked & ~LockExternal) {
-		runtime·printf("invalid m->locked = %d", m->locked);
+		runtime·printf("invalid m->locked = %d\n", m->locked);
 		runtime·throw("internal lockOSThread error");
 	}	
 	m->locked = 0;
@@ -2098,6 +2098,7 @@ sysmon(void)
 		lastpoll = runtime·atomicload64(&runtime·sched.lastpoll);
 		now = runtime·nanotime();
 		if(lastpoll != 0 && lastpoll + 10*1000*1000 > now) {
+			runtime·cas64(&runtime·sched.lastpoll, lastpoll, now);
 			gp = runtime·netpoll(false);  // non-blocking
 			injectglist(gp);
 		}

@@ -33,6 +33,7 @@
 #include	"lib.h"
 #include	"../ld/elf.h"
 #include	"../../pkg/runtime/stack.h"
+#include	"../../pkg/runtime/funcdata.h"
 
 #include	<ar.h>
 
@@ -1375,7 +1376,7 @@ addvarint(Sym *s, uint32 val)
 	p = s->p + s->np - n;
 	for(v = val; v >= 0x80; v >>= 7)
 		*p++ = v | 0x80;
-	*p++ = v;
+	*p = v;
 }
 
 // funcpctab appends to dst a pc-value table mapping the code in func to the values
@@ -1422,7 +1423,7 @@ funcpctab(Sym *dst, Sym *func, char *desc, int32 (*valfunc)(Sym*, int32, Prog*, 
 		if(val == oldval && started) {
 			val = valfunc(func, val, p, 1, arg);
 			if(debug['O'])
-				Bprint(&bso, "%6llux %6s %P\n", p->pc, "", p);
+				Bprint(&bso, "%6llux %6s %P\n", (vlong)p->pc, "", p);
 			continue;
 		}
 
@@ -1433,7 +1434,7 @@ funcpctab(Sym *dst, Sym *func, char *desc, int32 (*valfunc)(Sym*, int32, Prog*, 
 		if(p->link && p->link->pc == p->pc) {
 			val = valfunc(func, val, p, 1, arg);
 			if(debug['O'])
-				Bprint(&bso, "%6llux %6s %P\n", p->pc, "", p);
+				Bprint(&bso, "%6llux %6s %P\n", (vlong)p->pc, "", p);
 			continue;
 		}
 
@@ -1452,11 +1453,9 @@ funcpctab(Sym *dst, Sym *func, char *desc, int32 (*valfunc)(Sym*, int32, Prog*, 
 		// where the 0x80 bit indicates that the integer continues.
 
 		if(debug['O'])
-			Bprint(&bso, "%6llux %6d %P\n", p->pc, val, p);
+			Bprint(&bso, "%6llux %6d %P\n", (vlong)p->pc, val, p);
 
-		if(!started)
-			started = 1;
-		else {
+		if(started) {
 			addvarint(dst, (p->pc - pc) / MINLC);
 			pc = p->pc;
 		}
@@ -1473,7 +1472,7 @@ funcpctab(Sym *dst, Sym *func, char *desc, int32 (*valfunc)(Sym*, int32, Prog*, 
 
 	if(started) {
 		if(debug['O'])
-			Bprint(&bso, "%6llux done\n", func->value+func->size);
+			Bprint(&bso, "%6llux done\n", (vlong)func->value+func->size);
 		addvarint(dst, (func->value+func->size - pc) / MINLC);
 		addvarint(dst, 0); // terminator
 	}
@@ -2353,7 +2352,7 @@ void
 pclntab(void)
 {
 	Prog *p;
-	int32 i, n, nfunc, start, funcstart, nameoff;
+	int32 i, n, nfunc, start, funcstart;
 	uint32 *havepc, *havefunc;
 	Sym *ftab, *s;
 	int32 npcdata, nfuncdata, off, end;
@@ -2399,7 +2398,7 @@ pclntab(void)
 
 		// fixed size of struct, checked below
 		off = funcstart;
-		end = funcstart + PtrSize + 6*4 + 5*4 + npcdata*4 + nfuncdata*PtrSize;
+		end = funcstart + PtrSize + 3*4 + 5*4 + npcdata*4 + nfuncdata*PtrSize;
 		if(nfuncdata > 0 && (end&(PtrSize-1)))
 			end += 4;
 		symgrow(ftab, end);
@@ -2408,24 +2407,14 @@ pclntab(void)
 		off = setaddr(ftab, off, cursym);
 
 		// name int32
-		// Filled in below, after we emit the ptrs.
-		nameoff = off;
-		off += 4;
+		off = setuint32(ftab, off, ftabaddstring(ftab, cursym->name));
 		
 		// args int32
 		// TODO: Move into funcinfo.
-		if(cursym->text == nil || (cursym->text->textflag & NOSPLIT) && cursym->args == 0 && cursym->nptrs < 0) {
-			// This might be a vararg function and have no
-			// predetermined argument size.  This check is
-			// approximate and will also match 0 argument
-			// nosplit functions compiled by 6c.
+		if(cursym->text == nil)
 			off = setuint32(ftab, off, ArgsSizeUnknown);
-		} else
+		else
 			off = setuint32(ftab, off, cursym->args);
-
-		// locals int32
-		// TODO: Move into funcinfo.
-		off = setuint32(ftab, off, cursym->locals);
 	
 		// frame int32
 		// TODO: Remove entirely. The pcsp table is more precise.
@@ -2437,24 +2426,6 @@ pclntab(void)
 			off = setuint32(ftab, off, 0);
 		else
 			off = setuint32(ftab, off, (uint32)cursym->text->to.offset+PtrSize);
-
-		// TODO: Move into funcinfo.
-		// ptrsoff, ptrslen int32
-		start = ftab->np;
-		if(start&3) {
-			diag("bad math in functab: ptrs misaligned");
-			errorexit();
-		}
-		ftab->size = ftab->np; // for adduint32
-		for(i = 0; i < cursym->nptrs; i += 32)
-			adduint32(ftab, cursym->ptrs[i/32]);
-		off = setuint32(ftab, off, start);
-		off = setuint32(ftab, off, i/32);
-
-		// Now that ptrs are emitted, can fill in function name.
-		// The string is appended to ftab; we waited until now
-		// to avoid misaligning the ptrs data.
-		setuint32(ftab, nameoff, ftabaddstring(ftab, cursym->name));
 
 		// pcsp table (offset int32)
 		off = addpctab(ftab, off, cursym, "pctospadj", pctospadj, 0);
@@ -2478,7 +2449,7 @@ pclntab(void)
 		for(p = cursym->text; p != P; p = p->link) {
 			if(p->as == AFUNCDATA) {
 				if((havefunc[p->from.offset/32]>>(p->from.offset%32))&1)
-					diag("multiple definitions for FUNCDATA $%d", i);
+					diag("multiple definitions for FUNCDATA $%d", p->from.offset);
 				havefunc[p->from.offset/32] |= 1<<(p->from.offset%32);
 			}
 			if(p->as == APCDATA)

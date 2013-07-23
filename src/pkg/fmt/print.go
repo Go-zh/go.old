@@ -42,16 +42,20 @@ var (
 // 它提供了访问 io.Writer 接口及关于标记的信息，以及操作数的格式说明符选项。
 type State interface {
 	// Write is the function to call to emit formatted output to be printed.
+
 	// Write 函数用于打印出已格式化的输出。
 	Write(b []byte) (ret int, err error)
 	// Width returns the value of the width option and whether it has been set.
+
 	// Width 返回宽度选项的值以及它是否已被设置。
 	Width() (wid int, ok bool)
 	// Precision returns the value of the precision option and whether it has been set.
+
 	// Precision 返回精度选项的值以及它是否已被设置。
 	Precision() (prec int, ok bool)
 
-	// Flag returns whether the flag c, a character, has been set.
+	// Flag reports whether the flag c, a character, has been set.
+
 	// Flag 返回标记 c（一个字符）是否已被设置。
 	Flag(c int) bool
 }

@@ -945,9 +945,9 @@ func (f *FlagSet) usage() {
 	}
 }
 
-// parseOne parses one flag. It returns whether a flag was seen.
+// parseOne parses one flag. It reports whether a flag was seen.
 
-// parseOne解析一个标签，它返回是否这个标签能解析。
+// parseOne解析一个标签，它报告是否这个标签能解析。
 func (f *FlagSet) parseOne() (bool, error) {
 	if len(f.args) == 0 {
 		return false, nil
