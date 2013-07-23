@@ -1,4 +1,4 @@
-<!--{
+
 	"Title": "实效Go编程",
 	"Template": true
 }-->
@@ -308,6 +308,7 @@ quality of the documentation <code>godoc</code> produces.
 这些注释的类型和风格决定了 <code>godoc</code> 生成的文档质量。
 </p>
 
+<div class="english">
 <p>
 Every package should have a <i>package comment</i>, a block
 comment preceding the package clause.
@@ -318,7 +319,15 @@ provide information relevant to the package as a whole.
 It will appear first on the <code>godoc</code> page and
 should set up the detailed documentation that follows.
 </p>
+</div>
 
+<p>
+每个包都应包含一段<b>包注释</b>，即放置在包子句前的一个块注释。对于包含多个文件的包，
+包注释只需出现在其中的任一文件中即可。包注释应在整体上对该包进行介绍，并提供包的相关信息。
+它将出现在 <code>godoc</code> 页面中的最上面，并为紧随其后的内容建立详细的文档。
+</p>
+
+<div class="english">
 <pre>
 /*
 Package regexp implements a simple library for regular expressions.
@@ -341,15 +350,50 @@ The syntax of the regular expressions accepted is:
 */
 package regexp
 </pre>
+</div>
 
+<pre>
+/*
+    regexp 包为正则表达式实现了一个简单的库。
+
+    该库接受的正则表达式语法为：
+
+    正则表达式:
+        串联 { '|' 串联 }
+    串联:
+        { 闭包 }
+    闭包:
+        条目 [ '*' | '+' | '?' ]
+    条目:
+        '^'
+        '$'
+        '.'
+        字符
+        '[' [ '^' ] 字符遍历 ']'
+        '(' 正则表达式 ')'
+*/
+package regexp
+</pre>
+
+<div class="english">
 <p>
 If the package is simple, the package comment can be brief.
 </p>
+</div>
 
+<p>
+若某个包比较简单，包注释同样可以简洁些。
+</p>
+
+<div class="english">
 <pre>
 // Package path implements utility routines for
 // manipulating slash-separated filename paths.
 </pre>
+</div>
+
+<pre>
+// path 包实现了一些常用的工具，以便于操作用反斜杠分隔的路径
 
 <p>
 Comments do not need extra formatting such as banners of stars.
