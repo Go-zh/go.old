@@ -8,12 +8,13 @@
 // Float64 and Int, use a default shared Source that produces a deterministic
 // sequence of values each time a program is run. Use the Seed function to
 // initialize the default Source if different behavior is required for each run.
+// The default Source is safe for concurrent use by multiple goroutines.
 
 // rand 包实现了伪随机数生成器.
 //
 // 随机数由一个 Source 生成。像 Float64 和 Int 这样的顶级函数使用默认共享的 Source，
 // 它会在每次程序运行时产生一系列确定的值。若每次运行都需要不同的行为，需使用 Seed
-// 函数来初始化默认的 Source。
+// 函数来初始化默认的 Source。对于多Go程并发来说，默认的 Source 是安全的。
 package rand
 
 import "sync"

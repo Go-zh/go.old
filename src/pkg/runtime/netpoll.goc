@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin linux windows
+// +build darwin freebsd,amd64 freebsd,386 linux openbsd windows
 
 package net
 
@@ -253,7 +253,7 @@ netpollblock(PollDesc *pd, int32 mode)
 		return true;
 	}
 	if(*gpp != nil)
-		runtime·throw("epoll: double wait");
+		runtime·throw("netpollblock: double wait");
 	*gpp = g;
 	runtime·park(runtime·unlock, &pd->Lock, "IO wait");
 	runtime·lock(pd);

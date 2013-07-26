@@ -228,13 +228,42 @@ runtime·cfree(void *p)
 
 static FuncVal unwindmf = {unwindm};
 
+typedef struct CallbackArgs CallbackArgs;
+struct CallbackArgs
+{
+	FuncVal *fn;
+	void *arg;
+	uintptr argsize;
+};
+
+// Location of callback arguments depends on stack frame layout
+// and size of stack frame of cgocallback_gofunc.
+
+// On arm, stack frame is two words and there's a saved LR between
+// SP and the stack frame and between the stack frame and the arguments.
+#ifdef GOARCH_arm
+#define CBARGS (CallbackArgs*)((byte*)m->g0->sched.sp+4*sizeof(void*))
+#endif
+
+// On amd64, stack frame is one word, plus caller PC.
+#ifdef GOARCH_amd64
+#define CBARGS (CallbackArgs*)((byte*)m->g0->sched.sp+2*sizeof(void*))
+#endif
+
+// On 386, stack frame is three words, plus caller PC.
+#ifdef GOARCH_386
+#define CBARGS (CallbackArgs*)((byte*)m->g0->sched.sp+4*sizeof(void*))
+#endif
+
 void
-runtime·cgocallbackg(FuncVal *fn, void *arg, uintptr argsize)
+runtime·cgocallbackg(void)
 {
 	Defer d;
+	CallbackArgs *cb;
 
 	if(m->racecall) {
-		reflect·call(fn, arg, argsize);
+		cb = CBARGS;
+		reflect·call(cb->fn, cb->arg, cb->argsize);
 		return;
 	}
 
@@ -261,7 +290,8 @@ runtime·cgocallbackg(FuncVal *fn, void *arg, uintptr argsize)
 		runtime·raceacquire(&cgosync);
 
 	// Invoke callback.
-	reflect·call(fn, arg, argsize);
+	cb = CBARGS;
+	reflect·call(cb->fn, cb->arg, cb->argsize);
 
 	if(raceenabled)
 		runtime·racereleasemerge(&cgosync);
@@ -286,8 +316,10 @@ unwindm(void)
 		runtime·throw("runtime: unwindm not implemented");
 	case '8':
 	case '6':
-	case '5':
 		m->g0->sched.sp = *(uintptr*)m->g0->sched.sp;
+		break;
+	case '5':
+		m->g0->sched.sp = *(uintptr*)((byte*)m->g0->sched.sp + 4);
 		break;
 	}
 }
