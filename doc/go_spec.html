@@ -1,6 +1,6 @@
 <!--{
 	"Title": "Go编程语言规范",
-	"Subtitle": "版本：2013年2月11日 || 译者：Oling Cat",
+	"Subtitle": "版本：2013年7月25日 || 译者：Oling Cat",
 	"Path": "/ref/spec"
 }-->
 
@@ -32,6 +32,7 @@ TODO
 [ ] 阐明什么是结构体声明中的字段名（struct{T} 之于 struct {T T} 之于 struct {t T}）
 [ ] 关于操作符的结果类型需要详尽的语言描述
 [ ] 或许该写一些关于语句求值顺序的东西，尽管它很明显
+[ ] 在“选择者”一节中，阐明在方法调用中传递的是接收者的什么值
 -->
 
 <div class="english">
@@ -188,7 +189,6 @@ in the source text.
 </div>
 
 <p>
-Source code is Unicode text encoded in
 源码是采用<a href="http://en.wikipedia.org/wiki/UTF-8">UTF-8</a>编码的Unicode文本。
 该文本是非标准化的，因此单一的着重号码点不同于结合了字母与着重号的字符结构，
 那些应视作两个码点。为简单起见，本文档将使用非正式的术语<b>字符</b>在源文本中指代Unicode码点。
