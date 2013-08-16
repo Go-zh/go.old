@@ -794,7 +794,7 @@ func (b *builder) build(a *action) (err error) {
 
 	if a.p.Standard && a.p.ImportPath == "runtime" && buildContext.Compiler == "gc" &&
 		!hasString(a.p.HFiles, "zasm_"+buildContext.GOOS+"_"+buildContext.GOARCH+".h") {
-		return fmt.Errorf("%s/%s must be bootstrapped using make.bash", buildContext.GOOS, buildContext.GOARCH)
+		return fmt.Errorf("%s/%s must be bootstrapped using make%v", buildContext.GOOS, buildContext.GOARCH, defaultSuffix())
 	}
 
 	// Make build directory.
@@ -1794,8 +1794,9 @@ func (b *builder) gccld(p *Package, out string, flags []string, obj []string) er
 }
 
 // gccCmd returns a gcc command line prefix
+// defaultCC is defined in zdefaultcc.go, written by cmd/dist.
 func (b *builder) gccCmd(objdir string) []string {
-	return b.ccompilerCmd("CC", "gcc", objdir)
+	return b.ccompilerCmd("CC", defaultCC, objdir)
 }
 
 // gxxCmd returns a g++ command line prefix
@@ -1811,7 +1812,7 @@ func (b *builder) ccompilerCmd(envvar, defcmd, objdir string) []string {
 
 	compiler := strings.Fields(os.Getenv(envvar))
 	if len(compiler) == 0 {
-		compiler = append(compiler, defcmd)
+		compiler = strings.Fields(defcmd)
 	}
 	a := []string{compiler[0], "-I", objdir, "-g", "-O2"}
 	a = append(a, compiler[1:]...)
@@ -1858,7 +1859,7 @@ func (b *builder) gccArchArgs() []string {
 	case "6":
 		return []string{"-m64"}
 	case "5":
-		return []string{"-marm"} // not thumb
+		return []string{"-marm", "-march=armv5t"} // not thumb
 	}
 	return nil
 }
@@ -2263,4 +2264,17 @@ func raceInit() {
 	}
 	buildContext.InstallSuffix += "race"
 	buildContext.BuildTags = append(buildContext.BuildTags, "race")
+}
+
+// defaultSuffix returns file extension used for command files in
+// current os environment.
+func defaultSuffix() string {
+	switch runtime.GOOS {
+	case "windows":
+		return ".bat"
+	case "plan9":
+		return ".rc"
+	default:
+		return ".bash"
+	}
 }

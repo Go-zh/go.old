@@ -24,8 +24,6 @@ const (
 var padZeroBytes = make([]byte, nByte)
 var padSpaceBytes = make([]byte, nByte)
 
-var newline = []byte{'\n'}
-
 func init() {
 	for i := 0; i < nByte; i++ {
 		padZeroBytes[i] = '0'
@@ -178,6 +176,11 @@ func (f *fmt) integer(a int64, base uint64, signedness bool, digits string) {
 	}
 
 	var buf []byte = f.intbuf[0:]
+	if f.widPresent && f.wid > nByte {
+		// We're going to need a bigger boat.
+		buf = make([]byte, f.wid)
+	}
+
 	negative := signedness == signed && a < 0
 	if negative {
 		a = -a
@@ -205,7 +208,7 @@ func (f *fmt) integer(a int64, base uint64, signedness bool, digits string) {
 	// 将 a 格式化为 buf，止于 buf[i]。（从右到左打印更容易。）a 会被转为无符号的
 	// ua。我们可以让这件事更快一点，就是在32位的情况下，把它分割成单独的块，
 	// 不过没必要这样重复，因此 ua 是64位的。
-	i := len(f.intbuf)
+	i := len(buf)
 	ua := uint64(a)
 	for ua >= base {
 		i--
@@ -214,7 +217,7 @@ func (f *fmt) integer(a int64, base uint64, signedness bool, digits string) {
 	}
 	i--
 	buf[i] = digits[ua]
-	for i > 0 && prec > nByte-i {
+	for i > 0 && prec > len(buf)-i {
 		i--
 		buf[i] = '0'
 	}
@@ -402,6 +405,14 @@ func (f *fmt) formatFloat(v float64, verb byte, prec, n int) {
 	// 已格式化的数字起始于 slice[1]。
 	switch slice[1] {
 	case '-', '+':
+		// If we're zero padding, want the sign before the leading zeros.
+		// Achieve this by writing the sign out and padding the postive number.
+		if f.zero && f.widPresent && f.wid > len(slice) {
+			f.buf.WriteByte(slice[1])
+			f.wid--
+			f.pad(slice[2:])
+			return
+		}
 		// We're set; drop the leading space.
 		// 我们设置了符号；丢弃前导的空格。
 		slice = slice[1:]

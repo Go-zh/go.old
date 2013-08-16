@@ -7,6 +7,7 @@
 #include "stack.h"
 #include "cgocall.h"
 #include "race.h"
+#include "../../cmd/ld/textflag.h"
 
 // Cgo call and callback support.
 //
@@ -86,26 +87,12 @@
 void *_cgo_init;	/* filled in by dynamic linker when Cgo is available */
 static int64 cgosync;  /* represents possible synchronization in C code */
 
-// These two are only used by the architecture where TLS based storage isn't
-// the default for g and m (e.g., ARM)
-void *_cgo_load_gm; /* filled in by dynamic linker when Cgo is available */
-void *_cgo_save_gm; /* filled in by dynamic linker when Cgo is available */
-
 static void unwindm(void);
 
 // Call from Go to C.
 
 static void endcgo(void);
 static FuncVal endcgoV = { endcgo };
-
-// Gives a hint that the next syscall
-// executed by the current goroutine will block.
-// Currently used only on windows.
-void
-net·runtime_blockingSyscallHint(void)
-{
-	g->blockingsyscall = true;
-}
 
 void
 runtime·cgocall(void (*fn)(void*), void *arg)
@@ -158,11 +145,7 @@ runtime·cgocall(void (*fn)(void*), void *arg)
 	 * so it is safe to call while "in a system call", outside
 	 * the $GOMAXPROCS accounting.
 	 */
-	if(g->blockingsyscall) {
-		g->blockingsyscall = false;
-		runtime·entersyscallblock();
-	} else
-		runtime·entersyscall();
+	runtime·entersyscall();
 	runtime·asmcgocall(fn, arg);
 	runtime·exitsyscall();
 
@@ -255,22 +238,39 @@ struct CallbackArgs
 #define CBARGS (CallbackArgs*)((byte*)m->g0->sched.sp+4*sizeof(void*))
 #endif
 
+void runtime·cgocallbackg1(void);
+
+#pragma textflag NOSPLIT
 void
 runtime·cgocallbackg(void)
 {
-	Defer d;
-	CallbackArgs *cb;
-
-	if(m->racecall) {
-		cb = CBARGS;
-		reflect·call(cb->fn, cb->arg, cb->argsize);
-		return;
+	if(g != m->curg) {
+		runtime·prints("runtime: bad g in cgocallback");
+		runtime·exit(2);
 	}
 
-	if(g != m->curg)
-		runtime·throw("runtime: bad g in cgocallback");
+	if(m->racecall) {
+		// We were not in syscall, so no need to call runtime·exitsyscall.
+		// However we must set m->locks for the following reason.
+		// Race detector runtime makes __tsan_symbolize cgo callback
+		// holding internal mutexes. The mutexes are not cooperative with Go scheduler.
+		// So if we deschedule a goroutine that holds race detector internal mutex
+		// (e.g. preempt it), another goroutine will deadlock trying to acquire the same mutex.
+		m->locks++;
+		runtime·cgocallbackg1();
+		m->locks--;
+	} else {
+		runtime·exitsyscall();	// coming out of cgo call
+		runtime·cgocallbackg1();
+		runtime·entersyscall();	// going back to cgo call
+	}
+}
 
-	runtime·exitsyscall();	// coming out of cgo call
+void
+runtime·cgocallbackg1(void)
+{
+	CallbackArgs *cb;
+	Defer d;
 
 	if(m->needextram) {
 		m->needextram = 0;
@@ -286,14 +286,14 @@ runtime·cgocallbackg(void)
 	d.free = false;
 	g->defer = &d;
 
-	if(raceenabled)
+	if(raceenabled && !m->racecall)
 		runtime·raceacquire(&cgosync);
 
 	// Invoke callback.
 	cb = CBARGS;
-	reflect·call(cb->fn, cb->arg, cb->argsize);
+	runtime·newstackcall(cb->fn, cb->arg, cb->argsize);
 
-	if(raceenabled)
+	if(raceenabled && !m->racecall)
 		runtime·racereleasemerge(&cgosync);
 
 	// Pop defer.
@@ -302,8 +302,6 @@ runtime·cgocallbackg(void)
 	if(g->defer != &d || d.fn != &unwindmf)
 		runtime·throw("runtime: bad defer entry in cgocallback");
 	g->defer = d.link;
-
-	runtime·entersyscall();	// going back to cgo call
 }
 
 static void

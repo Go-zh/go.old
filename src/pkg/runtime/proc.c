@@ -8,6 +8,7 @@
 #include "stack.h"
 #include "race.h"
 #include "type.h"
+#include "../../cmd/ld/textflag.h"
 
 // Goroutine scheduler
 // The scheduler's job is to distribute ready-to-run goroutines over worker threads.
@@ -29,7 +30,7 @@ struct Sched {
 
 	M*	midle;	 // idle m's waiting for work
 	int32	nmidle;	 // number of idle m's waiting for work
-	int32	mlocked; // number of locked m's waiting for work
+	int32	nmidlelocked; // number of locked m's waiting for work
 	int32	mcount;	 // number of m's that have been created
 
 	P*	pidle;  // idle P's
@@ -45,6 +46,7 @@ struct Sched {
 	Lock	gflock;
 	G*	gfree;
 
+	uint32	gcwaiting;	// gc is waiting to run
 	int32	stopwait;
 	Note	stopnote;
 	uint32	sysmonwait;
@@ -61,9 +63,7 @@ enum { MaxGomaxprocs = 1<<8 };
 Sched	runtime·sched;
 int32	runtime·gomaxprocs;
 uint32	runtime·needextram;
-bool	runtime·singleproc;
 bool	runtime·iscgo;
-uint32	runtime·gcwaiting;
 M	runtime·m0;
 G	runtime·g0;	 // idle goroutine for m0
 G*	runtime·allg;
@@ -95,7 +95,7 @@ static void stoplockedm(void);
 static void startlockedm(G*);
 static void sysmon(void);
 static uint32 retake(int64);
-static void inclocked(int32);
+static void incidlelocked(int32);
 static void checkdead(void);
 static void exitsyscall0(G*);
 static void park0(G*);
@@ -108,8 +108,9 @@ static G* globrunqget(P*, int32);
 static P* pidleget(void);
 static void pidleput(P*);
 static void injectglist(G*);
-static void preemptall(void);
-static void preemptone(P*);
+static bool preemptall(void);
+static bool preemptone(P*);
+static bool exitsyscallfast(void);
 
 // The bootstrap sequence is:
 //
@@ -160,10 +161,22 @@ extern void main·main(void);
 
 static FuncVal scavenger = {runtime·MHeap_Scavenger};
 
+static FuncVal initDone = { runtime·unlockOSThread };
+
 // The main goroutine.
 void
 runtime·main(void)
 {
+	Defer d;
+	
+	// Max stack size is 1 GB on 64-bit, 250 MB on 32-bit.
+	// Using decimal instead of binary GB and MB because
+	// they look nicer in the stack overflow failure message.
+	if(sizeof(void*) == 8)
+		runtime·maxstacksize = 1000000000;
+	else
+		runtime·maxstacksize = 250000000;
+
 	newm(sysmon, nil);
 
 	// Lock the main goroutine onto this, the main OS thread,
@@ -173,10 +186,24 @@ runtime·main(void)
 	// by calling runtime.LockOSThread during initialization
 	// to preserve the lock.
 	runtime·lockOSThread();
+	
+	// Defer unlock so that runtime.Goexit during init does the unlock too.
+	d.fn = &initDone;
+	d.siz = 0;
+	d.link = g->defer;
+	d.argp = (void*)-1;
+	d.special = true;
+	d.free = false;
+	g->defer = &d;
+
 	if(m != &runtime·m0)
 		runtime·throw("runtime·main not on m0");
 	runtime·newproc1(&scavenger, nil, 0, 0, runtime·main);
 	main·init();
+
+	if(g->defer != &d || d.fn != &initDone)
+		runtime·throw("runtime: bad defer entry after init");
+	g->defer = d.link;
 	runtime·unlockOSThread();
 
 	main·main();
@@ -248,9 +275,10 @@ runtime·tracebackothers(G *me)
 			continue;
 		runtime·printf("\n");
 		runtime·goroutineheader(gp);
-		if(gp->status == Grunning)
+		if(gp->status == Grunning) {
 			runtime·printf("\tgoroutine running on other thread; stack unavailable\n");
-		else
+			runtime·printcreatedby(gp);
+		} else
 			runtime·traceback(gp->sched.pc, gp->sched.sp, gp->sched.lr, gp);
 	}
 }
@@ -355,6 +383,34 @@ runtime·helpgc(int32 nproc)
 	runtime·unlock(&runtime·sched);
 }
 
+// Similar to stoptheworld but best-effort and can be called several times.
+// There is no reverse operation, used during crashing.
+// This function must not lock any mutexes.
+void
+runtime·freezetheworld(void)
+{
+	int32 i;
+
+	if(runtime·gomaxprocs == 1)
+		return;
+	// stopwait and preemption requests can be lost
+	// due to races with concurrently executing threads,
+	// so try several times
+	for(i = 0; i < 5; i++) {
+		// this should tell the scheduler to not start any new goroutines
+		runtime·sched.stopwait = 0x7fffffff;
+		runtime·atomicstore((uint32*)&runtime·sched.gcwaiting, 1);
+		// this should stop running goroutines
+		if(!preemptall())
+			break;  // no running goroutines
+		runtime·usleep(1000);
+	}
+	// to be sure
+	runtime·usleep(1000);
+	preemptall();
+	runtime·usleep(1000);
+}
+
 void
 runtime·stoptheworld(void)
 {
@@ -365,7 +421,7 @@ runtime·stoptheworld(void)
 
 	runtime·lock(&runtime·sched);
 	runtime·sched.stopwait = runtime·gomaxprocs;
-	runtime·atomicstore((uint32*)&runtime·gcwaiting, 1);
+	runtime·atomicstore((uint32*)&runtime·sched.gcwaiting, 1);
 	preemptall();
 	// stop current P
 	m->p->status = Pgcstop;
@@ -429,7 +485,7 @@ runtime·starttheworld(void)
 		newprocs = 0;
 	} else
 		procresize(runtime·gomaxprocs);
-	runtime·gcwaiting = 0;
+	runtime·sched.gcwaiting = 0;
 
 	p1 = nil;
 	while(p = pidleget()) {
@@ -618,7 +674,7 @@ static void unlockextra(M*);
 //
 // When the callback is done with the m, it calls dropm to
 // put the m back on the list.
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 runtime·needm(byte x)
 {
@@ -693,11 +749,18 @@ runtime·newextram(void)
 	gp->sched.sp = gp->stackbase;
 	gp->sched.lr = 0;
 	gp->sched.g = gp;
+	gp->syscallpc = gp->sched.pc;
+	gp->syscallsp = gp->sched.sp;
+	gp->syscallstack = gp->stackbase;
+	gp->syscallguard = gp->stackguard;
 	gp->status = Gsyscall;
 	mp->curg = gp;
 	mp->locked = LockInternal;
 	mp->lockedg = gp;
 	gp->lockedm = mp;
+	gp->goid = runtime·xadd64(&runtime·sched.goidgen, 1);
+	if(raceenabled)
+		gp->racectx = runtime·racegostart(runtime·newextram);
 	// put on allg for garbage collector
 	runtime·lock(&runtime·sched);
 	if(runtime·lastg == nil)
@@ -706,9 +769,6 @@ runtime·newextram(void)
 		runtime·lastg->alllink = gp;
 	runtime·lastg = gp;
 	runtime·unlock(&runtime·sched);
-	gp->goid = runtime·xadd64(&runtime·sched.goidgen, 1);
-	if(raceenabled)
-		gp->racectx = runtime·racegostart(runtime·newextram);
 
 	// Add m to the extra list.
 	mnext = lockextra(true);
@@ -770,7 +830,7 @@ runtime·dropm(void)
 // to runtime.extram. If nilokay is true, then lockextra will
 // return a nil list head if that's what it finds. If nilokay is false,
 // lockextra will keep waiting until the list head is no longer nil.
-#pragma textflag 7
+#pragma textflag NOSPLIT
 static M*
 lockextra(bool nilokay)
 {
@@ -798,7 +858,7 @@ lockextra(bool nilokay)
 	return mp;
 }
 
-#pragma textflag 7
+#pragma textflag NOSPLIT
 static void
 unlockextra(M *mp)
 {
@@ -919,7 +979,7 @@ handoffp(P *p)
 		return;
 	}
 	runtime·lock(&runtime·sched);
-	if(runtime·gcwaiting) {
+	if(runtime·sched.gcwaiting) {
 		p->status = Pgcstop;
 		if(--runtime·sched.stopwait == 0)
 			runtime·notewakeup(&runtime·sched.stopnote);
@@ -967,7 +1027,7 @@ stoplockedm(void)
 		p = releasep();
 		handoffp(p);
 	}
-	inclocked(1);
+	incidlelocked(1);
 	// Wait until another thread schedules lockedg again.
 	runtime·notesleep(&m->park);
 	runtime·noteclear(&m->park);
@@ -990,7 +1050,7 @@ startlockedm(G *gp)
 	if(mp->nextp)
 		runtime·throw("startlockedm: m has p");
 	// directly handoff current P to the locked m
-	inclocked(-1);
+	incidlelocked(-1);
 	p = releasep();
 	mp->nextp = p;
 	runtime·notewakeup(&mp->park);
@@ -1004,7 +1064,7 @@ gcstopm(void)
 {
 	P *p;
 
-	if(!runtime·gcwaiting)
+	if(!runtime·sched.gcwaiting)
 		runtime·throw("gcstopm: not waiting for gc");
 	if(m->spinning) {
 		m->spinning = false;
@@ -1033,7 +1093,7 @@ execute(G *gp)
 	gp->status = Grunning;
 	gp->preempt = false;
 	gp->stackguard0 = gp->stackguard;
-	m->p->tick++;
+	m->p->schedtick++;
 	m->curg = gp;
 	gp->m = m;
 
@@ -1055,7 +1115,7 @@ findrunnable(void)
 	int32 i;
 
 top:
-	if(runtime·gcwaiting) {
+	if(runtime·sched.gcwaiting) {
 		gcstopm();
 		goto top;
 	}
@@ -1089,7 +1149,7 @@ top:
 	}
 	// random steal from other P's
 	for(i = 0; i < 2*runtime·gomaxprocs; i++) {
-		if(runtime·gcwaiting)
+		if(runtime·sched.gcwaiting)
 			goto top;
 		p = runtime·allp[runtime·fastrand1()%runtime·gomaxprocs];
 		if(p == m->p)
@@ -1102,7 +1162,7 @@ top:
 stop:
 	// return P and block
 	runtime·lock(&runtime·sched);
-	if(runtime·gcwaiting) {
+	if(runtime·sched.gcwaiting) {
 		runtime·unlock(&runtime·sched);
 		goto top;
 	}
@@ -1211,7 +1271,7 @@ schedule(void)
 		runtime·throw("schedule: holding locks");
 
 top:
-	if(runtime·gcwaiting) {
+	if(runtime·sched.gcwaiting) {
 		gcstopm();
 		goto top;
 	}
@@ -1220,7 +1280,7 @@ top:
 	// Check the global runnable queue once in a while to ensure fairness.
 	// Otherwise two goroutines can completely occupy the local runqueue
 	// by constantly respawning each other.
-	tick = m->p->tick;
+	tick = m->p->schedtick;
 	// This is a fancy way to say tick%61==0,
 	// it uses 2 MUL instructions instead of a single DIV and so is faster on modern processors.
 	if(tick - (((uint64)tick*0x4325c53fu)>>36)*61 == 0 && runtime·sched.runqsize > 0) {
@@ -1308,7 +1368,7 @@ runtime·gosched0(G *gp)
 // Need to mark it as nosplit, because it runs with sp > stackbase (as runtime·lessstack).
 // Since it does not return it does not matter.  But if it is preempted
 // at the split stack check, GC will complain about inconsistent sp.
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 runtime·goexit(void)
 {
@@ -1336,11 +1396,10 @@ goexit0(G *gp)
 	schedule();
 }
 
+#pragma textflag NOSPLIT
 static void
 save(void *pc, uintptr sp)
 {
-	g->gcpc = (uintptr)pc;
-	g->gcsp = sp;
 	g->sched.pc = (uintptr)pc;
 	g->sched.sp = sp;
 	g->sched.lr = 0;
@@ -1357,22 +1416,24 @@ save(void *pc, uintptr sp)
 // Entersyscall cannot split the stack: the runtime·gosave must
 // make g->sched refer to the caller's stack segment, because
 // entersyscall is going to return immediately after.
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 ·entersyscall(int32 dummy)
 {
-	if(m->profilehz > 0)
-		runtime·setprof(false);
+	// Disable preemption because during this function g is in Gsyscall status,
+	// but can have inconsistent g->sched, do not let GC observe it.
+	m->locks++;
 
-	// Leave SP around for gc and traceback.
+	// Leave SP around for GC and traceback.
 	save(runtime·getcallerpc(&dummy), runtime·getcallersp(&dummy));
-
-	g->gcstack = g->stackbase;
-	g->gcguard = g->stackguard;
+	g->syscallsp = g->sched.sp;
+	g->syscallpc = g->sched.pc;
+	g->syscallstack = g->stackbase;
+	g->syscallguard = g->stackguard;
 	g->status = Gsyscall;
-	if(g->gcsp < g->gcguard-StackGuard || g->gcstack < g->gcsp) {
+	if(g->syscallsp < g->syscallguard-StackGuard || g->syscallstack < g->syscallsp) {
 		// runtime·printf("entersyscall inconsistent %p [%p,%p]\n",
-		//	g->gcsp, g->gcguard-StackGuard, g->gcstack);
+		//	g->syscallsp, g->syscallguard-StackGuard, g->syscallstack);
 		runtime·throw("entersyscall");
 	}
 
@@ -1387,10 +1448,9 @@ void
 	}
 
 	m->mcache = nil;
-	m->p->tick++;
 	m->p->m = nil;
 	runtime·atomicstore(&m->p->status, Psyscall);
-	if(runtime·gcwaiting) {
+	if(runtime·sched.gcwaiting) {
 		runtime·lock(&runtime·sched);
 		if (runtime·sched.stopwait > 0 && runtime·cas(&m->p->status, Psyscall, Pgcstop)) {
 			if(--runtime·sched.stopwait == 0)
@@ -1399,88 +1459,81 @@ void
 		runtime·unlock(&runtime·sched);
 		save(runtime·getcallerpc(&dummy), runtime·getcallersp(&dummy));
 	}
+
+	// Goroutines must not split stacks in Gsyscall status (it would corrupt g->sched).
+	// We set stackguard to StackPreempt so that first split stack check calls morestack.
+	// Morestack detects this case and throws.
+	g->stackguard0 = StackPreempt;
+	m->locks--;
 }
 
 // The same as runtime·entersyscall(), but with a hint that the syscall is blocking.
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 ·entersyscallblock(int32 dummy)
 {
 	P *p;
 
-	if(m->profilehz > 0)
-		runtime·setprof(false);
+	m->locks++;  // see comment in entersyscall
 
-	// Leave SP around for gc and traceback.
+	// Leave SP around for GC and traceback.
 	save(runtime·getcallerpc(&dummy), runtime·getcallersp(&dummy));
-	g->gcsp = g->sched.sp;
-	g->gcpc = g->sched.pc;
-	g->gcstack = g->stackbase;
-	g->gcguard = g->stackguard;
+	g->syscallsp = g->sched.sp;
+	g->syscallpc = g->sched.pc;
+	g->syscallstack = g->stackbase;
+	g->syscallguard = g->stackguard;
 	g->status = Gsyscall;
-	if(g->gcsp < g->gcguard-StackGuard || g->gcstack < g->gcsp) {
-		// runtime·printf("entersyscallblock inconsistent %p [%p,%p]\n",
-		//	g->gcsp, g->gcguard-StackGuard, g->gcstack);
+	if(g->syscallsp < g->syscallguard-StackGuard || g->syscallstack < g->syscallsp) {
+		// runtime·printf("entersyscall inconsistent %p [%p,%p]\n",
+		//	g->syscallsp, g->syscallguard-StackGuard, g->syscallstack);
 		runtime·throw("entersyscallblock");
 	}
 
 	p = releasep();
 	handoffp(p);
 	if(g->isbackground)  // do not consider blocked scavenger for deadlock detection
-		inclocked(1);
+		incidlelocked(1);
 
 	// Resave for traceback during blocked call.
 	save(runtime·getcallerpc(&dummy), runtime·getcallersp(&dummy));
+
+	g->stackguard0 = StackPreempt;  // see comment in entersyscall
+	m->locks--;
 }
 
 // The goroutine g exited its system call.
 // Arrange for it to run on a cpu again.
 // This is called only from the go syscall library, not
 // from the low-level system calls used by the runtime.
+#pragma textflag NOSPLIT
 void
 runtime·exitsyscall(void)
 {
-	P *p;
+	m->locks++;  // see comment in entersyscall
 
-	// Check whether the profiler needs to be turned on.
-	if(m->profilehz > 0)
-		runtime·setprof(true);
+	if(g->isbackground)  // do not consider blocked scavenger for deadlock detection
+		incidlelocked(-1);
 
-	// Try to re-acquire the last P.
-	if(m->p && m->p->status == Psyscall && runtime·cas(&m->p->status, Psyscall, Prunning)) {
+	if(exitsyscallfast()) {
 		// There's a cpu for us, so we can run.
-		m->mcache = m->p->mcache;
-		m->p->m = m;
-		m->p->tick++;
+		m->p->syscalltick++;
 		g->status = Grunning;
 		// Garbage collector isn't running (since we are),
 		// so okay to clear gcstack and gcsp.
-		g->gcstack = (uintptr)nil;
-		g->gcsp = (uintptr)nil;
-		if(g->preempt)  // restore the preemption request in case we've cleared it in newstack
+		g->syscallstack = (uintptr)nil;
+		g->syscallsp = (uintptr)nil;
+		m->locks--;
+		if(g->preempt) {
+			// restore the preemption request in case we've cleared it in newstack
 			g->stackguard0 = StackPreempt;
+		} else {
+			// otherwise restore the real stackguard, we've spoiled it in entersyscall/entersyscallblock
+			g->stackguard0 = g->stackguard;
+		}
 		return;
 	}
 
-	if(g->isbackground)  // do not consider blocked scavenger for deadlock detection
-		inclocked(-1);
-	// Try to get any other idle P.
-	m->p = nil;
-	if(runtime·sched.pidle) {
-		runtime·lock(&runtime·sched);
-		p = pidleget();
-		runtime·unlock(&runtime·sched);
-		if(p) {
-			acquirep(p);
-			m->p->tick++;
-			g->status = Grunning;
-			g->gcstack = (uintptr)nil;
-			g->gcsp = (uintptr)nil;
-			if(g->preempt)  // restore the preemption request in case we've cleared it in newstack
-				g->stackguard0 = StackPreempt;
-			return;
-		}
-	}
+	m->locks--;
 
 	// Call the scheduler.
 	runtime·mcall(exitsyscall0);
@@ -1491,8 +1544,46 @@ runtime·exitsyscall(void)
 	// Must wait until now because until gosched returns
 	// we don't know for sure that the garbage collector
 	// is not running.
-	g->gcstack = (uintptr)nil;
-	g->gcsp = (uintptr)nil;
+	g->syscallstack = (uintptr)nil;
+	g->syscallsp = (uintptr)nil;
+	m->p->syscalltick++;
+}
+
+#pragma textflag NOSPLIT
+static bool
+exitsyscallfast(void)
+{
+	P *p;
+
+	// Freezetheworld sets stopwait but does not retake P's.
+	if(runtime·sched.stopwait) {
+		m->p = nil;
+		return false;
+	}
+
+	// Try to re-acquire the last P.
+	if(m->p && m->p->status == Psyscall && runtime·cas(&m->p->status, Psyscall, Prunning)) {
+		// There's a cpu for us, so we can run.
+		m->mcache = m->p->mcache;
+		m->p->m = m;
+		return true;
+	}
+	// Try to get any other idle P.
+	m->p = nil;
+	if(runtime·sched.pidle) {
+		runtime·lock(&runtime·sched);
+		p = pidleget();
+		if(p && runtime·atomicload(&runtime·sched.sysmonwait)) {
+			runtime·atomicstore(&runtime·sched.sysmonwait, 0);
+			runtime·notewakeup(&runtime·sched.sysmonnote);
+		}
+		runtime·unlock(&runtime·sched);
+		if(p) {
+			acquirep(p);
+			return true;
+		}
+	}
+	return false;
 }
 
 // runtime·exitsyscall slow path on g0.
@@ -1509,6 +1600,10 @@ exitsyscall0(G *gp)
 	p = pidleget();
 	if(p == nil)
 		globrunqput(gp);
+	else if(runtime·atomicload(&runtime·sched.sysmonwait)) {
+		runtime·atomicstore(&runtime·sched.sysmonwait, 0);
+		runtime·notewakeup(&runtime·sched.sysmonnote);
+	}
 	runtime·unlock(&runtime·sched);
 	if(p) {
 		acquirep(p);
@@ -1521,6 +1616,29 @@ exitsyscall0(G *gp)
 	}
 	stopm();
 	schedule();  // Never returns.
+}
+
+// Called from syscall package before fork.
+void
+syscall·runtime_BeforeFork(void)
+{
+	// Fork can hang if preempted with signals frequently enough (see issue 5517).
+	// Ensure that we stay on the same M where we disable profiling.
+	m->locks++;
+	if(m->profilehz != 0)
+		runtime·resetcpuprofiler(0);
+}
+
+// Called from syscall package after fork in parent.
+void
+syscall·runtime_AfterFork(void)
+{
+	int32 hz;
+
+	hz = runtime·sched.profilehz;
+	if(hz != 0)
+		runtime·resetcpuprofiler(hz);
+	m->locks--;
 }
 
 // Hook used by runtime·malg to call runtime·stackalloc on the
@@ -1558,6 +1676,7 @@ runtime·malg(int32 stacksize)
 			stk = g->param;
 			g->param = nil;
 		}
+		g->stacksize = StackSystem + stacksize;
 		newg->stack0 = (uintptr)stk;
 		newg->stackguard = (uintptr)stk + StackGuard;
 		newg->stackguard0 = newg->stackguard;
@@ -1574,7 +1693,7 @@ runtime·malg(int32 stacksize)
 // are available sequentially after &fn; they would not be
 // copied if a stack split occurred.  It's OK for this to call
 // functions that split the stack.
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 runtime·newproc(int32 siz, FuncVal* fn, ...)
 {
@@ -1750,7 +1869,7 @@ runtime·gomaxprocsfunc(int32 n)
 	}
 	runtime·unlock(&runtime·sched);
 
-	runtime·semacquire(&runtime·worldsema);
+	runtime·semacquire(&runtime·worldsema, false);
 	m->gcing = 1;
 	runtime·stoptheworld();
 	newprocs = n;
@@ -1761,8 +1880,12 @@ runtime·gomaxprocsfunc(int32 n)
 	return ret;
 }
 
+// lockOSThread is called by runtime.LockOSThread and runtime.lockOSThread below
+// after they modify m->locked. Do not allow preemption during this call,
+// or else the m might be different in this function than in the caller.
+#pragma textflag NOSPLIT
 static void
-LockOSThread(void)
+lockOSThread(void)
 {
 	m->lockedg = g;
 	g->lockedm = m;
@@ -1772,18 +1895,23 @@ void
 runtime·LockOSThread(void)
 {
 	m->locked |= LockExternal;
-	LockOSThread();
+	lockOSThread();
 }
 
 void
 runtime·lockOSThread(void)
 {
 	m->locked += LockInternal;
-	LockOSThread();
+	lockOSThread();
 }
 
+
+// unlockOSThread is called by runtime.UnlockOSThread and runtime.unlockOSThread below
+// after they update m->locked. Do not allow preemption during this call,
+// or else the m might be in different in this function than in the caller.
+#pragma textflag NOSPLIT
 static void
-UnlockOSThread(void)
+unlockOSThread(void)
 {
 	if(m->locked != 0)
 		return;
@@ -1795,7 +1923,7 @@ void
 runtime·UnlockOSThread(void)
 {
 	m->locked &= ~LockExternal;
-	UnlockOSThread();
+	unlockOSThread();
 }
 
 void
@@ -1804,7 +1932,7 @@ runtime·unlockOSThread(void)
 	if(m->locked < LockInternal)
 		runtime·throw("runtime: internal error: misuse of lockOSThread/unlockOSThread");
 	m->locked -= LockInternal;
-	UnlockOSThread();
+	unlockOSThread();
 }
 
 bool
@@ -1867,6 +1995,12 @@ runtime·badmcall2(void)  // called from assembly
 	runtime·throw("runtime: mcall function returned");
 }
 
+void
+runtime·badreflectcall(void) // called from assembly
+{
+	runtime·panicstring("runtime: arg size to reflect.call more than 1GB");
+}
+
 static struct {
 	Lock;
 	void (*fn)(uintptr*, int32);
@@ -1874,26 +2008,45 @@ static struct {
 	uintptr pcbuf[100];
 } prof;
 
+static void
+System(void)
+{
+}
+
 // Called if we receive a SIGPROF signal.
 void
 runtime·sigprof(uint8 *pc, uint8 *sp, uint8 *lr, G *gp)
 {
 	int32 n;
+	bool traceback;
 
-	// Windows does profiling in a dedicated thread w/o m.
-	if(!Windows && (m == nil || m->mcache == nil))
-		return;
 	if(prof.fn == nil || prof.hz == 0)
 		return;
+	traceback = true;
+	// Windows does profiling in a dedicated thread w/o m.
+	if(!Windows && (m == nil || m->mcache == nil))
+		traceback = false;
+	if(gp == m->g0 || gp == m->gsignal)
+		traceback = false;
+	// Race detector calls asmcgocall w/o entersyscall/exitsyscall,
+	// we can not currently unwind through asmcgocall.
+	if(m != nil && m->racecall)
+		traceback = false;
 
 	runtime·lock(&prof);
 	if(prof.fn == nil) {
 		runtime·unlock(&prof);
 		return;
 	}
-	n = runtime·gentraceback((uintptr)pc, (uintptr)sp, (uintptr)lr, gp, 0, prof.pcbuf, nelem(prof.pcbuf), nil, nil, false);
-	if(n > 0)
-		prof.fn(prof.pcbuf, n);
+	n = 0;
+	if(traceback)
+		n = runtime·gentraceback((uintptr)pc, (uintptr)sp, (uintptr)lr, gp, 0, prof.pcbuf, nelem(prof.pcbuf), nil, nil, false);
+	if(!traceback || n <= 0) {
+		n = 2;
+		prof.pcbuf[0] = (uintptr)pc;
+		prof.pcbuf[1] = (uintptr)System + 1;
+	}
+	prof.fn(prof.pcbuf, n);
 	runtime·unlock(&prof);
 }
 
@@ -1909,7 +2062,11 @@ runtime·setcpuprofilerate(void (*fn)(uintptr*, int32), int32 hz)
 	if(fn == nil)
 		hz = 0;
 
-	// Stop profiler on this cpu so that it is safe to lock prof.
+	// Disable preemption, otherwise we can be rescheduled to another thread
+	// that has profiling enabled.
+	m->locks++;
+
+	// Stop profiler on this thread so that it is safe to lock prof.
 	// if a profiling signal came in while we had prof locked,
 	// it would deadlock.
 	runtime·resetcpuprofiler(0);
@@ -1924,6 +2081,8 @@ runtime·setcpuprofilerate(void (*fn)(uintptr*, int32), int32 hz)
 
 	if(hz != 0)
 		runtime·resetcpuprofiler(hz);
+
+	m->locks--;
 }
 
 // Change number of processors.  The world is stopped, sched is locked.
@@ -1941,7 +2100,8 @@ procresize(int32 new)
 	for(i = 0; i < new; i++) {
 		p = runtime·allp[i];
 		if(p == nil) {
-			p = (P*)runtime·mallocgc(sizeof(*p), 0, 0, 1);
+			p = (P*)runtime·mallocgc(sizeof(*p), 0, FlagNoInvokeGC);
+			p->id = i;
 			p->status = Pgcstop;
 			runtime·atomicstorep(&runtime·allp[i], p);
 		}
@@ -1953,7 +2113,7 @@ procresize(int32 new)
 		}
 		if(p->runq == nil) {
 			p->runqsize = 128;
-			p->runq = (G**)runtime·mallocgc(p->runqsize*sizeof(G*), 0, 0, 1);
+			p->runq = (G**)runtime·mallocgc(p->runqsize*sizeof(G*), 0, FlagNoInvokeGC);
 		}
 	}
 
@@ -1996,7 +2156,6 @@ procresize(int32 new)
 		p->status = Pidle;
 		pidleput(p);
 	}
-	runtime·singleproc = new == 1;
 	runtime·atomicstore((uint32*)&runtime·gomaxprocs, new);
 }
 
@@ -2038,10 +2197,10 @@ releasep(void)
 }
 
 static void
-inclocked(int32 v)
+incidlelocked(int32 v)
 {
 	runtime·lock(&runtime·sched);
-	runtime·sched.mlocked += v;
+	runtime·sched.nmidlelocked += v;
 	if(v > 0)
 		checkdead();
 	runtime·unlock(&runtime·sched);
@@ -2056,12 +2215,12 @@ checkdead(void)
 	int32 run, grunning, s;
 
 	// -1 for sysmon
-	run = runtime·sched.mcount - runtime·sched.nmidle - runtime·sched.mlocked - 1;
+	run = runtime·sched.mcount - runtime·sched.nmidle - runtime·sched.nmidlelocked - 1;
 	if(run > 0)
 		return;
 	if(run < 0) {
-		runtime·printf("checkdead: nmidle=%d mlocked=%d mcount=%d\n",
-			runtime·sched.nmidle, runtime·sched.mlocked, runtime·sched.mcount);
+		runtime·printf("checkdead: nmidle=%d nmidlelocked=%d mcount=%d\n",
+			runtime·sched.nmidle, runtime·sched.nmidlelocked, runtime·sched.mcount);
 		runtime·throw("checkdead: inconsistent counts");
 	}
 	grunning = 0;
@@ -2086,9 +2245,10 @@ static void
 sysmon(void)
 {
 	uint32 idle, delay;
-	int64 now, lastpoll;
+	int64 now, lastpoll, lasttrace;
 	G *gp;
 
+	lasttrace = 0;
 	idle = 0;  // how many cycles in succession we had not wokeup somebody
 	delay = 0;
 	for(;;) {
@@ -2099,9 +2259,10 @@ sysmon(void)
 		if(delay > 10*1000)  // up to 10ms
 			delay = 10*1000;
 		runtime·usleep(delay);
-		if(runtime·gcwaiting || runtime·atomicload(&runtime·sched.npidle) == runtime·gomaxprocs) {  // TODO: fast atomic
+		if(runtime·debug.schedtrace <= 0 &&
+			(runtime·sched.gcwaiting || runtime·atomicload(&runtime·sched.npidle) == runtime·gomaxprocs)) {  // TODO: fast atomic
 			runtime·lock(&runtime·sched);
-			if(runtime·atomicload(&runtime·gcwaiting) || runtime·atomicload(&runtime·sched.npidle) == runtime·gomaxprocs) {
+			if(runtime·atomicload(&runtime·sched.gcwaiting) || runtime·atomicload(&runtime·sched.npidle) == runtime·gomaxprocs) {
 				runtime·atomicstore(&runtime·sched.sysmonwait, 1);
 				runtime·unlock(&runtime·sched);
 				runtime·notesleep(&runtime·sched.sysmonnote);
@@ -2117,7 +2278,18 @@ sysmon(void)
 		if(lastpoll != 0 && lastpoll + 10*1000*1000 > now) {
 			runtime·cas64(&runtime·sched.lastpoll, lastpoll, now);
 			gp = runtime·netpoll(false);  // non-blocking
-			injectglist(gp);
+			if(gp) {
+				// Need to decrement number of idle locked M's
+				// (pretending that one more is running) before injectglist.
+				// Otherwise it can lead to the following situation:
+				// injectglist grabs all P's but before it starts M's to run the P's,
+				// another M returns from syscall, finishes running its G,
+				// observes that there is no work to do and no other running M's
+				// and reports deadlock.
+				incidlelocked(-1);
+				injectglist(gp);
+				incidlelocked(1);
+			}
 		}
 		// retake P's blocked in syscalls
 		// and preempt long running G's
@@ -2125,14 +2297,21 @@ sysmon(void)
 			idle = 0;
 		else
 			idle++;
+
+		if(runtime·debug.schedtrace > 0 && lasttrace + runtime·debug.schedtrace*1000000ll <= now) {
+			lasttrace = now;
+			runtime·schedtrace(runtime·debug.scheddetail);
+		}
 	}
 }
 
 typedef struct Pdesc Pdesc;
 struct Pdesc
 {
-	uint32	tick;
-	int64	when;
+	uint32	schedtick;
+	int64	schedwhen;
+	uint32	syscalltick;
+	int64	syscallwhen;
 };
 static Pdesc pdesc[MaxGomaxprocs];
 
@@ -2149,32 +2328,39 @@ retake(int64 now)
 		p = runtime·allp[i];
 		if(p==nil)
 			continue;
-		t = p->tick;
 		pd = &pdesc[i];
-		if(pd->tick != t) {
-			pd->tick = t;
-			pd->when = now;
-			continue;
-		}
 		s = p->status;
 		if(s == Psyscall) {
 			// Retake P from syscall if it's there for more than 1 sysmon tick (20us).
 			// But only if there is other work to do.
+			t = p->syscalltick;
+			if(pd->syscalltick != t) {
+				pd->syscalltick = t;
+				pd->syscallwhen = now;
+				continue;
+			}
 			if(p->runqhead == p->runqtail &&
 				runtime·atomicload(&runtime·sched.nmspinning) + runtime·atomicload(&runtime·sched.npidle) > 0)
 				continue;
-			// Need to increment number of locked M's before the CAS.
+			// Need to decrement number of idle locked M's
+			// (pretending that one more is running) before the CAS.
 			// Otherwise the M from which we retake can exit the syscall,
 			// increment nmidle and report deadlock.
-			inclocked(-1);
+			incidlelocked(-1);
 			if(runtime·cas(&p->status, s, Pidle)) {
 				n++;
 				handoffp(p);
 			}
-			inclocked(1);
+			incidlelocked(1);
 		} else if(s == Prunning) {
 			// Preempt G if it's running for more than 10ms.
-			if(pd->when + 10*1000*1000 > now)
+			t = p->schedtick;
+			if(pd->schedtick != t) {
+				pd->schedtick = t;
+				pd->schedwhen = now;
+				continue;
+			}
+			if(pd->schedwhen + 10*1000*1000 > now)
 				continue;
 			preemptone(p);
 		}
@@ -2186,18 +2372,22 @@ retake(int64 now)
 // This function is purely best-effort.  It can fail to inform a goroutine if a
 // processor just started running it.
 // No locks need to be held.
-static void
+// Returns true if preemption request was issued to at least one goroutine.
+static bool
 preemptall(void)
 {
 	P *p;
 	int32 i;
+	bool res;
 
+	res = false;
 	for(i = 0; i < runtime·gomaxprocs; i++) {
 		p = runtime·allp[i];
 		if(p == nil || p->status != Prunning)
 			continue;
-		preemptone(p);
+		res |= preemptone(p);
 	}
+	return res;
 }
 
 // Tell the goroutine running on processor P to stop.
@@ -2206,26 +2396,110 @@ preemptall(void)
 // correct goroutine, that goroutine might ignore the request if it is
 // simultaneously executing runtime·newstack.
 // No lock needs to be held.
-static void
+// Returns true if preemption request was issued.
+static bool
 preemptone(P *p)
 {
 	M *mp;
 	G *gp;
 
-// Preemption requires more robust traceback routines.
-// For now, disable.
-// The if(1) silences a compiler warning about the rest of the
-// function being unreachable.
-if(1) return;
-
 	mp = p->m;
 	if(mp == nil || mp == m)
-		return;
+		return false;
 	gp = mp->curg;
 	if(gp == nil || gp == mp->g0)
-		return;
+		return false;
 	gp->preempt = true;
 	gp->stackguard0 = StackPreempt;
+	return true;
+}
+
+void
+runtime·schedtrace(bool detailed)
+{
+	static int64 starttime;
+	int64 now;
+	int64 id1, id2, id3;
+	int32 i, q, t, h, s;
+	int8 *fmt;
+	M *mp, *lockedm;
+	G *gp, *lockedg;
+	P *p;
+
+	now = runtime·nanotime();
+	if(starttime == 0)
+		starttime = now;
+
+	runtime·lock(&runtime·sched);
+	runtime·printf("SCHED %Dms: gomaxprocs=%d idleprocs=%d threads=%d idlethreads=%d runqueue=%d",
+		(now-starttime)/1000000, runtime·gomaxprocs, runtime·sched.npidle, runtime·sched.mcount,
+		runtime·sched.nmidle, runtime·sched.runqsize);
+	if(detailed) {
+		runtime·printf(" gcwaiting=%d nmidlelocked=%d nmspinning=%d stopwait=%d sysmonwait=%d\n",
+			runtime·sched.gcwaiting, runtime·sched.nmidlelocked, runtime·sched.nmspinning,
+			runtime·sched.stopwait, runtime·sched.sysmonwait);
+	}
+	// We must be careful while reading data from P's, M's and G's.
+	// Even if we hold schedlock, most data can be changed concurrently.
+	// E.g. (p->m ? p->m->id : -1) can crash if p->m changes from non-nil to nil.
+	for(i = 0; i < runtime·gomaxprocs; i++) {
+		p = runtime·allp[i];
+		if(p == nil)
+			continue;
+		mp = p->m;
+		t = p->runqtail;
+		h = p->runqhead;
+		s = p->runqsize;
+		q = t - h;
+		if(q < 0)
+			q += s;
+		if(detailed)
+			runtime·printf("  P%d: status=%d schedtick=%d syscalltick=%d m=%d runqsize=%d/%d gfreecnt=%d\n",
+				i, p->status, p->schedtick, p->syscalltick, mp ? mp->id : -1, q, s, p->gfreecnt);
+		else {
+			// In non-detailed mode format lengths of per-P run queues as:
+			// [len1 len2 len3 len4]
+			fmt = " %d";
+			if(runtime·gomaxprocs == 1)
+				fmt = " [%d]\n";
+			else if(i == 0)
+				fmt = " [%d";
+			else if(i == runtime·gomaxprocs-1)
+				fmt = " %d]\n";
+			runtime·printf(fmt, q);
+		}
+	}
+	if(!detailed) {
+		runtime·unlock(&runtime·sched);
+		return;
+	}
+	for(mp = runtime·allm; mp; mp = mp->alllink) {
+		p = mp->p;
+		gp = mp->curg;
+		lockedg = mp->lockedg;
+		id1 = -1;
+		if(p)
+			id1 = p->id;
+		id2 = -1;
+		if(gp)
+			id2 = gp->goid;
+		id3 = -1;
+		if(lockedg)
+			id3 = lockedg->goid;
+		runtime·printf("  M%d: p=%D curg=%D mallocing=%d throwing=%d gcing=%d"
+			" locks=%d dying=%d helpgc=%d spinning=%d lockedg=%D\n",
+			mp->id, id1, id2,
+			mp->mallocing, mp->throwing, mp->gcing, mp->locks, mp->dying, mp->helpgc,
+			mp->spinning, id3);
+	}
+	for(gp = runtime·allg; gp; gp = gp->alllink) {
+		mp = gp->m;
+		lockedm = gp->lockedm;
+		runtime·printf("  G%D: status=%d(%s) m=%d lockedm=%d\n",
+			gp->goid, gp->status, gp->waitreason, mp ? mp->id : -1,
+			lockedm ? lockedm->id : -1);
+	}
+	runtime·unlock(&runtime·sched);
 }
 
 // Put mp on midle list.

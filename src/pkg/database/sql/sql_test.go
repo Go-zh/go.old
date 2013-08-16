@@ -5,6 +5,8 @@
 package sql
 
 import (
+	"database/sql/driver"
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -38,15 +40,7 @@ const fakeDBName = "foo"
 
 var chrisBirthday = time.Unix(123456789, 0)
 
-type testOrBench interface {
-	Fatalf(string, ...interface{})
-	Errorf(string, ...interface{})
-	Fatal(...interface{})
-	Error(...interface{})
-	Logf(string, ...interface{})
-}
-
-func newTestDB(t testOrBench, name string) *DB {
+func newTestDB(t testing.TB, name string) *DB {
 	db, err := Open("test", fakeDBName)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
@@ -68,14 +62,14 @@ func newTestDB(t testOrBench, name string) *DB {
 	return db
 }
 
-func exec(t testOrBench, db *DB, query string, args ...interface{}) {
+func exec(t testing.TB, db *DB, query string, args ...interface{}) {
 	_, err := db.Exec(query, args...)
 	if err != nil {
 		t.Fatalf("Exec of %q: %v", query, err)
 	}
 }
 
-func closeDB(t testOrBench, db *DB) {
+func closeDB(t testing.TB, db *DB) {
 	if e := recover(); e != nil {
 		fmt.Printf("Panic: %v\n", e)
 		panic(e)
@@ -1046,6 +1040,34 @@ func TestRowsCloseOrder(t *testing.T) {
 	}
 }
 
+func TestRowsImplicitClose(t *testing.T) {
+	db := newTestDB(t, "people")
+	defer closeDB(t, db)
+
+	rows, err := db.Query("SELECT|people|age,name|")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want, fail := 2, errors.New("fail")
+	r := rows.rowsi.(*rowsCursor)
+	r.errPos, r.err = want, fail
+
+	got := 0
+	for rows.Next() {
+		got++
+	}
+	if got != want {
+		t.Errorf("got %d rows, want %d", got, want)
+	}
+	if err := rows.Err(); err != fail {
+		t.Errorf("got error %v, want %v", err, fail)
+	}
+	if !r.closed {
+		t.Errorf("r.closed is false, want true")
+	}
+}
+
 func TestStmtCloseOrder(t *testing.T) {
 	db := newTestDB(t, "people")
 	defer closeDB(t, db)
@@ -1060,7 +1082,7 @@ func TestStmtCloseOrder(t *testing.T) {
 	}
 }
 
-func manyConcurrentQueries(t testOrBench) {
+func manyConcurrentQueries(t testing.TB) {
 	maxProcs, numReqs := 16, 500
 	if testing.Short() {
 		maxProcs, numReqs = 4, 50
@@ -1108,6 +1130,51 @@ func manyConcurrentQueries(t testOrBench) {
 	}
 
 	wg.Wait()
+}
+
+func TestIssue6081(t *testing.T) {
+	db := newTestDB(t, "people")
+	defer closeDB(t, db)
+
+	drv := db.driver.(*fakeDriver)
+	drv.mu.Lock()
+	opens0 := drv.openCount
+	closes0 := drv.closeCount
+	drv.mu.Unlock()
+
+	stmt, err := db.Prepare("SELECT|people|name|")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rowsCloseHook = func(rows *Rows, err *error) {
+		*err = driver.ErrBadConn
+	}
+	defer func() { rowsCloseHook = nil }()
+	for i := 0; i < 10; i++ {
+		rows, err := stmt.Query()
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows.Close()
+	}
+	if n := len(stmt.css); n > 1 {
+		t.Errorf("len(css slice) = %d; want <= 1", n)
+	}
+	stmt.Close()
+	if n := len(stmt.css); n != 0 {
+		t.Errorf("len(css slice) after Close = %d; want 0", n)
+	}
+
+	drv.mu.Lock()
+	opens := drv.openCount - opens0
+	closes := drv.closeCount - closes0
+	drv.mu.Unlock()
+	if opens < 9 {
+		t.Errorf("opens = %d; want >= 9", opens)
+	}
+	if closes < 9 {
+		t.Errorf("closes = %d; want >= 9", closes)
+	}
 }
 
 func TestConcurrency(t *testing.T) {

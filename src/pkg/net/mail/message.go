@@ -388,7 +388,9 @@ func (p *addrParser) consumePhrase() (phrase string, err error) {
 			word, err = p.consumeQuotedString()
 		} else {
 			// atom
-			word, err = p.consumeAtom(false)
+			// We actually parse dot-atom here to be more permissive
+			// than what RFC 5322 specifies.
+			word, err = p.consumeAtom(true)
 		}
 
 		// RFC 2047 encoded-word starts with =?, ends with ?=, and has two other ?s.

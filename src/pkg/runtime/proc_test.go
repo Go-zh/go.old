@@ -94,9 +94,14 @@ func TestYieldLocked(t *testing.T) {
 }
 
 func TestGoroutineParallelism(t *testing.T) {
-	const P = 4
+	P := 4
+	N := 10
+	if testing.Short() {
+		P = 3
+		N = 3
+	}
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(P))
-	for try := 0; try < 10; try++ {
+	for try := 0; try < N; try++ {
 		done := make(chan bool)
 		x := uint32(0)
 		for p := 0; p < P; p++ {
@@ -193,9 +198,11 @@ var preempt = func() int {
 }
 
 func TestPreemption(t *testing.T) {
-	t.Skip("preemption is disabled")
 	// Test that goroutines are preempted at function calls.
-	const N = 5
+	N := 5
+	if testing.Short() {
+		N = 2
+	}
 	c := make(chan bool)
 	var x uint32
 	for g := 0; g < 2; g++ {
@@ -214,9 +221,13 @@ func TestPreemption(t *testing.T) {
 }
 
 func TestPreemptionGC(t *testing.T) {
-	t.Skip("preemption is disabled")
 	// Test that pending GC preempts running goroutines.
-	const P = 5
+	P := 5
+	N := 10
+	if testing.Short() {
+		P = 3
+		N = 2
+	}
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(P + 1))
 	var stop uint32
 	for i := 0; i < P; i++ {
@@ -226,7 +237,7 @@ func TestPreemptionGC(t *testing.T) {
 			}
 		}()
 	}
-	for i := 0; i < 10; i++ {
+	for i := 0; i < N; i++ {
 		runtime.Gosched()
 		runtime.GC()
 	}
@@ -342,49 +353,6 @@ func BenchmarkStackGrowth(b *testing.B) {
 
 func BenchmarkStackGrowthDeep(b *testing.B) {
 	benchmarkStackGrowth(b, 1024)
-}
-
-func BenchmarkSyscall(b *testing.B) {
-	benchmarkSyscall(b, 0, 1)
-}
-
-func BenchmarkSyscallWork(b *testing.B) {
-	benchmarkSyscall(b, 100, 1)
-}
-
-func BenchmarkSyscallExcess(b *testing.B) {
-	benchmarkSyscall(b, 0, 4)
-}
-
-func BenchmarkSyscallExcessWork(b *testing.B) {
-	benchmarkSyscall(b, 100, 4)
-}
-
-func benchmarkSyscall(b *testing.B, work, excess int) {
-	const CallsPerSched = 1000
-	procs := runtime.GOMAXPROCS(-1) * excess
-	N := int32(b.N / CallsPerSched)
-	c := make(chan bool, procs)
-	for p := 0; p < procs; p++ {
-		go func() {
-			foo := 42
-			for atomic.AddInt32(&N, -1) >= 0 {
-				runtime.Gosched()
-				for g := 0; g < CallsPerSched; g++ {
-					runtime.Entersyscall()
-					for i := 0; i < work; i++ {
-						foo *= 2
-						foo /= 2
-					}
-					runtime.Exitsyscall()
-				}
-			}
-			c <- foo == 42
-		}()
-	}
-	for p := 0; p < procs; p++ {
-		<-c
-	}
 }
 
 func BenchmarkCreateGoroutines(b *testing.B) {

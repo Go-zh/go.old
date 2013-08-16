@@ -119,17 +119,14 @@ libinit(void)
 	}
 
 	if(INITENTRY == nil) {
-		INITENTRY = mal(strlen(goarch)+strlen(goos)+10);
-		sprint(INITENTRY, "_rt0_%s_%s", goarch, goos);
+		INITENTRY = mal(strlen(goarch)+strlen(goos)+20);
+		if(!flag_shared) {
+			sprint(INITENTRY, "_rt0_%s_%s", goarch, goos);
+		} else {
+			sprint(INITENTRY, "_rt0_%s_%s_lib", goarch, goos);
+		}
 	}
 	lookup(INITENTRY, 0)->type = SXREF;
-	if(flag_shared) {
-		if(LIBINITENTRY == nil) {
-			LIBINITENTRY = mal(strlen(goarch)+strlen(goos)+20);
-			sprint(LIBINITENTRY, "_rt0_%s_%s_lib", goarch, goos);
-		}
-		lookup(LIBINITENTRY, 0)->type = SXREF;
-	}
 }
 
 void
@@ -231,7 +228,7 @@ addlib(char *src, char *obj)
 	if(p != nil)
 		*p = '\0';
 
-	if(debug['v'])
+	if(debug['v'] > 1)
 		Bprint(&bso, "%5.2f addlib: %s %s pulls in %s\n", cputime(), obj, src, pname);
 
 	addlibpath(src, obj, pname, name);
@@ -308,7 +305,13 @@ void
 loadlib(void)
 {
 	int i, w, x;
-	Sym *s;
+	Sym *s, *gmsym;
+
+	if(flag_shared) {
+		s = lookup("runtime.islibrary", 0);
+		s->dupok = 1;
+		adduint8(s, 1);
+	}
 
 	loadinternal("runtime");
 	if(thechar == '5')
@@ -330,7 +333,7 @@ loadlib(void)
 	}
 
 	for(i=0; i<libraryp; i++) {
-		if(debug['v'])
+		if(debug['v'] > 1)
 			Bprint(&bso, "%5.2f autolib: %s (from %s)\n", cputime(), library[i].file, library[i].objref);
 		iscgo |= strcmp(library[i].pkg, "runtime/cgo") == 0;
 		objfile(library[i].file, library[i].pkg);
@@ -359,6 +362,15 @@ loadlib(void)
 			}
 	}
 	
+	gmsym = lookup("runtime.tlsgm", 0);
+	gmsym->type = STLSBSS;
+	gmsym->size = 2*PtrSize;
+	gmsym->hide = 1;
+	if(linkmode == LinkExternal && iself && HEADTYPE != Hopenbsd)
+		gmsym->reachable = 1;
+	else
+		gmsym->reachable = 0;
+
 	// Now that we know the link mode, trim the dynexp list.
 	x = CgoExportDynamic;
 	if(linkmode == LinkExternal)
@@ -433,7 +445,7 @@ objfile(char *file, char *pkg)
 
 	pkg = smprint("%i", pkg);
 
-	if(debug['v'])
+	if(debug['v'] > 1)
 		Bprint(&bso, "%5.2f ldobj: %s (%s)\n", cputime(), file, pkg);
 	Bflush(&bso);
 	f = Bopen(file, 0);
@@ -669,7 +681,7 @@ hostlink(void)
 		p = strchr(p + 1, ' ');
 	}
 
-	argv = malloc((10+nhostobj+nldflag+c)*sizeof argv[0]);
+	argv = malloc((13+nhostobj+nldflag+c)*sizeof argv[0]);
 	argc = 0;
 	if(extld == nil)
 		extld = "gcc";
@@ -682,7 +694,7 @@ hostlink(void)
 		argv[argc++] = "-m64";
 		break;
 	case '5':
-		// nothing required for arm
+		argv[argc++] = "-marm";
 		break;
 	}
 	if(!debug['s'] && !debug_s) {
@@ -696,6 +708,10 @@ hostlink(void)
 	if(iself && AssumeGoldLinker)
 		argv[argc++] = "-Wl,--rosegment";
 
+	if(flag_shared) {
+		argv[argc++] = "-Wl,-Bsymbolic";
+		argv[argc++] = "-shared";
+	}
 	argv[argc++] = "-o";
 	argv[argc++] = outfile;
 	
@@ -1522,7 +1538,7 @@ pctospadj(Sym *sym, int32 oldval, Prog *p, int32 phase, int32 arg)
 		oldval = 0;
 	if(phase == 0)
 		return oldval;
-	if(oldval + p->spadj < -10000 || oldval + p->spadj > 1000000000) {
+	if(oldval + p->spadj < -10000 || oldval + p->spadj > 1100000000) {
 		diag("overflow in spadj: %d + %d = %d", oldval, p->spadj, oldval + p->spadj);
 		errorexit();
 	}
@@ -2049,7 +2065,7 @@ genasmsym(void (*put)(Sym*, char*, int, vlong, vlong, int, Sym*))
 		}
 	}
 	if(debug['v'] || debug['n'])
-		Bprint(&bso, "symsize = %ud\n", symsize);
+		Bprint(&bso, "%5.2f symsize = %ud\n", cputime(), symsize);
 	Bflush(&bso);
 }
 
@@ -2356,7 +2372,9 @@ pclntab(void)
 	uint32 *havepc, *havefunc;
 	Sym *ftab, *s;
 	int32 npcdata, nfuncdata, off, end;
+	int64 funcdata_bytes;
 	
+	funcdata_bytes = 0;
 	ftab = lookup("pclntab", 0);
 	ftab->type = SPCLNTAB;
 	ftab->reachable = 1;
@@ -2478,8 +2496,11 @@ pclntab(void)
 					i = p->from.offset;
 					if(p->to.type == D_CONST)
 						setuintxx(ftab, off+PtrSize*i, p->to.offset, PtrSize);
-					else
+					else {
+						// TODO: Dedup.
+						funcdata_bytes += p->to.sym->size;
 						setaddrplus(ftab, off+PtrSize*i, p->to.sym, p->to.offset);
+					}
 				}
 			}
 			off += nfuncdata*PtrSize;
@@ -2506,4 +2527,7 @@ pclntab(void)
 		setuint32(ftab, start + s->value*4, ftabaddstring(ftab, s->name));
 
 	ftab->size = ftab->np;
+	
+	if(debug['v'])
+		Bprint(&bso, "%5.2f pclntab=%lld bytes, funcdata total %lld bytes\n", cputime(), (vlong)ftab->size, (vlong)funcdata_bytes);
 }	

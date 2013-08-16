@@ -7,6 +7,7 @@
 #include "os_GOOS.h"
 #include "signal_unix.h"
 #include "stack.h"
+#include "../../cmd/ld/textflag.h"
 
 enum
 {
@@ -62,6 +63,7 @@ runtime·semacreate(void)
 	return 1;
 }
 
+#pragma textflag NOSPLIT
 int32
 runtime·semasleep(int64 ns)
 {
@@ -93,9 +95,10 @@ runtime·semasleep(int64 ns)
 				runtime·atomicstore(&m->waitsemalock, 0);
 				runtime·lwp_park(nil, 0, &m->waitsemacount, nil);
 			} else {
-				ns += runtime·nanotime();
-				ts.tv_sec = ns/1000000000LL;
-				ts.tv_nsec = ns%1000000000LL;
+				ns = ns + runtime·nanotime();
+				// NOTE: tv_nsec is int64 on amd64, so this assumes a little-endian system.
+				ts.tv_nsec = 0;
+				ts.tv_sec = runtime·timediv(ns, 1000000000, (int32*)&ts.tv_nsec);
 				// TODO(jsing) - potential deadlock!
 				// See above for details.
 				runtime·atomicstore(&m->waitsemalock, 0);
@@ -267,12 +270,6 @@ uintptr
 runtime·memlimit(void)
 {
 	return 0;
-}
-
-void
-runtime·setprof(bool on)
-{
-	USED(on);
 }
 
 extern void runtime·sigtramp(void);

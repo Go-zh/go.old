@@ -13,6 +13,13 @@
 // Share memory by communicating;
 // don't communicate by sharing memory.
 //
+// The swap operation, implemented by the SwapT functions, is the atomic
+// equivalent of:
+//
+//	old = *addr
+//	*addr = new
+//	return old
+//
 // The compare-and-swap operation, implemented by the CompareAndSwapT
 // functions, is the atomic equivalent of:
 //
@@ -67,6 +74,8 @@ import (
 
 // BUG(rsc): On x86-32, the 64-bit functions use instructions unavailable before the Pentium MMX.
 //
+// On non-Linux ARM, the 64-bit functions use instructions unavailable before the ARMv6k core.
+//
 // On both ARM and x86-32, it is the caller's responsibility to arrange for 64-bit
 // alignment of 64-bit words accessed atomically. The first word in a global
 // variable or in an allocated struct or slice can be relied upon to be
@@ -75,6 +84,36 @@ import (
 // BUG(rsc): 在ARM上，64位函数使用的指令在ARM 11之前不可用。
 //
 // 在x86-32上，64位函数使用的指令在Pentium MMX之前不可用。
+
+// SwapInt32 atomically stores new into *addr and returns the previous *addr value.
+
+// SwapInt32 自动将 new 存储到 *addr 中并返回上一个 *addr 值。
+func SwapInt32(addr *int32, new int32) (old int32)
+
+// SwapInt64 atomically stores new into *addr and returns the previous *addr value.
+
+// SwapInt64 自动将 new 存储到 *addr 中并返回上一个 *addr 值。
+func SwapInt64(addr *int64, new int64) (old int64)
+
+// SwapUint32 atomically stores new into *addr and returns the previous *addr value.
+
+// SwapUint32 自动将 new 存储到 *addr 中并返回上一个 *addr 值。
+func SwapUint32(addr *uint32, new uint32) (old uint32)
+
+// SwapUint64 atomically stores new into *addr and returns the previous *addr value.
+
+// SwapUint64 自动将 new 存储到 *addr 中并返回上一个 *addr 值。
+func SwapUint64(addr *uint64, new uint64) (old uint64)
+
+// SwapUintptr atomically stores new into *addr and returns the previous *addr value.
+
+// SwapUintptr 自动将 new 存储到 *addr 中并返回上一个 *addr 值。
+func SwapUintptr(addr *uintptr, new uintptr) (old uintptr)
+
+// SwapPointer atomically stores new into *addr and returns the previous *addr value.
+
+// SwapPointer 自动将 new 存储到 *addr 中并返回上一个 *addr 值。
+func SwapPointer(addr *unsafe.Pointer, new unsafe.Pointer) (old unsafe.Pointer)
 
 // CompareAndSwapInt32 executes the compare-and-swap operation for an int32 value.
 

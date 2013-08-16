@@ -12,14 +12,11 @@ import (
 )
 
 func newFileFD(f *os.File) (*netFD, error) {
-	syscall.ForkLock.RLock()
-	fd, err := syscall.Dup(int(f.Fd()))
+	fd, err := dupCloseOnExec(int(f.Fd()))
 	if err != nil {
-		syscall.ForkLock.RUnlock()
 		return nil, os.NewSyscallError("dup", err)
 	}
-	syscall.CloseOnExec(fd)
-	syscall.ForkLock.RUnlock()
+
 	if err = syscall.SetNonblock(fd, true); err != nil {
 		closesocket(fd)
 		return nil, err
@@ -68,6 +65,10 @@ func newFileFD(f *os.File) (*netFD, error) {
 	netfd, err := newFD(fd, family, sotype, laddr.Network())
 	if err != nil {
 		closesocket(fd)
+		return nil, err
+	}
+	if err := netfd.init(); err != nil {
+		netfd.Close()
 		return nil, err
 	}
 	netfd.setAddr(laddr, raddr)

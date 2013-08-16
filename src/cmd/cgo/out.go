@@ -97,7 +97,7 @@ func (p *Package) writeDefs() {
 	cVars := make(map[string]bool)
 	for _, key := range nameKeys(p.Name) {
 		n := p.Name[key]
-		if n.Kind != "var" {
+		if !n.IsVar() {
 			continue
 		}
 
@@ -113,17 +113,26 @@ func (p *Package) writeDefs() {
 
 			cVars[n.C] = true
 		}
-
+		var amp string
+		var node ast.Node
+		if n.Kind == "var" {
+			amp = "&"
+			node = &ast.StarExpr{X: n.Type.Go}
+		} else if n.Kind == "fpvar" {
+			node = n.Type.Go
+		} else {
+			panic(fmt.Errorf("invalid var kind %q", n.Kind))
+		}
 		if *gccgo {
 			fmt.Fprintf(fc, `extern void *%s __asm__("%s.%s");`, n.Mangle, gccgoSymbolPrefix, n.Mangle)
-			fmt.Fprintf(&gccgoInit, "\t%s = &%s;\n", n.Mangle, n.C)
+			fmt.Fprintf(&gccgoInit, "\t%s = %s%s;\n", n.Mangle, amp, n.C)
 		} else {
-			fmt.Fprintf(fc, "void *·%s = &%s;\n", n.Mangle, n.C)
+			fmt.Fprintf(fc, "void *·%s = %s%s;\n", n.Mangle, amp, n.C)
 		}
 		fmt.Fprintf(fc, "\n")
 
 		fmt.Fprintf(fgo2, "var %s ", n.Mangle)
-		conf.Fprint(fgo2, fset, &ast.StarExpr{X: n.Type.Go})
+		conf.Fprint(fgo2, fset, node)
 		fmt.Fprintf(fgo2, "\n")
 	}
 	fmt.Fprintf(fc, "\n")
@@ -498,7 +507,7 @@ func (p *Package) writeOutputFunc(fgcc *os.File, n *Name) {
 	// Use __gcc_struct__ to work around http://gcc.gnu.org/PR52991 on x86,
 	// and http://golang.org/issue/5603.
 	extraAttr := ""
-	if !strings.Contains(p.gccName(), "clang") && (goarch == "amd64" || goarch == "386") {
+	if !strings.Contains(p.gccBaseCmd()[0], "clang") && (goarch == "amd64" || goarch == "386") {
 		extraAttr = ", __gcc_struct__"
 	}
 	fmt.Fprintf(fgcc, "\t%s __attribute__((__packed__%v)) *a = v;\n", ctype, extraAttr)

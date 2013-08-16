@@ -33,6 +33,9 @@ enum {
 	PRECISE = 1,
 	LOOP = 2,
 	PC_BITS = PRECISE | LOOP,
+
+	// Pointer map
+	BitsPerPointer = 2,
 };
 
 // Bits in per-word bitmap.
@@ -109,6 +112,8 @@ struct Finalizer
 	FuncVal *fn;
 	void *arg;
 	uintptr nret;
+	Type *fint;
+	PtrType *ot;
 };
 
 typedef struct FinBlock FinBlock;
@@ -1386,56 +1391,75 @@ addroot(Obj obj)
 
 extern byte pclntab[]; // base for f->ptrsoff
 
-typedef struct GCFunc GCFunc;
-struct GCFunc
+typedef struct BitVector BitVector;
+struct BitVector
 {
-	uint32	locals; // size of local variables in bytes
-	uint32	nptrs; // number of words that follow
-	uint32	ptrs[1]; // bitmap of pointers in arguments
+	int32 n;
+	uint32 data[];
 };
+
+// Starting from scanp, scans words corresponding to set bits.
+static void
+scanbitvector(byte *scanp, BitVector *bv)
+{
+	uint32 *wp;
+	uint32 w;
+	int32 i, remptrs;
+
+	wp = bv->data;
+	for(remptrs = bv->n; remptrs > 0; remptrs -= 32) {
+		w = *wp++;
+		if(remptrs < 32)
+			i = remptrs;
+		else
+			i = 32;
+		i /= BitsPerPointer;
+		for(; i > 0; i--) {
+			if(w & 3)
+				addroot((Obj){scanp, PtrSize, 0});
+			w >>= BitsPerPointer;
+			scanp += PtrSize;
+		}
+	}
+}
 
 // Scan a stack frame: local variables and function arguments/results.
 static void
 addframeroots(Stkframe *frame, void*)
 {
 	Func *f;
-	byte *ap;
-	int32 i, j, nuintptr;
-	uint32 w, b;
-	GCFunc *gcf;
+	BitVector *args, *locals;
+	uintptr size;
 
 	f = frame->fn;
-	gcf = runtime·funcdata(f, FUNCDATA_GC);
-	
+
 	// Scan local variables if stack frame has been allocated.
-	i = frame->varp - (byte*)frame->sp;
-	if(i > 0) {
-		if(gcf == nil)
-			addroot((Obj){frame->varp - i, i, 0});
-		else if(i >= gcf->locals)
-			addroot((Obj){frame->varp - gcf->locals, gcf->locals, 0});
+	// Use pointer information if known.
+	if(frame->varp > (byte*)frame->sp) {
+		locals = runtime·funcdata(f, FUNCDATA_GCLocals);
+		if(locals == nil) {
+			// No locals information, scan everything.
+			size = frame->varp - (byte*)frame->sp;
+			addroot((Obj){frame->varp - size, size, 0});
+		} else if(locals->n < 0) {
+			// Locals size information, scan just the
+			// locals.
+			size = -locals->n;
+			addroot((Obj){frame->varp - size, size, 0});
+		} else if(locals->n > 0) {
+			// Locals bitmap information, scan just the
+			// pointers in locals.
+			size = (locals->n*PtrSize) / BitsPerPointer;
+			scanbitvector(frame->varp - size, locals);
+		}
 	}
 
 	// Scan arguments.
 	// Use pointer information if known.
-	if(f->args > 0 && gcf != nil && gcf->nptrs > 0) {
-		ap = frame->argp;
-		nuintptr = f->args / sizeof(uintptr);
-		for(i = 0; i < gcf->nptrs; i++) {
-			w = gcf->ptrs[i];
-			b = 1;
-			j = nuintptr;
-			if(j > 32)
-				j = 32;
-			for(; j > 0; j--) {
-				if(w & b)
-					addroot((Obj){ap, sizeof(uintptr), 0});
-				b <<= 1;
-				ap += sizeof(uintptr);
-			}
-			nuintptr -= 32;
-		}
-	} else
+	args = runtime·funcdata(f, FUNCDATA_GCArgs);
+	if(args != nil && args->n > 0)
+		scanbitvector(frame->argp, args);
+	else
 		addroot((Obj){frame->argp, frame->arglen, 0});
 }
 
@@ -1456,17 +1480,17 @@ addstackroots(G *gp)
 		runtime·throw("can't scan our own stack");
 	if((mp = gp->m) != nil && mp->helpgc)
 		runtime·throw("can't scan gchelper stack");
-	if(gp->gcstack != (uintptr)nil) {
+	if(gp->syscallstack != (uintptr)nil) {
 		// Scanning another goroutine that is about to enter or might
 		// have just exited a system call. It may be executing code such
 		// as schedlock and may have needed to start a new stack segment.
 		// Use the stack segment and stack pointer at the time of
 		// the system call instead, since that won't change underfoot.
-		sp = gp->gcsp;
-		pc = gp->gcpc;
+		sp = gp->syscallsp;
+		pc = gp->syscallpc;
 		lr = 0;
-		stk = (Stktop*)gp->gcstack;
-		guard = gp->gcguard;
+		stk = (Stktop*)gp->syscallstack;
+		guard = gp->syscallguard;
 	} else {
 		// Scanning another goroutine's stack.
 		// The goroutine is usually asleep (the world is stopped).
@@ -1583,10 +1607,12 @@ handlespecial(byte *p, uintptr size)
 {
 	FuncVal *fn;
 	uintptr nret;
+	PtrType *ot;
+	Type *fint;
 	FinBlock *block;
 	Finalizer *f;
 
-	if(!runtime·getfinalizer(p, true, &fn, &nret)) {
+	if(!runtime·getfinalizer(p, true, &fn, &nret, &fint, &ot)) {
 		runtime·setblockspecial(p, false);
 		runtime·MProf_Free(p, size);
 		return false;
@@ -1609,6 +1635,8 @@ handlespecial(byte *p, uintptr size)
 	finq->cnt++;
 	f->fn = fn;
 	f->nret = nret;
+	f->fint = fint;
+	f->ot = ot;
 	f->arg = p;
 	runtime·unlock(&finlock);
 	return true;
@@ -1998,7 +2026,7 @@ runtime·gc(int32 force)
 	if(gcpercent < 0)
 		return;
 
-	runtime·semacquire(&runtime·worldsema);
+	runtime·semacquire(&runtime·worldsema, false);
 	if(!force && mstats.heap_alloc < mstats.next_gc) {
 		// typically threads which lost the race to grab
 		// worldsema exit here when gc is done.
@@ -2081,7 +2109,7 @@ gc(struct gc_args *args)
 		runtime·memclr((byte*)&gcstats, sizeof(gcstats));
 
 	for(mp=runtime·allm; mp; mp=mp->alllink)
-		runtime·settype_flush(mp, false);
+		runtime·settype_flush(mp);
 
 	heap0 = 0;
 	obj0 = 0;
@@ -2197,7 +2225,7 @@ runtime·ReadMemStats(MStats *stats)
 	// because stoptheworld can only be used by
 	// one goroutine at a time, and there might be
 	// a pending garbage collection already calling it.
-	runtime·semacquire(&runtime·worldsema);
+	runtime·semacquire(&runtime·worldsema, false);
 	m->gcing = 1;
 	runtime·stoptheworld();
 	updatememstats(nil);
@@ -2272,6 +2300,7 @@ runfinq(void)
 	FinBlock *fb, *next;
 	byte *frame;
 	uint32 framesz, framecap, i;
+	Eface *ef, ef1;
 
 	frame = nil;
 	framecap = 0;
@@ -2291,20 +2320,37 @@ runfinq(void)
 			next = fb->next;
 			for(i=0; i<fb->cnt; i++) {
 				f = &fb->fin[i];
-				framesz = sizeof(uintptr) + f->nret;
+				framesz = sizeof(Eface) + f->nret;
 				if(framecap < framesz) {
 					runtime·free(frame);
 					// The frame does not contain pointers interesting for GC,
 					// all not yet finalized objects are stored in finc.
 					// If we do not mark it as FlagNoPointers,
 					// the last finalized object is not collected.
-					frame = runtime·mallocgc(framesz, FlagNoPointers, 0, 1);
+					frame = runtime·mallocgc(framesz, 0, FlagNoPointers|FlagNoInvokeGC);
 					framecap = framesz;
 				}
-				*(void**)frame = f->arg;
-				reflect·call(f->fn, frame, sizeof(uintptr) + f->nret);
+				if(f->fint == nil)
+					runtime·throw("missing type in runfinq");
+				if(f->fint->kind == KindPtr) {
+					// direct use of pointer
+					*(void**)frame = f->arg;
+				} else if(((InterfaceType*)f->fint)->mhdr.len == 0) {
+					// convert to empty interface
+					ef = (Eface*)frame;
+					ef->type = f->ot;
+					ef->data = f->arg;
+				} else {
+					// convert to interface with methods, via empty interface.
+					ef1.type = f->ot;
+					ef1.data = f->arg;
+					if(!runtime·ifaceE2I2((InterfaceType*)f->fint, ef1, (Iface*)frame))
+						runtime·throw("invalid type conversion in runfinq");
+				}
+				reflect·call(f->fn, frame, framesz);
 				f->fn = nil;
 				f->arg = nil;
+				f->ot = nil;
 			}
 			fb->cnt = 0;
 			fb->next = finc;
@@ -2336,7 +2382,7 @@ runtime·markallocated(void *v, uintptr n, bool noptr)
 		bits = (obits & ~(bitMask<<shift)) | (bitAllocated<<shift);
 		if(noptr)
 			bits |= bitNoPointers<<shift;
-		if(runtime·singleproc) {
+		if(runtime·gomaxprocs == 1) {
 			*b = bits;
 			break;
 		} else {
@@ -2366,7 +2412,7 @@ runtime·markfreed(void *v, uintptr n)
 	for(;;) {
 		obits = *b;
 		bits = (obits & ~(bitMask<<shift)) | (bitBlockBoundary<<shift);
-		if(runtime·singleproc) {
+		if(runtime·gomaxprocs == 1) {
 			*b = bits;
 			break;
 		} else {
@@ -2486,7 +2532,7 @@ runtime·setblockspecial(void *v, bool s)
 			bits = obits | (bitSpecial<<shift);
 		else
 			bits = obits & ~(bitSpecial<<shift);
-		if(runtime·singleproc) {
+		if(runtime·gomaxprocs == 1) {
 			*b = bits;
 			break;
 		} else {

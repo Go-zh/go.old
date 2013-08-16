@@ -44,6 +44,18 @@ static struct {
 	{nil, nil},
 };
 
+// Debug arguments.
+// These can be specified with the -d flag, as in "-d checknil"
+// to set the debug_checknil variable. In general the list passed
+// to -d can be comma-separated.
+static struct {
+	char *name;
+	int *val;
+} debugtab[] = {
+	{"nil", &debug_checknil},
+	{nil, nil},
+};
+
 static void
 addexp(char *s)
 {
@@ -238,7 +250,7 @@ main(int argc, char *argv[])
 	flagfn0("V", "print compiler version", doversion);
 	flagcount("W", "debug parse tree after type checking", &debug['W']);
 	flagcount("complete", "compiling complete package (no C or assembly)", &pure_go);
-	flagcount("d", "debug declarations", &debug['d']);
+	flagstr("d", "list: print debug information about items in list", &debugstr);
 	flagcount("e", "no limit on number of errors reported", &debug['e']);
 	flagcount("f", "debug stack frames", &debug['f']);
 	flagcount("g", "debug code generation", &debug['g']);
@@ -268,6 +280,24 @@ main(int argc, char *argv[])
 	if(flag_race) {
 		racepkg = mkpkg(strlit("runtime/race"));
 		racepkg->name = "race";
+	}
+	
+	// parse -d argument
+	if(debugstr) {
+		char *f[100];
+		int i, j, nf;
+		
+		nf = getfields(debugstr, f, nelem(f), 1, ",");
+		for(i=0; i<nf; i++) {
+			for(j=0; debugtab[j].name != nil; j++) {
+				if(strcmp(debugtab[j].name, f[i]) == 0) {
+					*debugtab[j].val = 1;
+					break;
+				}
+			}
+			if(j == nelem(debugtab))
+				fatal("unknown debug information -d '%s'\n", f[i]);
+		}
 	}
 
 	// enable inlining.  for now:
@@ -329,6 +359,8 @@ main(int argc, char *argv[])
 		curio.peekc = 0;
 		curio.peekc1 = 0;
 		curio.nlsemi = 0;
+		curio.eofnl = 0;
+		curio.last = 0;
 
 		// Skip initial BOM if present.
 		if(Bgetrune(curio.bin) != BOM)
@@ -416,6 +448,10 @@ main(int argc, char *argv[])
 	// Phase 5: Escape analysis.
 	if(!debug['N'])
 		escapes(xtop);
+	
+	// Escape analysis moved escaped values off stack.
+	// Move large values off stack too.
+	movelarge(xtop);
 
 	// Phase 6: Compile top level functions.
 	for(l=xtop; l; l=l->next)
@@ -1602,7 +1638,7 @@ check:
 		}
 	case EOF:
 		// insert \n at EOF
-		if(curio.eofnl)
+		if(curio.eofnl || curio.last == '\n')
 			return EOF;
 		curio.eofnl = 1;
 		c = '\n';
@@ -1611,6 +1647,7 @@ check:
 			lexlineno++;
 		break;
 	}
+	curio.last = c;
 	return c;
 }
 

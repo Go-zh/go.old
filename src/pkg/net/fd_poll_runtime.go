@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin linux windows
+// +build darwin freebsd,amd64 freebsd,386 linux openbsd windows
 
 package net
 
@@ -38,7 +38,11 @@ func (pd *pollDesc) Init(fd *netFD) error {
 }
 
 func (pd *pollDesc) Close() {
+	if pd.runtimeCtx == 0 {
+		return
+	}
 	runtime_pollClose(pd.runtimeCtx)
+	pd.runtimeCtx = 0
 }
 
 func (pd *pollDesc) Lock() {
@@ -53,6 +57,9 @@ func (pd *pollDesc) Wakeup() {
 // Evict evicts fd from the pending list, unblocking any I/O running on fd.
 // Return value is whether the pollServer should be woken up.
 func (pd *pollDesc) Evict() bool {
+	if pd.runtimeCtx == 0 {
+		return false
+	}
 	runtime_pollUnblock(pd.runtimeCtx)
 	return false
 }
@@ -108,16 +115,16 @@ func convertErr(res int) error {
 	panic("unreachable")
 }
 
-func setReadDeadline(fd *netFD, t time.Time) error {
+func (fd *netFD) setDeadline(t time.Time) error {
+	return setDeadlineImpl(fd, t, 'r'+'w')
+}
+
+func (fd *netFD) setReadDeadline(t time.Time) error {
 	return setDeadlineImpl(fd, t, 'r')
 }
 
-func setWriteDeadline(fd *netFD, t time.Time) error {
+func (fd *netFD) setWriteDeadline(t time.Time) error {
 	return setDeadlineImpl(fd, t, 'w')
-}
-
-func setDeadline(fd *netFD, t time.Time) error {
-	return setDeadlineImpl(fd, t, 'r'+'w')
 }
 
 func setDeadlineImpl(fd *netFD, t time.Time, mode int) error {
@@ -125,7 +132,7 @@ func setDeadlineImpl(fd *netFD, t time.Time, mode int) error {
 	if t.IsZero() {
 		d = 0
 	}
-	if err := fd.incref(false); err != nil {
+	if err := fd.incref(); err != nil {
 		return err
 	}
 	runtime_pollSetDeadline(fd.pd.runtimeCtx, d, mode)

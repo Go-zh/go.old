@@ -4,10 +4,59 @@
 
 // +build !race
 
-TEXT ·CompareAndSwapInt32(SB),7,$0
+#include "../../../cmd/ld/textflag.h"
+
+TEXT ·SwapInt32(SB),NOSPLIT,$0-12
+	JMP	·SwapUint32(SB)
+
+TEXT ·SwapUint32(SB),NOSPLIT,$0-12
+	MOVL	addr+0(FP), BP
+	MOVL	new+4(FP), AX
+	XCHGL	AX, 0(BP)
+	MOVL	AX, new+8(FP)
+	RET
+
+TEXT ·SwapInt64(SB),NOSPLIT,$0-20
+	JMP	·SwapUint64(SB)
+
+TEXT ·SwapUint64(SB),NOSPLIT,$0-20
+	// no XCHGQ so use CMPXCHG8B loop
+	MOVL	addr+0(FP), BP
+	TESTL	$7, BP
+	JZ	2(PC)
+	MOVL	0, AX // crash with nil ptr deref
+	// CX:BX = new
+	MOVL	new_lo+4(FP), BX
+	MOVL	new_hi+8(FP), CX
+	// DX:AX = *addr
+	MOVL	0(BP), AX
+	MOVL	4(BP), DX
+swaploop:
+	// if *addr == DX:AX
+	//	*addr = CX:BX
+	// else
+	//	DX:AX = *addr
+	// all in one instruction
+	LOCK
+	CMPXCHG8B	0(BP)
+	JNZ	swaploop
+
+	// success
+	// return DX:AX
+	MOVL	AX, new_lo+12(FP)
+	MOVL	DX, new_hi+16(FP)
+	RET
+
+TEXT ·SwapUintptr(SB),NOSPLIT,$0-12
+	JMP	·SwapUint32(SB)
+
+TEXT ·SwapPointer(SB),NOSPLIT,$0-12
+	JMP	·SwapUint32(SB)
+
+TEXT ·CompareAndSwapInt32(SB),NOSPLIT,$0-13
 	JMP	·CompareAndSwapUint32(SB)
 
-TEXT ·CompareAndSwapUint32(SB),7,$0
+TEXT ·CompareAndSwapUint32(SB),NOSPLIT,$0-13
 	MOVL	addr+0(FP), BP
 	MOVL	old+4(FP), AX
 	MOVL	new+8(FP), CX
@@ -17,16 +66,16 @@ TEXT ·CompareAndSwapUint32(SB),7,$0
 	SETEQ	swapped+12(FP)
 	RET
 
-TEXT ·CompareAndSwapUintptr(SB),7,$0
+TEXT ·CompareAndSwapUintptr(SB),NOSPLIT,$0-13
 	JMP	·CompareAndSwapUint32(SB)
 
-TEXT ·CompareAndSwapPointer(SB),7,$0
+TEXT ·CompareAndSwapPointer(SB),NOSPLIT,$0-13
 	JMP	·CompareAndSwapUint32(SB)
 
-TEXT ·CompareAndSwapInt64(SB),7,$0
+TEXT ·CompareAndSwapInt64(SB),NOSPLIT,$0-21
 	JMP	·CompareAndSwapUint64(SB)
 
-TEXT ·CompareAndSwapUint64(SB),7,$0
+TEXT ·CompareAndSwapUint64(SB),NOSPLIT,$0-21
 	MOVL	addr+0(FP), BP
 	TESTL	$7, BP
 	JZ	2(PC)
@@ -41,10 +90,10 @@ TEXT ·CompareAndSwapUint64(SB),7,$0
 	SETEQ	swapped+20(FP)
 	RET
 
-TEXT ·AddInt32(SB),7,$0
+TEXT ·AddInt32(SB),NOSPLIT,$0-12
 	JMP	·AddUint32(SB)
 
-TEXT ·AddUint32(SB),7,$0
+TEXT ·AddUint32(SB),NOSPLIT,$0-12
 	MOVL	addr+0(FP), BP
 	MOVL	delta+4(FP), AX
 	MOVL	AX, CX
@@ -55,13 +104,13 @@ TEXT ·AddUint32(SB),7,$0
 	MOVL	CX, new+8(FP)
 	RET
 
-TEXT ·AddUintptr(SB),7,$0
+TEXT ·AddUintptr(SB),NOSPLIT,$0-12
 	JMP	·AddUint32(SB)
 
-TEXT ·AddInt64(SB),7,$0
+TEXT ·AddInt64(SB),NOSPLIT,$0-20
 	JMP	·AddUint64(SB)
 
-TEXT ·AddUint64(SB),7,$0
+TEXT ·AddUint64(SB),NOSPLIT,$0-20
 	// no XADDQ so use CMPXCHG8B loop
 	MOVL	addr+0(FP), BP
 	TESTL	$7, BP
@@ -97,19 +146,19 @@ addloop:
 	MOVL	CX, new_hi+16(FP)
 	RET
 
-TEXT ·LoadInt32(SB),7,$0
+TEXT ·LoadInt32(SB),NOSPLIT,$0-8
 	JMP	·LoadUint32(SB)
 
-TEXT ·LoadUint32(SB),7,$0
+TEXT ·LoadUint32(SB),NOSPLIT,$0-8
 	MOVL	addr+0(FP), AX
 	MOVL	0(AX), AX
 	MOVL	AX, val+4(FP)
 	RET
 
-TEXT ·LoadInt64(SB),7,$0
+TEXT ·LoadInt64(SB),NOSPLIT,$0-16
 	JMP	·LoadUint64(SB)
 
-TEXT ·LoadUint64(SB),7,$0
+TEXT ·LoadUint64(SB),NOSPLIT,$0-16
 	MOVL	addr+0(FP), AX
 	TESTL	$7, AX
 	JZ	2(PC)
@@ -122,25 +171,25 @@ TEXT ·LoadUint64(SB),7,$0
 	EMMS
 	RET
 
-TEXT ·LoadUintptr(SB),7,$0
+TEXT ·LoadUintptr(SB),NOSPLIT,$0-8
 	JMP	·LoadUint32(SB)
 
-TEXT ·LoadPointer(SB),7,$0
+TEXT ·LoadPointer(SB),NOSPLIT,$0-8
 	JMP	·LoadUint32(SB)
 
-TEXT ·StoreInt32(SB),7,$0
+TEXT ·StoreInt32(SB),NOSPLIT,$0-8
 	JMP	·StoreUint32(SB)
 
-TEXT ·StoreUint32(SB),7,$0
+TEXT ·StoreUint32(SB),NOSPLIT,$0-8
 	MOVL	addr+0(FP), BP
 	MOVL	val+4(FP), AX
 	XCHGL	AX, 0(BP)
 	RET
 
-TEXT ·StoreInt64(SB),7,$0
+TEXT ·StoreInt64(SB),NOSPLIT,$0-16
 	JMP	·StoreUint64(SB)
 
-TEXT ·StoreUint64(SB),7,$0
+TEXT ·StoreUint64(SB),NOSPLIT,$0-16
 	MOVL	addr+0(FP), AX
 	TESTL	$7, AX
 	JZ	2(PC)
@@ -158,8 +207,8 @@ TEXT ·StoreUint64(SB),7,$0
 	XADDL	AX, (SP)
 	RET
 
-TEXT ·StoreUintptr(SB),7,$0
+TEXT ·StoreUintptr(SB),NOSPLIT,$0-8
 	JMP	·StoreUint32(SB)
 
-TEXT ·StorePointer(SB),7,$0
+TEXT ·StorePointer(SB),NOSPLIT,$0-8
 	JMP	·StoreUint32(SB)

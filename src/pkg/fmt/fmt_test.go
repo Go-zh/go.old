@@ -528,6 +528,17 @@ var fmtTests = []struct {
 	// 用于崩溃测试，因为 nByte 不接受正负号。
 	{"%b", int64(-1 << 63), "-1000000000000000000000000000000000000000000000000000000000000000"},
 
+	// Used to panic.
+	{"%0100d", 1, "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"},
+	{"%0100d", -1, "-000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"},
+	{"%0.100f", 1.0, "1.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},
+	{"%0.100f", -1.0, "-1.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"},
+
+	// Zero padding floats used to put the minus sign in the middle.
+	{"%020f", -1.0, "-000000000001.000000"},
+	{"%20f", -1.0, "           -1.000000"},
+	{"%0100f", -1.0, "-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001.000000"},
+
 	// Complex fmt used to leave the plus flag set for future entries in the array
 	// causing +2+0i and +3+0i instead of 2+0i and 3+0i.
 	// 复数格式化用于在数组中为将来的条目留下加号，以产生 +2+0i 和 +3+0i 而非 2+0i 和 3+0i
@@ -600,17 +611,17 @@ var reorderTests = []struct {
 	{"%d %d %d %#[1]o %#o %#o", SE{11, 12, 13}, "11 12 13 013 014 015"},
 
 	// Erroneous cases.
-	{"%[d", SE{2, 1}, "%d(BADINDEX)"},
+	{"%[d", SE{2, 1}, "%!d(BADINDEX)"},
 	{"%]d", SE{2, 1}, "%!](int=2)d%!(EXTRA int=1)"},
-	{"%[]d", SE{2, 1}, "%d(BADINDEX)"},
-	{"%[-3]d", SE{2, 1}, "%d(BADINDEX)"},
-	{"%[99]d", SE{2, 1}, "%d(BADINDEX)"},
+	{"%[]d", SE{2, 1}, "%!d(BADINDEX)"},
+	{"%[-3]d", SE{2, 1}, "%!d(BADINDEX)"},
+	{"%[99]d", SE{2, 1}, "%!d(BADINDEX)"},
 	{"%[3]", SE{2, 1}, "%!(NOVERB)"},
-	{"%[1].2d", SE{5, 6}, "%d(BADINDEX)"},
-	{"%[1]2d", SE{2, 1}, "%d(BADINDEX)"},
-	{"%3.[2]d", SE{7}, "%d(BADINDEX)"},
-	{"%.[2]d", SE{7}, "%d(BADINDEX)"},
-	{"%d %d %d %#[1]o %#o %#o %#o", SE{11, 12, 13}, "11 12 13 013 014 015 %o(MISSING)"},
+	{"%[1].2d", SE{5, 6}, "%!d(BADINDEX)"},
+	{"%[1]2d", SE{2, 1}, "%!d(BADINDEX)"},
+	{"%3.[2]d", SE{7}, "%!d(BADINDEX)"},
+	{"%.[2]d", SE{7}, "%!d(BADINDEX)"},
+	{"%d %d %d %#[1]o %#o %#o %#o", SE{11, 12, 13}, "11 12 13 013 014 015 %!o(MISSING)"},
 }
 
 func TestReorder(t *testing.T) {
@@ -937,16 +948,16 @@ var panictests = []struct {
 }{
 	// String
 	{"%s", (*Panic)(nil), "<nil>"}, // nil pointer special case // 空指针的特殊情况
-	{"%s", Panic{io.ErrUnexpectedEOF}, "%s(PANIC=unexpected EOF)"},
-	{"%s", Panic{3}, "%s(PANIC=3)"},
+	{"%s", Panic{io.ErrUnexpectedEOF}, "%!s(PANIC=unexpected EOF)"},
+	{"%s", Panic{3}, "%!s(PANIC=3)"},
 	// GoString
 	{"%#v", (*Panic)(nil), "<nil>"}, // nil pointer special case // 空指针的特殊情况
-	{"%#v", Panic{io.ErrUnexpectedEOF}, "%v(PANIC=unexpected EOF)"},
-	{"%#v", Panic{3}, "%v(PANIC=3)"},
+	{"%#v", Panic{io.ErrUnexpectedEOF}, "%!v(PANIC=unexpected EOF)"},
+	{"%#v", Panic{3}, "%!v(PANIC=3)"},
 	// Format
 	{"%s", (*PanicF)(nil), "<nil>"}, // nil pointer special case // 空指针的特殊情况
-	{"%s", PanicF{io.ErrUnexpectedEOF}, "%s(PANIC=unexpected EOF)"},
-	{"%s", PanicF{3}, "%s(PANIC=3)"},
+	{"%s", PanicF{io.ErrUnexpectedEOF}, "%!s(PANIC=unexpected EOF)"},
+	{"%s", PanicF{3}, "%!s(PANIC=3)"},
 }
 
 func TestPanics(t *testing.T) {
@@ -968,7 +979,7 @@ type Recur struct {
 	failed *bool
 }
 
-func (r Recur) String() string {
+func (r *Recur) String() string {
 	if recurCount++; recurCount > 10 {
 		*r.failed = true
 		return "FAIL"
@@ -984,13 +995,13 @@ func (r Recur) String() string {
 
 func TestBadVerbRecursion(t *testing.T) {
 	failed := false
-	r := Recur{3, &failed}
+	r := &Recur{3, &failed}
 	Sprintf("recur@%p value: %d\n", &r, r.i)
 	if failed {
 		t.Error("fail with pointer")
 	}
 	failed = false
-	r = Recur{4, &failed}
+	r = &Recur{4, &failed}
 	Sprintf("recur@%p, value: %d\n", r, r.i)
 	if failed {
 		t.Error("fail with value")

@@ -1,20 +1,68 @@
+pkg archive/zip, func RegisterCompressor(uint16, Compressor)
+pkg archive/zip, func RegisterDecompressor(uint16, Decompressor)
+pkg archive/zip, type Compressor func(io.Writer) (io.WriteCloser, error)
+pkg archive/zip, type Decompressor func(io.Reader) io.ReadCloser
+pkg container/heap, func Fix(Interface, int)
+pkg container/list, method (*List) MoveAfter(*Element, *Element)
+pkg container/list, method (*List) MoveBefore(*Element, *Element)
+pkg crypto, type PublicKey interface {}
+pkg crypto/cipher, func NewGCM(Block) (AEAD, error)
+pkg crypto/cipher, type AEAD interface { NonceSize, Open, Overhead, Seal }
+pkg crypto/cipher, type AEAD interface, NonceSize() int
+pkg crypto/cipher, type AEAD interface, Open([]uint8, []uint8, []uint8, []uint8) ([]uint8, error)
+pkg crypto/cipher, type AEAD interface, Overhead() int
+pkg crypto/cipher, type AEAD interface, Seal([]uint8, []uint8, []uint8, []uint8) []uint8
+pkg crypto/md5, func Sum([]uint8) [16]uint8
 pkg crypto/rsa, const PSSSaltLengthAuto ideal-int
 pkg crypto/rsa, const PSSSaltLengthEqualsHash ideal-int
 pkg crypto/rsa, func SignPSS(io.Reader, *PrivateKey, crypto.Hash, []uint8, *PSSOptions) ([]uint8, error)
 pkg crypto/rsa, func VerifyPSS(*PublicKey, crypto.Hash, []uint8, []uint8, *PSSOptions) error
 pkg crypto/rsa, type PSSOptions struct
 pkg crypto/rsa, type PSSOptions struct, SaltLength int
+pkg crypto/sha1, func Sum([]uint8) [20]uint8
+pkg crypto/sha256, func Sum224([]uint8) [28]uint8
+pkg crypto/sha256, func Sum256([]uint8) [32]uint8
+pkg crypto/sha512, func Sum384([]uint8) [48]uint8
+pkg crypto/sha512, func Sum512([]uint8) [64]uint8
 pkg crypto/subtle, func ConstantTimeLessOrEq(int, int) int
+pkg crypto/tls, const TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA uint16
+pkg crypto/tls, const TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA uint16
+pkg crypto/tls, const TLS_ECDHE_ECDSA_WITH_RC4_128_SHA uint16
 pkg crypto/tls, const VersionSSL30 ideal-int
 pkg crypto/tls, const VersionTLS10 ideal-int
 pkg crypto/tls, const VersionTLS11 ideal-int
+pkg crypto/tls, const VersionTLS12 ideal-int
 pkg crypto/tls, type Config struct, MaxVersion uint16
 pkg crypto/tls, type Config struct, MinVersion uint16
+pkg crypto/x509, func MarshalECPrivateKey(*ecdsa.PrivateKey) ([]uint8, error)
+pkg crypto/x509, type Certificate struct, CRLDistributionPoints []string
+pkg crypto/x509, type Certificate struct, IssuingCertificateURL []string
+pkg crypto/x509, type Certificate struct, OCSPServer []string
+pkg flag, type Getter interface { Get, Set, String }
+pkg flag, type Getter interface, Get() interface{}
+pkg flag, type Getter interface, Set(string) error
+pkg flag, type Getter interface, String() string
+pkg flag, var CommandLine *FlagSet
+pkg go/ast, type SliceExpr struct, Max Expr
 pkg go/ast, type TypeAssertExpr struct, Lparen token.Pos
 pkg go/ast, type TypeAssertExpr struct, Rparen token.Pos
 pkg go/build, type Package struct, CXXFiles []string
 pkg go/build, type Package struct, CgoCPPFLAGS []string
 pkg go/build, type Package struct, CgoCXXFLAGS []string
+pkg image/color, var Plan9Palette []Color
+pkg image/color, var WebSafePalette []Color
+pkg image/draw, method (Op) Draw(Image, image.Rectangle, image.Image, image.Point)
+pkg image/draw, type Drawer interface { Draw }
+pkg image/draw, type Drawer interface, Draw(Image, image.Rectangle, image.Image, image.Point)
+pkg image/draw, type Quantizer interface { Quantize }
+pkg image/draw, type Quantizer interface, Quantize(color.Palette, image.Image) color.Palette
+pkg image/draw, var FloydSteinberg Drawer
+pkg image/gif, func Encode(io.Writer, image.Image, *Options) error
+pkg image/gif, func EncodeAll(io.Writer, *GIF) error
+pkg image/gif, type Options struct
+pkg image/gif, type Options struct, Drawer draw.Drawer
+pkg image/gif, type Options struct, NumColors int
+pkg image/gif, type Options struct, Quantizer draw.Quantizer
 pkg log/syslog (freebsd-386-cgo), const LOG_ALERT Priority
 pkg log/syslog (freebsd-386-cgo), const LOG_AUTH Priority
 pkg log/syslog (freebsd-386-cgo), const LOG_AUTHPRIV Priority
@@ -660,6 +708,12 @@ pkg log/syslog (openbsd-amd64-cgo), method (*Writer) Warning(string) error
 pkg log/syslog (openbsd-amd64-cgo), method (*Writer) Write([]uint8) (int, error)
 pkg log/syslog (openbsd-amd64-cgo), type Priority int
 pkg log/syslog (openbsd-amd64-cgo), type Writer struct
+pkg net, method (*TCPConn) SetKeepAlivePeriod(time.Duration) error
+pkg net/smtp, method (*Client) Close() error
+pkg reflect, method (Value) SetCap(int)
+pkg reflect, method (Value) Slice3(int, int, int) Value
+pkg sort, func Stable(Interface)
+pkg strings, func IndexByte(string, uint8) int
 pkg syscall (darwin-386), const ICMP6_FILTER ideal-int
 pkg syscall (darwin-386), const PRIO_PGRP ideal-int
 pkg syscall (darwin-386), const PRIO_PROCESS ideal-int
@@ -697,6 +751,7 @@ pkg syscall (darwin-amd64), const SizeofIPv6MTUInfo ideal-int
 pkg syscall (darwin-amd64), func GetsockoptICMPv6Filter(int, int, int) (*ICMPv6Filter, error)
 pkg syscall (darwin-amd64), func GetsockoptIPv6MTUInfo(int, int, int) (*IPv6MTUInfo, error)
 pkg syscall (darwin-amd64), func SetsockoptICMPv6Filter(int, int, int, *ICMPv6Filter) error
+pkg syscall (darwin-amd64), func Syscall9(uintptr, uintptr, uintptr, uintptr, uintptr, uintptr, uintptr, uintptr, uintptr, uintptr) (uintptr, uintptr, Errno)
 pkg syscall (darwin-amd64), type ICMPv6Filter struct
 pkg syscall (darwin-amd64), type ICMPv6Filter struct, Filt [8]uint32
 pkg syscall (darwin-amd64), type IPv6MTUInfo struct
@@ -711,11 +766,14 @@ pkg syscall (darwin-amd64-cgo), const SizeofIPv6MTUInfo ideal-int
 pkg syscall (darwin-amd64-cgo), func GetsockoptICMPv6Filter(int, int, int) (*ICMPv6Filter, error)
 pkg syscall (darwin-amd64-cgo), func GetsockoptIPv6MTUInfo(int, int, int) (*IPv6MTUInfo, error)
 pkg syscall (darwin-amd64-cgo), func SetsockoptICMPv6Filter(int, int, int, *ICMPv6Filter) error
+pkg syscall (darwin-amd64-cgo), func Syscall9(uintptr, uintptr, uintptr, uintptr, uintptr, uintptr, uintptr, uintptr, uintptr, uintptr) (uintptr, uintptr, Errno)
 pkg syscall (darwin-amd64-cgo), type ICMPv6Filter struct
 pkg syscall (darwin-amd64-cgo), type ICMPv6Filter struct, Filt [8]uint32
 pkg syscall (darwin-amd64-cgo), type IPv6MTUInfo struct
 pkg syscall (darwin-amd64-cgo), type IPv6MTUInfo struct, Addr RawSockaddrInet6
 pkg syscall (darwin-amd64-cgo), type IPv6MTUInfo struct, Mtu uint32
+pkg syscall (freebsd-386), const F_DUP2FD_CLOEXEC ideal-int
+pkg syscall (freebsd-386), const F_DUPFD_CLOEXEC ideal-int
 pkg syscall (freebsd-386), const ICMP6_FILTER ideal-int
 pkg syscall (freebsd-386), const PRIO_PGRP ideal-int
 pkg syscall (freebsd-386), const PRIO_PROCESS ideal-int
@@ -1175,7 +1233,9 @@ pkg syscall (freebsd-386-cgo), const FD_SETSIZE ideal-int
 pkg syscall (freebsd-386-cgo), const FLUSHO ideal-int
 pkg syscall (freebsd-386-cgo), const F_CANCEL ideal-int
 pkg syscall (freebsd-386-cgo), const F_DUP2FD ideal-int
+pkg syscall (freebsd-386-cgo), const F_DUP2FD_CLOEXEC ideal-int
 pkg syscall (freebsd-386-cgo), const F_DUPFD ideal-int
+pkg syscall (freebsd-386-cgo), const F_DUPFD_CLOEXEC ideal-int
 pkg syscall (freebsd-386-cgo), const F_GETFD ideal-int
 pkg syscall (freebsd-386-cgo), const F_GETFL ideal-int
 pkg syscall (freebsd-386-cgo), const F_GETLK ideal-int
@@ -2923,6 +2983,8 @@ pkg syscall (freebsd-386-cgo), type WaitStatus uint32
 pkg syscall (freebsd-386-cgo), var Stderr int
 pkg syscall (freebsd-386-cgo), var Stdin int
 pkg syscall (freebsd-386-cgo), var Stdout int
+pkg syscall (freebsd-amd64), const F_DUP2FD_CLOEXEC ideal-int
+pkg syscall (freebsd-amd64), const F_DUPFD_CLOEXEC ideal-int
 pkg syscall (freebsd-amd64), const ICMP6_FILTER ideal-int
 pkg syscall (freebsd-amd64), const PRIO_PGRP ideal-int
 pkg syscall (freebsd-amd64), const PRIO_PROCESS ideal-int
@@ -3382,7 +3444,9 @@ pkg syscall (freebsd-amd64-cgo), const FD_SETSIZE ideal-int
 pkg syscall (freebsd-amd64-cgo), const FLUSHO ideal-int
 pkg syscall (freebsd-amd64-cgo), const F_CANCEL ideal-int
 pkg syscall (freebsd-amd64-cgo), const F_DUP2FD ideal-int
+pkg syscall (freebsd-amd64-cgo), const F_DUP2FD_CLOEXEC ideal-int
 pkg syscall (freebsd-amd64-cgo), const F_DUPFD ideal-int
+pkg syscall (freebsd-amd64-cgo), const F_DUPFD_CLOEXEC ideal-int
 pkg syscall (freebsd-amd64-cgo), const F_GETFD ideal-int
 pkg syscall (freebsd-amd64-cgo), const F_GETFL ideal-int
 pkg syscall (freebsd-amd64-cgo), const F_GETLK ideal-int
@@ -9557,10 +9621,12 @@ pkg syscall (linux-386), const PRIO_PROCESS ideal-int
 pkg syscall (linux-386), const PRIO_USER ideal-int
 pkg syscall (linux-386), const SizeofICMPv6Filter ideal-int
 pkg syscall (linux-386), const SizeofIPv6MTUInfo ideal-int
+pkg syscall (linux-386), func Dup3(int, int, int) error
 pkg syscall (linux-386), func Getpriority(int, int) (int, error)
 pkg syscall (linux-386), func GetsockoptICMPv6Filter(int, int, int) (*ICMPv6Filter, error)
 pkg syscall (linux-386), func GetsockoptIPv6MTUInfo(int, int, int) (*IPv6MTUInfo, error)
 pkg syscall (linux-386), func Setpriority(int, int, int) error
+pkg syscall (linux-386), func SetsockoptByte(int, int, int, uint8) error
 pkg syscall (linux-386), func SetsockoptICMPv6Filter(int, int, int, *ICMPv6Filter) error
 pkg syscall (linux-386), type ICMPv6Filter struct
 pkg syscall (linux-386), type ICMPv6Filter struct, Data [8]uint32
@@ -9573,10 +9639,12 @@ pkg syscall (linux-386-cgo), const PRIO_PROCESS ideal-int
 pkg syscall (linux-386-cgo), const PRIO_USER ideal-int
 pkg syscall (linux-386-cgo), const SizeofICMPv6Filter ideal-int
 pkg syscall (linux-386-cgo), const SizeofIPv6MTUInfo ideal-int
+pkg syscall (linux-386-cgo), func Dup3(int, int, int) error
 pkg syscall (linux-386-cgo), func Getpriority(int, int) (int, error)
 pkg syscall (linux-386-cgo), func GetsockoptICMPv6Filter(int, int, int) (*ICMPv6Filter, error)
 pkg syscall (linux-386-cgo), func GetsockoptIPv6MTUInfo(int, int, int) (*IPv6MTUInfo, error)
 pkg syscall (linux-386-cgo), func Setpriority(int, int, int) error
+pkg syscall (linux-386-cgo), func SetsockoptByte(int, int, int, uint8) error
 pkg syscall (linux-386-cgo), func SetsockoptICMPv6Filter(int, int, int, *ICMPv6Filter) error
 pkg syscall (linux-386-cgo), type ICMPv6Filter struct
 pkg syscall (linux-386-cgo), type ICMPv6Filter struct, Data [8]uint32
@@ -9589,10 +9657,12 @@ pkg syscall (linux-amd64), const PRIO_PROCESS ideal-int
 pkg syscall (linux-amd64), const PRIO_USER ideal-int
 pkg syscall (linux-amd64), const SizeofICMPv6Filter ideal-int
 pkg syscall (linux-amd64), const SizeofIPv6MTUInfo ideal-int
+pkg syscall (linux-amd64), func Dup3(int, int, int) error
 pkg syscall (linux-amd64), func Getpriority(int, int) (int, error)
 pkg syscall (linux-amd64), func GetsockoptICMPv6Filter(int, int, int) (*ICMPv6Filter, error)
 pkg syscall (linux-amd64), func GetsockoptIPv6MTUInfo(int, int, int) (*IPv6MTUInfo, error)
 pkg syscall (linux-amd64), func Setpriority(int, int, int) error
+pkg syscall (linux-amd64), func SetsockoptByte(int, int, int, uint8) error
 pkg syscall (linux-amd64), func SetsockoptICMPv6Filter(int, int, int, *ICMPv6Filter) error
 pkg syscall (linux-amd64), type ICMPv6Filter struct
 pkg syscall (linux-amd64), type ICMPv6Filter struct, Data [8]uint32
@@ -9605,10 +9675,12 @@ pkg syscall (linux-amd64-cgo), const PRIO_PROCESS ideal-int
 pkg syscall (linux-amd64-cgo), const PRIO_USER ideal-int
 pkg syscall (linux-amd64-cgo), const SizeofICMPv6Filter ideal-int
 pkg syscall (linux-amd64-cgo), const SizeofIPv6MTUInfo ideal-int
+pkg syscall (linux-amd64-cgo), func Dup3(int, int, int) error
 pkg syscall (linux-amd64-cgo), func Getpriority(int, int) (int, error)
 pkg syscall (linux-amd64-cgo), func GetsockoptICMPv6Filter(int, int, int) (*ICMPv6Filter, error)
 pkg syscall (linux-amd64-cgo), func GetsockoptIPv6MTUInfo(int, int, int) (*IPv6MTUInfo, error)
 pkg syscall (linux-amd64-cgo), func Setpriority(int, int, int) error
+pkg syscall (linux-amd64-cgo), func SetsockoptByte(int, int, int, uint8) error
 pkg syscall (linux-amd64-cgo), func SetsockoptICMPv6Filter(int, int, int, *ICMPv6Filter) error
 pkg syscall (linux-amd64-cgo), type ICMPv6Filter struct
 pkg syscall (linux-amd64-cgo), type ICMPv6Filter struct, Data [8]uint32
@@ -9621,10 +9693,12 @@ pkg syscall (linux-arm), const PRIO_PROCESS ideal-int
 pkg syscall (linux-arm), const PRIO_USER ideal-int
 pkg syscall (linux-arm), const SizeofICMPv6Filter ideal-int
 pkg syscall (linux-arm), const SizeofIPv6MTUInfo ideal-int
+pkg syscall (linux-arm), func Dup3(int, int, int) error
 pkg syscall (linux-arm), func Getpriority(int, int) (int, error)
 pkg syscall (linux-arm), func GetsockoptICMPv6Filter(int, int, int) (*ICMPv6Filter, error)
 pkg syscall (linux-arm), func GetsockoptIPv6MTUInfo(int, int, int) (*IPv6MTUInfo, error)
 pkg syscall (linux-arm), func Setpriority(int, int, int) error
+pkg syscall (linux-arm), func SetsockoptByte(int, int, int, uint8) error
 pkg syscall (linux-arm), func SetsockoptICMPv6Filter(int, int, int, *ICMPv6Filter) error
 pkg syscall (linux-arm), type ICMPv6Filter struct
 pkg syscall (linux-arm), type ICMPv6Filter struct, Data [8]uint32
@@ -11392,6 +11466,7 @@ pkg syscall (linux-arm-cgo), func Creat(string, uint32) (int, error)
 pkg syscall (linux-arm-cgo), func DetachLsf(int) error
 pkg syscall (linux-arm-cgo), func Dup(int) (int, error)
 pkg syscall (linux-arm-cgo), func Dup2(int, int) error
+pkg syscall (linux-arm-cgo), func Dup3(int, int, int) error
 pkg syscall (linux-arm-cgo), func EpollCreate(int) (int, error)
 pkg syscall (linux-arm-cgo), func EpollCreate1(int) (int, error)
 pkg syscall (linux-arm-cgo), func EpollCtl(int, int, int, *EpollEvent) error
@@ -11515,6 +11590,7 @@ pkg syscall (linux-arm-cgo), func Setresuid(int, int, int) error
 pkg syscall (linux-arm-cgo), func Setreuid(int, int) error
 pkg syscall (linux-arm-cgo), func Setrlimit(int, *Rlimit) error
 pkg syscall (linux-arm-cgo), func Setsid() (int, error)
+pkg syscall (linux-arm-cgo), func SetsockoptByte(int, int, int, uint8) error
 pkg syscall (linux-arm-cgo), func SetsockoptICMPv6Filter(int, int, int, *ICMPv6Filter) error
 pkg syscall (linux-arm-cgo), func SetsockoptIPMreq(int, int, int, *IPMreq) error
 pkg syscall (linux-arm-cgo), func SetsockoptIPMreqn(int, int, int, *IPMreqn) error
@@ -31630,17 +31706,146 @@ pkg syscall (openbsd-amd64-cgo), type WaitStatus uint32
 pkg syscall (openbsd-amd64-cgo), var Stderr int
 pkg syscall (openbsd-amd64-cgo), var Stdin int
 pkg syscall (openbsd-amd64-cgo), var Stdout int
+pkg syscall (windows-386), const BASE_PROTOCOL ideal-int
 pkg syscall (windows-386), const ERROR_HANDLE_EOF Errno
+pkg syscall (windows-386), const FILE_SKIP_COMPLETION_PORT_ON_SUCCESS ideal-int
+pkg syscall (windows-386), const FILE_SKIP_SET_EVENT_ON_HANDLE ideal-int
+pkg syscall (windows-386), const LAYERED_PROTOCOL ideal-int
+pkg syscall (windows-386), const MAX_PROTOCOL_CHAIN ideal-int
 pkg syscall (windows-386), const NetSetupDomainName ideal-int
 pkg syscall (windows-386), const NetSetupUnjoined ideal-int
 pkg syscall (windows-386), const NetSetupUnknownStatus ideal-int
 pkg syscall (windows-386), const NetSetupWorkgroupName ideal-int
+pkg syscall (windows-386), const PFL_HIDDEN ideal-int
+pkg syscall (windows-386), const PFL_MATCHES_PROTOCOL_ZERO ideal-int
+pkg syscall (windows-386), const PFL_MULTIPLE_PROTO_ENTRIES ideal-int
+pkg syscall (windows-386), const PFL_NETWORKDIRECT_PROVIDER ideal-int
+pkg syscall (windows-386), const PFL_RECOMMENDED_PROTO_ENTRY ideal-int
 pkg syscall (windows-386), const PROCESS_TERMINATE ideal-int
+pkg syscall (windows-386), const WSAPROTOCOL_LEN ideal-int
+pkg syscall (windows-386), const XP1_CONNECTIONLESS ideal-int
+pkg syscall (windows-386), const XP1_CONNECT_DATA ideal-int
+pkg syscall (windows-386), const XP1_DISCONNECT_DATA ideal-int
+pkg syscall (windows-386), const XP1_EXPEDITED_DATA ideal-int
+pkg syscall (windows-386), const XP1_GRACEFUL_CLOSE ideal-int
+pkg syscall (windows-386), const XP1_GUARANTEED_DELIVERY ideal-int
+pkg syscall (windows-386), const XP1_GUARANTEED_ORDER ideal-int
+pkg syscall (windows-386), const XP1_IFS_HANDLES ideal-int
+pkg syscall (windows-386), const XP1_MESSAGE_ORIENTED ideal-int
+pkg syscall (windows-386), const XP1_MULTIPOINT_CONTROL_PLANE ideal-int
+pkg syscall (windows-386), const XP1_MULTIPOINT_DATA_PLANE ideal-int
+pkg syscall (windows-386), const XP1_PARTIAL_MESSAGE ideal-int
+pkg syscall (windows-386), const XP1_PSEUDO_STREAM ideal-int
+pkg syscall (windows-386), const XP1_QOS_SUPPORTED ideal-int
+pkg syscall (windows-386), const XP1_SAN_SUPPORT_SDP ideal-int
+pkg syscall (windows-386), const XP1_SUPPORT_BROADCAST ideal-int
+pkg syscall (windows-386), const XP1_SUPPORT_MULTIPOINT ideal-int
+pkg syscall (windows-386), const XP1_UNI_RECV ideal-int
+pkg syscall (windows-386), const XP1_UNI_SEND ideal-int
+pkg syscall (windows-386), func LoadSetFileCompletionNotificationModes() error
 pkg syscall (windows-386), func NetGetJoinInformation(*uint16, **uint16, *uint32) error
+pkg syscall (windows-386), func SetFileCompletionNotificationModes(Handle, uint8) error
+pkg syscall (windows-386), func WSAEnumProtocols(*int32, *WSAProtocolInfo, *uint32) (int32, error)
+pkg syscall (windows-386), type IpMaskString struct, String [16]uint8
+pkg syscall (windows-386), type WSAProtocolChain struct
+pkg syscall (windows-386), type WSAProtocolChain struct, ChainEntries [7]uint32
+pkg syscall (windows-386), type WSAProtocolChain struct, ChainLen int32
+pkg syscall (windows-386), type WSAProtocolInfo struct
+pkg syscall (windows-386), type WSAProtocolInfo struct, AddressFamily int32
+pkg syscall (windows-386), type WSAProtocolInfo struct, CatalogEntryId uint32
+pkg syscall (windows-386), type WSAProtocolInfo struct, MaxSockAddr int32
+pkg syscall (windows-386), type WSAProtocolInfo struct, MessageSize uint32
+pkg syscall (windows-386), type WSAProtocolInfo struct, MinSockAddr int32
+pkg syscall (windows-386), type WSAProtocolInfo struct, NetworkByteOrder int32
+pkg syscall (windows-386), type WSAProtocolInfo struct, Protocol int32
+pkg syscall (windows-386), type WSAProtocolInfo struct, ProtocolChain WSAProtocolChain
+pkg syscall (windows-386), type WSAProtocolInfo struct, ProtocolMaxOffset int32
+pkg syscall (windows-386), type WSAProtocolInfo struct, ProtocolName [256]uint16
+pkg syscall (windows-386), type WSAProtocolInfo struct, ProviderFlags uint32
+pkg syscall (windows-386), type WSAProtocolInfo struct, ProviderId GUID
+pkg syscall (windows-386), type WSAProtocolInfo struct, ProviderReserved uint32
+pkg syscall (windows-386), type WSAProtocolInfo struct, SecurityScheme int32
+pkg syscall (windows-386), type WSAProtocolInfo struct, ServiceFlags1 uint32
+pkg syscall (windows-386), type WSAProtocolInfo struct, ServiceFlags2 uint32
+pkg syscall (windows-386), type WSAProtocolInfo struct, ServiceFlags3 uint32
+pkg syscall (windows-386), type WSAProtocolInfo struct, ServiceFlags4 uint32
+pkg syscall (windows-386), type WSAProtocolInfo struct, SocketType int32
+pkg syscall (windows-386), type WSAProtocolInfo struct, Version int32
+pkg syscall (windows-amd64), const BASE_PROTOCOL ideal-int
 pkg syscall (windows-amd64), const ERROR_HANDLE_EOF Errno
+pkg syscall (windows-amd64), const FILE_SKIP_COMPLETION_PORT_ON_SUCCESS ideal-int
+pkg syscall (windows-amd64), const FILE_SKIP_SET_EVENT_ON_HANDLE ideal-int
+pkg syscall (windows-amd64), const LAYERED_PROTOCOL ideal-int
+pkg syscall (windows-amd64), const MAX_PROTOCOL_CHAIN ideal-int
 pkg syscall (windows-amd64), const NetSetupDomainName ideal-int
 pkg syscall (windows-amd64), const NetSetupUnjoined ideal-int
 pkg syscall (windows-amd64), const NetSetupUnknownStatus ideal-int
 pkg syscall (windows-amd64), const NetSetupWorkgroupName ideal-int
+pkg syscall (windows-amd64), const PFL_HIDDEN ideal-int
+pkg syscall (windows-amd64), const PFL_MATCHES_PROTOCOL_ZERO ideal-int
+pkg syscall (windows-amd64), const PFL_MULTIPLE_PROTO_ENTRIES ideal-int
+pkg syscall (windows-amd64), const PFL_NETWORKDIRECT_PROVIDER ideal-int
+pkg syscall (windows-amd64), const PFL_RECOMMENDED_PROTO_ENTRY ideal-int
 pkg syscall (windows-amd64), const PROCESS_TERMINATE ideal-int
+pkg syscall (windows-amd64), const WSAPROTOCOL_LEN ideal-int
+pkg syscall (windows-amd64), const XP1_CONNECTIONLESS ideal-int
+pkg syscall (windows-amd64), const XP1_CONNECT_DATA ideal-int
+pkg syscall (windows-amd64), const XP1_DISCONNECT_DATA ideal-int
+pkg syscall (windows-amd64), const XP1_EXPEDITED_DATA ideal-int
+pkg syscall (windows-amd64), const XP1_GRACEFUL_CLOSE ideal-int
+pkg syscall (windows-amd64), const XP1_GUARANTEED_DELIVERY ideal-int
+pkg syscall (windows-amd64), const XP1_GUARANTEED_ORDER ideal-int
+pkg syscall (windows-amd64), const XP1_IFS_HANDLES ideal-int
+pkg syscall (windows-amd64), const XP1_MESSAGE_ORIENTED ideal-int
+pkg syscall (windows-amd64), const XP1_MULTIPOINT_CONTROL_PLANE ideal-int
+pkg syscall (windows-amd64), const XP1_MULTIPOINT_DATA_PLANE ideal-int
+pkg syscall (windows-amd64), const XP1_PARTIAL_MESSAGE ideal-int
+pkg syscall (windows-amd64), const XP1_PSEUDO_STREAM ideal-int
+pkg syscall (windows-amd64), const XP1_QOS_SUPPORTED ideal-int
+pkg syscall (windows-amd64), const XP1_SAN_SUPPORT_SDP ideal-int
+pkg syscall (windows-amd64), const XP1_SUPPORT_BROADCAST ideal-int
+pkg syscall (windows-amd64), const XP1_SUPPORT_MULTIPOINT ideal-int
+pkg syscall (windows-amd64), const XP1_UNI_RECV ideal-int
+pkg syscall (windows-amd64), const XP1_UNI_SEND ideal-int
+pkg syscall (windows-amd64), func LoadSetFileCompletionNotificationModes() error
 pkg syscall (windows-amd64), func NetGetJoinInformation(*uint16, **uint16, *uint32) error
+pkg syscall (windows-amd64), func SetFileCompletionNotificationModes(Handle, uint8) error
+pkg syscall (windows-amd64), func WSAEnumProtocols(*int32, *WSAProtocolInfo, *uint32) (int32, error)
+pkg syscall (windows-amd64), type IpMaskString struct, String [16]uint8
+pkg syscall (windows-amd64), type WSAProtocolChain struct
+pkg syscall (windows-amd64), type WSAProtocolChain struct, ChainEntries [7]uint32
+pkg syscall (windows-amd64), type WSAProtocolChain struct, ChainLen int32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, AddressFamily int32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, CatalogEntryId uint32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, MaxSockAddr int32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, MessageSize uint32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, MinSockAddr int32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, NetworkByteOrder int32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, Protocol int32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, ProtocolChain WSAProtocolChain
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, ProtocolMaxOffset int32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, ProtocolName [256]uint16
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, ProviderFlags uint32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, ProviderId GUID
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, ProviderReserved uint32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, SecurityScheme int32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, ServiceFlags1 uint32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, ServiceFlags2 uint32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, ServiceFlags3 uint32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, ServiceFlags4 uint32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, SocketType int32
+pkg syscall (windows-amd64), type WSAProtocolInfo struct, Version int32
+pkg testing, func RegisterCover(Cover)
+pkg testing, type Cover struct
+pkg testing, type Cover struct, Blocks map[string][]CoverBlock
+pkg testing, type Cover struct, Counters map[string][]uint32
+pkg testing, type Cover struct, CoveredPackages string
+pkg testing, type Cover struct, Mode string
+pkg testing, type CoverBlock struct
+pkg testing, type CoverBlock struct, Col0 uint16
+pkg testing, type CoverBlock struct, Col1 uint16
+pkg testing, type CoverBlock struct, Line0 uint32
+pkg testing, type CoverBlock struct, Line1 uint32
+pkg testing, type CoverBlock struct, Stmts uint16
+pkg unicode, func In(int32, ...*RangeTable) bool

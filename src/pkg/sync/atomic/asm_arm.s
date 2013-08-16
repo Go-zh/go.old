@@ -4,14 +4,16 @@
 
 // +build !race
 
+#include "../../../cmd/ld/textflag.h"
+
 // ARM atomic operations, for use by asm_$(GOOS)_arm.s.
 
-TEXT ·armCompareAndSwapUint32(SB),7,$0
+TEXT ·armCompareAndSwapUint32(SB),NOSPLIT,$0-13
 	MOVW	addr+0(FP), R1
 	MOVW	old+4(FP), R2
 	MOVW	new+8(FP), R3
 casloop:
-	// LDREX and STREX were introduced in ARM 6.
+	// LDREX and STREX were introduced in ARMv6.
 	LDREX	(R1), R0
 	CMP	R0, R2
 	BNE	casfail
@@ -26,7 +28,7 @@ casfail:
 	MOVBU	R0, ret+12(FP)
 	RET
 
-TEXT ·armCompareAndSwapUint64(SB),7,$0
+TEXT ·armCompareAndSwapUint64(SB),NOSPLIT,$0-21
 	BL	fastCheck64<>(SB)
 	MOVW	addr+0(FP), R1
 	// make unaligned atomic access panic
@@ -38,7 +40,7 @@ TEXT ·armCompareAndSwapUint64(SB),7,$0
 	MOVW	newlo+12(FP), R4
 	MOVW	newhi+16(FP), R5
 cas64loop:
-	// LDREXD and STREXD were introduced in ARM 11.
+	// LDREXD and STREXD were introduced in ARMv6k.
 	LDREXD	(R1), R6  // loads R6 and R7
 	CMP	R2, R6
 	BNE	cas64fail
@@ -55,11 +57,11 @@ cas64fail:
 	MOVBU	R0, ret+20(FP)
 	RET
 
-TEXT ·armAddUint32(SB),7,$0
+TEXT ·armAddUint32(SB),NOSPLIT,$0-12
 	MOVW	addr+0(FP), R1
 	MOVW	delta+4(FP), R2
 addloop:
-	// LDREX and STREX were introduced in ARM 6.
+	// LDREX and STREX were introduced in ARMv6.
 	LDREX	(R1), R3
 	ADD	R2, R3
 	STREX	R3, (R1), R0
@@ -68,7 +70,7 @@ addloop:
 	MOVW	R3, ret+8(FP)
 	RET
 
-TEXT ·armAddUint64(SB),7,$0
+TEXT ·armAddUint64(SB),NOSPLIT,$0-20
 	BL	fastCheck64<>(SB)
 	MOVW	addr+0(FP), R1
 	// make unaligned atomic access panic
@@ -78,7 +80,7 @@ TEXT ·armAddUint64(SB),7,$0
 	MOVW	deltalo+4(FP), R2
 	MOVW	deltahi+8(FP), R3
 add64loop:
-	// LDREXD and STREXD were introduced in ARM 11.
+	// LDREXD and STREXD were introduced in ARMv6k.
 	LDREXD	(R1), R4	// loads R4 and R5
 	ADD.S	R2, R4
 	ADC	R3, R5
@@ -89,7 +91,38 @@ add64loop:
 	MOVW	R5, rethi+16(FP)
 	RET
 
-TEXT ·armLoadUint64(SB),7,$0
+TEXT ·armSwapUint32(SB),NOSPLIT,$0-12
+	MOVW	addr+0(FP), R1
+	MOVW	new+4(FP), R2
+swaploop:
+	// LDREX and STREX were introduced in ARMv6.
+	LDREX	(R1), R3
+	STREX	R2, (R1), R0
+	CMP	$0, R0
+	BNE	swaploop
+	MOVW	R3, old+8(FP)
+	RET
+
+TEXT ·armSwapUint64(SB),NOSPLIT,$0-20
+	BL	fastCheck64<>(SB)
+	MOVW	addr+0(FP), R1
+	// make unaligned atomic access panic
+	AND.S	$7, R1, R2
+	BEQ 	2(PC)
+	MOVW	R2, (R2)
+	MOVW	newlo+4(FP), R2
+	MOVW	newhi+8(FP), R3
+swap64loop:
+	// LDREXD and STREXD were introduced in ARMv6k.
+	LDREXD	(R1), R4	// loads R4 and R5
+	STREXD	R2, (R1), R0	// stores R2 and R3
+	CMP	$0, R0
+	BNE	swap64loop
+	MOVW	R4, oldlo+12(FP)
+	MOVW	R5, oldhi+16(FP)
+	RET
+
+TEXT ·armLoadUint64(SB),NOSPLIT,$0-12
 	BL	fastCheck64<>(SB)
 	MOVW	addr+0(FP), R1
 	// make unaligned atomic access panic
@@ -105,7 +138,7 @@ load64loop:
 	MOVW	R3, valhi+8(FP)
 	RET
 
-TEXT ·armStoreUint64(SB),7,$0
+TEXT ·armStoreUint64(SB),NOSPLIT,$0-12
 	BL	fastCheck64<>(SB)
 	MOVW	addr+0(FP), R1
 	// make unaligned atomic access panic
@@ -129,7 +162,7 @@ store64loop:
 // which will make uses of the 64-bit atomic operations loop forever.
 // If things are working, set okLDREXD to avoid future checks.
 // https://bugs.launchpad.net/qemu/+bug/670883.
-TEXT	check64<>(SB),7,$16
+TEXT	check64<>(SB),NOSPLIT,$16-0
 	MOVW	$10, R1
 	// 8-aligned stack address scratch space.
 	MOVW	$8(R13), R5
@@ -148,13 +181,13 @@ ok:
 	RET
 
 // Fast, cached version of check.  No frame, just MOVW CMP RET after first time.
-TEXT	fastCheck64<>(SB),7,$-4
+TEXT	fastCheck64<>(SB),NOSPLIT,$-4
 	MOVW	ok64<>(SB), R0
 	CMP	$0, R0	// have we been here before?
 	RET.NE
 	B	slowCheck64<>(SB)
 
-TEXT slowCheck64<>(SB),7,$0
+TEXT slowCheck64<>(SB),NOSPLIT,$0-0
 	BL	check64<>(SB)
 	// Still here, must be okay.
 	MOVW	$1, R0

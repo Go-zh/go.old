@@ -222,6 +222,29 @@ struct	GCStats
 	uint64	nosyield;
 	uint64	nsleep;
 };
+
+struct	WinCall
+{
+	void	(*fn)(void*);
+	uintptr	n;	// number of parameters
+	void*	args;	// parameters
+	uintptr	r1;	// return values
+	uintptr	r2;
+	uintptr	err;	// error number
+};
+struct	SEH
+{
+	void*	prev;
+	void*	handler;
+};
+// describes how to handle callback
+struct	WinCallbackContext
+{
+	void*	gobody;		// Go function to call
+	uintptr	argsize;	// callback arguments size (in bytes)
+	uintptr	restorestack;	// adjust stack on return by (in bytes) (386 only)
+};
+
 struct	G
 {
 	// stackguard0 can be set to StackPreempt as opposed to stackguard
@@ -230,12 +253,13 @@ struct	G
 	Defer*	defer;
 	Panic*	panic;
 	Gobuf	sched;
-	uintptr	gcstack;		// if status==Gsyscall, gcstack = stackbase to use during gc
-	uintptr	gcsp;		// if status==Gsyscall, gcsp = sched.sp to use during gc
-	uintptr	gcpc;		// if status==Gsyscall, gcpc = sched.pc to use during gc
-	uintptr	gcguard;		// if status==Gsyscall, gcguard = stackguard to use during gc
+	uintptr	syscallstack;		// if status==Gsyscall, syscallstack = stackbase to use during gc
+	uintptr	syscallsp;		// if status==Gsyscall, syscallsp = sched.sp to use during gc
+	uintptr	syscallpc;		// if status==Gsyscall, syscallpc = sched.pc to use during gc
+	uintptr	syscallguard;		// if status==Gsyscall, syscallguard = stackguard to use during gc
 	uintptr	stackguard;	// same as stackguard0, but not set to StackPreempt
 	uintptr	stack0;
+	uintptr	stacksize;
 	G*	alllink;	// on allg
 	void*	param;		// passed parameter on wakeup
 	int16	status;
@@ -246,7 +270,6 @@ struct	G
 	bool	ispanic;
 	bool	issystem;	// do not output in stack dump
 	bool	isbackground;	// ignore in deadlock detector
-	bool	blockingsyscall;	// hint that the next syscall will block
 	bool	preempt;	// preemption signal, duplicates stackguard0 = StackPreempt
 	int8	raceignore;	// ignore race detection events
 	M*	m;		// for debuggers, but offset not hard-coded
@@ -254,8 +277,8 @@ struct	G
 	int32	sig;
 	int32	writenbuf;
 	byte*	writebuf;
-	DeferChunk	*dchunk;
-	DeferChunk	*dchunknext;
+	DeferChunk*	dchunk;
+	DeferChunk*	dchunknext;
 	uintptr	sigcode0;
 	uintptr	sigcode1;
 	uintptr	sigpc;
@@ -290,7 +313,6 @@ struct	M
 	int32	dying;
 	int32	profilehz;
 	int32	helpgc;
-	bool	blockingsyscall;
 	bool	spinning;
 	uint32	fastrand;
 	uint64	ncgocall;	// number of cgo calls in total
@@ -300,7 +322,7 @@ struct	M
 	M*	alllink;	// on allm
 	M*	schedlink;
 	uint32	machport;	// Return address for Mach IPC (OS X)
-	MCache	*mcache;
+	MCache*	mcache;
 	int32	stackinuse;
 	uint32	stackcachepos;
 	uint32	stackcachecnt;
@@ -318,7 +340,6 @@ struct	M
 	GCStats	gcstats;
 	bool	racecall;
 	bool	needextram;
-	void*	racepc;
 	void	(*waitunlockf)(Lock*);
 	void*	waitlock;
 
@@ -327,9 +348,10 @@ struct	M
 
 #ifdef GOOS_windows
 	void*	thread;		// thread handle
+	WinCall	wincall;
 #endif
 #ifdef GOOS_plan9
-	int8*		notesig;
+	int8*	notesig;
 	byte*	errstr;
 #endif
 	SEH*	seh;
@@ -340,9 +362,11 @@ struct P
 {
 	Lock;
 
-	uint32	status;  // one of Pidle/Prunning/...
+	int32	id;
+	uint32	status;	// one of Pidle/Prunning/...
 	P*	link;
-	uint32	tick;   // incremented on every scheduler or system call
+	uint32	schedtick;	// incremented on every scheduler call
+	uint32	syscalltick;	// incremented on every system call
 	M*	m;	// back-link to associated M (nil if idle)
 	MCache*	mcache;
 
@@ -432,28 +456,6 @@ struct	Itab
 	void	(*fun[])(void);
 };
 
-struct	WinCall
-{
-	void	(*fn)(void*);
-	uintptr	n;	// number of parameters
-	void*	args;	// parameters
-	uintptr	r1;	// return values
-	uintptr	r2;
-	uintptr	err;	// error number
-};
-struct	SEH
-{
-	void*	prev;
-	void*	handler;
-};
-// describes how to handle callback
-struct	WinCallbackContext
-{
-	void*	gobody;		// Go function to call
-	uintptr	argsize;	// callback arguments size (in bytes)
-	uintptr	restorestack;	// adjust stack on return by (in bytes) (386 only)
-};
-
 #ifdef GOOS_windows
 enum {
    Windows = 1
@@ -532,6 +534,8 @@ struct CgoMal
 struct DebugVars
 {
 	int32	gctrace;
+	int32	schedtrace;
+	int32	scheddetail;
 };
 
 /*
@@ -700,26 +704,25 @@ extern	M*	runtime·allm;
 extern	P**	runtime·allp;
 extern	int32	runtime·gomaxprocs;
 extern	uint32	runtime·needextram;
-extern	bool	runtime·singleproc;
 extern	uint32	runtime·panicking;
-extern	uint32	runtime·gcwaiting;		// gc is waiting to run
 extern	int8*	runtime·goos;
 extern	int32	runtime·ncpu;
 extern	bool	runtime·iscgo;
 extern 	void	(*runtime·sysargs)(int32, uint8**);
-extern	uint32	runtime·maxstring;
+extern	uintptr	runtime·maxstring;
 extern	uint32	runtime·Hchansize;
 extern	uint32	runtime·cpuid_ecx;
 extern	uint32	runtime·cpuid_edx;
 extern	DebugVars	runtime·debug;
+extern	uintptr	runtime·maxstacksize;
 
 /*
  * common functions and data
  */
 int32	runtime·strcmp(byte*, byte*);
 byte*	runtime·strstr(byte*, byte*);
-int32	runtime·findnull(byte*);
-int32	runtime·findnullw(uint16*);
+intgo	runtime·findnull(byte*);
+intgo	runtime·findnullw(uint16*);
 void	runtime·dump(byte*, int32);
 int32	runtime·runetochar(byte*, int32);
 int32	runtime·charntorune(int32*, uint8*, int32);
@@ -808,7 +811,6 @@ uintptr	runtime·ifacehash(Iface, uintptr);
 uintptr	runtime·efacehash(Eface, uintptr);
 void*	runtime·malloc(uintptr size);
 void	runtime·free(void *v);
-bool	runtime·addfinalizer(void*, FuncVal *fn, uintptr);
 void	runtime·runpanic(Panic*);
 uintptr	runtime·getcallersp(void*);
 int32	runtime·mcount(void);
@@ -816,6 +818,7 @@ int32	runtime·gcount(void);
 void	runtime·mcall(void(*)(G*));
 uint32	runtime·fastrand1(void);
 void	runtime·rewindmorestack(Gobuf*);
+int32	runtime·timediv(int64, int32, int32*);
 
 void runtime·setmg(M*, G*);
 void runtime·newextram(void);
@@ -823,6 +826,7 @@ void	runtime·exit(int32);
 void	runtime·breakpoint(void);
 void	runtime·gosched(void);
 void	runtime·gosched0(G*);
+void	runtime·schedtrace(bool);
 void	runtime·park(void(*)(Lock*), Lock*, int8*);
 void	runtime·tsleep(int64, int8*);
 M*	runtime·newm(void);
@@ -837,6 +841,7 @@ int32	runtime·callers(int32, uintptr*, int32);
 int64	runtime·nanotime(void);
 void	runtime·dopanic(int32);
 void	runtime·startpanic(void);
+void	runtime·freezetheworld(void);
 void	runtime·unwindstack(G*, byte*);
 void	runtime·sigprof(uint8 *pc, uint8 *sp, uint8 *lr, G *gp);
 void	runtime·resetcpuprofiler(int32);
@@ -853,6 +858,7 @@ void	runtime·netpollinit(void);
 int32	runtime·netpollopen(uintptr, PollDesc*);
 int32   runtime·netpollclose(uintptr);
 void	runtime·netpollready(G**, PollDesc*, int32);
+uintptr	runtime·netpollfd(PollDesc*);
 void	runtime·crash(void);
 void	runtime·parsedebugvars(void);
 void	_rt0_go(void);
@@ -982,6 +988,7 @@ void	runtime·printuint(uint64);
 void	runtime·printhex(uint64);
 void	runtime·printslice(Slice);
 void	runtime·printcomplex(Complex128);
+void	runtime·newstackcall(FuncVal*, byte*, uint32);
 void	reflect·call(FuncVal*, byte*, uint32);
 void	runtime·panic(Eface);
 void	runtime·panicindex(void);
@@ -1018,7 +1025,7 @@ bool	runtime·isInf(float64 f, int32 sign);
 bool	runtime·isNaN(float64 f);
 float64	runtime·ldexp(float64 d, int32 e);
 float64	runtime·modf(float64 d, float64 *ip);
-void	runtime·semacquire(uint32*);
+void	runtime·semacquire(uint32*, bool);
 void	runtime·semrelease(uint32*);
 int32	runtime·gomaxprocsfunc(int32 n);
 void	runtime·procyield(uint32);
@@ -1036,20 +1043,11 @@ Hchan*	runtime·makechan_c(ChanType*, int64);
 void	runtime·chansend(ChanType*, Hchan*, byte*, bool*, void*);
 void	runtime·chanrecv(ChanType*, Hchan*, byte*, bool*, bool*);
 bool	runtime·showframe(Func*, G*);
+void	runtime·printcreatedby(G*);
 
 void	runtime·ifaceE2I(InterfaceType*, Eface, Iface*);
-
+bool	runtime·ifaceE2I2(InterfaceType*, Eface, Iface*);
 uintptr	runtime·memlimit(void);
-
-// If appropriate, ask the operating system to control whether this
-// thread should receive profiling signals.  This is only necessary on OS X.
-// An operating system should not deliver a profiling signal to a
-// thread that is not actually executing (what good is that?), but that's
-// what OS X prefers to do.  When profiling is turned on, we mask
-// away the profiling signal when threads go to sleep, so that OS X
-// is forced to deliver the signal to a thread that's actually running.
-// This is a no-op on other systems.
-void	runtime·setprof(bool);
 
 // float.c
 extern float64 runtime·nan;

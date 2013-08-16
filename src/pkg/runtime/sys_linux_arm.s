@@ -7,6 +7,7 @@
 //
 
 #include "zasm_GOOS_GOARCH.h"
+#include "../../cmd/ld/textflag.h"
 
 // for EABI, as we don't support OABI
 #define SYS_BASE 0x0
@@ -44,7 +45,7 @@
 
 #define ARM_BASE (SYS_BASE + 0x0f0000)
 
-TEXT runtime·open(SB),7,$0
+TEXT runtime·open(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	4(FP), R1
 	MOVW	8(FP), R2
@@ -52,13 +53,13 @@ TEXT runtime·open(SB),7,$0
 	SWI	$0
 	RET
 
-TEXT runtime·close(SB),7,$0
+TEXT runtime·close(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	$SYS_close, R7
 	SWI	$0
 	RET
 
-TEXT runtime·write(SB),7,$0
+TEXT runtime·write(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	4(FP), R1
 	MOVW	8(FP), R2
@@ -66,7 +67,7 @@ TEXT runtime·write(SB),7,$0
 	SWI	$0
 	RET
 
-TEXT runtime·read(SB),7,$0
+TEXT runtime·read(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	4(FP), R1
 	MOVW	8(FP), R2
@@ -74,14 +75,14 @@ TEXT runtime·read(SB),7,$0
 	SWI	$0
 	RET
 
-TEXT runtime·getrlimit(SB),7,$0
+TEXT runtime·getrlimit(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	4(FP), R1
 	MOVW	$SYS_ugetrlimit, R7
 	SWI	$0
 	RET
 
-TEXT runtime·exit(SB),7,$-4
+TEXT runtime·exit(SB),NOSPLIT,$-4
 	MOVW	0(FP), R0
 	MOVW	$SYS_exit_group, R7
 	SWI	$0
@@ -89,7 +90,7 @@ TEXT runtime·exit(SB),7,$-4
 	MOVW	$1002, R1
 	MOVW	R0, (R1)	// fail hard
 
-TEXT runtime·exit1(SB),7,$-4
+TEXT runtime·exit1(SB),NOSPLIT,$-4
 	MOVW	0(FP), R0
 	MOVW	$SYS_exit, R7
 	SWI	$0
@@ -97,7 +98,7 @@ TEXT runtime·exit1(SB),7,$-4
 	MOVW	$1003, R1
 	MOVW	R0, (R1)	// fail hard
 
-TEXT	runtime·raise(SB),7,$-4
+TEXT	runtime·raise(SB),NOSPLIT,$-4
 	MOVW	$SYS_gettid, R7
 	SWI	$0
 	// arg 1 tid already in R0 from gettid
@@ -106,7 +107,7 @@ TEXT	runtime·raise(SB),7,$-4
 	SWI	$0
 	RET
 
-TEXT runtime·mmap(SB),7,$0
+TEXT runtime·mmap(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	4(FP), R1
 	MOVW	8(FP), R2
@@ -120,7 +121,7 @@ TEXT runtime·mmap(SB),7,$0
 	RSB.HI	$0, R0
 	RET
 
-TEXT runtime·munmap(SB),7,$0
+TEXT runtime·munmap(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	4(FP), R1
 	MOVW	$SYS_munmap, R7
@@ -131,7 +132,7 @@ TEXT runtime·munmap(SB),7,$0
 	MOVW.HI	R8, (R8)
 	RET
 
-TEXT runtime·madvise(SB),7,$0
+TEXT runtime·madvise(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	4(FP), R1
 	MOVW	8(FP), R2
@@ -140,7 +141,7 @@ TEXT runtime·madvise(SB),7,$0
 	// ignore failure - maybe pages are locked
 	RET
 
-TEXT runtime·setitimer(SB),7,$0
+TEXT runtime·setitimer(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	4(FP), R1
 	MOVW	8(FP), R2
@@ -148,7 +149,7 @@ TEXT runtime·setitimer(SB),7,$0
 	SWI	$0
 	RET
 
-TEXT runtime·mincore(SB),7,$0
+TEXT runtime·mincore(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	4(FP), R1
 	MOVW	8(FP), R2
@@ -156,7 +157,7 @@ TEXT runtime·mincore(SB),7,$0
 	SWI	$0
 	RET
 
-TEXT time·now(SB), 7, $32
+TEXT time·now(SB), NOSPLIT, $32
 	MOVW	$0, R0  // CLOCK_REALTIME
 	MOVW	$8(R13), R1  // timespec
 	MOVW	$SYS_clock_gettime, R7
@@ -173,7 +174,7 @@ TEXT time·now(SB), 7, $32
 
 // int64 nanotime(void) so really
 // void nanotime(int64 *nsec)
-TEXT runtime·nanotime(SB),7,$32
+TEXT runtime·nanotime(SB),NOSPLIT,$32
 	MOVW	$0, R0  // CLOCK_REALTIME
 	MOVW	$8(R13), R1  // timespec
 	MOVW	$SYS_clock_gettime, R7
@@ -195,7 +196,7 @@ TEXT runtime·nanotime(SB),7,$32
 
 // int32 futex(int32 *uaddr, int32 op, int32 val,
 //	struct timespec *timeout, int32 *uaddr2, int32 val2);
-TEXT runtime·futex(SB),7,$0
+TEXT runtime·futex(SB),NOSPLIT,$0
 	MOVW	4(SP), R0
 	MOVW	8(SP), R1
 	MOVW	12(SP), R2
@@ -208,7 +209,7 @@ TEXT runtime·futex(SB),7,$0
 
 
 // int32 clone(int32 flags, void *stack, M *mp, G *gp, void (*fn)(void));
-TEXT runtime·clone(SB),7,$0
+TEXT runtime·clone(SB),NOSPLIT,$0
 	MOVW	flags+0(FP), R0
 	MOVW	stack+4(FP), R1
 	MOVW	$0, R2	// parent tid ptr
@@ -271,7 +272,7 @@ TEXT runtime·clone(SB),7,$0
 	MOVW	$1005, R1
 	MOVW	R0, (R1)
 
-TEXT runtime·sigaltstack(SB),7,$0
+TEXT runtime·sigaltstack(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	4(FP), R1
 	MOVW	$SYS_sigaltstack, R7
@@ -282,14 +283,14 @@ TEXT runtime·sigaltstack(SB),7,$0
 	MOVW.HI	R8, (R8)
 	RET
 
-TEXT runtime·sigtramp(SB),7,$24
+TEXT runtime·sigtramp(SB),NOSPLIT,$24
 	// this might be called in external code context,
 	// where g and m are not set.
-	// first save R0, because _cgo_load_gm will clobber it
+	// first save R0, because runtime·load_gm will clobber it
 	MOVW	R0, 4(R13)
-	MOVW	_cgo_load_gm(SB), R0
+	MOVB	runtime·iscgo(SB), R0
 	CMP 	$0, R0
-	BL.NE	(R0)
+	BL.NE	runtime·load_gm(SB)
 
 	CMP 	$0, m
 	BNE 	4(PC)
@@ -318,7 +319,7 @@ TEXT runtime·sigtramp(SB),7,$24
 
 	RET
 
-TEXT runtime·rtsigprocmask(SB),7,$0
+TEXT runtime·rtsigprocmask(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	4(FP), R1
 	MOVW	8(FP), R2
@@ -327,7 +328,7 @@ TEXT runtime·rtsigprocmask(SB),7,$0
 	SWI	$0
 	RET
 
-TEXT runtime·rt_sigaction(SB),7,$0
+TEXT runtime·rt_sigaction(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	4(FP), R1
 	MOVW	8(FP), R2
@@ -336,12 +337,12 @@ TEXT runtime·rt_sigaction(SB),7,$0
 	SWI	$0
 	RET
 
-TEXT runtime·sigreturn(SB),7,$0
+TEXT runtime·sigreturn(SB),NOSPLIT,$0
 	MOVW	$SYS_rt_sigreturn, R7
 	SWI	$0
 	RET
 
-TEXT runtime·usleep(SB),7,$12
+TEXT runtime·usleep(SB),NOSPLIT,$12
 	MOVW	usec+0(FP), R0
 	MOVW	R0, R1
 	MOVW	$1000000, R2
@@ -360,17 +361,17 @@ TEXT runtime·usleep(SB),7,$12
 
 // Use kernel version instead of native armcas in asm_arm.s.
 // See ../sync/atomic/asm_linux_arm.s for details.
-TEXT cas<>(SB),7,$0
+TEXT cas<>(SB),NOSPLIT,$0
 	MOVW	$0xffff0fc0, PC
 
-TEXT runtime·cas(SB),7,$0
+TEXT runtime·cas(SB),NOSPLIT,$0
 	MOVW	valptr+0(FP), R2
 	MOVW	old+4(FP), R0
 casagain:
 	MOVW	new+8(FP), R1
 	BL	cas<>(SB)
 	BCC	cascheck
-	MOVW $1, R0
+	MOVW	$1, R0
 	RET
 cascheck:
 	// Kernel lies; double-check.
@@ -379,18 +380,18 @@ cascheck:
 	MOVW	0(R2), R3
 	CMP	R0, R3
 	BEQ	casagain
-	MOVW $0, R0
+	MOVW	$0, R0
 	RET
 
-TEXT runtime·casp(SB),7,$0
+TEXT runtime·casp(SB),NOSPLIT,$0
 	B	runtime·cas(SB)
 
-TEXT runtime·osyield(SB),7,$0
+TEXT runtime·osyield(SB),NOSPLIT,$0
 	MOVW	$SYS_sched_yield, R7
 	SWI	$0
 	RET
 
-TEXT runtime·sched_getaffinity(SB),7,$0
+TEXT runtime·sched_getaffinity(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	4(FP), R1
 	MOVW	8(FP), R2
@@ -399,21 +400,21 @@ TEXT runtime·sched_getaffinity(SB),7,$0
 	RET
 
 // int32 runtime·epollcreate(int32 size)
-TEXT runtime·epollcreate(SB),7,$0
+TEXT runtime·epollcreate(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	$SYS_epoll_create, R7
 	SWI	$0
 	RET
 
 // int32 runtime·epollcreate1(int32 flags)
-TEXT runtime·epollcreate1(SB),7,$0
+TEXT runtime·epollcreate1(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	$SYS_epoll_create1, R7
 	SWI	$0
 	RET
 
 // int32 runtime·epollctl(int32 epfd, int32 op, int32 fd, EpollEvent *ev)
-TEXT runtime·epollctl(SB),7,$0
+TEXT runtime·epollctl(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	4(FP), R1
 	MOVW	8(FP), R2
@@ -423,7 +424,7 @@ TEXT runtime·epollctl(SB),7,$0
 	RET
 
 // int32 runtime·epollwait(int32 epfd, EpollEvent *ev, int32 nev, int32 timeout)
-TEXT runtime·epollwait(SB),7,$0
+TEXT runtime·epollwait(SB),NOSPLIT,$0
 	MOVW	0(FP), R0
 	MOVW	4(FP), R1
 	MOVW	8(FP), R2
@@ -433,10 +434,15 @@ TEXT runtime·epollwait(SB),7,$0
 	RET
 
 // void runtime·closeonexec(int32 fd)
-TEXT runtime·closeonexec(SB),7,$0
+TEXT runtime·closeonexec(SB),NOSPLIT,$0
 	MOVW	0(FP), R0	// fd
 	MOVW	$2, R1	// F_SETFD
 	MOVW	$1, R2	// FD_CLOEXEC
 	MOVW	$SYS_fcntl, R7
-	SWI $0
+	SWI	$0
 	RET
+
+// b __kuser_get_tls @ 0xffff0fe0
+TEXT runtime·read_tls_fallback(SB),NOSPLIT,$-4
+	MOVW	$0xffff0fe0, R0
+	B	(R0)

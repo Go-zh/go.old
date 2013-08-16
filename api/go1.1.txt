@@ -1700,6 +1700,7 @@ pkg testing, method (BenchmarkResult) AllocsPerOp() int64
 pkg testing, method (BenchmarkResult) MemString() string
 pkg testing, type BenchmarkResult struct, MemAllocs uint64
 pkg testing, type BenchmarkResult struct, MemBytes uint64
+pkg text/template, method (Template) ErrorContext(parse.Node) (string, string)
 pkg text/template/parse, const NodeChain NodeType
 pkg text/template/parse, const NodeNil NodeType
 pkg text/template/parse, method (*ChainNode) Add(string)

@@ -6,6 +6,7 @@
 #include "type.h"
 #include "defs_GOOS_GOARCH.h"
 #include "os_GOOS.h"
+#include "../../cmd/ld/textflag.h"
 
 #pragma dynimport runtime·CloseHandle CloseHandle "kernel32.dll"
 #pragma dynimport runtime·CreateEvent CreateEventA "kernel32.dll"
@@ -24,6 +25,7 @@
 #pragma dynimport runtime·GetSystemTimeAsFileTime GetSystemTimeAsFileTime "kernel32.dll"
 #pragma dynimport runtime·GetThreadContext GetThreadContext "kernel32.dll"
 #pragma dynimport runtime·LoadLibrary LoadLibraryW "kernel32.dll"
+#pragma dynimport runtime·LoadLibraryA LoadLibraryA "kernel32.dll"
 #pragma dynimport runtime·ResumeThread ResumeThread "kernel32.dll"
 #pragma dynimport runtime·SetConsoleCtrlHandler SetConsoleCtrlHandler "kernel32.dll"
 #pragma dynimport runtime·SetEvent SetEvent "kernel32.dll"
@@ -55,6 +57,7 @@ extern void *runtime·GetSystemInfo;
 extern void *runtime·GetSystemTimeAsFileTime;
 extern void *runtime·GetThreadContext;
 extern void *runtime·LoadLibrary;
+extern void *runtime·LoadLibraryA;
 extern void *runtime·ResumeThread;
 extern void *runtime·SetConsoleCtrlHandler;
 extern void *runtime·SetEvent;
@@ -65,6 +68,8 @@ extern void *runtime·SuspendThread;
 extern void *runtime·timeBeginPeriod;
 extern void *runtime·WaitForSingleObject;
 extern void *runtime·WriteFile;
+
+void *runtime·GetQueuedCompletionStatusEx;
 
 static int32
 getproccount(void)
@@ -78,6 +83,9 @@ getproccount(void)
 void
 runtime·osinit(void)
 {
+	void *kernel32;
+	void *SetProcessPriorityBoost;
+
 	// -1 = current process, -2 = current thread
 	runtime·stdcall(runtime·DuplicateHandle, 7,
 		(uintptr)-1, (uintptr)-2, (uintptr)-1, &m->thread,
@@ -85,6 +93,18 @@ runtime·osinit(void)
 	runtime·stdcall(runtime·SetConsoleCtrlHandler, 2, runtime·ctrlhandler, (uintptr)1);
 	runtime·stdcall(runtime·timeBeginPeriod, 1, (uintptr)1);
 	runtime·ncpu = getproccount();
+
+	kernel32 = runtime·stdcall(runtime·LoadLibraryA, 1, "kernel32.dll");
+	if(kernel32 != nil) {
+		// Windows dynamic priority boosting assumes that a process has different types
+		// of dedicated threads -- GUI, IO, computational, etc. Go processes use
+		// equivalent threads that all do a mix of GUI, IO, computations, etc.
+		// In such context dynamic priority boosting does nothing but harm, so we turn it off.
+		SetProcessPriorityBoost = runtime·stdcall(runtime·GetProcAddress, 2, kernel32, "SetProcessPriorityBoost");
+		if(SetProcessPriorityBoost != nil)  // supported since Windows XP
+			runtime·stdcall(SetProcessPriorityBoost, 2, (uintptr)-1, (uintptr)1);
+		runtime·GetQueuedCompletionStatusEx = runtime·stdcall(runtime·GetProcAddress, 2, kernel32, "GetQueuedCompletionStatusEx");
+	}
 }
 
 void
@@ -164,21 +184,19 @@ runtime·write(int32 fd, void *buf, int32 n)
 
 #define INFINITE ((uintptr)0xFFFFFFFF)
 
+#pragma textflag NOSPLIT
 int32
 runtime·semasleep(int64 ns)
 {
-	uintptr ms;
-
+	// store ms in ns to save stack space
 	if(ns < 0)
-		ms = INFINITE;
-	else if(ns/1000000 > 0x7fffffffLL)
-		ms = 0x7fffffff;
+		ns = INFINITE;
 	else {
-		ms = ns/1000000;
-		if(ms == 0)
-			ms = 1;
+		ns = runtime·timediv(ns, 1000000, nil);
+		if(ns == 0)
+			ns = 1;
 	}
-	if(runtime·stdcall(runtime·WaitForSingleObject, 2, m->waitsema, ms) != 0)
+	if(runtime·stdcall(runtime·WaitForSingleObject, 2, m->waitsema, (uintptr)ns) != 0)
 		return -1;  // timeout
 	return 0;
 }
@@ -237,6 +255,7 @@ runtime·unminit(void)
 	runtime·remove_exception_handler();
 }
 
+#pragma textflag NOSPLIT
 int64
 runtime·nanotime(void)
 {
@@ -262,29 +281,27 @@ time·now(int64 sec, int32 usec)
 }
 
 // Calling stdcall on os stack.
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void *
 runtime·stdcall(void *fn, int32 count, ...)
 {
-	WinCall c;
-
-	c.fn = fn;
-	c.n = count;
-	c.args = (uintptr*)&count + 1;
-	runtime·asmcgocall(runtime·asmstdcall, &c);
-	return (void*)c.r1;
+	m->wincall.fn = fn;
+	m->wincall.n = count;
+	m->wincall.args = (uintptr*)&count + 1;
+	runtime·asmcgocall(runtime·asmstdcall, &m->wincall);
+	return (void*)m->wincall.r1;
 }
 
 extern void runtime·usleep1(uint32);
 
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 runtime·osyield(void)
 {
 	runtime·usleep1(1);
 }
 
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 runtime·usleep(uint32 us)
 {
@@ -459,12 +476,6 @@ uintptr
 runtime·memlimit(void)
 {
 	return 0;
-}
-
-void
-runtime·setprof(bool on)
-{
-	USED(on);
 }
 
 #pragma dataflag 16 // no pointers

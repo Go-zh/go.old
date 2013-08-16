@@ -113,10 +113,13 @@ func runtime_pollWait(pd *PollDesc, mode int) (err int) {
 	runtime·lock(pd);
 	err = checkerr(pd, mode);
 	if(err == 0) {
-		if(!netpollblock(pd, mode)) {
+		while(!netpollblock(pd, mode)) {
 			err = checkerr(pd, mode);
-			if(err == 0)
-				runtime·throw("runtime_pollWait: unblocked by ioready");
+			if(err != 0)
+				break;
+			// Can happen if timeout has fired and unblocked us,
+			// but before we had a chance to run, timeout has been reset.
+			// Pretend it has not happened and retry.
 		}
 	}
 	runtime·unlock(pd);
@@ -131,9 +134,13 @@ func runtime_pollWaitCanceled(pd *PollDesc, mode int) {
 }
 
 func runtime_pollSetDeadline(pd *PollDesc, d int64, mode int) {
+	G *rg, *wg;
+
 	runtime·lock(pd);
-	if(pd->closing)
-		goto ret;
+	if(pd->closing) {
+		runtime·unlock(pd);
+		return;
+	}
 	pd->seq++;  // invalidate current timers
 	// Reset current timers.
 	if(pd->rt.fv) {
@@ -145,9 +152,8 @@ func runtime_pollSetDeadline(pd *PollDesc, d int64, mode int) {
 		pd->wt.fv = nil;
 	}
 	// Setup new timers.
-	if(d != 0 && d <= runtime·nanotime()) {
+	if(d != 0 && d <= runtime·nanotime())
 		d = -1;
-	}
 	if(mode == 'r' || mode == 'r'+'w')
 		pd->rd = d;
 	if(mode == 'w' || mode == 'r'+'w')
@@ -177,8 +183,18 @@ func runtime_pollSetDeadline(pd *PollDesc, d int64, mode int) {
 			runtime·addtimer(&pd->wt);
 		}
 	}
-ret:
+	// If we set the new deadline in the past, unblock currently pending IO if any.
+	rg = nil;
+	wg = nil;
+	if(pd->rd < 0)
+		rg = netpollunblock(pd, 'r', false);
+	if(pd->wd < 0)
+		wg = netpollunblock(pd, 'w', false);
 	runtime·unlock(pd);
+	if(rg)
+		runtime·ready(rg);
+	if(wg)
+		runtime·ready(wg);
 }
 
 func runtime_pollUnblock(pd *PollDesc) {
@@ -204,6 +220,12 @@ func runtime_pollUnblock(pd *PollDesc) {
 		runtime·ready(rg);
 	if(wg)
 		runtime·ready(wg);
+}
+
+uintptr
+runtime·netpollfd(PollDesc *pd)
+{
+	return pd->fd;
 }
 
 // make pd ready, newly runnable goroutines (if any) are enqueued info gpp list

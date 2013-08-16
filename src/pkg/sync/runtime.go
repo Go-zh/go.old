@@ -4,6 +4,8 @@
 
 package sync
 
+import "unsafe"
+
 // defined in package runtime
 // 已在 runtime 包中定义。
 
@@ -23,3 +25,19 @@ func runtime_Semacquire(s *uint32)
 // Semrelease 原子性地对 *s 进行减量，若有等待的Go程在 Semacquire 中被阻塞就通知它。
 // 其目的是用作同步库的简单唤醒原语，你不应直接使用它。
 func runtime_Semrelease(s *uint32)
+
+// Opaque representation of SyncSema in runtime/sema.goc.
+type syncSema [3]uintptr
+
+// Syncsemacquire waits for a pairing Syncsemrelease on the same semaphore s.
+func runtime_Syncsemacquire(s *syncSema)
+
+// Syncsemrelease waits for n pairing Syncsemacquire on the same semaphore s.
+func runtime_Syncsemrelease(s *syncSema, n uint32)
+
+// Ensure that sync and runtime agree on size of syncSema.
+func runtime_Syncsemcheck(size uintptr)
+func init() {
+	var s syncSema
+	runtime_Syncsemcheck(unsafe.Sizeof(s))
+}

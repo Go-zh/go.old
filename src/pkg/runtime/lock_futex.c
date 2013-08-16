@@ -6,6 +6,7 @@
 
 #include "runtime.h"
 #include "stack.h"
+#include "../../cmd/ld/textflag.h"
 
 // This implementation depends on OS-specific implementations of
 //
@@ -114,37 +115,42 @@ runtime·noteclear(Note *n)
 void
 runtime·notewakeup(Note *n)
 {
-	if(runtime·xchg((uint32*)&n->key, 1))
+	uint32 old;
+
+	old = runtime·xchg((uint32*)&n->key, 1);
+	if(old != 0) {
+		runtime·printf("notewakeup - double wakeup (%d)\n", old);
 		runtime·throw("notewakeup - double wakeup");
+	}
 	runtime·futexwakeup((uint32*)&n->key, 1);
 }
 
 void
 runtime·notesleep(Note *n)
 {
-	if(m->profilehz > 0)
-		runtime·setprof(false);
+	if(g != m->g0)
+		runtime·throw("notesleep not on g0");
 	while(runtime·atomicload((uint32*)&n->key) == 0)
 		runtime·futexsleep((uint32*)&n->key, 0, -1);
-	if(m->profilehz > 0)
-		runtime·setprof(true);
 }
 
-bool
-runtime·notetsleep(Note *n, int64 ns)
+#pragma textflag NOSPLIT
+static bool
+notetsleep(Note *n, int64 ns, int64 deadline, int64 now)
 {
-	int64 deadline, now;
+	// Conceptually, deadline and now are local variables.
+	// They are passed as arguments so that the space for them
+	// does not count against our nosplit stack sequence.
 
 	if(ns < 0) {
-		runtime·notesleep(n);
+		while(runtime·atomicload((uint32*)&n->key) == 0)
+			runtime·futexsleep((uint32*)&n->key, 0, -1);
 		return true;
 	}
 
 	if(runtime·atomicload((uint32*)&n->key) != 0)
 		return true;
 
-	if(m->profilehz > 0)
-		runtime·setprof(false);
 	deadline = runtime·nanotime() + ns;
 	for(;;) {
 		runtime·futexsleep((uint32*)&n->key, 0, ns);
@@ -155,11 +161,23 @@ runtime·notetsleep(Note *n, int64 ns)
 			break;
 		ns = deadline - now;
 	}
-	if(m->profilehz > 0)
-		runtime·setprof(true);
 	return runtime·atomicload((uint32*)&n->key) != 0;
 }
 
+bool
+runtime·notetsleep(Note *n, int64 ns)
+{
+	bool res;
+
+	if(g != m->g0 && !m->gcing)
+		runtime·throw("notetsleep not on g0");
+
+	res = notetsleep(n, ns, 0, 0);
+	return res;
+}
+
+// same as runtime·notetsleep, but called on user g (not g0)
+// calls only nosplit functions between entersyscallblock/exitsyscall
 bool
 runtime·notetsleepg(Note *n, int64 ns)
 {
@@ -167,8 +185,9 @@ runtime·notetsleepg(Note *n, int64 ns)
 
 	if(g == m->g0)
 		runtime·throw("notetsleepg on g0");
+
 	runtime·entersyscallblock();
-	res = runtime·notetsleep(n, ns);
+	res = notetsleep(n, ns, 0, 0);
 	runtime·exitsyscall();
 	return res;
 }

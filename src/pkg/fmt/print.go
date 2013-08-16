@@ -18,20 +18,21 @@ import (
 
 // 将一些内容以字节的形式存储，以此避免字符串开销。我觉得无可挑剔了。
 var (
-	commaSpaceBytes = []byte(", ")
-	nilAngleBytes   = []byte("<nil>")
-	nilParenBytes   = []byte("(nil)")
-	nilBytes        = []byte("nil")
-	mapBytes        = []byte("map[")
-	missingBytes    = []byte("(MISSING)")
-	badIndexBytes   = []byte("(BADINDEX)")
-	panicBytes      = []byte("(PANIC=")
-	extraBytes      = []byte("%!(EXTRA ")
-	irparenBytes    = []byte("i)")
-	bytesBytes      = []byte("[]byte{")
-	badWidthBytes   = []byte("%!(BADWIDTH)")
-	badPrecBytes    = []byte("%!(BADPREC)")
-	noVerbBytes     = []byte("%!(NOVERB)")
+	commaSpaceBytes  = []byte(", ")
+	nilAngleBytes    = []byte("<nil>")
+	nilParenBytes    = []byte("(nil)")
+	nilBytes         = []byte("nil")
+	mapBytes         = []byte("map[")
+	percentBangBytes = []byte("%!")
+	missingBytes     = []byte("(MISSING)")
+	badIndexBytes    = []byte("(BADINDEX)")
+	panicBytes       = []byte("(PANIC=")
+	extraBytes       = []byte("%!(EXTRA ")
+	irparenBytes     = []byte("i)")
+	bytesBytes       = []byte("[]byte{")
+	badWidthBytes    = []byte("%!(BADWIDTH)")
+	badPrecBytes     = []byte("%!(BADPREC)")
+	noVerbBytes      = []byte("%!(NOVERB)")
 )
 
 // State represents the printer state passed to custom formatters.
@@ -731,8 +732,6 @@ func (p *pp) fmtPointer(value reflect.Value, verb rune, goSyntax bool) {
 
 var (
 	intBits     = reflect.TypeOf(0).Bits()
-	floatBits   = reflect.TypeOf(0.0).Bits()
-	complexBits = reflect.TypeOf(1i).Bits()
 	uintptrBits = reflect.TypeOf(uintptr(0)).Bits()
 )
 
@@ -756,7 +755,7 @@ func (p *pp) catchPanic(arg interface{}, verb rune) {
 			// 嵌套 printArg 中的递归无法成功。
 			panic(err)
 		}
-		p.buf.WriteByte('%')
+		p.buf.Write(percentBangBytes)
 		p.add(verb)
 		p.buf.Write(panicBytes)
 		p.panicking = true
@@ -1299,12 +1298,12 @@ func (p *pp) doPrintf(format string, a []interface{}) {
 			continue
 		}
 		if !p.goodArgNum {
-			p.buf.WriteByte('%')
+			p.buf.Write(percentBangBytes)
 			p.add(c)
 			p.buf.Write(badIndexBytes)
 			continue
 		} else if argNum >= len(a) { // out of operands // 超过操作数
-			p.buf.WriteByte('%')
+			p.buf.Write(percentBangBytes)
 			p.add(c)
 			p.buf.Write(missingBytes)
 			continue

@@ -26,8 +26,9 @@ char *tooldir;
 char *gochar;
 char *goversion;
 char *slash;	// / for unix, \ for windows
-
-bool	rebuildall = 0;
+char *defaultcc;
+bool	rebuildall;
+bool defaultclang;
 
 static bool shouldbuild(char*, char*);
 static void copy(char*, char*, int);
@@ -146,6 +147,20 @@ init(void)
 		if(!streq(goextlinkenabled, "0") && !streq(goextlinkenabled, "1"))
 			fatal("unknown $GO_EXTLINK_ENABLED %s", goextlinkenabled);
 	}
+	
+	xgetenv(&b, "CC");
+	if(b.len == 0) {
+		// Use clang on OS X, because gcc is deprecated there.
+		// Xcode for OS X 10.9 Mavericks will ship a fake "gcc" binary that
+		// actually runs clang. We prepare different command
+		// lines for the two binaries, so it matters what we call it.
+		// See golang.org/issue/5822.
+		if(defaultclang)
+			bprintf(&b, "clang");
+		else
+			bprintf(&b, "gcc");
+	}
+	defaultcc = btake(&b);
 
 	xsetenv("GOROOT", goroot);
 	xsetenv("GOARCH", goarch);
@@ -474,6 +489,7 @@ static struct {
 	{"cmd/gc", {
 		"-cplx.c",
 		"-pgen.c",
+		"-popt.c",
 		"-y1.tab.c",  // makefile dreg
 		"opnames.h",
 	}},
@@ -498,18 +514,24 @@ static struct {
 	{"cmd/5g", {
 		"../gc/cplx.c",
 		"../gc/pgen.c",
+		"../gc/popt.c",
+		"../gc/popt.h",
 		"../5l/enam.c",
 		"$GOROOT/pkg/obj/$GOOS_$GOARCH/libgc.a",
 	}},
 	{"cmd/6g", {
 		"../gc/cplx.c",
 		"../gc/pgen.c",
+		"../gc/popt.c",
+		"../gc/popt.h",
 		"../6l/enam.c",
 		"$GOROOT/pkg/obj/$GOOS_$GOARCH/libgc.a",
 	}},
 	{"cmd/8g", {
 		"../gc/cplx.c",
 		"../gc/pgen.c",
+		"../gc/popt.c",
+		"../gc/popt.h",
 		"../8l/enam.c",
 		"$GOROOT/pkg/obj/$GOOS_$GOARCH/libgc.a",
 	}},
@@ -524,6 +546,9 @@ static struct {
 	{"cmd/8l", {
 		"../ld/*",
 		"enam.c",
+	}},
+	{"cmd/go", {
+		"zdefaultcc.go",
 	}},
 	{"cmd/", {
 		"$GOROOT/pkg/obj/$GOOS_$GOARCH/libmach.a",
@@ -557,6 +582,7 @@ static struct {
 	{"opnames.h", gcopnames},
 	{"enam.c", mkenam},
 	{"zasm_", mkzasm},
+	{"zdefaultcc.go", mkzdefaultcc},
 	{"zsys_", mkzsys},
 	{"zgoarch_", mkzgoarch},
 	{"zgoos_", mkzgoos},
@@ -570,7 +596,7 @@ static void
 install(char *dir)
 {
 	char *name, *p, *elem, *prefix, *exe;
-	bool islib, ispkg, isgo, stale, clang;
+	bool islib, ispkg, isgo, stale;
 	Buf b, b1, path;
 	Vec compile, files, link, go, missing, clean, lib, extra;
 	Time ttarg, t;
@@ -616,14 +642,11 @@ install(char *dir)
 
 	// set up gcc command line on first run.
 	if(gccargs.len == 0) {
-		xgetenv(&b, "CC");
-		if(b.len == 0)
-			bprintf(&b, "gcc");
-		clang = contains(bstr(&b), "clang");
+		bprintf(&b, "%s", defaultcc);
 		splitfields(&gccargs, bstr(&b));
 		for(i=0; i<nelem(proto_gccargs); i++)
 			vadd(&gccargs, proto_gccargs[i]);
-		if(clang) {
+		if(contains(gccargs.p[0], "clang")) {
 			// disable ASCII art in clang errors, if possible
 			vadd(&gccargs, "-fno-caret-diagnostics");
 			// clang is too smart about unused command-line arguments
@@ -969,6 +992,8 @@ install(char *dir)
 			vadd(&compile, bprintf(&b, "GOOS_%s", goos));
 			vadd(&compile, "-D");
 			vadd(&compile, bprintf(&b, "GOARCH_%s", goarch));
+			vadd(&compile, "-D");
+			vadd(&compile, bprintf(&b, "GOOS_GOARCH_%s_%s", goos, goarch));
 		}
 
 		bpathf(&b, "%s/%s", workdir, lastelem(files.p[i]));
@@ -1242,6 +1267,7 @@ static char *buildorder[] = {
 	"pkg/os",
 	"pkg/reflect",
 	"pkg/fmt",
+	"pkg/encoding",
 	"pkg/encoding/json",
 	"pkg/flag",
 	"pkg/path/filepath",
@@ -1294,6 +1320,7 @@ static char *cleantab[] = {
 	"pkg/bufio",
 	"pkg/bytes",
 	"pkg/container/heap",
+	"pkg/encoding",
 	"pkg/encoding/base64",
 	"pkg/encoding/json",
 	"pkg/errors",
@@ -1443,6 +1470,7 @@ cmdenv(int argc, char **argv)
 	if(argc > 0)
 		usage();
 
+	xprintf(format, "CC", defaultcc);
 	xprintf(format, "GOROOT", goroot);
 	xprintf(format, "GOBIN", gobin);
 	xprintf(format, "GOARCH", goarch);

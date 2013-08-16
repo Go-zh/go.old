@@ -13,14 +13,7 @@ import (
 	"time"
 )
 
-func (a *UnixAddr) isUnnamed() bool {
-	if a == nil || a.Name == "" {
-		return true
-	}
-	return false
-}
-
-func unixSocket(net string, laddr, raddr *UnixAddr, mode string, deadline time.Time) (*netFD, error) {
+func unixSocket(net string, laddr, raddr sockaddr, mode string, deadline time.Time) (*netFD, error) {
 	var sotype int
 	switch net {
 	case "unix":
@@ -33,19 +26,18 @@ func unixSocket(net string, laddr, raddr *UnixAddr, mode string, deadline time.T
 		return nil, UnknownNetworkError(net)
 	}
 
-	var la, ra syscall.Sockaddr
 	switch mode {
 	case "dial":
-		if !laddr.isUnnamed() {
-			la = &syscall.SockaddrUnix{Name: laddr.Name}
+		if laddr != nil && laddr.isWildcard() {
+			laddr = nil
 		}
-		if raddr != nil {
-			ra = &syscall.SockaddrUnix{Name: raddr.Name}
-		} else if sotype != syscall.SOCK_DGRAM || laddr.isUnnamed() {
+		if raddr != nil && raddr.isWildcard() {
+			raddr = nil
+		}
+		if raddr == nil && (sotype != syscall.SOCK_DGRAM || laddr == nil) {
 			return nil, &OpError{Op: mode, Net: net, Err: errMissingAddress}
 		}
 	case "listen":
-		la = &syscall.SockaddrUnix{Name: laddr.Name}
 	default:
 		return nil, errors.New("unknown mode: " + mode)
 	}
@@ -57,7 +49,7 @@ func unixSocket(net string, laddr, raddr *UnixAddr, mode string, deadline time.T
 		f = sockaddrToUnixpacket
 	}
 
-	fd, err := socket(net, syscall.AF_UNIX, sotype, 0, false, la, ra, deadline, f)
+	fd, err := socket(net, syscall.AF_UNIX, sotype, 0, false, laddr, raddr, deadline, f)
 	if err != nil {
 		goto error
 	}
@@ -104,6 +96,28 @@ func sotypeToNet(sotype int) string {
 	default:
 		panic("sotypeToNet unknown socket type")
 	}
+}
+
+func (a *UnixAddr) family() int {
+	return syscall.AF_UNIX
+}
+
+func (a *UnixAddr) isWildcard() bool {
+	return a == nil || a.Name == ""
+}
+
+func (a *UnixAddr) sockaddr(family int) (syscall.Sockaddr, error) {
+	if a == nil {
+		return nil, nil
+	}
+	return &syscall.SockaddrUnix{Name: a.Name}, nil
+}
+
+func (a *UnixAddr) toAddr() sockaddr {
+	if a == nil {
+		return nil
+	}
+	return a
 }
 
 // UnixConn is an implementation of the Conn interface for connections
@@ -269,11 +283,6 @@ func ListenUnix(net string, laddr *UnixAddr) (*UnixListener, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = syscall.Listen(fd.sysfd, listenerBacklog)
-	if err != nil {
-		fd.Close()
-		return nil, &OpError{Op: "listen", Net: net, Addr: laddr, Err: err}
-	}
 	return &UnixListener{fd, laddr.Name}, nil
 }
 
@@ -333,7 +342,7 @@ func (l *UnixListener) SetDeadline(t time.Time) (err error) {
 	if l == nil || l.fd == nil {
 		return syscall.EINVAL
 	}
-	return setDeadline(l.fd, t)
+	return l.fd.setDeadline(t)
 }
 
 // File returns a copy of the underlying os.File, set to blocking

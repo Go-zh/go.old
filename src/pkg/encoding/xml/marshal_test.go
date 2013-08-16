@@ -276,6 +276,50 @@ type Strings struct {
 	X []string `xml:"A>B,omitempty"`
 }
 
+type PointerFieldsTest struct {
+	XMLName  Name    `xml:"dummy"`
+	Name     *string `xml:"name,attr"`
+	Age      *uint   `xml:"age,attr"`
+	Empty    *string `xml:"empty,attr"`
+	Contents *string `xml:",chardata"`
+}
+
+type ChardataEmptyTest struct {
+	XMLName  Name    `xml:"test"`
+	Contents *string `xml:",chardata"`
+}
+
+type MyMarshalerTest struct {
+}
+
+var _ Marshaler = (*MyMarshalerTest)(nil)
+
+func (m *MyMarshalerTest) MarshalXML(e *Encoder, start StartElement) error {
+	e.EncodeToken(start)
+	e.EncodeToken(CharData([]byte("hello world")))
+	e.EncodeToken(EndElement{start.Name})
+	return nil
+}
+
+type MyMarshalerAttrTest struct {
+}
+
+var _ MarshalerAttr = (*MyMarshalerAttrTest)(nil)
+
+func (m *MyMarshalerAttrTest) MarshalXMLAttr(name Name) (Attr, error) {
+	return Attr{name, "hello world"}, nil
+}
+
+type MarshalerStruct struct {
+	Foo MyMarshalerAttrTest `xml:",attr"`
+}
+
+var (
+	nameAttr     = "Sarah"
+	ageAttr      = uint(12)
+	contentsAttr = "lorem ipsum"
+)
+
 // Unless explicitly stated as such (or *Plain), all of the
 // tests below are two-way tests. When introducing new tests,
 // please try to make them two-way as well to ensure that
@@ -673,6 +717,20 @@ var marshalTests = []struct {
 		ExpectXML: `<OmitAttrTest></OmitAttrTest>`,
 	},
 
+	// pointer fields
+	{
+		Value:       &PointerFieldsTest{Name: &nameAttr, Age: &ageAttr, Contents: &contentsAttr},
+		ExpectXML:   `<dummy name="Sarah" age="12">lorem ipsum</dummy>`,
+		MarshalOnly: true,
+	},
+
+	// empty chardata pointer field
+	{
+		Value:       &ChardataEmptyTest{},
+		ExpectXML:   `<test></test>`,
+		MarshalOnly: true,
+	},
+
 	// omitempty on fields
 	{
 		Value: &OmitFieldTest{
@@ -810,6 +868,15 @@ var marshalTests = []struct {
 	{
 		ExpectXML: `<Strings><A></A></Strings>`,
 		Value:     &Strings{},
+	},
+	// Custom marshalers.
+	{
+		ExpectXML: `<MyMarshalerTest>hello world</MyMarshalerTest>`,
+		Value:     &MyMarshalerTest{},
+	},
+	{
+		ExpectXML: `<MarshalerStruct Foo="hello world"></MarshalerStruct>`,
+		Value:     &MarshalerStruct{},
 	},
 }
 

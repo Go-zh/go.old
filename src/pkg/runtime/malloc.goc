@@ -14,6 +14,7 @@ package runtime
 #include "typekind.h"
 #include "race.h"
 #include "stack.h"
+#include "../../cmd/ld/textflag.h"
 
 // Mark mheap as 'no pointers', it does not contain interesting pointers but occupies ~45K.
 #pragma dataflag 16
@@ -28,8 +29,9 @@ extern volatile intgo runtime·MemProfileRate;
 // Allocate an object of at least size bytes.
 // Small objects are allocated from the per-thread cache's free lists.
 // Large objects (> 32 kB) are allocated straight from the heap.
+// If the block will be freed with runtime·free(), typ must be 0.
 void*
-runtime·mallocgc(uintptr size, uint32 flag, int32 dogc, int32 zeroed)
+runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 {
 	int32 sizeclass;
 	intgo rate;
@@ -39,13 +41,18 @@ runtime·mallocgc(uintptr size, uint32 flag, int32 dogc, int32 zeroed)
 	MSpan *s;
 	MLink *v;
 
-	if(runtime·gcwaiting && g != m->g0 && m->locks == 0 && dogc)
-		runtime·gosched();
+	if(size == 0) {
+		// All 0-length allocations use this pointer.
+		// The language does not require the allocations to
+		// have distinct values.
+		return &runtime·zerobase;
+	}
 	if(m->mallocing)
 		runtime·throw("malloc/free - deadlock");
+	// Disable preemption during settype_flush.
+	// We can not use m->mallocing for this, because settype_flush calls mallocgc.
+	m->locks++;
 	m->mallocing = 1;
-	if(size == 0)
-		size = 1;
 
 	if(DebugTypeAtBlockEnd)
 		size += sizeof(uintptr);
@@ -65,7 +72,7 @@ runtime·mallocgc(uintptr size, uint32 flag, int32 dogc, int32 zeroed)
 		v = l->list;
 		l->list = v->next;
 		l->nlist--;
-		if(zeroed) {
+		if(!(flag & FlagNoZero)) {
 			v->next = nil;
 			// block is zeroed iff second word is zero ...
 			if(size > sizeof(uintptr) && ((uintptr*)v)[1] != 0)
@@ -79,7 +86,7 @@ runtime·mallocgc(uintptr size, uint32 flag, int32 dogc, int32 zeroed)
 		npages = size >> PageShift;
 		if((size & PageMask) != 0)
 			npages++;
-		s = runtime·MHeap_Alloc(&runtime·mheap, npages, 0, 1, zeroed);
+		s = runtime·MHeap_Alloc(&runtime·mheap, npages, 0, 1, !(flag & FlagNoZero));
 		if(s == nil)
 			runtime·throw("out of memory");
 		s->limit = (byte*)(s->start<<PageShift) + size;
@@ -94,10 +101,23 @@ runtime·mallocgc(uintptr size, uint32 flag, int32 dogc, int32 zeroed)
 		runtime·markallocated(v, size, (flag&FlagNoPointers) != 0);
 
 	if(DebugTypeAtBlockEnd)
-		*(uintptr*)((uintptr)v+size-sizeof(uintptr)) = 0;
+		*(uintptr*)((uintptr)v+size-sizeof(uintptr)) = typ;
+
+	if(UseSpanType && !(flag & FlagNoPointers) && typ != 0) {
+		uintptr *buf, i;
+
+		buf = m->settype_buf;
+		i = m->settype_bufsize;
+		buf[i++] = (uintptr)v;
+		buf[i++] = typ;
+		m->settype_bufsize = i;
+	}
 
 	m->mallocing = 0;
-	if(g->preempt)  // restore the preemption request in case we've cleared it in newstack
+	if(UseSpanType && !(flag & FlagNoPointers) && typ != 0 && m->settype_bufsize == nelem(m->settype_buf))
+		runtime·settype_flush(m);
+	m->locks--;
+	if(m->locks == 0 && g->preempt)  // restore the preemption request in case we've cleared it in newstack
 		g->stackguard0 = StackPreempt;
 
 	if(!(flag & FlagNoProfiling) && (rate = runtime·MemProfileRate) > 0) {
@@ -117,20 +137,18 @@ runtime·mallocgc(uintptr size, uint32 flag, int32 dogc, int32 zeroed)
 		}
 	}
 
-	if(dogc && mstats.heap_alloc >= mstats.next_gc)
+	if(!(flag & FlagNoInvokeGC) && mstats.heap_alloc >= mstats.next_gc)
 		runtime·gc(0);
 
-	if(raceenabled) {
-		runtime·racemalloc(v, size, m->racepc);
-		m->racepc = nil;
-	}
+	if(raceenabled)
+		runtime·racemalloc(v, size);
 	return v;
 }
 
 void*
 runtime·malloc(uintptr size)
 {
-	return runtime·mallocgc(size, 0, 0, 1);
+	return runtime·mallocgc(size, 0, FlagNoInvokeGC);
 }
 
 // Free the object whose base pointer is v.
@@ -542,14 +560,13 @@ runtime·persistentalloc(uintptr size, uintptr align)
 static Lock settype_lock;
 
 void
-runtime·settype_flush(M *mp, bool sysalloc)
+runtime·settype_flush(M *mp)
 {
 	uintptr *buf, *endbuf;
 	uintptr size, ofs, j, t;
 	uintptr ntypes, nbytes2, nbytes3;
 	uintptr *data2;
 	byte *data3;
-	bool sysalloc3;
 	void *v;
 	uintptr typ, p;
 	MSpan *s;
@@ -584,20 +601,9 @@ runtime·settype_flush(M *mp, bool sysalloc)
 		case MTypes_Empty:
 			ntypes = (s->npages << PageShift) / size;
 			nbytes3 = 8*sizeof(uintptr) + 1*ntypes;
-
-			if(!sysalloc) {
-				data3 = runtime·mallocgc(nbytes3, FlagNoProfiling|FlagNoPointers, 0, 1);
-			} else {
-				data3 = runtime·SysAlloc(nbytes3);
-				if(data3 == nil)
-					runtime·throw("runtime: cannot allocate memory");
-				if(0) runtime·printf("settype(0->3): SysAlloc(%x) --> %p\n", (uint32)nbytes3, data3);
-			}
-
+			data3 = runtime·mallocgc(nbytes3, 0, FlagNoProfiling|FlagNoPointers|FlagNoInvokeGC);
 			s->types.compression = MTypes_Bytes;
-			s->types.sysalloc = sysalloc;
 			s->types.data = (uintptr)data3;
-
 			((uintptr*)data3)[1] = typ;
 			data3[8*sizeof(uintptr) + ofs] = 1;
 			break;
@@ -622,20 +628,8 @@ runtime·settype_flush(M *mp, bool sysalloc)
 			} else {
 				ntypes = (s->npages << PageShift) / size;
 				nbytes2 = ntypes * sizeof(uintptr);
-
-				if(!sysalloc) {
-					data2 = runtime·mallocgc(nbytes2, FlagNoProfiling|FlagNoPointers, 0, 1);
-				} else {
-					data2 = runtime·SysAlloc(nbytes2);
-					if(data2 == nil)
-						runtime·throw("runtime: cannot allocate memory");
-					if(0) runtime·printf("settype.(3->2): SysAlloc(%x) --> %p\n", (uint32)nbytes2, data2);
-				}
-
-				sysalloc3 = s->types.sysalloc;
-
+				data2 = runtime·mallocgc(nbytes2, 0, FlagNoProfiling|FlagNoPointers|FlagNoInvokeGC);
 				s->types.compression = MTypes_Words;
-				s->types.sysalloc = sysalloc;
 				s->types.data = (uintptr)data2;
 
 				// Move the contents of data3 to data2. Then deallocate data3.
@@ -644,12 +638,6 @@ runtime·settype_flush(M *mp, bool sysalloc)
 					t = ((uintptr*)data3)[t];
 					data2[j] = t;
 				}
-				if(sysalloc3) {
-					nbytes3 = 8*sizeof(uintptr) + 1*ntypes;
-					if(0) runtime·printf("settype.(3->2): SysFree(%p,%x)\n", data3, (uint32)nbytes3);
-					runtime·SysFree(data3, nbytes3);
-				}
-
 				data2[ofs] = typ;
 			}
 			break;
@@ -658,69 +646,6 @@ runtime·settype_flush(M *mp, bool sysalloc)
 	runtime·unlock(&settype_lock);
 
 	mp->settype_bufsize = 0;
-}
-
-// It is forbidden to use this function if it is possible that
-// explicit deallocation via calling runtime·free(v) may happen.
-void
-runtime·settype(void *v, uintptr t)
-{
-	M *mp;
-	uintptr *buf;
-	uintptr i;
-	MSpan *s;
-
-	if(t == 0)
-		runtime·throw("settype: zero type");
-
-	mp = m;
-	m->locks++;
-	buf = mp->settype_buf;
-	i = mp->settype_bufsize;
-	buf[i+0] = (uintptr)v;
-	buf[i+1] = t;
-	i += 2;
-	mp->settype_bufsize = i;
-
-	if(i == nelem(mp->settype_buf)) {
-		runtime·settype_flush(mp, false);
-	}
-
-	if(DebugTypeAtBlockEnd) {
-		s = runtime·MHeap_Lookup(&runtime·mheap, v);
-		*(uintptr*)((uintptr)v+s->elemsize-sizeof(uintptr)) = t;
-	}
-
-	m->locks--;
-	if(m->locks == 0 && g->preempt)  // restore the preemption request in case we've cleared it in newstack
-		g->stackguard0 = StackPreempt;
-}
-
-void
-runtime·settype_sysfree(MSpan *s)
-{
-	uintptr ntypes, nbytes;
-
-	if(!s->types.sysalloc)
-		return;
-
-	nbytes = (uintptr)-1;
-
-	switch (s->types.compression) {
-	case MTypes_Words:
-		ntypes = (s->npages << PageShift) / s->elemsize;
-		nbytes = ntypes * sizeof(uintptr);
-		break;
-	case MTypes_Bytes:
-		ntypes = (s->npages << PageShift) / s->elemsize;
-		nbytes = 8*sizeof(uintptr) + 1*ntypes;
-		break;
-	}
-
-	if(nbytes != (uintptr)-1) {
-		if(0) runtime·printf("settype: SysFree(%p,%x)\n", (void*)s->types.data, (uint32)nbytes);
-		runtime·SysFree((void*)s->types.data, nbytes);
-	}
 }
 
 uintptr
@@ -767,61 +692,25 @@ runtime·gettype(void *v)
 void*
 runtime·mal(uintptr n)
 {
-	return runtime·mallocgc(n, 0, 1, 1);
+	return runtime·mallocgc(n, 0, 0);
 }
 
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 runtime·new(Type *typ, uint8 *ret)
 {
-	uint32 flag;
-
-	if(raceenabled)
-		m->racepc = runtime·getcallerpc(&typ);
-
-	if(typ->size == 0) {
-		// All 0-length allocations use this pointer.
-		// The language does not require the allocations to
-		// have distinct values.
-		ret = (uint8*)&runtime·zerobase;
-	} else {
-		flag = typ->kind&KindNoPointers ? FlagNoPointers : 0;
-		ret = runtime·mallocgc(typ->size, flag, 1, 1);
-
-		if(UseSpanType && !flag) {
-			if(false)
-				runtime·printf("new %S: %p\n", *typ->string, ret);
-			runtime·settype(ret, (uintptr)typ | TypeInfo_SingleObject);
-		}
-	}
-
+	ret = runtime·mallocgc(typ->size, (uintptr)typ | TypeInfo_SingleObject, typ->kind&KindNoPointers ? FlagNoPointers : 0);
 	FLUSH(&ret);
 }
 
 static void*
 cnew(Type *typ, intgo n, int32 objtyp)
 {
-	uint32 flag;
-	void *ret;
-
 	if((objtyp&(PtrSize-1)) != objtyp)
 		runtime·throw("runtime: invalid objtyp");
 	if(n < 0 || (typ->size > 0 && n > MaxMem/typ->size))
 		runtime·panicstring("runtime: allocation size out of range");
-	if(typ->size == 0 || n == 0) {
-		// All 0-length allocations use this pointer.
-		// The language does not require the allocations to
-		// have distinct values.
-		return &runtime·zerobase;
-	}
-	flag = typ->kind&KindNoPointers ? FlagNoPointers : 0;
-	ret = runtime·mallocgc(typ->size*n, flag, 1, 1);
-	if(UseSpanType && !flag) {
-		if(false)
-			runtime·printf("cnew [%D]%S: %p\n", (int64)n, *typ->string, ret);
-		runtime·settype(ret, (uintptr)typ | objtyp);
-	}
-	return ret;
+	return runtime·mallocgc(typ->size*n, (uintptr)typ | objtyp, typ->kind&KindNoPointers ? FlagNoPointers : 0);
 }
 
 // same as runtime·new, but callable from C
@@ -848,6 +737,9 @@ func SetFinalizer(obj Eface, finalizer Eface) {
 	int32 i;
 	uintptr nret;
 	Type *t;
+	Type *fint;
+	PtrType *ot;
+	Iface iface;
 
 	if(obj.type == nil) {
 		runtime·printf("runtime.SetFinalizer: first argument is nil interface\n");
@@ -862,11 +754,25 @@ func SetFinalizer(obj Eface, finalizer Eface) {
 		goto throw;
 	}
 	nret = 0;
+	ot = (PtrType*)obj.type;
+	fint = nil;
 	if(finalizer.type != nil) {
 		if(finalizer.type->kind != KindFunc)
 			goto badfunc;
 		ft = (FuncType*)finalizer.type;
-		if(ft->dotdotdot || ft->in.len != 1 || *(Type**)ft->in.array != obj.type)
+		if(ft->dotdotdot || ft->in.len != 1)
+			goto badfunc;
+		fint = *(Type**)ft->in.array;
+		if(fint == obj.type) {
+			// ok - same type
+		} else if(fint->kind == KindPtr && (fint->x == nil || fint->x->name == nil || obj.type->x == nil || obj.type->x->name == nil) && ((PtrType*)fint)->elem == ((PtrType*)obj.type)->elem) {
+			// ok - not same type, but both pointers,
+			// one or the other is unnamed, and same element type, so assignable.
+		} else if(fint->kind == KindInterface && ((InterfaceType*)fint)->mhdr.len == 0) {
+			// ok - satisfies empty interface
+		} else if(fint->kind == KindInterface && runtime·ifaceE2I2((InterfaceType*)fint, obj, &iface)) {
+			// ok - satisfies non-empty interface
+		} else
 			goto badfunc;
 
 		// compute size needed for return parameters
@@ -877,14 +783,14 @@ func SetFinalizer(obj Eface, finalizer Eface) {
 		nret = ROUND(nret, sizeof(void*));
 	}
 	
-	if(!runtime·addfinalizer(obj.data, finalizer.data, nret)) {
+	if(!runtime·addfinalizer(obj.data, finalizer.data, nret, fint, ot)) {
 		runtime·printf("runtime.SetFinalizer: finalizer already set\n");
 		goto throw;
 	}
 	return;
 
 badfunc:
-	runtime·printf("runtime.SetFinalizer: second argument is %S, not func(%S)\n", *finalizer.type->string, *obj.type->string);
+	runtime·printf("runtime.SetFinalizer: cannot pass %S to finalizer %S\n", *obj.type->string, *finalizer.type->string);
 throw:
 	runtime·throw("runtime.SetFinalizer");
 }

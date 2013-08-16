@@ -184,7 +184,7 @@ walkstmt(Node **np)
 	case OLABEL:
 	case ODCLCONST:
 	case ODCLTYPE:
-	case OCHECKNOTNIL:
+	case OCHECKNIL:
 		break;
 
 	case OBLOCK:
@@ -405,8 +405,9 @@ walkexpr(Node **np, NodeList **init)
 
 	case OIND:
 		if(n->left->type->type->width == 0) {
+			// No actual copy will be generated, so emit an explicit nil check.
 			n->left = cheapexpr(n->left, init);
-			checknotnil(n->left, init);
+			checknil(n->left, init);
 		}
 		walkexpr(&n->left, init);
 		goto ret;
@@ -419,8 +420,9 @@ walkexpr(Node **np, NodeList **init)
 	case ODOTPTR:
 		usefield(n);
 		if(n->op == ODOTPTR && n->left->type->type->width == 0) {
+			// No actual copy will be generated, so emit an explicit nil check.
 			n->left = cheapexpr(n->left, init);
-			checknotnil(n->left, init);
+			checknil(n->left, init);
 		}
 		walkexpr(&n->left, init);
 		goto ret;
@@ -2309,7 +2311,9 @@ paramstoheap(Type **argin, int out)
 		v = t->nname;
 		if(v && v->sym && v->sym->name[0] == '~')
 			v = N;
-		if(v == N && out && hasdefer) {
+		// The garbage collector assumes results are always live,
+		// so zero them always (1 ||).
+		if(out && (1 || (v == N && hasdefer))) {
 			// Defer might stop a panic and show the
 			// return values as they exist at the time of panic.
 			// Make sure to zero them on entry to the function.
@@ -2623,7 +2627,7 @@ sliceany(Node* n, NodeList **init)
 		cb = n->right->right->right;
 	} else {
 		hb = n->right->right;
-		cb = hb;
+		cb = N;
 	}
 
 	bounded = n->etype;

@@ -609,11 +609,11 @@ var (
 func (db *DB) connIfFree(wanted *driverConn) (*driverConn, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	if wanted.inUse {
-		return nil, errConnBusy
-	}
 	if wanted.dbmuClosed {
 		return nil, errConnClosed
+	}
+	if wanted.inUse {
+		return nil, errConnBusy
 	}
 	for i, conn := range db.freeConn {
 		if conn != wanted {
@@ -688,6 +688,7 @@ func (db *DB) putConn(dc *driverConn, err error) {
 	if err == driver.ErrBadConn {
 		// Don't reuse bad connections.
 		db.mu.Unlock()
+		dc.Close()
 		return
 	}
 	if putConnHook != nil {
@@ -1493,8 +1494,8 @@ type Rows struct {
 
 	closed    bool
 	lastcols  []driver.Value
-	lasterr   error
-	closeStmt driver.Stmt // if non-nil, statement to Close on close  // 如果非空，这些声明会在close调用的时候关闭。
+	lasterr   error       // non-nil only if closed is true // 仅当 closed 为 true 时非 nil
+	closeStmt driver.Stmt // if non-nil, statement to Close on close// 若非 nil，该语句会在 Close 调用时关闭
 }
 
 // Next prepares the next result row for reading with the Scan method.
@@ -1509,22 +1510,22 @@ func (rs *Rows) Next() bool {
 	if rs.closed {
 		return false
 	}
-	if rs.lasterr != nil {
-		return false
-	}
 	if rs.lastcols == nil {
 		rs.lastcols = make([]driver.Value, len(rs.rowsi.Columns()))
 	}
 	rs.lasterr = rs.rowsi.Next(rs.lastcols)
-	if rs.lasterr == io.EOF {
+	if rs.lasterr != nil {
 		rs.Close()
+		return false
 	}
-	return rs.lasterr == nil
+	return true
 }
 
 // Err returns the error, if any, that was encountered during iteration.
+// Err may be called after an explicit or implicit Close.
 
-// Err返回错误。如果有错误的话，就会在循环过程中捕获到。
+// Err 返回错误。如果有错误的话，就会在循环过程中捕获到。
+// Err 可能会在一个显式或隐式的 Close 后调用。
 func (rs *Rows) Err() error {
 	if rs.lasterr == io.EOF {
 		return nil
@@ -1571,10 +1572,7 @@ func (rs *Rows) Columns() ([]string, error) {
 // 如果值是[]byte类型，Scan就会返回一份拷贝，并且调用者获得返回结果。
 func (rs *Rows) Scan(dest ...interface{}) error {
 	if rs.closed {
-		return errors.New("sql: Rows closed")
-	}
-	if rs.lasterr != nil {
-		return rs.lasterr
+		return errors.New("sql: Rows are closed")
 	}
 	if rs.lastcols == nil {
 		return errors.New("sql: Scan called without calling Next")
@@ -1591,18 +1589,23 @@ func (rs *Rows) Scan(dest ...interface{}) error {
 	return nil
 }
 
-// Close closes the Rows, preventing further enumeration. If the
-// end is encountered, the Rows are closed automatically. Close
-// is idempotent.
+var rowsCloseHook func(*Rows, *error)
 
-// Close关闭Rows，就禁止了进一步的枚举使用。如果遍历过程结束了，Rows就会自动关闭了。
-// 关闭是非常重要的。
+// Close closes the Rows, preventing further enumeration. If Next returns
+// false, the Rows are closed automatically and it will suffice to check the
+// result of Err. Close is idempotent and does not affect the result of Err.
+
+// Close 关闭 Rows，阻止了进一步枚举。若 Next 返回 false，则 Rows 会自动关闭并能够检查
+// Err 的结果。Close 是幂等的，并不会影响 Err 的结果。
 func (rs *Rows) Close() error {
 	if rs.closed {
 		return nil
 	}
 	rs.closed = true
 	err := rs.rowsi.Close()
+	if fn := rowsCloseHook; fn != nil {
+		fn(rs, &err)
+	}
 	if rs.closeStmt != nil {
 		rs.closeStmt.Close()
 	}

@@ -2,10 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+#include "../../cmd/ld/textflag.h"
+
 // makeFuncStub is the code half of the function returned by MakeFunc.
 // See the comment on the declaration of makeFuncStub in makefunc.go
 // for more details.
-TEXT ·makeFuncStub(SB),7,$16
+// No argsize here, gc generates argsize info at call site.
+TEXT ·makeFuncStub(SB),NOSPLIT,$16
 	MOVQ	DX, 0(SP)
 	LEAQ	argframe+0(FP), CX
 	MOVQ	CX, 8(SP)
@@ -15,7 +18,8 @@ TEXT ·makeFuncStub(SB),7,$16
 // methodValueCall is the code half of the function returned by makeMethodValue.
 // See the comment on the declaration of methodValueCall in makefunc.go
 // for more details.
-TEXT ·methodValueCall(SB),7,$16
+// No argsize here, gc generates argsize info at call site.
+TEXT ·methodValueCall(SB),NOSPLIT,$16
 	MOVQ	DX, 0(SP)
 	LEAQ	argframe+0(FP), CX
 	MOVQ	CX, 8(SP)

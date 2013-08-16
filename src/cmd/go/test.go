@@ -378,7 +378,7 @@ func runTest(cmd *Command, args []string) {
 			a.deps = append(a.deps, b.action(modeInstall, modeInstall, p))
 		}
 		b.do(a)
-		if !testC {
+		if !testC || a.failed {
 			return
 		}
 		b.init()
@@ -896,10 +896,23 @@ func (b *builder) runTest(a *action) error {
 		go func() {
 			done <- cmd.Wait()
 		}()
+	Outer:
 		select {
 		case err = <-done:
 			// ok
 		case <-tick.C:
+			if signalTrace != nil {
+				// Send a quit signal in the hope that the program will print
+				// a stack trace and exit. Give it five seconds before resorting
+				// to Kill.
+				cmd.Process.Signal(signalTrace)
+				select {
+				case err = <-done:
+					fmt.Fprintf(&buf, "*** Test killed with %v: ran too long (%v).\n", signalTrace, testKillTimeout)
+					break Outer
+				case <-time.After(5 * time.Second):
+				}
+			}
 			cmd.Process.Kill()
 			err = <-done
 			fmt.Fprintf(&buf, "*** Test killed: ran too long (%v).\n", testKillTimeout)
@@ -997,7 +1010,7 @@ type coverInfo struct {
 func writeTestmain(out string, pmain, p *Package) error {
 	var cover []coverInfo
 	for _, cp := range pmain.imports {
-		if cp.coverVars != nil {
+		if len(cp.coverVars) > 0 {
 			cover = append(cover, coverInfo{cp, cp.coverVars})
 		}
 	}

@@ -9,9 +9,15 @@
 #include "gg.h"
 #include "opt.h"
 
+static Prog* appendp(Prog*, int, int, int, int32, int, int, int32);
+
 void
-defframe(Prog *ptxt)
+defframe(Prog *ptxt, Bvec *bv)
 {
+	int i, j, first;
+	uint32 frame;
+	Prog *p, *p1;
+	
 	// fill in argument size
 	ptxt->to.type = D_CONST2;
 	ptxt->to.offset2 = rnd(curfn->type->argwid, widthptr);
@@ -19,8 +25,60 @@ defframe(Prog *ptxt)
 	// fill in final stack size
 	if(stksize > maxstksize)
 		maxstksize = stksize;
-	ptxt->to.offset = rnd(maxstksize+maxarg, widthptr);
+	frame = rnd(maxstksize+maxarg, widthptr);
+	ptxt->to.offset = frame;
 	maxstksize = 0;
+
+	// insert code to clear pointered part of the frame,
+	// so that garbage collector only sees initialized values
+	// when it looks for pointers.
+	p = ptxt;
+	while(p->link->as == AFUNCDATA || p->link->as == APCDATA || p->link->as == ATYPE)
+		p = p->link;
+	if(stkptrsize >= 8*widthptr) {
+		p = appendp(p, AMOVW, D_CONST, NREG, 0, D_REG, 0, 0);
+		p = appendp(p, AADD, D_CONST, NREG, 4+frame-stkptrsize, D_REG, 1, 0);
+		p->reg = REGSP;
+		p = appendp(p, AADD, D_CONST, NREG, stkptrsize, D_REG, 2, 0);
+		p->reg = 1;
+		p1 = p = appendp(p, AMOVW, D_REG, 0, 0, D_OREG, 1, 4);
+		p->scond |= C_PBIT;
+		p = appendp(p, ACMP, D_REG, 1, 0, D_NONE, 0, 0);
+		p->reg = 2;
+		p = appendp(p, ABNE, D_NONE, NREG, 0, D_BRANCH, NREG, 0);
+		patch(p, p1);
+	} else {
+		first = 1;
+		for(i=0, j=0; i<stkptrsize; i+=widthptr, j+=2) {
+			if(bvget(bv, j) || bvget(bv, j+1)) {
+				if(first) {
+					p = appendp(p, AMOVW, D_CONST, NREG, 0, D_REG, 0, 0);
+					first = 0;
+				}
+				p = appendp(p, AMOVW, D_REG, 0, 0, D_OREG, REGSP, 4+frame-stkptrsize+i);
+			}
+		}
+	}
+}
+
+static Prog*
+appendp(Prog *p, int as, int ftype, int freg, int32 foffset, int ttype, int treg, int32 toffset)
+{
+	Prog *q;
+	
+	q = mal(sizeof(*q));
+	clearp(q);
+	q->as = as;
+	q->lineno = p->lineno;
+	q->from.type = ftype;
+	q->from.reg = freg;
+	q->from.offset = foffset;
+	q->to.type = ttype;
+	q->to.reg = treg;
+	q->to.offset = toffset;
+	q->link = p->link;
+	p->link = q;
+	return q;
 }
 
 // Sweep the prog list to mark any used nodes.
@@ -81,7 +139,12 @@ ginscall(Node *f, int proc)
 		setmaxarg(f->type);
 
 	arg = -1;
-	if(f->type != T && ((f->sym != S && f->sym->pkg == runtimepkg) || proc == 1 || proc == 2)) {
+	// Most functions have a fixed-size argument block, so traceback uses that during unwind.
+	// Not all, though: there are some variadic functions in package runtime,
+	// and for those we emit call-specific metadata recorded by caller.
+	// Reflect generates functions with variable argsize (see reflect.methodValueCall/makeFuncStub),
+	// so we do this for all indirect calls as well.
+	if(f->type != T && (f->sym == S || (f->sym != S && f->sym->pkg == runtimepkg) || proc == 1 || proc == 2)) {
 		arg = f->type->argwid;
 		if(proc == 1 || proc == 2)
 			arg += 3*widthptr;
@@ -242,6 +305,7 @@ cgen_callinter(Node *n, Node *res, int proc)
 
 	nodo.xoffset -= widthptr;
 	cgen(&nodo, &nodr);	// REG = 0(REG) -- i.tab
+	cgen_checknil(&nodr); // in case offset is huge
 
 	nodo.xoffset = n->left->xoffset + 3*widthptr + 8;
 	
@@ -635,6 +699,8 @@ cgen_shift(int op, int bounded, Node *nl, Node *nr, Node *res)
 			gshift(AMOVW, &n2, SHIFT_LL, v, &n1);
 			gshift(AORR, &n2, SHIFT_LR, w-v, &n1);
 			regfree(&n2);
+			// Ensure sign/zero-extended result.
+			gins(optoas(OAS, nl->type), &n1, &n1);
 		}
 		gmove(&n1, res);
 		regfree(&n1);
@@ -660,6 +726,8 @@ cgen_shift(int op, int bounded, Node *nl, Node *nr, Node *res)
 			else // OLSH
 				gshift(AMOVW, &n1, SHIFT_LL, sc, &n1);
 		}
+		if(w < 32 && op == OLSH)
+			gins(optoas(OAS, nl->type), &n1, &n1);
 		gmove(&n1, res);
 		regfree(&n1);
 		return;
@@ -733,6 +801,9 @@ cgen_shift(int op, int bounded, Node *nl, Node *nr, Node *res)
 	regfree(&n3);
 
 	patch(p3, pc);
+	// Left-shift of smaller word must be sign/zero-extended.
+	if(w < 32 && op == OLSH)
+		gins(optoas(OAS, nl->type), &n2, &n2);
 	gmove(&n2, res);
 
 	regfree(&n1);
@@ -793,7 +864,7 @@ clearfat(Node *nl)
 	}
 
 	while(c > 0) {
-		p = gins(AMOVBU, &nz, &dst);
+		p = gins(AMOVB, &nz, &dst);
 		p->to.type = D_OREG;
 		p->to.offset = 1;
  		p->scond |= C_PBIT;
@@ -802,4 +873,44 @@ clearfat(Node *nl)
 	}
 	regfree(&dst);
 	regfree(&nz);
+}
+
+// Called after regopt and peep have run.
+// Expand CHECKNIL pseudo-op into actual nil pointer check.
+void
+expandchecks(Prog *firstp)
+{
+	int reg;
+	Prog *p, *p1;
+
+	for(p = firstp; p != P; p = p->link) {
+		if(p->as != ACHECKNIL)
+			continue;
+		if(debug_checknil && p->lineno > 1) // p->lineno==1 in generated wrappers
+			warnl(p->lineno, "nil check %D", &p->from);
+		if(p->from.type != D_REG)
+			fatal("invalid nil check %P", p);
+		reg = p->from.reg;
+		// check is
+		//	CMP arg, $0
+		//	MOV.EQ arg, 0(arg)
+		p1 = mal(sizeof *p1);
+		clearp(p1);
+		p1->link = p->link;
+		p->link = p1;
+		p1->lineno = p->lineno;
+		p1->loc = 9999;
+		p1->as = AMOVW;
+		p1->from.type = D_REG;
+		p1->from.reg = reg;
+		p1->to.type = D_OREG;
+		p1->to.reg = reg;
+		p1->to.offset = 0;
+		p1->scond = C_SCOND_EQ;
+		p->as = ACMP;
+		p->from.type = D_CONST;
+		p->from.reg = NREG;
+		p->from.offset = 0;
+		p->reg = reg;
+	}
 }

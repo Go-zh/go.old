@@ -82,8 +82,9 @@ var pkgDeps = map[string][]string{
 	// L3 adds reflection and some basic utility packages
 	// and interface definitions, but nothing that makes
 	// system calls.
-	"crypto":          {"L2", "hash"}, // interfaces
-	"crypto/cipher":   {"L2"},         // interfaces
+	"crypto":          {"L2", "hash"},          // interfaces
+	"crypto/cipher":   {"L2", "crypto/subtle"}, // interfaces
+	"crypto/subtle":   {},
 	"encoding/base32": {"L2"},
 	"encoding/base64": {"L2"},
 	"encoding/binary": {"L2", "reflect"},
@@ -100,6 +101,7 @@ var pkgDeps = map[string][]string{
 		"L2",
 		"crypto",
 		"crypto/cipher",
+		"crypto/subtle",
 		"encoding/base32",
 		"encoding/base64",
 		"encoding/binary",
@@ -190,14 +192,15 @@ var pkgDeps = map[string][]string{
 	"debug/gosym":         {"L4"},
 	"debug/macho":         {"L4", "OS", "debug/dwarf"},
 	"debug/pe":            {"L4", "OS", "debug/dwarf"},
+	"encoding":            {"L4"},
 	"encoding/ascii85":    {"L4"},
 	"encoding/asn1":       {"L4", "math/big"},
 	"encoding/csv":        {"L4"},
-	"encoding/gob":        {"L4", "OS"},
+	"encoding/gob":        {"L4", "OS", "encoding"},
 	"encoding/hex":        {"L4"},
-	"encoding/json":       {"L4"},
+	"encoding/json":       {"L4", "encoding"},
 	"encoding/pem":        {"L4"},
-	"encoding/xml":        {"L4"},
+	"encoding/xml":        {"L4", "encoding"},
 	"flag":                {"L4", "OS"},
 	"go/build":            {"L4", "OS", "GOPARSER"},
 	"html":                {"L4"},
@@ -248,15 +251,10 @@ var pkgDeps = map[string][]string{
 	"net/mail":      {"L4", "NET", "OS"},
 	"net/textproto": {"L4", "OS", "net"},
 
-	// Support libraries for crypto that aren't L2.
-	"CRYPTO-SUPPORT": {
-		"crypto/subtle",
-	},
-
 	// Core crypto.
 	"crypto/aes":    {"L3"},
 	"crypto/des":    {"L3"},
-	"crypto/hmac":   {"L3", "CRYPTO-SUPPORT"},
+	"crypto/hmac":   {"L3"},
 	"crypto/md5":    {"L3"},
 	"crypto/rc4":    {"L3"},
 	"crypto/sha1":   {"L3"},
@@ -264,7 +262,6 @@ var pkgDeps = map[string][]string{
 	"crypto/sha512": {"L3"},
 
 	"CRYPTO": {
-		"CRYPTO-SUPPORT",
 		"crypto/aes",
 		"crypto/des",
 		"crypto/hmac",

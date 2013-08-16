@@ -6,6 +6,7 @@
 #include "arch_GOARCH.h"
 #include "stack.h"
 #include "malloc.h"
+#include "../../cmd/ld/textflag.h"
 
 // Code related to defer, panic and recover.
 
@@ -122,7 +123,7 @@ freedefer(Defer *d)
 // are available sequentially after &fn; they would not be
 // copied if a stack split occurred.  It's OK for this to call
 // functions that split the stack.
-#pragma textflag 7
+#pragma textflag NOSPLIT
 uintptr
 runtime·deferproc(int32 siz, FuncVal *fn, ...)
 {
@@ -161,7 +162,7 @@ runtime·deferproc(int32 siz, FuncVal *fn, ...)
 // an argument frame size. deferreturn is a very special function,
 // and if the runtime ever asks for its frame size, that means
 // the traceback routines are probably broken.
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 runtime·deferreturn(uintptr arg0, ...)
 {
@@ -241,10 +242,10 @@ runtime·panic(Eface e)
 			break;
 		// take defer off list in case of recursive panic
 		popdefer();
-		g->ispanic = true;	// rock for newstack, where reflect.call ends up
+		g->ispanic = true;	// rock for newstack, where reflect.newstackcall ends up
 		argp = d->argp;
 		pc = d->pc;
-		reflect·call(d->fn, (byte*)d->args, d->siz);
+		runtime·newstackcall(d->fn, (byte*)d->args, d->siz);
 		freedefer(d);
 		if(p->recovered) {
 			g->panic = p->link;
@@ -319,8 +320,10 @@ runtime·unwindstack(G *gp, byte *sp)
 		gp->stackbase = top->stackbase;
 		gp->stackguard = top->stackguard;
 		gp->stackguard0 = gp->stackguard;
-		if(top->free != 0)
+		if(top->free != 0) {
+			gp->stacksize -= top->free;
 			runtime·stackfree(stk, top->free);
+		}
 	}
 
 	if(sp != nil && (sp < (byte*)gp->stackguard - StackGuard || (byte*)gp->stackbase < sp)) {
@@ -332,7 +335,7 @@ runtime·unwindstack(G *gp, byte *sp)
 // The implementation of the predeclared function recover.
 // Cannot split the stack because it needs to reliably
 // find the stack segment of its caller.
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 runtime·recover(byte *argp, Eface ret)
 {
@@ -415,8 +418,13 @@ runtime·startpanic(void)
 		runtime·exit(3);
 	}
 	m->dying = 1;
+	if(g != nil)
+		g->writebuf = nil;
 	runtime·xadd(&runtime·panicking, 1);
 	runtime·lock(&paniclk);
+	if(runtime·debug.schedtrace > 0 || runtime·debug.scheddetail > 0)
+		runtime·schedtrace(true);
+	runtime·freezetheworld();
 }
 
 void

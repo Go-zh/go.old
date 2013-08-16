@@ -4,6 +4,7 @@
 
 #include "runtime.h"
 #include "arch_GOARCH.h"
+#include "../../cmd/ld/textflag.h"
 
 enum {
 	maxround = sizeof(uintptr),
@@ -220,6 +221,9 @@ runtime·check(void)
 	if(offsetof(struct y1, y) != 1) runtime·throw("bad offsetof y1.y");
 	if(sizeof(struct y1) != 2) runtime·throw("bad sizeof y1");
 
+	if(runtime·timediv(12345LL*1000000000+54321, 1000000000, &e) != 12345 || e != 54321)
+		runtime·throw("bad timediv");
+
 	uint32 z;
 	z = 1;
 	if(!runtime·cas(&z, 1, 2))
@@ -384,13 +388,15 @@ static struct {
 	int32*	value;
 } dbgvar[] = {
 	{"gctrace", &runtime·debug.gctrace},
+	{"schedtrace", &runtime·debug.schedtrace},
+	{"scheddetail", &runtime·debug.scheddetail},
 };
 
 void
 runtime·parsedebugvars(void)
 {
 	byte *p;
-	int32 i, n;
+	intgo i, n;
 
 	p = runtime·getenv("GODEBUG");
 	if(p == nil)
@@ -406,4 +412,31 @@ runtime·parsedebugvars(void)
 			break;
 		p++;
 	}
+}
+
+// Poor mans 64-bit division.
+// This is a very special function, do not use it if you are not sure what you are doing.
+// int64 division is lowered into _divv() call on 386, which does not fit into nosplit functions.
+// Handles overflow in a time-specific manner.
+#pragma textflag NOSPLIT
+int32
+runtime·timediv(int64 v, int32 div, int32 *rem)
+{
+	int32 res, bit;
+
+	if(v >= (int64)div*0x7fffffffLL) {
+		if(rem != nil)
+			*rem = 0;
+		return 0x7fffffff;
+	}
+	res = 0;
+	for(bit = 30; bit >= 0; bit--) {
+		if(v >= ((int64)div<<bit)) {
+			v = v - ((int64)div<<bit);
+			res += 1<<bit;
+		}
+	}
+	if(rem != nil)
+		*rem = v;
+	return res;
 }

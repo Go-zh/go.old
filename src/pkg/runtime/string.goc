@@ -7,13 +7,15 @@ package runtime
 #include "arch_GOARCH.h"
 #include "malloc.h"
 #include "race.h"
+#include "../../cmd/ld/textflag.h"
 
 String	runtime·emptystring;
 
-int32
+#pragma textflag NOSPLIT
+intgo
 runtime·findnull(byte *s)
 {
-	int32 l;
+	intgo l;
 
 	if(s == nil)
 		return 0;
@@ -22,10 +24,10 @@ runtime·findnull(byte *s)
 	return l;
 }
 
-int32
+intgo
 runtime·findnullw(uint16 *s)
 {
-	int32 l;
+	intgo l;
 
 	if(s == nil)
 		return 0;
@@ -34,23 +36,23 @@ runtime·findnullw(uint16 *s)
 	return l;
 }
 
-uint32 runtime·maxstring = 256; // a hint for print
+uintptr runtime·maxstring = 256; // a hint for print
 
 static String
 gostringsize(intgo l)
 {
 	String s;
-	uint32 ms;
+	uintptr ms;
 
 	if(l == 0)
 		return runtime·emptystring;
 	// leave room for NUL for C runtime (e.g., callers of getenv)
-	s.str = runtime·mallocgc(l+1, FlagNoPointers, 1, 0);
+	s.str = runtime·mallocgc(l+1, 0, FlagNoPointers|FlagNoZero);
 	s.len = l;
 	s.str[l] = 0;
 	for(;;) {
 		ms = runtime·maxstring;
-		if((uint32)l <= ms || runtime·cas(&runtime·maxstring, ms, (uint32)l))
+		if((uintptr)l <= ms || runtime·casp((void**)&runtime·maxstring, (void*)ms, (void*)l))
 			break;
 	}
 	return s;
@@ -83,7 +85,7 @@ runtime·gobytes(byte *p, intgo n)
 {
 	Slice sl;
 
-	sl.array = runtime·mallocgc(n, FlagNoPointers, 1, 0);
+	sl.array = runtime·mallocgc(n, 0, FlagNoPointers|FlagNoZero);
 	sl.len = n;
 	sl.cap = n;
 	runtime·memmove(sl.array, p, n);
@@ -173,9 +175,9 @@ concatstring(intgo n, String *s)
 // NOTE: Cannot use func syntax, because we need the ...,
 // to signal to the garbage collector that this function does
 // not have a fixed size argument count.
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
-runtime·concatstring(int32 n, String s1, ...)
+runtime·concatstring(intgo n, String s1, ...)
 {
 	(&s1)[n] = concatstring(n, &s1);
 }
@@ -250,7 +252,7 @@ func slicebytetostring(b Slice) (s String) {
 }
 
 func stringtoslicebyte(s String) (b Slice) {
-	b.array = runtime·mallocgc(s.len, FlagNoPointers, 1, 0);
+	b.array = runtime·mallocgc(s.len, 0, FlagNoPointers|FlagNoZero);
 	b.len = s.len;
 	b.cap = s.len;
 	runtime·memmove(b.array, s.str, s.len);
@@ -299,7 +301,7 @@ func stringtoslicerune(s String) (b Slice) {
 		n++;
 	}
 
-	b.array = runtime·mallocgc(n*sizeof(r[0]), FlagNoPointers, 1, 0);
+	b.array = runtime·mallocgc(n*sizeof(r[0]), 0, FlagNoPointers|FlagNoZero);
 	b.len = n;
 	b.cap = n;
 	p = s.str;

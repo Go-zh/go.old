@@ -31,12 +31,7 @@
 #define	NSNAME		8
 #define	NSYM		50
 #define	NREG		16
-
-#define NOPROF		(1<<0)
-#define DUPOK		(1<<1)
-#define NOSPLIT		(1<<2)
-#define RODATA	(1<<3)
-#define NOPTR	(1<<4)
+#include "../ld/textflag.h"
 
 #define	REGRET		0
 /* -1 disables use of REGARG */
@@ -140,8 +135,10 @@ enum	as
 	AMODU,
 
 	AMOVB,
+	AMOVBS,
 	AMOVBU,
 	AMOVH,
+	AMOVHS,
 	AMOVHU,
 	AMOVW,
 	AMOVM,
@@ -200,6 +197,7 @@ enum	as
 	ATYPE,
 	AFUNCDATA,
 	APCDATA,
+	ACHECKNIL,
 
 	ALAST,
 };
@@ -276,7 +274,7 @@ enum	as
 #define	D_PLT1		(D_NONE+44) // R_ARM_PLT32, 2nd inst: add ip, ip, #0xNN000
 #define	D_PLT2		(D_NONE+45) // R_ARM_PLT32, 3rd inst: ldr pc, [ip, #0xNNN]!
 #define	D_CALL		(D_NONE+46) // R_ARM_PLT32/R_ARM_CALL/R_ARM_JUMP24, bl xxxxx or b yyyyy
-#define	D_TLS		(D_NONE+47)
+#define	D_TLS		(D_NONE+47) // R_ARM_TLS_LE32
 
 /*
  * this is the ranlib header

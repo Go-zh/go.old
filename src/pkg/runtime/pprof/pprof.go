@@ -23,8 +23,8 @@ import (
 	"text/tabwriter"
 )
 
-// BUG(rsc): A bug in the OS X Snow Leopard 64-bit kernel prevents
-// CPU profiling from giving accurate results on that system.
+// BUG(rsc): Profiles are incomplete and inaccuate on NetBSD, OpenBSD, and OS X.
+// See http://golang.org/issue/6047 for details.
 
 // BUG(rsc): OS X Snow Leopard 64位内核有一个bug会妨碍CPU分析为该系统提供准确的结果。
 
@@ -797,7 +797,7 @@ func writeBlock(w io.Writer, debug int) error {
 		}
 		fmt.Fprint(w, "\n")
 		if debug > 0 {
-			printStackRecord(w, r.Stack(), false)
+			printStackRecord(w, r.Stack(), true)
 		}
 	}
 

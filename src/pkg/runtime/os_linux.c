@@ -7,6 +7,7 @@
 #include "os_GOOS.h"
 #include "signal_unix.h"
 #include "stack.h"
+#include "../../cmd/ld/textflag.h"
 
 extern SigTab runtime·sigtab[];
 
@@ -32,30 +33,26 @@ enum
 //	if(*addr == val) sleep
 // Might be woken up spuriously; that's allowed.
 // Don't sleep longer than ns; ns < 0 means forever.
+#pragma textflag NOSPLIT
 void
 runtime·futexsleep(uint32 *addr, uint32 val, int64 ns)
 {
-	Timespec ts, *tsp;
-	int64 secs;
-
-	if(ns < 0)
-		tsp = nil;
-	else {
-		secs = ns/1000000000LL;
-		// Avoid overflow
-		if(secs > 1LL<<30)
-			secs = 1LL<<30;
-		ts.tv_sec = secs;
-		ts.tv_nsec = ns%1000000000LL;
-		tsp = &ts;
-	}
+	Timespec ts;
 
 	// Some Linux kernels have a bug where futex of
 	// FUTEX_WAIT returns an internal error code
 	// as an errno.  Libpthread ignores the return value
 	// here, and so can we: as it says a few lines up,
 	// spurious wakeups are allowed.
-	runtime·futex(addr, FUTEX_WAIT, val, tsp, nil, 0);
+
+	if(ns < 0) {
+		runtime·futex(addr, FUTEX_WAIT, val, nil, nil, 0);
+		return;
+	}
+	// NOTE: tv_nsec is int64 on amd64, so this assumes a little-endian system.
+	ts.tv_nsec = 0;
+	ts.tv_sec = runtime·timediv(ns, 1000000000LL, (int32*)&ts.tv_nsec);
+	runtime·futex(addr, FUTEX_WAIT, val, &ts, nil, 0);
 }
 
 // If any procs are sleeping on addr, wake up at most cnt.
@@ -276,12 +273,6 @@ runtime·memlimit(void)
 		return 0;
 
 	return rl.rlim_cur - used;
-}
-
-void
-runtime·setprof(bool on)
-{
-	USED(on);
 }
 
 #ifdef GOARCH_386

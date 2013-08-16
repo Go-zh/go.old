@@ -80,6 +80,10 @@ func (p *pipe) write(b []byte) (n int, err error) {
 
 	p.l.Lock()
 	defer p.l.Unlock()
+	if p.werr != nil {
+		err = ErrClosedPipe
+		return
+	}
 	p.data = b
 	p.rwait.Signal()
 	for {

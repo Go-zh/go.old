@@ -5,6 +5,7 @@
 #include "runtime.h"
 #include "arch_GOARCH.h"
 #include "malloc.h"
+#include "type.h"
 
 enum { debug = 0 };
 
@@ -13,6 +14,8 @@ struct Fin
 {
 	FuncVal *fn;
 	uintptr nret;
+	Type *fint;
+	PtrType *ot;
 };
 
 // Finalizer hash table.  Direct hash, linear scan, at most 3/4 full.
@@ -42,7 +45,7 @@ static struct {
 } fintab[TABSZ];
 
 static void
-addfintab(Fintab *t, void *k, FuncVal *fn, uintptr nret)
+addfintab(Fintab *t, void *k, FuncVal *fn, uintptr nret, Type *fint, PtrType *ot)
 {
 	int32 i, j;
 
@@ -67,6 +70,8 @@ ret:
 	t->key[i] = k;
 	t->val[i].fn = fn;
 	t->val[i].nret = nret;
+	t->val[i].fint = fint;
+	t->val[i].ot = ot;
 }
 
 static bool
@@ -87,6 +92,7 @@ lookfintab(Fintab *t, void *k, bool del, Fin *f)
 				t->key[i] = (void*)-1;
 				t->val[i].fn = nil;
 				t->val[i].nret = 0;
+				t->val[i].ot = nil;
 				t->ndead++;
 			}
 			return true;
@@ -117,13 +123,13 @@ resizefintab(Fintab *tab)
 		newtab.max *= 3;
 	}
 	
-	newtab.key = runtime·mallocgc(newtab.max*sizeof newtab.key[0], FlagNoPointers, 0, 1);
-	newtab.val = runtime·mallocgc(newtab.max*sizeof newtab.val[0], 0, 0, 1);
+	newtab.key = runtime·mallocgc(newtab.max*sizeof newtab.key[0], 0, FlagNoInvokeGC|FlagNoPointers);
+	newtab.val = runtime·mallocgc(newtab.max*sizeof newtab.val[0], 0, FlagNoInvokeGC);
 	
 	for(i=0; i<tab->max; i++) {
 		k = tab->key[i];
 		if(k != nil && k != (void*)-1)
-			addfintab(&newtab, k, tab->val[i].fn, tab->val[i].nret);
+			addfintab(&newtab, k, tab->val[i].fn, tab->val[i].nret, tab->val[i].fint, tab->val[i].ot);
 	}
 	
 	runtime·free(tab->key);
@@ -137,7 +143,7 @@ resizefintab(Fintab *tab)
 }
 
 bool
-runtime·addfinalizer(void *p, FuncVal *f, uintptr nret)
+runtime·addfinalizer(void *p, FuncVal *f, uintptr nret, Type *fint, PtrType *ot)
 {
 	Fintab *tab;
 	byte *base;
@@ -166,7 +172,7 @@ runtime·addfinalizer(void *p, FuncVal *f, uintptr nret)
 		resizefintab(tab);
 	}
 
-	addfintab(tab, p, f, nret);
+	addfintab(tab, p, f, nret, fint, ot);
 	runtime·setblockspecial(p, true);
 	runtime·unlock(tab);
 	return true;
@@ -175,7 +181,7 @@ runtime·addfinalizer(void *p, FuncVal *f, uintptr nret)
 // get finalizer; if del, delete finalizer.
 // caller is responsible for updating RefHasFinalizer (special) bit.
 bool
-runtime·getfinalizer(void *p, bool del, FuncVal **fn, uintptr *nret)
+runtime·getfinalizer(void *p, bool del, FuncVal **fn, uintptr *nret, Type **fint, PtrType **ot)
 {
 	Fintab *tab;
 	bool res;
@@ -189,6 +195,8 @@ runtime·getfinalizer(void *p, bool del, FuncVal **fn, uintptr *nret)
 		return false;
 	*fn = f.fn;
 	*nret = f.nret;
+	*fint = f.fint;
+	*ot = f.ot;
 	return true;
 }
 

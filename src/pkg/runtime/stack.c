@@ -105,7 +105,7 @@ runtime·stackalloc(uint32 n)
 		m->stackinuse++;
 		return v;
 	}
-	return runtime·mallocgc(n, FlagNoProfiling|FlagNoGC, 0, 0);
+	return runtime·mallocgc(n, 0, FlagNoProfiling|FlagNoGC|FlagNoZero|FlagNoInvokeGC);
 }
 
 void
@@ -176,14 +176,18 @@ runtime·oldstack(void)
 	gp->stackguard = top->stackguard;
 	gp->stackguard0 = gp->stackguard;
 
-	if(top->free != 0)
+	if(top->free != 0) {
+		gp->stacksize -= top->free;
 		runtime·stackfree(old, top->free);
+	}
 
 	gp->status = oldstatus;
 	runtime·gogo(&gp->sched);
 }
 
-// Called from reflect·call or from runtime·morestack when a new
+uintptr runtime·maxstacksize = 1<<20; // enough until runtime.main sets it for real
+
+// Called from runtime·newstackcall or from runtime·morestack when a new
 // stack segment is needed.  Allocate a new stack big enough for
 // m->moreframesize bytes, copy m->moreargsize bytes to the new frame,
 // and then act as though runtime·lessstack called the function at
@@ -198,8 +202,15 @@ runtime·newstack(void)
 	uintptr *src, *dst, *dstend;
 	G *gp;
 	Gobuf label;
-	bool reflectcall;
+	bool newstackcall;
 	uintptr free;
+
+	if(m->morebuf.g != m->curg) {
+		runtime·printf("runtime: newstack called from g=%p\n"
+			"\tm=%p m->curg=%p m->g0=%p m->gsignal=%p\n",
+			m->morebuf.g, m, m->curg, m->g0, m->gsignal);
+		runtime·throw("runtime: wrong goroutine in newstack");
+	}
 
 	// gp->status is usually Grunning, but it could be Gsyscall if a stack split
 	// happens during a function call inside entersyscall.
@@ -210,12 +221,12 @@ runtime·newstack(void)
 	argsize = m->moreargsize;
 	gp->status = Gwaiting;
 	gp->waitreason = "stack split";
-	reflectcall = framesize==1;
-	if(reflectcall)
+	newstackcall = framesize==1;
+	if(newstackcall)
 		framesize = 0;
 
-	// For reflectcall the context already points to beginning of reflect·call.
-	if(!reflectcall)
+	// For newstackcall the context already points to beginning of runtime·newstackcall.
+	if(!newstackcall)
 		runtime·rewindmorestack(&gp->sched);
 
 	sp = gp->sched.sp;
@@ -246,6 +257,8 @@ runtime·newstack(void)
 			runtime·throw("runtime: preempt g0");
 		if(oldstatus == Grunning && m->p == nil)
 			runtime·throw("runtime: g is running but p is not");
+		if(oldstatus == Gsyscall && m->locks == 0)
+			runtime·throw("runtime: stack split during syscall");
 		// Be conservative about where we preempt.
 		// We are interested in preempting user Go code, not runtime code.
 		if(oldstatus != Grunning || m->locks || m->mallocing || m->gcing || m->p->status != Prunning) {
@@ -260,8 +273,8 @@ runtime·newstack(void)
 		runtime·gosched0(gp);	// never return
 	}
 
-	if(reflectcall && m->morebuf.sp - sizeof(Stktop) - argsize - 32 > gp->stackguard) {
-		// special case: called from reflect.call (framesize==1)
+	if(newstackcall && m->morebuf.sp - sizeof(Stktop) - argsize - 32 > gp->stackguard) {
+		// special case: called from runtime.newstackcall (framesize==1)
 		// to call code with an arbitrary argument size,
 		// and we have enough space on the current stack.
 		// the new Stktop* is necessary to unwind, but
@@ -276,6 +289,11 @@ runtime·newstack(void)
 		if(framesize < StackMin)
 			framesize = StackMin;
 		framesize += StackSystem;
+		gp->stacksize += framesize;
+		if(gp->stacksize > runtime·maxstacksize) {
+			runtime·printf("runtime: goroutine stack exceeds %D-byte limit\n", (uint64)runtime·maxstacksize);
+			runtime·throw("stack overflow");
+		}
 		stk = runtime·stackalloc(framesize);
 		top = (Stktop*)(stk+framesize-sizeof(*top));
 		free = framesize;
@@ -325,7 +343,7 @@ runtime·newstack(void)
 	label.sp = sp;
 	label.pc = (uintptr)runtime·lessstack;
 	label.g = m->curg;
-	if(reflectcall)
+	if(newstackcall)
 		runtime·gostartcallfn(&label, (FuncVal*)m->cret);
 	else {
 		runtime·gostartcall(&label, (void(*)(void))gp->sched.pc, gp->sched.ctxt);
@@ -343,4 +361,12 @@ void
 runtime·gostartcallfn(Gobuf *gobuf, FuncVal *fv)
 {
 	runtime·gostartcall(gobuf, fv->fn, fv);
+}
+
+void
+runtime∕debug·setMaxStack(intgo in, intgo out)
+{
+	out = runtime·maxstacksize;
+	runtime·maxstacksize = in;
+	FLUSH(&out);
 }

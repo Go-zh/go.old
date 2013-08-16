@@ -136,8 +136,7 @@ package:
 	{
 		prevlineno = lineno;
 		yyerror("package statement must be first");
-		flusherrors();
-		mkpackage("main");
+		errorexit();
 	}
 |	LPACKAGE sym ';'
 	{
@@ -1541,8 +1540,8 @@ structdcl:
 
 		Node *n;
 		l = $1;
-		if(l != nil && l->next == nil && l->n == nil) {
-			// ? symbol, during import
+		if(l == nil) {
+			// ? symbol, during import (list1(N) == nil)
 			n = $2;
 			if(n->op == OIND)
 				n = n->left;

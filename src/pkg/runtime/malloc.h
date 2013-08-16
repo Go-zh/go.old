@@ -157,8 +157,9 @@ struct MLink
 //
 // SysUnused notifies the operating system that the contents
 // of the memory region are no longer needed and can be reused
-// for other purposes.  The program reserves the right to start
-// accessing those pages in the future.
+// for other purposes.
+// SysUsed notifies the operating system that the contents
+// of the memory region are needed again.
 //
 // SysFree returns it unconditionally; this is only used if
 // an out-of-memory error has been detected midway through
@@ -174,6 +175,7 @@ struct MLink
 void*	runtime·SysAlloc(uintptr nbytes);
 void	runtime·SysFree(void *v, uintptr nbytes);
 void	runtime·SysUnused(void *v, uintptr nbytes);
+void	runtime·SysUsed(void *v, uintptr nbytes);
 void	runtime·SysMap(void *v, uintptr nbytes);
 void*	runtime·SysReserve(void *v, uintptr nbytes);
 
@@ -334,7 +336,6 @@ enum
 struct MTypes
 {
 	byte	compression;	// one of MTypes_*
-	bool	sysalloc;	// whether (void*)data is from runtime·SysAlloc
 	uintptr	data;
 };
 
@@ -442,7 +443,7 @@ void	runtime·MHeap_MapBits(MHeap *h);
 void	runtime·MHeap_MapSpans(MHeap *h);
 void	runtime·MHeap_Scavenger(void);
 
-void*	runtime·mallocgc(uintptr size, uint32 flag, int32 dogc, int32 zeroed);
+void*	runtime·mallocgc(uintptr size, uintptr typ, uint32 flag);
 void*	runtime·persistentalloc(uintptr size, uintptr align);
 int32	runtime·mlookup(void *v, byte **base, uintptr *size, MSpan **s);
 void	runtime·gc(int32 force);
@@ -459,17 +460,18 @@ void	runtime·purgecachedstats(MCache*);
 void*	runtime·cnew(Type*);
 void*	runtime·cnewarray(Type*, intgo);
 
-void	runtime·settype(void*, uintptr);
-void	runtime·settype_flush(M*, bool);
+void	runtime·settype_flush(M*);
 void	runtime·settype_sysfree(MSpan*);
 uintptr	runtime·gettype(void*);
 
 enum
 {
 	// flags to malloc
-	FlagNoPointers = 1<<0,	// no pointers here
-	FlagNoProfiling = 1<<1,	// must not profile
-	FlagNoGC = 1<<2,	// must not free or scan for pointers
+	FlagNoPointers	= 1<<0,	// no pointers here
+	FlagNoProfiling	= 1<<1,	// must not profile
+	FlagNoGC	= 1<<2,	// must not free or scan for pointers
+	FlagNoZero	= 1<<3, // don't zero memory
+	FlagNoInvokeGC	= 1<<4, // don't invoke GC
 };
 
 void	runtime·MProf_Malloc(void*, uintptr);
@@ -479,7 +481,6 @@ int32	runtime·gcprocs(void);
 void	runtime·helpgc(int32 nproc);
 void	runtime·gchelper(void);
 
-bool	runtime·getfinalizer(void *p, bool del, FuncVal **fn, uintptr *nret);
 void	runtime·walkfintab(void (*fn)(void*));
 
 enum

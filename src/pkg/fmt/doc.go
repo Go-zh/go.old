@@ -156,8 +156,8 @@
 			Printf("%*s", 4.5, "hi"):  %!(BADWIDTH)hi
 			Printf("%.*s", 4.5, "hi"): %!(BADPREC)hi
 		Invalid or invalid use of argument index: %!(BADINDEX)
-			Printf("%*[2]d", 7):       %d(BADINDEX)
-			Printf("%.[2]d", 7):       %d(BADINDEX)
+			Printf("%*[2]d", 7):       %!d(BADINDEX)
+			Printf("%.[2]d", 7):       %!d(BADINDEX)
 
 	All errors begin with the string "%!" followed sometimes
 	by a single character (the verb) and end with a parenthesized
@@ -169,9 +169,9 @@
 	through the fmt package.  For example, if a String method
 	calls panic("bad"), the resulting formatted message will look
 	like
-		%s(PANIC=bad)
+		%!s(PANIC=bad)
 
-	The %s just shows the print verb in use when the failure
+	The %!s just shows the print verb in use when the failure
 	occurred.
 
 	Scanning
@@ -214,6 +214,10 @@
 	text in the format string must match the input text; scanning
 	stops if it does not, with the return value of the function
 	indicating the number of arguments scanned.
+
+	In all the scanning functions, a carriage return followed
+	immediately by a newline is treated as a plain newline
+	(\r\n means the same as \n).
 
 	In all the scanning functions, if an operand implements method
 	Scan (that is, it implements the Scanner interface) that

@@ -9,17 +9,58 @@
 #include "gg.h"
 #include "opt.h"
 
+static Prog* appendp(Prog*, int, int, int32, int, int32);
+
 void
-defframe(Prog *ptxt)
+defframe(Prog *ptxt, Bvec *bv)
 {
+	uint32 frame;
+	Prog *p;
+	int i, j;
+
 	// fill in argument size
 	ptxt->to.offset2 = rnd(curfn->type->argwid, widthptr);
 
 	// fill in final stack size
 	if(stksize > maxstksize)
 		maxstksize = stksize;
-	ptxt->to.offset = rnd(maxstksize+maxarg, widthptr);
+	frame = rnd(maxstksize+maxarg, widthptr);
+	ptxt->to.offset = frame;
 	maxstksize = 0;
+
+	// insert code to clear pointered part of the frame,
+	// so that garbage collector only sees initialized values
+	// when it looks for pointers.
+	p = ptxt;
+	if(stkptrsize >= 8*widthptr) {
+		p = appendp(p, AMOVL, D_CONST, 0, D_AX, 0);
+		p = appendp(p, AMOVL, D_CONST, stkptrsize/widthptr, D_CX, 0);
+		p = appendp(p, ALEAL, D_SP+D_INDIR, frame-stkptrsize, D_DI, 0);
+		p = appendp(p, AREP, D_NONE, 0, D_NONE, 0);
+		appendp(p, ASTOSL, D_NONE, 0, D_NONE, 0);
+	} else {
+		for(i=0, j=0; i<stkptrsize; i+=widthptr, j+=2)
+			if(bvget(bv, j) || bvget(bv, j+1))
+				p = appendp(p, AMOVL, D_CONST, 0, D_SP+D_INDIR, frame-stkptrsize+i);
+	}
+}
+
+static Prog*
+appendp(Prog *p, int as, int ftype, int32 foffset, int ttype, int32 toffset)
+{
+	Prog *q;
+	
+	q = mal(sizeof(*q));
+	clearp(q);
+	q->as = as;
+	q->lineno = p->lineno;
+	q->from.type = ftype;
+	q->from.offset = foffset;
+	q->to.type = ttype;
+	q->to.offset = toffset;
+	q->link = p->link;
+	p->link = q;
+	return q;
 }
 
 // Sweep the prog list to mark any used nodes.
@@ -123,7 +164,12 @@ ginscall(Node *f, int proc)
 		setmaxarg(f->type);
 
 	arg = -1;
-	if(f->type != T && ((f->sym != S && f->sym->pkg == runtimepkg) || proc == 1 || proc == 2)) {
+	// Most functions have a fixed-size argument block, so traceback uses that during unwind.
+	// Not all, though: there are some variadic functions in package runtime,
+	// and for those we emit call-specific metadata recorded by caller.
+	// Reflect generates functions with variable argsize (see reflect.methodValueCall/makeFuncStub),
+	// so we do this for all indirect calls as well.
+	if(f->type != T && (f->sym == S || (f->sym != S && f->sym->pkg == runtimepkg) || proc == 1 || proc == 2)) {
 		arg = f->type->argwid;
 		if(proc == 1 || proc == 2)
 			arg += 2*widthptr;
@@ -242,6 +288,7 @@ cgen_callinter(Node *n, Node *res, int proc)
 	regalloc(&nodr, types[tptr], &nodo);
 	if(n->left->xoffset == BADWIDTH)
 		fatal("cgen_callinter: badwidth");
+	cgen_checknil(&nodo);
 	nodo.op = OINDREG;
 	nodo.xoffset = n->left->xoffset + 3*widthptr + 8;
 	
@@ -1169,4 +1216,52 @@ ret:
 	} else
 		patch(gbranch(optoas(a, nr->type), T, likely), to);
 
+}
+
+// Called after regopt and peep have run.
+// Expand CHECKNIL pseudo-op into actual nil pointer check.
+void
+expandchecks(Prog *firstp)
+{
+	Prog *p, *p1, *p2;
+
+	for(p = firstp; p != P; p = p->link) {
+		if(p->as != ACHECKNIL)
+			continue;
+		if(debug_checknil && p->lineno > 1) // p->lineno==1 in generated wrappers
+			warnl(p->lineno, "nil check %D", &p->from);
+		// check is
+		//	CMP arg, $0
+		//	JNE 2(PC) (likely)
+		//	MOV AX, 0
+		p1 = mal(sizeof *p1);
+		p2 = mal(sizeof *p2);
+		clearp(p1);
+		clearp(p2);
+		p1->link = p2;
+		p2->link = p->link;
+		p->link = p1;
+		p1->lineno = p->lineno;
+		p2->lineno = p->lineno;
+		p1->loc = 9999;
+		p2->loc = 9999;
+		p->as = ACMPL;
+		p->to.type = D_CONST;
+		p->to.offset = 0;
+		p1->as = AJNE;
+		p1->from.type = D_CONST;
+		p1->from.offset = 1; // likely
+		p1->to.type = D_BRANCH;
+		p1->to.u.branch = p2->link;
+		// crash by write to memory address 0.
+		// if possible, since we know arg is 0, use 0(arg),
+		// which will be shorter to encode than plain 0.
+		p2->as = AMOVL;
+		p2->from.type = D_AX;
+		if(regtyp(&p->from))
+			p2->to.type = p->from.type + D_INDIR;
+		else
+			p2->to.type = D_INDIR+D_NONE;
+		p2->to.offset = 0;
+	}
 }

@@ -283,15 +283,23 @@ func reusePackage(p *Package, stk *importStack) *Package {
 	return p
 }
 
-// isGoTool is the list of directories for Go programs that are installed in
-// $GOROOT/pkg/tool.
-var isGoTool = map[string]bool{
-	"cmd/api":                              true,
-	"cmd/cgo":                              true,
-	"cmd/fix":                              true,
-	"cmd/yacc":                             true,
-	"code.google.com/p/go.tools/cmd/cover": true,
-	"code.google.com/p/go.tools/cmd/vet":   true,
+type targetDir int
+
+const (
+	toRoot targetDir = iota // to bin dir inside package root (default)
+	toTool                  // GOROOT/pkg/tool
+	toBin                   // GOROOT/bin
+)
+
+// goTools is a map of Go program import path to install target directory.
+var goTools = map[string]targetDir{
+	"cmd/api":                              toTool,
+	"cmd/cgo":                              toTool,
+	"cmd/fix":                              toTool,
+	"cmd/yacc":                             toTool,
+	"code.google.com/p/go.tools/cmd/cover": toTool,
+	"code.google.com/p/go.tools/cmd/godoc": toBin,
+	"code.google.com/p/go.tools/cmd/vet":   toTool,
 }
 
 // expandScanner expands a scanner.List error into all the errors in the list.
@@ -313,6 +321,23 @@ func expandScanner(err error) error {
 		return errors.New(buf.String())
 	}
 	return err
+}
+
+var raceExclude = map[string]bool{
+	"runtime/race": true,
+	"runtime/cgo":  true,
+	"cmd/cgo":      true,
+	"syscall":      true,
+	"errors":       true,
+}
+
+var cgoExclude = map[string]bool{
+	"runtime/cgo": true,
+}
+
+var cgoSyscallExclude = map[string]bool{
+	"runtime/cgo":  true,
+	"runtime/race": true,
 }
 
 // load populates p using information from bp, err, which should
@@ -341,10 +366,18 @@ func (p *Package) load(stk *importStack, bp *build.Package, err error) *Package 
 			// Install cross-compiled binaries to subdirectories of bin.
 			elem = full
 		}
-		if p.build.BinDir != "" {
+		if p.build.BinDir != gobin && goTools[p.ImportPath] == toBin {
+			// Override BinDir.
+			// This is from a subrepo but installs to $GOROOT/bin
+			// by default anyway (like godoc).
+			p.target = filepath.Join(gorootBin, elem)
+		} else if p.build.BinDir != "" {
+			// Install to GOBIN or bin of GOPATH entry.
 			p.target = filepath.Join(p.build.BinDir, elem)
 		}
-		if isGoTool[p.ImportPath] {
+		if goTools[p.ImportPath] == toTool {
+			// This is for 'go tool'.
+			// Override all the usual logic and force it into the tool directory.
 			p.target = filepath.Join(gorootPkg, "tool", full)
 		}
 		if p.target != "" && buildContext.GOOS == "windows" {
@@ -359,17 +392,22 @@ func (p *Package) load(stk *importStack, bp *build.Package, err error) *Package 
 	}
 
 	importPaths := p.Imports
-	// Packages that use cgo import runtime/cgo implicitly,
-	// except runtime/cgo itself.
-	if len(p.CgoFiles) > 0 && (!p.Standard || p.ImportPath != "runtime/cgo") {
+	// Packages that use cgo import runtime/cgo implicitly.
+	// Packages that use cgo also import syscall implicitly,
+	// to wrap errno.
+	// Exclude certain packages to avoid circular dependencies.
+	if len(p.CgoFiles) > 0 && (!p.Standard || !cgoExclude[p.ImportPath]) {
 		importPaths = append(importPaths, "runtime/cgo")
+	}
+	if len(p.CgoFiles) > 0 && (!p.Standard || !cgoSyscallExclude[p.ImportPath]) {
+		importPaths = append(importPaths, "syscall")
 	}
 	// Everything depends on runtime, except runtime and unsafe.
 	if !p.Standard || (p.ImportPath != "runtime" && p.ImportPath != "unsafe") {
 		importPaths = append(importPaths, "runtime")
 		// When race detection enabled everything depends on runtime/race.
-		// Exclude runtime/cgo and cmd/cgo to avoid circular dependencies.
-		if buildRace && (!p.Standard || (p.ImportPath != "runtime/race" && p.ImportPath != "runtime/cgo" && p.ImportPath != "cmd/cgo")) {
+		// Exclude certain packages to avoid circular dependencies.
+		if buildRace && (!p.Standard || !raceExclude[p.ImportPath]) {
 			importPaths = append(importPaths, "runtime/race")
 		}
 	}

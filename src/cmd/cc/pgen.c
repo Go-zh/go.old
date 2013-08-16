@@ -31,7 +31,9 @@
 #include "gc.h"
 #include "../../pkg/runtime/funcdata.h"
 
-static int32 pointermap(Sym *gcsym, int32 offset);
+enum { BitsPerPointer = 2 };
+
+static void dumpgcargs(Type *fn, Sym *sym);
 
 int
 hasdotdotdot(void)
@@ -78,11 +80,10 @@ void
 codgen(Node *n, Node *nn)
 {
 	Prog *sp;
-	Node *n1, nod, nod1;
-	Sym *gcsym;
-	static int ngcsym;
+	Node *n1, nod, nod1, nod2;
+	Sym *gcsym, *gclocalssym;
+	static int ngcsym, ngclocalssym;
 	static char namebuf[40];
-	int32 off;
 
 	cursafe = 0;
 	curarg = 0;
@@ -116,7 +117,17 @@ codgen(Node *n, Node *nn)
 	nod.op = ONAME;
 	nod.sym = gcsym;
 	nod.class = CSTATIC;
-	gins(AFUNCDATA, nodconst(FUNCDATA_GC), &nod);
+	gins(AFUNCDATA, nodconst(FUNCDATA_GCArgs), &nod);
+
+	snprint(namebuf, sizeof(namebuf), "gclocalssym·%d", ngclocalssym++);
+	gclocalssym = slookup(namebuf);
+	gclocalssym->class = CSTATIC;
+
+	memset(&nod2, 0, sizeof(nod2));
+	nod2.op = ONAME;
+	nod2.sym = gclocalssym;
+	nod2.class = CSTATIC;
+	gins(AFUNCDATA, nodconst(FUNCDATA_GCLocals), &nod2);
 
 	/*
 	 * isolate first argument
@@ -154,7 +165,9 @@ codgen(Node *n, Node *nn)
 	if(thechar=='6' || thechar=='7')	/* [sic] */
 		maxargsafe = xround(maxargsafe, 8);
 	sp->to.offset += maxargsafe;
-	
+
+	dumpgcargs(thisfn, gcsym);
+
 	// TODO(rsc): "stkoff" is not right. It does not account for
 	// the possibility of data stored in .safe variables.
 	// Unfortunately those move up and down just like
@@ -164,12 +177,9 @@ codgen(Node *n, Node *nn)
 	// area its own section.
 	// That said, we've been using stkoff for months
 	// and nothing too terrible has happened.
-	off = 0;
-	gextern(gcsym, nodconst(stkoff), off, 4); // locals
-	off += 4;
-	off = pointermap(gcsym, off); // nptrs and ptrs[...]
-	gcsym->type = typ(0, T);
-	gcsym->type->width = off;
+	gextern(gclocalssym, nodconst(-stkoff), 0, 4); // locals
+	gclocalssym->type = typ(0, T);
+	gclocalssym->type->width = 4;
 }
 
 void
@@ -638,15 +648,12 @@ bcomplex(Node *n, Node *c)
 	return 0;
 }
 
-// Makes a bitmap marking the the pointers in t.  t starts at the given byte
-// offset in the argument list.  The returned bitmap should be for pointer
-// indexes (relative to offset 0) between baseidx and baseidx+32.
-static int32
-pointermap_type(Type *t, int32 offset, int32 baseidx)
+// Updates the bitvector with a set bit for each pointer containing
+// value in the type description starting at offset.
+static void
+walktype1(Type *t, int32 offset, Bvec *bv)
 {
 	Type *t1;
-	int32 idx;
-	int32 m;
 
 	switch(t->etype) {
 	case TCHAR:
@@ -662,80 +669,76 @@ pointermap_type(Type *t, int32 offset, int32 baseidx)
 	case TFLOAT:
 	case TDOUBLE:
 		// non-pointer types
-		return 0;
+		break;
+
 	case TIND:
 	case TARRAY: // unlike Go, C passes arrays by reference
 		// pointer types
 		if((offset + t->offset) % ewidth[TIND] != 0)
 			yyerror("unaligned pointer");
-		idx = (offset + t->offset) / ewidth[TIND];
-		if(idx >= baseidx && idx < baseidx + 32)
-			return 1 << (idx - baseidx);
-		return 0;
+		bvset(bv, ((offset + t->offset) / ewidth[TIND])*BitsPerPointer);
+		break;
+
 	case TSTRUCT:
 		// build map recursively
-		m = 0;
-		for(t1=t->link; t1; t1=t1->down)
-			m |= pointermap_type(t1, offset, baseidx);
-		return m;
+		for(t1 = t->link; t1 != T; t1 = t1->down)
+			walktype1(t1, offset, bv);
+		break;
+
 	case TUNION:
-		// We require that all elements of the union have the same pointer map.
-		m = pointermap_type(t->link, offset, baseidx);
-		for(t1=t->link->down; t1; t1=t1->down) {
-			if(pointermap_type(t1, offset, baseidx) != m)
-				yyerror("invalid union in argument list - pointer maps differ");
-		}
-		return m;
+		walktype1(t->link, offset, bv);
+		break;
+
 	default:
 		yyerror("can't handle arg type %s\n", tnames[t->etype]);
-		return 0;
 	}
 }
 
 // Compute a bit vector to describe the pointer containing locations
 // in the argument list.  Adds the data to gcsym and returns the offset
 // of end of the bit vector.
-static int32
-pointermap(Sym *gcsym, int32 off)
+static void
+dumpgcargs(Type *fn, Sym *sym)
 {
-	int32 nptrs;
-	int32 i;
-	int32 s;     // offset in argument list (in bytes)
-	int32 m;     // current ptrs[i/32]
+	Bvec *bv;
 	Type *t;
+	int32 i;
+	int32 argbytes;
+	int32 symoffset, argoffset;
 
 	if(hasdotdotdot()) {
 		// give up for C vararg functions.
 		// TODO: maybe make a map just for the args we do know?
-		gextern(gcsym, nodconst(0), off, 4); // nptrs=0
-		return off + 4;
-	}
-	nptrs = (argsize() + ewidth[TIND] - 1) / ewidth[TIND];
-	gextern(gcsym, nodconst(nptrs), off, 4);
-	off += 4;
-
-	for(i = 0; i < nptrs; i += 32) {
-		// generate mask for ptrs at offsets i ... i+31
-		m = 0;
-		s = align(0, thisfn->link, Aarg0, nil);
-		if(s > 0 && i == 0) {
-			// C Calling convention returns structs by copying
-			// them to a location pointed to by a hidden first
-			// argument.  This first argument is a pointer.
-			if(s != ewidth[TIND])
+		gextern(sym, nodconst(0), 0, 4); // nptrs=0
+		symoffset = 4;
+	} else {
+		argbytes = (argsize() + ewidth[TIND] - 1);
+		bv = bvalloc((argbytes  / ewidth[TIND]) * BitsPerPointer);
+		argoffset = align(0, fn->link, Aarg0, nil);
+		if(argoffset > 0) {
+			// The C calling convention returns structs by
+			// copying them to a location pointed to by a
+			// hidden first argument.  This first argument
+			// is a pointer.
+			if(argoffset != ewidth[TIND])
 				yyerror("passbyptr arg not the right size");
-			m = 1;
+			bvset(bv, 0);
 		}
-		for(t=thisfn->down; t!=T; t=t->down) {
+		for(t = fn->down; t != T; t = t->down) {
 			if(t->etype == TVOID)
 				continue;
-			s = align(s, t, Aarg1, nil);
-			m |= pointermap_type(t, s, i);
-			s = align(s, t, Aarg2, nil);
+			argoffset = align(argoffset, t, Aarg1, nil);
+			walktype1(t, argoffset, bv);
+			argoffset = align(argoffset, t, Aarg2, nil);
 		}
-		gextern(gcsym, nodconst(m), off, 4);
-		off += 4;
+		gextern(sym, nodconst(bv->n), 0, 4);
+		symoffset = 4;
+		for(i = 0; i < bv->n; i += 32) {
+			gextern(sym, nodconst(bv->b[i/32]), symoffset, 4);
+			symoffset += 4;
+		}
+		free(bv);
 	}
-	return off;
-	// TODO: needs a test for nptrs>32
+	sym->type = typ(0, T);
+	sym->type->width = symoffset;
 }

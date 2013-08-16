@@ -54,15 +54,17 @@ echo.
 
 if not "%GOHOSTOS%-%GOOS%-%GOARCH%-%CGO_ENABLED%" == "windows-windows-amd64-1" goto norace
 echo # Testing race detector.
-go test -race -i flag
+go test -race -i runtime/race flag
+if errorlevel 1 goto fail
+go test -race -run=Output runtime/race
 if errorlevel 1 goto fail
 go test -race -short flag
 if errorlevel 1 goto fail
 echo.
 :norace
 
-echo # ..\misc\dashboard\builder ..\misc\goplay
-go build ..\misc\dashboard\builder ..\misc\goplay
+echo # ..\misc\goplay
+go build ..\misc\goplay
 if errorlevel 1 goto fail
 echo.
 
@@ -121,7 +123,7 @@ set GOMAXPROCS=%OLDGOMAXPROCS%
 set OLDGOMAXPROCS=
 
 echo # Checking API compatibility.
-go tool api -c ..\api\go1.txt,..\api\go1.1.txt -next ..\api\next.txt -except ..\api\except.txt
+go run "%GOROOT%\src\cmd\api\run.go"
 if errorlevel 1 goto fail
 echo.
 

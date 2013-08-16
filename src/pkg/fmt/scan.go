@@ -529,6 +529,9 @@ func (s *ss) skipSpace(stopAtNewline bool) {
 		if r == eof {
 			return
 		}
+		if r == '\r' && s.peek("\n") {
+			continue
+		}
 		if r == '\n' {
 			if stopAtNewline {
 				break
@@ -570,13 +573,6 @@ func (s *ss) token(skipSpace bool, f func(rune) bool) []byte {
 		s.buf.WriteRune(r)
 	}
 	return s.buf
-}
-
-// typeError indicates that the type of the operand did not match the format
-
-// typeError 表明操作数的类型与格式不匹配。
-func (s *ss) typeError(arg interface{}, expected string) {
-	s.errorString("expected argument of type pointer to " + expected + "; found " + reflect.TypeOf(arg).String())
 }
 
 var complexError = errors.New("syntax error scanning complex number")
@@ -1043,7 +1039,7 @@ func (s *ss) hexDigit(d rune) int {
 	case 'A', 'B', 'C', 'D', 'E', 'F':
 		return 10 + digit - 'A'
 	}
-	s.errorString("Scan: illegal hex digit")
+	s.errorString("illegal hex digit")
 	return 0
 }
 
@@ -1078,7 +1074,7 @@ func (s *ss) hexString() string {
 		s.buf.WriteByte(b)
 	}
 	if len(s.buf) == 0 {
-		s.errorString("Scan: no hex data for %x string")
+		s.errorString("no hex data for %x string")
 		return ""
 	}
 	return string(s.buf)
@@ -1163,7 +1159,7 @@ func (s *ss) scanOne(verb rune, arg interface{}) {
 		val := reflect.ValueOf(v)
 		ptr := val
 		if ptr.Kind() != reflect.Ptr {
-			s.errorString("Scan: type not a pointer: " + val.Type().String())
+			s.errorString("type not a pointer: " + val.Type().String())
 			return
 		}
 		switch v := ptr.Elem(); v.Kind() {
@@ -1180,7 +1176,7 @@ func (s *ss) scanOne(verb rune, arg interface{}) {
 			// 现在，只能处理（重命名的）[]byte。
 			typ := v.Type()
 			if typ.Elem().Kind() != reflect.Uint8 {
-				s.errorString("Scan: can't handle type: " + val.Type().String())
+				s.errorString("can't scan type: " + val.Type().String())
 			}
 			str := s.convertString(verb)
 			v.Set(reflect.MakeSlice(typ, len(str), len(str)))
@@ -1194,7 +1190,7 @@ func (s *ss) scanOne(verb rune, arg interface{}) {
 		case reflect.Complex64, reflect.Complex128:
 			v.SetComplex(s.scanComplex(verb, v.Type().Bits()))
 		default:
-			s.errorString("Scan: can't handle type: " + val.Type().String())
+			s.errorString("can't scan type: " + val.Type().String())
 		}
 	}
 }
@@ -1232,7 +1228,7 @@ func (s *ss) doScan(a []interface{}) (numProcessed int, err error) {
 				break
 			}
 			if !isSpace(r) {
-				s.errorString("Scan: expected newline")
+				s.errorString("expected newline")
 				break
 			}
 		}

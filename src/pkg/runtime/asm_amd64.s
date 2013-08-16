@@ -4,8 +4,9 @@
 
 #include "zasm_GOOS_GOARCH.h"
 #include "funcdata.h"
+#include "../../cmd/ld/textflag.h"
 
-TEXT _rt0_go(SB),7,$0
+TEXT _rt0_go(SB),NOSPLIT,$0
 	// copy arguments forward on an even stack
 	MOVQ	DI, AX		// argc
 	MOVQ	SI, BX		// argv
@@ -102,13 +103,13 @@ ok:
 	RET
 
 DATA	runtime·main·f+0(SB)/8,$runtime·main(SB)
-GLOBL	runtime·main·f(SB),8,$8
+GLOBL	runtime·main·f(SB),RODATA,$8
 
-TEXT runtime·breakpoint(SB),7,$0-0
+TEXT runtime·breakpoint(SB),NOSPLIT,$0-0
 	BYTE	$0xcc
 	RET
 
-TEXT runtime·asminit(SB),7,$0-0
+TEXT runtime·asminit(SB),NOSPLIT,$0-0
 	// No per-thread init.
 	RET
 
@@ -118,7 +119,7 @@ TEXT runtime·asminit(SB),7,$0-0
 
 // void gosave(Gobuf*)
 // save state in Gobuf; setjmp
-TEXT runtime·gosave(SB), 7, $0-8
+TEXT runtime·gosave(SB), NOSPLIT, $0-8
 	MOVQ	8(SP), AX		// gobuf
 	LEAQ	8(SP), BX		// caller's SP
 	MOVQ	BX, gobuf_sp(AX)
@@ -133,7 +134,7 @@ TEXT runtime·gosave(SB), 7, $0-8
 
 // void gogo(Gobuf*)
 // restore state from Gobuf; longjmp
-TEXT runtime·gogo(SB), 7, $0-8
+TEXT runtime·gogo(SB), NOSPLIT, $0-8
 	MOVQ	8(SP), BX		// gobuf
 	MOVQ	gobuf_g(BX), DX
 	MOVQ	0(DX), CX		// make sure g != nil
@@ -152,7 +153,7 @@ TEXT runtime·gogo(SB), 7, $0-8
 // Switch to m->g0's stack, call fn(g).
 // Fn must never return.  It should gogo(&g->sched)
 // to keep running g.
-TEXT runtime·mcall(SB), 7, $0-8
+TEXT runtime·mcall(SB), NOSPLIT, $0-8
 	MOVQ	fn+0(FP), DI
 	
 	get_tls(CX)
@@ -191,7 +192,7 @@ TEXT runtime·mcall(SB), 7, $0-8
 // the top of a stack (for example, morestack calling newstack
 // calling the scheduler calling newm calling gc), so we must
 // record an argument size. For that purpose, it has no arguments.
-TEXT runtime·morestack(SB),7,$0-0
+TEXT runtime·morestack(SB),NOSPLIT,$0-0
 	// Cannot grow scheduler stack (m->g0).
 	MOVQ	m_g0(BX), SI
 	CMPQ	g(CX), SI
@@ -225,12 +226,12 @@ TEXT runtime·morestack(SB),7,$0-0
 	MOVQ	$0, 0x1003	// crash if newstack returns
 	RET
 
-// Called from reflection library.  Mimics morestack,
+// Called from panic.  Mimics morestack,
 // reuses stack growth code to create a frame
 // with the desired args running the desired function.
 //
 // func call(fn *byte, arg *byte, argsize uint32).
-TEXT reflect·call(SB), 7, $0-20
+TEXT runtime·newstackcall(SB), NOSPLIT, $0-20
 	get_tls(CX)
 	MOVQ	m(CX), BX
 
@@ -245,12 +246,12 @@ TEXT reflect·call(SB), 7, $0-20
 	
 	// Save our own state as the PC and SP to restore
 	// if this goroutine needs to be restarted.
-	MOVQ	$reflect·call(SB), (g_sched+gobuf_pc)(AX)
+	MOVQ	$runtime·newstackcall(SB), (g_sched+gobuf_pc)(AX)
 	MOVQ	SP, (g_sched+gobuf_sp)(AX)
 
 	// Set up morestack arguments to call f on a new stack.
 	// We set f's frame size to 1, as a hint to newstack
-	// that this is a call from reflect·call.
+	// that this is a call from runtime·newstackcall.
 	// If it turns out that f needs a larger frame than
 	// the default stack, f's usual stack growth prolog will
 	// allocate a new segment (and recopy the arguments).
@@ -272,11 +273,101 @@ TEXT reflect·call(SB), 7, $0-20
 	MOVQ	$0, 0x1103	// crash if newstack returns
 	RET
 
+// reflect·call: call a function with the given argument list
+// func call(f *FuncVal, arg *byte, argsize uint32).
+// we don't have variable-sized frames, so we use a small number
+// of constant-sized-frame functions to encode a few bits of size in the pc.
+// Caution: ugly multiline assembly macros in your future!
+
+#define DISPATCH(NAME,MAXSIZE)		\
+	CMPQ	CX, $MAXSIZE;		\
+	JA	3(PC);			\
+	MOVQ	$runtime·NAME(SB), AX;	\
+	JMP	AX
+// Note: can't just "JMP runtime·NAME(SB)" - bad inlining results.
+
+TEXT reflect·call(SB), NOSPLIT, $0-20
+	MOVLQZX argsize+16(FP), CX
+	DISPATCH(call16, 16)
+	DISPATCH(call32, 32)
+	DISPATCH(call64, 64)
+	DISPATCH(call128, 128)
+	DISPATCH(call256, 256)
+	DISPATCH(call512, 512)
+	DISPATCH(call1024, 1024)
+	DISPATCH(call2048, 2048)
+	DISPATCH(call4096, 4096)
+	DISPATCH(call8192, 8192)
+	DISPATCH(call16384, 16384)
+	DISPATCH(call32768, 32768)
+	DISPATCH(call65536, 65536)
+	DISPATCH(call131072, 131072)
+	DISPATCH(call262144, 262144)
+	DISPATCH(call524288, 524288)
+	DISPATCH(call1048576, 1048576)
+	DISPATCH(call2097152, 2097152)
+	DISPATCH(call4194304, 4194304)
+	DISPATCH(call8388608, 8388608)
+	DISPATCH(call16777216, 16777216)
+	DISPATCH(call33554432, 33554432)
+	DISPATCH(call67108864, 67108864)
+	DISPATCH(call134217728, 134217728)
+	DISPATCH(call268435456, 268435456)
+	DISPATCH(call536870912, 536870912)
+	DISPATCH(call1073741824, 1073741824)
+	MOVQ	$runtime·badreflectcall(SB), AX
+	JMP	AX
+
+#define CALLFN(NAME,MAXSIZE)			\
+TEXT runtime·NAME(SB), 0, $MAXSIZE-20;		\
+	/* copy arguments to stack */		\
+	MOVQ	argptr+8(FP), SI;		\
+	MOVLQZX argsize+16(FP), CX;		\
+	MOVQ	SP, DI;				\
+	REP;MOVSB;				\
+	/* call function */			\
+	MOVQ	f+0(FP), DX;			\
+	CALL	(DX);				\
+	/* copy return values back */		\
+	MOVQ	argptr+8(FP), DI;		\
+	MOVLQZX	argsize+16(FP), CX;		\
+	MOVQ	SP, SI;				\
+	REP;MOVSB;				\
+	RET
+
+CALLFN(call16, 16)
+CALLFN(call32, 32)
+CALLFN(call64, 64)
+CALLFN(call128, 128)
+CALLFN(call256, 256)
+CALLFN(call512, 512)
+CALLFN(call1024, 1024)
+CALLFN(call2048, 2048)
+CALLFN(call4096, 4096)
+CALLFN(call8192, 8192)
+CALLFN(call16384, 16384)
+CALLFN(call32768, 32768)
+CALLFN(call65536, 65536)
+CALLFN(call131072, 131072)
+CALLFN(call262144, 262144)
+CALLFN(call524288, 524288)
+CALLFN(call1048576, 1048576)
+CALLFN(call2097152, 2097152)
+CALLFN(call4194304, 4194304)
+CALLFN(call8388608, 8388608)
+CALLFN(call16777216, 16777216)
+CALLFN(call33554432, 33554432)
+CALLFN(call67108864, 67108864)
+CALLFN(call134217728, 134217728)
+CALLFN(call268435456, 268435456)
+CALLFN(call536870912, 536870912)
+CALLFN(call1073741824, 1073741824)
+
 // Return point when leaving stack.
 //
 // Lessstack can appear in stack traces for the same reason
 // as morestack; in that context, it has 0 arguments.
-TEXT runtime·lessstack(SB), 7, $0-0
+TEXT runtime·lessstack(SB), NOSPLIT, $0-0
 	// Save return value in m->cret
 	get_tls(CX)
 	MOVQ	m(CX), BX
@@ -291,7 +382,7 @@ TEXT runtime·lessstack(SB), 7, $0-0
 	RET
 
 // morestack trampolines
-TEXT runtime·morestack00(SB),7,$0
+TEXT runtime·morestack00(SB),NOSPLIT,$0
 	get_tls(CX)
 	MOVQ	m(CX), BX
 	MOVQ	$0, AX
@@ -299,7 +390,7 @@ TEXT runtime·morestack00(SB),7,$0
 	MOVQ	$runtime·morestack(SB), AX
 	JMP	AX
 
-TEXT runtime·morestack01(SB),7,$0
+TEXT runtime·morestack01(SB),NOSPLIT,$0
 	get_tls(CX)
 	MOVQ	m(CX), BX
 	SHLQ	$32, AX
@@ -307,7 +398,7 @@ TEXT runtime·morestack01(SB),7,$0
 	MOVQ	$runtime·morestack(SB), AX
 	JMP	AX
 
-TEXT runtime·morestack10(SB),7,$0
+TEXT runtime·morestack10(SB),NOSPLIT,$0
 	get_tls(CX)
 	MOVQ	m(CX), BX
 	MOVLQZX	AX, AX
@@ -315,7 +406,7 @@ TEXT runtime·morestack10(SB),7,$0
 	MOVQ	$runtime·morestack(SB), AX
 	JMP	AX
 
-TEXT runtime·morestack11(SB),7,$0
+TEXT runtime·morestack11(SB),NOSPLIT,$0
 	get_tls(CX)
 	MOVQ	m(CX), BX
 	MOVQ	AX, m_moreframesize(BX)
@@ -324,42 +415,41 @@ TEXT runtime·morestack11(SB),7,$0
 
 // subcases of morestack01
 // with const of 8,16,...48
-TEXT runtime·morestack8(SB),7,$0
-	PUSHQ	$1
+TEXT runtime·morestack8(SB),NOSPLIT,$0
+	MOVQ	$1, R8
 	MOVQ	$morestack<>(SB), AX
 	JMP	AX
 
-TEXT runtime·morestack16(SB),7,$0
-	PUSHQ	$2
+TEXT runtime·morestack16(SB),NOSPLIT,$0
+	MOVQ	$2, R8
 	MOVQ	$morestack<>(SB), AX
 	JMP	AX
 
-TEXT runtime·morestack24(SB),7,$0
-	PUSHQ	$3
+TEXT runtime·morestack24(SB),NOSPLIT,$0
+	MOVQ	$3, R8
 	MOVQ	$morestack<>(SB), AX
 	JMP	AX
 
-TEXT runtime·morestack32(SB),7,$0
-	PUSHQ	$4
+TEXT runtime·morestack32(SB),NOSPLIT,$0
+	MOVQ	$4, R8
 	MOVQ	$morestack<>(SB), AX
 	JMP	AX
 
-TEXT runtime·morestack40(SB),7,$0
-	PUSHQ	$5
+TEXT runtime·morestack40(SB),NOSPLIT,$0
+	MOVQ	$5, R8
 	MOVQ	$morestack<>(SB), AX
 	JMP	AX
 
-TEXT runtime·morestack48(SB),7,$0
-	PUSHQ	$6
+TEXT runtime·morestack48(SB),NOSPLIT,$0
+	MOVQ	$6, R8
 	MOVQ	$morestack<>(SB), AX
 	JMP	AX
 
-TEXT morestack<>(SB),7,$0
+TEXT morestack<>(SB),NOSPLIT,$0
 	get_tls(CX)
 	MOVQ	m(CX), BX
-	POPQ	AX
-	SHLQ	$35, AX
-	MOVQ	AX, m_moreframesize(BX)
+	SHLQ	$35, R8
+	MOVQ	R8, m_moreframesize(BX)
 	MOVQ	$runtime·morestack(SB), AX
 	JMP	AX
 
@@ -370,7 +460,7 @@ TEXT morestack<>(SB),7,$0
 //		return 1;
 //	} else
 //		return 0;
-TEXT runtime·cas(SB), 7, $0-16
+TEXT runtime·cas(SB), NOSPLIT, $0-16
 	MOVQ	8(SP), BX
 	MOVL	16(SP), AX
 	MOVL	20(SP), CX
@@ -390,7 +480,7 @@ TEXT runtime·cas(SB), 7, $0-16
 //	} else {
 //		return 0;
 //	}
-TEXT runtime·cas64(SB), 7, $0-24
+TEXT runtime·cas64(SB), NOSPLIT, $0-24
 	MOVQ	8(SP), BX
 	MOVQ	16(SP), AX
 	MOVQ	24(SP), CX
@@ -410,7 +500,7 @@ cas64_fail:
 //		return 1;
 //	} else
 //		return 0;
-TEXT runtime·casp(SB), 7, $0-24
+TEXT runtime·casp(SB), NOSPLIT, $0-24
 	MOVQ	8(SP), BX
 	MOVQ	16(SP), AX
 	MOVQ	24(SP), CX
@@ -426,7 +516,7 @@ TEXT runtime·casp(SB), 7, $0-24
 // Atomically:
 //	*val += delta;
 //	return *val;
-TEXT runtime·xadd(SB), 7, $0-12
+TEXT runtime·xadd(SB), NOSPLIT, $0-12
 	MOVQ	8(SP), BX
 	MOVL	16(SP), AX
 	MOVL	AX, CX
@@ -435,7 +525,7 @@ TEXT runtime·xadd(SB), 7, $0-12
 	ADDL	CX, AX
 	RET
 
-TEXT runtime·xadd64(SB), 7, $0-16
+TEXT runtime·xadd64(SB), NOSPLIT, $0-16
 	MOVQ	8(SP), BX
 	MOVQ	16(SP), AX
 	MOVQ	AX, CX
@@ -444,19 +534,19 @@ TEXT runtime·xadd64(SB), 7, $0-16
 	ADDQ	CX, AX
 	RET
 
-TEXT runtime·xchg(SB), 7, $0-12
+TEXT runtime·xchg(SB), NOSPLIT, $0-12
 	MOVQ	8(SP), BX
 	MOVL	16(SP), AX
 	XCHGL	AX, 0(BX)
 	RET
 
-TEXT runtime·xchg64(SB), 7, $0-16
+TEXT runtime·xchg64(SB), NOSPLIT, $0-16
 	MOVQ	8(SP), BX
 	MOVQ	16(SP), AX
 	XCHGQ	AX, 0(BX)
 	RET
 
-TEXT runtime·procyield(SB),7,$0-0
+TEXT runtime·procyield(SB),NOSPLIT,$0-0
 	MOVL	8(SP), AX
 again:
 	PAUSE
@@ -464,19 +554,19 @@ again:
 	JNZ	again
 	RET
 
-TEXT runtime·atomicstorep(SB), 7, $0-16
+TEXT runtime·atomicstorep(SB), NOSPLIT, $0-16
 	MOVQ	8(SP), BX
 	MOVQ	16(SP), AX
 	XCHGQ	AX, 0(BX)
 	RET
 
-TEXT runtime·atomicstore(SB), 7, $0-12
+TEXT runtime·atomicstore(SB), NOSPLIT, $0-12
 	MOVQ	8(SP), BX
 	MOVL	16(SP), AX
 	XCHGL	AX, 0(BX)
 	RET
 
-TEXT runtime·atomicstore64(SB), 7, $0-16
+TEXT runtime·atomicstore64(SB), NOSPLIT, $0-16
 	MOVQ	8(SP), BX
 	MOVQ	16(SP), AX
 	XCHGQ	AX, 0(BX)
@@ -487,7 +577,7 @@ TEXT runtime·atomicstore64(SB), 7, $0-16
 // 1. pop the caller
 // 2. sub 5 bytes from the callers return
 // 3. jmp to the argument
-TEXT runtime·jmpdefer(SB), 7, $0
+TEXT runtime·jmpdefer(SB), NOSPLIT, $0-16
 	MOVQ	8(SP), DX	// fn
 	MOVQ	16(SP), BX	// caller sp
 	LEAQ	-8(BX), SP	// caller sp after CALL
@@ -496,7 +586,7 @@ TEXT runtime·jmpdefer(SB), 7, $0
 	JMP	BX	// but first run the deferred function
 
 // Save state of caller into g->sched. Smashes R8, R9.
-TEXT gosave<>(SB),7,$0
+TEXT gosave<>(SB),NOSPLIT,$0
 	get_tls(R8)
 	MOVQ	g(R8), R8
 	MOVQ	0(SP), R9
@@ -511,7 +601,7 @@ TEXT gosave<>(SB),7,$0
 // Call fn(arg) on the scheduler stack,
 // aligned appropriately for the gcc ABI.
 // See cgocall.c for more details.
-TEXT runtime·asmcgocall(SB),7,$0-16
+TEXT runtime·asmcgocall(SB),NOSPLIT,$0-16
 	MOVQ	fn+0(FP), AX
 	MOVQ	arg+8(FP), BX
 	MOVQ	SP, DX
@@ -550,7 +640,7 @@ TEXT runtime·asmcgocall(SB),7,$0-16
 // cgocallback(void (*fn)(void*), void *frame, uintptr framesize)
 // Turn the fn into a Go func (by taking its address) and call
 // cgocallback_gofunc.
-TEXT runtime·cgocallback(SB),7,$24-24
+TEXT runtime·cgocallback(SB),NOSPLIT,$24-24
 	LEAQ	fn+0(FP), AX
 	MOVQ	AX, 0(SP)
 	MOVQ	frame+8(FP), AX
@@ -563,7 +653,7 @@ TEXT runtime·cgocallback(SB),7,$24-24
 
 // cgocallback_gofunc(FuncVal*, void *frame, uintptr framesize)
 // See cgocall.c for more details.
-TEXT runtime·cgocallback_gofunc(SB),7,$8-24
+TEXT runtime·cgocallback_gofunc(SB),NOSPLIT,$8-24
 	// If m is nil, Go did not create the current thread.
 	// Call needm to obtain one for temporary use.
 	// In this case, we're running on the thread stack, so there's
@@ -652,7 +742,7 @@ havem:
 	RET
 
 // void setmg(M*, G*); set m and g. for use by needm.
-TEXT runtime·setmg(SB), 7, $0-16
+TEXT runtime·setmg(SB), NOSPLIT, $0-16
 	MOVQ	mm+0(FP), AX
 #ifdef GOOS_windows
 	CMPQ	AX, $0
@@ -671,14 +761,14 @@ settls:
 	RET
 
 // void setmg_gcc(M*, G*); set m and g called from gcc.
-TEXT setmg_gcc<>(SB),7,$0
+TEXT setmg_gcc<>(SB),NOSPLIT,$0
 	get_tls(AX)
 	MOVQ	DI, m(AX)
 	MOVQ	SI, g(AX)
 	RET
 
 // check that SP is in range [g->stackbase, g->stackguard)
-TEXT runtime·stackcheck(SB), 7, $0-0
+TEXT runtime·stackcheck(SB), NOSPLIT, $0-0
 	get_tls(CX)
 	MOVQ	g(CX), AX
 	CMPQ	g_stackbase(AX), SP
@@ -689,7 +779,7 @@ TEXT runtime·stackcheck(SB), 7, $0-0
 	INT	$3
 	RET
 
-TEXT runtime·memclr(SB),7,$0-16
+TEXT runtime·memclr(SB),NOSPLIT,$0-16
 	MOVQ	8(SP), DI		// arg 1 addr
 	MOVQ	16(SP), CX		// arg 2 count
 	MOVQ	CX, BX
@@ -704,29 +794,29 @@ TEXT runtime·memclr(SB),7,$0-16
 	STOSB
 	RET
 
-TEXT runtime·getcallerpc(SB),7,$0-8
+TEXT runtime·getcallerpc(SB),NOSPLIT,$0-8
 	MOVQ	x+0(FP),AX		// addr of first arg
 	MOVQ	-8(AX),AX		// get calling pc
 	RET
 
-TEXT runtime·setcallerpc(SB),7,$0-16
+TEXT runtime·setcallerpc(SB),NOSPLIT,$0-16
 	MOVQ	x+0(FP),AX		// addr of first arg
 	MOVQ	x+8(FP), BX
 	MOVQ	BX, -8(AX)		// set calling pc
 	RET
 
-TEXT runtime·getcallersp(SB),7,$0-8
+TEXT runtime·getcallersp(SB),NOSPLIT,$0-8
 	MOVQ	sp+0(FP), AX
 	RET
 
 // int64 runtime·cputicks(void)
-TEXT runtime·cputicks(SB),7,$0-0
+TEXT runtime·cputicks(SB),NOSPLIT,$0-0
 	RDTSC
 	SHLQ	$32, DX
 	ADDQ	DX, AX
 	RET
 
-TEXT runtime·stackguard(SB),7,$0-16
+TEXT runtime·stackguard(SB),NOSPLIT,$0-16
 	MOVQ	SP, DX
 	MOVQ	DX, sp+0(FP)
 	get_tls(CX)
@@ -738,13 +828,13 @@ TEXT runtime·stackguard(SB),7,$0-16
 GLOBL runtime·tls0(SB), $64
 
 // hash function using AES hardware instructions
-TEXT runtime·aeshash(SB),7,$0-24
+TEXT runtime·aeshash(SB),NOSPLIT,$0-24
 	MOVQ	8(SP), DX	// ptr to hash value
 	MOVQ	16(SP), CX	// size
 	MOVQ	24(SP), AX	// ptr to data
 	JMP	runtime·aeshashbody(SB)
 
-TEXT runtime·aeshashstr(SB),7,$0-24
+TEXT runtime·aeshashstr(SB),NOSPLIT,$0-24
 	MOVQ	8(SP), DX	// ptr to hash value
 	MOVQ	24(SP), AX	// ptr to string struct
 	MOVQ	8(AX), CX	// length of string
@@ -754,7 +844,7 @@ TEXT runtime·aeshashstr(SB),7,$0-24
 // AX: data
 // CX: length
 // DX: ptr to seed input / hash output
-TEXT runtime·aeshashbody(SB),7,$0-24
+TEXT runtime·aeshashbody(SB),NOSPLIT,$0-24
 	MOVQ	(DX), X0	// seed to low 64 bits of xmm0
 	PINSRQ	$1, CX, X0	// size to high 64 bits of xmm0
 	MOVO	runtime·aeskeysched+0(SB), X2
@@ -809,7 +899,7 @@ finalize:
 	MOVQ	X0, (DX)
 	RET
 
-TEXT runtime·aeshash32(SB),7,$0-24
+TEXT runtime·aeshash32(SB),NOSPLIT,$0-24
 	MOVQ	8(SP), DX	// ptr to hash value
 	MOVQ	24(SP), AX	// ptr to data
 	MOVQ	(DX), X0	// seed
@@ -820,7 +910,7 @@ TEXT runtime·aeshash32(SB),7,$0-24
 	MOVQ	X0, (DX)
 	RET
 
-TEXT runtime·aeshash64(SB),7,$0-24
+TEXT runtime·aeshash64(SB),NOSPLIT,$0-24
 	MOVQ	8(SP), DX	// ptr to hash value
 	MOVQ	24(SP), AX	// ptr to data
 	MOVQ	(DX), X0	// seed
@@ -864,7 +954,7 @@ DATA masks<>+0xe0(SB)/8, $0xffffffffffffffff
 DATA masks<>+0xe8(SB)/8, $0x0000ffffffffffff
 DATA masks<>+0xf0(SB)/8, $0xffffffffffffffff
 DATA masks<>+0xf8(SB)/8, $0x00ffffffffffffff
-GLOBL masks<>(SB),8,$256
+GLOBL masks<>(SB),RODATA,$256
 
 // these are arguments to pshufb.  They move data down from
 // the high bytes of the register to the low bytes of the register.
@@ -901,31 +991,18 @@ DATA shifts<>+0xe0(SB)/8, $0x0908070605040302
 DATA shifts<>+0xe8(SB)/8, $0xffff0f0e0d0c0b0a
 DATA shifts<>+0xf0(SB)/8, $0x0807060504030201
 DATA shifts<>+0xf8(SB)/8, $0xff0f0e0d0c0b0a09
-GLOBL shifts<>(SB),8,$256
+GLOBL shifts<>(SB),RODATA,$256
 
-TEXT runtime·memeq(SB),7,$0-24
+TEXT runtime·memeq(SB),NOSPLIT,$0-24
 	MOVQ	a+0(FP), SI
 	MOVQ	b+8(FP), DI
 	MOVQ	count+16(FP), BX
 	JMP	runtime·memeqbody(SB)
 
-TEXT bytes·Equal(SB),7,$0-49
-	MOVQ	a_len+8(FP), BX
-	MOVQ	b_len+32(FP), CX
-	XORQ	AX, AX
-	CMPQ	BX, CX
-	JNE	eqret
-	MOVQ	a+0(FP), SI
-	MOVQ	b+24(FP), DI
-	CALL	runtime·memeqbody(SB)
-eqret:
-	MOVB	AX, ret+48(FP)
-	RET
-
 // a in SI
 // b in DI
 // count in BX
-TEXT runtime·memeqbody(SB),7,$0-0
+TEXT runtime·memeqbody(SB),NOSPLIT,$0-0
 	XORQ	AX, AX
 
 	CMPQ	BX, $8
@@ -1014,7 +1091,7 @@ equal:
 	SETEQ	AX
 	RET
 
-TEXT runtime·cmpstring(SB),7,$0-40
+TEXT runtime·cmpstring(SB),NOSPLIT,$0-40
 	MOVQ	s1+0(FP), SI
 	MOVQ	s1+8(FP), BX
 	MOVQ	s2+16(FP), DI
@@ -1023,7 +1100,7 @@ TEXT runtime·cmpstring(SB),7,$0-40
 	MOVQ	AX, res+32(FP)
 	RET
 
-TEXT bytes·Compare(SB),7,$0-56
+TEXT bytes·Compare(SB),NOSPLIT,$0-56
 	MOVQ	s1+0(FP), SI
 	MOVQ	s1+8(FP), BX
 	MOVQ	s2+24(FP), DI
@@ -1039,7 +1116,7 @@ TEXT bytes·Compare(SB),7,$0-56
 //   DX = blen
 // output:
 //   AX = 1/0/-1
-TEXT runtime·cmpbody(SB),7,$0-0
+TEXT runtime·cmpbody(SB),NOSPLIT,$0-0
 	CMPQ	SI, DI
 	JEQ	cmp_allsame
 	CMPQ	BX, DX
@@ -1142,4 +1219,124 @@ cmp_allsame:
 	SETGT	AX	// 1 if alen > blen
 	SETEQ	CX	// 1 if alen == blen
 	LEAQ	-1(CX)(AX*2), AX	// 1,0,-1 result
+	RET
+
+TEXT bytes·IndexByte(SB),NOSPLIT,$0
+	MOVQ s+0(FP), SI
+	MOVQ s_len+8(FP), BX
+	MOVB c+24(FP), AL
+	CALL runtime·indexbytebody(SB)
+	MOVQ AX, ret+32(FP)
+	RET
+
+TEXT strings·IndexByte(SB),NOSPLIT,$0
+	MOVQ s+0(FP), SI
+	MOVQ s_len+8(FP), BX
+	MOVB c+16(FP), AL
+	CALL runtime·indexbytebody(SB)
+	MOVQ AX, ret+24(FP)
+	RET
+
+// input:
+//   SI: data
+//   BX: data len
+//   AL: byte sought
+// output:
+//   AX
+TEXT runtime·indexbytebody(SB),NOSPLIT,$0
+	MOVQ SI, DI
+
+	CMPQ BX, $16
+	JLT indexbyte_small
+
+	// round up to first 16-byte boundary
+	TESTQ $15, SI
+	JZ aligned
+	MOVQ SI, CX
+	ANDQ $~15, CX
+	ADDQ $16, CX
+
+	// search the beginning
+	SUBQ SI, CX
+	REPN; SCASB
+	JZ success
+
+// DI is 16-byte aligned; get ready to search using SSE instructions
+aligned:
+	// round down to last 16-byte boundary
+	MOVQ BX, R11
+	ADDQ SI, R11
+	ANDQ $~15, R11
+
+	// shuffle X0 around so that each byte contains c
+	MOVD AX, X0
+	PUNPCKLBW X0, X0
+	PUNPCKLBW X0, X0
+	PSHUFL $0, X0, X0
+	JMP condition
+
+sse:
+	// move the next 16-byte chunk of the buffer into X1
+	MOVO (DI), X1
+	// compare bytes in X0 to X1
+	PCMPEQB X0, X1
+	// take the top bit of each byte in X1 and put the result in DX
+	PMOVMSKB X1, DX
+	TESTL DX, DX
+	JNZ ssesuccess
+	ADDQ $16, DI
+
+condition:
+	CMPQ DI, R11
+	JLT sse
+
+	// search the end
+	MOVQ SI, CX
+	ADDQ BX, CX
+	SUBQ R11, CX
+	// if CX == 0, the zero flag will be set and we'll end up
+	// returning a false success
+	JZ failure
+	REPN; SCASB
+	JZ success
+
+failure:
+	MOVQ $-1, AX
+	RET
+
+// handle for lengths < 16
+indexbyte_small:
+	MOVQ BX, CX
+	REPN; SCASB
+	JZ success
+	MOVQ $-1, AX
+	RET
+
+// we've found the chunk containing the byte
+// now just figure out which specific byte it is
+ssesuccess:
+	// get the index of the least significant set bit
+	BSFW DX, DX
+	SUBQ SI, DI
+	ADDQ DI, DX
+	MOVQ DX, AX
+	RET
+
+success:
+	SUBQ SI, DI
+	SUBL $1, DI
+	MOVQ DI, AX
+	RET
+
+TEXT bytes·Equal(SB),NOSPLIT,$0-49
+	MOVQ	a_len+8(FP), BX
+	MOVQ	b_len+32(FP), CX
+	XORQ	AX, AX
+	CMPQ	BX, CX
+	JNE	eqret
+	MOVQ	a+0(FP), SI
+	MOVQ	b+24(FP), DI
+	CALL	runtime·memeqbody(SB)
+eqret:
+	MOVB	AX, ret+48(FP)
 	RET

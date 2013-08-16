@@ -57,10 +57,13 @@ Pconv(Fmt *fp)
 	switch(p->as) {
 	case ATEXT:
 		if(p->from.scale) {
-			fmtprint(fp, "(%d)	%A	%D,%d,%D",
+			fmtprint(fp, "(%d)	%A	%D,%d,%lD",
 				p->line, p->as, &p->from, p->from.scale, &p->to);
 			break;
 		}
+		fmtprint(fp, "(%d)	%A	%D,%lD",
+			p->line, p->as, &p->from, &p->to);
+		break;
 	default:
 		fmtprint(fp, "(%d)	%A	%D,%D",
 			p->line, p->as, &p->from, &p->to);

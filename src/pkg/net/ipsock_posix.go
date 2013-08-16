@@ -13,6 +13,17 @@ import (
 	"time"
 )
 
+func probeIPv4Stack() bool {
+	s, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_TCP)
+	switch err {
+	case syscall.EAFNOSUPPORT, syscall.EPROTONOSUPPORT:
+		return false
+	case nil:
+		closesocket(s)
+	}
+	return true
+}
+
 // Should we try to use the IPv4 socket interface if we're
 // only dealing with IPv4 sockets?  As long as the host system
 // understands IPv6, it's okay to pass IPv4 addresses to the IPv6
@@ -120,29 +131,9 @@ func favoriteAddrFamily(net string, laddr, raddr sockaddr, mode string) (family 
 
 // Internet sockets (TCP, UDP, IP)
 
-// A sockaddr represents a TCP, UDP or IP network address that can
-// be converted into a syscall.Sockaddr.
-type sockaddr interface {
-	Addr
-	family() int
-	isWildcard() bool
-	sockaddr(family int) (syscall.Sockaddr, error)
-}
-
 func internetSocket(net string, laddr, raddr sockaddr, deadline time.Time, sotype, proto int, mode string, toAddr func(syscall.Sockaddr) Addr) (fd *netFD, err error) {
-	var la, ra syscall.Sockaddr
 	family, ipv6only := favoriteAddrFamily(net, laddr, raddr, mode)
-	if laddr != nil {
-		if la, err = laddr.sockaddr(family); err != nil {
-			goto Error
-		}
-	}
-	if raddr != nil {
-		if ra, err = raddr.sockaddr(family); err != nil {
-			goto Error
-		}
-	}
-	fd, err = socket(net, family, sotype, proto, ipv6only, la, ra, deadline, toAddr)
+	fd, err = socket(net, family, sotype, proto, ipv6only, laddr, raddr, deadline, toAddr)
 	if err != nil {
 		goto Error
 	}

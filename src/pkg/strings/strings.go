@@ -130,14 +130,7 @@ func Index(s, sep string) int {
 	case n == 0:
 		return 0
 	case n == 1:
-		c := sep[0]
-		// special case worth making fast
-		for i := 0; i < len(s); i++ {
-			if s[i] == c {
-				return i
-			}
-		}
-		return -1
+		return IndexByte(s, sep[0])
 	case n == len(s):
 		if sep == s {
 			return 0

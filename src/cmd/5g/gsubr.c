@@ -706,16 +706,24 @@ gmove(Node *f, Node *t)
 	 * integer copy and truncate
 	 */
 	case CASE(TINT8, TINT8):	// same size
+		if(!ismem(f)) {
+			a = AMOVB;
+			break;
+		}
 	case CASE(TUINT8, TINT8):
 	case CASE(TINT16, TINT8):	// truncate
 	case CASE(TUINT16, TINT8):
 	case CASE(TINT32, TINT8):
 	case CASE(TUINT32, TINT8):
-		a = AMOVB;
+		a = AMOVBS;
 		break;
 
-	case CASE(TINT8, TUINT8):
 	case CASE(TUINT8, TUINT8):
+		if(!ismem(f)) {
+			a = AMOVB;
+			break;
+		}
+	case CASE(TINT8, TUINT8):
 	case CASE(TINT16, TUINT8):
 	case CASE(TUINT16, TUINT8):
 	case CASE(TINT32, TUINT8):
@@ -725,7 +733,7 @@ gmove(Node *f, Node *t)
 
 	case CASE(TINT64, TINT8):	// truncate low word
 	case CASE(TUINT64, TINT8):
-		a = AMOVB;
+		a = AMOVBS;
 		goto trunc64;
 
 	case CASE(TINT64, TUINT8):
@@ -734,14 +742,22 @@ gmove(Node *f, Node *t)
 		goto trunc64;
 
 	case CASE(TINT16, TINT16):	// same size
+		if(!ismem(f)) {
+			a = AMOVH;
+			break;
+		}
 	case CASE(TUINT16, TINT16):
 	case CASE(TINT32, TINT16):	// truncate
 	case CASE(TUINT32, TINT16):
-		a = AMOVH;
+		a = AMOVHS;
 		break;
 
-	case CASE(TINT16, TUINT16):
 	case CASE(TUINT16, TUINT16):
+		if(!ismem(f)) {
+			a = AMOVH;
+			break;
+		}
+	case CASE(TINT16, TUINT16):
 	case CASE(TINT32, TUINT16):
 	case CASE(TUINT32, TUINT16):
 		a = AMOVHU;
@@ -749,7 +765,7 @@ gmove(Node *f, Node *t)
 
 	case CASE(TINT64, TINT16):	// truncate low word
 	case CASE(TUINT64, TINT16):
-		a = AMOVH;
+		a = AMOVHS;
 		goto trunc64;
 
 	case CASE(TINT64, TUINT16):
@@ -801,7 +817,7 @@ gmove(Node *f, Node *t)
 	case CASE(TINT8, TUINT16):
 	case CASE(TINT8, TINT32):
 	case CASE(TINT8, TUINT32):
-		a = AMOVB;
+		a = AMOVBS;
 		goto rdst;
 	case CASE(TINT8, TINT64):	// convert via int32
 	case CASE(TINT8, TUINT64):
@@ -821,7 +837,7 @@ gmove(Node *f, Node *t)
 
 	case CASE(TINT16, TINT32):	// sign extend int16
 	case CASE(TINT16, TUINT32):
-		a = AMOVH;
+		a = AMOVHS;
 		goto rdst;
 	case CASE(TINT16, TINT64):	// convert via int32
 	case CASE(TINT16, TUINT64):
@@ -893,13 +909,13 @@ gmove(Node *f, Node *t)
 		ta = AMOVW;
 		switch(tt) {
 		case TINT8:
-			ta = AMOVB;
+			ta = AMOVBS;
 			break;
 		case TUINT8:
 			ta = AMOVBU;
 			break;
 		case TINT16:
-			ta = AMOVH;
+			ta = AMOVHS;
 			break;
 		case TUINT16:
 			ta = AMOVHU;
@@ -940,13 +956,13 @@ gmove(Node *f, Node *t)
 		fa = AMOVW;
 		switch(ft) {
 		case TINT8:
-			fa = AMOVB;
+			fa = AMOVBS;
 			break;
 		case TUINT8:
 			fa = AMOVBU;
 			break;
 		case TINT16:
-			fa = AMOVH;
+			fa = AMOVHS;
 			break;
 		case TUINT16:
 			fa = AMOVHU;
@@ -1173,48 +1189,6 @@ gregshift(int as, Node *lhs, int32 stype, Node *reg, Node *rhs)
 	return p;
 }
 
-// Generate an instruction referencing *n
-// to force segv on nil pointer dereference.
-void
-checkref(Node *n, int force)
-{
-	Node m1, m2;
-
-	if(!force && isptr[n->type->etype] && n->type->type->width < unmappedzero)
-		return;
-
-	regalloc(&m1, types[TUINTPTR], n);
-	regalloc(&m2, types[TUINT8], n);
-	cgen(n, &m1);
-	m1.xoffset = 0;
-	m1.op = OINDREG;
-	m1.type = types[TUINT8];
-	gins(AMOVBU, &m1, &m2);
-	regfree(&m2);
-	regfree(&m1);
-}
-
-static void
-checkoffset(Addr *a, int canemitcode)
-{
-	Prog *p;
-	Node n1;
-
-	if(a->offset < unmappedzero)
-		return;
-	if(!canemitcode)
-		fatal("checkoffset %#x, cannot emit code", a->offset);
-
-	// cannot rely on unmapped nil page at 0 to catch
-	// reference with large offset.  instead, emit explicit
-	// test of 0(reg).
-	regalloc(&n1, types[TUINTPTR], N);
-	p = gins(AMOVB, N, &n1);
-	p->from = *a;
-	p->from.offset = 0;
-	regfree(&n1);
-}
-
 /*
  * generate code to compute n;
  * make a refer to result.
@@ -1278,7 +1252,6 @@ naddr(Node *n, Addr *a, int canemitcode)
 		a->reg = n->val.u.reg;
 		a->sym = n->sym;
 		a->offset = n->xoffset;
-		checkoffset(a, canemitcode);
 		break;
 
 	case OPARAM:
@@ -1386,8 +1359,6 @@ naddr(Node *n, Addr *a, int canemitcode)
 		a->etype = TINT32;
 		if(a->type == D_CONST && a->offset == 0)
 			break;	// len(nil)
-		if(a->offset >= unmappedzero && a->offset-Array_nel < unmappedzero)
-			checkoffset(a, canemitcode);
 		break;
 
 	case OLEN:
@@ -1397,8 +1368,6 @@ naddr(Node *n, Addr *a, int canemitcode)
 		if(a->type == D_CONST && a->offset == 0)
 			break;	// len(nil)
 		a->offset += Array_nel;
-		if(a->offset >= unmappedzero && a->offset-Array_nel < unmappedzero)
-			checkoffset(a, canemitcode);
 		break;
 
 	case OCAP:
@@ -1408,8 +1377,6 @@ naddr(Node *n, Addr *a, int canemitcode)
 		if(a->type == D_CONST && a->offset == 0)
 			break;	// cap(nil)
 		a->offset += Array_cap;
-		if(a->offset >= unmappedzero && a->offset-Array_cap < unmappedzero)
-			checkoffset(a, canemitcode);
 		break;
 
 	case OADDR:
@@ -1575,8 +1542,11 @@ optoas(int op, Type *t)
 		break;
 
 	case CASE(OAS, TBOOL):
-	case CASE(OAS, TINT8):
 		a = AMOVB;
+		break;
+
+	case CASE(OAS, TINT8):
+		a = AMOVBS;
 		break;
 
 	case CASE(OAS, TUINT8):
@@ -1584,7 +1554,7 @@ optoas(int op, Type *t)
 		break;
 
 	case CASE(OAS, TINT16):
-		a = AMOVH;
+		a = AMOVHS;
 		break;
 
 	case CASE(OAS, TUINT16):
@@ -1877,7 +1847,8 @@ lit:
 	default:
 		return 0;
 	case AADD: case ASUB: case AAND: case AORR: case AEOR:
-	case AMOVB: case AMOVBU: case AMOVH: case AMOVHU:
+	case AMOVB: case AMOVBS: case AMOVBU:
+	case AMOVH: case AMOVHS: case AMOVHU:
 	case AMOVW:
 		break;
 	}
@@ -1912,6 +1883,7 @@ odot:
 		n1.xoffset = oary[0];
 	} else {
 		cgen(nn, reg);
+		cgen_checknil(reg);
 		n1.xoffset = -(oary[0]+1);
 	}
 
@@ -1919,6 +1891,7 @@ odot:
 		if(oary[i] >= 0)
 			fatal("can't happen");
 		gins(AMOVW, &n1, reg);
+		cgen_checknil(reg);
 		n1.xoffset = -(oary[i]+1);
 	}
 
@@ -1966,9 +1939,10 @@ oindex:
 	// load the array (reg)
 	if(l->ullman > r->ullman) {
 		regalloc(reg, types[tptr], N);
-		if(o & OPtrto)
+		if(o & OPtrto) {
 			cgen(l, reg);
-		else
+			cgen_checknil(reg);
+		} else
 			agen(l, reg);
 	}
 
@@ -1985,9 +1959,10 @@ oindex:
 	// load the array (reg)
 	if(l->ullman <= r->ullman) {
 		regalloc(reg, types[tptr], N);
-		if(o & OPtrto)
+		if(o & OPtrto) {
 			cgen(l, reg);
-		else
+			cgen_checknil(reg);
+		} else
 			agen(l, reg);
 	}
 
@@ -1999,20 +1974,10 @@ oindex:
 			n2.type = types[tptr];
 			n2.xoffset = Array_nel;
 		} else {
-			if(l->type->width >= unmappedzero && l->op == OIND) {
-				// cannot rely on page protections to
-				// catch array ptr == 0, so dereference.
-				n2 = *reg;
-				n2.op = OINDREG;
-				n2.type = types[TUINTPTR];
-				n2.xoffset = 0;
-				regalloc(&n3, n2.type, N);
-				gins(AMOVW, &n2, &n3);
-				regfree(&n3);
-			}
-			nodconst(&n2, types[TUINT32], l->type->bound);
 			if(o & OPtrto)
 				nodconst(&n2, types[TUINT32], l->type->type->bound);
+			else
+				nodconst(&n2, types[TUINT32], l->type->bound);
 		}
 		regalloc(&n3, n2.type, N);
 		cgen(&n2, &n3);
@@ -2060,14 +2025,14 @@ oindex_const:
 	// can multiply by width statically
 
 	regalloc(reg, types[tptr], N);
-	if(o & OPtrto)
+	if(o & OPtrto) {
 		cgen(l, reg);
-	else
+		cgen_checknil(reg);
+	} else
 		agen(l, reg);
 
 	v = mpgetfix(r->val.u.xval);
 	if(o & ODynam) {
-
 		if(!debug['B'] && !n->bounded) {
 			n1 = *reg;
 			n1.op = OINDREG;

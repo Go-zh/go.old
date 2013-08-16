@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build freebsd netbsd openbsd
+// +build freebsd,arm netbsd
 
 package net
 
@@ -252,14 +252,23 @@ func (pd *pollDesc) Close() {
 }
 
 func (pd *pollDesc) Lock() {
+	if pd.pollServer == nil {
+		return
+	}
 	pd.pollServer.Lock()
 }
 
 func (pd *pollDesc) Unlock() {
+	if pd.pollServer == nil {
+		return
+	}
 	pd.pollServer.Unlock()
 }
 
 func (pd *pollDesc) Wakeup() {
+	if pd.pollServer == nil {
+		return
+	}
 	pd.pollServer.Wakeup()
 }
 
@@ -294,6 +303,9 @@ func (pd *pollDesc) WaitWrite() error {
 }
 
 func (pd *pollDesc) Evict() bool {
+	if pd.pollServer == nil {
+		return false
+	}
 	return pd.pollServer.Evict(pd)
 }
 
@@ -339,20 +351,29 @@ func (pd *pollDesc) Init(fd *netFD) error {
 	return nil
 }
 
-// TODO(dfc) these unused error returns could be removed
-
-func setReadDeadline(fd *netFD, t time.Time) error {
-	fd.pd.rdeadline.setTime(t)
-	return nil
+func (fd *netFD) setDeadline(t time.Time) error {
+	return setDeadlineImpl(fd, t, true, true)
 }
 
-func setWriteDeadline(fd *netFD, t time.Time) error {
-	fd.pd.wdeadline.setTime(t)
-	return nil
+func (fd *netFD) setReadDeadline(t time.Time) error {
+	return setDeadlineImpl(fd, t, true, false)
 }
 
-func setDeadline(fd *netFD, t time.Time) error {
-	setReadDeadline(fd, t)
-	setWriteDeadline(fd, t)
+func (fd *netFD) setWriteDeadline(t time.Time) error {
+	return setDeadlineImpl(fd, t, false, true)
+}
+
+func setDeadlineImpl(fd *netFD, t time.Time, read, write bool) error {
+	if err := fd.incref(); err != nil {
+		return err
+	}
+	defer fd.decref()
+	if read {
+		fd.pd.rdeadline.setTime(t)
+	}
+	if write {
+		fd.pd.wdeadline.setTime(t)
+	}
+	fd.pd.Wakeup()
 	return nil
 }

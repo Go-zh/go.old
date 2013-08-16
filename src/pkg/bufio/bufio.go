@@ -36,8 +36,7 @@ var (
 
 // Reader实现了对一个io.Reader对象的缓冲读。
 type Reader struct {
-	buf          []byte // either nil or []byte of length bufSize
-	bufSize      int
+	buf          []byte
 	rd           io.Reader
 	r, w         int
 	err          error
@@ -56,22 +55,14 @@ const minReadBufferSize = 16
 func NewReaderSize(rd io.Reader, size int) *Reader {
 	// Is it already a Reader?
 	b, ok := rd.(*Reader)
-	if ok && b.bufSize >= size {
+	if ok && len(b.buf) >= size {
 		return b
 	}
 	if size < minReadBufferSize {
 		size = minReadBufferSize
 	}
-	r := &Reader{
-		bufSize:      size,
-		rd:           rd,
-		lastByte:     -1,
-		lastRuneSize: -1,
-	}
-	if size > defaultBufSize {
-		// TODO(bradfitz): make all buffer sizes recycle
-		r.buf = make([]byte, r.bufSize)
-	}
+	r := new(Reader)
+	r.reset(make([]byte, size), rd)
 	return r
 }
 
@@ -82,46 +73,27 @@ func NewReader(rd io.Reader) *Reader {
 	return NewReaderSize(rd, defaultBufSize)
 }
 
+// Reset discards any buffered data, resets all state, and switches
+// the buffered reader to read from r.
+func (b *Reader) Reset(r io.Reader) {
+	b.reset(b.buf, r)
+}
+
+func (b *Reader) reset(buf []byte, r io.Reader) {
+	*b = Reader{
+		buf:          buf,
+		rd:           r,
+		lastByte:     -1,
+		lastRuneSize: -1,
+	}
+}
+
 var errNegativeRead = errors.New("bufio: reader returned negative count from Read")
-
-// TODO: use a sync.Cache instead of this:
-const arbitrarySize = 8
-
-// bufCache holds only byte slices with capacity defaultBufSize.
-var bufCache = make(chan []byte, arbitrarySize)
-
-// allocBuf makes b.buf non-nil.
-func (b *Reader) allocBuf() {
-	if b.buf != nil {
-		return
-	}
-	select {
-	case b.buf = <-bufCache:
-		b.buf = b.buf[:b.bufSize]
-	default:
-		b.buf = make([]byte, b.bufSize, defaultBufSize)
-	}
-}
-
-// putBuf returns b.buf if it's unused.
-func (b *Reader) putBuf() {
-	if b.r == b.w && b.err == io.EOF && cap(b.buf) == defaultBufSize {
-		select {
-		case bufCache <- b.buf:
-			b.buf = nil
-			b.r = 0
-			b.w = 0
-		default:
-		}
-	}
-}
 
 // fill reads a new chunk into the buffer.
 
 // fill读取一个新的块到缓存中。
 func (b *Reader) fill() {
-	b.allocBuf()
-
 	// Slide existing data to beginning.
 	if b.r > 0 {
 		copy(b.buf, b.buf[b.r:b.w])
@@ -157,7 +129,7 @@ func (b *Reader) Peek(n int) ([]byte, error) {
 	if n < 0 {
 		return nil, ErrNegativeCount
 	}
-	if n > b.bufSize {
+	if n > len(b.buf) {
 		return nil, ErrBufferFull
 	}
 	for b.w-b.r < n && b.err == nil {
@@ -196,7 +168,7 @@ func (b *Reader) Read(p []byte) (n int, err error) {
 		if b.err != nil {
 			return 0, b.readErr()
 		}
-		if len(p) >= b.bufSize {
+		if len(p) >= len(b.buf) {
 			// Large read, empty buffer.
 			// Read directly into p to avoid copy.
 			n, b.err = b.rd.Read(p)
@@ -219,7 +191,6 @@ func (b *Reader) Read(p []byte) (n int, err error) {
 	b.r += n
 	b.lastByte = int(b.buf[b.r-1])
 	b.lastRuneSize = -1
-	b.putBuf()
 	return n, nil
 }
 
@@ -239,9 +210,6 @@ func (b *Reader) ReadByte() (c byte, err error) {
 	c = b.buf[b.r]
 	b.r++
 	b.lastByte = int(c)
-	if b.err != nil { // avoid putBuf call in the common case
-		b.putBuf()
-	}
 	return c, nil
 }
 
@@ -251,7 +219,6 @@ func (b *Reader) ReadByte() (c byte, err error) {
 func (b *Reader) UnreadByte() error {
 	b.lastRuneSize = -1
 	if b.r == b.w && b.lastByte >= 0 {
-		b.allocBuf()
 		b.w = 1
 		b.r = 0
 		b.buf[0] = byte(b.lastByte)
@@ -315,7 +282,7 @@ func (b *Reader) Buffered() int { return b.w - b.r }
 
 // ReadSlice reads until the first occurrence of delim in the input,
 // returning a slice pointing at the bytes in the buffer.
-// The bytes stop being valid at the next read call.
+// The bytes stop being valid at the next read.
 // If ReadSlice encounters an error before finding a delimiter,
 // it returns all the data in the buffer and the error itself (often io.EOF).
 // ReadSlice fails with error ErrBufferFull if the buffer fills without a delim.
@@ -357,7 +324,7 @@ func (b *Reader) ReadSlice(delim byte) (line []byte, err error) {
 		}
 
 		// Buffer is full?
-		if b.Buffered() >= b.bufSize {
+		if b.Buffered() >= len(b.buf) {
 			b.r = b.w
 			return b.buf, ErrBufferFull
 		}
@@ -490,7 +457,6 @@ func (b *Reader) ReadBytes(delim byte) (line []byte, err error) {
 func (b *Reader) ReadString(delim byte) (line string, err error) {
 	bytes, err := b.ReadBytes(delim)
 	line = string(bytes)
-	b.putBuf()
 	return line, err
 }
 
@@ -530,7 +496,6 @@ func (b *Reader) WriteTo(w io.Writer) (n int64, err error) {
 func (b *Reader) writeBuf(w io.Writer) (int64, error) {
 	n, err := w.Write(b.buf[b.r:b.w])
 	b.r += n
-	b.putBuf()
 	return int64(n), err
 }
 
@@ -541,16 +506,19 @@ func (b *Reader) writeBuf(w io.Writer) (int64, error) {
 // Writer implements buffering for an io.Writer object.
 // If an error occurs writing to a Writer, no more data will be
 // accepted and all subsequent writes will return the error.
+// After all data has been written, the client should call the
+// Flush method to guarantee all data has been forwarded to
+// the underlying io.Writer.
 
 // Writer实现了io.Writer对象的缓存。
 // 如果在写数据到Writer的时候出现了一个错误，不会再有数据被写进来了，
-// 并且所有随后的写操作都会返回error。
+// 并且所有随后的写操作都会返回error。当所有数据被写入后，客户端应调用 Flush
+// 方法以确保所有数据已转为基本的 io.Writer
 type Writer struct {
-	err     error
-	buf     []byte // either nil or []byte of length bufSize
-	bufSize int
-	n       int
-	wr      io.Writer
+	err error
+	buf []byte
+	n   int
+	wr  io.Writer
 }
 
 // NewWriterSize returns a new Writer whose buffer has at least the specified
@@ -559,55 +527,34 @@ type Writer struct {
 
 // NewWriterSize返回一个新的Writer，它的缓存一定大于指定的size参数。
 // 如果io.Writer参数已经是足够大的有缓存的Writer了，函数就会返回它底层的Writer。
-func NewWriterSize(wr io.Writer, size int) *Writer {
+func NewWriterSize(w io.Writer, size int) *Writer {
 	// Is it already a Writer?
-	b, ok := wr.(*Writer)
-	if ok && b.bufSize >= size {
+	b, ok := w.(*Writer)
+	if ok && len(b.buf) >= size {
 		return b
 	}
 	if size <= 0 {
 		size = defaultBufSize
 	}
-	b = &Writer{
-		wr:      wr,
-		bufSize: size,
+	return &Writer{
+		buf: make([]byte, size),
+		wr:  w,
 	}
-	if size > defaultBufSize {
-		// TODO(bradfitz): make all buffer sizes recycle
-		b.buf = make([]byte, b.bufSize)
-	}
-	return b
 }
 
 // NewWriter returns a new Writer whose buffer has the default size.
 
 // NewWriter返回一个新的，有默认尺寸缓存的Writer。
-func NewWriter(wr io.Writer) *Writer {
-	return NewWriterSize(wr, defaultBufSize)
+func NewWriter(w io.Writer) *Writer {
+	return NewWriterSize(w, defaultBufSize)
 }
 
-// allocBuf makes b.buf non-nil.
-func (b *Writer) allocBuf() {
-	if b.buf != nil {
-		return
-	}
-	select {
-	case b.buf = <-bufCache:
-		b.buf = b.buf[:b.bufSize]
-	default:
-		b.buf = make([]byte, b.bufSize, defaultBufSize)
-	}
-}
-
-// putBuf returns b.buf if it's unused.
-func (b *Writer) putBuf() {
-	if b.n == 0 && cap(b.buf) == defaultBufSize {
-		select {
-		case bufCache <- b.buf:
-			b.buf = nil
-		default:
-		}
-	}
+// Reset discards any unflushed buffered data, clears any error, and
+// resets b to write its output to w.
+func (b *Writer) Reset(w io.Writer) {
+	b.err = nil
+	b.n = 0
+	b.wr = w
 }
 
 // Flush writes any buffered data to the underlying io.Writer.
@@ -615,7 +562,6 @@ func (b *Writer) putBuf() {
 // Flush将缓存上的所有数据写入到底层的io.Writer中。
 func (b *Writer) Flush() error {
 	err := b.flush()
-	b.putBuf()
 	return err
 }
 
@@ -645,7 +591,7 @@ func (b *Writer) flush() error {
 // Available returns how many bytes are unused in the buffer.
 
 // Available返回buffer中有多少的字节数未使用。
-func (b *Writer) Available() int { return b.bufSize - b.n }
+func (b *Writer) Available() int { return len(b.buf) - b.n }
 
 // Buffered returns the number of bytes that have been written into the current buffer.
 
@@ -661,7 +607,6 @@ func (b *Writer) Buffered() int { return b.n }
 // 它返回写入的字节数。
 // 如果nn < len(p), 它也会返回错误，用于解释为什么写入的数据会短缺。
 func (b *Writer) Write(p []byte) (nn int, err error) {
-	b.allocBuf()
 	for len(p) > b.Available() && b.err == nil {
 		var n int
 		if b.Buffered() == 0 {
@@ -695,9 +640,6 @@ func (b *Writer) WriteByte(c byte) error {
 	if b.Available() <= 0 && b.flush() != nil {
 		return b.err
 	}
-	if b.buf == nil {
-		b.allocBuf()
-	}
 	b.buf[b.n] = c
 	b.n++
 	return nil
@@ -708,9 +650,6 @@ func (b *Writer) WriteByte(c byte) error {
 
 // WriteRune写单个的Unicode代码，返回写的字节数，和遇到的错误。
 func (b *Writer) WriteRune(r rune) (size int, err error) {
-	if b.buf == nil {
-		b.allocBuf()
-	}
 	if r < utf8.RuneSelf {
 		err = b.WriteByte(byte(r))
 		if err != nil {
@@ -746,7 +685,6 @@ func (b *Writer) WriteRune(r rune) (size int, err error) {
 // 它返回写入的字节数。
 // 如果字节数比len(s)少，它就会返回error来解释为什么写入的数据短缺了。
 func (b *Writer) WriteString(s string) (int, error) {
-	b.allocBuf()
 	nn := 0
 	for len(s) > b.Available() && b.err == nil {
 		n := copy(b.buf[b.n:], s)
@@ -768,7 +706,6 @@ func (b *Writer) WriteString(s string) (int, error) {
 
 // ReadFrom实现了io.ReaderFrom。
 func (b *Writer) ReadFrom(r io.Reader) (n int64, err error) {
-	b.allocBuf()
 	if b.Buffered() == 0 {
 		if w, ok := b.wr.(io.ReaderFrom); ok {
 			return w.ReadFrom(r)

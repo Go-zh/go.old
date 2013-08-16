@@ -23,6 +23,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+#include "../../cmd/ld/textflag.h"
+
 // declared here to avoid include of runtime.h
 void	runtime·panicstring(char*);
 
@@ -62,30 +64,24 @@ struct  Vlong
 
 void    runtime·abort(void);
 
+#pragma textflag NOSPLIT
 void
 _addv(Vlong *r, Vlong a, Vlong b)
 {
-	ulong lo, hi;
-
-	lo = a.lo + b.lo;
-	hi = a.hi + b.hi;
-	if(lo < a.lo)
-		hi++;
-	r->lo = lo;
-	r->hi = hi;
+	r->lo = a.lo + b.lo;
+	r->hi = a.hi + b.hi;
+	if(r->lo < a.lo)
+		r->hi++;
 }
 
+#pragma textflag NOSPLIT
 void
 _subv(Vlong *r, Vlong a, Vlong b)
 {
-	ulong lo, hi;
-
-	lo = a.lo - b.lo;
-	hi = a.hi - b.hi;
-	if(lo > a.lo)
-		hi--;
-	r->lo = lo;
-	r->hi = hi;
+	r->lo = a.lo - b.lo;
+	r->hi = a.hi - b.hi;
+	if(r->lo > a.lo)
+		r->hi--;
 }
 
 void
@@ -427,12 +423,10 @@ _rshlv(Vlong *r, Vlong a, int b)
 	r->lo = (t << (32-b)) | (a.lo >> b);
 }
 
+#pragma textflag NOSPLIT
 void
 _lshv(Vlong *r, Vlong a, int b)
 {
-	ulong t;
-
-	t = a.lo;
 	if(b >= 32) {
 		r->lo = 0;
 		if(b >= 64) {
@@ -440,16 +434,16 @@ _lshv(Vlong *r, Vlong a, int b)
 			r->hi = 0;
 			return;
 		}
-		r->hi = t << (b-32);
+		r->hi = a.lo << (b-32);
 		return;
 	}
 	if(b <= 0) {
-		r->lo = t;
+		r->lo = a.lo;
 		r->hi = a.hi;
 		return;
 	}
-	r->lo = t << b;
-	r->hi = (t >> (32-b)) | (a.hi << b);
+	r->lo = a.lo << b;
+	r->hi = (a.lo >> (32-b)) | (a.hi << b);
 }
 
 void
@@ -623,14 +617,12 @@ _ul2v(Vlong *ret, ulong ul)
 	ret->hi = 0;
 }
 
+#pragma textflag NOSPLIT
 void
 _si2v(Vlong *ret, int si)
 {
-	long t;
-
-	t = si;
-	ret->lo = t;
-	ret->hi = t >> 31;
+	ret->lo = (long)si;
+	ret->hi = (long)si >> 31;
 }
 
 void
@@ -729,6 +721,7 @@ _v2ul(Vlong rv)
 	return rv.lo;
 }
 
+#pragma textflag NOSPLIT
 long
 _v2si(Vlong rv)
 {
@@ -782,6 +775,7 @@ _gtv(Vlong lv, Vlong rv)
 		(lv.hi == rv.hi && lv.lo > rv.lo);
 }
 
+#pragma textflag NOSPLIT
 int
 _gev(Vlong lv, Vlong rv)
 {

@@ -96,12 +96,12 @@ struct Hmap
 {
 	uintgo  count;        // # live cells == size of map.  Must be first (used by len() builtin)
 	uint32  flags;
+	uint32 hash0;        // hash seed
 	uint8   B;            // log_2 of # of buckets (can hold up to LOAD * 2^B items)
 	uint8   keysize;      // key size in bytes
 	uint8   valuesize;    // value size in bytes
 	uint16  bucketsize;   // bucket size in bytes
 
-	uintptr hash0;        // hash seed
 	byte    *buckets;     // array of 2^B Buckets. may be nil if count==0.
 	byte    *oldbuckets;  // previous bucket array of half the size, non-nil only when growing
 	uintptr nevacuate;    // progress counter for evacuation (buckets less than this have been evacuated)
@@ -259,7 +259,7 @@ hash_init(MapType *t, Hmap *h, uint32 hint)
 		// done lazily later.
 		buckets = nil;
 	} else {
-		buckets = runtime·mallocgc(bucketsize << B, 0, 1, 0);
+		buckets = runtime·mallocgc(bucketsize << B, 0, FlagNoZero);
 		for(i = 0; i < (uintptr)1 << B; i++) {
 			b = (Bucket*)(buckets + i * bucketsize);
 			clearbucket(b);
@@ -330,7 +330,7 @@ evacuate(MapType *t, Hmap *h, uintptr oldbucket)
 				if((hash & newbit) == 0) {
 					if(xi == BUCKETSIZE) {
 						if(checkgc) mstats.next_gc = mstats.heap_alloc;
-						newx = runtime·mallocgc(h->bucketsize, 0, 1, 0);
+						newx = runtime·mallocgc(h->bucketsize, 0, FlagNoZero);
 						clearbucket(newx);
 						x->overflow = newx;
 						x = newx;
@@ -355,7 +355,7 @@ evacuate(MapType *t, Hmap *h, uintptr oldbucket)
 				} else {
 					if(yi == BUCKETSIZE) {
 						if(checkgc) mstats.next_gc = mstats.heap_alloc;
-						newy = runtime·mallocgc(h->bucketsize, 0, 1, 0);
+						newy = runtime·mallocgc(h->bucketsize, 0, FlagNoZero);
 						clearbucket(newy);
 						y->overflow = newy;
 						y = newy;
@@ -451,7 +451,7 @@ hash_grow(MapType *t, Hmap *h)
 	old_buckets = h->buckets;
 	// NOTE: this could be a big malloc, but since we don't need zeroing it is probably fast.
 	if(checkgc) mstats.next_gc = mstats.heap_alloc;
-	new_buckets = runtime·mallocgc((uintptr)h->bucketsize << (h->B + 1), 0, 1, 0);
+	new_buckets = runtime·mallocgc((uintptr)h->bucketsize << (h->B + 1), 0, FlagNoZero);
 	flags = (h->flags & ~(Iterator | OldIterator));
 	if((h->flags & Iterator) != 0) {
 		flags |= OldIterator;
@@ -533,49 +533,67 @@ static uint8 empty_value[MAXVALUESIZE];
 #define HASH_LOOKUP2 runtime·mapaccess2_fast32
 #define KEYTYPE uint32
 #define HASHFUNC runtime·algarray[AMEM32].hash
-#define EQFUNC(x,y) ((x) == (y))
-#define EQMAYBE(x,y) ((x) == (y))
-#define HASMAYBE false
-#define QUICKEQ(x) true
+#define FASTKEY(x) true
+#define QUICK_NE(x,y) ((x) != (y))
+#define QUICK_EQ(x,y) true
+#define SLOW_EQ(x,y) true
+#define MAYBE_EQ(x,y) true
 #include "hashmap_fast.c"
 
 #undef HASH_LOOKUP1
 #undef HASH_LOOKUP2
 #undef KEYTYPE
 #undef HASHFUNC
-#undef EQFUNC
-#undef EQMAYBE
-#undef HASMAYBE
-#undef QUICKEQ
+#undef FASTKEY
+#undef QUICK_NE
+#undef QUICK_EQ
+#undef SLOW_EQ
+#undef MAYBE_EQ
 
 #define HASH_LOOKUP1 runtime·mapaccess1_fast64
 #define HASH_LOOKUP2 runtime·mapaccess2_fast64
 #define KEYTYPE uint64
 #define HASHFUNC runtime·algarray[AMEM64].hash
-#define EQFUNC(x,y) ((x) == (y))
-#define EQMAYBE(x,y) ((x) == (y))
-#define HASMAYBE false
-#define QUICKEQ(x) true
+#define FASTKEY(x) true
+#define QUICK_NE(x,y) ((x) != (y))
+#define QUICK_EQ(x,y) true
+#define SLOW_EQ(x,y) true
+#define MAYBE_EQ(x,y) true
 #include "hashmap_fast.c"
 
 #undef HASH_LOOKUP1
 #undef HASH_LOOKUP2
 #undef KEYTYPE
 #undef HASHFUNC
-#undef EQFUNC
-#undef EQMAYBE
-#undef HASMAYBE
-#undef QUICKEQ
+#undef FASTKEY
+#undef QUICK_NE
+#undef QUICK_EQ
+#undef SLOW_EQ
+#undef MAYBE_EQ
+
+#ifdef GOARCH_amd64
+#define CHECKTYPE uint64
+#endif
+#ifdef GOARCH_386
+#define CHECKTYPE uint32
+#endif
+#ifdef GOARCH_arm
+// can't use uint32 on arm because our loads aren't aligned.
+// TODO: use uint32 for arm v6+?
+#define CHECKTYPE uint8
+#endif
 
 #define HASH_LOOKUP1 runtime·mapaccess1_faststr
 #define HASH_LOOKUP2 runtime·mapaccess2_faststr
 #define KEYTYPE String
 #define HASHFUNC runtime·algarray[ASTRING].hash
-#define EQFUNC(x,y) ((x).len == (y).len && ((x).str == (y).str || runtime·memeq((x).str, (y).str, (x).len)))
-#define EQMAYBE(x,y) ((x).len == (y).len)
-#define HASMAYBE true
-#define QUICKEQ(x) ((x).len < 32)
+#define FASTKEY(x) ((x).len < 32)
+#define QUICK_NE(x,y) ((x).len != (y).len)
+#define QUICK_EQ(x,y) ((x).str == (y).str)
+#define SLOW_EQ(x,y) runtime·memeq((x).str, (y).str, (x).len)
+#define MAYBE_EQ(x,y) (*(CHECKTYPE*)(x).str == *(CHECKTYPE*)(y).str && *(CHECKTYPE*)((x).str + (x).len - sizeof(CHECKTYPE)) == *(CHECKTYPE*)((y).str + (x).len - sizeof(CHECKTYPE)))
 #include "hashmap_fast.c"
+#include "../../cmd/ld/textflag.h"
 
 static void
 hash_insert(MapType *t, Hmap *h, void *key, void *value)
@@ -597,7 +615,7 @@ hash_insert(MapType *t, Hmap *h, void *key, void *value)
 	hash = h->hash0;
 	t->key->alg->hash(&hash, t->key->size, key);
 	if(h->buckets == nil) {
-		h->buckets = runtime·mallocgc(h->bucketsize, 0, 1, 0);
+		h->buckets = runtime·mallocgc(h->bucketsize, 0, FlagNoZero);
 		b = (Bucket*)(h->buckets);
 		clearbucket(b);
 	}
@@ -647,7 +665,7 @@ hash_insert(MapType *t, Hmap *h, void *key, void *value)
 	if(inserti == nil) {
 		// all current buckets are full, allocate a new one.
 		if(checkgc) mstats.next_gc = mstats.heap_alloc;
-		newb = runtime·mallocgc(h->bucketsize, 0, 1, 0);
+		newb = runtime·mallocgc(h->bucketsize, 0, FlagNoZero);
 		clearbucket(newb);
 		b->overflow = newb;
 		inserti = newb->tophash;
@@ -658,13 +676,13 @@ hash_insert(MapType *t, Hmap *h, void *key, void *value)
 	// store new key/value at insert position
 	if((h->flags & IndirectKey) != 0) {
 		if(checkgc) mstats.next_gc = mstats.heap_alloc;
-		kmem = runtime·mallocgc(t->key->size, 0, 1, 0);
+		kmem = runtime·mallocgc(t->key->size, 0, FlagNoZero);
 		*(byte**)insertk = kmem;
 		insertk = kmem;
 	}
 	if((h->flags & IndirectValue) != 0) {
 		if(checkgc) mstats.next_gc = mstats.heap_alloc;
-		vmem = runtime·mallocgc(t->elem->size, 0, 1, 0);
+		vmem = runtime·mallocgc(t->elem->size, 0, FlagNoZero);
 		*(byte**)insertv = vmem;
 		insertv = vmem;
 	}
@@ -1095,6 +1113,9 @@ runtime·makemap_c(MapType *typ, int64 hint)
 	Type *key;
 
 	key = typ->key;
+	
+	if(sizeof(Hmap) > 48)
+		runtime·panicstring("hmap too large");
 
 	if(hint < 0 || (int32)hint != hint)
 		runtime·panicstring("makemap: size out of range");
@@ -1102,15 +1123,7 @@ runtime·makemap_c(MapType *typ, int64 hint)
 	if(key->alg->hash == runtime·nohash)
 		runtime·throw("runtime.makemap: unsupported map key type");
 
-	h = runtime·mal(sizeof(*h));
-
-	if(UseSpanType) {
-		if(false) {
-			runtime·printf("makemap %S: %p\n", *typ->string, h);
-		}
-		runtime·settype(h, (uintptr)typ | TypeInfo_Map);
-	}
-
+	h = runtime·mallocgc(sizeof(*h), (uintptr)typ | TypeInfo_Map, 0);
 	hash_init(typ, h, hint);
 
 	// these calculations are compiler dependent.
@@ -1154,9 +1167,6 @@ runtime·mapaccess(MapType *t, Hmap *h, byte *ak, byte *av, bool *pres)
 		return;
 	}
 
-	if(runtime·gcwaiting)
-		runtime·gosched();
-
 	res = hash_lookup(t, h, &ak);
 
 	if(res != nil) {
@@ -1169,7 +1179,7 @@ runtime·mapaccess(MapType *t, Hmap *h, byte *ak, byte *av, bool *pres)
 }
 
 // mapaccess1(hmap *map[any]any, key any) (val any);
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 runtime·mapaccess1(MapType *t, Hmap *h, ...)
 {
@@ -1201,7 +1211,7 @@ runtime·mapaccess1(MapType *t, Hmap *h, ...)
 }
 
 // mapaccess2(hmap *map[any]any, key any) (val any, pres bool);
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 runtime·mapaccess2(MapType *t, Hmap *h, ...)
 {
@@ -1264,9 +1274,6 @@ runtime·mapassign(MapType *t, Hmap *h, byte *ak, byte *av)
 	if(h == nil)
 		runtime·panicstring("assignment to entry in nil map");
 
-	if(runtime·gcwaiting)
-		runtime·gosched();
-
 	if(av == nil) {
 		hash_remove(t, h, ak);
 	} else {
@@ -1285,7 +1292,7 @@ runtime·mapassign(MapType *t, Hmap *h, byte *ak, byte *av)
 }
 
 // mapassign1(mapType *type, hmap *map[any]any, key any, val any);
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 runtime·mapassign1(MapType *t, Hmap *h, ...)
 {
@@ -1303,7 +1310,7 @@ runtime·mapassign1(MapType *t, Hmap *h, ...)
 }
 
 // mapdelete(mapType *type, hmap *map[any]any, key any)
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 runtime·mapdelete(MapType *t, Hmap *h, ...)
 {
@@ -1411,8 +1418,6 @@ runtime·mapiternext(struct hash_iter *it)
 {
 	if(raceenabled)
 		runtime·racereadpc(it->h, runtime·getcallerpc(&it), runtime·mapiternext);
-	if(runtime·gcwaiting)
-		runtime·gosched();
 
 	hash_next(it);
 	if(debug) {
@@ -1433,7 +1438,7 @@ reflect·mapiternext(struct hash_iter *it)
 }
 
 // mapiter1(hiter *any) (key any);
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 runtime·mapiter1(struct hash_iter *it, ...)
 {
@@ -1514,7 +1519,7 @@ reflect·maplen(Hmap *h, intgo len)
 }
 
 // mapiter2(hiter *any) (key any, val any);
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 runtime·mapiter2(struct hash_iter *it, ...)
 {

@@ -4,6 +4,7 @@
 
 #include "runtime.h"
 #include "type.h"
+#include "../../cmd/ld/textflag.h"
 
 //static Lock debuglock;
 
@@ -12,7 +13,7 @@ static void vprintf(int8*, byte*);
 // write to goroutine-local buffer if diverting output,
 // or else standard error.
 static void
-gwrite(void *v, int32 n)
+gwrite(void *v, intgo n)
 {
 	if(g == nil || g->writebuf == nil) {
 		runtime·write(2, v, n);
@@ -52,7 +53,7 @@ runtime·prints(int8 *s)
 	gwrite(s, runtime·findnull((byte*)s));
 }
 
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 runtime·printf(int8 *s, ...)
 {
@@ -179,7 +180,7 @@ vprintf(int8 *s, byte *base)
 	//runtime·unlock(&debuglock);
 }
 
-#pragma textflag 7
+#pragma textflag NOSPLIT
 void
 runtime·goprintf(String s, ...)
 {
@@ -350,8 +351,6 @@ runtime·printpointer(void *p)
 void
 runtime·printstring(String v)
 {
-	extern uint32 runtime·maxstring;
-
 	if(v.len > runtime·maxstring) {
 		gwrite("[string too long]", 17);
 		return;

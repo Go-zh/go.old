@@ -63,6 +63,8 @@ enum
 	ACPLX128,
 
 	BADWIDTH	= -1000000000,
+	
+	MaxStackVarSize = 10*1024*1024,
 };
 
 extern vlong	MAXWIDTH;
@@ -151,6 +153,7 @@ struct	Type
 	uchar	broke;  	// broken type definition.
 	uchar	isddd;		// TFIELD is ... argument
 	uchar	align;
+	uchar	haspointers;	// 0 unknown, 1 no, 2 yes
 
 	Node*	nod;		// canonical OTYPE node
 	Type*	orig;		// original type (type literal or predefined type)
@@ -189,8 +192,7 @@ struct	Type
 	// for TFORW, where to copy the eventual value to
 	NodeList	*copyto;
 	
-	// for usefield
-	Node	*lastfn;
+	Node	*lastfn;	// for usefield
 };
 #define	T	((Type*)0)
 
@@ -328,6 +330,7 @@ struct	Node
 	int32	iota;
 	uint32	walkgen;
 	int32	esclevel;
+	void*	opt;	// for optimization passes
 };
 #define	N	((Node*)0)
 
@@ -570,7 +573,7 @@ enum
 	OITAB,	// itable word of an interface value.
 	OCLOSUREVAR, // variable reference at beginning of closure function
 	OCFUNC,	// reference to c function pointer (not go func value)
-	OCHECKNOTNIL, // emit code to ensure pointer/interface not nil
+	OCHECKNIL, // emit code to ensure pointer/interface not nil
 
 	// arch-specific registers
 	OREGISTER,	// a register, such as AX.
@@ -751,6 +754,7 @@ struct	Io
 	int32	ilineno;
 	int	nlsemi;
 	int	eofnl;
+	int	last;
 	int	peekc;
 	int	peekc1;	// second peekc for ...
 	char*	cp;	// used for content when bin==nil
@@ -861,6 +865,8 @@ EXTERN	char	namebuf[NSYMB];
 EXTERN	char	lexbuf[NSYMB];
 EXTERN	char	litbuf[NSYMB];
 EXTERN	int	debug[256];
+EXTERN	char*	debugstr;
+EXTERN	int	debug_checknil;
 EXTERN	Sym*	hash[NHASH];
 EXTERN	Sym*	importmyname;	// my name for package
 EXTERN	Pkg*	localpkg;	// package being compiled
@@ -934,6 +940,7 @@ EXTERN	NodeList*	lastconst;
 EXTERN	Node*	lasttype;
 EXTERN	vlong	maxarg;
 EXTERN	vlong	stksize;		// stack size for current frame
+EXTERN	vlong	stkptrsize;		// prefix of stack containing pointers for current frame
 EXTERN	int32	blockgen;		// max block number
 EXTERN	int32	block;			// current block number
 EXTERN	int	hasdefer;		// flag that curfn has defer statetment
@@ -1440,20 +1447,22 @@ EXTERN	Prog*	firstpc;
 EXTERN	Prog*	retpc;
 
 EXTERN	Node*	nodfp;
+EXTERN	int	disable_checknil;
 
 int	anyregalloc(void);
 void	betypeinit(void);
 void	bgen(Node *n, int true, int likely, Prog *to);
-void	checkref(Node *n, int force);
-void	checknotnil(Node*, NodeList**);
+void	checknil(Node*, NodeList**);
+void	expandchecks(Prog*);
 void	cgen(Node*, Node*);
 void	cgen_asop(Node *n);
 void	cgen_call(Node *n, int proc);
 void	cgen_callinter(Node *n, Node *res, int proc);
+void	cgen_checknil(Node*);
 void	cgen_ret(Node *n);
 void	clearfat(Node *n);
 void	compile(Node*);
-void	defframe(Prog*);
+void	defframe(Prog*, Bvec*);
 int	dgostringptr(Sym*, int off, char *str);
 int	dgostrlitptr(Sym*, int off, Strlit*);
 int	dstringptr(Sym *s, int off, char *str);
@@ -1469,6 +1478,7 @@ void	ggloblnod(Node *nam);
 void	ggloblsym(Sym *s, int32 width, int dupok, int rodata);
 Prog*	gjmp(Prog*);
 void	gused(Node*);
+void	movelarge(NodeList*);
 int	isfat(Type*);
 void	markautoused(Prog*);
 Plist*	newplist(void);

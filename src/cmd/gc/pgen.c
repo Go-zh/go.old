@@ -2,29 +2,36 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// "Portable" code generation.
+// Compiled separately for 5g, 6g, and 8g, so allowed to use gg.h, opt.h.
+// Must code to the intersection of the three back ends.
+
 #include	<u.h>
 #include	<libc.h>
 #include	"gg.h"
 #include	"opt.h"
 #include	"../../pkg/runtime/funcdata.h"
 
+enum { BitsPerPointer = 2 };
+
 static void allocauto(Prog* p);
-static int pointermap(Sym*, int, Node*);
-static void gcsymbol(Sym*, Node*);
+static void dumpgcargs(Node*, Sym*);
+static Bvec* dumpgclocals(Node*, Sym*);
 
 void
 compile(Node *fn)
 {
+	Bvec *bv;
 	Plist *pl;
-	Node nod1, *n, *gcnod;
+	Node nod1, *n, *gcargsnod, *gclocalsnod;
 	Prog *ptxt, *p, *p1;
 	int32 lno;
 	Type *t;
 	Iter save;
 	vlong oldstksize;
 	NodeList *l;
-	Sym *gcsym;
-	static int ngcsym;
+	Sym *gcargssym, *gclocalssym;
+	static int ngcargs, ngclocals;
 
 	if(newproc == N) {
 		newproc = sysfunc("newproc");
@@ -93,13 +100,21 @@ compile(Node *fn)
 
 	ginit();
 
-	snprint(namebuf, sizeof namebuf, "gc·%d", ngcsym++);
-	gcsym = lookup(namebuf);
-	gcnod = newname(gcsym);
-	gcnod->class = PEXTERN;
+	snprint(namebuf, sizeof namebuf, "gcargs·%d", ngcargs++);
+	gcargssym = lookup(namebuf);
+	gcargsnod = newname(gcargssym);
+	gcargsnod->class = PEXTERN;
 
-	nodconst(&nod1, types[TINT32], FUNCDATA_GC);
-	gins(AFUNCDATA, &nod1, gcnod);
+	nodconst(&nod1, types[TINT32], FUNCDATA_GCArgs);
+	gins(AFUNCDATA, &nod1, gcargsnod);
+
+	snprint(namebuf, sizeof(namebuf), "gclocals·%d", ngclocals++);
+	gclocalssym = lookup(namebuf);
+	gclocalsnod = newname(gclocalssym);
+	gclocalsnod->class = PEXTERN;
+
+	nodconst(&nod1, types[TINT32], FUNCDATA_GCLocals);
+	gins(AFUNCDATA, &nod1, gclocalsnod);
 
 	for(t=curfn->paramfld; t; t=t->down)
 		gtrack(tracksym(t->type));
@@ -156,38 +171,32 @@ compile(Node *fn)
 	if(!debug['N'] || debug['R'] || debug['P']) {
 		regopt(ptxt);
 	}
+	expandchecks(ptxt);
 
 	oldstksize = stksize;
 	allocauto(ptxt);
-	
-	// Emit garbage collection symbol.
-	gcsymbol(gcsym, fn);
 
 	if(0)
 		print("allocauto: %lld to %lld\n", oldstksize, (vlong)stksize);
 
 	setlineno(curfn);
-	if((int64)stksize+maxarg > (1ULL<<31))
+	if((int64)stksize+maxarg > (1ULL<<31)) {
 		yyerror("stack frame too large (>2GB)");
+		goto ret;
+	}
 
-	defframe(ptxt);
+	// Emit garbage collection symbols.
+	dumpgcargs(fn, gcargssym);
+	bv = dumpgclocals(curfn, gclocalssym);
+
+	defframe(ptxt, bv);
+	free(bv);
 
 	if(0)
 		frame(0);
 
 ret:
 	lineno = lno;
-}
-
-static void
-gcsymbol(Sym *gcsym, Node *fn)
-{
-	int off;
-
-	off = 0;
-	off = duint32(gcsym, off, stksize); // size of local block
-	off = pointermap(gcsym, off, fn); // pointer bitmap for args (must be last)
-	ggloblsym(gcsym, off, 0, 1);
 }
 
 static void
@@ -227,7 +236,7 @@ walktype1(Type *t, vlong *xoffset, Bvec *bv)
 	case TMAP:
 		if(*xoffset % widthptr != 0)
 			fatal("walktype1: invalid alignment, %T", t);
-		bvset(bv, *xoffset / widthptr);
+		bvset(bv, (*xoffset / widthptr) * BitsPerPointer);
 		*xoffset += t->width;
 		break;
 
@@ -235,7 +244,7 @@ walktype1(Type *t, vlong *xoffset, Bvec *bv)
 		// struct { byte *str; intgo len; }
 		if(*xoffset % widthptr != 0)
 			fatal("walktype1: invalid alignment, %T", t);
-		bvset(bv, *xoffset / widthptr);
+		bvset(bv, (*xoffset / widthptr) * BitsPerPointer);
 		*xoffset += t->width;
 		break;
 
@@ -245,8 +254,10 @@ walktype1(Type *t, vlong *xoffset, Bvec *bv)
 		// struct { Type* type; union { void* ptr, uintptr val } data; }
 		if(*xoffset % widthptr != 0)
 			fatal("walktype1: invalid alignment, %T", t);
-		bvset(bv, *xoffset / widthptr);
-		bvset(bv, (*xoffset + widthptr) / widthptr);
+		bvset(bv, ((*xoffset / widthptr) * BitsPerPointer) + 1);
+		if(isnilinter(t))
+			bvset(bv, ((*xoffset / widthptr) * BitsPerPointer));
+		bvset(bv, ((*xoffset + widthptr) / widthptr) * BitsPerPointer);
 		*xoffset += t->width;
 		break;
 
@@ -259,7 +270,7 @@ walktype1(Type *t, vlong *xoffset, Bvec *bv)
 			// struct { byte* array; uintgo len; uintgo cap; }
 			if(*xoffset % widthptr != 0)
 				fatal("walktype1: invalid TARRAY alignment, %T", t);
-			bvset(bv, *xoffset / widthptr);
+			bvset(bv, (*xoffset / widthptr) * BitsPerPointer);
 			*xoffset += t->width;
 		} else if(!haspointers(t->type))
 				*xoffset += t->width;
@@ -296,50 +307,98 @@ walktype(Type *type, Bvec *bv)
 }
 
 // Compute a bit vector to describes the pointer containing locations
-// in the argument list.
-static int
-pointermap(Sym *gcsym, int off, Node *fn)
+// in the in and out argument list and dump the bitvector length and
+// data to the provided symbol.
+static void
+dumpgcargs(Node *fn, Sym *sym)
 {
 	Type *thistype, *inargtype, *outargtype;
 	Bvec *bv;
 	int32 i;
+	int off;
 
 	thistype = getthisx(fn->type);
 	inargtype = getinargx(fn->type);
 	outargtype = getoutargx(fn->type);
-	bv = bvalloc(fn->type->argwid / widthptr);
+	bv = bvalloc((fn->type->argwid / widthptr) * BitsPerPointer);
 	if(thistype != nil)
 		walktype(thistype, bv);
 	if(inargtype != nil)
 		walktype(inargtype, bv);
 	if(outargtype != nil)
 		walktype(outargtype, bv);
-	off = duint32(gcsym, off, bv->n);
+	off = duint32(sym, 0, bv->n);
 	for(i = 0; i < bv->n; i += 32)
-		off = duint32(gcsym, off, bv->b[i/32]);
+		off = duint32(sym, off, bv->b[i/32]);
 	free(bv);
-	return off;
+	ggloblsym(sym, off, 0, 1);
 }
 
-// Sort the list of stack variables.  autos after anything else,
-// within autos, unused after used, and within used on reverse alignment.
-// non-autos sort on offset.
+// Compute a bit vector to describes the pointer containing locations
+// in local variables and dumps the bitvector length and data out to
+// the provided symbol. Returns the vector for use and freeing by caller.
+static Bvec*
+dumpgclocals(Node* fn, Sym *sym)
+{
+	Bvec *bv;
+	NodeList *ll;
+	Node *node;
+	vlong xoffset;
+	int32 i;
+	int off;
+
+	bv = bvalloc((stkptrsize / widthptr) * BitsPerPointer);
+	for(ll = fn->dcl; ll != nil; ll = ll->next) {
+		node = ll->n;
+		if(node->class == PAUTO && node->op == ONAME) {
+			if(haspointers(node->type)) {
+				xoffset = node->xoffset + stkptrsize;
+				walktype1(node->type, &xoffset, bv);
+			}
+		}
+	}
+	off = duint32(sym, 0, bv->n);
+	for(i = 0; i < bv->n; i += 32) {
+		off = duint32(sym, off, bv->b[i/32]);
+	}
+	ggloblsym(sym, off, 0, 1);
+	return bv;
+}
+
+// Sort the list of stack variables. Autos after anything else,
+// within autos, unused after used, within used, things with
+// pointers first, and then decreasing size.
+// Because autos are laid out in decreasing addresses
+// on the stack, pointers first and decreasing size
+// really means, in memory, pointers near the top of the 
+// stack and increasing in size.
+// Non-autos sort on offset.
 static int
 cmpstackvar(Node *a, Node *b)
 {
+	int ap, bp;
+
 	if (a->class != b->class)
-		return (a->class == PAUTO) ? 1 : -1;
+		return (a->class == PAUTO) ? +1 : -1;
 	if (a->class != PAUTO) {
 		if (a->xoffset < b->xoffset)
 			return -1;
 		if (a->xoffset > b->xoffset)
-			return 1;
+			return +1;
 		return 0;
 	}
 	if ((a->used == 0) != (b->used == 0))
 		return b->used - a->used;
-	return b->type->align - a->type->align;
 
+	ap = haspointers(a->type);
+	bp = haspointers(b->type);
+	if(ap != bp)
+		return bp - ap;
+	if(a->type->width < b->type->width)
+		return +1;
+	if(a->type->width > b->type->width)
+		return -1;
+	return 0;
 }
 
 // TODO(lvd) find out where the PAUTO/OLITERAL nodes come from.
@@ -350,8 +409,11 @@ allocauto(Prog* ptxt)
 	Node* n;
 	vlong w;
 
-	if(curfn->dcl == nil)
+	if(curfn->dcl == nil) {
+		stksize = 0;
+		stkptrsize = 0;
 		return;
+	}
 
 	// Mark the PAUTO's unused.
 	for(ll=curfn->dcl; ll != nil; ll=ll->next)
@@ -369,6 +431,7 @@ allocauto(Prog* ptxt)
 		// No locals used at all
 		curfn->dcl = nil;
 		stksize = 0;
+		stkptrsize = 0;
 		fixautoused(ptxt);
 		return;
 	}
@@ -384,6 +447,7 @@ allocauto(Prog* ptxt)
 
 	// Reassign stack offsets of the locals that are still there.
 	stksize = 0;
+	stkptrsize = 0;
 	for(ll = curfn->dcl; ll != nil; ll=ll->next) {
 		n = ll->n;
 		if (n->class != PAUTO || n->op != ONAME)
@@ -395,6 +459,8 @@ allocauto(Prog* ptxt)
 			fatal("bad width");
 		stksize += w;
 		stksize = rnd(stksize, n->type->align);
+		if(haspointers(n->type))
+			stkptrsize = stksize;
 		if(thechar == '5')
 			stksize = rnd(stksize, widthptr);
 		if(stksize >= (1ULL<<31)) {
@@ -403,14 +469,58 @@ allocauto(Prog* ptxt)
 		}
 		n->stkdelta = -stksize - n->xoffset;
 	}
+	stksize = rnd(stksize, widthptr);
+	stkptrsize = rnd(stkptrsize, widthptr);
 
 	fixautoused(ptxt);
 
 	// The debug information needs accurate offsets on the symbols.
-	for(ll = curfn->dcl ;ll != nil; ll=ll->next) {
+	for(ll = curfn->dcl; ll != nil; ll=ll->next) {
 		if (ll->n->class != PAUTO || ll->n->op != ONAME)
 			continue;
 		ll->n->xoffset += ll->n->stkdelta;
 		ll->n->stkdelta = 0;
 	}
+}
+
+static void movelargefn(Node*);
+
+void
+movelarge(NodeList *l)
+{
+	for(; l; l=l->next)
+		if(l->n->op == ODCLFUNC)
+			movelargefn(l->n);
+}
+
+static void
+movelargefn(Node *fn)
+{
+	NodeList *l;
+	Node *n;
+
+	for(l=fn->dcl; l != nil; l=l->next) {
+		n = l->n;
+		if(n->class == PAUTO && n->type != T && n->type->width > MaxStackVarSize)
+			addrescapes(n);
+	}
+}
+
+void
+cgen_checknil(Node *n)
+{
+	Node reg;
+
+	if(disable_checknil)
+		return;
+	while(n->op == ODOT || (n->op == OINDEX && isfixedarray(n->left->type->type))) // NOTE: not ODOTPTR
+		n = n->left;
+	if((thechar == '5' && n->op != OREGISTER) || !n->addable) {
+		regalloc(&reg, types[tptr], n);
+		cgen(n, &reg);
+		gins(ACHECKNIL, &reg, N);
+		regfree(&reg);
+		return;
+	}
+	gins(ACHECKNIL, n, N);
 }

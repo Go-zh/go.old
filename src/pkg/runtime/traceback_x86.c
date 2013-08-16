@@ -17,8 +17,6 @@ void runtime·sigpanic(void);
 // This code is also used for the 386 tracebacks.
 // Use uintptr for an appropriate word-sized integer.
 
-static String unknown = { (uint8*)"?", 1 };
-
 // Generic traceback.  Handles runtime stack prints (pcbuf == nil),
 // the runtime.Callers function (pcbuf != nil), as well as the garbage
 // collector (callback != nil).  A little clunky to merge these, but avoids
@@ -118,7 +116,7 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 		// Most functions have a fixed-size argument block,
 		// so we can use metadata about the function f.
 		// Not all, though: there are some variadic functions
-		// in package runtime, and for those we use call-specific
+		// in package runtime and reflect, and for those we use call-specific
 		// metadata recorded by f's caller.
 		if(callback != nil || printing) {
 			frame.argp = (byte*)frame.fp;
@@ -201,21 +199,22 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 	return n;
 }
 
-static void
-printcreatedby(G *gp)
+void
+runtime·printcreatedby(G *gp)
 {
 	int32 line;
-	String file;
 	uintptr pc, tracepc;
 	Func *f;
+	String file;
 
 	// Show what created goroutine, except main goroutine (goid 1).
-	if((pc = gp->gopc) != 0 && (f = runtime·findfunc(pc)) != nil && gp->goid != 1) {
+	if((pc = gp->gopc) != 0 && (f = runtime·findfunc(pc)) != nil &&
+		runtime·showframe(f, gp) && gp->goid != 1) {
 		runtime·printf("created by %s\n", runtime·funcname(f));
 		tracepc = pc;	// back up to CALL instruction for funcline.
 		if(pc > f->entry)
-			tracepc--;
-		line =  runtime·funcline(f, tracepc, &file);
+			tracepc -= PCQuantum;
+		line = runtime·funcline(f, tracepc, &file);
 		runtime·printf("\t%S:%d", file, line);
 		if(pc > f->entry)
 			runtime·printf(" +%p", (uintptr)(pc - f->entry));
@@ -230,15 +229,15 @@ runtime·traceback(uintptr pc, uintptr sp, uintptr lr, G *gp)
 
 	if(gp->status == Gsyscall) {
 		// Override signal registers if blocked in system call.
-		pc = gp->sched.pc;
-		sp = gp->sched.sp;
+		pc = gp->syscallpc;
+		sp = gp->syscallsp;
 	}
 	
 	// Print traceback. By default, omits runtime frames.
 	// If that means we print nothing at all, repeat forcing all frames printed.
 	if(runtime·gentraceback(pc, sp, 0, gp, 0, nil, 100, nil, nil, false) == 0)
 		runtime·gentraceback(pc, sp, 0, gp, 0, nil, 100, nil, nil, true);
-	printcreatedby(gp);
+	runtime·printcreatedby(gp);
 }
 
 int32

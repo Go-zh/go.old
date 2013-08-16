@@ -28,6 +28,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+#include	"../gc/popt.h"
+
 #define	Z	N
 #define	Adr	Addr
 
@@ -50,9 +52,10 @@ typedef	struct	Rgn	Rgn;
 // A Reg is a wrapper around a single Prog (one instruction) that holds
 // register optimization information while the optimizer runs.
 // r->prog is the instruction.
-// r->prog->regp points back to r.
+// r->prog->opt points back to r.
 struct	Reg
 {
+	Flow	f;
 
 	Bits	set;  		// variables written by this instruction.
 	Bits	use1; 		// variables read by prog->from.
@@ -66,19 +69,6 @@ struct	Reg
 	Bits	act;
 
 	int32	regu;		// register used bitmap
-	int32	rpo;		// reverse post ordering
-	int32	active;
-
-	uint16	loop;		// x5 for every loop
-	uchar	refset;		// diagnostic generated
-
-	Reg*	p1;     	// predecessors of this instruction: p1,
-	Reg*	p2;     	// and then p2 linked though p2link.
-	Reg*	p2link;
-	Reg*	s1;     	// successors of this instruction (at most two: s1 and s2).
-	Reg*	s2;
-	Reg*	link;   	// next instruction in function code
-	Prog*	prog;   	// actual instruction
 };
 #define	R	((Reg*)0)
 
@@ -93,11 +83,7 @@ struct	Rgn
 
 EXTERN	int32	exregoffset;		// not set
 EXTERN	int32	exfregoffset;		// not set
-EXTERN	Reg*	firstr;
-EXTERN	Reg*	lastr;
 EXTERN	Reg	zreg;
-EXTERN	Reg*	freer;
-EXTERN	Reg**	rpo2r;
 EXTERN	Rgn	region[NRGN];
 EXTERN	Rgn*	rgp;
 EXTERN	int	nregion;
@@ -111,7 +97,6 @@ EXTERN	Bits	addrs;
 EXTERN	Bits	ovar;
 EXTERN	int	change;
 EXTERN	int32	maxnr;
-EXTERN	int32*	idom;
 
 EXTERN	struct
 {
@@ -126,43 +111,89 @@ EXTERN	struct
 /*
  * reg.c
  */
-Reg*	rega(void);
 int	rcmp(const void*, const void*);
 void	regopt(Prog*);
 void	addmove(Reg*, int, int, int);
 Bits	mkvar(Reg*, Adr*);
 void	prop(Reg*, Bits, Bits);
-void	loopit(Reg*, int32);
 void	synch(Reg*, Bits);
 uint32	allreg(uint32, Rgn*);
 void	paint1(Reg*, int);
 uint32	paint2(Reg*, int);
 void	paint3(Reg*, int, int32, int);
 void	addreg(Adr*, int);
-void	dumpone(Reg*);
-void	dumpit(char*, Reg*);
-int	noreturn(Prog *p);
+void	dumpone(Flow*, int);
+void	dumpit(char*, Flow*, int);
 
 /*
  * peep.c
  */
-void	peep(void);
-void	excise(Reg*);
-Reg*	uniqp(Reg*);
-Reg*	uniqs(Reg*);
-int	regtyp(Adr*);
-int	anyvar(Adr*);
-int	subprop(Reg*);
-int	copyprop(Reg*);
-int	copy1(Adr*, Adr*, Reg*, int);
+void	peep(Prog*);
+void	excise(Flow*);
 int	copyu(Prog*, Adr*, Adr*);
-
-int	copyas(Adr*, Adr*);
-int	copyau(Adr*, Adr*);
-int	copysub(Adr*, Adr*, Adr*, int);
-int	copysub1(Prog*, Adr*, Adr*, int);
 
 int32	RtoB(int);
 int32	FtoB(int);
 int	BtoR(int32);
 int	BtoF(int32);
+
+/*
+ * prog.c
+ */
+typedef struct ProgInfo ProgInfo;
+struct ProgInfo
+{
+	uint32 flags; // the bits below
+	uint32 reguse; // required registers used by this instruction
+	uint32 regset; // required registers set by this instruction
+	uint32 regindex; // registers used by addressing mode
+};
+
+enum
+{
+	// Pseudo-op, like TEXT, GLOBL, TYPE, PCDATA, FUNCDATA.
+	Pseudo = 1<<1,
+	
+	// There's nothing to say about the instruction,
+	// but it's still okay to see.
+	OK = 1<<2,
+
+	// Size of right-side write, or right-side read if no write.
+	SizeB = 1<<3,
+	SizeW = 1<<4,
+	SizeL = 1<<5,
+	SizeQ = 1<<6,
+	SizeF = 1<<7, // float aka float32
+	SizeD = 1<<8, // double aka float64
+
+	// Left side: address taken, read, write.
+	LeftAddr = 1<<9,
+	LeftRead = 1<<10,
+	LeftWrite = 1<<11,
+	
+	// Right side: address taken, read, write.
+	RightAddr = 1<<12,
+	RightRead = 1<<13,
+	RightWrite = 1<<14,
+
+	// Set, use, or kill of carry bit.
+	// Kill means we never look at the carry bit after this kind of instruction.
+	SetCarry = 1<<15,
+	UseCarry = 1<<16,
+	KillCarry = 1<<17,
+
+	// Instruction kinds
+	Move = 1<<18, // straight move
+	Conv = 1<<19, // size conversion
+	Cjmp = 1<<20, // conditional jump
+	Break = 1<<21, // breaks control flow (no fallthrough)
+	Call = 1<<22, // function call
+	Jump = 1<<23, // jump
+	Skip = 1<<24, // data instruction
+
+	// Special cases for register use.
+	ShiftCX = 1<<25, // possible shift by CX
+	ImulAXDX = 1<<26, // possible multiply into DX:AX
+};
+
+void proginfo(ProgInfo*, Prog*);

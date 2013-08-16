@@ -156,6 +156,7 @@ HaveSpan:
 		// is just a unique constant not seen elsewhere in the
 		// runtime, as a clue in case it turns up unexpectedly in
 		// memory or in a stack trace.
+		runtime·SysUsed((void*)(s->start<<PageShift), s->npages<<PageShift);
 		*(uintptr*)(s->start<<PageShift) = (uintptr)0xbeadbeadbeadbeadULL;
 	}
 	s->npreleased = 0;
@@ -330,8 +331,6 @@ MHeap_FreeLocked(MHeap *h, MSpan *s)
 	MSpan *t;
 	PageID p;
 
-	if(s->types.sysalloc)
-		runtime·settype_sysfree(s);
 	s->types.compression = MTypes_Empty;
 
 	if(s->state != MSpanInUse || s->ref != 0) {
@@ -352,8 +351,10 @@ MHeap_FreeLocked(MHeap *h, MSpan *s)
 	if(sizeof(void*) == 8)
 		p -= (uintptr)h->arena_start >> PageShift;
 	if(p > 0 && (t = h->spans[p-1]) != nil && t->state != MSpanInUse) {
-		tp = (uintptr*)(t->start<<PageShift);
-		*tp |= *sp;	// propagate "needs zeroing" mark
+		if(t->npreleased == 0) {  // cant't touch this otherwise
+			tp = (uintptr*)(t->start<<PageShift);
+			*tp |= *sp;	// propagate "needs zeroing" mark
+		}
 		s->start = t->start;
 		s->npages += t->npages;
 		s->npreleased = t->npreleased; // absorb released pages
@@ -366,8 +367,10 @@ MHeap_FreeLocked(MHeap *h, MSpan *s)
 		mstats.mspan_sys = h->spanalloc.sys;
 	}
 	if((p+s->npages)*sizeof(h->spans[0]) < h->spans_mapped && (t = h->spans[p+s->npages]) != nil && t->state != MSpanInUse) {
-		tp = (uintptr*)(t->start<<PageShift);
-		*sp |= *tp;	// propagate "needs zeroing" mark
+		if(t->npreleased == 0) {  // cant't touch this otherwise
+			tp = (uintptr*)(t->start<<PageShift);
+			*sp |= *tp;	// propagate "needs zeroing" mark
+		}
 		s->npages += t->npages;
 		s->npreleased += t->npreleased;
 		h->spans[p + s->npages - 1] = s;
@@ -403,7 +406,7 @@ scavengelist(MSpan *list, uint64 now, uint64 limit)
 
 	sumreleased = 0;
 	for(s=list->next; s != list; s=s->next) {
-		if((now - s->unusedsince) > limit) {
+		if((now - s->unusedsince) > limit && s->npreleased != s->npages) {
 			released = (s->npages - s->npreleased) << PageShift;
 			mstats.heap_released += released;
 			sumreleased += released;
@@ -414,8 +417,8 @@ scavengelist(MSpan *list, uint64 now, uint64 limit)
 	return sumreleased;
 }
 
-static uintptr
-scavenge(uint64 now, uint64 limit)
+static void
+scavenge(int32 k, uint64 now, uint64 limit)
 {
 	uint32 i;
 	uintptr sumreleased;
@@ -426,7 +429,14 @@ scavenge(uint64 now, uint64 limit)
 	for(i=0; i < nelem(h->free); i++)
 		sumreleased += scavengelist(&h->free[i], now, limit);
 	sumreleased += scavengelist(&h->large, now, limit);
-	return sumreleased;
+
+	if(runtime·debug.gctrace > 0) {
+		if(sumreleased > 0)
+			runtime·printf("scvg%d: %D MB released\n", k, (uint64)sumreleased>>20);
+		runtime·printf("scvg%d: inuse: %D, idle: %D, sys: %D, released: %D, consumed: %D (MB)\n",
+			k, mstats.heap_inuse>>20, mstats.heap_idle>>20, mstats.heap_sys>>20,
+			mstats.heap_released>>20, (mstats.heap_sys - mstats.heap_released)>>20);
+	}
 }
 
 static FuncVal forcegchelperv = {(void(*)(void))forcegchelper};
@@ -439,8 +449,7 @@ runtime·MHeap_Scavenger(void)
 {
 	MHeap *h;
 	uint64 tick, now, forcegc, limit;
-	uint32 k;
-	uintptr sumreleased;
+	int32 k;
 	Note note, *notep;
 
 	g->issystem = true;
@@ -478,16 +487,8 @@ runtime·MHeap_Scavenger(void)
 			runtime·lock(h);
 			now = runtime·nanotime();
 		}
-		sumreleased = scavenge(now, limit);
+		scavenge(k, now, limit);
 		runtime·unlock(h);
-
-		if(runtime·debug.gctrace > 0) {
-			if(sumreleased > 0)
-				runtime·printf("scvg%d: %p MB released\n", k, sumreleased>>20);
-			runtime·printf("scvg%d: inuse: %D, idle: %D, sys: %D, released: %D, consumed: %D (MB)\n",
-				k, mstats.heap_inuse>>20, mstats.heap_idle>>20, mstats.heap_sys>>20,
-				mstats.heap_released>>20, (mstats.heap_sys - mstats.heap_released)>>20);
-		}
 	}
 }
 
@@ -496,7 +497,7 @@ runtime∕debug·freeOSMemory(void)
 {
 	runtime·gc(1);
 	runtime·lock(&runtime·mheap);
-	scavenge(~(uintptr)0, 0);
+	scavenge(-1, ~(uintptr)0, 0);
 	runtime·unlock(&runtime·mheap);
 }
 
