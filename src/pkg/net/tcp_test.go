@@ -453,11 +453,8 @@ func TestTCPConcurrentAccept(t *testing.T) {
 }
 
 func TestTCPReadWriteMallocs(t *testing.T) {
-	maxMallocs := 10000
-	switch runtime.GOOS {
-	// Add other OSes if you know how many mallocs they do.
-	case "windows":
-		maxMallocs = 0
+	if testing.Short() {
+		t.Skip("skipping malloc count in short mode")
 	}
 	ln, err := Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -490,8 +487,8 @@ func TestTCPReadWriteMallocs(t *testing.T) {
 			t.Fatalf("Read failed: %v", err)
 		}
 	})
-	if int(mallocs) > maxMallocs {
-		t.Fatalf("Got %v allocs, want %v", mallocs, maxMallocs)
+	if mallocs > 0 {
+		t.Fatalf("Got %v allocs, want 0", mallocs)
 	}
 }
 

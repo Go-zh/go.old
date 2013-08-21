@@ -6,6 +6,8 @@
 
 package main
 
+import "os"
+
 func main() {
 	ok := true
 	for _, tt := range tests {
@@ -21,6 +23,7 @@ func main() {
 	}
 	if !ok {
 		println("BUG")
+		os.Exit(1)
 	}
 }
 
@@ -87,8 +90,8 @@ var tests = []struct{
 	{"&bigstructp.x[i]", func() { println(&bigstructp.x[i]) }},
 	{"bigstructp.x[9]", func() { println(bigstructp.x[9]) }},
 	{"&bigstructp.x[9]", func() { println(&bigstructp.x[9]) }},
-	{"bigstructp.x[200<<20]", func() { println(bigstructp.x[200<<20]) }},
-	{"&bigstructp.x[200<<20]", func() { println(&bigstructp.x[200<<20]) }},
+	{"bigstructp.x[100<<20]", func() { println(bigstructp.x[100<<20]) }},
+	{"&bigstructp.x[100<<20]", func() { println(&bigstructp.x[100<<20]) }},
 	{"bigstructp.l", func() { println(bigstructp.l) }},
 	{"&bigstructp.l", func() { println(&bigstructp.l) }},
 	{"m1.F()", func() { println(m1.F()) }},
@@ -109,7 +112,7 @@ type BigStruct struct {
 	i int
 	j float64
 	k string
-	x [256<<20]byte
+	x [128<<20]byte
 	l []byte
 }
 

@@ -973,10 +973,10 @@ description at POINT."
   "Describe the expression at POINT."
   (interactive "d")
   (condition-case nil
-      (let ((description (nth 1 (godef--call point))))
-        (if (string= "" description)
+      (let ((description (cdr (butlast (godef--call point) 1))))
+        (if (not description)
             (message "No description found for expression at point")
-          (message "%s" description)))
+          (message "%s" (mapconcat 'identity description "\n"))))
     (file-error (message "Could not run godef binary"))))
 
 (defun godef-jump (point &optional other-window)
@@ -1110,7 +1110,13 @@ for."
          (coverage-file (or coverage-file (go--coverage-file)))
          (ranges-and-divisor (go--coverage-parse-file
                               coverage-file
-                              (file-name-nondirectory (buffer-file-name origin-buffer)))))
+                              (file-name-nondirectory (buffer-file-name origin-buffer))))
+         (cov-mtime (nth 5 (file-attributes coverage-file)))
+         (cur-mtime (nth 5 (file-attributes (buffer-file-name origin-buffer)))))
+
+    (if (< (float-time cov-mtime) (float-time cur-mtime))
+        (message "Coverage file is older than the source file."))
+
     (with-current-buffer (or (get-buffer gocov-buffer-name)
                              (make-indirect-buffer origin-buffer gocov-buffer-name t))
       (set (make-local-variable 'go--coverage-origin-buffer) origin-buffer)

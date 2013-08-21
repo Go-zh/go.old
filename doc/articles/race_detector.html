@@ -215,6 +215,12 @@ access history is <code>32K * 2**history_size elements</code>.
 Increasing this value can avoid a "failed to restore the stack" error in reports, at the
 cost of increased memory usage.
 </li>
+
+<li>
+<code>halt_on_error</code> (default <code>0</code>): Controls whether the program
+exits after reporting first data race.
+</li>
+</ul>
 </div>
 
 <ul>
@@ -234,9 +240,13 @@ log_path.pid 的文件中。特殊的名字 <code>stdout</code> 和 <code>stderr
 </li>
 
 <li>
-<code>history_size</code>（默认为<code>1</code>）：每个Go程的内存访问历史为
+<code>history_size</code>（默认为 <code>1</code>）：每个Go程的内存访问历史为
 <code>32K * 2**history_size</code> 个元素。增加该值可避免在报告中避免
 "failed to restore the stack"（栈恢复失败）的提示，但代价是会增加内存的使用。
+</li>
+
+<li>
+<code>halt_on_error</code>（默认为 <code>0</code>）：控制程序在报告第一次数据竞争后是否退出。
 </li>
 </ul>
 

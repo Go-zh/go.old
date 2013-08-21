@@ -1173,6 +1173,9 @@ const intGobVersion byte = 1
 
 // GobEncode 实现了 gob.GobEncoder 接口。
 func (x *Int) GobEncode() ([]byte, error) {
+	if x == nil {
+		return nil, nil
+	}
 	buf := make([]byte, 1+len(x.abs)*_S) // extra byte for version and sign bit // 版本和符号位的扩展字节
 	i := x.abs.bytes(buf) - 1            // i >= 0
 	b := intGobVersion << 1              // make space for sign bit // 为符号位留下空间
@@ -1188,7 +1191,9 @@ func (x *Int) GobEncode() ([]byte, error) {
 // GobDecode 实现了 gob.GobDecoder 接口。
 func (z *Int) GobDecode(buf []byte) error {
 	if len(buf) == 0 {
-		return errors.New("Int.GobDecode: no data")
+		// Other side sent a nil or default value.
+		*z = Int{}
+		return nil
 	}
 	b := buf[0]
 	if b>>1 != intGobVersion {

@@ -169,16 +169,20 @@ var typeTests = []pair{
 }
 
 var valueTests = []pair{
+	{new(int), "132"},
 	{new(int8), "8"},
 	{new(int16), "16"},
 	{new(int32), "32"},
 	{new(int64), "64"},
+	{new(uint), "132"},
 	{new(uint8), "8"},
 	{new(uint16), "16"},
 	{new(uint32), "32"},
 	{new(uint64), "64"},
 	{new(float32), "256.25"},
 	{new(float64), "512.125"},
+	{new(complex64), "532.125+10i"},
+	{new(complex128), "564.25+1i"},
 	{new(string), "stringy cheese"},
 	{new(bool), "true"},
 	{new(*int8), "*int8(0)"},
@@ -2287,6 +2291,9 @@ func TestAddr(t *testing.T) {
 }
 
 func noAlloc(t *testing.T, n int, f func(int)) {
+	if testing.Short() {
+		t.Skip("skipping malloc count in short mode")
+	}
 	if runtime.GOMAXPROCS(0) > 1 {
 		t.Skip("skipping; GOMAXPROCS>1")
 	}
@@ -2972,17 +2979,28 @@ func TestConvert(t *testing.T) {
 		all[t2] = true
 		canConvert[[2]Type{t1, t2}] = true
 
+		// vout1 represents the in value converted to the in type.
 		v1 := tt.in
 		vout1 := v1.Convert(t1)
 		out1 := vout1.Interface()
 		if vout1.Type() != tt.in.Type() || !DeepEqual(out1, tt.in.Interface()) {
-			t.Errorf("ValueOf(%T(%v)).Convert(%s) = %T(%v), want %T(%v)", tt.in.Interface(), tt.in.Interface(), t1, out1, out1, tt.in.Interface(), tt.in.Interface())
+			t.Errorf("ValueOf(%T(%[1]v)).Convert(%s) = %T(%[3]v), want %T(%[4]v)", tt.in.Interface(), t1, out1, tt.in.Interface())
 		}
 
-		vout := v1.Convert(t2)
-		out := vout.Interface()
-		if vout.Type() != tt.out.Type() || !DeepEqual(out, tt.out.Interface()) {
-			t.Errorf("ValueOf(%T(%v)).Convert(%s) = %T(%v), want %T(%v)", tt.in.Interface(), tt.in.Interface(), t2, out, out, tt.out.Interface(), tt.out.Interface())
+		// vout2 represents the in value converted to the out type.
+		vout2 := v1.Convert(t2)
+		out2 := vout2.Interface()
+		if vout2.Type() != tt.out.Type() || !DeepEqual(out2, tt.out.Interface()) {
+			t.Errorf("ValueOf(%T(%[1]v)).Convert(%s) = %T(%[3]v), want %T(%[4]v)", tt.in.Interface(), t2, out2, tt.out.Interface())
+		}
+
+		// vout3 represents a new value of the out type, set to vout2.  This makes
+		// sure the converted value vout2 is really usable as a regular value.
+		vout3 := New(t2).Elem()
+		vout3.Set(vout2)
+		out3 := vout3.Interface()
+		if vout3.Type() != tt.out.Type() || !DeepEqual(out3, tt.out.Interface()) {
+			t.Errorf("Set(ValueOf(%T(%[1]v)).Convert(%s)) = %T(%[3]v), want %T(%[4]v)", tt.in.Interface(), t2, out3, tt.out.Interface())
 		}
 
 		if IsRO(v1) {
@@ -2991,8 +3009,11 @@ func TestConvert(t *testing.T) {
 		if IsRO(vout1) {
 			t.Errorf("self-conversion output %v is RO, should not be", vout1)
 		}
-		if IsRO(vout) {
-			t.Errorf("conversion output %v is RO, should not be", vout)
+		if IsRO(vout2) {
+			t.Errorf("conversion output %v is RO, should not be", vout2)
+		}
+		if IsRO(vout3) {
+			t.Errorf("set(conversion output) %v is RO, should not be", vout3)
 		}
 		if !IsRO(MakeRO(v1).Convert(t1)) {
 			t.Errorf("RO self-conversion output %v is not RO, should be", v1)
@@ -3433,6 +3454,9 @@ func BenchmarkInterfaceBig(b *testing.B) {
 }
 
 func TestAllocsInterfaceBig(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping malloc count in short mode")
+	}
 	v := ValueOf(S{})
 	if allocs := testing.AllocsPerRun(100, func() { v.Interface() }); allocs > 0 {
 		t.Errorf("allocs:", allocs)
@@ -3447,6 +3471,9 @@ func BenchmarkInterfaceSmall(b *testing.B) {
 }
 
 func TestAllocsInterfaceSmall(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping malloc count in short mode")
+	}
 	v := ValueOf(int64(0))
 	if allocs := testing.AllocsPerRun(100, func() { v.Interface() }); allocs > 0 {
 		t.Errorf("allocs:", allocs)

@@ -13,9 +13,14 @@ compress/bzip2: faster decompression by 30% (CL 9915043).
 crypto/des: 5x faster encoding/decoding (CL 11874043, 12072045).
 encoding/json: faster encoding (CL 9129044).
 net: improve windows performance by up to 30% (CL 8670044).
+net: improve performance on BSD by up to 30% (CL 8264043, 12927048, 13080043).
+
+Breaking change:
+archive/tar,archive/zip: fix os.FileInfo implementation to provide base name only (CL 13118043).
 
 cmd/5a: removed support for R9/R10 (use m/g instead) (CL 9840043).
 cmd/5l: add MOVBS, MOVHS etc for sub-word moves (CL 12682043).
+cmd/5l: support for external linking for linux/arm (CL 12871044).
 cmd/cgo, cmd/go: support including C++ code with cgo (CL 8248043).
 cmd/gc: three-index slicing to set cap as well as length (CL 10743046).
 cmd/gc: make missing package error fatal (CL 12677043).
@@ -53,7 +58,6 @@ image/draw: added Drawer, FloydSteinberg and the op.Draw method (CL 10977043).
 image/draw: added Quantizer type (CL 11148043).
 image/gif: added Encode and EncodeAll (CL 10896043).
 io: Copy prioritizes WriterTo over ReaderFrom (CL 9462044).
-ioutil: add WriteString to Discard (CL 12580045).
 net: new build tag netgo for building a pure Go net package (CL 7100050).
 net/http: don't allow sending invalid cookie lines (CL 12204043).
 net/http: allow ReadResponse with nil *Request parameter (CL 9821043).
@@ -66,6 +70,7 @@ sync/atomic: add Swap functions (CL 12670045).
 syscall: implemented Sendfile for Darwin, added Syscall9 for Darwin/amd64 (CL 10980043).
 testing: AllocsPerRun is now quantized to an integer (the type is still float64) (CL 9837049).
 testing: add TB interface (intersection of T and B's methods) (CL 12962043).
+text/template: add comparison functions (CL 13091045).
 time: Allow Parse and Format to handle time zone offsets with seconds (CL 8132044)
 time: patterns require non-lowercase letter to follow Mon, Jan etc (CL 12448044).
 unicode: add In, a nicer-to-use but equivalent version of IsOneOf (CL 11672044).

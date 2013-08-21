@@ -466,9 +466,12 @@ xworkdir(void)
 	xgetenv(&b, "TMPDIR");
 	if(b.len == 0)
 		bwritestr(&b, "/var/tmp");
-	bwritestr(&b, "/go-cbuild-XXXXXX");
-	if(mkdtemp(bstr(&b)) == nil)
-		fatal("mkdtemp: %s", strerror(errno));
+	if(b.p[b.len-1] != '/')
+		bwrite(&b, "/", 1);
+	bwritestr(&b, "go-cbuild-XXXXXX");
+	p = bstr(&b);
+	if(mkdtemp(p) == nil)
+		fatal("mkdtemp(%s): %s", p, strerror(errno));
 	p = btake(&b);
 
 	bfree(&b);
