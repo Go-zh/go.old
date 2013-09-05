@@ -395,6 +395,7 @@ If the package is simple, the package comment can be brief.
 <pre>
 // path 包实现了一些常用的工具，以便于操作用反斜杠分隔的路径
 
+<div class="english">
 <p>
 Comments do not need extra formatting such as banners of stars.
 The generated output may not even be presented in a fixed-width font, so don't depend
@@ -408,12 +409,29 @@ text in a fixed-width font, suitable for program snippets.
 The package comment for the
 <a href="http://golang.org/pkg/fmt/"><code>fmt</code> package</a> uses this to good effect.
 </p>
+</div>
 
+<p>
+注释无需进行额外的格式化，如用星号来突出等。生成的输出甚至可能无法以等宽字体显示，
+因此不要依赖于空格对齐，<code>godoc</code> 会像 <code>gofmt</code> 那样处理好这一切。
+注释是不会被解析的纯文本，因此像HTML或其它类似于 <code>_this_</code> 的东西将按照
+<b>原样</b> 输出，因此不应使用它们。<code>godoc</code> 所做的调整，
+就是将已缩进的文本以等宽字体显示，来适应对应的程序片段。
+<a href="http://golang.org/pkg/fmt/"><code>fmt</code> 包</a>的注释就用了这种不错的效果。
+</p>
+
+<div class="english">
 <p>
 Depending on the context, <code>godoc</code> might not even
 reformat comments, so make sure they look good straight up:
 use correct spelling, punctuation, and sentence structure,
 fold long lines, and so on.
+</p>
+</div>
+
+<p>
+<code>godoc</code> 是否会重新格式化注释取决于上下文，因此必须确保它们看起来清晰易辨：
+使用正确的拼写、标点和语句结构以及折叠长行等。
 </p>
 
 <p>
