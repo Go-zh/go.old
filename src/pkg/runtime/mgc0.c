@@ -12,8 +12,8 @@
 #include "race.h"
 #include "type.h"
 #include "typekind.h"
-#include "hashmap.h"
 #include "funcdata.h"
+#include "../../cmd/ld/textflag.h"
 
 enum {
 	Debug = 0,
@@ -36,6 +36,10 @@ enum {
 
 	// Pointer map
 	BitsPerPointer = 2,
+	BitsNoPointer = 0,
+	BitsPointer = 1,
+	BitsIface = 2,
+	BitsEface = 3,
 };
 
 // Bits in per-word bitmap.
@@ -47,7 +51,7 @@ enum {
 // The bits in the word are packed together by type first, then by
 // heap location, so each 64-bit bitmap word consists of, from top to bottom,
 // the 16 bitSpecial bits for the corresponding heap words, then the 16 bitMarked bits,
-// then the 16 bitNoPointers/bitBlockBoundary bits, then the 16 bitAllocated bits.
+// then the 16 bitNoScan/bitBlockBoundary bits, then the 16 bitAllocated bits.
 // This layout makes it easier to iterate over the bits of a given type.
 //
 // The bitmap starts at mheap.arena_start and extends *backward* from
@@ -64,7 +68,7 @@ enum {
 //	/* then test bits & bitAllocated, bits & bitMarked, etc. */
 //
 #define bitAllocated		((uintptr)1<<(bitShift*0))
-#define bitNoPointers		((uintptr)1<<(bitShift*1))	/* when bitAllocated is set */
+#define bitNoScan		((uintptr)1<<(bitShift*1))	/* when bitAllocated is set */
 #define bitMarked		((uintptr)1<<(bitShift*2))	/* when bitAllocated is set */
 #define bitSpecial		((uintptr)1<<(bitShift*3))	/* when bitAllocated is set - has finalizer or being profiled */
 #define bitBlockBoundary	((uintptr)1<<(bitShift*1))	/* when bitAllocated is NOT set */
@@ -171,7 +175,6 @@ static struct {
 
 enum {
 	GC_DEFAULT_PTR = GC_NUM_INSTR,
-	GC_MAP_NEXT,
 	GC_CHAN,
 
 	GC_NUM_INSTR2
@@ -194,6 +197,16 @@ static struct {
 	uint64 instr[GC_NUM_INSTR2];
 	uint64 putempty;
 	uint64 getfull;
+	struct {
+		uint64 foundbit;
+		uint64 foundword;
+		uint64 foundspan;
+	} flushptrbuf;
+	struct {
+		uint64 foundbit;
+		uint64 foundword;
+		uint64 foundspan;
+	} markonly;
 } gcstats;
 
 // markonly marks an object. It returns true if the object
@@ -203,7 +216,7 @@ static bool
 markonly(void *obj)
 {
 	byte *p;
-	uintptr *bitp, bits, shift, x, xbits, off;
+	uintptr *bitp, bits, shift, x, xbits, off, j;
 	MSpan *s;
 	PageID k;
 
@@ -225,8 +238,23 @@ markonly(void *obj)
 	bits = xbits >> shift;
 
 	// Pointing at the beginning of a block?
-	if((bits & (bitAllocated|bitBlockBoundary)) != 0)
+	if((bits & (bitAllocated|bitBlockBoundary)) != 0) {
+		if(CollectStats)
+			runtime·xadd64(&gcstats.markonly.foundbit, 1);
 		goto found;
+	}
+
+	// Pointing just past the beginning?
+	// Scan backward a little to find a block boundary.
+	for(j=shift; j-->0; ) {
+		if(((xbits>>j) & (bitAllocated|bitBlockBoundary)) != 0) {
+			shift = j;
+			bits = xbits>>shift;
+			if(CollectStats)
+				runtime·xadd64(&gcstats.markonly.foundword, 1);
+			goto found;
+		}
+	}
 
 	// Otherwise consult span table to find beginning.
 	// (Manually inlined copy of MHeap_LookupMaybe.)
@@ -252,6 +280,8 @@ markonly(void *obj)
 	shift = off % wordsPerBitmapWord;
 	xbits = *bitp;
 	bits = xbits >> shift;
+	if(CollectStats)
+		runtime·xadd64(&gcstats.markonly.foundspan, 1);
 
 found:
 	// Now we have bits, bitp, and shift correct for
@@ -295,7 +325,7 @@ struct BufferList
 	uint32 busy;
 	byte pad[CacheLineSize];
 };
-#pragma dataflag 16  // no pointers
+#pragma dataflag NOPTR
 static BufferList bufferList[MaxGcproc];
 
 static Type *itabtype;
@@ -390,8 +420,11 @@ flushptrbuf(PtrTarget *ptrbuf, PtrTarget **ptrbufpos, Obj **_wp, Workbuf **_wbuf
 			bits = xbits >> shift;
 
 			// Pointing at the beginning of a block?
-			if((bits & (bitAllocated|bitBlockBoundary)) != 0)
+			if((bits & (bitAllocated|bitBlockBoundary)) != 0) {
+				if(CollectStats)
+					runtime·xadd64(&gcstats.flushptrbuf.foundbit, 1);
 				goto found;
+			}
 
 			ti = 0;
 
@@ -402,6 +435,8 @@ flushptrbuf(PtrTarget *ptrbuf, PtrTarget **ptrbufpos, Obj **_wp, Workbuf **_wbuf
 					obj = (byte*)obj - (shift-j)*PtrSize;
 					shift = j;
 					bits = xbits>>shift;
+					if(CollectStats)
+						runtime·xadd64(&gcstats.flushptrbuf.foundword, 1);
 					goto found;
 				}
 			}
@@ -430,6 +465,8 @@ flushptrbuf(PtrTarget *ptrbuf, PtrTarget **ptrbufpos, Obj **_wp, Workbuf **_wbuf
 			shift = off % wordsPerBitmapWord;
 			xbits = *bitp;
 			bits = xbits >> shift;
+			if(CollectStats)
+				runtime·xadd64(&gcstats.flushptrbuf.foundspan, 1);
 
 		found:
 			// Now we have bits, bitp, and shift correct for
@@ -450,7 +487,7 @@ flushptrbuf(PtrTarget *ptrbuf, PtrTarget **ptrbufpos, Obj **_wp, Workbuf **_wbuf
 			}
 
 			// If object has no pointers, don't need to scan further.
-			if((bits & bitNoPointers) != 0)
+			if((bits & bitNoScan) != 0)
 				continue;
 
 			// Ask span about size class.
@@ -541,9 +578,6 @@ flushobjbuf(Obj *objbuf, Obj **objbufpos, Obj **_wp, Workbuf **_wbuf, uintptr *_
 // Program that scans the whole block and treats every block element as a potential pointer
 static uintptr defaultProg[2] = {PtrSize, GC_DEFAULT_PTR};
 
-// Hashmap iterator program
-static uintptr mapProg[2] = {0, GC_MAP_NEXT};
-
 // Hchan program
 static uintptr chanProg[2] = {0, GC_CHAN};
 
@@ -583,8 +617,11 @@ checkptr(void *obj, uintptr objti)
 	}
 	tisize = *(uintptr*)objti;
 	// Sanity check for object size: it should fit into the memory block.
-	if((byte*)obj + tisize > objstart + s->elemsize)
+	if((byte*)obj + tisize > objstart + s->elemsize) {
+		runtime·printf("object of type '%S' at %p/%p does not fit in block %p/%p\n",
+			       *t->string, obj, tisize, objstart, s->elemsize);
 		runtime·throw("invalid gc type info");
+	}
 	if(obj != objstart)
 		return;
 	// If obj points to the beginning of the memory block,
@@ -600,7 +637,7 @@ checkptr(void *obj, uintptr objti)
 		for(j = 1; pc1[j] != GC_END && pc2[j] != GC_END; j++) {
 			if(pc1[j] != pc2[j]) {
 				runtime·printf("invalid gc type info for '%s' at %p, type info %p, block info %p\n",
-					t->string ? (int8*)t->string->str : (int8*)"?", j, pc1[j], pc2[j]);
+					       t->string ? (int8*)t->string->str : (int8*)"?", j, pc1[j], pc2[j]);
 				runtime·throw("invalid gc type info");
 			}
 		}
@@ -623,7 +660,7 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 	byte *b, *arena_start, *arena_used;
 	uintptr n, i, end_b, elemsize, size, ti, objti, count, type;
 	uintptr *pc, precise_type, nominal_size;
-	uintptr *map_ret, mapkey_size, mapval_size, mapkey_ti, mapval_ti, *chan_ret, chancap;
+	uintptr *chan_ret, chancap;
 	void *obj;
 	Type *t;
 	Slice *sliceptr;
@@ -633,11 +670,6 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 	Obj *objbuf, *objbuf_end, *objbufpos;
 	Eface *eface;
 	Iface *iface;
-	Hmap *hmap;
-	MapType *maptype;
-	bool mapkey_kind, mapval_kind;
-	struct hash_gciter map_iter;
-	struct hash_gciter_data d;
 	Hchan *chan;
 	ChanType *chantype;
 
@@ -666,10 +698,6 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 	objbufpos = objbuf;
 
 	// (Silence the compiler)
-	map_ret = nil;
-	mapkey_size = mapval_size = 0;
-	mapkey_kind = mapval_kind = false;
-	mapkey_ti = mapval_ti = 0;
 	chan = nil;
 	chantype = nil;
 	chan_ret = nil;
@@ -737,23 +765,6 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 					stack_top.count = 0;  // 0 means an infinite number of iterations
 					stack_top.elemsize = pc[0];
 					stack_top.loop_or_ret = pc+1;
-					break;
-				case TypeInfo_Map:
-					hmap = (Hmap*)b;
-					maptype = (MapType*)t;
-					if(hash_gciter_init(hmap, &map_iter)) {
-						mapkey_size = maptype->key->size;
-						mapkey_kind = maptype->key->kind;
-						mapkey_ti   = (uintptr)maptype->key->gc | PRECISE;
-						mapval_size = maptype->elem->size;
-						mapval_kind = maptype->elem->kind;
-						mapval_ti   = (uintptr)maptype->elem->gc | PRECISE;
-
-						map_ret = nil;
-						pc = mapProg;
-					} else {
-						goto next_block;
-					}
 					break;
 				case TypeInfo_Chan:
 					chan = (Hchan*)b;
@@ -955,77 +966,6 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 			pc = (uintptr*)((byte*)pc + *(int32*)(pc+2));  // target of the CALL instruction
 			continue;
 
-		case GC_MAP_PTR:
-			hmap = *(Hmap**)(stack_top.b + pc[1]);
-			if(hmap == nil) {
-				pc += 3;
-				continue;
-			}
-			if(markonly(hmap)) {
-				maptype = (MapType*)pc[2];
-				if(hash_gciter_init(hmap, &map_iter)) {
-					mapkey_size = maptype->key->size;
-					mapkey_kind = maptype->key->kind;
-					mapkey_ti   = (uintptr)maptype->key->gc | PRECISE;
-					mapval_size = maptype->elem->size;
-					mapval_kind = maptype->elem->kind;
-					mapval_ti   = (uintptr)maptype->elem->gc | PRECISE;
-
-					// Start mapProg.
-					map_ret = pc+3;
-					pc = mapProg+1;
-				} else {
-					pc += 3;
-				}
-			} else {
-				pc += 3;
-			}
-			continue;
-
-		case GC_MAP_NEXT:
-			// Add all keys and values to buffers, mark all subtables.
-			while(hash_gciter_next(&map_iter, &d)) {
-				// buffers: reserve space for 2 objects.
-				if(ptrbufpos+2 >= ptrbuf_end)
-					flushptrbuf(ptrbuf, &ptrbufpos, &wp, &wbuf, &nobj);
-				if(objbufpos+2 >= objbuf_end)
-					flushobjbuf(objbuf, &objbufpos, &wp, &wbuf, &nobj);
-
-				if(d.st != nil)
-					markonly(d.st);
-
-				if(d.key_data != nil) {
-					if(!(mapkey_kind & KindNoPointers) || d.indirectkey) {
-						if(!d.indirectkey)
-							*objbufpos++ = (Obj){d.key_data, mapkey_size, mapkey_ti};
-						else {
-							if(Debug) {
-								obj = *(void**)d.key_data;
-								if(!(arena_start <= obj && obj < arena_used))
-									runtime·throw("scanblock: inconsistent hashmap");
-							}
-							*ptrbufpos++ = (PtrTarget){*(void**)d.key_data, mapkey_ti};
-						}
-					}
-					if(!(mapval_kind & KindNoPointers) || d.indirectval) {
-						if(!d.indirectval)
-							*objbufpos++ = (Obj){d.val_data, mapval_size, mapval_ti};
-						else {
-							if(Debug) {
-								obj = *(void**)d.val_data;
-								if(!(arena_start <= obj && obj < arena_used))
-									runtime·throw("scanblock: inconsistent hashmap");
-							}
-							*ptrbufpos++ = (PtrTarget){*(void**)d.val_data, mapval_ti};
-						}
-					}
-				}
-			}
-			if(map_ret == nil)
-				goto next_block;
-			pc = map_ret;
-			continue;
-
 		case GC_REGION:
 			obj = (void*)(stack_top.b + pc[1]);
 			size = pc[2];
@@ -1038,7 +978,6 @@ scanblock(Workbuf *wbuf, Obj *wp, uintptr nobj, bool keepworking)
 			continue;
 
 		case GC_CHAN_PTR:
-			// Similar to GC_MAP_PTR
 			chan = *(Hchan**)(stack_top.b + pc[1]);
 			if(chan == nil) {
 				pc += 3;
@@ -1194,7 +1133,7 @@ debug_scanblock(byte *b, uintptr n)
 			runtime·printf("found unmarked block %p in %p\n", obj, vp+i);
 
 		// If object has no pointers, don't need to scan further.
-		if((bits & bitNoPointers) != 0)
+		if((bits & bitNoScan) != 0)
 			continue;
 
 		debug_scanblock(obj, size);
@@ -1398,26 +1337,52 @@ struct BitVector
 	uint32 data[];
 };
 
+// Scans an interface data value when the interface type indicates
+// that it is a pointer.
+static void
+scaninterfacedata(uintptr bits, byte *scanp, bool afterprologue)
+{
+	Itab *tab;
+	Type *type;
+
+	if(afterprologue) {
+		if(bits == BitsIface) {
+			tab = *(Itab**)scanp;
+			if(tab->type->size <= sizeof(void*) && (tab->type->kind & KindNoPointers))
+				return;
+		} else { // bits == BitsEface
+			type = *(Type**)scanp;
+			if(type->size <= sizeof(void*) && (type->kind & KindNoPointers))
+				return;
+		}
+	}
+	addroot((Obj){scanp+PtrSize, PtrSize, 0});
+}
+
 // Starting from scanp, scans words corresponding to set bits.
 static void
-scanbitvector(byte *scanp, BitVector *bv)
+scanbitvector(byte *scanp, BitVector *bv, bool afterprologue)
 {
-	uint32 *wp;
-	uint32 w;
+	uintptr word, bits;
+	uint32 *wordp;
 	int32 i, remptrs;
 
-	wp = bv->data;
+	wordp = bv->data;
 	for(remptrs = bv->n; remptrs > 0; remptrs -= 32) {
-		w = *wp++;
+		word = *wordp++;
 		if(remptrs < 32)
 			i = remptrs;
 		else
 			i = 32;
 		i /= BitsPerPointer;
 		for(; i > 0; i--) {
-			if(w & 3)
-				addroot((Obj){scanp, PtrSize, 0});
-			w >>= BitsPerPointer;
+			bits = word & 3;
+			if(bits != BitsNoPointer && *(void**)scanp != nil)
+				if(bits == BitsPointer)
+					addroot((Obj){scanp, PtrSize, 0});
+				else
+					scaninterfacedata(bits, scanp, afterprologue);
+			word >>= BitsPerPointer;
 			scanp += PtrSize;
 		}
 	}
@@ -1430,12 +1395,14 @@ addframeroots(Stkframe *frame, void*)
 	Func *f;
 	BitVector *args, *locals;
 	uintptr size;
+	bool afterprologue;
 
 	f = frame->fn;
 
 	// Scan local variables if stack frame has been allocated.
 	// Use pointer information if known.
-	if(frame->varp > (byte*)frame->sp) {
+	afterprologue = (frame->varp > (byte*)frame->sp);
+	if(afterprologue) {
 		locals = runtime·funcdata(f, FUNCDATA_GCLocals);
 		if(locals == nil) {
 			// No locals information, scan everything.
@@ -1450,7 +1417,7 @@ addframeroots(Stkframe *frame, void*)
 			// Locals bitmap information, scan just the
 			// pointers in locals.
 			size = (locals->n*PtrSize) / BitsPerPointer;
-			scanbitvector(frame->varp - size, locals);
+			scanbitvector(frame->varp - size, locals, afterprologue);
 		}
 	}
 
@@ -1458,7 +1425,7 @@ addframeroots(Stkframe *frame, void*)
 	// Use pointer information if known.
 	args = runtime·funcdata(f, FUNCDATA_GCArgs);
 	if(args != nil && args->n > 0)
-		scanbitvector(frame->argp, args);
+		scanbitvector(frame->argp, args, false);
 	else
 		addroot((Obj){frame->argp, frame->arglen, 0});
 }
@@ -1582,12 +1549,7 @@ addroots(void)
 		case Gdead:
 			break;
 		case Grunning:
-			if(gp != m->curg)
-				runtime·throw("mark - world not stopped");
-			if(g != m->g0)
-				runtime·throw("gc not on g0");
-			addstackroots(gp);
-			break;
+			runtime·throw("mark - world not stopped");
 		case Grunnable:
 		case Gsyscall:
 		case Gwaiting:
@@ -2014,7 +1976,7 @@ runtime·gc(int32 force)
 	// problems, don't bother trying to run gc
 	// while holding a lock.  The next mallocgc
 	// without a lock will do the gc instead.
-	if(!mstats.enablegc || m->locks > 0 || runtime·panicking)
+	if(!mstats.enablegc || g == m->g0 || m->locks > 0 || runtime·panicking)
 		return;
 
 	if(gcpercent == GcpercentUnknown) {	// first time through
@@ -2045,16 +2007,11 @@ runtime·gc(int32 force)
 	// we don't need to scan gc's internal state).  Also an
 	// enabler for copyable stacks.
 	for(i = 0; i < (runtime·debug.gctrace > 1 ? 2 : 1); i++) {
-		if(g == m->g0) {
-			// already on g0
-			gc(&a);
-		} else {
-			// switch to g0, call gc(&a), then switch back
-			g->param = &a;
-			g->status = Gwaiting;
-			g->waitreason = "garbage collection";
-			runtime·mcall(mgc);
-		}
+		// switch to g0, call gc(&a), then switch back
+		g->param = &a;
+		g->status = Gwaiting;
+		g->waitreason = "garbage collection";
+		runtime·mcall(mgc);
 		// record a new start time in case we're going around again
 		a.start_time = runtime·nanotime();
 	}
@@ -2078,11 +2035,8 @@ runtime·gc(int32 force)
 		}
 		runtime·unlock(&finlock);
 	}
-	if(g->preempt)  // restore the preemption request in case we've cleared it in newstack
-		g->stackguard0 = StackPreempt;
 	// give the queued finalizers, if any, a chance to run
-	if(g != m->g0)
-		runtime·gosched();
+	runtime·gosched();
 }
 
 static void
@@ -2213,6 +2167,9 @@ gc(struct gc_args *args)
 			runtime·printf("\ttotal:\t%D\n", ninstr);
 
 			runtime·printf("putempty: %D, getfull: %D\n", gcstats.putempty, gcstats.getfull);
+
+			runtime·printf("markonly base lookup: bit %D word %D span %D\n", gcstats.markonly.foundbit, gcstats.markonly.foundword, gcstats.markonly.foundspan);
+			runtime·printf("flushptrbuf base lookup: bit %D word %D span %D\n", gcstats.flushptrbuf.foundbit, gcstats.flushptrbuf.foundword, gcstats.flushptrbuf.foundspan);
 		}
 	}
 
@@ -2326,9 +2283,9 @@ runfinq(void)
 					runtime·free(frame);
 					// The frame does not contain pointers interesting for GC,
 					// all not yet finalized objects are stored in finc.
-					// If we do not mark it as FlagNoPointers,
+					// If we do not mark it as FlagNoScan,
 					// the last finalized object is not collected.
-					frame = runtime·mallocgc(framesz, 0, FlagNoPointers|FlagNoInvokeGC);
+					frame = runtime·mallocgc(framesz, 0, FlagNoScan|FlagNoInvokeGC);
 					framecap = framesz;
 				}
 				if(f->fint == nil)
@@ -2362,9 +2319,9 @@ runfinq(void)
 }
 
 // mark the block at v of size n as allocated.
-// If noptr is true, mark it as having no pointers.
+// If noscan is true, mark it as not needing scanning.
 void
-runtime·markallocated(void *v, uintptr n, bool noptr)
+runtime·markallocated(void *v, uintptr n, bool noscan)
 {
 	uintptr *b, obits, bits, off, shift;
 
@@ -2381,8 +2338,8 @@ runtime·markallocated(void *v, uintptr n, bool noptr)
 	for(;;) {
 		obits = *b;
 		bits = (obits & ~(bitMask<<shift)) | (bitAllocated<<shift);
-		if(noptr)
-			bits |= bitNoPointers<<shift;
+		if(noscan)
+			bits |= bitNoScan<<shift;
 		if(runtime·gomaxprocs == 1) {
 			*b = bits;
 			break;

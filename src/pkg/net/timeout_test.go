@@ -325,9 +325,6 @@ func TestReadWriteDeadline(t *testing.T) {
 		t.Skipf("skipping test on %q", runtime.GOOS)
 	}
 
-	if !canCancelIO {
-		t.Skip("skipping test on this system")
-	}
 	const (
 		readTimeout  = 50 * time.Millisecond
 		writeTimeout = 250 * time.Millisecond
@@ -496,7 +493,10 @@ func testVariousDeadlines(t *testing.T, maxProcs int) {
 				clientc <- copyRes{n, err, d}
 			}()
 
-			const tooLong = 2000 * time.Millisecond
+			tooLong := 2 * time.Second
+			if runtime.GOOS == "windows" {
+				tooLong = 5 * time.Second
+			}
 			select {
 			case res := <-clientc:
 				if isTimeout(res.err) {

@@ -467,7 +467,7 @@ uintptr	runtime·gettype(void*);
 enum
 {
 	// flags to malloc
-	FlagNoPointers	= 1<<0,	// no pointers here
+	FlagNoScan	= 1<<0,	// GC doesn't have to scan object
 	FlagNoProfiling	= 1<<1,	// must not profile
 	FlagNoGC	= 1<<2,	// must not free or scan for pointers
 	FlagNoZero	= 1<<3, // don't zero memory
@@ -487,8 +487,7 @@ enum
 {
 	TypeInfo_SingleObject = 0,
 	TypeInfo_Array = 1,
-	TypeInfo_Map = 2,
-	TypeInfo_Chan = 3,
+	TypeInfo_Chan = 2,
 
 	// Enables type information at the end of blocks allocated from heap	
 	DebugTypeAtBlockEnd = 0,

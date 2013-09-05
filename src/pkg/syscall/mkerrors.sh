@@ -37,6 +37,25 @@ includes_Darwin='
 #include <termios.h>
 '
 
+includes_DragonFly='
+#include <sys/types.h>
+#include <sys/event.h>
+#include <sys/socket.h>
+#include <sys/sockio.h>
+#include <sys/sysctl.h>
+#include <sys/mman.h>
+#include <sys/wait.h>
+#include <sys/ioctl.h>
+#include <net/bpf.h>
+#include <net/if.h>
+#include <net/if_types.h>
+#include <net/route.h>
+#include <netinet/in.h>
+#include <termios.h>
+#include <netinet/ip.h>
+#include <net/ip_mroute/ip_mroute.h>
+'
+
 includes_FreeBSD='
 #include <sys/types.h>
 #include <sys/event.h>
@@ -81,6 +100,7 @@ includes_Linux='
 #include <linux/reboot.h>
 #include <linux/rtnetlink.h>
 #include <linux/ptrace.h>
+#include <linux/sched.h>
 #include <linux/wait.h>
 #include <linux/icmpv6.h>
 #include <net/if.h>
@@ -224,6 +244,7 @@ ccflags="$@"
 		$2 ~ /^RUSAGE_(SELF|CHILDREN|THREAD)/ ||
 		$2 ~ /^RLIMIT_(AS|CORE|CPU|DATA|FSIZE|NOFILE|STACK)|RLIM_INFINITY/ ||
 		$2 ~ /^PRIO_(PROCESS|PGRP|USER)/ ||
+		$2 ~ /^CLONE_[A-Z_]+/ ||
 		$2 !~ /^(BPF_TIMEVAL)$/ &&
 		$2 ~ /^(BPF|DLT)_/ ||
 		$2 !~ "WMESGLEN" &&

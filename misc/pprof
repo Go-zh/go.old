@@ -79,6 +79,7 @@ use strict;
 use warnings;
 use Getopt::Long;
 use File::Temp;
+use File::Copy;
 
 my $PPROF_VERSION = "1.5";
 
@@ -104,7 +105,6 @@ my $GV = "gv";
 my $KCACHEGRIND = "kcachegrind";
 my $PS2PDF = "ps2pdf";
 # These are used for dynamic profiles
-my $CURL = "curl";
 
 # These are the web pages that servers need to support for dynamic profiles
 my $HEAP_PAGE = "/pprof/heap";
@@ -138,8 +138,8 @@ my $sep_address = undef;
 my $OS = $^O;
 my $DEVNULL = "/dev/null";
 if ($^O =~ /MSWin32|cygwin|msys/) {
-	$OS = "windows";
-	$DEVNULL = "NUL";
+  $OS = "windows";
+  $DEVNULL = "NUL";
 }
 
 ##### Argument parsing #####
@@ -501,7 +501,7 @@ sub Init() {
   # Remote profiling without a binary (using $SYMBOL_PAGE instead)
   if (IsProfileURL($ARGV[0])) {
     $main::use_symbol_page = 1;
-  } elsif (IsSymbolizedProfileFile($ARGV[0])) {
+  } elsif ($ARGV[0] && IsSymbolizedProfileFile($ARGV[0])) {
     $main::use_symbolized_profile = 1;
     $main::prog = $UNKNOWN_BINARY;  # will be set later from the profile file
   }
@@ -2977,10 +2977,9 @@ sub IsSymbolizedProfileFile {
 sub CheckSymbolPage {
   my $url = SymbolPageURL();
 print STDERR "Read $url\n";
-  open(SYMBOL, "$CURL -s '$url' |");
-  my $line = <SYMBOL>;
+
+  my $line = FetchHTTP($url);
   $line =~ s/\r//g;         # turn windows-looking lines into unix-looking lines
-  close(SYMBOL);
   unless (defined($line)) {
     error("$url doesn't exist\n");
   }
@@ -3022,33 +3021,14 @@ sub SymbolPageURL {
 sub FetchProgramName() {
   my ($scheme, $host, $port, $prefix, $path) = ParseProfileURL($main::pfile_args[0]);
   my $url = "$scheme://$host:$port$prefix$PROGRAM_NAME_PAGE";
-  my $command_line = "$CURL -s '$url'";
-  open(CMDLINE, "$command_line |") or error($command_line);
-  my $cmdline = <CMDLINE>;
+  
+  my $cmdline = FetchHTTP($url);
+  $cmdline =~ s/\n.*//s; # first line only
   $cmdline =~ s/\r//g;   # turn windows-looking lines into unix-looking lines
-  close(CMDLINE);
   error("Failed to get program name from $url\n") unless defined($cmdline);
   $cmdline =~ s/\x00.+//;  # Remove argv[1] and latters.
   $cmdline =~ s!\n!!g;  # Remove LFs.
   return $cmdline;
-}
-
-# Gee, curl's -L (--location) option isn't reliable at least
-# with its 7.12.3 version.  Curl will forget to post data if
-# there is a redirection.  This function is a workaround for
-# curl.  Redirection happens on borg hosts.
-sub ResolveRedirectionForCurl {
-  my $url = shift;
-  my $command_line = "$CURL -s --head '$url'";
-  open(CMDLINE, "$command_line |") or error($command_line);
-  while (<CMDLINE>) {
-    s/\r//g;         # turn windows-looking lines into unix-looking lines
-    if (/^Location: (.*)/) {
-      $url = $1;
-    }
-  }
-  close(CMDLINE);
-  return $url;
 }
 
 # Reads a symbol map from the file handle name given as $1, returning
@@ -3102,14 +3082,15 @@ sub FetchSymbols {
     $symbol_map = {};
 
     my $post_data = join("+", sort((map {"0x" . "$_"} @pcs)));
-    open(POSTFILE, ">$main::tmpfile_sym");
-    print POSTFILE $post_data;
-    close(POSTFILE);
-
     my $url = SymbolPageURL();
-    $url = ResolveRedirectionForCurl($url);
-    my $command_line = "$CURL -sd '\@$main::tmpfile_sym' '$url'";
-    open(SYMBOL, "$command_line |") or error($command_line);
+    my $content = PostHTTP($url, $post_data);
+    
+    my $tmp_symbol = File::Temp->new()->filename;
+    open(SYMBOL, ">$tmp_symbol");
+    print SYMBOL $content;
+    close(SYMBOL);
+    
+    open(SYMBOL, "<$tmp_symbol") || error("$tmp_symbol");
     ReadSymbols(*SYMBOL{IO}, $symbol_map);
     close(SYMBOL);
   }
@@ -3175,7 +3156,7 @@ sub FetchDynamicProfile {
     my $profile_file = MakeProfileBaseName($binary_name, $profile_name);
 
     my $url;
-    my $curl_timeout;
+    my $timeout;
     if (($path =~ m/$PROFILE_PAGE/) || ($path =~ m/$PMUPROFILE_PAGE/)) {
       if ($path =~ m/$PROFILE_PAGE/) {
         $url = sprintf("$scheme://$host:$port$prefix$path?seconds=%d",
@@ -3189,8 +3170,7 @@ sub FetchDynamicProfile {
         $url = sprintf("$scheme://$profile_name" . "seconds=%d",
             $main::opt_seconds);
       }
-      $curl_timeout = sprintf("--max-time %d",
-                              int($main::opt_seconds * 1.01 + 60));
+      $timeout = int($main::opt_seconds * 1.01 + 60);
     } else {
       # For non-CPU profiles, we add a type-extension to
       # the target profile file name.
@@ -3198,22 +3178,15 @@ sub FetchDynamicProfile {
       $suffix =~ s,/,.,g;
       $profile_file .= "$suffix";
       $url = "$scheme://$host:$port$prefix$path";
-      $curl_timeout = "";
     }
 
-    my $profile_dir = $ENV{"PPROF_TMPDIR"} || ($ENV{HOME} . "/pprof");
-    if (!(-d $profile_dir)) {
-      mkdir($profile_dir)
-          || die("Unable to create profile directory $profile_dir: $!\n");
-    }
-    my $tmp_profile = "$profile_dir/.tmp.$profile_file";
-    my $real_profile = "$profile_dir/$profile_file";
+    my $tmp_profile = File::Temp->new()->filename;
+    my $real_profile = File::Temp->new()->filename;
 
     if ($fetch_name_only > 0) {
       return $real_profile;
     }
 
-    my $cmd = "$CURL $curl_timeout -s -o $tmp_profile '$url'";
     if (($path =~ m/$PROFILE_PAGE/) || ($path =~ m/$PMUPROFILE_PAGE/)){
       print STDERR "Gathering CPU profile from $url for $main::opt_seconds seconds to\n  ${real_profile}\n";
       if ($encourage_patience) {
@@ -3223,12 +3196,17 @@ sub FetchDynamicProfile {
       print STDERR "Fetching $path profile from $host:$port to\n  ${real_profile}\n";
     }
 
-    (system($cmd) == 0) || error("Failed to get profile: $cmd: $!\n");
-    open(TMPPROF, "$tmp_profile") || error("Cannot open $tmp_profile: $!\n");
-    my $line = <TMPPROF>;
-    close(TMPPROF);
+    my $content = FetchHTTP($url, $timeout);
+    
+    open(OUTFILE, ">$tmp_profile");
+    binmode(OUTFILE);
+    print OUTFILE $content;
+    close(OUTFILE);
+    
+    my $line = $content;
     $line !~ /^Could not enable CPU profiling/ || error($line);
-    (system("mv $tmp_profile $real_profile") == 0) || error("Unable to rename profile\n");
+    
+    copy($tmp_profile, $real_profile) || error("Unable to copy profile\n");
     print STDERR "Wrote profile to $real_profile\n";
     $main::collected_profile = $real_profile;
     return $main::collected_profile;
@@ -4680,9 +4658,59 @@ sub ConfigureTool {
   return $path;
 }
 
+# FetchHTTP retrieves a URL using either curl or LWP::UserAgent.
+# It returns the entire body of the page on success, or exits the program
+# with an error message on any failure.
+sub FetchHTTP {
+  my $url = shift;
+  my $timeout = shift;  # optional, in seconds
+  eval "use LWP::UserAgent ();";
+  if ($@) {
+    my @max;
+    push @max, "--max-time", $timeout if $timeout;
+    open(my $fh, "-|", "curl", @max, "-s", $url) or error("Neither LWP::UserAgent nor curl is installed: $!\n");
+    my $slurp = do { local $/; <$fh> };
+    close($fh);
+    if ($? != 0) {
+      error("Error fetching $url with curl: exit $?")
+    }
+    return $slurp;
+  }
+  my $ua = LWP::UserAgent->new;
+  $ua->timeout($timeout) if $timeout;
+  my $res = $ua->get($url);
+  error("Failed to fetch $url\n") unless $res->is_success();
+  return $res->content();
+}
+
+sub PostHTTP {
+  my ($url, $post_data) = @_;
+  eval "use LWP::UserAgent ();";
+  if ($@) {
+    open(POSTFILE, ">$main::tmpfile_sym");
+    print POSTFILE $post_data;
+    close(POSTFILE);
+
+    open(my $fh, "-|", "curl", "-s", "-d", "\@$main::tmpfile_sym", $url) or error("Neither LWP::UserAgent nor curl is installed: $!\n");
+    my $slurp = do { local $/; <$fh> };
+    close($fh);
+    if ($? != 0) {
+      error("Error fetching $url with curl: exit $?")
+    }
+    return $slurp;
+  }
+  my $req = HTTP::Request->new(POST => $url);
+  $req->content($post_data);
+  my $ua = LWP::UserAgent->new;
+  my $res = $ua->request($req);
+  error("Failed to POST to $url\n") unless $res->is_success();
+  return $res->content();
+}
+
 sub cleanup {
-  unlink($main::tmpfile_sym);
-  unlink(keys %main::tempnames);
+  unlink($main::tmpfile_sym) if defined $main::tmpfile_sym;
+  unlink(keys %main::tempnames) if %main::tempnames;
+  unlink($main::collected_profile) if defined $main::collected_profile;
 
   # We leave any collected profiles in $HOME/pprof in case the user wants
   # to look at them later.  We print a message informing them of this.

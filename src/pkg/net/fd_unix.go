@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin freebsd linux netbsd openbsd
+// +build darwin dragonfly freebsd linux netbsd openbsd
 
 package net
 
@@ -33,8 +33,6 @@ type netFD struct {
 	pd pollDesc
 }
 
-var canCancelIO = true // used for testing current package
-
 func sysInit() {
 }
 
@@ -43,7 +41,7 @@ func resolveAndDial(net, addr string, localAddr Addr, deadline time.Time) (Conn,
 	if err != nil {
 		return nil, &OpError{Op: "dial", Net: net, Addr: nil, Err: err}
 	}
-	return dial(net, addr, localAddr, ra, deadline)
+	return dial(net, addr, localAddr, ra.toAddr(), deadline)
 }
 
 func newFD(sysfd, family, sotype int, net string) (*netFD, error) {

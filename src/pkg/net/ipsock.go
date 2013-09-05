@@ -6,7 +6,10 @@
 
 package net
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 var (
 	// supportsIPv4 reports whether the platform supports IPv4
@@ -29,40 +32,87 @@ func init() {
 	supportsIPv6, supportsIPv4map = probeIPv6Stack()
 }
 
-func firstFavoriteAddr(filter func(IP) IP, addrs []string) (addr IP) {
-	if filter == nil {
-		// We'll take any IP address, but since the dialing code
-		// does not yet try multiple addresses, prefer to use
-		// an IPv4 address if possible.  This is especially relevant
-		// if localhost resolves to [ipv6-localhost, ipv4-localhost].
-		// Too much code assumes localhost == ipv4-localhost.
-		addr = firstSupportedAddr(ipv4only, addrs)
-		if addr == nil {
-			addr = firstSupportedAddr(anyaddr, addrs)
-		}
-	} else {
-		addr = firstSupportedAddr(filter, addrs)
-	}
-	return
+// A netaddr represents a network endpoint address or a list of
+// network endpoint addresses.
+type netaddr interface {
+	// toAddr returns the address represented in Addr interface.
+	// It returns a nil interface when the address is nil.
+	toAddr() Addr
 }
 
-func firstSupportedAddr(filter func(IP) IP, addrs []string) IP {
-	for _, s := range addrs {
-		if addr := filter(ParseIP(s)); addr != nil {
-			return addr
-		}
+// An addrList represents a list of network endpoint addresses.
+type addrList []netaddr
+
+func (al addrList) toAddr() Addr {
+	switch len(al) {
+	case 0:
+		return nil
+	case 1:
+		return al[0].toAddr()
+	default:
+		// For now, we'll roughly pick first one without
+		// considering dealing with any preferences such as
+		// DNS TTL, transport path quality, network routing
+		// information.
+		return al[0].toAddr()
 	}
-	return nil
 }
 
-// anyaddr returns IP addresses that we can use with the current
-// kernel configuration.  It returns nil when ip is not suitable for
-// the configuration and an IP address.
-func anyaddr(ip IP) IP {
-	if ip4 := ipv4only(ip); ip4 != nil {
-		return ip4
+var errNoSuitableAddress = errors.New("no suitable address found")
+
+// firstFavoriteAddr returns an address or a list of addresses that
+// implement the netaddr interface. Known filters are nil, ipv4only
+// and ipv6only. It returns any address when filter is nil. The result
+// contains at least one address when error is nil.
+func firstFavoriteAddr(filter func(IP) IP, ips []IP, inetaddr func(IP) netaddr) (netaddr, error) {
+	if filter != nil {
+		return firstSupportedAddr(filter, ips, inetaddr)
 	}
-	return ipv6only(ip)
+	var (
+		ipv4, ipv6, swap bool
+		list             addrList
+	)
+	for _, ip := range ips {
+		// We'll take any IP address, but since the dialing
+		// code does not yet try multiple addresses
+		// effectively, prefer to use an IPv4 address if
+		// possible. This is especially relevant if localhost
+		// resolves to [ipv6-localhost, ipv4-localhost]. Too
+		// much code assumes localhost == ipv4-localhost.
+		if ip4 := ipv4only(ip); ip4 != nil && !ipv4 {
+			list = append(list, inetaddr(ip4))
+			ipv4 = true
+			if ipv6 {
+				swap = true
+			}
+		} else if ip6 := ipv6only(ip); ip6 != nil && !ipv6 {
+			list = append(list, inetaddr(ip6))
+			ipv6 = true
+		}
+		if ipv4 && ipv6 {
+			if swap {
+				list[0], list[1] = list[1], list[0]
+			}
+			break
+		}
+	}
+	switch len(list) {
+	case 0:
+		return nil, errNoSuitableAddress
+	case 1:
+		return list[0], nil
+	default:
+		return list, nil
+	}
+}
+
+func firstSupportedAddr(filter func(IP) IP, ips []IP, inetaddr func(IP) netaddr) (netaddr, error) {
+	for _, ip := range ips {
+		if ip := filter(ip); ip != nil {
+			return inetaddr(ip), nil
+		}
+	}
+	return nil, errNoSuitableAddress
 }
 
 // ipv4only returns IPv4 addresses that we can use with the kernel's
@@ -178,7 +228,13 @@ func JoinHostPort(host, port string) string {
 	return host + ":" + port
 }
 
-func resolveInternetAddr(net, addr string, deadline time.Time) (Addr, error) {
+// resolveInternetAddr resolves addr that is either a literal IP
+// address or a DNS name and returns an internet protocol family
+// address. It returns a list that contains a pair of different
+// address family addresses when addr is a DNS name and the name has
+// mutiple address family records. The result contains at least one
+// address when error is nil.
+func resolveInternetAddr(net, addr string, deadline time.Time) (netaddr, error) {
 	var (
 		err              error
 		host, port, zone string
@@ -201,30 +257,32 @@ func resolveInternetAddr(net, addr string, deadline time.Time) (Addr, error) {
 	default:
 		return nil, UnknownNetworkError(net)
 	}
-	inetaddr := func(net string, ip IP, port int, zone string) Addr {
+	inetaddr := func(ip IP) netaddr {
 		switch net {
 		case "tcp", "tcp4", "tcp6":
-			return &TCPAddr{IP: ip, Port: port, Zone: zone}
+			return &TCPAddr{IP: ip, Port: portnum, Zone: zone}
 		case "udp", "udp4", "udp6":
-			return &UDPAddr{IP: ip, Port: port, Zone: zone}
+			return &UDPAddr{IP: ip, Port: portnum, Zone: zone}
 		case "ip", "ip4", "ip6":
 			return &IPAddr{IP: ip, Zone: zone}
+		default:
+			panic("unexpected network: " + net)
 		}
-		return nil
 	}
 	if host == "" {
-		return inetaddr(net, nil, portnum, zone), nil
+		return inetaddr(nil), nil
 	}
-	// Try as an IP address.
-	if ip := parseIPv4(host); ip != nil {
-		return inetaddr(net, ip, portnum, zone), nil
+	// Try as a literal IP address.
+	var ip IP
+	if ip = parseIPv4(host); ip != nil {
+		return inetaddr(ip), nil
 	}
-	if ip, zone := parseIPv6(host, true); ip != nil {
-		return inetaddr(net, ip, portnum, zone), nil
+	if ip, zone = parseIPv6(host, true); ip != nil {
+		return inetaddr(ip), nil
 	}
-	// Try as a domain name.
+	// Try as a DNS name.
 	host, zone = splitHostZone(host)
-	addrs, err := lookupHostDeadline(host, deadline)
+	ips, err := lookupIPDeadline(host, deadline)
 	if err != nil {
 		return nil, err
 	}
@@ -235,12 +293,7 @@ func resolveInternetAddr(net, addr string, deadline time.Time) (Addr, error) {
 	if net != "" && net[len(net)-1] == '6' || zone != "" {
 		filter = ipv6only
 	}
-	ip := firstFavoriteAddr(filter, addrs)
-	if ip == nil {
-		// should not happen
-		return nil, &AddrError{"LookupHost returned no suitable address", addrs[0]}
-	}
-	return inetaddr(net, ip, portnum, zone), nil
+	return firstFavoriteAddr(filter, ips, inetaddr)
 }
 
 func zoneToString(zone int) string {

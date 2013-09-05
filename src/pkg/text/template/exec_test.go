@@ -57,6 +57,7 @@ type T struct {
 	Err error
 	// Pointers
 	PI  *int
+	PS  *string
 	PSI *[]int
 	NIL *int
 	// Function (not method)
@@ -125,6 +126,7 @@ var tVal = &T{
 	Str:               bytes.NewBuffer([]byte("foozle")),
 	Err:               errors.New("erroozle"),
 	PI:                newInt(23),
+	PS:                newString("a string"),
 	PSI:               newIntSlice(21, 22, 23),
 	BinaryFunc:        func(a, b string) string { return fmt.Sprintf("[%s=%s]", a, b) },
 	VariadicFunc:      func(s ...string) string { return fmt.Sprint("<", strings.Join(s, "+"), ">") },
@@ -143,9 +145,11 @@ var iVal I = tVal
 
 // Helpers for creation.
 func newInt(n int) *int {
-	p := new(int)
-	*p = n
-	return p
+	return &n
+}
+
+func newString(s string) *string {
+	return &s
 }
 
 func newIntSlice(n ...int) *[]int {
@@ -282,6 +286,7 @@ var execTests = []execTest{
 
 	// Pointers.
 	{"*int", "{{.PI}}", "23", tVal, true},
+	{"*string", "{{.PS}}", "a string", tVal, true},
 	{"*[]int", "{{.PSI}}", "[21 22 23]", tVal, true},
 	{"*[]int[1]", "{{index .PSI 1}}", "22", tVal, true},
 	{"NIL", "{{.NIL}}", "<nil>", tVal, true},
@@ -369,6 +374,8 @@ var execTests = []execTest{
 	{"if map not unset", "{{if not .MXI.none}}ZERO{{else}}NON-ZERO{{end}}", "ZERO", tVal, true},
 	{"if $x with $y int", "{{if $x := true}}{{with $y := .I}}{{$x}},{{$y}}{{end}}{{end}}", "true,17", tVal, true},
 	{"if $x with $x int", "{{if $x := true}}{{with $x := .I}}{{$x}},{{end}}{{$x}}{{end}}", "17,true", tVal, true},
+	{"if else if", "{{if false}}FALSE{{else if true}}TRUE{{end}}", "TRUE", tVal, true},
+	{"if else chain", "{{if eq 1 3}}1{{else if eq 2 3}}2{{else if eq 3 3}}3{{end}}", "3", tVal, true},
 
 	// Print etc.
 	{"print", `{{print "hello, print"}}`, "hello, print", tVal, true},
@@ -391,6 +398,7 @@ var execTests = []execTest{
 		"&lt;script&gt;alert(&#34;XSS&#34;);&lt;/script&gt;", nil, true},
 	{"html pipeline", `{{printf "<script>alert(\"XSS\");</script>" | html}}`,
 		"&lt;script&gt;alert(&#34;XSS&#34;);&lt;/script&gt;", nil, true},
+	{"html", `{{html .PS}}`, "a string", tVal, true},
 
 	// JavaScript.
 	{"js", `{{js .}}`, `It\'d be nice.`, `It'd be nice.`, true},
@@ -883,6 +891,8 @@ var cmpTests = []cmpTest{
 	{"eq `xy` `xyz`", "false", true},
 	{"eq .Xuint .Xuint", "true", true},
 	{"eq .Xuint .Yuint", "false", true},
+	{"eq 3 4 5 6 3", "true", true},
+	{"eq 3 4 5 6 7", "false", true},
 	{"ne true true", "false", true},
 	{"ne true false", "true", true},
 	{"ne 1+2i 1+2i", "false", true},
@@ -938,7 +948,6 @@ var cmpTests = []cmpTest{
 	{"ge .Xuint .Yuint", "false", true},
 	{"ge .Yuint .Xuint", "true", true},
 	// Errors
-	{"eq 3 4 5", "", false},     // Too many arguments.
 	{"eq `xy` 1", "", false},    // Different types.
 	{"lt true true", "", false}, // Unordered types.
 	{"lt 1+0i 1+0i", "", false}, // Unordered types.
@@ -962,7 +971,7 @@ func TestComparison(t *testing.T) {
 			continue
 		}
 		if !test.ok && err == nil {
-			t.Errorf("%s did not error")
+			t.Errorf("%s did not error", test.expr)
 			continue
 		}
 		if b.String() != test.truth {

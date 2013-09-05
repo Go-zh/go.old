@@ -34,3 +34,4 @@ var v Val
 var pv = &v
 
 var _ = pv.val() // ERROR "method"
+var _ = pv.val   // ERROR "method"
