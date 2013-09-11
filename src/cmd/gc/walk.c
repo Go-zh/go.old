@@ -340,7 +340,7 @@ walkexpr(Node **np, NodeList **init)
 	Node *r, *l, *var, *a;
 	NodeList *ll, *lr, *lpost;
 	Type *t;
-	int et;
+	int et, old_safemode;
 	int64 v;
 	int32 lno;
 	Node *n, *fn, *n1, *n2;
@@ -488,7 +488,15 @@ walkexpr(Node **np, NodeList **init)
 	case ONE:
 		walkexpr(&n->left, init);
 		walkexpr(&n->right, init);
+		// Disable safemode while compiling this code: the code we
+		// generate internally can refer to unsafe.Pointer.
+		// In this case it can happen if we need to generate an ==
+		// for a struct containing a reflect.Value, which itself has
+		// an unexported field of type unsafe.Pointer.
+		old_safemode = safemode;
+		safemode = 0;
 		walkcompare(&n, init);
+		safemode = old_safemode;
 		goto ret;
 
 	case OANDAND:
@@ -1386,7 +1394,11 @@ ret:
 	// constants until walk. For example, if n is y%1 == 0, the
 	// walk of y%1 may have replaced it by 0.
 	// Check whether n with its updated args is itself now a constant.
+	t = n->type;
 	evconst(n);
+	n->type = t;
+	if(n->op == OLITERAL)
+		typecheck(&n, Erv);
 
 	ullmancalc(n);
 

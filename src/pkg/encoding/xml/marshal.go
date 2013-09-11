@@ -196,6 +196,7 @@ func (enc *Encoder) EncodeToken(t Token) error {
 		p.WriteString("<!--")
 		p.Write(t)
 		p.WriteString("-->")
+		return p.cachedWriteError()
 	case ProcInst:
 		if t.Target == "xml" || !isNameString(t.Target) {
 			return fmt.Errorf("xml: EncodeToken of ProcInst with invalid Target")
@@ -218,7 +219,7 @@ func (enc *Encoder) EncodeToken(t Token) error {
 		p.Write(t)
 		p.WriteString(">")
 	}
-	return p.Flush()
+	return p.cachedWriteError()
 }
 
 type printer struct {
@@ -654,7 +655,10 @@ func (p *printer) marshalSimple(typ reflect.Type, val reflect.Value) (string, []
 	case reflect.Bool:
 		return strconv.FormatBool(val.Bool()), nil, nil
 	case reflect.Array:
-		// will be [...]byte
+		if typ.Elem().Kind() != reflect.Uint8 {
+			break
+		}
+		// [...]byte
 		var bytes []byte
 		if val.CanAddr() {
 			bytes = val.Slice(0, val.Len()).Bytes()
@@ -664,7 +668,10 @@ func (p *printer) marshalSimple(typ reflect.Type, val reflect.Value) (string, []
 		}
 		return "", bytes, nil
 	case reflect.Slice:
-		// will be []byte
+		if typ.Elem().Kind() != reflect.Uint8 {
+			break
+		}
+		// []byte
 		return "", val.Bytes(), nil
 	}
 	return "", nil, &UnsupportedTypeError{typ}

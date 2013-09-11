@@ -104,6 +104,19 @@ cp -R testdata/local "testdata/$bad"
 testlocal "$bad" 'with bad characters in path'
 rm -rf "testdata/$bad"
 
+TEST error message for syntax error in test go file says FAIL
+export GOPATH=$(pwd)/testdata
+if ./testgo test syntaxerror 2>testdata/err; then
+	echo 'go test syntaxerror succeeded'
+	ok=false
+elif ! grep FAIL testdata/err >/dev/null; then
+	echo 'go test did not say FAIL:'
+	cat testdata/err
+	ok=false
+fi
+rm -f ./testdata/err
+unset GOPATH
+
 # Test tests with relative imports.
 TEST relative imports '(go test)'
 if ! ./testgo test ./testdata/testimport; then
@@ -126,6 +139,18 @@ if ! ./testgo test ./testdata/testimport/*.go; then
 	ok=false
 fi
 
+TEST version control error message includes correct directory
+export GOPATH=$(pwd)/testdata/shadow/root1
+if ./testgo get -u foo 2>testdata/err; then
+	echo "go get -u foo succeeded unexpectedly"
+	ok=false
+elif ! grep testdata/shadow/root1/src/foo testdata/err >/dev/null; then
+	echo "go get -u error does not mention shadow/root1/src/foo:"
+	cat testdata/err
+	ok=false
+fi
+unset GOPATH
+
 # Test that without $GOBIN set, binaries get installed
 # into the GOPATH bin directory.
 TEST install into GOPATH
@@ -137,6 +162,27 @@ elif ! test -x testdata/bin/go-cmd-test; then
 	echo "go install go-cmd-test did not write to testdata/bin/go-cmd-test"
 	ok=false
 fi
+
+TEST package main_test imports archive not binary
+export GOBIN=$(pwd)/testdata/bin
+mkdir -p $GOBIN
+export GOPATH=$(pwd)/testdata
+touch ./testdata/src/main_test/m.go
+if ! ./testgo test main_test; then
+	echo "go test main_test failed without install"
+	ok=false
+elif ! ./testgo install main_test; then
+	echo "go test main_test failed"
+	ok=false
+elif [ "$(./testgo list -f '{{.Stale}}' main_test)" != false ]; then
+	echo "after go install, main listed as stale"
+	ok=false
+elif ! ./testgo test main_test; then
+	echo "go test main_test failed after install"
+	ok=false
+fi
+rm -rf $GOBIN
+unset GOBIN
 
 # And with $GOBIN set, binaries get installed to $GOBIN.
 TEST install into GOBIN
@@ -150,11 +196,16 @@ fi
 
 # Without $GOBIN set, installing a program outside $GOPATH should fail
 # (there is nowhere to install it).
-TEST install without destination
-if ./testgo install testdata/src/go-cmd-test/helloworld.go; then
+TEST install without destination fails
+if ./testgo install testdata/src/go-cmd-test/helloworld.go 2>testdata/err; then
 	echo "go install testdata/src/go-cmd-test/helloworld.go should have failed, did not"
 	ok=false
+elif ! grep 'no install location for .go files listed on command line' testdata/err; then
+	echo "wrong error:"
+	cat testdata/err
+	ok=false
 fi
+rm -f testdata/err
 
 # With $GOBIN set, should install there.
 TEST install to GOBIN '(command-line package)'
@@ -439,6 +490,37 @@ TEST go get cover
 unset GOPATH
 rm -rf $d
 
+TEST shadowing logic
+export GOPATH=$(pwd)/testdata/shadow/root1:$(pwd)/testdata/shadow/root2
+
+# The math in root1 is not "math" because the standard math is.
+cdir=$(./testgo list -f '({{.ImportPath}}) ({{.ConflictDir}})' ./testdata/shadow/root1/src/math)
+if [ "$cdir" != "(_$(pwd)/testdata/shadow/root1/src/math) ($GOROOT/src/pkg/math)" ]; then
+	echo shadowed math is not shadowed: "$cdir"
+	ok=false
+fi
+
+# The foo in root1 is "foo".
+cdir=$(./testgo list -f '({{.ImportPath}}) ({{.ConflictDir}})' ./testdata/shadow/root1/src/foo)
+if [ "$cdir" != "(foo) ()" ]; then
+	echo unshadowed foo is shadowed: "$cdir"
+	ok=false
+fi
+
+# The foo in root2 is not "foo" because the foo in root1 got there first.
+cdir=$(./testgo list -f '({{.ImportPath}}) ({{.ConflictDir}})' ./testdata/shadow/root2/src/foo)
+if [ "$cdir" != "(_$(pwd)/testdata/shadow/root2/src/foo) ($(pwd)/testdata/shadow/root1/src/foo)" ]; then
+	echo shadowed foo is not shadowed: "$cdir"
+	ok=false
+fi
+
+# The error for go install should mention the conflicting directory.
+err=$(! ./testgo install ./testdata/shadow/root2/src/foo 2>&1)
+if [ "$err" != "go install: no install location for directory $(pwd)/testdata/shadow/root2/src/foo hidden by $(pwd)/testdata/shadow/root1/src/foo" ]; then
+	echo wrong shadowed install error: "$err"
+	ok=false
+fi
+
 # Only succeeds if source order is preserved.
 TEST source file name order preserved
 ./testgo test testdata/example[12]_test.go || ok=false
@@ -460,6 +542,45 @@ package foo
 import "C"
 ' >$d/src/foo/foo.go
 ./testgo build -race foo || ok=false
+rm -rf $d
+unset GOPATH
+
+TEST cgo shows full path names
+d=$(TMPDIR=/var/tmp mktemp -d -t testgoXXX)
+export GOPATH=$d
+mkdir -p $d/src/x/y/dirname
+echo '
+package foo
+import "C"
+func f() {
+' >$d/src/x/y/dirname/foo.go
+if ./testgo build x/y/dirname >$d/err 2>&1; then
+	echo build succeeded unexpectedly.
+	ok=false
+elif ! grep x/y/dirname $d/err >/dev/null; then
+	echo error did not use full path.
+	cat $d/err
+	ok=false
+fi
+rm -rf $d
+unset GOPATH
+
+TEST 'cgo handles -Wl,$ORIGIN'
+d=$(TMPDIR=/var/tmp mktemp -d -t testgoXXX)
+export GOPATH=$d
+mkdir -p $d/src/origin
+echo '
+package origin
+// #cgo LDFLAGS: -Wl,-rpath -Wl,$ORIGIN
+// void f(void) {}
+import "C"
+
+func f() { C.f() }
+' >$d/src/origin/origin.go
+if ! ./testgo build origin; then
+	echo build failed
+	ok=false
+fi
 rm -rf $d
 unset GOPATH
 

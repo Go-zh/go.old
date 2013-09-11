@@ -19,11 +19,10 @@ type MemStats struct {
 	// 一般统计。
 	Alloc      uint64 // bytes allocated and still in use   // 已分配且仍在使用的字节数
 	TotalAlloc uint64 // bytes allocated (even if freed)    // 已分配（包括已释放的）字节数
-	// 从系统中获取的字节数（应当为下面 XxxSys 之和）
-	Sys     uint64 // bytes obtained from system (should be sum of XxxSys below)
-	Lookups uint64 // number of pointer lookups  // 指针查找数
-	Mallocs uint64 // number of mallocs          // malloc 数
-	Frees   uint64 // number of frees            // free 数
+	Sys        uint64 // bytes obtained from system (sum of XxxSys below) // 从系统中获取的字节数（应当为下面 XxxSys 之和）
+	Lookups    uint64 // number of pointer lookups          // 指针查找数
+	Mallocs    uint64 // number of mallocs                  // malloc 数
+	Frees      uint64 // number of frees                    // free 数
 
 	// Main allocation heap statistics.
 	// 主分配堆统计。
@@ -48,6 +47,8 @@ type MemStats struct {
 	MCacheInuse uint64 // mcache structures // mcache（内存缓存）结构数
 	MCacheSys   uint64
 	BuckHashSys uint64 // profiling bucket hash table // 分析桶散列表
+	GCSys       uint64 // GC metadata                 // GC 元数据
+	OtherSys    uint64 // other system allocations    // 其它系统分配
 
 	// Garbage collector statistics.
 	// 垃圾收集器统计。

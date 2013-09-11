@@ -131,7 +131,7 @@ addr(Biobuf *bp)
 			off = -off;
 	}
 	if(a.flags & T_OFFSET2){
-		BGETLE4(bp);
+		Bgetle4(bp);
 	}
 	if(a.flags & T_SYM)
 		a.sym = BGETC(bp);
@@ -166,5 +166,5 @@ static void
 skip(Biobuf *bp, int n)
 {
 	while (n-- > 0)
-		BGETC(bp);
+		Bgetc(bp);
 }

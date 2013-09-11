@@ -127,10 +127,10 @@ addr(Biobuf *bp)
 		break;
 	case D_REGREG:
 	case D_REGREG2:
-		BGETC(bp);
+		Bgetc(bp);
 		break;
 	case D_CONST2:
-		BGETLE4(bp);	// fall through
+		Bgetle4(bp); // fall through
 	case D_OREG:
 	case D_CONST:
 	case D_BRANCH:
@@ -167,5 +167,5 @@ static void
 skip(Biobuf *bp, int n)
 {
 	while (n-- > 0)
-		BGETC(bp);
+		Bgetc(bp);
 }

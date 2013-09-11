@@ -78,7 +78,7 @@ typedef	struct	Strlit	Strlit;
 struct	Strlit
 {
 	int32	len;
-	char	s[3];	// variable
+	char	s[1]; // variable
 };
 
 enum
@@ -380,6 +380,7 @@ struct	Sym
 	Sym*	link;
 	int32	npkg;	// number of imported packages with this name
 	uint32	uniqgen;
+	Pkg*	importdef;	// where imported definition was found
 
 	// saved and restored by dcopy
 	Pkg*	pkg;

@@ -540,7 +540,7 @@ ginscon(int as, vlong c, Node *n2)
 
 	nodconst(&n1, types[TINT64], c);
 
-	if(as != AMOVQ && (c < -1LL<<31 || c >= 1LL<<31)) {
+	if(as != AMOVQ && (c < -(1LL<<31) || c >= 1LL<<31)) {
 		// cannot have 64-bit immediokate in ADD, etc.
 		// instead, MOV into register first.
 		regalloc(&ntmp, types[TINT64], N);
@@ -1065,6 +1065,29 @@ gins(int as, Node *f, Node *t)
 	}
 
 	return p;
+}
+
+void
+fixlargeoffset(Node *n)
+{
+	Node a;
+
+	if(n == N)
+		return;
+	if(n->op != OINDREG)
+		return;
+	if(n->val.u.reg == D_SP) // stack offset cannot be large
+		return;
+	if(n->xoffset != (int32)n->xoffset) {
+		// offset too large, add to register instead.
+		a = *n;
+		a.op = OREGISTER;
+		a.type = types[tptr];
+		a.xoffset = 0;
+		cgen_checknil(&a);
+		ginscon(optoas(OADD, types[tptr]), n->xoffset, &a);
+		n->xoffset = 0;
+	}
 }
 
 /*
@@ -2015,6 +2038,7 @@ odot:
 
 	a->type = D_NONE;
 	a->index = D_NONE;
+	fixlargeoffset(&n1);
 	naddr(&n1, a, 1);
 	goto yes;
 
@@ -2176,6 +2200,7 @@ oindex_const:
 		n2 = *reg;
 		n2.op = OINDREG;
 		n2.xoffset = v*w;
+		fixlargeoffset(&n2);
 		a->type = D_NONE;
 		a->index = D_NONE;
 		naddr(&n2, a, 1);
@@ -2188,6 +2213,7 @@ oindex_const:
 		reg->op = OREGISTER;
 	}
 	n1.xoffset += v*w;
+	fixlargeoffset(&n1);
 	a->type = D_NONE;
 	a->index= D_NONE;
 	naddr(&n1, a, 1);
@@ -2223,6 +2249,7 @@ oindex_const_sudo:
 	n2 = *reg;
 	n2.op = OINDREG;
 	n2.xoffset = v*w;
+	fixlargeoffset(&n2);
 	a->type = D_NONE;
 	a->index = D_NONE;
 	naddr(&n2, a, 1);

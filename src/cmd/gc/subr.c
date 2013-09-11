@@ -322,7 +322,7 @@ setlineno(Node *n)
 uint32
 stringhash(char *p)
 {
-	int32 h;
+	uint32 h;
 	int c;
 
 	h = 0;
@@ -333,9 +333,9 @@ stringhash(char *p)
 		h = h*PRIME1 + c;
 	}
 
-	if(h < 0) {
+	if((int32)h < 0) {
 		h = -h;
-		if(h < 0)
+		if((int32)h < 0)
 			h = 0;
 	}
 	return h;
@@ -1410,6 +1410,9 @@ assignconv(Node *n, Type *t, char *context)
 	
 	if(n == N || n->type == T || n->type->broke)
 		return n;
+
+	if(t->etype == TBLANK && n->type->etype == TNIL)
+		yyerror("use of untyped nil");
 
 	old = n;
 	old->diag++;  // silence errors about n; we'll issue one below

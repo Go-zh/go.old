@@ -134,7 +134,7 @@ addr(Biobuf *bp)
 			off = ((vlong)l << 32) | (off & 0xFFFFFFFF);
 		}
 		if(off < 0)
-			off = -off;
+			off = -(uvlong)off;
 	}
 	if(a.flags & T_SYM)
 		a.sym = BGETC(bp);
@@ -169,5 +169,5 @@ static void
 skip(Biobuf *bp, int n)
 {
 	while (n-- > 0)
-		BGETC(bp);
+		Bgetc(bp);
 }
