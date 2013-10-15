@@ -21,10 +21,10 @@ type netFD struct {
 func sysInit() {
 }
 
-func resolveAndDial(net, addr string, localAddr Addr, deadline time.Time) (Conn, error) {
+func dial(net string, ra Addr, dialer func(time.Time) (Conn, error), deadline time.Time) (Conn, error) {
 	// On plan9, use the relatively inefficient
 	// goroutine-racing implementation.
-	return resolveAndDialChannel(net, addr, localAddr, deadline)
+	return dialChannel(net, ra, dialer, deadline)
 }
 
 func newFD(proto, name string, ctl, data *os.File, laddr, raddr Addr) *netFD {
@@ -124,4 +124,8 @@ func setReadBuffer(fd *netFD, bytes int) error {
 
 func setWriteBuffer(fd *netFD, bytes int) error {
 	return syscall.EPLAN9
+}
+
+func skipRawSocketTests() (skip bool, skipmsg string, err error) {
+	return true, "skipping test on plan9", nil
 }

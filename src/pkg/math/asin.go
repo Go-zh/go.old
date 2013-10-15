@@ -16,7 +16,7 @@ package math
 	在适当减少范围后，它们通过计算反正切来实现。
 */
 
-// Asin returns the arcsine of x.
+// Asin returns the arcsine, in radians, of x.
 //
 // Special cases are:
 //	Asin(±0) = ±0
@@ -55,7 +55,7 @@ func asin(x float64) float64 {
 	return temp
 }
 
-// Acos returns the arccosine of x.
+// Acos returns the arccosine, in radians, of x.
 //
 // Special case is:
 //	Acos(x) = NaN if x < -1 or x > 1

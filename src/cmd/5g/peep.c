@@ -47,6 +47,8 @@ static Flow*	findpre(Flow *r, Adr *v);
 static int	copyau1(Prog *p, Adr *v);
 static int	isdconst(Addr *a);
 
+static uint32	gactive;
+
 // UNUSED
 int	shiftprop(Flow *r);
 void	constprop(Adr *c1, Adr *v1, Flow *r);
@@ -63,8 +65,7 @@ peep(Prog *firstp)
 	g = flowstart(firstp, sizeof(Flow));
 	if(g == nil)
 		return;
-	for(r=g->start, t=0; r!=nil; r=r->link, t++)
-		r->active = t;
+	gactive = 0;
 
 loop1:
 	if(debug['P'] && debug['v'])
@@ -345,9 +346,6 @@ gotit:
 	return 1;
 }
 
-static uchar *active;
-static int nactive;
-
 /*
  * The idea is to remove redundant copies.
  *	v1->v2	F=0
@@ -366,16 +364,13 @@ copyprop(Graph *g, Flow *r0)
 	Prog *p;
 	Adr *v1, *v2;
 
+	USED(g);
 	p = r0->prog;
 	v1 = &p->from;
 	v2 = &p->to;
 	if(copyas(v1, v2))
 		return 1;
-	if(nactive < g->num) {
-		nactive = g->num;
-		active = realloc(active, g->num);
-	}
- 	memset(active, 0, g->num);
+	gactive++;
 	return copy1(v1, v2, r0->s1, 0);
 }
 
@@ -385,12 +380,12 @@ copy1(Adr *v1, Adr *v2, Flow *r, int f)
 	int t;
 	Prog *p;
 
-	if(active[r->active]) {
+	if(r->active == gactive) {
 		if(debug['P'])
 			print("act set; return 1\n");
 		return 1;
 	}
-	active[r->active] = 1;
+	r->active = gactive;
 	if(debug['P'])
 		print("copy %D->%D f=%d\n", v1, v2, f);
 	for(; r != nil; r = r->s1) {
@@ -1198,6 +1193,20 @@ copyas(Adr *a, Adr *v)
 	return 0;
 }
 
+int
+sameaddr(Adr *a, Adr *v)
+{
+	if(a->type != v->type)
+		return 0;
+	if(regtyp(v) && a->reg == v->reg)
+		return 1;
+	if(v->type == D_AUTO || v->type == D_PARAM) {
+		if(v->offset == a->offset)
+			return 1;
+	}
+	return 0;
+}
+
 /*
  * either direct or indirect
  */
@@ -1529,4 +1538,18 @@ isdconst(Addr *a)
 	if(a->type == D_CONST && a->reg == NREG)
 		return 1;
 	return 0;
+}
+
+int
+stackaddr(Addr *a)
+{
+	return regtyp(a) && a->reg == REGSP;
+}
+
+int
+smallindir(Addr *a, Addr *reg)
+{
+	return reg->type == D_REG && a->type == D_OREG &&
+		a->reg == reg->reg &&
+		0 <= a->offset && a->offset < 4096;
 }

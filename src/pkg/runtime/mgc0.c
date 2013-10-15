@@ -19,7 +19,7 @@ enum {
 	Debug = 0,
 	DebugMark = 0,  // run second pass to check mark
 	CollectStats = 0,
-	ScanStackByFrames = 1,
+	ScanStackByFrames = 0,
 	IgnorePreciseGC = 0,
 
 	// Four bits per word (see #defines below).
@@ -1345,7 +1345,7 @@ scaninterfacedata(uintptr bits, byte *scanp, bool afterprologue)
 	Itab *tab;
 	Type *type;
 
-	if(afterprologue) {
+	if(runtime·precisestack && afterprologue) {
 		if(bits == BitsIface) {
 			tab = *(Itab**)scanp;
 			if(tab->type->size <= sizeof(void*) && (tab->type->kind & KindNoPointers))
@@ -1474,6 +1474,7 @@ addstackroots(G *gp)
 		USED(guard);
 		runtime·gentraceback(pc, sp, lr, gp, 0, nil, 0x7fffffff, addframeroots, nil, false);
 	} else {
+		USED(lr);
 		USED(pc);
 		n = 0;
 		while(stk) {
@@ -2362,10 +2363,10 @@ runtime·markfreed(void *v, uintptr n)
 	uintptr *b, obits, bits, off, shift;
 
 	if(0)
-		runtime·printf("markallocated %p+%p\n", v, n);
+		runtime·printf("markfreed %p+%p\n", v, n);
 
 	if((byte*)v+n > (byte*)runtime·mheap.arena_used || (byte*)v < runtime·mheap.arena_start)
-		runtime·throw("markallocated: bad pointer");
+		runtime·throw("markfreed: bad pointer");
 
 	off = (uintptr*)v - (uintptr*)runtime·mheap.arena_start;  // word offset
 	b = (uintptr*)runtime·mheap.arena_start - off/wordsPerBitmapWord - 1;

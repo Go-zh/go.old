@@ -87,7 +87,7 @@ func (p *Package) writeDefs() {
 	}
 
 	if *gccgo {
-		fmt.Fprintf(fc, cPrologGccgo)
+		fmt.Fprintf(fc, p.cPrologGccgo())
 	} else {
 		fmt.Fprintf(fc, cProlog)
 	}
@@ -120,6 +120,9 @@ func (p *Package) writeDefs() {
 			node = &ast.StarExpr{X: n.Type.Go}
 		} else if n.Kind == "fpvar" {
 			node = n.Type.Go
+			if *gccgo {
+				amp = "&"
+			}
 		} else {
 			panic(fmt.Errorf("invalid var kind %q", n.Kind))
 		}
@@ -331,7 +334,7 @@ func (p *Package) writeDefsFunc(fc, fgo2 *os.File, n *Name) {
 	}
 
 	// Builtins defined in the C prolog.
-	inProlog := name == "CString" || name == "GoString" || name == "GoStringN" || name == "GoBytes"
+	inProlog := name == "CString" || name == "GoString" || name == "GoStringN" || name == "GoBytes" || name == "_CMalloc"
 
 	if *gccgo {
 		// Gccgo style hooks.
@@ -380,11 +383,7 @@ func (p *Package) writeDefsFunc(fc, fgo2 *os.File, n *Name) {
 		fmt.Fprint(fgo2, "}\n")
 
 		// declare the C function.
-		if inProlog {
-			fmt.Fprintf(fgo2, "//extern %s\n", n.C)
-		} else {
-			fmt.Fprintf(fgo2, "//extern _cgo%s%s\n", cPrefix, n.Mangle)
-		}
+		fmt.Fprintf(fgo2, "//extern _cgo%s%s\n", cPrefix, n.Mangle)
 		d.Name = ast.NewIdent(cname)
 		if n.AddError {
 			l := d.Type.Results.List
@@ -413,7 +412,17 @@ func (p *Package) writeDefsFunc(fc, fgo2 *os.File, n *Name) {
 	if argSize == 0 {
 		argSize++
 	}
-	fmt.Fprintf(fc, "·%s(struct{uint8 x[%d];}p)\n", n.Mangle, argSize)
+	// TODO(rsc): The struct here should declare pointers only where
+	// there are pointers in the actual argument frame.
+	// This is a workaround for golang.org/issue/6397.
+	fmt.Fprintf(fc, "·%s(struct{", n.Mangle)
+	if n := argSize / p.PtrSize; n > 0 {
+		fmt.Fprintf(fc, "void *y[%d];", n)
+	}
+	if n := argSize % p.PtrSize; n > 0 {
+		fmt.Fprintf(fc, "uint8 x[%d];", n)
+	}
+	fmt.Fprintf(fc, "}p)\n")
 	fmt.Fprintf(fc, "{\n")
 	fmt.Fprintf(fc, "\truntime·cgocall(_cgo%s%s, &p);\n", cPrefix, n.Mangle)
 	if n.AddError {
@@ -476,9 +485,27 @@ func (p *Package) writeOutput(f *File, srcfile string) {
 	fgcc.Close()
 }
 
+// fixGo convers the internal Name.Go field into the name we should show
+// to users in error messages. There's only one for now: on input we rewrite
+// C.malloc into C._CMalloc, so change it back here.
+func fixGo(name string) string {
+	if name == "_CMalloc" {
+		return "malloc"
+	}
+	return name
+}
+
+var isBuiltin = map[string]bool{
+	"_Cfunc_CString":   true,
+	"_Cfunc_GoString":  true,
+	"_Cfunc_GoStringN": true,
+	"_Cfunc_GoBytes":   true,
+	"_Cfunc__CMalloc":  true,
+}
+
 func (p *Package) writeOutputFunc(fgcc *os.File, n *Name) {
 	name := n.Mangle
-	if name == "_Cfunc_CString" || name == "_Cfunc_GoString" || name == "_Cfunc_GoStringN" || name == "_Cfunc_GoBytes" || p.Written[name] {
+	if isBuiltin[name] || p.Written[name] {
 		// The builtins are already defined in the C prolog, and we don't
 		// want to duplicate function definitions we've already done.
 		return
@@ -1101,6 +1128,8 @@ __cgo_size_assert(double, 8)
 `
 
 const builtinProlog = `
+#include <sys/types.h> /* for size_t below */
+
 /* Define intgo when compiling with GCC.  */
 #ifdef __PTRDIFF_TYPE__
 typedef __PTRDIFF_TYPE__ intgo;
@@ -1116,6 +1145,7 @@ _GoString_ GoString(char *p);
 _GoString_ GoStringN(char *p, int l);
 _GoBytes_ GoBytes(void *p, int n);
 char *CString(_GoString_);
+void *_CMalloc(size_t);
 `
 
 const cProlog = `
@@ -1153,10 +1183,22 @@ void
 	p[s.len] = 0;
 	FLUSH(&p);
 }
+
+void
+·_Cfunc__CMalloc(uintptr n, int8 *p)
+{
+	p = runtime·cmalloc(n);
+	FLUSH(&p);
+}
 `
+
+func (p *Package) cPrologGccgo() string {
+	return strings.Replace(cPrologGccgo, "PREFIX", cPrefix, -1)
+}
 
 const cPrologGccgo = `
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef unsigned char byte;
@@ -1176,22 +1218,32 @@ typedef struct __go_open_array {
 struct __go_string __go_byte_array_to_string(const void* p, intgo len);
 struct __go_open_array __go_string_to_byte_array (struct __go_string str);
 
-const char *CString(struct __go_string s) {
+const char *_cgoPREFIX_Cfunc_CString(struct __go_string s) {
 	return strndup((const char*)s.__data, s.__length);
 }
 
-struct __go_string GoString(char *p) {
+struct __go_string _cgoPREFIX_Cfunc_GoString(char *p) {
 	intgo len = (p != NULL) ? strlen(p) : 0;
 	return __go_byte_array_to_string(p, len);
 }
 
-struct __go_string GoStringN(char *p, int32_t n) {
+struct __go_string _cgoPREFIX_Cfunc_GoStringN(char *p, int32_t n) {
 	return __go_byte_array_to_string(p, n);
 }
 
-Slice GoBytes(char *p, int32_t n) {
+Slice _cgoPREFIX_Cfunc_GoBytes(char *p, int32_t n) {
 	struct __go_string s = { (const unsigned char *)p, n };
 	return __go_string_to_byte_array(s);
+}
+
+extern void runtime_throw(const char *);
+void *_cgoPREFIX_Cfunc__CMalloc(size_t n) {
+        void *p = malloc(n);
+        if(p == NULL && n == 0)
+                p = malloc(1);
+        if(p == NULL)
+                runtime_throw("runtime: C malloc failed");
+        return p;
 }
 `
 

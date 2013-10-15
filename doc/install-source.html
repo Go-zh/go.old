@@ -425,6 +425,88 @@ set up a work environment in which to build and test Go code.
 </p>
 
 <div class="english">
+<h2 id="tools">Install additional tools</h2>
+</div>
+
+<h2 id="工具">安装附加工具</h2>
+
+<div class="english">
+<p>
+The source code for several Go tools (including <a href="/cmd/godoc/">godoc</a>)
+is kept in <a href="https://code.google.com/p/go.tools">the go.tools repository</a>.
+To install all of them, run the <code>go</code> <code>get</code> command:
+</p>
+</div>
+
+<p>
+某些 Go 工具（包括 <a href="/cmd/godoc/">godoc</a>）保存在
+<a href="https://code.google.com/p/go.tools">go.tools 源码库中</a>。
+要安装所有的这些工具，请运行 <code>go</code> <code>get</code> 命令：
+</p>
+
+<pre>
+$ go get code.google.com/p/go.tools/cmd/...
+</pre>
+
+<div class="english">
+<p>
+Or if you just want to install a specific command (<code>godoc</code> in this case):
+</p>
+</div>
+
+<p>
+若你想安装具体的命令（此处例为 <code>godoc</code>），请执行：
+</p>
+
+<pre>
+$ go get code.google.com/p/go.tools/cmd/godoc
+</pre>
+
+<div class="english">
+<p>
+To install these tools, the <code>go</code> <code>get</code> command requires
+that <a href="#mercurial">Mercurial</a> be installed locally.
+</p>
+</div>
+
+<p>
+要安装这些工具，<code>go</code> <code>get</code> 要求本地安装了
+<a href="#mercurial">Mercurial</a>。
+</p>
+
+<div class="english">
+<p>
+You must also have a workspace (<code>GOPATH</code>) set up;
+see <a href="/doc/code.html">How to Write Go Code</a> for the details.
+</p>
+</div>
+
+<p>
+你必须还设置了工作空间（<code>GOPATH</code>）；详情见
+<a href="/doc/code.html">如何使用Go编程</a>。
+</p>
+
+<div class="english">
+<p>
+<b>Note</b>: The <code>go</code> command will install the <code>godoc</code>
+binary to <code>$GOROOT/bin</code> (or <code>$GOBIN</code>) and the
+<code>cover</code> and <code>vet</code> binaries to
+<code>$GOROOT/pkg/tool/$GOOS_$GOARCH</code>.
+You can access the latter commands with
+"<code>go</code> <code>tool</code> <code>cover</code>" and
+"<code>go</code> <code>tool</code> <code>vet</code>".
+</p>
+</div>
+
+<p>
+<b>注</b>：<code>go</code> 命令会将 <code>godoc</code> 程序安装到
+<code>$GOROOT/bin</code>（或 <code>$GOBIN</code>）中，而 <code>cover</code>
+和 <code>vet</code> 则会被安装到 <code>$GOROOT/pkg/tool/$GOOS_$GOARCH</code> 中。
+你可以通过 “<code>go</code> <code>tool</code> <code>cover</code>” 和
+“<code>go</code> <code>tool</code> <code>vet</code>” 来访问它们。
+</p>
+
+<div class="english">
 <h2 id="community">Community resources</h2>
 </div>
 

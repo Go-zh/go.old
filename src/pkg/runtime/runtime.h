@@ -250,6 +250,8 @@ struct	G
 	// stackguard0 can be set to StackPreempt as opposed to stackguard
 	uintptr	stackguard0;	// cannot move - also known to linker, libmach, runtime/cgo
 	uintptr	stackbase;	// cannot move - also known to libmach, runtime/cgo
+	uint32	panicwrap;	// cannot move - also known to linker
+	uint32	selgen;		// valid sudog pointer
 	Defer*	defer;
 	Panic*	panic;
 	Gobuf	sched;
@@ -264,7 +266,6 @@ struct	G
 	void*	param;		// passed parameter on wakeup
 	int16	status;
 	int64	goid;
-	uint32	selgen;		// valid sudog pointer
 	int8*	waitreason;	// if status==Gwaiting
 	G*	schedlink;
 	bool	ispanic;
@@ -403,6 +404,7 @@ struct	Stktop
 	uintptr	stackbase;
 	Gobuf	gobuf;
 	uint32	argsize;
+	uint32	panicwrap;
 
 	uint8*	argp;	// pointer to arguments in old frame
 	uintptr	free;	// if free>0, call stackfree using free as size
@@ -433,7 +435,6 @@ struct	Func
 	uintptr	entry;	// start pc
 	int32	nameoff;// function name
 	
-	// TODO: Perhaps remove these fields.
 	int32	args;	// in/out args size
 	int32	frame;	// legacy frame size; use pcsp if possible
 
@@ -537,6 +538,8 @@ struct DebugVars
 	int32	schedtrace;
 	int32	scheddetail;
 };
+
+extern bool runtime·precisestack;
 
 /*
  * defined macros
@@ -799,6 +802,7 @@ int32	runtime·funcline(Func*, uintptr, String*);
 int32	runtime·funcarglen(Func*, uintptr);
 int32	runtime·funcspdelta(Func*, uintptr);
 int8*	runtime·funcname(Func*);
+int32	runtime·pcdatavalue(Func*, int32, uintptr);
 void*	runtime·stackalloc(uint32);
 void	runtime·stackfree(void*, uintptr);
 MCache*	runtime·allocmcache(void);
@@ -1000,6 +1004,7 @@ void	runtime·panicslice(void);
 void	runtime·printany(Eface);
 void	runtime·newTypeAssertionError(String*, String*, String*, String*, Eface*);
 void	runtime·newErrorString(String, Eface*);
+void	runtime·newErrorCString(int8*, Eface*);
 void	runtime·fadd64c(uint64, uint64, uint64*);
 void	runtime·fsub64c(uint64, uint64, uint64*);
 void	runtime·fmul64c(uint64, uint64, uint64*);

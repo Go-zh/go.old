@@ -948,7 +948,7 @@ func TestMap(t *testing.T) {
 
 	newm := newmap.Interface().(map[string]int)
 	if len(newm) != len(m) {
-		t.Errorf("length after copy: newm=%d, m=%d", newm, m)
+		t.Errorf("length after copy: newm=%d, m=%d", len(newm), len(m))
 	}
 
 	for k, v := range newm {
@@ -1452,6 +1452,24 @@ func TestMakeFunc(t *testing.T) {
 	}
 }
 
+func TestMakeFuncInterface(t *testing.T) {
+	fn := func(i int) int { return i }
+	incr := func(in []Value) []Value {
+		return []Value{ValueOf(int(in[0].Int() + 1))}
+	}
+	fv := MakeFunc(TypeOf(fn), incr)
+	ValueOf(&fn).Elem().Set(fv)
+	if r := fn(2); r != 3 {
+		t.Errorf("Call returned %d, want 3", r)
+	}
+	if r := fv.Call([]Value{ValueOf(14)})[0].Int(); r != 15 {
+		t.Errorf("Call returned %d, want 15", r)
+	}
+	if r := fv.Interface().(func(int) int)(26); r != 27 {
+		t.Errorf("Call returned %d, want 27", r)
+	}
+}
+
 type Point struct {
 	x, y int
 }
@@ -1602,6 +1620,25 @@ func TestMethodValue(t *testing.T) {
 		t.Errorf("Pointer Value MethodByName returned %d; want 325", i)
 	}
 
+	// Curried method of pointer to pointer.
+	pp := &p
+	v = ValueOf(&pp).Elem().Method(1)
+	if tt := v.Type(); tt != tfunc {
+		t.Errorf("Pointer Pointer Value Method Type is %s; want %s", tt, tfunc)
+	}
+	i = ValueOf(v.Interface()).Call([]Value{ValueOf(14)})[0].Int()
+	if i != 350 {
+		t.Errorf("Pointer Pointer Value Method returned %d; want 350", i)
+	}
+	v = ValueOf(&pp).Elem().MethodByName("Dist")
+	if tt := v.Type(); tt != tfunc {
+		t.Errorf("Pointer Pointer Value MethodByName Type is %s; want %s", tt, tfunc)
+	}
+	i = ValueOf(v.Interface()).Call([]Value{ValueOf(15)})[0].Int()
+	if i != 375 {
+		t.Errorf("Pointer Pointer Value MethodByName returned %d; want 375", i)
+	}
+
 	// Curried method of interface value.
 	// Have to wrap interface value in a struct to get at it.
 	// Passing it to ValueOf directly would
@@ -1616,17 +1653,17 @@ func TestMethodValue(t *testing.T) {
 	if tt := v.Type(); tt != tfunc {
 		t.Errorf("Interface Method Type is %s; want %s", tt, tfunc)
 	}
-	i = ValueOf(v.Interface()).Call([]Value{ValueOf(14)})[0].Int()
-	if i != 350 {
-		t.Errorf("Interface Method returned %d; want 350", i)
+	i = ValueOf(v.Interface()).Call([]Value{ValueOf(16)})[0].Int()
+	if i != 400 {
+		t.Errorf("Interface Method returned %d; want 400", i)
 	}
 	v = pv.MethodByName("Dist")
 	if tt := v.Type(); tt != tfunc {
 		t.Errorf("Interface MethodByName Type is %s; want %s", tt, tfunc)
 	}
-	i = ValueOf(v.Interface()).Call([]Value{ValueOf(15)})[0].Int()
-	if i != 375 {
-		t.Errorf("Interface MethodByName returned %d; want 375", i)
+	i = ValueOf(v.Interface()).Call([]Value{ValueOf(17)})[0].Int()
+	if i != 425 {
+		t.Errorf("Interface MethodByName returned %d; want 425", i)
 	}
 }
 
@@ -2457,6 +2494,15 @@ func TestVariadic(t *testing.T) {
 	V(fmt.Fprintf).CallSlice([]Value{V(&b), V("%s, %d world"), V([]interface{}{"hello", 42})})
 	if b.String() != "hello, 42 world" {
 		t.Errorf("after Fprintf CallSlice: %q != %q", b.String(), "hello 42 world")
+	}
+}
+
+func TestFuncArg(t *testing.T) {
+	f1 := func(i int, f func(int) int) int { return f(i) }
+	f2 := func(i int) int { return i + 1 }
+	r := ValueOf(f1).Call([]Value{ValueOf(100), ValueOf(f2)})
+	if r[0].Int() != 101 {
+		t.Errorf("function returned %d, want 101", r[0].Int())
 	}
 }
 
@@ -3459,7 +3505,7 @@ func TestAllocsInterfaceBig(t *testing.T) {
 	}
 	v := ValueOf(S{})
 	if allocs := testing.AllocsPerRun(100, func() { v.Interface() }); allocs > 0 {
-		t.Errorf("allocs:", allocs)
+		t.Error("allocs:", allocs)
 	}
 }
 
@@ -3476,7 +3522,7 @@ func TestAllocsInterfaceSmall(t *testing.T) {
 	}
 	v := ValueOf(int64(0))
 	if allocs := testing.AllocsPerRun(100, func() { v.Interface() }); allocs > 0 {
-		t.Errorf("allocs:", allocs)
+		t.Error("allocs:", allocs)
 	}
 }
 

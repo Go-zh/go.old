@@ -21,7 +21,6 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
@@ -38,9 +37,9 @@ func main() {
 	if goroot == "" {
 		log.Fatal("No $GOROOT set.")
 	}
-	isGoDeveloper := exec.Command("hg", "pq").Run() == nil
-	if !isGoDeveloper && !forceAPICheck() {
-		fmt.Println("Skipping cmd/api checks; hg codereview extension not available and GO_FORCE_API_CHECK not set")
+	_, err := exec.LookPath("hg")
+	if err != nil {
+		fmt.Println("Skipping cmd/api checks; hg not available")
 		return
 	}
 
@@ -88,25 +87,27 @@ func file(s ...string) string {
 	return filepath.Join(goroot, "api", s[0]+".txt")
 }
 
-// GO_FORCE_API_CHECK is set by builders.
-func forceAPICheck() bool {
-	v, _ := strconv.ParseBool(os.Getenv("GO_FORCE_API_CHECK"))
-	return v
-}
-
 // prepGoPath returns a GOPATH for the "go" tool to compile the API tool with.
 // It tries to re-use a go.tools checkout from a previous run if possible,
 // else it hg clones it.
 func prepGoPath() string {
 	const tempBase = "go.tools.TMP"
 
+	username := ""
 	u, err := user.Current()
-	if err != nil {
-		log.Fatalf("Error getting current user: %v", err)
+	if err == nil {
+		username = u.Username
+	} else {
+		// Only need to handle Unix here, as Windows's os/user uses
+		// native syscall and should work fine without cgo.
+		username = os.Getenv("USER")
+		if username == "" {
+			log.Fatalf("Error getting current user: %v", err)
+		}
 	}
 
 	// The GOPATH we'll return
-	gopath := filepath.Join(os.TempDir(), "gopath-api-"+cleanUsername(u.Username), goToolsVersion)
+	gopath := filepath.Join(os.TempDir(), "gopath-api-"+cleanUsername(username), goToolsVersion)
 
 	// cloneDir is where we run "hg clone".
 	cloneDir := filepath.Join(gopath, "src", "code.google.com", "p")

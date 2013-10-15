@@ -7,13 +7,6 @@
 <h2 id="introduction">Introduction to Go 1.2</h2>
 
 <p>
-<font color=red>
-RED TEXT IS FROM THE 1.1 DOC AND NEEDS TO BE UPDATED. (It is here for
-formatting and style reference.)
-</font>
-</p>
-
-<p>
 Since the release of <a href="/doc/go1.1.html">Go version 1.1</a> in April, 2013,
 the release schedule has been shortened to make the release process more efficient.
 This release, Go version 1.2 or Go 1.2 for short, arrives roughly six months after 1.1,
@@ -106,12 +99,12 @@ source slice or array, adjusted for the origin. For instance,
 </p>
 
 <pre>
-slice = array[2:4:6]
+slice = array[2:4:7]
 </pre>
 
 <p>
-sets the slice to have the same length as in the earlier example but its capacity is now only 4 elements (6-2).
-It is impossible to use this new slice value to access the last two elements of the original array.
+sets the slice to have the same length as in the earlier example but its capacity is now only 5 elements (7-2).
+It is impossible to use this new slice value to access the last three elements of the original array.
 </p>
 
 <p>
@@ -132,23 +125,36 @@ This is a backwards-compatible change that affects no existing programs.
 
 <h2 id="impl">Changes to the implementations and tools</h2>
 
-<ul>
-<li>
-runtime: preemption of goroutines at function entry (CL 12371043).
-</li>
-
-<li>
-go/build: support including C++ code with cgo (CL 8248043).
-</li>
-</ul>
-
-<h3 id="go_tools_godoc">Godoc moved to the go.tools subrepository</h3>
+<h3 id="preemption">Pre-emption in the scheduler</h3>
 
 <p>
-A binary is still included with the distribution, but the source code for the
-<code>godoc</code> command has moved to the
+In prior releases, a goroutine that was looping forever could starve out other
+goroutines on the same thread, a serious problem when GOMAXPROCS
+provided only one user thread.
+In Go 1.2, this is partially addressed: The scheduler is invoked occasionally
+upon entry to a function.
+This means that any loop that includes a (non-inlined) function call can
+be pre-empted, allowing other goroutines to run on the same thread.
+</p>
+
+<h3 id="cgo_and_cpp">Cgo and C++</h3>
+
+<p>
+The <a href="/cmd/cgo/"><code>cgo</code></a> command will now invoke the C++
+compiler to build any pieces of the linked-to library that are written in C++; the
+documentation has more detail.
+</p>
+
+<h3 id="go_tools_godoc">Godoc and vet moved to the go.tools subrepository</h3>
+
+<p>
+Both binaries are still included with the distribution, but the source code for the
+godoc and vet commands has moved to the
 <a href="http://code.google.com/p/go.tools">go.tools</a> subrepository.
-The core of the program has been split into a
+</p>
+
+<p>
+Also, the core of the godoc program has been split into a
 <a href="https://code.google.com/p/go/source/browse/?repo=tools#hg%2Fgodoc">library</a>,
 while the command itself is in a separate
 <a href="https://code.google.com/p/go/source/browse/?repo=tools#hg%2Fcmd%2Fgodoc">directory</a>.
@@ -158,192 +164,398 @@ makes it easier to construct custom binaries for local sites and different deplo
 
 <p>
 <em>Updating</em>:
-Since godoc was not part of the library,
-no client code depends on the godoc sources and no updating is required.
+Since godoc and vet are not part of the library,
+no client Go code depends on the their source and no updating is required.
 </p>
 
 <p>
-The binary distributions available from <a href="http://golang.org>golang.org</a>
-include a godoc binary, so users of these distributions are unaffected.
+The binary distributions available from <a href="http://golang.org">golang.org</a>
+include these binaries, so users of these distributions are unaffected.
 </p>
 
 <p>
-When building from source, users must use "go get" to install godoc.
+When building from source, users must use "go get" to install godoc and vet.
+(The binaries will continue to be installed in their usual locations, not
+<code>$GOPATH/bin</code>.)
 </p>
 
 <pre>
 $ go get code.google.com/p/go.tools/cmd/godoc
+$ go get code.google.com/p/go.tools/cmd/vet
 </pre>
-
-<h3 id="go_tools_vet">The vet tool moved to the go.tools subrepository</h3>
-
-<p>
-TODO
-</p>
 
 <h3 id="gccgo">Status of gccgo</h3>
 
 <p>
-<font color=red>
-The GCC release schedule does not coincide with the Go release schedule, so some skew is inevitable in
-<code>gccgo</code>'s releases.
-The 4.8.0 version of GCC shipped in March, 2013 and includes a nearly-Go 1.1 version of <code>gccgo</code>.
-Its library is a little behind the release, but the biggest difference is that method values are not implemented.
-Sometime around July 2013, we expect 4.8.2 of GCC to ship with a <code>gccgo</code>
-providing a complete Go 1.1 implementation.
-</font>
+We expect the future GCC 4.9 release to include gccgo with full
+support for Go 1.2.
+In the current (4.8.2) release of GCC, gccgo implements Go 1.1.2.
 </p>
 
-<h3 id="gc_changes">TODO</h3>
+<h3 id="gc_changes">Changes to the gc compiler and linker</h3>
 
 <p>
-TODO: write prose
+Go 1.2 has several semantic changes to the workings of the gc compiler suite.
+Most users will be unaffected by them.
 </p>
 
-<ul>
-<li>cmd/5a: removed support for R9/R10 (use m/g instead) (CL 9840043).
-</li>
+<p>
+The <a href="/cmd/cgo/"><code>cgo</code></a> command now
+works when C++ is included in the library being linked against.
+See the <a href="/cmd/cgo/"><code>cgo</code></a> documentation
+for details.
+</p>
 
-<li>cmd/5l: add MOVBS, MOVHS etc for sub-word moves (CL 12682043).
-</li>
+<p>
+The gc compiler displayed a vestigial detail of its origins when
+a program had no <code>package</code> clause: it assumed
+the file was in package <code>main</code>.
+The past has been erased, and a missing <code>package</code> clause
+is now an error.
+</p>
 
-<li>cmd/5l: support for external linking for linux/arm (CL 12871044).
-</li>
+<p>
+On the ARM, the toolchain supports "external linking", which
+is a step towards being able to build shared libraries with the gc
+tool chain and to provide dynamic linking support for environments
+in which that is necessary.
+</p>
 
-<li>cmd/cgo, cmd/go: support including C++ code with cgo (CL 8248043).
-</li>
+<p>
+In the runtime for the ARM, with <code>5a</code>, it used to be possible to refer
+to the runtime-internal <code>m</code> (machine) and <code>g</code>
+(goroutine) variables using <code>R9</code> and <code>R10</code> directly.
+It is now necessary to refer to them by their proper names.
+</p>
 
-<li>cmd/gc: make missing package error fatal (CL 12677043).
-</li>
-</ul>
+<p>
+Also on the ARM, the <code>5l</code> linker (sic) now defines the
+<code>MOVBS</code> and <code>MOVHS</code> instructions
+as synonyms of <code>MOVB</code> and <code>MOVH</code>,
+to make clearer the separation between signed and unsigned
+sub-word moves; the unsigned versions already existed with a
+<code>U</code> suffix.
+</p>
+
+<h3 id="cover">Test coverage</h3>
+
+<p>
+One major new feature of <a href="/pkg/go/"><code>go test</code></a> is
+that it can now compute and, with help from a new, separately installed
+"go tool cover" program, display test coverage results.
+</p>
+
+<p>
+The cover tool is part of the
+<a href="https://code.google.com/p/go/source/checkout?repo=tools"><code>go.tools</code></a>
+subrepository.
+It can be installed by running
+</p>
+
+<pre>
+$ go get code.google.com/p/go.tools/cmd/cover
+</pre>
+
+<p>
+The cover tool does two things.
+First, when "go test" is given the <code>-cover</code> flag, it is run automatically 
+to rewrite the source for the package and insert instrumentation statements.
+The test is then compiled and run as usual, and basic coverage statistics are reported:
+</p>
+
+<pre>
+$ go test -cover fmt
+ok  	fmt	0.060s	coverage: 91.4% of statements
+$
+</pre>
+
+<p>
+Second, for more detailed reports, different flags to "go test" can create a coverage profile file,
+which the cover program, invoked with "go tool cover", can then analyze.
+</p>
+
+<p>
+Details on how to generate and analyze coverage statistics can be found by running the commands
+</p>
+
+<pre>
+$ go help testflag
+$ go tool cover -help
+</pre>
+
+<h3 id="go_doc">The go doc command is deleted</h3>
+
+<p>
+The "go doc" command is deleted.
+Note that the <a href="/cmd/godoc/"><code>godoc</code></a> tool itself is not deleted,
+just the wrapping of it by the <a href="/cmd/go/"><code>go</code></a> command.
+All it did was show the documents for a package by package path,
+which godoc itself already does with more flexibility.
+It has therefore been deleted to reduce the number of documentation tools and,
+as part of the restructuring of godoc, encourage better options in future.
+</p>
+
+<p>
+<em>Updating</em>: For those who still need the precise functionality of running
+</p>
+
+<pre>
+$ go doc
+</pre>
+
+<p>
+in a directory, the behavior is identical to running
+</p>
+
+<pre>
+$ godoc .
+</pre>
 
 <h3 id="gocmd">Changes to the go command</h3>
 
-<ul>
-<li>cmd/go: test coverage (CL 10413044).
-</li>
-
-<li>cmd/go: add -t flag to 'go get' to download test dependencies (CL 12566046).
-</li>
-
-<li>cmd/go: delete 'go doc' (CL 12974043).
-</li>
-
-</ul>
-
-
-<h3 id="platforms">Additional platforms</h3>
-
 <p>
-<font color=red>
-The Go 1.1 tool chain adds experimental support for <code>freebsd/arm</code>,
-<code>netbsd/386</code>, <code>netbsd/amd64</code>, <code>netbsd/arm</code>,
-<code>openbsd/386</code> and <code>openbsd/amd64</code> platforms.
-</font>
-</p>
-
-<p>
-<font color=red>
-An ARMv6 or later processor is required for <code>freebsd/arm</code> or
-<code>netbsd/arm</code>.
-</font>
-</p>
-
-<p>
-<font color=red>
-Go 1.1 adds experimental support for <code>cgo</code> on <code>linux/arm</code>.
-</font>
+The <a href="/cmd/go/"><code>go get</code></a> command
+now has a <code>-t</code> flag that causes it to download the dependencies
+of the tests run by the package, not just those of the package itself.
+By default, as before, dependencies of the tests are not downloaded.
 </p>
 
 <h2 id="performance">Performance</h2>
 
 <p>
-<font color=red>
-The performance of code compiled with the Go 1.1 gc tool suite should be noticeably
-better for most Go programs.
-Typical improvements relative to Go 1.0 seem to be about 30%-40%, sometimes
-much more, but occasionally less or even non-existent.
-There are too many small performance-driven tweaks through the tools and libraries
-to list them all here, but the following major changes are worth noting:
-</font>
+There are a number of significant performance improvements in the standard library; here are a few of them.
 </p>
 
-<ul>
-<li>compress/bzip2: faster decompression by 30% (CL 9915043).
+<ul> 
+
+<li>
+The <a href="/pkg/compress/bzip2/"><code>compress/bzip2</code></a>
+decompresses about 30% faster.
 </li>
 
-<li>crypto/des: 5x faster encoding/decoding (CL 11874043, 12072045).
+<li>
+The <a href="/pkg/crypto/des/"><code>crypto/des</code></a> package
+is about five times faster.
 </li>
 
-<li>encoding/json: faster encoding (CL 9129044).
+<li>
+The <a href="/pkg/encoding/json/"><code>encoding/json</code></a> package
+encodes about 30% faster.
 </li>
 
-<li>net: improve windows performance by up to 30% (CL 8670044).
+<li>
+Networking performance on Windows and BSD systems is about 30% faster through the use
+of an integrated network poller in the runtime, similar to what was done for Linux and OS X
+in Go 1.1.
 </li>
 
-<li>net: improve performance on BSD by up to 30% (CL 8264043, 12927048, 13080043).
-</li>
 </ul>
 
 <h2 id="library">Changes to the standard library</h2>
 
-<h3 id="foo_bar">foo.Bar</h3>
+
+<h3 id="archive_tar_zip">The archive/tar and archive/zip packages</h3>
 
 <p>
-TODO: choose which to call out
-<font color=red>
-The various routines to scan textual input in the
-<a href="/pkg/bufio/"><code>bufio</code></a>
-package,
-<a href="/pkg/bufio/#Reader.ReadBytes"><code>ReadBytes</code></a>,
-<a href="/pkg/bufio/#Reader.ReadString"><code>ReadString</code></a>
-and particularly
-<a href="/pkg/bufio/#Reader.ReadLine"><code>ReadLine</code></a>,
-are needlessly complex to use for simple purposes.
-In Go 1.1, a new type,
-<a href="/pkg/bufio/#Scanner"><code>Scanner</code></a>,
-has been added to make it easier to do simple tasks such as
-read the input as a sequence of lines or space-delimited words.
-It simplifies the problem by terminating the scan on problematic
-input such as pathologically long lines, and having a simple
-default: line-oriented input, with each line stripped of its terminator.
-Here is code to reproduce the input a line at a time:
-</font>
+The
+<a href="/pkg/archive/tar/"><code>archive/tar</code></a>
+and
+<a href="/pkg/archive/zip/"><code>archive/zip</code></a>
+packages have had a change to their semantics that may break existing programs.
+The issue is that they both provided an implementation of the
+<a href="/pkg/os/#FileInfo"><code>os.FileInfo</code></a>
+interface that was not compliant with the specification for that interface.
+In particular, their <code>Name</code> method returned the full
+path name of the entry, but the interface specification requires that
+the method return only the base name (final path element).
+</p>
 
 <p>
-<font color=red>
-<em>Updating</em>:
-To correct breakage caused by the new struct field,
-<code>go fix</code> will rewrite code to add tags for these types.
-More generally, <code>go vet</code> will identify composite literals that
-should be revised to use field tags.
-</font>
+<em>Updating</em>: Since this behavior was newly implemented and
+a bit obscure, it is possible that no code depends on the broken behavior.
+If there are programs that do depend on it, they will need to be identified
+and fixed manually.
+</p>
+
+<h3 id="encoding">The new encoding package</h3>
+
+<p>
+There is a new package, <a href="/pkg/encoding/"><code>encoding</code></a>,
+that defines a set of standard encoding interfaces that may be used to
+build custom marshalers and unmarshalers for packages such as
+<a href="/pkg/encoding/xml/"><code>encoding/xml</code></a>,
+<a href="/pkg/encoding/json/"><code>encoding/json</code></a>,
+and
+<a href="/pkg/encoding/binary/"><code>encoding/binary</code></a>.
+These new interfaces have been used to tidy up some implementations in
+the standard library.
+</p>
+
+<p>
+The new interfaces are called
+<a href="/pkg/encoding/#BinaryMarshaler"><code>BinaryMarshaler</code></a>,
+<a href="/pkg/encoding/#BinaryUnmarshaler"><code>BinaryUnmarshaler</code></a>,
+<a href="/pkg/encoding/#TextMarshaler"><code>TextMarshaler</code></a>,
+and
+<a href="/pkg/encoding/#TextUnmarshaler"><code>TextUnmarshaler</code></a>.
+Full details are in the <a href="/pkg/encoding/">documentation</a> for the package
+and a separate <a href="http://golang.org/s/go12encoding">design document</a>.
+</p>
+
+<h3 id="fmt_indexed_arguments">The fmt package</h3>
+
+<p>
+The <a href="/pkg/fmt/"><code>fmt</code></a> package's formatted print
+routines such as <a href="/pkg/fmt/#Printf"><code>Printf</code></a>
+now allow the data items to be printed to be accessed in arbitrary order
+by using an indexing operation in the formatting specifications.
+Wherever an argument is to be fetched from the argument list for formatting,
+either as the value to be formatted or as a width or specification integer,
+a new optional indexing notation <code>[</code><em>n</em><code>]</code>
+fetches argument <em>n</em> instead.
+The value of <em>n</em> is 1-indexed.
+After such an indexing operating, the next argument to be fetched by normal
+processing will be <em>n</em>+1.
+</p>
+
+<p>
+For example, the normal <code>Printf</code> call
+</p>
+
+<pre>
+fmt.Sprintf("%c %c %c\n", 'a', 'b', 'c')
+</pre>
+
+<p>
+would create the string <code>"a b c"</code>, but with indexing operations like this,
+</p>
+
+<pre>
+fmt.Sprintf("%[3]c %[1]c %c\n", 'a', 'b', 'c')
+</pre>
+
+<p>
+the result is "<code>"c a b"</code>. The <code>[3]</code> index accesses the third formatting
+argument, which is <code>'c'</code>, <code>[1]</code> accesses the first, <code>'a'</code>,
+and then the next fetch accesses the argument following that one, <code>'b'</code>.
+</p>
+
+<p>
+The motivation for this feature is programmable format statements to access
+the arguments in different order for localization, but it has other uses:
+</p>
+
+<pre>
+log.Printf("trace: value %v of type %[1]T\n", expensiveFunction(a.b[c]))
+</pre>
+
+<p>
+<em>Updating</em>: The change to the syntax of format specifications
+is strictly backwards compatible, so it affects no working programs.
+</p>
+
+<h3 id="text_template">The text/template and html/template packages</h3>
+
+<p>
+The
+<a href="/pkg/text/template/"><code>text/template</code></a> package
+has a couple of changes in Go 1.2, both of which are also mirrored in the
+<a href="/pkg/html/template/"><code>html/template</code></a> package.
+</p>
+
+<p>
+First, there are new default functions for comparing basic types.
+The functions are listed in this table, which shows their names and
+the associated familiar comparison operator.
+</p>
+
+<table cellpadding="0" summary="Template comparison functions">
+<tr>
+<th width="50"></th><th width="100">Name</th> <th width="50">Operator</th>
+</tr>
+<tr>
+<td></td><td><code>eq</code></td> <td><code>==</code></td>
+</tr>
+<tr>
+<td></td><td><code>ne</code></td> <td><code>!=</code></td>
+</tr>
+<tr>
+<td></td><td><code>lt</code></td> <td><code>&lt;</code></td>
+</tr>
+<tr>
+<td></td><td><code>le</code></td> <td><code>&lt;=</code></td>
+</tr>
+<tr>
+<td></td><td><code>gt</code></td> <td><code>&gt;</code></td>
+</tr>
+<tr>
+<td></td><td><code>ge</code></td> <td><code>&gt;=</code></td>
+</tr>
+</table>
+
+<p>
+These functions behave slightly differently from the corresponding Go operators.
+First, they operate only on basic types (<code>bool</code>, <code>int</code>,
+<code>float64</code>, <code>string</code>, etc.).
+(Go allows comparison of arrays and structs as well, under some circumstances.)
+Second, values can be compared as long as they are the same sort of value:
+any signed integer value can be compared to any other signed integer value for example. (Go
+does not permit comparing an <code>int8</code> and an <code>int16</code>).
+Finally, the <code>eq</code> function (only) allows comparison of the first
+argument with one or more following arguments. The template in this example,
+</p>
+
+<pre>
+{{"{{"}}if eq .A 1 2 3 {{"}}"}} equal {{"{{"}}else{{"}}"}} not equal {{"{{"}}end{{"}}"}}
+</pre>
+
+<p>
+reports "equal" if <code>.A</code> is equal to <em>any</em> of 1, 2, or 3.
+</p>
+
+<p>
+The second change is that a small addition to the grammar makes "if else if" chains easier to write.
+Instead of writing,
+</p>
+
+<pre>
+{{"{{"}}if eq .A 1{{"}}"}} X {{"{{"}}else{{"}}"}} {{"{{"}}if eq .A 2{{"}}"}} Y {{"{{"}}end{{"}}"}} {{"{{"}}end{{"}}"}} 
+</pre>
+
+<p>
+one can fold the second "if" into the "else" and have only one "end", like this:
+</p>
+
+<pre>
+{{"{{"}}if eq .A 1{{"}}"}} X {{"{{"}}else if eq .A 2{{"}}"}} Y {{"{{"}}end{{"}}"}}
+</pre>
+
+<p>
+The two forms are identical in effect; the difference is just in the syntax.
+</p>
+
+<p>
+<em>Updating</em>: Neither the "else if" change nor the comparison functions
+affect existing programs. Those that
+already define functions called <code>eq</code> and so on through a function
+map are unaffected because the associated function map will override the new
+default function definitions.
+</p>
+
+<h3 id="new_packages">New packages</h3>
+
+<p>
+There are two new packages.
 </p>
 
 <ul>
-
 <li>
-Breaking change:
-archive/tar,archive/zip: fix os.FileInfo implementation to provide base name only (CL 13118043).
-</li>
-
-<li>
-encoding: new package defining generic encoding interfaces (CL 12541051).
-</li>
-
-<li>
-fmt: indexed access to arguments in Printf etc. (CL 9680043).
-</li>
-
-<li>
-sync/atomic: add Swap functions (CL 12670045).
+The <a href="/pkg/encoding/"><code>encoding</code></a> package is
+<a href="#encoding">described above</a>.
 </li>
 <li>
-text/template: add comparison functions (CL 13091045).
-</li>
-
-<li>
-text/template: allow {{"{{"}}else if ... {{"}}"}} to simplify if chains (CL 13327043).
+The <a href="/pkg/image/color/palette/"><code>image/color/palette</code></a> package
+provides standard color palettes.
 </li>
 </ul>
 
@@ -368,8 +580,8 @@ The <a href="/pkg/bufio/"><code>bufio</code></a> package
 adds <a href="/pkg/bufio/#Reader.Reset"><code>Reset</code></a>
 methods to <a href="/pkg/bufio/#Reader"><code>Reader</code></a> and
 <a href="/pkg/bufio/#Writer"><code>Writer</code></a>.
-These methods allow the <a href="/pkg/Reader/"><code>Readers</code></a>
-and <a href="/pkg/Writer/"><code>Writers</code></a>
+These methods allow the <a href="/pkg/io/#Reader"><code>Readers</code></a>
+and <a href="/pkg/io/#Writer"><code>Writers</code></a>
 to be re-used on new input and output readers and writers, saving
 allocation overhead. 
 </li>
@@ -381,13 +593,24 @@ can now decompress concatenated archives.
 
 <li>
 The <a href="/pkg/compress/flate/"><code>compress/flate</code></a>
-package adds a <a href="/pkg/compress/flate/#Reset"><code>Reset</code></a> 
+package adds a <a href="/pkg/compress/flate/#Writer.Reset"><code>Reset</code></a> 
 method on the <a href="/pkg/compress/flate/#Writer"><code>Writer</code></a>,
-allowing compression of one file to start with another's dictionary.
+to make it possible to reduce allocation when, for instance, constructing an
+archive to hold multiple compressed files.
 </li>
 
 <li>
-compress/gzip: add Reset method on Writer (CL 13435043).
+The <a href="/pkg/compress/gzip/"><code>compress/gzip</code></a> package's
+<a href="/pkg/compress/gzip/#Writer"><code>Writer</code></a> type adds a
+<a href="/pkg/compress/gzip/#Writer.Reset"><code>Reset</code></a>
+so it may be reused.
+</li>
+
+<li>
+The <a href="/pkg/compress/zlib/"><code>compress/zlib</code></a> package's
+<a href="/pkg/compress/zlib/#Writer"><code>Writer</code></a> type adds a
+<a href="/pkg/compress/zlib/#Writer.Reset"><code>Reset</code></a>
+so it may be reused.
 </li>
 
 <li>
@@ -398,9 +621,9 @@ method to provide a more efficient way to update an item's position in the heap.
 
 <li>
 The <a href="/pkg/container/list/"><code>container/list</code></a> package
-adds the <a href="/pkg/container/list/#MoveBefore"><code>MoveBefore</code></a>
+adds the <a href="/pkg/container/list/#List.MoveBefore"><code>MoveBefore</code></a>
 and
-<a href="/pkg/container/list/#MoveAfter"><code>MoveAfter</code></a>
+<a href="/pkg/container/list/#List.MoveAfter"><code>MoveAfter</code></a>
 methods, which implement the obvious rearrangement.
 </li>
 
@@ -460,7 +683,11 @@ now always allows trailing commas on fields.
 
 <li>
 The <a href="/pkg/encoding/gob/"><code>encoding/gob</code></a> package
-now supports the generic encoding interfaces of the
+now treats channel and function fields of structures as if they were unexported,
+even if they are not. That is, it ignores them completely. Previously they would
+trigger an error, which could cause unexpected compatibility problems if an
+embedded structure added such a field.
+The package also now supports the generic encoding interfaces of the
 <a href="/pkg/encoding/"><code>encoding</code></a> package
 described above.
 </li>
@@ -488,6 +715,13 @@ and related
 <a href="/pkg/encoding/xml/#MarshalerAttr"><code>MarshalerAttr</code></a> and
 <a href="/pkg/encoding/xml/#UnmarshalerAttr"><code>UnmarshalerAttr</code></a>
 interfaces.
+The package also adds a
+<a href="/pkg/encoding/xml/#Encoder.Flush"><code>Flush</code></a> method
+to the
+<a href="/pkg/encoding/xml/#Encoder"><code>Encoder</code></a>
+type for use by custom encoders. See the documentation for
+<a href="/pkg/encoding/xml/#Encoder.EncodeToken"><code>EncodeToken</code></a>
+to see how to use it.
 </li>
 
 <li>
@@ -502,8 +736,16 @@ flag set, which holds the flags from the command line.
 </li>
 
 <li>
+The <a href="/pkg/go/ast/"><code>go/ast</code></a> package's
+<a href="/pkg/go/ast/#SliceExpr"><code>SliceExpr</code></a> struct
+has a new boolean field, <code>Slice3</code>, which is set to true
+when representing a slice expression with three indices (two colons).
+The default is false, representing the usual two-index form.
+</li>
+
+<li>
 The <a href="/pkg/go/build/"><code>go/build</code></a> package adds
-the <a href="/pkg/go/build/#Package.AllTags"><code>AllTags</code></a> field
+the <code>AllTags</code> field
 to the <a href="/pkg/go/build/#Package"><code>Package</code></a> type,
 to make it easier to process build tags.
 </li>
@@ -545,30 +787,61 @@ if it is <code>nil</code>, Floyd-Steinberg error diffusion is used.
 </li>
 
 <li>
-The<a href="/pkg/io/#Copy"><code>Copy</code></a> method of the
+The <a href="/pkg/io/#Copy"><code>Copy</code></a> method of the
 <a href="/pkg/io/"><code>io</code></a> package now prioritizes its
 arguments differently.
 If one argument implements <a href="/pkg/io/#WriterTo"><code>WriterTo</code></a>
-and the other implements i<a href="/pkg/o/#ReaderFrom"><code>ReaderFrom</code></a>,
+and the other implements <a href="/pkg/io/#ReaderFrom"><code>ReaderFrom</code></a>,
 <a href="/pkg/io/#Copy"><code>Copy</code></a> will now invoke
 <a href="/pkg/io/#WriterTo"><code>WriterTo</code></a> to do the work,
 so that less intermediate buffering is required in general.
 </li>
 
 <li>
-net: new build tag netgo for building a pure Go net package (CL 7100050).
+The <a href="/pkg/net/"><code>net</code></a> package requires cgo by default
+because the host operating system must in general mediate network call setup.
+On some systems, though, it is possible to use the network without cgo, and useful
+to do so, for instance to avoid dynamic linking.
+The new build tag <code>netgo</code> (off by default) allows the construction of a
+<code>net</code> package in pure Go on those systems where it is possible.
 </li>
 
 <li>
-net/http: don't allow sending invalid cookie lines (CL 12204043).
+The <a href="/pkg/net/"><code>net</code></a> package adds a new field
+<code>DualStack</code> to the <a href="/pkg/net/#Dialer"><code>Dialer</code></a>
+struct for TCP connection setup using a dual IP stack as described in
+<a href="http://tools.ietf.org/html/rfc6555">RFC 6555</a>.
 </li>
 
 <li>
-net/http: allow ReadResponse with nil *Request parameter (CL 9821043).
+The <a href="/pkg/net/http/"><code>net/http</code></a> package will no longer
+transmit cookies that are incorrect according to
+<a href="http://tools.ietf.org/html/rfc6265">RFC 6265</a>.
+It just logs an error and sends nothing.
+Also,
+the <a href="/pkg/net/http/"><code>net/http</code></a> package's
+<a href="/pkg/net/http/#ReadResponse"><code>ReadResponse</code></a>
+function now permits the <code>*Request</code> parameter to be <code>nil</code>,
+whereupon it assumes a GET request.
+Finally, an HTTP server will now serve HEAD
+requests transparently, without the need for special casing in handler code.
+While serving a HEAD request, writes to a 
+<a href="/pkg/net/http/#Handler"><code>Handler</code></a>'s
+<a href="/pkg/net/http/#ResponseWriter"><code>ResponseWriter</code></a>
+are absorbed by the
+<a href="/pkg/net/http/#Server"><code>Server</code></a>
+and the client receives an empty body as required by the HTTP specification.
 </li>
 
 <li>
-net/http: allow responses to HEAD requests, detect type and length (CL 12583043).
+The <a href="/pkg/os/exec/"><code>os/exec</code></a> package's 
+<a href="/pkg/os/exec/#Cmd.StdinPipe"><code>Cmd.StdinPipe</code></a> method 
+returns an <code>io.WriteCloser</code>, but has changed its concrete
+implementation from <code>*os.File</code> to an unexported type that embeds
+<code>*os.File</code>, and it is now safe to close the returned value.
+Before Go 1.2, there was an unavoidable race that this change fixes.
+Code that needs access to the methods of <code>*os.File</code> can use an
+interface type assertion, such as <code>wc.(interface{ Sync() error })</code>.
 </li>
 
 <li>
@@ -592,12 +865,28 @@ function for consistency with the <a href="/pkg/bytes/"><code>bytes</code></a> p
 </li>
 
 <li>
-syscall: implemented Sendfile for Darwin, added Syscall9 for Darwin/amd64 (CL 10980043).
+The <a href="/pkg/sync/atomic/"><code>sync/atomic</code></a> package
+adds a new set of swap functions that atomically exchange the argument with the
+value stored in the pointer, returning the old value.
+The functions are
+<a href="/pkg/sync/atomic/#SwapInt32"><code>SwapInt32</code></a>,
+<a href="/pkg/sync/atomic/#SwapInt64"><code>SwapInt64</code></a>,
+<a href="/pkg/sync/atomic/#SwapUint32"><code>SwapUint32</code></a>,
+<a href="/pkg/sync/atomic/#SwapUint64"><code>SwapUint64</code></a>,
+<a href="/pkg/sync/atomic/#SwapUintptr"><code>SwapUintptr</code></a>,
+and
+<a href="/pkg/sync/atomic/#SwapPointer"><code>SwapPointer</code></a>,
+which swaps an <code>unsafe.Pointer</code>.
+</li>
+
+<li>
+The <a href="/pkg/syscall/"><code>syscall</code></a> package now implements
+<a href="/pkg/syscall/#Sendfile"><code>Sendfile</code></a> for Darwin.
 </li>
 
 <li>
 The <a href="/pkg/testing/"><code>testing</code></a> package
-now exports the<a href="/pkg/testing/#TB"><code>TB</code></a> interface.
+now exports the <a href="/pkg/testing/#TB"><code>TB</code></a> interface.
 It records the methods in common with the
 <a href="/pkg/testing/#T"><code>T</code></a>
 and
@@ -621,7 +910,7 @@ in agreement with that of other printing functions such as "printf".
 In the <a href="/pkg/time/"><code>time</code></a> package, the
 <a href="/pkg/time/#Parse"><code>Parse</code></a> function
 and
-<a href="/pkg/time/#Format"><code>Format</code></a>
+<a href="/pkg/time/#Time.Format"><code>Format</code></a>
 method
 now handle time zone offsets with seconds, such as in the historical
 date "1871-01-01T05:33:02+00:34:08".

@@ -61,6 +61,14 @@ import time
 from mercurial import commands as hg_commands
 from mercurial import util as hg_util
 
+# bind Plan 9 preferred dotfile location
+if os.sys.platform == 'plan9':
+	try:
+		import plan9
+		n = plan9.bind(os.path.expanduser("~/lib"), os.path.expanduser("~"), plan9.MBEFORE)
+	except ImportError:
+		pass
+
 defaultcc = None
 codereview_disabled = None
 real_rollback = None
@@ -976,7 +984,7 @@ def ReadContributors(ui, repo):
 			f = open(repo.root + '/CONTRIBUTORS', 'r')
 	except:
 		ui.write("warning: cannot open %s: %s\n" % (opening, ExceptionDetail()))
-		return
+		return {}
 
 	contributors = {}
 	for line in f:
@@ -2394,7 +2402,7 @@ def IsRietveldSubmitted(ui, clname, hex):
 		return False
 	for msg in dict.get("messages", []):
 		text = msg.get("text", "")
-		m = re.match('\*\*\* Submitted as [^*]*?([0-9a-f]+) \*\*\*', text)
+		m = re.match('\*\*\* Submitted as [^*]*?r=([0-9a-f]+)[^ ]* \*\*\*', text)
 		if m is not None and len(m.group(1)) >= 8 and hex.startswith(m.group(1)):
 			return True
 	return False

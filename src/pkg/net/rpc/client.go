@@ -69,6 +69,7 @@ type Client struct {
 // 往连接中写RPC请求，同时调用ReadResponseHeader和ReadResponseBody来读取RPC返回。当结束连接的时候
 // 客户端调用Close。ReadResponseBody可以使用一个nil参数，来读取RPC回复，然后丢弃信息。
 type ClientCodec interface {
+	// WriteRequest must be safe for concurrent use by multiple goroutines.
 	WriteRequest(*Request, interface{}) error
 	ReadResponseHeader(*Response) error
 	ReadResponseBody(interface{}) error
@@ -171,7 +172,7 @@ func (client *Client) input() {
 	}
 	client.mutex.Unlock()
 	client.sending.Unlock()
-	if err != io.EOF && !closing {
+	if debugLog && err != io.EOF && !closing {
 		log.Println("rpc: client protocol error:", err)
 	}
 }
@@ -183,7 +184,9 @@ func (call *Call) done() {
 	default:
 		// We don't want to block here.  It is the caller's responsibility to make
 		// sure the channel has enough buffer space. See comment in Go().
-		log.Println("rpc: discarding Call reply due to insufficient Done chan capacity")
+		if debugLog {
+			log.Println("rpc: discarding Call reply due to insufficient Done chan capacity")
+		}
 	}
 }
 

@@ -1987,7 +1987,7 @@ func TestHTTP10ConnectionHeader(t *testing.T) {
 
 		got := resp.Header["Connection"]
 		if !reflect.DeepEqual(got, tt.expect) {
-			t.Errorf("wrong Connection headers for request %q. Got %q expect %q", got, tt.expect)
+			t.Errorf("wrong Connection headers for request %q. Got %q expect %q", tt.req, got, tt.expect)
 		}
 	}
 }
@@ -2077,6 +2077,19 @@ func TestResponseWriterWriteStringAllocs(t *testing.T) {
 	after := testing.AllocsPerRun(25, func() { ht.rawResponse("GET /s HTTP/1.0") })
 	if int(after) >= int(before) {
 		t.Errorf("WriteString allocs of %v >= Write allocs of %v", after, before)
+	}
+}
+
+func TestAppendTime(t *testing.T) {
+	var b [len(TimeFormat)]byte
+	t1 := time.Date(2013, 9, 21, 15, 41, 0, 0, time.FixedZone("CEST", 2*60*60))
+	res := ExportAppendTime(b[:0], t1)
+	t2, err := ParseTime(string(res))
+	if err != nil {
+		t.Fatalf("Error parsing time: %s", err)
+	}
+	if !t1.Equal(t2) {
+		t.Fatalf("Times differ; expected: %v, got %v (%s)", t1, t2, string(res))
 	}
 }
 

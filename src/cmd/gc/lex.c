@@ -41,6 +41,7 @@ static struct {
 } exper[] = {
 //	{"rune32", &rune32},
 	{"fieldtrack", &fieldtrack_enabled},
+	{"precisestack", &precisestack_enabled},
 	{nil, nil},
 };
 
@@ -256,6 +257,7 @@ main(int argc, char *argv[])
 	flagcount("g", "debug code generation", &debug['g']);
 	flagcount("h", "halt on error", &debug['h']);
 	flagcount("i", "debug line number stack", &debug['i']);
+	flagstr("installsuffix", "pkg directory suffix", &flag_installsuffix);
 	flagcount("j", "debug runtime-initialized variables", &debug['j']);
 	flagcount("l", "disable inlining", &debug['l']);
 	flagcount("m", "print optimization decisions", &debug['m']);
@@ -576,7 +578,7 @@ static int
 findpkg(Strlit *name)
 {
 	Idir *p;
-	char *q, *race;
+	char *q, *suffix, *suffixsep;
 
 	if(islocalname(name)) {
 		if(safemode)
@@ -614,13 +616,19 @@ findpkg(Strlit *name)
 			return 1;
 	}
 	if(goroot != nil) {
-		race = "";
-		if(flag_race)
-			race = "_race";
-		snprint(namebuf, sizeof(namebuf), "%s/pkg/%s_%s%s/%Z.a", goroot, goos, goarch, race, name);
+		suffix = "";
+		suffixsep = "";
+		if(flag_installsuffix != nil) {
+			suffixsep = "_";
+			suffix = flag_installsuffix;
+		} else if(flag_race) {
+			suffixsep = "_";
+			suffix = "race";
+		}
+		snprint(namebuf, sizeof(namebuf), "%s/pkg/%s_%s%s%s/%Z.a", goroot, goos, goarch, suffixsep, suffix, name);
 		if(access(namebuf, 0) >= 0)
 			return 1;
-		snprint(namebuf, sizeof(namebuf), "%s/pkg/%s_%s%s/%Z.%c", goroot, goos, goarch, race, name, thechar);
+		snprint(namebuf, sizeof(namebuf), "%s/pkg/%s_%s%s%s/%Z.%c", goroot, goos, goarch, suffixsep, suffix, name, thechar);
 		if(access(namebuf, 0) >= 0)
 			return 1;
 	}
@@ -2295,7 +2303,7 @@ pkgnotused(int lineno, Strlit *path, char *name)
 		elem++;
 	else
 		elem = path->s;
-	if(strcmp(elem, name) == 0)
+	if(name == nil || strcmp(elem, name) == 0)
 		yyerrorl(lineno, "imported and not used: \"%Z\"", path);
 	else
 		yyerrorl(lineno, "imported and not used: \"%Z\" as %s", path, name);
@@ -2334,7 +2342,7 @@ mkpackage(char* pkgname)
 					// throw away top-level name left over
 					// from previous import . "x"
 					if(s->def->pack != N && !s->def->pack->used && !nsyntaxerrors) {
-						pkgnotused(s->def->pack->lineno, s->def->pack->pkg->path, s->name);
+						pkgnotused(s->def->pack->lineno, s->def->pack->pkg->path, nil);
 						s->def->pack->used = 1;
 					}
 					s->def = N;

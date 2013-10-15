@@ -79,3 +79,8 @@ var StringHash = stringHash
 var BytesHash = bytesHash
 var Int32Hash = int32Hash
 var Int64Hash = int64Hash
+
+func GogoBytes() int32
+
+var hashLoad float64 // declared in hashmap.c
+var HashLoad = &hashLoad

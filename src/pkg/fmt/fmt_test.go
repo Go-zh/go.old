@@ -237,6 +237,8 @@ var fmtTests = []struct {
 	{"%+.3g", -1.0, "-1"},
 	{"% .3g", -1.0, "-1"},
 	{"% .3g", 1.0, " 1"},
+	{"%b", float32(1.0), "8388608p-23"},
+	{"%b", 1.0, "4503599627370496p-52"},
 
 	// complex values
 	// 复数
@@ -258,6 +260,8 @@ var fmtTests = []struct {
 	{"% .3E", -1 - 2i, "(-1.000E+00-2.000E+00i)"},
 	{"%+.3g", complex64(1 + 2i), "(+1+2i)"},
 	{"%+.3g", complex128(1 + 2i), "(+1+2i)"},
+	{"%b", complex64(1 + 2i), "(8388608p-23+8388608p-22i)"},
+	{"%b", 1 + 2i, "(4503599627370496p-52+4503599627370496p-51i)"},
 
 	// erroneous formats
 	// 错误的的格式
@@ -622,6 +626,8 @@ var reorderTests = []struct {
 	{"%3.[2]d", SE{7}, "%!d(BADINDEX)"},
 	{"%.[2]d", SE{7}, "%!d(BADINDEX)"},
 	{"%d %d %d %#[1]o %#o %#o %#o", SE{11, 12, 13}, "11 12 13 013 014 015 %!o(MISSING)"},
+	{"%[5]d %[2]d %d", SE{1, 2, 3}, "%!d(BADINDEX) 2 3"},
+	{"%d %[3]d %d", SE{1, 2}, "1 %!d(BADINDEX) 2"}, // Erroneous index does not affect sequence.
 }
 
 func TestReorder(t *testing.T) {

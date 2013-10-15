@@ -151,8 +151,12 @@ func CompareAndSwapPointer(addr *unsafe.Pointer, old, new unsafe.Pointer) (swapp
 func AddInt32(addr *int32, delta int32) (new int32)
 
 // AddUint32 atomically adds delta to *addr and returns the new value.
+// To subtract a signed positive constant value c from x, do AddUint32(&x, ^uint32(c-1)).
+// In particular, to decrement x, do AddUint32(&x, ^uint32(0)).
 
 // AddUint32 自动将 delta 加上 *addr 并返回新值。
+// 要从 x 中减去一个带符号正整数常量 c，需执行 AddUint32(&x, ^uint32(c-1))。
+// 特别地，要减量 x，需执行 AddUint32(&x, ^uint32(0))。
 func AddUint32(addr *uint32, delta uint32) (new uint32)
 
 // AddInt64 atomically adds delta to *addr and returns the new value.
@@ -161,8 +165,12 @@ func AddUint32(addr *uint32, delta uint32) (new uint32)
 func AddInt64(addr *int64, delta int64) (new int64)
 
 // AddUint64 atomically adds delta to *addr and returns the new value.
+// To subtract a signed positive constant value c from x, do AddUint64(&x, ^uint64(c-1)).
+// In particular, to decrement x, do AddUint64(&x, ^uint64(0)).
 
 // AddUint64 自动将 delta 加上 *addr 并返回新值。
+// 要从 x 中减去一个带符号正整数常量 c，需执行 AddUint64(&x, ^uint64(c-1))。
+// 特别地，要减量 x，需执行 AddUint64(&x, ^uint64(0))。
 func AddUint64(addr *uint64, delta uint64) (new uint64)
 
 // AddUintptr atomically adds delta to *addr and returns the new value.

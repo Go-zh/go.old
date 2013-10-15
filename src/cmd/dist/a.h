@@ -75,6 +75,7 @@ extern char *goroot_final;
 extern char *goextlinkenabled;
 extern char *goversion;
 extern char *defaultcc;
+extern char *defaultcxx;
 extern char *workdir;
 extern char *tooldir;
 extern char *slash;
@@ -101,6 +102,7 @@ void	mkzgoarch(char*, char*);
 void	mkzgoos(char*, char*);
 void	mkzruntimedefs(char*, char*);
 void	mkzversion(char*, char*);
+void	mkzexperiment(char*, char*);
 
 // buildgo.c
 void	mkzdefaultcc(char*, char*);
@@ -110,6 +112,7 @@ void	goc2c(char*, char*);
 
 // main.c
 extern int vflag;
+extern int sflag;
 void	usage(void);
 void	xmain(int argc, char **argv);
 

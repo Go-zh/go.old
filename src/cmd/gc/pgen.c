@@ -95,7 +95,18 @@ compile(Node *fn)
 	nodconst(&nod1, types[TINT32], 0);
 	ptxt = gins(ATEXT, isblank(curfn->nname) ? N : curfn->nname, &nod1);
 	if(fn->dupok)
-		ptxt->TEXTFLAG = DUPOK;
+		ptxt->TEXTFLAG |= DUPOK;
+	if(fn->wrapper)
+		ptxt->TEXTFLAG |= WRAPPER;
+
+	// Clumsy but important.
+	// See test/recover.go for test cases and src/pkg/reflect/value.go
+	// for the actual functions being considered.
+	if(myimportpath != nil && strcmp(myimportpath, "reflect") == 0) {
+		if(strcmp(curfn->nname->sym->name, "callReflect") == 0 || strcmp(curfn->nname->sym->name, "callMethod") == 0)
+			ptxt->TEXTFLAG |= WRAPPER;
+	}	
+	
 	afunclit(&ptxt->from, curfn->nname);
 
 	ginit();
@@ -170,6 +181,7 @@ compile(Node *fn)
 
 	if(!debug['N'] || debug['R'] || debug['P']) {
 		regopt(ptxt);
+		nilopt(ptxt);
 	}
 	expandchecks(ptxt);
 
@@ -305,7 +317,7 @@ walktype(Type *type, Bvec *bv)
 	walktype1(type, &xoffset, bv);
 }
 
-// Compute a bit vector to describes the pointer containing locations
+// Compute a bit vector to describe the pointer-containing locations
 // in the in and out argument list and dump the bitvector length and
 // data to the provided symbol.
 static void
@@ -333,9 +345,9 @@ dumpgcargs(Node *fn, Sym *sym)
 	ggloblsym(sym, off, 0, 1);
 }
 
-// Compute a bit vector to describes the pointer containing locations
-// in local variables and dumps the bitvector length and data out to
-// the provided symbol. Returns the vector for use and freeing by caller.
+// Compute a bit vector to describe the pointer-containing locations
+// in local variables and dump the bitvector length and data out to
+// the provided symbol. Return the vector for use and freeing by caller.
 static Bvec*
 dumpgclocals(Node* fn, Sym *sym)
 {
@@ -427,11 +439,13 @@ allocauto(Prog* ptxt)
 			ll->n->used = 0;
 
 	markautoused(ptxt);
-	
-	// TODO: Remove when liveness analysis sets needzero instead.
-	for(ll=curfn->dcl; ll != nil; ll=ll->next)
-		if (ll->n->class == PAUTO)
-			ll->n->needzero = 1; // ll->n->addrtaken;
+
+	if(precisestack_enabled) {
+		// TODO: Remove when liveness analysis sets needzero instead.
+		for(ll=curfn->dcl; ll != nil; ll=ll->next)
+			if(ll->n->class == PAUTO)
+				ll->n->needzero = 1; // ll->n->addrtaken;
+	}
 
 	listsort(&curfn->dcl, cmpstackvar);
 
@@ -524,8 +538,11 @@ cgen_checknil(Node *n)
 
 	if(disable_checknil)
 		return;
-	while(n->op == ODOT || (n->op == OINDEX && isfixedarray(n->left->type->type))) // NOTE: not ODOTPTR
-		n = n->left;
+	// Ideally we wouldn't see any TUINTPTR here, but we do.
+	if(n->type == T || (!isptr[n->type->etype] && n->type->etype != TUINTPTR && n->type->etype != TUNSAFEPTR)) {
+		dump("checknil", n);
+		fatal("bad checknil");
+	}
 	if((thechar == '5' && n->op != OREGISTER) || !n->addable) {
 		regalloc(&reg, types[tptr], n);
 		cgen(n, &reg);

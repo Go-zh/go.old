@@ -147,8 +147,8 @@ type pp struct {
 	// reordered records whether the format string used argument reordering.
 	// reordered 记录该格式字符串是否用实参来重新排序。
 	reordered bool
-	// goodArgNum records whether all reordering directives were valid.
-	// goodArgNum 记录所有重新排序的指令是否均有效。
+	// goodArgNum records whether the most recent reordering directive was valid.
+	// goodArgNum 记录最近重新排序的指令是否有效。
 	goodArgNum bool
 	runeBuf    [utf8.UTFMax]byte
 	fmt        fmt
@@ -602,7 +602,7 @@ func (p *pp) fmtFloat64(v float64, verb rune) {
 
 func (p *pp) fmtComplex64(v complex64, verb rune) {
 	switch verb {
-	case 'e', 'E', 'f', 'F', 'g', 'G':
+	case 'b', 'e', 'E', 'f', 'F', 'g', 'G':
 		p.fmt.fmt_c64(v, verb)
 	case 'v':
 		p.fmt.fmt_c64(v, 'g')
@@ -613,7 +613,7 @@ func (p *pp) fmtComplex64(v complex64, verb rune) {
 
 func (p *pp) fmtComplex128(v complex128, verb rune) {
 	switch verb {
-	case 'e', 'E', 'f', 'F', 'g', 'G':
+	case 'b', 'e', 'E', 'f', 'F', 'g', 'G':
 		p.fmt.fmt_c128(v, verb)
 	case 'v':
 		p.fmt.fmt_c128(v, 'g')
@@ -1168,7 +1168,7 @@ func intFromArg(a []interface{}, argNum int) (num int, isInt bool, newArgNum int
 // up to the closing paren, if present, and whether the number parsed
 // ok. The bytes to consume will be 1 if no closing paren is present.
 func parseArgNumber(format string) (index int, wid int, ok bool) {
-	// Find closing parenthesis
+	// Find closing bracket.
 	for i := 1; i < len(format); i++ {
 		if format[i] == ']' {
 			width, ok, newi := parsenum(format, 1, i)
@@ -1202,8 +1202,8 @@ func (p *pp) doPrintf(format string, a []interface{}) {
 	argNum := 0         // we process one argument per non-trivial format // 我们为每个非平凡格式都处理一个实参。
 	afterIndex := false // previous item in format was an index like [3]. // 格式中的前一项是否为类似于 [3] 的下标。
 	p.reordered = false
-	p.goodArgNum = true
 	for i := 0; i < end; {
+		p.goodArgNum = true
 		lasti := i
 		for i < end && format[i] != '%' {
 			i++

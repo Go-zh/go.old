@@ -173,14 +173,8 @@ func TestUDPConnSpecificMethods(t *testing.T) {
 }
 
 func TestIPConnSpecificMethods(t *testing.T) {
-	switch runtime.GOOS {
-	case "plan9":
-		t.Skipf("skipping test on %q", runtime.GOOS)
-	case "windows":
-	default:
-		if os.Getuid() != 0 {
-			t.Skipf("skipping test; must be root")
-		}
+	if skip, skipmsg := skipRawSocketTest(t); skip {
+		t.Skip(skipmsg)
 	}
 
 	la, err := ResolveIPAddr("ip4", "127.0.0.1")

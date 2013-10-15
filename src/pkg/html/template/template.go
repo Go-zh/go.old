@@ -128,8 +128,10 @@ func (t *Template) Parse(src string) (*Template, error) {
 		if tmpl == nil {
 			tmpl = t.new(name)
 		}
+		// Restore our record of this text/template to its unescaped original state.
 		tmpl.escaped = false
 		tmpl.text = v
+		tmpl.Tree = v.Tree
 	}
 	return t, nil
 }
@@ -190,12 +192,7 @@ func (t *Template) Clone() (*Template, error) {
 		if src == nil || src.escaped {
 			return nil, fmt.Errorf("html/template: cannot Clone %q after it has executed", t.Name())
 		}
-		if x.Tree != nil {
-			x.Tree = &parse.Tree{
-				Name: x.Tree.Name,
-				Root: x.Tree.Root.CopyList(),
-			}
-		}
+		x.Tree = x.Tree.Copy()
 		ret.set[name] = &Template{
 			false,
 			x,

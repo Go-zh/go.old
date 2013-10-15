@@ -341,7 +341,8 @@ func (w *response) requestTooLarge() {
 
 // needsSniff reports whether a Content-Type still needs to be sniffed.
 func (w *response) needsSniff() bool {
-	return !w.cw.wroteHeader && w.handlerHeader.Get("Content-Type") == "" && w.written < sniffLen
+	_, haveType := w.handlerHeader["Content-Type"]
+	return !w.cw.wroteHeader && !haveType && w.written < sniffLen
 }
 
 // writerOnly hides an io.Writer value's optional ReadFrom method
@@ -530,11 +531,12 @@ func (ecr *expectContinueReader) Close() error {
 // It is like time.RFC1123 but hard codes GMT as the time zone.
 const TimeFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
 
-// appendTime is a non-allocating version of []byte(time.Now().UTC().Format(TimeFormat))
+// appendTime is a non-allocating version of []byte(t.UTC().Format(TimeFormat))
 func appendTime(b []byte, t time.Time) []byte {
 	const days = "SunMonTueWedThuFriSat"
 	const months = "JanFebMarAprMayJunJulAugSepOctNovDec"
 
+	t = t.UTC()
 	yy, mm, dd := t.Date()
 	hh, mn, ss := t.Clock()
 	day := days[3*t.Weekday():]
@@ -1357,6 +1359,10 @@ func RedirectHandler(url string, code int) Handler {
 // called for paths beginning "/images/thumbnails/" and the
 // former will receive requests for any other paths in the
 // "/images/" subtree.
+//
+// Note that since a pattern ending in a slash names a rooted subtree,
+// the pattern "/" matches all paths not matched by other registered
+// patterns, not just the URL with Path == "/".
 //
 // Patterns may optionally begin with a host name, restricting matches to
 // URLs on that host only.  Host-specific patterns take precedence over

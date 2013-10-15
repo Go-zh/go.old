@@ -83,17 +83,13 @@ func canUseConnectEx(net string) bool {
 	return syscall.LoadConnectEx() == nil
 }
 
-func resolveAndDial(net, addr string, localAddr Addr, deadline time.Time) (Conn, error) {
+func dial(net string, ra Addr, dialer func(time.Time) (Conn, error), deadline time.Time) (Conn, error) {
 	if !canUseConnectEx(net) {
 		// Use the relatively inefficient goroutine-racing
 		// implementation of DialTimeout.
-		return resolveAndDialChannel(net, addr, localAddr, deadline)
+		return dialChannel(net, ra, dialer, deadline)
 	}
-	ra, err := resolveAddr("dial", net, addr, deadline)
-	if err != nil {
-		return nil, &OpError{Op: "dial", Net: net, Addr: nil, Err: err}
-	}
-	return dial(net, addr, localAddr, ra.toAddr(), deadline)
+	return dialer(deadline)
 }
 
 // operation contains superset of data necessary to perform all async IO.
@@ -570,6 +566,25 @@ func (fd *netFD) accept(toAddr func(syscall.Sockaddr) Addr) (*netFD, error) {
 
 	netfd.setAddr(toAddr(lsa), toAddr(rsa))
 	return netfd, nil
+}
+
+func skipRawSocketTests() (skip bool, skipmsg string, err error) {
+	// From http://msdn.microsoft.com/en-us/library/windows/desktop/ms740548.aspx:
+	// Note: To use a socket of type SOCK_RAW requires administrative privileges.
+	// Users running Winsock applications that use raw sockets must be a member of
+	// the Administrators group on the local computer, otherwise raw socket calls
+	// will fail with an error code of WSAEACCES. On Windows Vista and later, access
+	// for raw sockets is enforced at socket creation. In earlier versions of Windows,
+	// access for raw sockets is enforced during other socket operations.
+	s, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, 0)
+	if err == syscall.WSAEACCES {
+		return true, "skipping test; no access to raw socket allowed", nil
+	}
+	if err != nil {
+		return true, "", err
+	}
+	defer syscall.Closesocket(s)
+	return false, "", nil
 }
 
 // Unimplemented functions.

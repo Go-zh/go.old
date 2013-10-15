@@ -295,7 +295,7 @@ func defaultContext() Context {
 	// When we reach Go 1.3 the line will read
 	//	c.ReleaseTags = []string{"go1.1", "go1.2", "go1.3"}
 	// and so on.
-	c.ReleaseTags = []string{"go1.1"}
+	c.ReleaseTags = []string{"go1.1", "go1.2"}
 
 	switch os.Getenv("CGO_ENABLED") {
 	case "1":
@@ -408,6 +408,14 @@ func (e *NoGoError) Error() string {
 	return "no buildable Go source files in " + e.Dir
 }
 
+func nameExt(name string) string {
+	i := strings.LastIndex(name, ".")
+	if i < 0 {
+		return ""
+	}
+	return name[i:]
+}
+
 // Import returns details about the Go package named by the import path,
 // interpreting local import paths relative to the srcDir directory.
 // If the path is a local import path naming a package that can be imported
@@ -437,7 +445,7 @@ func (ctxt *Context) Import(path string, srcDir string, mode ImportMode) (*Packa
 	switch ctxt.Compiler {
 	case "gccgo":
 		dir, elem := pathpkg.Split(p.ImportPath)
-		pkga = "pkg/gccgo/" + dir + "lib" + elem + ".a"
+		pkga = "pkg/gccgo_" + ctxt.GOOS + "_" + ctxt.GOARCH + "/" + dir + "lib" + elem + ".a"
 	case "gc":
 		suffix := ""
 		if ctxt.InstallSuffix != "" {
@@ -591,58 +599,15 @@ Found:
 		if d.IsDir() {
 			continue
 		}
+
 		name := d.Name()
-		if strings.HasPrefix(name, "_") ||
-			strings.HasPrefix(name, ".") {
-			continue
-		}
+		ext := nameExt(name)
 
-		i := strings.LastIndex(name, ".")
-		if i < 0 {
-			i = len(name)
-		}
-		ext := name[i:]
-
-		if !ctxt.goodOSArchFile(name, allTags) && !ctxt.UseAllFiles {
-			if ext == ".go" {
-				p.IgnoredGoFiles = append(p.IgnoredGoFiles, name)
-			}
-			continue
-		}
-
-		switch ext {
-		case ".go", ".c", ".cc", ".cxx", ".cpp", ".s", ".h", ".hh", ".hpp", ".hxx", ".S", ".swig", ".swigcxx":
-			// tentatively okay - read to make sure
-		case ".syso":
-			// binary objects to add to package archive
-			// Likely of the form foo_windows.syso, but
-			// the name was vetted above with goodOSArchFile.
-			p.SysoFiles = append(p.SysoFiles, name)
-			continue
-		default:
-			// skip
-			continue
-		}
-
-		filename := ctxt.joinPath(p.Dir, name)
-		f, err := ctxt.openFile(filename)
+		match, data, filename, err := ctxt.matchFile(p.Dir, name, true, allTags)
 		if err != nil {
 			return p, err
 		}
-
-		var data []byte
-		if strings.HasSuffix(filename, ".go") {
-			data, err = readImports(f, false)
-		} else {
-			data, err = readComments(f)
-		}
-		f.Close()
-		if err != nil {
-			return p, fmt.Errorf("read %s: %v", filename, err)
-		}
-
-		// Look for +build comments to accept or reject the file.
-		if !ctxt.shouldBuild(data, allTags) && !ctxt.UseAllFiles {
+		if !match {
 			if ext == ".go" {
 				p.IgnoredGoFiles = append(p.IgnoredGoFiles, name)
 			}
@@ -671,6 +636,12 @@ Found:
 			continue
 		case ".swigcxx":
 			p.SwigCXXFiles = append(p.SwigCXXFiles, name)
+			continue
+		case ".syso":
+			// binary objects to add to package archive
+			// Likely of the form foo_windows.syso, but
+			// the name was vetted above with goodOSArchFile.
+			p.SysoFiles = append(p.SysoFiles, name)
 			continue
 		}
 
@@ -747,6 +718,8 @@ Found:
 			allTags["cgo"] = true
 			if ctxt.CgoEnabled {
 				p.CgoFiles = append(p.CgoFiles, name)
+			} else {
+				p.IgnoredGoFiles = append(p.IgnoredGoFiles, name)
 			}
 		} else if isXTest {
 			p.XTestGoFiles = append(p.XTestGoFiles, name)
@@ -756,7 +729,7 @@ Found:
 			p.GoFiles = append(p.GoFiles, name)
 		}
 	}
-	if p.Name == "" {
+	if len(p.GoFiles)+len(p.CgoFiles)+len(p.TestGoFiles)+len(p.XTestGoFiles) == 0 {
 		return p, &NoGoError{p.Dir}
 	}
 
@@ -778,6 +751,79 @@ Found:
 	}
 
 	return p, pkgerr
+}
+
+// MatchFile reports whether the file with the given name in the given directory
+// matches the context and would be included in a Package created by ImportDir
+// of that directory.
+//
+// MatchFile considers the name of the file and may use ctxt.OpenFile to
+// read some or all of the file's content.
+func (ctxt *Context) MatchFile(dir, name string) (match bool, err error) {
+	match, _, _, err = ctxt.matchFile(dir, name, false, nil)
+	return
+}
+
+// matchFile determines whether the file with the given name in the given directory
+// should be included in the package being constructed.
+// It returns the data read from the file.
+// If returnImports is true and name denotes a Go program, matchFile reads
+// until the end of the imports (and returns that data) even though it only
+// considers text until the first non-comment.
+// If allTags is non-nil, matchFile records any encountered build tag
+// by setting allTags[tag] = true.
+func (ctxt *Context) matchFile(dir, name string, returnImports bool, allTags map[string]bool) (match bool, data []byte, filename string, err error) {
+	if strings.HasPrefix(name, "_") ||
+		strings.HasPrefix(name, ".") {
+		return
+	}
+
+	i := strings.LastIndex(name, ".")
+	if i < 0 {
+		i = len(name)
+	}
+	ext := name[i:]
+
+	if !ctxt.goodOSArchFile(name, allTags) && !ctxt.UseAllFiles {
+		return
+	}
+
+	switch ext {
+	case ".go", ".c", ".cc", ".cxx", ".cpp", ".s", ".h", ".hh", ".hpp", ".hxx", ".S", ".swig", ".swigcxx":
+		// tentatively okay - read to make sure
+	case ".syso":
+		// binary, no reading
+		match = true
+		return
+	default:
+		// skip
+		return
+	}
+
+	filename = ctxt.joinPath(dir, name)
+	f, err := ctxt.openFile(filename)
+	if err != nil {
+		return
+	}
+
+	if strings.HasSuffix(filename, ".go") {
+		data, err = readImports(f, false)
+	} else {
+		data, err = readComments(f)
+	}
+	f.Close()
+	if err != nil {
+		err = fmt.Errorf("read %s: %v", filename, err)
+		return
+	}
+
+	// Look for +build comments to accept or reject the file.
+	if !ctxt.shouldBuild(data, allTags) && !ctxt.UseAllFiles {
+		return
+	}
+
+	match = true
+	return
 }
 
 func cleanImports(m map[string][]token.Position) ([]string, map[string][]token.Position) {
@@ -1112,16 +1158,22 @@ func (ctxt *Context) goodOSArchFile(name string, allTags map[string]bool) bool {
 	}
 	n := len(l)
 	if n >= 2 && knownOS[l[n-2]] && knownArch[l[n-1]] {
-		allTags[l[n-2]] = true
-		allTags[l[n-1]] = true
+		if allTags != nil {
+			allTags[l[n-2]] = true
+			allTags[l[n-1]] = true
+		}
 		return l[n-2] == ctxt.GOOS && l[n-1] == ctxt.GOARCH
 	}
 	if n >= 1 && knownOS[l[n-1]] {
-		allTags[l[n-1]] = true
+		if allTags != nil {
+			allTags[l[n-1]] = true
+		}
 		return l[n-1] == ctxt.GOOS
 	}
 	if n >= 1 && knownArch[l[n-1]] {
-		allTags[l[n-1]] = true
+		if allTags != nil {
+			allTags[l[n-1]] = true
+		}
 		return l[n-1] == ctxt.GOARCH
 	}
 	return true

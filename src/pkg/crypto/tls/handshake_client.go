@@ -23,7 +23,6 @@ func (c *Conn) clientHandshake() error {
 
 	hello := &clientHelloMsg{
 		vers:               c.config.maxVersion(),
-		cipherSuites:       c.config.cipherSuites(),
 		compressionMethods: []uint8{compressionNone},
 		random:             make([]byte, 32),
 		ocspStapling:       true,
@@ -31,6 +30,25 @@ func (c *Conn) clientHandshake() error {
 		supportedCurves:    []uint16{curveP256, curveP384, curveP521},
 		supportedPoints:    []uint8{pointFormatUncompressed},
 		nextProtoNeg:       len(c.config.NextProtos) > 0,
+	}
+
+	possibleCipherSuites := c.config.cipherSuites()
+	hello.cipherSuites = make([]uint16, 0, len(possibleCipherSuites))
+
+NextCipherSuite:
+	for _, suiteId := range possibleCipherSuites {
+		for _, suite := range cipherSuites {
+			if suite.id != suiteId {
+				continue
+			}
+			// Don't advertise TLS 1.2-only cipher suites unless
+			// we're attempting TLS 1.2.
+			if hello.vers < VersionTLS12 && suite.flags&suiteTLS12 != 0 {
+				continue
+			}
+			hello.cipherSuites = append(hello.cipherSuites, suiteId)
+			continue NextCipherSuite
+		}
 	}
 
 	t := uint32(c.config.time().Unix())
@@ -281,17 +299,24 @@ func (c *Conn) clientHandshake() error {
 
 	if chainToSend != nil {
 		var signed []byte
-		certVerify := new(certificateVerifyMsg)
+		certVerify := &certificateVerifyMsg{
+			hasSignatureAndHash: c.vers >= VersionTLS12,
+		}
+
 		switch key := c.config.Certificates[0].PrivateKey.(type) {
 		case *ecdsa.PrivateKey:
-			digest, _ := finishedHash.hashForClientCertificate(signatureECDSA)
+			digest, _, hashId := finishedHash.hashForClientCertificate(signatureECDSA)
 			r, s, err := ecdsa.Sign(c.config.rand(), key, digest)
 			if err == nil {
 				signed, err = asn1.Marshal(ecdsaSignature{r, s})
 			}
+			certVerify.signatureAndHash.signature = signatureECDSA
+			certVerify.signatureAndHash.hash = hashId
 		case *rsa.PrivateKey:
-			digest, hashFunc := finishedHash.hashForClientCertificate(signatureRSA)
+			digest, hashFunc, hashId := finishedHash.hashForClientCertificate(signatureRSA)
 			signed, err = rsa.SignPKCS1v15(c.config.rand(), key, hashFunc, digest)
+			certVerify.signatureAndHash.signature = signatureRSA
+			certVerify.signatureAndHash.hash = hashId
 		default:
 			err = errors.New("unknown private key type")
 		}

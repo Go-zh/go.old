@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // This is a tool for packaging binary releases.
-// It supports FreeBSD, Linux, NetBSD, OS X, and Windows.
+// It supports FreeBSD, Linux, NetBSD, OpenBSD, OS X, and Windows.
 package main
 
 import (
@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -30,6 +31,7 @@ import (
 
 var (
 	tag             = flag.String("tag", "release", "mercurial tag to check out")
+	toolTag         = flag.String("tool", defaultToolTag, "go.tools tag to check out")
 	repo            = flag.String("repo", "https://code.google.com/p/go", "repo URL")
 	verbose         = flag.Bool("v", false, "verbose output")
 	upload          = flag.Bool("upload", true, "upload resulting files to Google Code")
@@ -37,15 +39,27 @@ var (
 	addLabel        = flag.String("label", "", "additional label to apply to file when uploading")
 	includeRace     = flag.Bool("race", true, "build race detector packages")
 	versionOverride = flag.String("version", "", "override version name")
+	staticToolchain = flag.Bool("static", true, "try to build statically linked toolchain (only supported on ELF targets)")
 
 	username, password string // for Google Code upload
 )
 
 const (
-	uploadURL = "https://go.googlecode.com/files"
-	godocPath = "code.google.com/p/go.tools/cmd/godoc"
-	tourPath  = "code.google.com/p/go-tour"
+	uploadURL      = "https://go.googlecode.com/files"
+	blogPath       = "code.google.com/p/go.blog"
+	toolPath       = "code.google.com/p/go.tools"
+	tourPath       = "code.google.com/p/go-tour"
+	defaultToolTag = "tip" // TOOD(adg): set this once Go 1.2 settles
 )
+
+// Import paths for tool commands.
+// These must be the command that cmd/go knows to install to $GOROOT/bin
+// or $GOROOT/pkg/tool.
+var toolPaths = []string{
+	"code.google.com/p/go.tools/cmd/cover",
+	"code.google.com/p/go.tools/cmd/godoc",
+	"code.google.com/p/go.tools/cmd/vet",
+}
 
 var preBuildCleanFiles = []string{
 	"lib/codereview",
@@ -75,12 +89,16 @@ var tourPackages = []string{
 }
 
 var tourContent = []string{
+	"content",
 	"js",
-	"prog",
 	"solutions",
 	"static",
 	"template",
-	"tour.article",
+}
+
+var blogContent = []string{
+	"content",
+	"template",
 }
 
 // The os-arches that support the race toolchain.
@@ -90,7 +108,17 @@ var raceAvailable = []string{
 	"windows-amd64",
 }
 
-var fileRe = regexp.MustCompile(`^(go[a-z0-9-.]+)\.(src|([a-z0-9]+)-([a-z0-9]+))\.`)
+// The OSes that support building statically linked toolchain
+// Only ELF platforms are supported.
+var staticLinkAvailable = []string{
+	"linux",
+	"freebsd",
+	"openbsd",
+	"netbsd",
+}
+
+var fileRe = regexp.MustCompile(
+	`^(go[a-z0-9-.]+)\.(src|([a-z0-9]+)-([a-z0-9]+)(?:-([a-z0-9.]))?)\.`)
 
 func main() {
 	flag.Usage = func() {
@@ -121,6 +149,7 @@ func main() {
 			} else {
 				b.OS = m[3]
 				b.Arch = m[4]
+				b.Label = m[5]
 			}
 			if !*upload {
 				log.Printf("%s: -upload=false, skipping", targ)
@@ -134,17 +163,27 @@ func main() {
 		if targ == "source" {
 			b.Source = true
 		} else {
-			p := strings.SplitN(targ, "-", 2)
-			if len(p) != 2 {
+			p := strings.SplitN(targ, "-", 3)
+			if len(p) < 2 {
 				log.Println("Ignoring unrecognized target:", targ)
 				continue
 			}
 			b.OS = p[0]
 			b.Arch = p[1]
+			if len(p) >= 3 {
+				b.Label = p[2]
+			}
 			if *includeRace {
 				for _, t := range raceAvailable {
 					if t == targ {
 						b.Race = true
+					}
+				}
+			}
+			if *staticToolchain {
+				for _, os := range staticLinkAvailable {
+					if b.OS == os {
+						b.static = true
 					}
 				}
 			}
@@ -160,8 +199,10 @@ type Build struct {
 	Race   bool // build race toolchain
 	OS     string
 	Arch   string
+	Label  string
 	root   string
 	gopath string
+	static bool // if true, build statically linked toolchain
 }
 
 func (b *Build) Do() error {
@@ -227,7 +268,11 @@ func (b *Build) Do() error {
 		if err != nil {
 			return err
 		}
-		err = b.godoc()
+		err = b.tools()
+		if err != nil {
+			return err
+		}
+		err = b.blog()
 		if err != nil {
 			return err
 		}
@@ -279,6 +324,9 @@ func (b *Build) Do() error {
 
 	// Create packages.
 	base := fmt.Sprintf("%s.%s-%s", version, b.OS, b.Arch)
+	if b.Label != "" {
+		base += "-" + b.Label
+	}
 	if !strings.HasPrefix(base, "go") {
 		base = "go." + base
 	}
@@ -413,27 +461,70 @@ func (b *Build) Do() error {
 	return err
 }
 
-func (b *Build) godoc() error {
-	defer func() {
-		// Clean work files from GOPATH directory.
-		for _, d := range []string{"bin", "pkg", "src"} {
-			os.RemoveAll(filepath.Join(b.gopath, d))
-		}
-	}()
+func (b *Build) tools() error {
+	defer b.cleanGopath()
 
-	// go get the godoc package.
-	// The go tool knows to install to $GOROOT/bin.
-	_, err := b.run(b.gopath, filepath.Join(b.root, "bin", "go"), "get", godocPath)
-	return err
+	// Fetch the tool packages (without building/installing).
+	args := append([]string{"get", "-d"}, toolPaths...)
+	_, err := b.run(b.gopath, filepath.Join(b.root, "bin", "go"), args...)
+	if err != nil {
+		return err
+	}
+
+	// Update the repo to the revision specified by -tool.
+	repoPath := filepath.Join(b.gopath, "src", filepath.FromSlash(toolPath))
+	_, err = b.run(repoPath, "hg", "update", *toolTag)
+	if err != nil {
+		return err
+	}
+
+	// Install tools.
+	args = append([]string{"install"}, toolPaths...)
+	_, err = b.run(b.gopath, filepath.Join(b.root, "bin", "go"), args...)
+	if err != nil {
+		return err
+	}
+
+	// Copy doc.go from go.tools/cmd/$CMD to $GOROOT/src/cmd/$CMD
+	// while rewriting "package main" to "package documentation".
+	for _, p := range toolPaths {
+		d, err := ioutil.ReadFile(filepath.Join(b.gopath, "src",
+			filepath.FromSlash(p), "doc.go"))
+		if err != nil {
+			return err
+		}
+		d = bytes.Replace(d, []byte("\npackage main\n"),
+			[]byte("\npackage documentation\n"), 1)
+		cmdDir := filepath.Join(b.root, "src", "cmd", path.Base(p))
+		if err := os.MkdirAll(cmdDir, 0755); err != nil {
+			return err
+		}
+		docGo := filepath.Join(cmdDir, "doc.go")
+		if err := ioutil.WriteFile(docGo, d, 0644); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (b *Build) blog() error {
+	defer b.cleanGopath()
+
+	// Fetch the blog repository.
+	_, err := b.run(b.gopath, filepath.Join(b.root, "bin", "go"), "get", "-d", blogPath+"/blog")
+	if err != nil {
+		return err
+	}
+
+	// Copy blog content to $GOROOT/blog.
+	blogSrc := filepath.Join(b.gopath, "src", filepath.FromSlash(blogPath))
+	contentDir := filepath.Join(b.root, "blog")
+	return cpAllDir(contentDir, blogSrc, blogContent...)
 }
 
 func (b *Build) tour() error {
-	defer func() {
-		// Clean work files from GOPATH directory.
-		for _, d := range []string{"bin", "pkg", "src"} {
-			os.RemoveAll(filepath.Join(b.gopath, d))
-		}
-	}()
+	defer b.cleanGopath()
 
 	// go get the gotour package.
 	_, err := b.run(b.gopath, filepath.Join(b.root, "bin", "go"), "get", tourPath+"/gotour")
@@ -459,6 +550,12 @@ func (b *Build) tour() error {
 		filepath.Join(b.root, "pkg", "tool", b.OS+"_"+b.Arch, "tour"+ext()),
 		filepath.Join(b.gopath, "bin", "gotour"+ext()),
 	)
+}
+
+func (b *Build) cleanGopath() {
+	for _, d := range []string{"bin", "pkg", "src"} {
+		os.RemoveAll(filepath.Join(b.gopath, d))
+	}
 }
 
 func ext() string {
@@ -528,6 +625,9 @@ func (b *Build) env() []string {
 		"GOROOT_FINAL="+final,
 		"GOPATH="+b.gopath,
 	)
+	if b.static {
+		env = append(env, "GO_DISTFLAGS=-s")
+	}
 	return env
 }
 
@@ -586,6 +686,9 @@ func (b *Build) Upload(version string, filename string) error {
 	}
 	if ftype != "" {
 		labels = append(labels, "Type-"+ftype)
+	}
+	if b.Label != "" {
+		labels = append(labels, b.Label)
 	}
 	if *addLabel != "" {
 		labels = append(labels, *addLabel)

@@ -117,6 +117,22 @@ fi
 rm -f ./testdata/err
 unset GOPATH
 
+TEST wildcards do not look in useless directories
+export GOPATH=$(pwd)/testdata
+if ./testgo list ... >testdata/err 2>&1; then
+	echo "go list ... succeeded"
+	ok=false
+elif ! grep badpkg testdata/err >/dev/null; then
+	echo "go list ... failure does not mention badpkg"
+	cat testdata/err
+	ok=false
+elif ! ./testgo list m... >testdata/err 2>&1; then
+	echo "go list m... failed"
+	ok=false
+fi
+rm -rf ./testdata/err
+unset GOPATH
+
 # Test tests with relative imports.
 TEST relative imports '(go test)'
 if ! ./testgo test ./testdata/testimport; then
@@ -149,6 +165,19 @@ elif ! grep testdata/shadow/root1/src/foo testdata/err >/dev/null; then
 	cat testdata/err
 	ok=false
 fi
+unset GOPATH
+
+TEST go install fails with no buildable files
+export GOPATH=$(pwd)/testdata
+export CGO_ENABLED=0
+if ./testgo install cgotest 2>testdata/err; then
+	echo "go install cgotest succeeded unexpectedly"
+elif ! grep 'no buildable Go source files' testdata/err >/dev/null; then
+	echo "go install cgotest did not report 'no buildable Go source files'"
+	cat testdata/err
+	ok=false
+fi
+unset CGO_ENABLED
 unset GOPATH
 
 # Test that without $GOBIN set, binaries get installed
@@ -379,7 +408,7 @@ if ! grep -q '^hello world' hello.out; then
 	cat hello.out
 	ok=false
 fi
-rm -rf $d
+rm -rf $d hello.out
 
 TEST go test -cpuprofile leaves binary behind
 ./testgo test -cpuprofile strings.prof strings || ok=false
@@ -583,6 +612,13 @@ if ! ./testgo build origin; then
 fi
 rm -rf $d
 unset GOPATH
+
+TEST 'Issue 6480: "go test -c -test.bench=XXX fmt" should not hang'
+if ! ./testgo test -c -test.bench=XXX fmt; then
+	echo build test failed
+	ok=false
+fi
+rm -f fmt.test
 
 # clean up
 if $started; then stop; fi

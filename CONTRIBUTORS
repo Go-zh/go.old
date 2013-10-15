@@ -145,6 +145,7 @@ Daniel Theophanes <kardianos@gmail.com>
 Darren Elwood <darren@textnode.com>
 Dave Borowitz <dborowitz@google.com>
 Dave Cheney <dave@cheney.net>
+Dave Day <djd@golang.org>
 Dave Grijalva <dgrijalva@ngmoco.com>
 David Anderson <danderson@google.com>
 David Bürgin <676c7473@gmail.com>
@@ -229,6 +230,7 @@ James Toy <nil@opensesame.st>
 James Tucker <raggi@google.com>
 James Whitehead <jnwhiteh@gmail.com>
 Jamie Gennis <jgennis@google.com> <jgennis@gmail.com>
+Jamie Wilkinson <jaq@spacepants.org>
 Jan H. Hosang <jan.hosang@gmail.com>
 Jan Mercl <0xjnml@gmail.com>
 Jan Mercl <befelemepeseveze@gmail.com>
@@ -240,6 +242,7 @@ Jason Travis <infomaniac7@gmail.com>
 Jean-Marc Eurin <jmeurin@google.com>
 Jeff Hodges <jeff@somethingsimilar.com>
 Jeff R. Allen <jra@nella.org> <jeff.allen@gmail.com>
+Jeff Sickel <jas@corpus-callosum.com>
 Jeff Wendling <jeff@spacemonkey.com>
 Jeremiah Harmsen <jeremiah@google.com>
 Jeremy Jackins <jeremyjackins@gmail.com>
@@ -306,6 +309,7 @@ Manu Garg <manugarg@google.com>
 Marcel van Lohuizen <mpvl@golang.org>
 Marco Hennings <marco.hennings@freiheit.com>
 Mark Zavislak <zavislak@google.com>
+Marko Juhani Silokunnas <marko.silokunnas@gmail.com>
 Markus Duft <markus.duft@salomon.at>
 Markus Sonderegger <marraison@gmail.com>
 Martin Neubauer <m.ne@gmx.net>
@@ -316,6 +320,7 @@ Matt Brown <mdbrown@google.com>
 Matt Jibson <matt.jibson@gmail.com>
 Matt Joiner <anacrolix@gmail.com>
 Matt Jones <mrjones@google.com>
+Matt Reiferson <mreiferson@gmail.com>
 Matthew Dempsky <mdempsky@google.com>
 Matthew Horsnell <matthew.horsnell@gmail.com>
 Maxim Pimenov <mpimenov@google.com>
@@ -327,6 +332,7 @@ Michael Gehring <mg@ebfe.org>
 Michael Hoisie <hoisie@gmail.com>
 Michael Lewis <mikelikespie@gmail.com>
 Michael Matloob <matloob@google.com>
+Michael Piatek <piatek@google.com>
 Michael Shields <mshields@google.com>
 Michael Stapelberg <michael@stapelberg.de> <mstplbrg@googlemail.com>
 Michael T. Jones <mtj@google.com> <michael.jones@gmail.com>
@@ -344,12 +350,15 @@ Miquel Sabaté Solà <mikisabate@gmail.com>
 Moriyoshi Koizumi <mozo@mozo.jp>
 Môshe van der Sterre <moshevds@gmail.com>
 Nan Deng <monnand@gmail.com>
+Nathan John Youngman <nj@nathany.com>
 Nicholas Presta <nick@nickpresta.ca> <nick1presta@gmail.com>
+Nicholas Sullivan <nicholas.sullivan@gmail.com>
 Nicholas Waples <nwaples@gmail.com>
 Nick Craig-Wood <nick@craig-wood.com> <nickcw@gmail.com>
 Nicolas Owens <mischief@offblast.org>
 Nigel Kerr <nigel.kerr@gmail.com>
 Nigel Tao <nigeltao@golang.org>
+Noah Campbell <noahcampbell@gmail.com>
 Oling Cat <olingcat@gmail.com>
 Oliver Hookins <ohookins@gmail.com>
 Olivier Antoine <olivier.antoine@gmail.com>
@@ -441,6 +450,7 @@ Taj Khattra <taj.khattra@gmail.com>
 Tarmigan Casebolt <tarmigan@gmail.com>
 Taru Karttunen <taruti@taruti.net>
 Thomas Alan Copeland <talan.copeland@gmail.com>
+Thomas Habets <habets@google.com>
 Thomas Kappler <tkappler@gmail.com>
 Timo Savola <timo.savola@gmail.com>
 Tobias Columbus <tobias.columbus@gmail.com> <tobias.columbus@googlemail.com>
@@ -448,6 +458,7 @@ Todd Wang <toddwang@gmail.com>
 Tom Szymanski <tgs@google.com>
 Tor Andersson <tor.andersson@gmail.com>
 Trevor Strohman <trevor.strohman@gmail.com>
+Tw <tw19881113@gmail.com>
 Tyler Bunnell <tylerbunnell@gmail.com>
 Ugorji Nwoke <ugorji@gmail.com>
 Ulf Holm Nielsen <doktor@dyregod.dk>

@@ -104,6 +104,53 @@ func TestNoCompressionOverlap(t *testing.T) {
 	testClientHelloFailure(t, clientHello, alertHandshakeFailure)
 }
 
+func TestTLS12OnlyCipherSuites(t *testing.T) {
+	// Test that a Server doesn't select a TLS 1.2-only cipher suite when
+	// the client negotiates TLS 1.1.
+	var zeros [32]byte
+
+	clientHello := &clientHelloMsg{
+		vers:   VersionTLS11,
+		random: zeros[:],
+		cipherSuites: []uint16{
+			// The Server, by default, will use the client's
+			// preference order. So the GCM cipher suite
+			// will be selected unless it's excluded because
+			// of the version in this ClientHello.
+			TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			TLS_RSA_WITH_RC4_128_SHA,
+		},
+		compressionMethods: []uint8{compressionNone},
+		supportedCurves:    []uint16{curveP256, curveP384, curveP521},
+		supportedPoints:    []uint8{pointFormatUncompressed},
+	}
+
+	c, s := net.Pipe()
+	var reply interface{}
+	var clientErr error
+	go func() {
+		cli := Client(c, testConfig)
+		cli.vers = clientHello.vers
+		cli.writeRecord(recordTypeHandshake, clientHello.marshal())
+		reply, clientErr = cli.readHandshake()
+		c.Close()
+	}()
+	config := *testConfig
+	config.CipherSuites = clientHello.cipherSuites
+	Server(s, &config).Handshake()
+	s.Close()
+	if clientErr != nil {
+		t.Fatal(clientErr)
+	}
+	serverHello, ok := reply.(*serverHelloMsg)
+	if !ok {
+		t.Fatalf("didn't get ServerHello message in reply. Got %v\n", reply)
+	}
+	if s := serverHello.cipherSuite; s != TLS_RSA_WITH_RC4_128_SHA {
+		t.Fatalf("bad cipher suite from server: %x", s)
+	}
+}
+
 func TestAlertForwarding(t *testing.T) {
 	c, s := net.Pipe()
 	go func() {
@@ -300,6 +347,28 @@ func TestClientAuthECDSA(t *testing.T) {
 		cfg.ClientAuth = cat.clientauth
 		testServerScript(t, cat.name, cat.script, cfg, cat.peers)
 	}
+}
+
+// TestCipherSuiteCertPreferance ensures that we select an RSA ciphersuite with
+// an RSA certificate and an ECDSA ciphersuite with an ECDSA certificate.
+func TestCipherSuiteCertPreferance(t *testing.T) {
+	var config = *testConfig
+	config.CipherSuites = []uint16{TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA, TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA}
+	config.MaxVersion = VersionTLS11
+	config.PreferServerCipherSuites = true
+	testServerScript(t, "CipherSuiteCertPreference", tls11ECDHEAESServerScript, &config, nil)
+
+	config = *testConfig
+	config.CipherSuites = []uint16{TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA, TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA}
+	config.Certificates = []Certificate{
+		Certificate{
+			Certificate: [][]byte{testECDSACertificate},
+			PrivateKey:  testECDSAPrivateKey,
+		},
+	}
+	config.BuildNameToCertificate()
+	config.PreferServerCipherSuites = true
+	testServerScript(t, "CipherSuiteCertPreference2", ecdheECDSAAESServerScript, &config, nil)
 }
 
 func TestTLS11Server(t *testing.T) {

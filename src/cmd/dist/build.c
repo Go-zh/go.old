@@ -27,6 +27,7 @@ char *gochar;
 char *goversion;
 char *slash;	// / for unix, \ for windows
 char *defaultcc;
+char *defaultcxx;
 bool	rebuildall;
 bool defaultclang;
 
@@ -162,6 +163,15 @@ init(void)
 			bprintf(&b, "gcc");
 	}
 	defaultcc = btake(&b);
+
+	xgetenv(&b, "CXX");
+	if(b.len == 0) {
+		if(defaultclang)
+			bprintf(&b, "clang++");
+		else
+			bprintf(&b, "g++");
+	}
+	defaultcxx = btake(&b);
 
 	xsetenv("GOROOT", goroot);
 	xsetenv("GOARCH", goarch);
@@ -557,6 +567,7 @@ static struct {
 		"$GOROOT/pkg/obj/$GOOS_$GOARCH/lib9.a",
 	}},
 	{"pkg/runtime", {
+		"zaexperiment.h", // must sort above zasm
 		"zasm_$GOOS_$GOARCH.h",
 		"zsys_$GOOS_$GOARCH.s",
 		"zgoarch_$GOARCH.go",
@@ -589,6 +600,7 @@ static struct {
 	{"zgoos_", mkzgoos},
 	{"zruntime_defs_", mkzruntimedefs},
 	{"zversion.go", mkzversion},
+	{"zaexperiment.h", mkzexperiment},
 };
 
 // install installs the library, package, or binary associated with dir,
@@ -708,6 +720,8 @@ install(char *dir)
 			vadd(&link, bpathf(&b, "%s/%s", tooldir, name));
 		} else {
 			vcopy(&link, gccargs.p, gccargs.len);
+			if(sflag)
+				vadd(&link, "-static");
 			vadd(&link, "-o");
 			targ = link.len;
 			vadd(&link, bpathf(&b, "%s/%s%s", tooldir, name, exe));
@@ -1515,6 +1529,9 @@ cmdbootstrap(int argc, char **argv)
 	case 'a':
 		rebuildall = 1;
 		break;
+	case 's':
+		sflag++;
+		break;
 	case 'v':
 		vflag++;
 		break;
@@ -1601,6 +1618,9 @@ cmdinstall(int argc, char **argv)
 	int i;
 
 	ARGBEGIN{
+	case 's':
+		sflag++;
+		break;
 	case 'v':
 		vflag++;
 		break;

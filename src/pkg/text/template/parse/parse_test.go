@@ -312,7 +312,7 @@ var isEmptyTests = []isEmptyTest{
 	{"spaces only", " \t\n \t\n", true},
 	{"definition", `{{define "x"}}something{{end}}`, true},
 	{"definitions and space", "{{define `x`}}something{{end}}\n\n{{define `y`}}something{{end}}\n\n", true},
-	{"definitions and text", "{{define `x`}}something{{end}}\nx\n{{define `y`}}something{{end}}\ny\n}}", false},
+	{"definitions and text", "{{define `x`}}something{{end}}\nx\n{{define `y`}}something{{end}}\ny\n", false},
 	{"definition and action", "{{define `x`}}something{{end}}{{if 3}}foo{{end}}", false},
 }
 
@@ -329,6 +329,22 @@ func TestIsEmpty(t *testing.T) {
 		if empty := IsEmptyTree(tree.Root); empty != test.empty {
 			t.Errorf("%q: expected %t got %t", test.name, test.empty, empty)
 		}
+	}
+}
+
+func TestErrorContextWithTreeCopy(t *testing.T) {
+	tree, err := New("root").Parse("{{if true}}{{end}}", "", "", make(map[string]*Tree), nil)
+	if err != nil {
+		t.Fatalf("unexpected tree parse failure: %v", err)
+	}
+	treeCopy := tree.Copy()
+	wantLocation, wantContext := tree.ErrorContext(tree.Root.Nodes[0])
+	gotLocation, gotContext := treeCopy.ErrorContext(treeCopy.Root.Nodes[0])
+	if wantLocation != gotLocation {
+		t.Errorf("wrong error location want %q got %q", wantLocation, gotLocation)
+	}
+	if wantContext != gotContext {
+		t.Errorf("wrong error location want %q got %q", wantContext, gotContext)
 	}
 }
 

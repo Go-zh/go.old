@@ -141,6 +141,7 @@ struct	Type
 {
 	uchar	etype;
 	uchar	nointerface;
+	uchar	noalg;
 	uchar	chan;
 	uchar	trecur;		// to detect loops
 	uchar	printed;
@@ -272,6 +273,7 @@ struct	Node
 	uchar	implicit;
 	uchar	addrtaken;	// address taken, even if not moved to heap
 	uchar	dupok;	// duplicate definitions ok (for func)
+	uchar	wrapper;	// is method wrapper (for func)
 	schar	likely; // likeliness of if statement
 	uchar	hasbreak;	// has break statement
 	uchar	needzero; // if it contains pointers, needs to be zeroed on function entry
@@ -577,6 +579,7 @@ enum
 	OINLCALL,	// intermediary representation of an inlined call.
 	OEFACE,	// itable and data words of an empty-interface value.
 	OITAB,	// itable word of an interface value.
+	OSPTR,  // base pointer of a slice or string.
 	OCLOSUREVAR, // variable reference at beginning of closure function
 	OCFUNC,	// reference to c function pointer (not go func value)
 	OCHECKNIL, // emit code to ensure pointer/interface not nil
@@ -973,12 +976,14 @@ EXTERN	int	typecheckok;
 EXTERN	int	compiling_runtime;
 EXTERN	int	compiling_wrappers;
 EXTERN	int	pure_go;
+EXTERN	char*	flag_installsuffix;
 EXTERN	int	flag_race;
 EXTERN	int	flag_largemodel;
 EXTERN	int	noescape;
 
 EXTERN	int	nointerface;
 EXTERN	int	fieldtrack_enabled;
+EXTERN	int	precisestack_enabled;
 
 /*
  *	y.tab.c
@@ -1076,7 +1081,7 @@ NodeList*	constiter(NodeList *vl, Node *t, NodeList *cl);
 Node*	dclname(Sym *s);
 void	declare(Node *n, int ctxt);
 void	dumpdcl(char *st);
-Node*	embedded(Sym *s);
+Node*	embedded(Sym *s, Pkg *pkg);
 Node*	fakethis(void);
 void	funcbody(Node *n);
 void	funccompile(Node *n, int isclosure);

@@ -547,6 +547,9 @@ algtype1(Type *t, Type **bad)
 	if(bad)
 		*bad = T;
 
+	if(t->noalg)
+		return ANOEQ;
+
 	switch(t->etype) {
 	case TANY:
 	case TFORW:
@@ -2180,7 +2183,7 @@ lookdot0(Sym *s, Type *t, Type **save, int ignorecase)
 	c = 0;
 	if(u->etype == TSTRUCT || u->etype == TINTER) {
 		for(f=u->type; f!=T; f=f->down)
-			if(f->sym == s || (ignorecase && ucistrcmp(f->sym->name, s->name) == 0)) {
+			if(f->sym == s || (ignorecase && f->type->etype == TFUNC && f->type->thistuple > 0 && ucistrcmp(f->sym->name, s->name) == 0)) {
 				if(save)
 					*save = f;
 				c++;
@@ -2588,6 +2591,7 @@ genwrapper(Type *rcvr, Type *method, Sym *newnam, int iface)
 		n->left = newname(methodsym(method->sym, methodrcvr, 0));
 		fn->nbody = list(fn->nbody, n);
 	} else {
+		fn->wrapper = 1; // ignore frame for panic+recover matching
 		call = nod(OCALL, dot, N);
 		call->list = args;
 		call->isddd = isddd;

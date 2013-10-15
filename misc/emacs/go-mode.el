@@ -249,7 +249,7 @@ For mode=set, all covered lines will have this weight."
 
    (if go-fontify-function-calls
        `((,(concat "\\(" go-identifier-regexp "\\)[[:space:]]*(") 1 font-lock-function-name-face) ;; function call/method name
-         (,(concat "(\\(" go-identifier-regexp "\\))[[:space:]]*(") 1 font-lock-function-name-face)) ;; bracketed function call
+         (,(concat "[^[:word:][:multibyte:]](\\(" go-identifier-regexp "\\))[[:space:]]*(") 1 font-lock-function-name-face)) ;; bracketed function call
      `((,go-func-meth-regexp 1 font-lock-function-name-face))) ;; method name
 
    `(
@@ -774,7 +774,10 @@ link in the kill ring."
   (let* ((url-request-method "POST")
          (url-request-extra-headers
           '(("Content-Type" . "application/x-www-form-urlencoded")))
-         (url-request-data (buffer-substring-no-properties start end))
+         (url-request-data
+          (encode-coding-string
+           (buffer-substring-no-properties start end)
+           'utf-8))
          (content-buf (url-retrieve
                        "http://play.golang.org/share"
                        (lambda (arg)
@@ -907,7 +910,7 @@ If IGNORE-CASE is non-nil, the comparison is case-insensitive."
   (reverse (remove nil
                    (mapcar
                     (lambda (line)
-                      (if (string-match "^\\(.+\\):\\([[:digit:]]+\\): imported and not used: \".+\"$" line)
+                      (if (string-match "^\\(.+\\):\\([[:digit:]]+\\): imported and not used: \".+\".*$" line)
                           (if (string= (file-truename (match-string 1 line)) (file-truename buffer-file-name))
                               (string-to-number (match-string 2 line)))))
                     (split-string (shell-command-to-string
@@ -1107,7 +1110,7 @@ divisor for FILE-NAME."
   "Open a clone of the current buffer and overlay it with
 coverage information gathered via go test -coverprofile=COVERAGE-FILE.
 
-If COVERAGE-FILE is nil, it will either be infered from the
+If COVERAGE-FILE is nil, it will either be inferred from the
 current buffer if it's already a coverage buffer, or be prompted
 for."
   (interactive)

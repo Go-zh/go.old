@@ -715,14 +715,15 @@ func (z *Int) SetBytes(buf []byte) *Int {
 	return z
 }
 
-// Bytes returns the absolute value of z as a big-endian byte slice.
-// Bytes 将 z 的绝对值作为大端序的字节切片返回。
+// Bytes returns the absolute value of x as a big-endian byte slice.
+
+// Bytes 将 x 的绝对值作为大端序的字节切片返回。
 func (x *Int) Bytes() []byte {
 	buf := make([]byte, len(x.abs)*_S)
 	return buf[x.abs.bytes(buf):]
 }
 
-// BitLen returns the length of the absolute value of z in bits.
+// BitLen returns the length of the absolute value of x in bits.
 // The bit length of 0 is 0.
 
 // BitLen 返回 z 的绝对值的位数长度。0 的位长为 0.

@@ -26,17 +26,9 @@ func packetConnTestData(t *testing.T, net string, i int) ([]byte, func()) {
 	case "udp":
 		return []byte("UDP PACKETCONN TEST"), nil
 	case "ip":
-		switch runtime.GOOS {
-		case "plan9":
+		if skip, skipmsg := skipRawSocketTest(t); skip {
 			return nil, func() {
-				t.Logf("skipping %q test on %q", net, runtime.GOOS)
-			}
-		case "windows":
-		default:
-			if os.Getuid() != 0 {
-				return nil, func() {
-					t.Logf("skipping %q test; must be root", net)
-				}
+				t.Logf(skipmsg)
 			}
 		}
 		b, err := (&icmpMessage{
@@ -180,7 +172,7 @@ func TestConnAndPacketConn(t *testing.T) {
 		}
 		rb1 := make([]byte, 128)
 		if _, _, err := c1.ReadFrom(rb1); err != nil {
-			t.Fatalf("PacetConn.ReadFrom failed: %v", err)
+			t.Fatalf("PacketConn.ReadFrom failed: %v", err)
 		}
 		var dst Addr
 		switch netstr[0] {
