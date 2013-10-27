@@ -49,7 +49,7 @@ const (
 	blogPath       = "code.google.com/p/go.blog"
 	toolPath       = "code.google.com/p/go.tools"
 	tourPath       = "code.google.com/p/go-tour"
-	defaultToolTag = "tip" // TOOD(adg): set this once Go 1.2 settles
+	defaultToolTag = "release-branch.go1.2"
 )
 
 // Import paths for tool commands.
@@ -175,7 +175,7 @@ func main() {
 			}
 			if *includeRace {
 				for _, t := range raceAvailable {
-					if t == targ {
+					if t == targ || strings.HasPrefix(targ, t+"-") {
 						b.Race = true
 					}
 				}

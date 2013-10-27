@@ -577,7 +577,7 @@ func isAtext(c byte, dot bool) bool {
 	return bytes.IndexByte(atextChars, c) >= 0
 }
 
-// isQtext returns true if c is an RFC 5322 qtest character.
+// isQtext returns true if c is an RFC 5322 qtext character.
 
 // isQtext当c是RFC 5322定义的qtest字符的话，返回true。
 func isQtext(c byte) bool {

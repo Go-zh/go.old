@@ -188,8 +188,8 @@ func (p *Package) Translate(f *File) {
 // in the file f and saves relevant renamings in f.Name[name].Define.
 func (p *Package) loadDefines(f *File) {
 	var b bytes.Buffer
-	b.WriteString(builtinProlog)
 	b.WriteString(f.Preamble)
+	b.WriteString(builtinProlog)
 	stdout := p.gccDefines(b.Bytes())
 
 	for _, line := range strings.Split(stdout, "\n") {
@@ -226,42 +226,22 @@ func (p *Package) loadDefines(f *File) {
 // name xxx for the references C.xxx in the Go input.
 // The kind is either a constant, type, or variable.
 func (p *Package) guessKinds(f *File) []*Name {
-	// Coerce gcc into telling us whether each name is
-	// a type, a value, or undeclared.  We compile a function
-	// containing the line:
-	//	name;
-	// If name is a type, gcc will print:
-	//	cgo-test:2: warning: useless type name in empty declaration
-	// If name is a value, gcc will print
-	//	cgo-test:2: warning: statement with no effect
-	// If name is undeclared, gcc will print
-	//	cgo-test:2: error: 'name' undeclared (first use in this function)
-	// A line number directive causes the line number to
-	// correspond to the index in the names array.
-	//
-	// The line also has an enum declaration:
-	//	name; enum { _cgo_enum_1 = name };
-	// If name is not a constant, gcc will print:
-	//	cgo-test:4: error: enumerator value for '_cgo_enum_4' is not an integer constant
-	// we assume lines without that error are constants.
-
-	// Make list of names that need sniffing, type lookup.
-	toSniff := make([]*Name, 0, len(f.Name))
-	needType := make([]*Name, 0, len(f.Name))
-
+	// Determine kinds for names we already know about,
+	// like #defines or 'struct foo', before bothering with gcc.
+	var names, needType []*Name
 	for _, n := range f.Name {
 		// If we've already found this name as a #define
 		// and we can translate it as a constant value, do so.
 		if n.Define != "" {
-			ok := false
+			isConst := false
 			if _, err := strconv.Atoi(n.Define); err == nil {
-				ok = true
+				isConst = true
 			} else if n.Define[0] == '"' || n.Define[0] == '\'' {
 				if _, err := parser.ParseExpr(n.Define); err == nil {
-					ok = true
+					isConst = true
 				}
 			}
-			if ok {
+			if isConst {
 				n.Kind = "const"
 				// Turn decimal into hex, just for consistency
 				// with enum-derived constants.  Otherwise
@@ -281,113 +261,139 @@ func (p *Package) guessKinds(f *File) []*Name {
 			}
 		}
 
-		// If this is a struct, union, or enum type name,
-		// record the kind but also that we need type information.
+		needType = append(needType, n)
+
+		// If this is a struct, union, or enum type name, no need to guess the kind.
 		if strings.HasPrefix(n.C, "struct ") || strings.HasPrefix(n.C, "union ") || strings.HasPrefix(n.C, "enum ") {
 			n.Kind = "type"
-			i := len(needType)
-			needType = needType[0 : i+1]
-			needType[i] = n
 			continue
 		}
 
-		i := len(toSniff)
-		toSniff = toSniff[0 : i+1]
-		toSniff[i] = n
+		// Otherwise, we'll need to find out from gcc.
+		names = append(names, n)
 	}
 
-	if len(toSniff) == 0 {
+	// Bypass gcc if there's nothing left to find out.
+	if len(names) == 0 {
 		return needType
 	}
 
+	// Coerce gcc into telling us whether each name is a type, a value, or undeclared.
+	// For names, find out whether they are integer constants.
+	// We used to look at specific warning or error messages here, but that tied the
+	// behavior too closely to specific versions of the compilers.
+	// Instead, arrange that we can infer what we need from only the presence or absence
+	// of an error on a specific line.
+	//
+	// For each name, we generate these lines, where xxx is the index in toSniff plus one.
+	//
+	//	#line xxx "not-declared"
+	//	void __cgo_f_xxx_1(void) { __typeof__(name) *__cgo_undefined__; }
+	//	#line xxx "not-type"
+	//	void __cgo_f_xxx_2(void) { name *__cgo_undefined__; }
+	//	#line xxx "not-const"
+	//	void __cgo_f_xxx_3(void) { enum { __cgo_undefined__ = (name)*1 }; }
+	//
+	// If we see an error at not-declared:xxx, the corresponding name is not declared.
+	// If we see an error at not-type:xxx, the corresponding name is a type.
+	// If we see an error at not-const:xxx, the corresponding name is not an integer constant.
+	// If we see no errors, we assume the name is an expression but not a constant
+	// (so a variable or a function).
+	//
+	// The specific input forms are chosen so that they are valid C syntax regardless of
+	// whether name denotes a type or an expression.
+
 	var b bytes.Buffer
-	b.WriteString(builtinProlog)
 	b.WriteString(f.Preamble)
-	b.WriteString("void __cgo__f__(void) {\n")
-	b.WriteString("#line 1 \"cgo-test\"\n")
-	for i, n := range toSniff {
-		fmt.Fprintf(&b, "%s; /* #%d */\nenum { _cgo_enum_%d = %s }; /* #%d */\n", n.C, i, i, n.C, i)
+	b.WriteString(builtinProlog)
+
+	for i, n := range names {
+		fmt.Fprintf(&b, "#line %d \"not-declared\"\n"+
+			"void __cgo_f_%d_1(void) { __typeof__(%s) *__cgo_undefined__; }\n"+
+			"#line %d \"not-type\"\n"+
+			"void __cgo_f_%d_2(void) { %s *__cgo_undefined__; }\n"+
+			"#line %d \"not-const\"\n"+
+			"void __cgo_f_%d_3(void) { enum { __cgo__undefined__ = (%s)*1 }; }\n",
+			i+1, i+1, n.C,
+			i+1, i+1, n.C,
+			i+1, i+1, n.C)
 	}
-	b.WriteString("}\n")
+	fmt.Fprintf(&b, "#line 1 \"completed\"\n"+
+		"int __cgo__1 = __cgo__2;\n")
+
 	stderr := p.gccErrors(b.Bytes())
 	if stderr == "" {
 		fatalf("%s produced no output\non input:\n%s", p.gccBaseCmd()[0], b.Bytes())
 	}
 
-	names := make([]*Name, len(toSniff))
-	copy(names, toSniff)
-
-	isConst := make([]bool, len(toSniff))
-	for i := range isConst {
-		isConst[i] = true // until proven otherwise
-	}
-
+	completed := false
+	sniff := make([]int, len(names))
+	const (
+		notType = 1 << iota
+		notConst
+	)
 	for _, line := range strings.Split(stderr, "\n") {
-		if len(line) < 9 || line[0:9] != "cgo-test:" {
-			// the user will see any compiler errors when the code is compiled later.
+		if !strings.Contains(line, ": error:") {
+			// we only care about errors.
+			// we tried to turn off warnings on the command line, but one never knows.
 			continue
 		}
-		line = line[9:]
-		colon := strings.Index(line, ":")
-		if colon < 0 {
-			continue
-		}
-		i, err := strconv.Atoi(line[0:colon])
-		if err != nil {
-			continue
-		}
-		i = (i - 1) / 2
-		what := ""
-		switch {
-		default:
-			continue
-		case strings.Contains(line, ": useless type name in empty declaration"),
-			strings.Contains(line, ": declaration does not declare anything"),
-			strings.Contains(line, ": unexpected type name"):
-			what = "type"
-			isConst[i] = false
-		case strings.Contains(line, ": statement with no effect"),
-			strings.Contains(line, ": expression result unused"):
-			what = "not-type" // const or func or var
-		case strings.Contains(line, "undeclared"):
-			error_(token.NoPos, "%s", strings.TrimSpace(line[colon+1:]))
-		case strings.Contains(line, "is not an integer constant"):
-			isConst[i] = false
-			continue
-		}
-		n := toSniff[i]
-		if n == nil {
-			continue
-		}
-		toSniff[i] = nil
-		n.Kind = what
 
-		j := len(needType)
-		needType = needType[0 : j+1]
-		needType[j] = n
-	}
-	for i, b := range isConst {
-		if b {
-			names[i].Kind = "const"
-			if toSniff[i] != nil && names[i].Const == "" {
-				j := len(needType)
-				needType = needType[0 : j+1]
-				needType[j] = names[i]
-			}
-		}
-	}
-	for _, n := range toSniff {
-		if n == nil {
+		c1 := strings.Index(line, ":")
+		if c1 < 0 {
 			continue
 		}
-		if n.Kind != "" {
+		c2 := strings.Index(line[c1+1:], ":")
+		if c2 < 0 {
 			continue
 		}
-		error_(token.NoPos, "could not determine kind of name for C.%s", fixGo(n.Go))
+		c2 += c1 + 1
+
+		filename := line[:c1]
+		i, _ := strconv.Atoi(line[c1+1 : c2])
+		i--
+		if i < 0 || i >= len(names) {
+			continue
+		}
+
+		switch filename {
+		case "completed":
+			// Strictly speaking, there is no guarantee that seeing the error at completed:1
+			// (at the end of the file) means we've seen all the errors from earlier in the file,
+			// but usually it does. Certainly if we don't see the completed:1 error, we did
+			// not get all the errors we expected.
+			completed = true
+
+		case "not-declared":
+			error_(token.NoPos, "%s", strings.TrimSpace(line[c2+1:]))
+		case "not-type":
+			sniff[i] |= notType
+		case "not-const":
+			sniff[i] |= notConst
+		}
+	}
+
+	if !completed {
+		fatalf("%s did not produce error at completed:1\non input:\n%s", p.gccBaseCmd()[0], b.Bytes())
+	}
+
+	for i, n := range names {
+		switch sniff[i] {
+		case 0:
+			error_(token.NoPos, "could not determine kind of name for C.%s", fixGo(n.Go))
+		case notType:
+			n.Kind = "const"
+		case notConst:
+			n.Kind = "type"
+		case notConst | notType:
+			n.Kind = "not-type"
+		}
 	}
 	if nerrors > 0 {
 		fatalf("unresolved names")
 	}
+
+	needType = append(needType, names...)
 	return needType
 }
 
@@ -400,14 +406,14 @@ func (p *Package) loadDWARF(f *File, names []*Name) {
 	// for symbols in the object file, so it is not enough to print the
 	// preamble and hope the symbols we care about will be there.
 	// Instead, emit
-	//	typeof(names[i]) *__cgo__i;
+	//	__typeof__(names[i]) *__cgo__i;
 	// for each entry in names and then dereference the type we
 	// learn for __cgo__i.
 	var b bytes.Buffer
-	b.WriteString(builtinProlog)
 	b.WriteString(f.Preamble)
+	b.WriteString(builtinProlog)
 	for i, n := range names {
-		fmt.Fprintf(&b, "typeof(%s) *__cgo__%d;\n", n.C, i)
+		fmt.Fprintf(&b, "__typeof__(%s) *__cgo__%d;\n", n.C, i)
 		if n.Kind == "const" {
 			fmt.Fprintf(&b, "enum { __cgo_enum__%d = %s };\n", i, n.C)
 		}
@@ -648,7 +654,7 @@ func (p *Package) rewriteRef(f *File) {
 				// Okay - might be new(T)
 				expr = r.Name.Type.Go
 			} else if r.Name.Kind == "var" {
-				expr = &ast.StarExpr{X: expr}
+				expr = &ast.StarExpr{Star: (*r.Expr).Pos(), X: expr}
 			}
 
 		case "type":
@@ -677,6 +683,16 @@ func (p *Package) rewriteRef(f *File) {
 				}
 			}
 		}
+
+		// Copy position information from old expr into new expr,
+		// in case expression being replaced is first on line.
+		// See golang.org/issue/6563.
+		pos := (*r.Expr).Pos()
+		switch x := expr.(type) {
+		case *ast.Ident:
+			expr = &ast.Ident{NamePos: pos, Name: x.Name}
+		}
+
 		*r.Expr = expr
 	}
 
@@ -726,8 +742,8 @@ func gccTmp() string {
 // the input.
 func (p *Package) gccCmd() []string {
 	c := append(p.gccBaseCmd(),
-		"-Wall",                             // many warnings
-		"-Werror",                           // warnings are errors
+		"-w",                                // no warnings
+		"-Wno-error",                        // warnings are not errors
 		"-o"+gccTmp(),                       // write object to tmp
 		"-gdwarf-2",                         // generate DWARF v2 debugging symbols
 		"-fno-eliminate-unused-debug-types", // gets rid of e.g. untyped enum otherwise
@@ -744,6 +760,13 @@ func (p *Package) gccCmd() []string {
 			"-Wno-unneeded-internal-declaration",
 			"-Wno-unused-function",
 			"-Qunused-arguments",
+			// Clang embeds prototypes for some builtin functions,
+			// like malloc and calloc, but all size_t parameters are
+			// incorrectly typed unsigned long. We work around that
+			// by disabling the builtin functions (this is safe as
+			// it won't affect the actual compilation of the C code).
+			// See: http://golang.org/issue/6506.
+			"-fno-builtin",
 		)
 	}
 
@@ -855,14 +878,6 @@ func (p *Package) gccDefines(stdin []byte) string {
 func (p *Package) gccErrors(stdin []byte) string {
 	// TODO(rsc): require failure
 	args := p.gccCmd()
-
-	// GCC 4.8.0 has a bug: it sometimes does not apply
-	// -Wunused-value to values that are macros defined in system
-	// headers.  See issue 5118.  Adding -Wsystem-headers avoids
-	// that problem.  This will produce additional errors, but it
-	// doesn't matter because we will ignore all errors that are
-	// not marked for the cgo-test file.
-	args = append(args, "-Wsystem-headers")
 
 	if *debugGcc {
 		fmt.Fprintf(os.Stderr, "$ %s <<EOF\n", strings.Join(args, " "))
@@ -1067,7 +1082,7 @@ func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
 		sub := c.Type(dt.Type, pos)
 		t.Align = sub.Align
 		gt.Elt = sub.Go
-		t.C.Set("typeof(%s[%d])", sub.C, dt.Count)
+		t.C.Set("__typeof__(%s[%d])", sub.C, dt.Count)
 
 	case *dwarf.BoolType:
 		t.Go = c.bool
@@ -1205,7 +1220,7 @@ func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
 		case "class", "union":
 			t.Go = c.Opaque(t.Size)
 			if t.C.Empty() {
-				t.C.Set("typeof(unsigned char[%d])", t.Size)
+				t.C.Set("__typeof__(unsigned char[%d])", t.Size)
 			}
 			t.Align = 1 // TODO: should probably base this on field alignment.
 			typedef[name.Name] = t

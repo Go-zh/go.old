@@ -459,7 +459,7 @@ func (u *URL) String() string {
 				buf.WriteString(h)
 			}
 		}
-		if u.Path != "" && u.Path[0] != '/' {
+		if u.Path != "" && u.Path[0] != '/' && u.Host != "" {
 			buf.WriteByte('/')
 		}
 		buf.WriteString(escape(u.Path, encodePath))
@@ -558,8 +558,8 @@ func parseQuery(m Values, query string) (err error) {
 	return err
 }
 
-// Encode encodes the values into ``URL encoded'' form.
-// e.g. "foo=bar&bar=baz"
+// Encode encodes the values into ``URL encoded'' form
+// ("bar=baz&foo=quux") sorted by key.
 func (v Values) Encode() string {
 	if v == nil {
 		return ""

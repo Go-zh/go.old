@@ -20,10 +20,14 @@ func main() {
 
 	// Test that NaNs in maps don't go quadratic.
 	t := func(n int) time.Duration {
+<<<<<<< local
 		var u0 syscall.Rusage
 		if err := syscall.Getrusage(0, &u0); err != nil {
 			panic(err)
 		}
+=======
+		t1 := time.Now()
+>>>>>>> other
 		m := map[float64]int{}
 		nan := math.NaN()
 		for i := 0; i < n; i++ {
@@ -32,11 +36,15 @@ func main() {
 		if len(m) != n {
 			panic("wrong size map after nan insertion")
 		}
+<<<<<<< local
 		var u1 syscall.Rusage
 		if err := syscall.Getrusage(0, &u1); err != nil {
 			panic(err)
 		}
 		return time.Duration(u1.Utime.Nano() - u0.Utime.Nano())
+=======
+		return time.Since(t1)
+>>>>>>> other
 	}
 
 	// Depending on the machine and OS, this test might be too fast

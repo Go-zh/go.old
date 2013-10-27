@@ -7,10 +7,15 @@
 //
 // The sql package must be used in conjunction with a database driver.
 // See http://golang.org/s/sqldrivers for a list of drivers.
+//
+// For more usage examples, see the wiki page at
+// http://golang.org/s/sqlwiki.
 
 // sql 包提供了通用的SQL（或类SQL）数据库接口.
 //
 // sql 包必须与数据库驱动结合使用。驱动列表见 http://golang.org/s/sqldrivers。
+//
+// 更多使用范例见 http://golang.org/s/sqlwiki 的维基页面。
 package sql
 
 import (
@@ -589,7 +594,6 @@ func (db *DB) maxIdleConnsLocked() int {
 // TODO：待译
 func (db *DB) SetMaxIdleConns(n int) {
 	db.mu.Lock()
-	defer db.mu.Unlock()
 	if n > 0 {
 		db.maxIdle = n
 	} else {
@@ -600,11 +604,16 @@ func (db *DB) SetMaxIdleConns(n int) {
 	if db.maxOpen > 0 && db.maxIdleConnsLocked() > db.maxOpen {
 		db.maxIdle = db.maxOpen
 	}
+	var closing []*driverConn
 	for db.freeConn.Len() > db.maxIdleConnsLocked() {
 		dc := db.freeConn.Back().Value.(*driverConn)
 		dc.listElem = nil
 		db.freeConn.Remove(db.freeConn.Back())
-		go dc.Close()
+		closing = append(closing, dc)
+	}
+	db.mu.Unlock()
+	for _, c := range closing {
+		c.Close()
 	}
 }
 
@@ -674,9 +683,12 @@ func (db *DB) openNewConnection() {
 		db: db,
 		ci: ci,
 	}
-	db.addDepLocked(dc, dc)
-	db.numOpen++
-	db.putConnDBLocked(dc, err)
+	if db.putConnDBLocked(dc, err) {
+		db.addDepLocked(dc, dc)
+		db.numOpen++
+	} else {
+		ci.Close()
+	}
 }
 
 // connRequest represents one request for a new connection
@@ -838,8 +850,8 @@ func (db *DB) putConn(dc *driverConn, err error) {
 	if err == driver.ErrBadConn {
 		// Don't reuse bad connections.
 		// Since the conn is considered bad and is being discarded, treat it
-		// as closed. Decrement the open count.
-		db.numOpen--
+		// as closed. Don't decrement the open count here, finalClose will
+		// take care of that.
 		db.maybeOpenNewConnections()
 		db.mu.Unlock()
 		dc.Close()
@@ -1835,13 +1847,13 @@ func (r *Row) Scan(dest ...interface{}) error {
 	// from Next will not be modified again." (for instance, if
 	// they were obtained from the network anyway) But for now we
 	// don't care.
+	defer r.rows.Close()
 	for _, dp := range dest {
 		if _, ok := dp.(*RawBytes); ok {
 			return errors.New("sql: RawBytes isn't allowed on Row.Scan")
 		}
 	}
 
-	defer r.rows.Close()
 	if !r.rows.Next() {
 		return ErrNoRows
 	}
