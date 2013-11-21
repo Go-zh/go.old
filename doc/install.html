@@ -100,6 +100,26 @@ Downloads preferences panel.
 </p>
 </div>
 
+<table class="codetable" frame="border" summary="requirements">
+<tr>
+<th align="middle">操作系统</th>
+<th align="middle">架构</th>
+<th align="middle">注释</th>
+</tr>
+<tr><td colspan="3"><hr></td></tr>
+<tr><td>FreeBSD 7或更新</td> <td>amd64、386、arm</td> <td>不支持Debian GNU/kFreeBSD；FreeBSD/ARM需要FreeBSD 10或更新</td></tr>
+<tr><td>Linux 2.6.23或更新，带glibc</td> <td>amd64、386、arm</td> <td>不支持CentOS/RHEL 5.x；ARM还没有二进制发行版</td></tr>
+<tr><td>Mac OS X 10.6或更新</td> <td>amd64、386</td> <td>使用Xcode<sup>&#8225;</sup>及其自带gcc<sup>&#8224;</sup></td></tr>
+<tr><td>Windows 2000或更新</td> <td>amd64、386</td> <td>使用mingw gcc<sup>&#8224;</sup>，无需cygwin或msys</td></tr>
+</table>
+
+<p>
+<sup>&#8224;</sup>仅当你打算用<a href="/cmd/cgo">cgo</a>时才需要<code>gcc</code>。<br/>
+<sup>&#8225;</sup>只需为
+<a href="http://developer.apple.com/Xcode/">Xcode</a>安装命令行工具即可。
+若你已经安装了Xcode 4.3+，只需从下载配置面板的组件标签内安装它即可。
+</p>
+
 <div class="english">
 <h2 id="install">Install the Go tools</h2>
 </div>
@@ -178,8 +198,13 @@ variable. You can do this by adding this line to your <code>/etc/profile</code>
 export PATH=$PATH:/usr/local/go/bin
 </pre>
 
-<h4 id="tarball_non_standard">Installing to a custom location</h3>
+<div class="english">
+<h4 id="tarball_non_standard">Installing to a custom location</h4>
+</div>
 
+<h4 id="非标准安装包">安装到指定位置</h4>
+
+<div class="english">
 <p>
 The Go binary distributions assume they will be installed in
 <code>/usr/local/go</code> (or <code>c:\Go</code> under Windows),
@@ -187,10 +212,23 @@ but it is possible to install the Go tools to a different location.
 In this case you must set the <code>GOROOT</code> environment variable
 to point to the directory in which it was installed.
 </p>
+</div>
 
+<p>
+Go二进制发行版假定它们会被安装到 <code>/usr/local/go</code>
+（或Windows下的 <code>c:\Go</code>）中，但也可将Go工具安装到不同的位置。
+此时你必须设置 <code>GOROOT</code> 环境变量来指出它所安装的位置。
+</p>
+
+<div class="english">
 <p>
 For example, if you installed Go to your home directory you should add the
 following commands to <code>$HOME/.profile</code>:
+</p>
+</div>
+
+<p>
+例如，若你将Go安装到你的home目录下，你应当将以下命令添加到 <code>$HOME/.profile</code> 文件中：
 </p>
 
 <pre>
@@ -198,9 +236,15 @@ export GOROOT=$HOME/go
 export PATH=$PATH:$GOROOT/bin
 </pre>
 
+<div class="english">
 <p>
 <b>Note</b>: <code>GOROOT</code> must be set only when installing to a custom
 location.
+</p>
+</div>
+
+<p>
+<b>注</b>：<code>GOROOT</code> 仅在安装到指定位置时才需要设置。
 </p>
 
 <div class="english">
