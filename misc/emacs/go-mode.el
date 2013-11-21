@@ -41,8 +41,8 @@
 
 (defalias 'go--kill-whole-line
   (if (fboundp 'kill-whole-line)
-      'kill-whole-line
-    'kill-entire-line))
+      #'kill-whole-line
+    #'kill-entire-line))
 
 ;; Delete the current line without putting it in the kill-ring.
 (defun go--delete-whole-line (&optional arg)
@@ -56,12 +56,16 @@
          (kill-new (s) ()))
     (go--kill-whole-line arg)))
 
-
+;; declare-function is an empty macro that only byte-compile cares
+;; about. Wrap in always false if to satisfy Emacsen without that
+;; macro.
+(if nil
+    (declare-function go--position-bytes "go-mode" (point)))
 ;; XEmacs unfortunately does not offer position-bytes. We can fall
 ;; back to just using (point), but it will be incorrect as soon as
 ;; multibyte characters are being used.
 (if (fboundp 'position-bytes)
-    (defalias 'go--position-bytes 'position-bytes)
+    (defalias 'go--position-bytes #'position-bytes)
   (defun go--position-bytes (point) point))
 
 (defun go--old-completion-list-style (list)
@@ -154,6 +158,12 @@
 trees and invoke the 'go' tool via a wrapper that sets GOROOT and
 GOPATH based on the current directory.  Such users should
 customize this variable to point to the wrapper script."
+  :type 'string
+  :group 'go)
+
+(defcustom gofmt-command "gofmt"
+  "The 'gofmt' command.  Some users may replace this with 'goimports'
+from https://github.com/bradfitz/goimports."
   :type 'string
   :group 'go)
 
@@ -273,15 +283,15 @@ For mode=set, all covered lines will have this weight."
 
 (defvar go-mode-map
   (let ((m (make-sparse-keymap)))
-    (define-key m "}" 'go-mode-insert-and-indent)
-    (define-key m ")" 'go-mode-insert-and-indent)
-    (define-key m "," 'go-mode-insert-and-indent)
-    (define-key m ":" 'go-mode-insert-and-indent)
-    (define-key m "=" 'go-mode-insert-and-indent)
-    (define-key m (kbd "C-c C-a") 'go-import-add)
-    (define-key m (kbd "C-c C-j") 'godef-jump)
-    (define-key m (kbd "C-x 4 C-c C-j") 'godef-jump-other-window)
-    (define-key m (kbd "C-c C-d") 'godef-describe)
+    (define-key m "}" #'go-mode-insert-and-indent)
+    (define-key m ")" #'go-mode-insert-and-indent)
+    (define-key m "," #'go-mode-insert-and-indent)
+    (define-key m ":" #'go-mode-insert-and-indent)
+    (define-key m "=" #'go-mode-insert-and-indent)
+    (define-key m (kbd "C-c C-a") #'go-import-add)
+    (define-key m (kbd "C-c C-j") #'godef-jump)
+    (define-key m (kbd "C-x 4 C-c C-j") #'godef-jump-other-window)
+    (define-key m (kbd "C-c C-d") #'godef-describe)
     m)
   "Keymap used by Go mode to implement electric keys.")
 
@@ -390,7 +400,7 @@ current line will be returned."
 
 (defun go-indentation-at-point ()
   (save-excursion
-    (let (start-nesting (outindent 0))
+    (let (start-nesting)
       (back-to-indentation)
       (setq start-nesting (go-paren-level))
 
@@ -420,7 +430,6 @@ current line will be returned."
   (interactive)
   (let (indent
         shift-amt
-        end
         (pos (- (point-max) (point)))
         (point (point))
         (beg (line-beginning-position)))
@@ -511,7 +520,7 @@ consider binding godef-jump to `M-.', which is the default key
 for `find-tag':
 
 \(add-hook 'go-mode-hook (lambda ()
-                          (local-set-key (kbd \"M-.\") 'godef-jump)))
+                          (local-set-key (kbd \"M-.\") #'godef-jump)))
 
 Please note that godef is an external dependency. You can install
 it with
@@ -531,7 +540,7 @@ recommended that you look at goflymake
        '(go--build-font-lock-keywords))
 
   ;; Indentation
-  (set (make-local-variable 'indent-line-function) 'go-mode-indent-line)
+  (set (make-local-variable 'indent-line-function) #'go-mode-indent-line)
 
   ;; Comments
   (set (make-local-variable 'comment-start) "// ")
@@ -539,12 +548,12 @@ recommended that you look at goflymake
   (set (make-local-variable 'comment-use-syntax) t)
   (set (make-local-variable 'comment-start-skip) "\\(//+\\|/\\*+\\)\\s *")
 
-  (set (make-local-variable 'beginning-of-defun-function) 'go-beginning-of-defun)
-  (set (make-local-variable 'end-of-defun-function) 'go-end-of-defun)
+  (set (make-local-variable 'beginning-of-defun-function) #'go-beginning-of-defun)
+  (set (make-local-variable 'end-of-defun-function) #'go-end-of-defun)
 
   (set (make-local-variable 'parse-sexp-lookup-properties) t)
   (if (boundp 'syntax-propertize-function)
-      (set (make-local-variable 'syntax-propertize-function) 'go-propertize-syntax))
+      (set (make-local-variable 'syntax-propertize-function) #'go-propertize-syntax))
 
   (set (make-local-variable 'go-dangling-cache) (make-hash-table :test 'eql))
   (add-hook 'before-change-functions (lambda (x y) (setq go-dangling-cache (make-hash-table :test 'eql))) t t)
@@ -638,7 +647,7 @@ buffer."
     ;; We're using errbuf for the mixed stdout and stderr output. This
     ;; is not an issue because gofmt -w does not produce any stdout
     ;; output in case of success.
-    (if (zerop (call-process "gofmt" nil errbuf nil "-w" tmpfile))
+    (if (zerop (call-process gofmt-command nil errbuf nil "-w" tmpfile))
         (if (zerop (call-process-region (point-min) (point-max) "diff" nil patchbuf nil "-n" "-" tmpfile))
             (progn
               (kill-buffer errbuf)
@@ -898,13 +907,13 @@ If IGNORE-CASE is non-nil, the comparison is case-insensitive."
                    (mapcar (lambda (file)
                              (let ((sub (substring file (length pkgdir) -2)))
                                (unless (or (go--string-prefix-p "obj/" sub) (go--string-prefix-p "tool/" sub))
-                                 (mapconcat 'identity (cdr (split-string sub "/")) "/"))))
+                                 (mapconcat #'identity (cdr (split-string sub "/")) "/"))))
                            (if (file-directory-p dir)
                                (directory-files dir t "\\.a$"))))
                  (if (file-directory-p pkgdir)
                      (go--directory-dirs pkgdir)))))
      (go-root-and-paths)))
-   'string<))
+   #'string<))
 
 (defun go-unused-imports-lines ()
   ;; FIXME Technically, -o /dev/null fails in quite some cases (on
@@ -950,11 +959,12 @@ will be commented, otherwise they will be removed completely."
   "Given a file name in the format of `filename:line:column',
 visit FILENAME and go to line LINE and column COLUMN."
   (if (not (string-match "\\(.+\\):\\([0-9]+\\):\\([0-9]+\\)" specifier))
-      (error "Unexpected godef output: %s" specifier)
+      ;; We've only been given a directory name
+      (funcall (if other-window #'find-file-other-window #'find-file) specifier)
     (let ((filename (match-string 1 specifier))
           (line (string-to-number (match-string 2 specifier)))
           (column (string-to-number (match-string 3 specifier))))
-      (with-current-buffer (funcall (if other-window 'find-file-other-window 'find-file) filename)
+      (with-current-buffer (funcall (if other-window #'find-file-other-window #'find-file) filename)
         (go--goto-line line)
         (beginning-of-line)
         (forward-char (1- column))
@@ -993,7 +1003,7 @@ description at POINT."
       (let ((description (cdr (butlast (godef--call point) 1))))
         (if (not description)
             (message "No description found for expression at point")
-          (message "%s" (mapconcat 'identity description "\n"))))
+          (message "%s" (mapconcat #'identity description "\n"))))
     (file-error (message "Could not run godef binary"))))
 
 (defun godef-jump (point &optional other-window)
@@ -1007,6 +1017,8 @@ description at POINT."
          ((string= "godef: no identifier found" file)
           (message "%s" file))
          ((go--string-prefix-p "godef: no declaration found for " file)
+          (message "%s" file))
+         ((go--string-prefix-p "error finding import path for " file)
           (message "%s" file))
          (t
           (push-mark)
@@ -1142,6 +1154,6 @@ for."
           (go--coverage-make-overlay range (cadr ranges-and-divisor))))
 
       (if (not (eq cur-buffer (current-buffer)))
-          (display-buffer (current-buffer) 'display-buffer-reuse-window)))))
+          (display-buffer (current-buffer) #'display-buffer-reuse-window)))))
 
 (provide 'go-mode)

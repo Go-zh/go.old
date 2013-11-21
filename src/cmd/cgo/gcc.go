@@ -742,13 +742,12 @@ func gccTmp() string {
 // the input.
 func (p *Package) gccCmd() []string {
 	c := append(p.gccBaseCmd(),
-		"-w",                                // no warnings
-		"-Wno-error",                        // warnings are not errors
-		"-o"+gccTmp(),                       // write object to tmp
-		"-gdwarf-2",                         // generate DWARF v2 debugging symbols
-		"-fno-eliminate-unused-debug-types", // gets rid of e.g. untyped enum otherwise
-		"-c",  // do not link
-		"-xc", // input language is C
+		"-w",          // no warnings
+		"-Wno-error",  // warnings are not errors
+		"-o"+gccTmp(), // write object to tmp
+		"-gdwarf-2",   // generate DWARF v2 debugging symbols
+		"-c",          // do not link
+		"-xc",         // input language is C
 	)
 	if strings.Contains(c[0], "clang") {
 		c = append(c,
@@ -781,6 +780,11 @@ func (p *Package) gccCmd() []string {
 func (p *Package) gccDebug(stdin []byte) (*dwarf.Data, binary.ByteOrder, []byte) {
 	runGcc(stdin, p.gccCmd())
 
+	isDebugData := func(s string) bool {
+		// Some systems use leading _ to denote non-assembly symbols.
+		return s == "__cgodebug_data" || s == "___cgodebug_data"
+	}
+
 	if f, err := macho.Open(gccTmp()); err == nil {
 		defer f.Close()
 		d, err := f.DWARF()
@@ -791,8 +795,7 @@ func (p *Package) gccDebug(stdin []byte) (*dwarf.Data, binary.ByteOrder, []byte)
 		if f.Symtab != nil {
 			for i := range f.Symtab.Syms {
 				s := &f.Symtab.Syms[i]
-				// Mach-O still uses a leading _ to denote non-assembly symbols.
-				if s.Name == "_"+"__cgodebug_data" {
+				if isDebugData(s.Name) {
 					// Found it.  Now find data section.
 					if i := int(s.Sect) - 1; 0 <= i && i < len(f.Sections) {
 						sect := f.Sections[i]
@@ -819,7 +822,7 @@ func (p *Package) gccDebug(stdin []byte) (*dwarf.Data, binary.ByteOrder, []byte)
 		if err == nil {
 			for i := range symtab {
 				s := &symtab[i]
-				if s.Name == "__cgodebug_data" {
+				if isDebugData(s.Name) {
 					// Found it.  Now find data section.
 					if i := int(s.Section); 0 <= i && i < len(f.Sections) {
 						sect := f.Sections[i]
@@ -843,7 +846,7 @@ func (p *Package) gccDebug(stdin []byte) (*dwarf.Data, binary.ByteOrder, []byte)
 		}
 		var data []byte
 		for _, s := range f.Symbols {
-			if s.Name == "_"+"__cgodebug_data" {
+			if isDebugData(s.Name) {
 				if i := int(s.SectionNumber) - 1; 0 <= i && i < len(f.Sections) {
 					sect := f.Sections[i]
 					if s.Value < sect.Size {
@@ -1043,20 +1046,10 @@ func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
 	}
 
 	t := new(Type)
-	t.Size = dtype.Size()
+	t.Size = dtype.Size() // note: wrong for array of pointers, corrected below
 	t.Align = -1
 	t.C = &TypeRepr{Repr: dtype.Common().Name}
 	c.m[dtype] = t
-
-	if t.Size < 0 {
-		// Unsized types are [0]byte
-		t.Size = 0
-		t.Go = c.Opaque(0)
-		if t.C.Empty() {
-			t.C.Set("void")
-		}
-		return t
-	}
 
 	switch dt := dtype.(type) {
 	default:
@@ -1204,6 +1197,9 @@ func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
 		return t
 
 	case *dwarf.StructType:
+		if dt.ByteSize < 0 { // opaque struct
+			break
+		}
 		// Convert to Go struct, being careful about alignment.
 		// Have to give it a name to simulate C "struct foo" references.
 		tag := dt.StructName
@@ -1319,6 +1315,25 @@ func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
 			if !*godefs && !*cdefs {
 				t.Go = name
 			}
+		}
+	}
+
+	if t.Size <= 0 {
+		// Clang does not record the size of a pointer in its DWARF entry,
+		// so if dtype is an array, the call to dtype.Size at the top of the function
+		// computed the size as the array length * 0 = 0.
+		// The type switch called Type (this function) recursively on the pointer
+		// entry, and the code near the top of the function updated the size to
+		// be correct, so calling dtype.Size again will produce the correct value.
+		t.Size = dtype.Size()
+		if t.Size < 0 {
+			// Unsized types are [0]byte
+			t.Size = 0
+			t.Go = c.Opaque(0)
+			if t.C.Empty() {
+				t.C.Set("void")
+			}
+			return t
 		}
 	}
 
