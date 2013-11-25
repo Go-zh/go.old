@@ -1,4 +1,4 @@
-
+<!--{
 	"Title": "实效Go编程",
 	"Template": true
 }-->
@@ -393,7 +393,8 @@ If the package is simple, the package comment can be brief.
 </div>
 
 <pre>
-// path 包实现了一些常用的工具，以便于操作用反斜杠分隔的路径
+// path 包实现了一些常用的工具，以便于操作用反斜杠分隔的路径.
+</pre>
 
 <div class="english">
 <p>
@@ -414,7 +415,7 @@ The package comment for the
 <p>
 注释无需进行额外的格式化，如用星号来突出等。生成的输出甚至可能无法以等宽字体显示，
 因此不要依赖于空格对齐，<code>godoc</code> 会像 <code>gofmt</code> 那样处理好这一切。
-注释是不会被解析的纯文本，因此像HTML或其它类似于 <code>_this_</code> 的东西将按照
+注释是不会被解析的纯文本，因此像HTML或其它类似于 <code>_这样_</code> 的东西将按照
 <b>原样</b> 输出，因此不应使用它们。<code>godoc</code> 所做的调整，
 就是将已缩进的文本以等宽字体显示，来适应对应的程序片段。
 <a href="http://golang.org/pkg/fmt/"><code>fmt</code> 包</a>的注释就用了这种不错的效果。
@@ -434,26 +435,48 @@ fold long lines, and so on.
 使用正确的拼写、标点和语句结构以及折叠长行等。
 </p>
 
+<div class="english">
 <p>
 Inside a package, any comment immediately preceding a top-level declaration
 serves as a <i>doc comment</i> for that declaration.
 Every exported (capitalized) name in a program should
 have a doc comment.
 </p>
+</div>
 
+<p>
+在包中，任何顶级声明前面的注释都将作为该声明的<b>文档注释</b>。
+在程序中，每个可导出（首字母大写）的名称都应该有文档注释。
+</p>
+
+<div class="english">
 <p>
 Doc comments work best as complete sentences, which allow
 a wide variety of automated presentations.
 The first sentence should be a one-sentence summary that
 starts with the name being declared.
 </p>
+</div>
 
+<p>
+文档注释最好是完整的句子，这样它才能适应各种自动化的展示。
+第一句应当以被声明的东西开头，并且是单句的摘要。
+</p>
+
+<div class="english">
 <pre>
 // Compile parses a regular expression and returns, if successful, a Regexp
 // object that can be used to match against text.
 func Compile(str string) (regexp *Regexp, err error) {
 </pre>
+</div>
 
+<pre>
+// Compile 用于解析正则表达式并返回，如果成功，则 Regexp 对象就可用于匹配所针对的文本。
+func Compile(str string) (regexp *Regexp, err error) {
+</pre>
+
+<div class="english">
 <p>
 If the name always begins the comment, the output of <code>godoc</code>
 can usefully be run through <code>grep</code>.
@@ -461,17 +484,41 @@ Imagine you couldn't remember the name "Compile" but were looking for
 the parsing function for regular expressions, so you ran
 the command,
 </p>
+</div>
+
+<p>
+若注释总是以名称开头，<code>godoc</code> 的输出就能通过 <code>grep</code>
+变得更加有用。假如你记不住“Compile”这个名称，而又在找正则表达式的解析函数，
+那就可以运行
+</p>
 
 <pre>
 $ godoc regexp | grep parse
 </pre>
 
+<div class="english">
 <p>
 If all the doc comments in the package began, "This function...", <code>grep</code>
 wouldn't help you remember the name. But because the package starts each
 doc comment with the name, you'd see something like this,
 which recalls the word you're looking for.
 </p>
+</div>
+
+<p>
+若包中的所有文档注释都以“此函数…”开头，<code>grep</code> 就无法帮你记住此名称。
+但由于每个包的文档注释都以其名称开头，你就能看到这样的内容，它能显示你正在寻找的词语。
+</p>
+
+<div class="english">
+<pre>
+$ godoc regexp | grep parse
+    Compile parses a regular expression and returns, if successful, a Regexp
+    parsed. It simplifies safe initialization of global variables holding
+    cannot be parsed. It simplifies safe initialization of global variables
+$
+</pre>
+</div>
 
 <pre>
 $ godoc regexp | grep parse
@@ -481,12 +528,20 @@ $ godoc regexp | grep parse
 $
 </pre>
 
+<div class="english">
 <p>
 Go's declaration syntax allows grouping of declarations.
 A single doc comment can introduce a group of related constants or variables.
 Since the whole declaration is presented, such a comment can often be perfunctory.
 </p>
+</div>
 
+<p>
+Go的声明语法允许成组声明。单个文档注释应介绍一组相关的常量或变量。
+由于是整体声明，这种注释往往较为笼统。
+</p>
+
+<div class="english">
 <pre>
 // Error codes returned by failures to parse an expression.
 var (
@@ -496,10 +551,27 @@ var (
     ...
 )
 </pre>
+</div>
 
+<pre>
+// 表达式解析失败后返回错误代码。
+var (
+    ErrInternal      = errors.New("regexp: internal error")
+    ErrUnmatchedLpar = errors.New("regexp: unmatched '('")
+    ErrUnmatchedRpar = errors.New("regexp: unmatched ')'")
+    ...
+)
+</pre>
+
+<div class="english">
 <p>
 Even for private names, grouping can also indicate relationships between items,
 such as the fact that a set of variables is protected by a mutex.
+</p>
+</div>
+
+<p>
+即便是对于私有名称，也可通过成组声明来表明各项间的关系，例如某一组由互斥体保护的变量。
 </p>
 
 <pre>
@@ -511,8 +583,13 @@ var (
 )
 </pre>
 
+<div class="english">
 <h2 id="names">Names</h2>
+</div>
 
+<h2 id="命名">命名</h2>
+
+<div class="english">
 <p>
 Names are as important in Go as in any other language.
 They even have semantic effect:
@@ -521,19 +598,37 @@ first character is upper case.
 It's therefore worth spending a little time talking about naming conventions
 in Go programs.
 </p>
+</div>
+
+<p>
+正如命名在其它语言中的地位，它在 Go 中同样重要。有时它们甚至会影响语义：
+例如，某个名称在包外是否可见，就取决于其首个字符是否为大写字母。
+因此有必要花点时间来讨论Go程序中的命名约定。
+</p>
 
 
+<div class="english">
 <h3 id="package-names">Package names</h3>
+</div>
 
+<h3 id="包名">包名</h3>
+
+<div class="english">
 <p>
 When a package is imported, the package name becomes an accessor for the
 contents.  After
+</p>
+</div>
+
+<p>
+当一个包被导入后，包名就会成了内容的访问器。在
 </p>
 
 <pre>
 import "bytes"
 </pre>
 
+<div class="english">
 <p>
 the importing package can talk about <code>bytes.Buffer</code>.  It's
 helpful if everyone using the package can use the same name to refer to
@@ -550,7 +645,21 @@ importing package can choose a different name to use locally.
 In any case, confusion is rare because the file name in the import
 determines just which package is being used.
 </p>
+</div>
 
+<p>
+之后，被导入的包就能通过 <code>bytes.Buffer</code> 来引用了。
+若所有人都以相同的名称来引用其内容将大有裨益，
+这也就意味着包应当有个恰当的名称：其名称应该简洁明了而易于理解。按照惯例，
+包应当以小写的单个单词来命名，且不应使用下划线或大小写混合。<code>err</code>
+的命名就是出于简短考虑的，因为任何使用该包的人都会键入该名称。
+不必担心<b>引用次序</b>的冲突。包名就是导入时所需的唯一默认名称，
+它并不需要在所有源码中保持唯一，即便在少数发生冲突的情况下，
+也可为导入的包选择一个别名来局部使用。
+无论如何，通过文件名来判定使用的包，都是不会产生混淆的。
+</p>
+
+<div class="english">
 <p>
 Another convention is that the package name is the base name of
 its source directory;
@@ -558,7 +667,15 @@ the package in <code>src/pkg/encoding/base64</code>
 is imported as <code>"encoding/base64"</code> but has name <code>base64</code>,
 not <code>encoding_base64</code> and not <code>encodingBase64</code>.
 </p>
+</div>
 
+<p>
+另一个约定就是包名应为其源码目录的基本名称。在 <code>src/pkg/encoding/base64</code>
+中的包应作为 <code>"encoding/base64"</code> 导入，其包名应为 <code>base64</code>，
+而非 <code>encoding_base64</code> 或 <code>encodingBase64</code>。
+</p>
+
+<div class="english">
 <p>
 The importer of a package will use the name to refer to its contents.
 so exported names in the package can use that fact
@@ -579,7 +696,23 @@ package is called <code>ring</code>, it's called just <code>New</code>,
 which clients of the package see as <code>ring.New</code>.
 Use the package structure to help you choose good names.
 </p>
+</div>
 
+<p>
+包的导入者可通过包名来引用其内容，因此包中的可导出名称可以此来避免冲突。
+（请勿使用 <code>import .</code> 记法，它可以简化必须在被测试包外运行的测试，
+除此之外应尽量避免使用。）例如，<code>bufio</code> 包中的缓存读取器类型叫做
+<code>Reader</code> 而非 <code>BufReader</code>，因为用户将它看做
+<code>bufio.Reader</code>，这是个清楚而简洁的名称。
+此外，由于被导入的项总是通过它们的包名来确定，因此 <code>bufio.Reader</code>
+不会与 <code>io.Reader</code> 发生冲突。同样，用于创建 <code>ring.Ring</code>
+的新实例的函数（这就是Go中的<strong>构造器</strong>）一般会称之为
+<code>NewRing</code>，但由于 <code>Ring</code> 是该包所导出的唯一类型，且该包也叫
+<code>ring</code>，因此它可以只叫做 <code>New</code>，它跟在包的后面，就像
+<code>ring.New</code>。使用包结构可以帮助你选择好的名称。
+</p>
+
+<div class="english">
 <p>
 Another short example is <code>once.Do</code>;
 <code>once.Do(setup)</code> reads well and would not be improved by
@@ -587,9 +720,21 @@ writing <code>once.DoOrWaitUntilDone(setup)</code>.
 Long names don't automatically make things more readable.
 A helpful doc comment can often be more valuable than an extra long name.
 </p>
+</div>
 
+<p>
+另一个简短的例子是 <code>once.Do</code>，<code>once.Do(setup)</code> 表述足够清晰，
+使用 <code>once.DoOrWaitUntilDone(setup)</code> 完全就是画蛇添足。
+长命名并不会使其更具可读性。一份有用的说明文档通常比额外的长名更有价值。
+</p>
+
+<div class="english">
 <h3 id="Getters">Getters</h3>
+</div>
 
+<h3 id="获取器">获取器</h3>
+
+<div class="english">
 <p>
 Go doesn't provide automatic support for getters and setters.
 There's nothing wrong with providing getters and setters yourself,
@@ -602,6 +747,21 @@ the field from the method.
 A setter function, if needed, will likely be called <code>SetOwner</code>.
 Both names read well in practice:
 </p>
+</div>
+
+<p>
+Go并不自动对获取器（getter）和设置器（setter）提供支持。
+There's nothing wrong with providing getters and setters yourself,
+and it's often appropriate to do so, but it's neither idiomatic nor necessary
+to put <code>Get</code> into the getter's name.  If you have a field called
+<code>owner</code> (lower case, unexported), the getter method should be
+called <code>Owner</code> (upper case, exported), not <code>GetOwner</code>.
+The use of upper-case names for export provides the hook to discriminate
+the field from the method.
+A setter function, if needed, will likely be called <code>SetOwner</code>.
+Both names read well in practice:
+</p>
+
 <pre>
 owner := obj.Owner()
 if owner != user {

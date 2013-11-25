@@ -424,7 +424,7 @@ have a doc comment.
 
 <p>
 在包中，任何放在顶级声明前面的注释都将作为该声明的<b>文档注释</b>。
-在程序中，每个已导出（首字母大写）的名称都应该有文档注释。
+在程序中，每个可导出（首字母大写）的名称都应该有文档注释。
 </p>
 
 <div class="english">
@@ -438,7 +438,7 @@ starts with the name being declared.
 
 <p>
 文档注释最好是完整的句子，这样它就能适用于各种自动化的展示。
-第一句应当以被声明的东西开头，并且为一句摘要。
+第一句应当以被声明的东西开头，并且是单句的摘要。
 </p>
 
 <div class="english">
@@ -575,8 +575,8 @@ determines just which package is being used.
 <p>
 之后，被导入的包就可以使用 <code>bytes.Buffer</code> 了。
 如果所有使用该包的人都以一个相同的名称来引用其内容，那会非常有益，
-这也就意味着包应该好好地命名：其名称应该简洁明了而易于理解。按照惯例，
-包应当以小写的单个单词来命名，且不应使用下划线或大小写混合。<code>err</code>
+这也就意味着包应该好好地命名：简洁、明确、而易于理解。按照惯例，
+包名应该是小写的单个单词，且不包含下划线或大小写混合。<code>err</code>
 的命名就是出于简短考虑的，因为任何使用你的包的人都会键入该名称。
 不必担心它会与<b>已有的东西</b>冲突。包名就是导入时所需的唯一默认名称，
 它并不需要在所有源码上都是唯一的，即便在少数发生冲突的情况下，
@@ -625,7 +625,7 @@ Use the package structure to help you choose good names.
 
 <p>
 包的导入者会使用该包的包名来引用其内容（<code>import .</code> 往往只用于测试或其它特殊情况，
-若非必要，应尽量避免使用），因此包中的已导出名称便可以此来避免冲突。例如，<code>bufio</code>
+若非必要，应尽量避免使用），因此包中的可导出名称便可以此来避免冲突。例如，<code>bufio</code>
 包中的缓存读取器类型叫做 <code>Reader</code> 而非 <code>BufReader</code>，因为用户看到的其实是
 <code>bufio.Reader</code>，这是个清楚而简洁的名称。此外，由于被导入的实体总是通过它们的包名来确定，
 因此 <code>bufio.Reader</code> 就不会与 <code>io.Reader</code> 发生冲突。同样，用于创建
@@ -679,7 +679,7 @@ Both names read well in practice:
 Go并不对获取器（getter）和设置器（setter）提供自动的支持。如果你要自己提供获取器和设置器，
 这并没有什么不对，而且往往是很恰当的。但要将 <code>Get</code> 放到获取器的名字中，
 既不符合习惯，也没有必要。如果你拥有一个称之为 <code>owner</code> （小写，未导出）的字段，
-那么该获取器的方法应称为 <code>Owner</code>（大写，已导出）而非 <code>GetOwner</code>。
+那么该获取器的方法应称为 <code>Owner</code>（大写，可导出）而非 <code>GetOwner</code>。
 使用大写字母名称来进行导出提供了一种挂钩，以将字段和方法区别开来。如果需要，
 一个设置器函数也应类似于 <code>SetOwner</code>。两种名称在实践中读起来都很好。
 </p>
