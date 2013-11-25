@@ -6,7 +6,7 @@
 
 package gobs1
 
-type T struct{ X, Y, Z int } // 只有已导出的字段才会被编码或解码。
+type T struct{ X, Y, Z int } // 只有可导出的字段才会被编码或解码。
 var t = T{X: 7, Y: 0, Z: 8}
 
 // STOP OMIT
