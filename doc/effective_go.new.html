@@ -1383,10 +1383,12 @@ func (file *File) Read(buf []byte) (n int, err error)
 	    std.Output(2, fmt.Sprintln(v...))  // Output takes parameters (int, string)
 	}
 </pre>
+
 <p>
 在这个嵌套调用中，我们将 <code>...</code> 写在 <code>v</code> 以调用 <code>Sprintln</code> 是为了
 告诉编译器将 <code>v</code> 视为一个参数列表，否则它会将 <code>v</code> 当做单一的切片参数。
 </p>
+
 <p>
 还有很多关于打印的知识点我们没有提到。详情请参阅 <code>godoc</code> 对 <code>fmt</code> 包的具体说明文档。
 </p>

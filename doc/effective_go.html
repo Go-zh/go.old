@@ -1766,7 +1766,7 @@ used as the returned values.
 
 <p>
 Go函数的返回值或结果“形参”可被命名，并作为常规变量使用，就像传入的形参一样。
-命名后，一旦该函数开始执行，它们就会被初始化为其类型相应的零值；
+命名后，一旦该函数开始执行，它们就会被初始化为与其类型相应的零值；
 若该函数执行了一条不带实参的 <code>return</code> 语句，则结果形参的当前值将被返回。
 </p>
 
@@ -1830,7 +1830,7 @@ canonical examples are unlocking a mutex or closing a file.
 <p>
 Go的 <code>defer</code> 语句用于预设一个函数调用（即<b>推迟执行</b>函数），
 该函数会在执行 <code>defer</code> 的函数返回之前立即执行。它显得非比寻常，
-但却是处理一些情况的有效方式，例如无论以何种路径返回，都必须释放资源的函数。
+但却是处理一些事情的有效方式，例如无论以何种路径返回，都必须释放资源的函数。
 典型的例子就是解锁互斥和关闭文件。
 </p>
 
@@ -1897,9 +1897,9 @@ which is much clearer than placing it at the end of the function.
 </div>
 
 <p>
-推迟诸如 <code>Close</code> 之类的函数调用有两点好处：其一，
+推迟诸如 <code>Close</code> 之类的函数调用有两点好处：第一，
 它能确保你不会忘记关闭文件。如果你以后又为该函数添加了新的返回路径时，
-这种情况往往就会发生。其二，它意味着“关闭”离“打开”很近，
+这种情况往往就会发生。第二，它意味着“关闭”离“打开”很近，
 这总比将它放在函数结尾处要清晰明了。
 </p>
 
@@ -2112,7 +2112,7 @@ The zero-value-is-useful property works transitively. Consider this type declara
 </div>
 
 <p>
-零值属性可以带来无穷的好处。考虑以下类型声明。
+“零值属性”可以带来各种好处。考虑以下类型声明。
 </p>
 
 <pre>
@@ -2131,7 +2131,7 @@ correctly without further arrangement.
 </div>
 
 <p>
-<code>SyncedBuffer</code> 类型的值也是在声明时就分配好内存然后就绪了。后续代码中，
+<code>SyncedBuffer</code> 类型的值也是在声明时就分配好内存就绪了。后续代码中，
 <code>p</code> 和 <code>v</code> 无需进一步处理即可正确工作。
 </p>
 
@@ -2140,12 +2140,23 @@ p := new(SyncedBuffer)  // type *SyncedBuffer
 var v SyncedBuffer      // type  SyncedBuffer
 </pre>
 
+<div class="english">
 <h3 id="composite_literals">Constructors and composite literals</h3>
+</div>
 
+<h3 id="复合字面">构造函数与复合字面</h3>
+
+<div class="english">
 <p>
 Sometimes the zero value isn't good enough and an initializing
 constructor is necessary, as in this example derived from
 package <code>os</code>.
+</p>
+</div>
+
+
+<p>
+有时零值还不够好，这时就需要一个初始化构造函数，如来自 <code>os</code> 包中的这段代码所示。
 </p>
 
 <pre>
@@ -2162,11 +2173,18 @@ func NewFile(fd int, name string) *File {
 }
 </pre>
 
+<div class="english">
 <p>
 There's a lot of boiler plate in there.  We can simplify it
 using a <i>composite literal</i>, which is
 an expression that creates a
 new instance each time it is evaluated.
+</p>
+</div>
+
+<p>
+这里显得代码过于冗长。我们可通过<b>复合字面</b>来简化它，
+该表达式在每次求值时都会创建新的实例。
 </p>
 
 <pre>
@@ -2179,6 +2197,7 @@ func NewFile(fd int, name string) *File {
 }
 </pre>
 
+<div class="english">
 <p>
 Note that, unlike in C, it's perfectly OK to return the address of a local variable;
 the storage associated with the variable survives after the function
@@ -2187,32 +2206,62 @@ In fact, taking the address of a composite literal
 allocates a fresh instance each time it is evaluated,
 so we can combine these last two lines.
 </p>
+</div>
+
+<p>
+请注意，返回一个局部变量的地址完全没有问题，这点与C不同。该局部变量对应的数据
+在函数返回后依然有效。实际上，每当获取一个复合字面的地址时，都将为一个新的实例分配内存，
+因此我们可以将上面的最后两行代码合并：
+</p>
 
 <pre>
     return &amp;File{fd, name, nil, 0}
 </pre>
 
+<div class="english">
 <p>
 The fields of a composite literal are laid out in order and must all be present.
 However, by labeling the elements explicitly as <i>field</i><code>:</code><i>value</i>
 pairs, the initializers can appear in any
 order, with the missing ones left as their respective zero values.  Thus we could say
 </p>
+</div>
+
+<p>
+复合字面的字段必须按顺序全部列出。但如果以 <b>字段</b><code>:</code><b>值</b>
+对的形式明确地标出元素，初始化字段时就可以按任何顺序出现，未给出的字段值将赋予零值。
+因此，我们可以用如下形式：
+</p>
 
 <pre>
     return &amp;File{fd: fd, name: name}
 </pre>
 
+<div class="english">
 <p>
 As a limiting case, if a composite literal contains no fields at all, it creates
 a zero value for the type.  The expressions <code>new(File)</code> and <code>&amp;File{}</code> are equivalent.
 </p>
+</div>
 
+<p>
+少数情况下，若复合字面不包括任何字段，它将创建该类型的零值。表达式
+<code>new(File)</code> 和 <code>&amp;File{}</code> 是等价的。
+</p>
+
+<div class="english">
 <p>
 Composite literals can also be created for arrays, slices, and maps,
 with the field labels being indices or map keys as appropriate.
 In these examples, the initializations work regardless of the values of <code>Enone</code>,
 <code>Eio</code>, and <code>Einval</code>, as long as they are distinct.
+</p>
+</div>
+
+<p>
+复合字面同样可用于创建数组、切片以及映射，字段标签是索引还是映射键则视情况而定。
+在下例初始化过程中，无论 <code>Enone</code>、<code>Eio</code> 和
+<code>Einval</code> 的值是什么，只要它们的标签不同就行。
 </p>
 
 <pre>
@@ -2221,8 +2270,13 @@ s := []string      {Enone: "no error", Eio: "Eio", Einval: "invalid argument"}
 m := map[int]string{Enone: "no error", Eio: "Eio", Einval: "invalid argument"}
 </pre>
 
+<div class="english">
 <h3 id="allocation_make">Allocation with <code>make</code></h3>
+</div>
 
+<h3 id="make分配"><code>make</code> 分配</h3>
+
+<div class="english">
 <p>
 Back to allocation.
 The built-in function <code>make(T, </code><i>args</i><code>)</code> serves
@@ -2241,11 +2295,23 @@ For slices, maps, and channels,
 the value for use.
 For instance,
 </p>
+</div>
+
+<p>
+再回到内存分配上来。内建函数 <code>make(T, <i></code>args<code></i>)</code>
+的目的不同于 <code>new(T)</code>。它只用于创建切片、映射和信道，并返回类型为
+<code>T</code>（而非 <code>*T</code>）的一个<b>已初始化</b> （而非<b>置零</b>）的值。
+出现这种用差异的原因在于，这三种类型本质上为引用数据类型，它们在使用前必须初始化。
+例如，切片是一个具有三项内容的描述符，包含一个指向（数组内部）数据的指针、长度以及容量，
+在这三项被初始化之前，该切片为 <code>nil</code>。对于切片、映射和信道，<code>make</code>
+用于初始化其内部的数据结构并准备好将要使用的值。例如，
+</p>
 
 <pre>
 make([]int, 10, 100)
 </pre>
 
+<div class="english">
 <p>
 allocates an array of 100 ints and then creates a slice
 structure with length 10 and a capacity of 100 pointing at the first
@@ -2255,12 +2321,27 @@ for more information.)
 In contrast, <code>new([]int)</code> returns a pointer to a newly allocated, zeroed slice
 structure, that is, a pointer to a <code>nil</code> slice value.
 </p>
+</div>
 
+<p>
+会分配一个具有100个 <code>int</code> 的数组空间，接着创建一个长度为10，
+容量为100并指向该数组中前10个元素的切片结构。（生成切片时，其容量可以省略，更多信息见切片一节。）
+与此相反，<code>new([]int)</code> 会返回一个指向新分配的，已置零的切片结构，
+即一个指向 <code>nil</code> 切片值的指针。
+</p>
+
+<div class="english">
 <p>
 These examples illustrate the difference between <code>new</code> and
 <code>make</code>.
 </p>
+</div>
 
+<p>
+下面的例子阐明了 <code>new</code> 和 <code>make</code> 之间的区别：
+</p>
+
+<div class="english">
 <pre>
 var p *[]int = new([]int)       // allocates slice structure; *p == nil; rarely useful
 var v  []int = make([]int, 100) // the slice v now refers to a new array of 100 ints
@@ -2272,23 +2353,55 @@ var p *[]int = new([]int)
 // Idiomatic:
 v := make([]int, 100)
 </pre>
+</div>
 
+<pre>
+var p *[]int = new([]int)       // 分配切片结构；*p == nil；基本没用
+var v  []int = make([]int, 100) // 切片 v 现在引用了一个具有 100 个 int 元素的新数组
+
+// 没必要的复杂：
+var p *[]int = new([]int)
+*p = make([]int, 100, 100)
+
+// 习惯用法：
+v := make([]int, 100)
+</pre>
+
+<div class="english">
 <p>
 Remember that <code>make</code> applies only to maps, slices and channels
 and does not return a pointer.
 To obtain an explicit pointer allocate with <code>new</code> or take the address
 of a variable explicitly.
 </p>
+</div>
 
+<p>
+请记住，<code>make</code> 只适用于映射、切片和信道且不返回指针。若要获得明确的指针，
+请使用 <code>new</code> 分配内存。
+</p>
+
+<div class="english">
 <h3 id="arrays">Arrays</h3>
+</div>
 
+<h3 id="数组">数组</h3>
+
+<div class="english">
 <p>
 Arrays are useful when planning the detailed layout of memory and sometimes
 can help avoid allocation, but primarily
 they are a building block for slices, the subject of the next section.
 To lay the foundation for that topic, here are a few words about arrays.
 </p>
+</div>
 
+<p>
+在详细规划内存布局时，数组是非常有用的，有时还能避免过多的内存分配，
+但它们主要用作切片的构件。这是下一节的主题了，不过要先说上几句来为它做铺垫。
+</p>
+
+<div class="english">
 <p>
 There are major differences between the ways arrays work in Go and C.
 In Go,
@@ -2305,12 +2418,34 @@ The size of an array is part of its type.  The types <code>[10]int</code>
 and <code>[20]int</code> are distinct.
 </li>
 </ul>
+</div>
 
+<p>
+以下为数组在Go和C中的主要区别。在Go中，
+</p>
+<ul>
+<li>
+数组是值。将一个数组赋予另一个数组会复制其所有元素。
+</li>
+<li>
+特别地，若将某个数组传入某个函数，它将接收到该数组的一份<b>副本</b>而非指针。
+<li>
+数组的大小是其类型的一部分。类型 <code>[10]int</code> 和 <code>[20]int</code> 是不同的。
+</li>
+</ul>
+
+<div class="english">
 <p>
 The value property can be useful but also expensive; if you want C-like behavior and efficiency,
 you can pass a pointer to the array.
 </p>
+</div>
 
+<p>
+数组为值的属性很有用，但代价高昂；若你想要C那样的行为和效率，你可以传递一个指向该数组的指针。
+</p>
+
+<div class="english">
 <pre>
 func Sum(a *[3]float64) (sum float64) {
     for _, v := range *a {
@@ -2322,20 +2457,52 @@ func Sum(a *[3]float64) (sum float64) {
 array := [...]float64{7.0, 8.5, 9.1}
 x := Sum(&amp;array)  // Note the explicit address-of operator
 </pre>
+</div>
 
+<pre>
+func Sum(a *[3]float64) (sum float64) {
+    for _, v := range *a {
+        sum += v
+    }
+    return
+}
+
+array := [...]float64{7.0, 8.5, 9.1}
+x := Sum(&amp;array)  // 注意显式的取址操作
+</pre>
+
+<div class="english">
 <p>
 But even this style isn't idiomatic Go.
 Use slices instead.
 </p>
+</div>
 
+<p>
+但这并不是Go的习惯用法，切片才是。
+</p>
+
+<div class="english">
 <h3 id="slices">Slices</h3>
+</div>
 
+<h3 id="切片">切片</h3>
+
+<div class="english">
 <p>
 Slices wrap arrays to give a more general, powerful, and convenient
 interface to sequences of data.  Except for items with explicit
 dimension such as transformation matrices, most array programming in
 Go is done with slices rather than simple arrays.
 </p>
+</div>
+
+<p>
+切片通过对数组进行封装，为数据序列提供了更通用、强大而方便的接口。
+除了矩阵变换这类需要明确维度的情况外，Go中的大部分数组编程都是通过切片来完成的。
+</p>
+
+<div class="english">
 <p>
 Slices hold references to an underlying array, and if you assign one
 slice to another, both refer to the same array.
@@ -2348,21 +2515,49 @@ limit of how much data to read.  Here is the signature of the
 <code>Read</code> method of the <code>File</code> type in package
 <code>os</code>:
 </p>
+</div>
+
+<p>
+切片保存了对底层数组的引用，若你将某个切片赋予另一个切片，它们会引用同一个数组。
+若某个函数将一个切片作为参数传入，则它对该切片元素的修改对调用者而言同样可见，
+这可以理解为传递了底层数组的指针。因此，<code>Read</code> 函数可接受一个切片实参
+而非一个指针和一个计数；切片的长度决定了可读取数据的上限。以下为 <code>os</code>
+包中 <code>File</code> 类型的 <code>Read</code> 方法签名:
+</p>
+
 <pre>
 func (file *File) Read(buf []byte) (n int, err error)
 </pre>
+
+<div class="english">
 <p>
 The method returns the number of bytes read and an error value, if
 any.  To read into the first 32 bytes of a larger buffer
 <code>b</code>, <i>slice</i> (here used as a verb) the buffer.
 </p>
+</div>
+
+<p>
+该方法返回读取的字节数和一个错误值（若有的话）。若要从更大的缓冲区 <code>b</code>
+中读取前32个字节，只需对其进行<b>切片</b>即可。
+</p>
+
 <pre>
     n, err := f.Read(buf[0:32])
 </pre>
+
+<div class="english">
 <p>
 Such slicing is common and efficient.  In fact, leaving efficiency aside for
 the moment, the following snippet would also read the first 32 bytes of the buffer.
 </p>
+</div>
+
+<p>
+这种切片的方法常用且高效。若不谈效率，以下片段同样能读取该缓冲区的前32个字节。
+</p>
+
+<div class="english">
 <pre>
     var n int
     var err error
@@ -2375,6 +2570,22 @@ the moment, the following snippet would also read the first 32 bytes of the buff
         n += nbytes
     }
 </pre>
+</div>
+
+<pre>
+    var n int
+    var err error
+    for i := 0; i &lt; 32; i++ {
+        nbytes, e := f.Read(buf[i:i+1])  // 读取一个字节
+        if nbytes == 0 || e != nil {
+            err = e
+            break
+        }
+        n += nbytes
+    }
+</pre>
+
+<div class="english">
 <p>
 The length of a slice may be changed as long as it still fits within
 the limits of the underlying array; just assign it to a slice of
@@ -2386,6 +2597,17 @@ resulting slice is returned.  The function uses the fact that
 <code>len</code> and <code>cap</code> are legal when applied to the
 <code>nil</code> slice, and return 0.
 </p>
+</div>
+
+<p>
+只要切片不超出底层数组的限制，它的长度就是可变的，只需将它赋予其自身的切片即可。
+切片的<b>容量</b>可通过内建函数 <code>cap</code> 获得，它将给出该切片可取得的最大长度。
+以下是将数据追加到切片的函数。若数据超出其容量，则会重新分配该切片。返回值即为所得的切片。
+该函数中所使用的 <code>len</code> 和 <code>cap</code> 在应用于 <code>nil</code>
+切片时是合法的，它会返回0.
+</p>
+
+<div class="english">
 <pre>
 func Append(slice, data[]byte) []byte {
     l := len(slice)
@@ -2403,37 +2625,97 @@ func Append(slice, data[]byte) []byte {
     return slice
 }
 </pre>
+</div>
+
+<pre>
+func Append(slice, data[]byte) []byte {
+    l := len(slice)
+    if l + len(data) &gt; cap(slice) {  // 重新分配
+        // 为了后面的增长，需分配两份。
+        newSlice := make([]byte, (l+len(data))*2)
+        // copy 函数是预声明的，且可用于任何切片类型。
+        copy(newSlice, slice)
+        slice = newSlice
+    }
+    slice = slice[0:l+len(data)]
+    for i, c := range data {
+        slice[l+i] = c
+    }
+    return slice
+}
+</pre>
+
+<div class="english">
 <p>
 We must return the slice afterwards because, although <code>Append</code>
 can modify the elements of <code>slice</code>, the slice itself (the run-time data
 structure holding the pointer, length, and capacity) is passed by value.
 </p>
+</div>
 
+<p>
+最终我们必须返回切片，因为尽管 <code>Append</code> 可修改 <code>slice</code>
+的元素，但切片自身（其运行时数据结构包含指针、长度和容量）是通过值传递的。
+</p>
+
+<div class="english">
 <p>
 The idea of appending to a slice is so useful it's captured by the
 <code>append</code> built-in function.  To understand that function's
 design, though, we need a little more information, so we'll return
 to it later.
 </p>
+</div>
 
+<p>
+
+向切片追加东西的想法非常有用，因此有专门的内建函数 <code>append</code>。
+要理解该函数的设计，我们还需要一些额外的信息，我们将稍后再介绍它。
+</p>
+
+<div class="english">
 <h3 id="two_dimensional_slices">Two-dimensional slices</h3>
+</div>
 
+<h3 id="二维切片">二维切片</h3>
+
+<div class="english">
 <p>
 Go's arrays and slices are one-dimensional.
 To create the equivalent of a 2D array or slice, it is necessary to define an array-of-arrays
 or slice-of-slices, like this:
 </p>
+</div>
 
+<p>
+Go的数组和切片都是一维的。要创建等价的二维数组或切片，就必须定义一个数组的数组，
+或切片的切片，就像这样：
+</p>
+
+<div class="english">
 <pre>
 type Transform [3][3]float64  // A 3x3 array, really an array of arrays.
 type LinesOfText [][]byte     // A slice of byte slices.
 </pre>
+</div>
 
+<pre>
+type Transform [3][3]float64  // 一个 3x3 的数组，其实是包含多个数组的一个数组。
+type LinesOfText [][]byte     // 包含多个字节切片的一个切片。
+</pre>
+
+<div class="english">
 <p>
 Because slices are variable-length, it is possible to have each inner
 slice be a different length.
 That can be a common situation, as in our <code>LinesOfText</code>
 example: each line has an independent length.
+</p>
+</div>
+
+<p>
+由于切片长度是可变的，因此其内部可能拥有多个不同长度的切片。在我们的
+<code>LinesOfText</code> 例子中，这是种常见的情况：每行都有其自己的长度。
 </p>
 
 <pre>
@@ -2444,6 +2726,7 @@ text := LinesOfText{
 }
 </pre>
 
+<div class="english">
 <p>
 Sometimes it's necessary to allocate a 2D slice, a situation that can arise when
 processing scan lines of pixels, for instance.
@@ -2457,7 +2740,17 @@ the object with a single allocation.
 For reference, here are sketches of the two methods.
 First, a line a time:
 </p>
+</div>
 
+<p>
+有时必须分配一个二维数组，例如在处理像素的扫描行时，这种情况就会发生。
+我们有两种方式来达到这个目的。一种就是独立地分配每一个切片；而另一种就是只分配一个数组，
+将各个切片都指向它。采用哪种方式取决于你的应用。若切片会增长或收缩，
+就应该通过独立分配来避免覆盖下一行；若不会，用单次分配来构造对象会更加高效。
+以下是这两种方法的大概代码，仅供参考。首先是一次一行的：
+</p>
+
+<div class="english">
 <pre>
 // Allocate the top-level slice.
 picture := make([][]uint8, YSize) // One row per unit of y.
@@ -2466,11 +2759,28 @@ for i := range picture {
 	picture[i] = make([]uint8, XSize)
 }
 </pre>
+</div>
 
+<pre>
+// 分配顶层切片。
+picture := make([][]uint8, YSize) // 每 y 个单元一行。
+// 遍历行，为每一行都分配切片
+for i := range picture {
+    picture[i] = make([]uint8, XSize)
+}
+</pre>
+
+<div class="english">
 <p>
 And now as one allocation, sliced into lines:
 </p>
+</div>
 
+<p>
+现在是一次分配，对行进行切片：
+</p>
+
+<div class="english">
 <pre>
 // Allocate the top-level slice, the same as before.
 picture := make([][]uint8, YSize) // One row per unit of y.
@@ -2478,12 +2788,29 @@ picture := make([][]uint8, YSize) // One row per unit of y.
 pixels := make([]uint8, XSize*YSize) // Has type []uint8 even though picture is [][]uint8.
 // Loop over the rows, slicing each row from the front of the remaining pixels slice.
 for i := range picture {
-	picture[i], pixels = pixels[:XSize], pixels[XSize:]
+    picture[i], pixels = pixels[:XSize], pixels[XSize:]
+}
+</pre>
+</div>
+
+<pre>
+// 分配顶层切片，和前面一样。
+picture := make([][]uint8, YSize) // 每 y 个单元一行。
+// 分配一个大的切片来保存所有像素
+pixels := make([]uint8, XSize*YSize) // 拥有类型 []uint8，尽管图片是 [][]uint8.
+// 遍历行，从剩余像素切片的前面切出每行来。
+for i := range picture {
+    picture[i], pixels = pixels[:XSize], pixels[XSize:]
 }
 </pre>
 
+<div class="english">
 <h3 id="maps">Maps</h3>
+</div>
 
+<h3 id="映射">映射</h3>
+
+<div class="english">
 <p>
 Maps are a convenient and powerful built-in data structure that associate
 values of one type (the <em>key</em>) with values of another type
@@ -2500,11 +2827,27 @@ If you pass a map to a function
 that changes the contents of the map, the changes will be visible
 in the caller.
 </p>
+</div>
+
+<p>
+映射是方便而强大的内建数据结构，它可以关联不同类型的值。其键可以是任何相等性操作符支持的类型，
+如整数、浮点数、复数、字符串、指针、接口（只要其动态类型支持相等性判断）、结构以及数组。
+切片不能用作映射键，因为它们的相等性还未定义。与切片一样，映射也是引用类型。
+若将映射传入函数中，并更改了该映射的内容，则此修改对调用者同样可见。
+</p>
+
+<div class="english">
 <p>
 Maps can be constructed using the usual composite literal syntax
 with colon-separated key-value pairs,
 so it's easy to build them during initialization.
 </p>
+</div>
+
+<p>
+映射可使用一般的复合字面语法进行构建，其键-值对使用逗号分隔，因此可在初始化时很容易地构建它们。
+</p>
+
 <pre>
 var timeZone = map[string]int{
     "UTC":  0*60*60,
@@ -2514,14 +2857,24 @@ var timeZone = map[string]int{
     "PST": -8*60*60,
 }
 </pre>
+
+<div class="english">
 <p>
 Assigning and fetching map values looks syntactically just like
 doing the same for arrays and slices except that the index doesn't
 need to be an integer.
 </p>
+</div>
+
+<p>
+赋值和获取映射值的语法类似于数组，不同的是映射的索引不必为整数。
+</p>
+
 <pre>
 offset := timeZone["EST"]
 </pre>
+
+<div class="english">
 <p>
 An attempt to fetch a map value with a key that
 is not present in the map will return the zero value for the type
@@ -2532,6 +2885,16 @@ A set can be implemented as a map with value type <code>bool</code>.
 Set the map entry to <code>true</code> to put the value in the set, and then
 test it by simple indexing.
 </p>
+</div>
+
+<p>
+若试图通过映射中不存在的键来取值，就会返回与该映射中项的类型对应的零值。
+例如，若某个映射包含整数，当查找一个不存在的键时会返回 <code>0</code>。
+集合可实现成一个值类型为 <code>bool</code> 的映射。将该映射中的项置为
+<code>true</code> 可将该值放入集合中，此后通过简单的索引操作即可判断是否存在。
+</p>
+
+<div class="english">
 <pre>
 attended := map[string]bool{
     "Ann": true,
@@ -2543,17 +2906,42 @@ if attended[person] { // will be false if person is not in the map
     fmt.Println(person, "was at the meeting")
 }
 </pre>
+</div>
+
+<pre>
+attended := map[string]bool{
+    "Ann": true,
+    "Joe": true,
+    ...
+}
+
+if attended[person] { // 若某人不在此映射中，则为 false
+    fmt.Println(person, "正在开会")
+}
+</pre>
+
+<div class="english">
 <p>
 Sometimes you need to distinguish a missing entry from
 a zero value.  Is there an entry for <code>"UTC"</code>
 or is that the empty string because it's not in the map at all?
 You can discriminate with a form of multiple assignment.
 </p>
+</div>
+
+
+<p>
+有时你需要区分某项是不存在还是其值为零值。如对于一个值本应为零的 <code>"UTC"</code>
+条目，也可能是由于不存在该项而得到零值。你可以使用多重赋值的形式来分辨这种情况。
+</p>
+
 <pre>
 var seconds int
 var ok bool
 seconds, ok = timeZone[tz]
 </pre>
+
+<div class="english">
 <p>
 For obvious reasons this is called the &ldquo;comma ok&rdquo; idiom.
 In this example, if <code>tz</code> is present, <code>seconds</code>
@@ -2562,6 +2950,14 @@ will be set appropriately and <code>ok</code> will be true; if not,
 be false.
 Here's a function that puts it together with a nice error report:
 </p>
+</div>
+
+<p>
+显然，我们可称之为“逗号 ok”惯用法。在下面的例子中，若 <code>tz</code> 存在，
+<code>seconds</code> 就会被赋予适当的值，且 <code>ok</code> 会被置为 <code>true</code>；
+若不存在，<code>seconds</code> 则会被置为零，而 <code>ok</code> 会被置为 <code>false</code>。
+</p>
+
 <pre>
 func offset(tz string) int {
     if seconds, ok := timeZone[tz]; ok {
@@ -2571,26 +2967,55 @@ func offset(tz string) int {
     return 0
 }
 </pre>
+
+<div class="english">
 <p>
 To test for presence in the map without worrying about the actual value,
 you can use the <a href="#blank">blank identifier</a> (<code>_</code>)
 in place of the usual variable for the value.
 </p>
+</div>
+
+<p>
+若仅需判断映射中是否存在某项而不关心实际的值，可使用<a href="#空白">空白标识符</a>
+（<code>_</code>）来代替该值的一般变量。
+</p>
+
 <pre>
 _, present := timeZone[tz]
 </pre>
+
+<div class="english">
 <p>
 To delete a map entry, use the <code>delete</code>
 built-in function, whose arguments are the map and the key to be deleted.
 It's safe to do this even if the key is already absent
 from the map.
 </p>
+</div>
+
+<p>
+要删除映射中的某项，可使用内建函数 <code>delete</code>，它以映射及要被删除的键为实参。
+即便对应的键不在该映射中，此操作也是安全的。
+</p>
+
+<div class="english">
 <pre>
 delete(timeZone, "PDT")  // Now on Standard Time
 </pre>
+</div>
 
+<pre>
+delete(timeZone, "PDT")  // 现在用标准时间
+</pre>
+
+<div class="english">
 <h3 id="printing">Printing</h3>
+</div>
 
+<h3 id="打印">打印</h3>
+
+<div class="english">
 <p>
 Formatted printing in Go uses a style similar to C's <code>printf</code>
 family but is richer and more general. The functions live in the <code>fmt</code>
@@ -2598,6 +3023,16 @@ package and have capitalized names: <code>fmt.Printf</code>, <code>fmt.Fprintf</
 <code>fmt.Sprintf</code> and so on.  The string functions (<code>Sprintf</code> etc.)
 return a string rather than filling in a provided buffer.
 </p>
+</div>
+
+<p>
+Go采用的格式化打印风格和C的 <code>printf</code> 族类似，但却更加丰富而通用。
+这些函数位于 <code>fmt</code> 包中，且函数名首字母均为大写：如
+<code>fmt.Printf</code>、<code>fmt.Fprintf</code>，<code>fmt.Sprintf</code> 等。
+字符串函数（<code>Sprintf</code> 等）会返回一个字符串，而非填充给定的缓冲区。
+</p>
+
+<div class="english">
 <p>
 You don't need to provide a format string.  For each of <code>Printf</code>,
 <code>Fprintf</code> and <code>Sprintf</code> there is another pair
@@ -2608,33 +3043,71 @@ between arguments and append a newline to the output while
 the <code>Print</code> versions add blanks only if the operand on neither side is a string.
 In this example each line produces the same output.
 </p>
+</div>
+
+<p>
+你无需提供一个格式字符串。每个 <code>Printf</code>、<code>Fprintf</code> 和
+<code>Sprintf</code> 都分别对应另外的函数，如 <code>Print</code> 与 <code>Println</code>。
+这些函数并不接受格式字符串，而是为每个实参生成一种默认格式。<code>Println</code>
+系列的函数还会在实参中插入空格，并在输出时追加一个换行符，而 <code>Print</code>
+版本仅在操作数两侧都没有字符串时才添加空白。以下示例中各行产生的输出都是一样的。
+</p>
+
 <pre>
 fmt.Printf("Hello %d\n", 23)
 fmt.Fprint(os.Stdout, "Hello ", 23, "\n")
 fmt.Println("Hello", 23)
 fmt.Println(fmt.Sprint("Hello ", 23))
 </pre>
+
+<div class="english">
 <p>
 The formatted print functions <code>fmt.Fprint</code>
 and friends take as a first argument any object
 that implements the <code>io.Writer</code> interface; the variables <code>os.Stdout</code>
 and <code>os.Stderr</code> are familiar instances.
 </p>
+</div>
+
+<p>
+<code>fmt.Fprint</code> 一类的格式化打印函数可接受任何实现了 <code>io.Writer</code>
+接口的对象作为第一个实参；变量<code>os.Stdout</code> 与 <code>os.Stderr</code>
+都是人们熟知的例子。
+</p>
+
+<div class="english">
 <p>
 Here things start to diverge from C.  First, the numeric formats such as <code>%d</code>
 do not take flags for signedness or size; instead, the printing routines use the
 type of the argument to decide these properties.
 </p>
+</div>
+
+<p>
+从这里开始，就与C有些不同了。首先，像 <code>%d</code> 这样的数值格式并不接受表示符号或大小的标记，
+打印例程会根据实参的类型来决定这些属性。
+</p>
+
 <pre>
 var x uint64 = 1&lt;&lt;64 - 1
 fmt.Printf("%d %x; %d %x\n", x, x, int64(x), int64(x))
 </pre>
+
+<div class="english">
 <p>
 prints
 </p>
+</div>
+
+<p>
+将打印
+</p>
+
 <pre>
 18446744073709551615 ffffffffffffffff; -1 -1
 </pre>
+
+<div class="english">
 <p>
 If you just want the default conversion, such as decimal for integers, you can use
 the catchall format <code>%v</code> (for &ldquo;value&rdquo;); the result is exactly
@@ -2642,6 +3115,16 @@ what <code>Print</code> and <code>Println</code> would produce.
 Moreover, that format can print <em>any</em> value, even arrays, slices, structs, and
 maps.  Here is a print statement for the time zone map defined in the previous section.
 </p>
+</div>
+
+<p>
+若你只想要默认的转换，如使用十进制的整数，你可以使用通用的格式
+<code>%v</code>（对应“值”）；其结果与 <code>Print</code> 和 <code>Println</code>
+的输出完全相同。此外，这种格式还能打印<b>任意</b>值，甚至包括数组、结构体和映射。
+以下是打印上一节中定义的时区映射的语句。
+</p>
+
+<div class="english">
 <pre>
 fmt.Printf("%v\n", timeZone)  // or just fmt.Println(timeZone)
 </pre>
@@ -2651,12 +3134,32 @@ which gives output
 <pre>
 map[CST:-21600 PST:-28800 EST:-18000 UTC:0 MST:-25200]
 </pre>
+</div>
+
+<pre>
+fmt.Printf("%v\n", timeZone)  // 或只用 fmt.Println(timeZone)
+</pre>
+<p>
+这会输出
+</p>
+<pre>
+map[CST:-21600 PST:-28800 EST:-18000 UTC:0 MST:-25200]
+</pre>
+
+<div class="english">
 <p>
 For maps the keys may be output in any order, of course.
 When printing a struct, the modified format <code>%+v</code> annotates the
 fields of the structure with their names, and for any value the alternate
 format <code>%#v</code> prints the value in full Go syntax.
 </p>
+</div>
+
+<p>
+当然，映射中的键可能按任意顺序输出。当打印结构体时，改进的格式 <code>%+v</code>
+会为结构体的每个字段添上字段名，而另一种格式 <code>%#v</code> 将完全按照Go的语法打印值。
+</p>
+
 <pre>
 type T struct {
     a int
@@ -2669,15 +3172,25 @@ fmt.Printf("%+v\n", t)
 fmt.Printf("%#v\n", t)
 fmt.Printf("%#v\n", timeZone)
 </pre>
+
+<div class="english">
 <p>
 prints
 </p>
+</div>
+
+<p>
+将打印
+</p>
+
 <pre>
 &amp;{7 -2.35 abc   def}
 &amp;{a:7 b:-2.35 c:abc     def}
 &amp;main.T{a:7, b:-2.35, c:"abc\tdef"}
 map[string] int{"CST":-21600, "PST":-28800, "EST":-18000, "UTC":0, "MST":-25200}
 </pre>
+
+<div class="english">
 <p>
 (Note the ampersands.)
 That quoted string format is also available through <code>%q</code> when
@@ -2689,42 +3202,94 @@ Also, <code>%x</code> works on strings, byte arrays and byte slices as well as
 on integers, generating a long hexadecimal string, and with
 a space in the format (<code>%&nbsp;x</code>) it puts spaces between the bytes.
 </p>
+</div>
+
+<p>
+（请注意其中的&amp;符号）当遇到 <code>string</code> 或 <code>[]byte</code> 值时，
+可使用 <code>%q</code> 产生带引号的字符串；而格式 <code>%#q</code> 会尽可能使用反引号。
+（<code>%q</code> 格式也可用于整数和符文，它会产生一个带单引号的符文常量。）
+此外，<code>%x</code> 还可用于字符串、字节数组以及整数，并生成一个很长的十六进制字符串，
+而带空格的格式（<code>%&nbsp;x</code>）还会在字节之间插入空格。
+</p>
+
+<div class="english">
 <p>
 Another handy format is <code>%T</code>, which prints the <em>type</em> of a value.
 </p>
+</div>
+
+<p>
+另一种实用的格式是 <code>%T</code>，它会打印某个值的<b>类型</b>.
+</p>
+
 <pre>
 fmt.Printf(&quot;%T\n&quot;, timeZone)
 </pre>
+
+<div class="english">
 <p>
 prints
 </p>
+</div>
+
+<p>
+会打印
+</p>
+
 <pre>
 map[string] int
 </pre>
+
+<div class="english">
 <p>
 If you want to control the default format for a custom type, all that's required is to define
 a method with the signature <code>String() string</code> on the type.
 For our simple type <code>T</code>, that might look like this.
 </p>
+</div>
+
+<p>
+若你想控制自定义类型的默认格式，只需为该类型定义一个具有 <code>String() string</code>
+签名的方法。对于我们简单的类型 <code>T</code>，可进行如下操作。
+</p>
+
 <pre>
 func (t *T) String() string {
     return fmt.Sprintf("%d/%g/%q", t.a, t.b, t.c)
 }
 fmt.Printf("%v\n", t)
 </pre>
+
+<div class="english">
 <p>
 to print in the format
 </p>
+</div>
+
+<p>
+会打印出如下格式：
+</p>
+
 <pre>
 7/-2.35/"abc\tdef"
 </pre>
+
+<div class="english">
 <p>
 (If you need to print <em>values</em> of type <code>T</code> as well as pointers to <code>T</code>,
 the receiver for <code>String</code> must be of value type; this example used a pointer because
 that's more efficient and idiomatic for struct types.
 See the section below on <a href="#pointers_vs_values">pointers vs. value receivers</a> for more information.)
 </p>
+</div>
 
+<p>
+（如果你需要像指向 <code>T</code> 的指针那样打印类型 <code>T</code> 的<b>值</b>，
+<code>String</code> 的接收者就必须是值类型的；上面的例子中接收者是一个指针，
+因为这对结构来说更高效而通用。更多详情见<a href="#指针vs值">指针vs.值接收者</a>一节.）
+</p>
+
+<div class="english">
 <p>
 Our <code>String</code> method is able to call <code>Sprintf</code> because the
 print routines are fully reentrant and can be wrapped this way.
@@ -2736,7 +3301,16 @@ call attempts to print the receiver directly as a string, which in
 turn will invoke the method again.  It's a common and easy mistake
 to make, as this example shows.
 </p>
+</div>
 
+<p>
+我们的 <code>String</code> 方法也可调用 <code>Sprintf</code>，
+因为打印例程可以完全重入并按这种方式封装。不过要理解这种方式，还有一个重要的细节：
+请勿通过调用 <code>Sprintf</code> 来构造 <code>String</code>
+方法，因为它会无限递归你的的 <code>String</code> 方法。
+</p>
+
+<div class="english">
 <pre>
 type MyString string
 
@@ -2744,32 +3318,73 @@ func (m MyString) String() string {
     return fmt.Sprintf("MyString=%s", m) // Error: will recur forever.
 }
 </pre>
+</div>
 
+<pre>
+type MyString string
+
+func (m MyString) String() string {
+    return fmt.Sprintf("MyString=%s", m) // 错误：会无限递归
+}
+</pre>
+
+<div class="english">
 <p>
 It's also easy to fix: convert the argument to the basic string type, which does not have the
 method.
 </p>
+</div>
 
+<p>
+要解决这个问题也很简单：将该实参转换为基本的字符串类型，它没有这个方法。
+</p>
+
+<div class="english">
 <pre>
 type MyString string
 func (m MyString) String() string {
     return fmt.Sprintf("MyString=%s", string(m)) // OK: note conversion.
 }
 </pre>
+</div>
 
+<pre>
+type MyString string
+func (m MyString) String() string {
+    return fmt.Sprintf("MyString=%s", string(m)) // 可以：注意转换
+}
+</pre>
+
+<div class="english">
 <p>
 In the <a href="#initialization">initialization section</a> we'll see another technique that avoids this recursion.
 </p>
+</div>
 
+<p>
+在<a href="#初始化">初始化</a>一节中，我们将看到避免这种递归的另一种技术。
+</p>
+
+<div class="english">
 <p>
 Another printing technique is to pass a print routine's arguments directly to another such routine.
 The signature of <code>Printf</code> uses the type <code>...interface{}</code>
 for its final argument to specify that an arbitrary number of parameters (of arbitrary type)
 can appear after the format.
 </p>
+</div>
+
+<p>
+另一种打印技术就是将打印例程的实参直接传入另一个这样的例程。<code>Printf</code>
+的签名为其最后的实参使用了 <code>...interface{}</code>
+类型，这样格式的后面就能出现任意数量，任意类型的形参了。
+</p>
+
 <pre>
 func Printf(format string, v ...interface{}) (n int, err error) {
 </pre>
+
+<div class="english">
 <p>
 Within the function <code>Printf</code>, <code>v</code> acts like a variable of type
 <code>[]interface{}</code> but if it is passed to another variadic function, it acts like
@@ -2778,25 +3393,69 @@ Here is the implementation of the
 function <code>log.Println</code> we used above. It passes its arguments directly to
 <code>fmt.Sprintln</code> for the actual formatting.
 </p>
+</div>
+
+<p>
+在 <code>Printf</code> 函数中，<code>v</code> 看起来更像是 <code>[]interface{}</code>
+类型的变量，但如果将它传递到另一个变参函数中，它就像是常规实参列表了。
+以下是我们之前用过的 <code>log.Println</code> 的实现。它直接将其实参传递给
+<code>fmt.Sprintln</code> 进行实际的格式化。
+</p>
+
+<div class="english">
 <pre>
 // Println prints to the standard logger in the manner of fmt.Println.
 func Println(v ...interface{}) {
     std.Output(2, fmt.Sprintln(v...))  // Output takes parameters (int, string)
 }
 </pre>
+</div>
+
+<pre>
+// Println 通过 fmt.Println 的方式将日志打印到标准记录器。
+func Println(v ...interface{}) {
+    std.Output(2, fmt.Sprintln(v...))  // Output 接受形参 (int, string)
+}
+</pre>
+
+<div class="english">
 <p>
 We write <code>...</code> after <code>v</code> in the nested call to <code>Sprintln</code> to tell the
 compiler to treat <code>v</code> as a list of arguments; otherwise it would just pass
 <code>v</code> as a single slice argument.
 </p>
+</div>
+
+<p>
+在该 <code>Sprintln</code> 嵌套调用中，我们将 <code>...</code> 写在 <code>v</code>
+之后来告诉编译器将 <code>v</code> 视作一个实参列表，否则它会将 <code>v</code>
+当做单一的切片实参来传递。
+</p>
+
+<div class="english">
 <p>
 There's even more to printing than we've covered here.  See the <code>godoc</code> documentation
 for package <code>fmt</code> for the details.
 </p>
+</div>
+
+<p>
+还有很多关于打印知识点没有提及。详情请参阅 <code>godoc</code> 对 <code>fmt</code> 包的说明文档。
+</p>
+
+<div class="english">
 <p>
 By the way, a <code>...</code> parameter can be of a specific type, for instance <code>...int</code>
 for a min function that chooses the least of a list of integers:
 </p>
+</div>
+
+<p>
+顺便一提，<code>...</code> 形参可指定具体的类型，例如从整数列表中选出最小值的函数
+<code>min</code>，其形参可为 <code>...int</code> 类型。
+</p>
+
+<div class="english">
 <pre>
 func Min(a ...int) int {
     min := int(^uint(0) >> 1)  // largest int
@@ -2808,17 +3467,51 @@ func Min(a ...int) int {
     return min
 }
 </pre>
+</div>
 
+<pre>
+func Min(a ...int) int {
+    min := int(^uint(0) >> 1)  // 最大的 int
+    for _, i := range a {
+        if i &lt; min {
+            min = i
+        }
+    }
+    return min
+}
+</pre>
+
+<div class="english">
 <h3 id="append">Append</h3>
+</div>
+
+<h3 id="追加">追加</h3>
+
+<div class="english">
 <p>
 Now we have the missing piece we needed to explain the design of
 the <code>append</code> built-in function.  The signature of <code>append</code>
 is different from our custom <code>Append</code> function above.
 Schematically, it's like this:
 </p>
+</div>
+
+<p>
+现在我们要对内建函数 <code>append</code> 的设计进行补充说明。<code>append</code>
+函数的签名不同于前面我们自定义的 <code>Append</code> 函数。大致来说，它就像这样：
+</p>
+
+<div class="english">
 <pre>
 func append(slice []<i>T</i>, elements ...<i>T</i>) []<i>T</i>
 </pre>
+</div>
+
+<pre>
+func append(slice []<i>T</i>, 元素 ...<i>T</i>) []<i>T</i>
+</pre>
+
+<div class="english">
 <p>
 where <i>T</i> is a placeholder for any given type.  You can't
 actually write a function in Go where the type <code>T</code>
@@ -2826,41 +3519,86 @@ is determined by the caller.
 That's why <code>append</code> is built in: it needs support from the
 compiler.
 </p>
+</div>
+
+其中的 <i>T</i> 为任意给定类型的占位符。实际上，你无法在Go中编写一个类型
+<code>T</code> 由调用者决定的函数。这也就是为何 <code>append</code>
+为内建函数的原因：它需要编译器的支持。
+
+<div class="english">
 <p>
 What <code>append</code> does is append the elements to the end of
 the slice and return the result.  The result needs to be returned
 because, as with our hand-written <code>Append</code>, the underlying
 array may change.  This simple example
 </p>
+</div>
+
+<p>
+<code>append</code> 会在切片末尾追加元素并返回结果。我们必须返回结果，
+原因与我们手写的 <code>Append</code> 一样，即底层数组可能会被改变。以下简单的例子
+</p>
+
 <pre>
 x := []int{1,2,3}
 x = append(x, 4, 5, 6)
 fmt.Println(x)
 </pre>
+
+<div class="english">
 <p>
 prints <code>[1 2 3 4 5 6]</code>.  So <code>append</code> works a
 little like <code>Printf</code>, collecting an arbitrary number of
 arguments.
 </p>
+</div>
+
+<p>
+将打印 <code>[1 2 3 4 5 6]</code>。因此 <code>append</code> 有点像 <code>Printf</code>
+那样，可接受任意数量的实参。
+</p>
+
+<div class="english">
 <p>
 But what if we wanted to do what our <code>Append</code> does and
 append a slice to a slice?  Easy: use <code>...</code> at the call
 site, just as we did in the call to <code>Output</code> above.  This
 snippet produces identical output to the one above.
 </p>
+</div>
+
+<p>
+但如果我们要像 <code>Append</code> 那样将一个切片追加到另一个切片中呢？
+很简单：在调用的地方使用 <code>...</code>，就像我们在上面调用 <code>Output</code>
+那样。以下代码片段的输出与上一个相同。
+</p>
+
 <pre>
 x := []int{1,2,3}
 y := []int{4,5,6}
 x = append(x, y...)
 fmt.Println(x)
 </pre>
+
+<div class="english">
 <p>
 Without that <code>...</code>, it wouldn't compile because the types
 would be wrong; <code>y</code> is not of type <code>int</code>.
 </p>
+</div>
 
+<p>
+如果没有 <code>...</code>，它就会由于类型错误而无法编译，因为 <code>y</code>
+不是 <code>int</code> 类型的。
+</p>
+
+<div class="english">
 <h2 id="initialization">Initialization</h2>
+</div>
 
+<h2 id="初始化">初始化</h2>
+
+<div class="english">
 <p>
 Although it doesn't look superficially very different from
 initialization in C or C++, initialization in Go is more powerful.
@@ -2868,9 +3606,21 @@ Complex structures can be built during initialization and the ordering
 issues among initialized objects, even among different packages, are handled
 correctly.
 </p>
+</div>
 
+<p>
+<p>
+尽管从表面上看，Go的初始化过程与C或C++并不算太大，但它确实更为强大。
+在初始化过程中，不仅可以构建复杂的结构，还能正确处理不同包对象间的初始化顺序。
+</p>
+
+<div class="english">
 <h3 id="constants">Constants</h3>
+</div>
 
+<h3 id="常量">常量</h3>
+
+<div class="english">
 <p>
 Constants in Go are just that&mdash;constant.
 They are created at compile time, even when defined as
@@ -2884,14 +3634,33 @@ evaluatable by the compiler.  For instance,
 the function call to <code>math.Sin</code> needs
 to happen at run time.
 </p>
+</div>
 
+<p>
+Go中的常量就是不变量。它们在编译时创建，即便它们可能是函数中定义的局部变量。
+常量只能是数字、字符（符文）、字符串或布尔值。由于编译时的限制，
+定义它们的表达式必须也是可被编译器求值的常量表达式。例如 <code>1&lt;&lt;3</code>
+就是一个常量表达式，而 <code>math.Sin(math.Pi/4)</code>
+则不是，因为对 <code>math.Sin</code> 的函数调用在运行时才会发生。
+</p>
+
+<div class="english">
 <p>
 In Go, enumerated constants are created using the <code>iota</code>
 enumerator.  Since <code>iota</code> can be part of an expression and
 expressions can be implicitly repeated, it is easy to build intricate
 sets of values.
 </p>
+</div>
+
+<p>
+在Go中，枚举常量使用枚举器 <code>iota</code> 创建。由于 <code>iota</code>
+可为表达式的一部分，而表达式可以被隐式地重复，这样也就更容易构建复杂的值的集合了。
+</p>
+
 {{code "/doc/progs/eff_bytesize.go" `/^type ByteSize/` `/^\)/`}}
+
+<div class="english">
 <p>
 The ability to attach a method such as <code>String</code> to any
 user-defined type makes it possible for arbitrary values to format themselves
@@ -2899,12 +3668,30 @@ automatically for printing.
 Although you'll see it most often applied to structs, this technique is also useful for
 scalar types such as floating-point types like <code>ByteSize</code>.
 </p>
+</div>
+
+<p>
+由于可将 <code>String</code> 之类的方法附加在用户定义的类型上，
+因此它就为打印时自动格式化任意值提供了可能性，即便是作为一个通用类型的一部分。
+尽管你常常会看到这种技术应用于结构体，但它对于像 <code>ByteSize</code>
+之类的浮点数标量等类型也是有用的。
+</p>
+
 {{code "/doc/progs/eff_bytesize.go" `/^func.*ByteSize.*String/` `/^}/`}}
+
+<div class="english">
 <p>
 The expression <code>YB</code> prints as <code>1.00YB</code>,
 while <code>ByteSize(1e13)</code> prints as <code>9.09TB</code>.
 </p>
+</div>
 
+<p>
+表达式 <code>YB</code> 会打印出 <code>1.00YB</code>，而
+<code>ByteSize(1e13)</code> 则会打印出 <code>9.09</code>。
+</p>
+
+<div class="english">
 <p>
 The use here of <code>Sprintf</code>
 to implement <code>ByteSize</code>'s <code>String</code> method is safe
@@ -2914,13 +3701,33 @@ which is not a string format: <code>Sprintf</code> will only call
 the <code>String</code> method when it wants a string, and <code>%f</code>
 wants a floating-point value.
 </p>
+</div>
 
+<p>
+在这里用 <code>Sprintf</code> 实现 <code>ByteSize</code> 的 <code>String</code>
+方法很安全（不会无限递归），这倒不是因为类型转换，而是它以 <code>%f</code>
+调用了 <code>Sprintf</code>，它并不是一种字符串格式：<code>Sprintf</code>
+只会在它需要字符串时才调用 <code>String</code> 方法，而 <code>%f</code>
+需要一个浮点数值。
+</p>
+
+<div class="english">
 <h3 id="variables">Variables</h3>
+</div>
 
+<h3 id="变量">变量</h3>
+
+<div class="english">
 <p>
 Variables can be initialized just like constants but the
 initializer can be a general expression computed at run time.
 </p>
+</div>
+
+<p>
+变量的初始化与常量类似，但其初始值也可以是在运行时才被计算的一般表达式。
+</p>
+
 <pre>
 var (
     home   = os.Getenv("HOME")
@@ -2929,8 +3736,13 @@ var (
 )
 </pre>
 
+<div class="english">
 <h3 id="init">The init function</h3>
+</div>
 
+<h3 id="init函数"><code>init</code> 函数</h3>
+
+<div class="english">
 <p>
 Finally, each source file can define its own niladic <code>init</code> function to
 set up whatever state is required.  (Actually each file can have multiple
@@ -2940,12 +3752,29 @@ variable declarations in the package have evaluated their initializers,
 and those are evaluated only after all the imported packages have been
 initialized.
 </p>
+</div>
+
+<p>
+最后，每个源文件都可以通过定义自己的无参数 <code>init</code> 函数来设置一些必要的状态。
+（其实每个文件都可以拥有多个 <code>init</code> 函数。）而它的结束就意味着初始化结束：
+只有该包中的所有变量声明都通过它们的初始化器求值后 <code>init</code> 才会被调用，
+而那些 <code>init</code> 只有在所有已导入的包都被初始化后才会被求值。
+</p>
+
+<div class="english">
 <p>
 Besides initializations that cannot be expressed as declarations,
 a common use of <code>init</code> functions is to verify or repair
 correctness of the program state before real execution begins.
 </p>
+</div>
 
+<p>
+除了那些不能被表示成声明的初始化外，<code>init</code>
+函数还常被用在程序真正开始执行前，检验或校正程序的状态。
+</p>
+
+<div class="english">
 <pre>
 func init() {
     if user == "" {
@@ -2961,21 +3790,65 @@ func init() {
     flag.StringVar(&amp;gopath, "gopath", gopath, "override default GOPATH")
 }
 </pre>
+</div>
 
+<pre>
+func init() {
+    if user == "" {
+        log.Fatal("$USER not set")
+    }
+    if home == "" {
+        home = "/home/" + user
+    }
+    if gopath == "" {
+        gopath = home + "/go"
+    }
+    // gopath 可通过命令行中的 --gopath 标记覆盖掉。
+    flag.StringVar(&amp;gopath, "gopath", gopath, "override default GOPATH")
+}
+</pre>
+
+<div class="english">
 <h2 id="methods">Methods</h2>
+</div>
 
+<h2 id="方法">方法</h2>
+
+<div class="english">
 <h3 id="pointers_vs_values">Pointers vs. Values</h3>
+</div>
+
+<h3 id="指针vs值">指针 vs. 值</h3>
+
+<div class="english">
 <p>
 As we saw with <code>ByteSize</code>,
 methods can be defined for any named type (except a pointer or an interface);
 the receiver does not have to be a struct.
 </p>
+</div>
+
+<p>
+正如 <code>ByteSize</code> 那样，我们可以为任何已命名的类型（除了指针或接口）定义方法；
+接收者可不必为结构体。
+</p>
+
+<div class="english">
 <p>
 In the discussion of slices above, we wrote an <code>Append</code>
 function.  We can define it as a method on slices instead.  To do
 this, we first declare a named type to which we can bind the method, and
 then make the receiver for the method a value of that type.
 </p>
+</div>
+
+<p>
+在之前讨论切片时，我们编写了一个 <code>Append</code> 函数。
+我们也可将其定义为切片的方法。为此，我们首先要声明一个已命名的类型来绑定该方法，
+然后使该方法的接收者成为该类型的值。
+</p>
+
+<div class="english">
 <pre>
 type ByteSlice []byte
 
@@ -2983,12 +3856,32 @@ func (slice ByteSlice) Append(data []byte) []byte {
     // Body exactly the same as above
 }
 </pre>
+</div>
+
+<pre>
+type ByteSlice []byte
+
+func (slice ByteSlice) Append(data []byte) []byte {
+    // 主体和前面相同。
+}
+</pre>
+
+<div class="english">
 <p>
 This still requires the method to return the updated slice.  We can
 eliminate that clumsiness by redefining the method to take a
 <i>pointer</i> to a <code>ByteSlice</code> as its receiver, so the
 method can overwrite the caller's slice.
 </p>
+</div>
+
+<p>
+我们仍然需要该方法返回更新后的切片。为了消除这种不便，我们可通过重新定义该方法，
+将一个指向 <code>ByteSlice</code> 的<b>指针</b>作为该方法的接收者，
+这样该方法就能重写调用者提供的切片了。
+</p>
+
+<div class="english">
 <pre>
 func (p *ByteSlice) Append(data []byte) {
     slice := *p
@@ -2996,10 +3889,28 @@ func (p *ByteSlice) Append(data []byte) {
     *p = slice
 }
 </pre>
+</div>
+
+<pre>
+func (p *ByteSlice) Append(data []byte) {
+    slice := *p
+    // 主体和前面相同，但没有 return。
+    *p = slice
+}
+</pre>
+
+<div class="english">
 <p>
 In fact, we can do even better.  If we modify our function so it looks
 like a standard <code>Write</code> method, like this,
 </p>
+</div>
+
+<p>
+其实我们做得更好。若我们将函数修改为与标准 <code>Write</code> 类似的方法，就像这样，
+</p>
+
+<div class="english">
 <pre>
 func (p *ByteSlice) Write(data []byte) (n int, err error) {
     slice := *p
@@ -3008,15 +3919,36 @@ func (p *ByteSlice) Write(data []byte) (n int, err error) {
     return len(data), nil
 }
 </pre>
+</div>
+
+<pre>
+func (p *ByteSlice) Write(data []byte) (n int, err error) {
+    slice := *p
+    // 依旧和前面相同。
+    *p = slice
+    return len(data), nil
+}
+</pre>
+
+<div class="english">
 <p>
 then the type <code>*ByteSlice</code> satisfies the standard interface
 <code>io.Writer</code>, which is handy.  For instance, we can
 print into one.
 </p>
+</div>
+
+<p>
+那么类型 <code>*ByteSlice</code> 就满足了标准的 <code>io.Writer</code> 接口，这将非常实用。
+例如，我们可以通过打印将内容写入。
+</p>
+
 <pre>
     var b ByteSlice
     fmt.Fprintf(&amp;b, "This hour has %d days\n", 7)
 </pre>
+
+<div class="english">
 <p>
 We pass the address of a <code>ByteSlice</code>
 because only <code>*ByteSlice</code> satisfies <code>io.Writer</code>.
@@ -3026,14 +3958,35 @@ invoked on pointers.  This is because pointer methods can modify the
 receiver; invoking them on a copy of the value would cause those
 modifications to be discarded.
 </p>
+</div>
+
+<p>
+我们将 <code>ByteSlice</code> 的地址传入，因为只有 <code>*ByteSlice</code>
+才满足 <code>io.Writer</code>。以指针或值为接收者的区别在于：值方法可通过指针和值调用，
+而指针方法只能通过指针来调用。这是由于指针方法可修改接收者，
+而在值的副本上所做的修改将被丢弃。
+</p>
+
+<div class="english">
 <p>
 By the way, the idea of using <code>Write</code> on a slice of bytes
 is central to the implementation of <code>bytes.Buffer</code>.
 </p>
+</div>
 
+<p>
+顺便一提，在字节切片上使用 <code>Write</code> 的想法已被 <code>bytes.Buffer</code> 所实现。
+</p>
+
+<div class="english">
 <h2 id="interfaces_and_types">Interfaces and other types</h2>
+</div>
 
-<h3 id="interfaces">Interfaces</h3>
+<h2 id="接口与类型">接口与其它类型</h2>
+
+<h3 id="接口">接口</h3>
+
+<div class="english">
 <p>
 Interfaces in Go provide a way to specify the behavior of an
 object: if something can do <em>this</em>, then it can be used
@@ -3045,6 +3998,18 @@ Interfaces with only one or two methods are common in Go code, and are
 usually given a name derived from the method, such as <code>io.Writer</code>
 for something that implements <code>Write</code>.
 </p>
+</div>
+
+<p>
+Go中的接口为指定对象的行为提供了一种方法：如果某样东西可以完成<b>这个</b>，
+那么它就可以用在<b>这里</b>。我们已经见过许多简单的示例了；通过实现
+<code>String</code> 方法，我们可以自定义打印函数，而通过 <code>Write</code>
+方法，<code>Fprintf</code> 则能对任何对象产生输出。在Go代码中，
+仅包含一两种方法的接口很常见，且其名称通常来自于实现它的方法，
+如 <code>io.Writer</code> 就是实现了 <code>Write</code> 的一类对象。
+</p>
+
+<div class="english">
 <p>
 A type can implement multiple interfaces.
 For instance, a collection can be sorted
@@ -3054,22 +4019,46 @@ by the routines in package <code>sort</code> if it implements
 and it could also have a custom formatter.
 In this contrived example <code>Sequence</code> satisfies both.
 </p>
+</div>
+
+<p>
+每种类型都能实现多个接口。例如一个实现了 <code>sort.Interface</code> 接口的集合就可通过
+<code>sort</code> 包中的例程进行排序。该接口包括 <code>Len()</code>、<code>Less(i, j int) bool</code>
+以及 <code>Swap(i, j int)</code>，另外，该集合仍然可以有一个自定义的格式化器。
+以下特意构建的例子 <code>Sequence</code> 就同时满足这两种情况。
+</p>
+
 {{code "/doc/progs/eff_sequence.go" `/^type/` "$"}}
 
+<div class="english">
 <h3 id="conversions">Conversions</h3>
+</div>
 
+<h3 id="类型转换">类型转换</h3>
+
+<div class="english">
 <p>
 The <code>String</code> method of <code>Sequence</code> is recreating the
 work that <code>Sprint</code> already does for slices.  We can share the
 effort if we convert the <code>Sequence</code> to a plain
 <code>[]int</code> before calling <code>Sprint</code>.
 </p>
+</div>
+
+<p>
+<code>Sequence</code> 的 <code>String</code> 方法重新实现了 <code>Sprint</code>
+为切片实现的功能。若我们在调用 <code>Sprint</code> 之前将 <code>Sequence</code>
+转换为纯粹的 <code>[]int</code>，就能共享已实现的功能。
+</p>
+
 <pre>
 func (s Sequence) String() string {
     sort.Sort(s)
     return fmt.Sprint([]int(s))
 }
 </pre>
+
+<div class="english">
 <p>
 This method is another example of the conversion technique for calling
 <code>Sprintf</code> safely from a <code>String</code> method.
@@ -3080,6 +4069,17 @@ as though the existing value has a new type.
 (There are other legal conversions, such as from integer to floating point, that
 do create a new value.)
 </p>
+</div>
+
+<p>
+该方法是通过类型转换技术，在 <code>String</code> 方法中安全调用 <code>Sprintf</code>
+的另个一例子。若我们忽略类型名的话，这两种类型（<code>Sequence</code>和
+<code>[]int</code>）其实是相同的，因此在二者之间进行转换是合法的。
+转换过程并不会创建新值，它只是值暂让现有的时看起来有个新类型而已。
+（还有些合法转换则会创建新值，如从整数转换为浮点数等。）
+</p>
+
+<div class="english">
 <p>
 It's an idiom in Go programs to convert the
 type of an expression to access a different
@@ -3087,6 +4087,14 @@ set of methods. As an example, we could use the existing
 type <code>sort.IntSlice</code> to reduce the entire example
 to this:
 </p>
+</div>
+
+<p>
+在Go程序中，为访问不同的方法集而进行类型转换的情况非常常见。
+例如，我们可使用现有的 <code>sort.IntSlice</code> 类型来简化整个示例：
+</p>
+
+<div class="english">
 <pre>
 type Sequence []int
 
@@ -3096,12 +4104,33 @@ func (s Sequence) String() string {
     return fmt.Sprint([]int(s))
 }
 </pre>
+</div>
+
+<pre>
+type Sequence []int
+
+// // 用于打印的方法 - 在打印前对元素进行排序。
+func (s Sequence) String() string {
+    sort.IntSlice(s).Sort()
+    return fmt.Sprint([]int(s))
+}
+</pre>
+
+<div class="english">
 <p>
 Now, instead of having <code>Sequence</code> implement multiple
 interfaces (sorting and printing), we're using the ability of a data item to be
 converted to multiple types (<code>Sequence</code>, <code>sort.IntSlice</code>
 and <code>[]int</code>), each of which does some part of the job.
 That's more unusual in practice but can be effective.
+</p>
+</div>
+
+<p>
+现在，不必让 <code>Sequence</code> 实现多个接口（排序和打印），
+我们可通过将数据条目转换为多种类型（<code>Sequence</code>、<code>sort.IntSlice</code>
+和 <code>[]int</code>）来使用相应的功能，每次转换都完成一部分工作。
+这在实践中虽然有些不同寻常，但往往却很有效。
 </p>
 
 <h3 id="interface_conversions">Interface conversions and type assertions</h3>
