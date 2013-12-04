@@ -190,6 +190,8 @@ struct	Type
 	// TMAP
 	Type*	bucket;		// internal type representing a hash bucket
 	Type*	hmap;		// internal type representing a Hmap (map header object)
+	Type*	hiter;		// internal type representing hash iterator state
+	Type*	map;		// link from the above 3 internal types back to the map type.
 
 	int32	maplineno;	// first use of TFORW as map key
 	int32	embedlineno;	// first use of TFORW as embedded type
@@ -1274,6 +1276,7 @@ Sym*	tracksym(Type *t);
 Sym*	typesymprefix(char *prefix, Type *t);
 int	haspointers(Type *t);
 void	usefield(Node*);
+Type*	hiter(Type* t);
 
 /*
  *	select.c

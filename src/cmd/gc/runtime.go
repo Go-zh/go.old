@@ -36,8 +36,11 @@ func printnl()
 func printsp()
 func goprintf()
 
-// filled in by compiler: int n, string, string, ...
-func concatstring()
+func concatstring2(string, string) string
+func concatstring3(string, string, string) string
+func concatstring4(string, string, string, string) string
+func concatstring5(string, string, string, string, string) string
+func concatstrings([]string) string
 
 func cmpstring(string, string) int
 func eqstring(string, string) bool
@@ -83,20 +86,18 @@ func equal(typ *byte, x1, x2 any) (ret bool)
 
 // *byte is really *runtime.Type
 func makemap(mapType *byte, hint int64) (hmap map[any]any)
-func mapaccess1(mapType *byte, hmap map[any]any, key any) (val any)
+func mapaccess1(mapType *byte, hmap map[any]any, key *any) (val *any)
 func mapaccess1_fast32(mapType *byte, hmap map[any]any, key any) (val *any)
 func mapaccess1_fast64(mapType *byte, hmap map[any]any, key any) (val *any)
 func mapaccess1_faststr(mapType *byte, hmap map[any]any, key any) (val *any)
-func mapaccess2(mapType *byte, hmap map[any]any, key any) (val any, pres bool)
+func mapaccess2(mapType *byte, hmap map[any]any, key *any) (val *any, pres bool)
 func mapaccess2_fast32(mapType *byte, hmap map[any]any, key any) (val *any, pres bool)
 func mapaccess2_fast64(mapType *byte, hmap map[any]any, key any) (val *any, pres bool)
 func mapaccess2_faststr(mapType *byte, hmap map[any]any, key any) (val *any, pres bool)
-func mapassign1(mapType *byte, hmap map[any]any, key any, val any)
+func mapassign1(mapType *byte, hmap map[any]any, key *any, val *any)
 func mapiterinit(mapType *byte, hmap map[any]any, hiter *any)
-func mapdelete(mapType *byte, hmap map[any]any, key any)
+func mapdelete(mapType *byte, hmap map[any]any, key *any)
 func mapiternext(hiter *any)
-func mapiter1(hiter *any) (key any)
-func mapiter2(hiter *any) (key any, val any)
 
 // *byte is really *runtime.Type
 func makechan(chanType *byte, hint int64) (hchan chan any)
