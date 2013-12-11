@@ -706,7 +706,7 @@ Use the package structure to help you choose good names.
 <code>bufio.Reader</code>，这是个清楚而简洁的名称。
 此外，由于被导入的项总是通过它们的包名来确定，因此 <code>bufio.Reader</code>
 不会与 <code>io.Reader</code> 发生冲突。同样，用于创建 <code>ring.Ring</code>
-的新实例的函数（这就是Go中的<strong>构造器</strong>）一般会称之为
+的新实例的函数（这就是Go中的<strong>构造函数</strong>）一般会称之为
 <code>NewRing</code>，但由于 <code>Ring</code> 是该包所导出的唯一类型，且该包也叫
 <code>ring</code>，因此它可以只叫做 <code>New</code>，它跟在包的后面，就像
 <code>ring.New</code>。使用包结构可以帮助你选择好的名称。
@@ -2050,7 +2050,11 @@ example of its possibilities.
 
 <h2 id="数据">数据</h2>
 
-<h3 id="new分配">使用 <code>new</code> 分配</h3>
+<div class="english">
+<h3 id="allocation_new">Allocation with <code>new</code></h3>
+</div>
+
+<h3 id="new分配"><code>new</code> 分配</h3>
 
 <div class="english">
 <p>
@@ -2101,7 +2105,7 @@ is defined to be an unlocked mutex.
 每种类型的零值就不必进一步初始化了，这意味着该数据结构的使用者只需用
 <code>new</code> 创建一个新的对象就能正常工作。例如，<code>bytes.Buffer</code>
 的文档中提到“零值的 <code>Buffer</code> 就是已准备就绪的缓冲区。"
-同样，<code>sync.Mutex</code> 并没有显式的构造器或 <code>Init</code> 方法，
+同样，<code>sync.Mutex</code> 并没有显式的构造函数或 <code>Init</code> 方法，
 而是零值的 <code>sync.Mutex</code> 就已经被定义为已解锁的互斥锁了。
 </p>
 
@@ -4133,8 +4137,13 @@ That's more unusual in practice but can be effective.
 这在实践中虽然有些不同寻常，但往往却很有效。
 </p>
 
+<div class="english">
 <h3 id="interface_conversions">Interface conversions and type assertions</h3>
+</div>
 
+<h3 id="接口转换">接口转换与类型断言</h3>
+
+<div class="english">
 <p>
 <a href="#type_switch">Type switches</a> are a form of conversion: they take an interface and, for
 each case in the switch, in a sense convert it to the type of that case.
@@ -4143,7 +4152,17 @@ a string using a type switch.
 If it's already a string, we want the actual string value held by the interface, while if it has a
 <code>String</code> method we want the result of calling the method.
 </p>
+</div>
 
+<p>
+<a href="#类型选择">类型选择</a>是类型转换的一种形式：它接受一个接口，在选择
+（<code>switch</code>）中根据其判断选择对应的情况（<code>case</code>），
+并在某种意义上将其转换为该种类型。以下代码为 <code>fmt.Printf</code>
+通过类型选择将值转换为字符串的简化版。若它已经为字符串，我们需要该接口中实际的字符串值；
+若它有 <code>String</code> 方法，我们则需要调用该方法所得的结果。
+</p>
+
+<div class="english">
 <pre>
 type Stringer interface {
     String() string
@@ -4157,12 +4176,34 @@ case Stringer:
     return str.String()
 }
 </pre>
+</div>
 
+<pre>
+type Stringer interface {
+    String() string
+}
+
+var value interface{} // 调用者提供的值。
+switch str := value.(type) {
+case string:
+    return str
+case Stringer:
+    return str.String()
+}
+</pre>
+
+<div class="english">
 <p>
 The first case finds a concrete value; the second converts the interface into another interface.
 It's perfectly fine to mix types this way.
 </p>
+</div>
 
+<p>
+第一种情况获取具体的值，第二种将该接口转换为另一个接口。这种方式对于混合类型来说非常完美。
+</p>
+
+<div class="english">
 <p>
 What if there's only one type we care about? If we know the value holds a <code>string</code>
 and we just want to extract it?
@@ -4170,27 +4211,51 @@ A one-case type switch would do, but so would a <em>type assertion</em>.
 A type assertion takes an interface value and extracts from it a value of the specified explicit type.
 The syntax borrows from the clause opening a type switch, but with an explicit
 type rather than the <code>type</code> keyword:
+</p>
+</div>
+
+<p>
+若我们只关心一种类型呢？若我们知道该值拥有一个 <code>string</code> 而想要提取它呢？
+只需一种情况的类型选择就行，但它需要<b>类型断言</b>。类型断言接受一个接口值，
+并从中提取指定的明确类型的值。其语法借鉴自类型选择开头的子句，但它需要一个明确的类型，
+而非 <code>type</code> 关键字：
+</p>
 
 <pre>
 value.(typeName)
 </pre>
 
+<div class="english">
 <p>
 and the result is a new value with the static type <code>typeName</code>.
 That type must either be the concrete type held by the interface, or a second interface
 type that the value can be converted to.
 To extract the string we know is in the value, we could write:
 </p>
+</div>
+
+<p>
+而其结果则是拥有静态类型 <code>typeName</code> 的新值。该类型必须为该接口所拥有的具体类型，
+或者该值可转换成的第二种接口类型。要提取我们知道在该值中的字符串，可以这样：
+</p>
 
 <pre>
 str := value.(string)
 </pre>
 
+<div class="english">
 <p>
 But if it turns out that the value does not contain a string, the program will crash with a run-time error.
 To guard against that, use the "comma, ok" idiom to test, safely, whether the value is a string:
 </p>
+</div>
 
+<p>
+但若它所转换的值中不包含字符串，该程序就会以运行时错误崩溃。为避免这种情况，
+需使用“逗号, ok”惯用测试它能安全地判断该值是否为字符串：
+</p>
+
+<div class="english">
 <pre>
 str, ok := value.(string)
 if ok {
@@ -4199,15 +4264,37 @@ if ok {
     fmt.Printf("value is not a string\n")
 }
 </pre>
+</div>
 
+<pre>
+str, ok := value.(string)
+if ok {
+    fmt.Printf("字符串值为 %q\n", str)
+} else {
+    fmt.Printf("该值非字符串\n")
+}
+</pre>
+
+<div class="english">
 <p>
 If the type assertion fails, <code>str</code> will still exist and be of type string, but it will have
 the zero value, an empty string.
 </p>
+</div>
 
+<p>
+若类型断言失败，<code>str</code> 将继续存在且为字符串类型，但它将拥有零值，即空字符串。
+</p>
+
+<div class="english">
 <p>
 As an illustration of the capability, here's an <code>if</code>-<code>else</code>
 statement that's equivalent to the type switch that opened this section.
+</p>
+</div>
+
+<p>
+作为对能量的说明，这里有个 <code>if-else</code> 语句，它等价于本节开头的类型选择。
 </p>
 
 <pre>
@@ -4218,7 +4305,9 @@ if str, ok := value.(string); ok {
 }
 </pre>
 
-<h3 id="generality">Generality</h3>
+<h3 id="通用性">通用性</h3>
+
+<div class="english">
 <p>
 If a type exists only to implement an interface
 and has no exported methods beyond that interface,
@@ -4230,6 +4319,15 @@ can mirror the behavior of the original type.
 It also avoids the need to repeat the documentation
 on every instance of a common method.
 </p>
+</div>
+
+<p>
+若某种现有的类型仅实现了一个接口，且除此之外并无可导出的方法，则该类型本身就无需导出。
+仅导出该接口能让我们更专注于其行为而非实现，其它属性不同的实现则能镜像该原始类型的行为。
+这也能够避免为每个通用接口的实例重复编写文档。
+</p>
+
+<div class="english">
 <p>
 In such cases, the constructor should return an interface value
 rather than the implementing type.
@@ -4240,6 +4338,16 @@ Substituting the CRC-32 algorithm for Adler-32 in a Go program
 requires only changing the constructor call;
 the rest of the code is unaffected by the change of algorithm.
 </p>
+</div>
+
+<p>
+在这种情况下，构造函数应当返回一个接口值而非实现的类型。例如在 <code>hash</code>
+库中，<code>crc32.NewIEEE</code> 和 <code>adler32.New</code> 都返回接口类型
+<code>hash.Hash32</code>。要在Go程序中用Adler-32算法替代CRC-32，
+只需修改构造函数调用即可，其余代码则不受算法改变的影响。
+</p>
+
+<div class="english">
 <p>
 A similar approach allows the streaming cipher algorithms
 in the various <code>crypto</code> packages to be
@@ -4254,9 +4362,26 @@ can be used to construct streaming ciphers, represented
 by the <code>Stream</code> interface, without
 knowing the details of the block encryption.
 </p>
+</div>
+
+<p>
+同样的方式能将 <code>crypto</code> 包中多种联系在一起的流密码算法与块密码算法分开。
+<code>crypto/cipher</code> 包中的 <code>Block</code> 接口指定了块密码算法的行为，
+它为单独的数据块提供加密。接着，和 <code>bufio</code>
+包类似，任何实现了该接口的密码包都能被用于构造以 <code>Stream</code>
+为接口表示的流密码，而无需知道块加密的细节。
+</p>
+
+<div class="english">
 <p>
 The  <code>crypto/cipher</code> interfaces look like this:
 </p>
+</div>
+
+<p>
+<code>crypto/cipher</code> 接口看其来就像这样：
+</p>
+
 <pre>
 type Block interface {
     BlockSize() int
@@ -4269,17 +4394,33 @@ type Stream interface {
 }
 </pre>
 
+<div class="english">
 <p>
 Here's the definition of the counter mode (CTR) stream,
 which turns a block cipher into a streaming cipher; notice
 that the block cipher's details are abstracted away:
 </p>
+</div>
 
+<p>
+这是计数器模式CTR流的定义，它将块加密改为流加密，注意块加密的细节已被抽象化了。
+</p>
+
+<div class="english">
 <pre>
 // NewCTR returns a Stream that encrypts/decrypts using the given Block in
 // counter mode. The length of iv must be the same as the Block's block size.
 func NewCTR(block Block, iv []byte) Stream
 </pre>
+</div>
+
+<pre>
+// NewCTR 返回一个 Stream，其加密/解密使用计数器模式中给定的 Block 进行。
+// iv 的长度必须与 Block 的块大小相同。
+func NewCTR(block Block, iv []byte) Stream
+</pre>
+
+<div class="english">
 <p>
 <code>NewCTR</code> applies not
 just to one specific encryption algorithm and data source but to any
@@ -4290,19 +4431,43 @@ encryption with other encryption modes is a localized change.  The constructor
 calls must be edited, but because the surrounding code must treat the result only
 as a <code>Stream</code>, it won't notice the difference.
 </p>
+</div>
 
+<p>
+<code>NewCTR</code> 的应用并不仅限于特定的加密算法和数据源，它适用于任何对
+<code>Block</code> 接口和 <code>Stream</code> 的实现。因为它们返回接口值，
+所以用其它加密模式来代替CTR只需做局部的更改。构造函数的调用过程必须被修改，
+但由于其周围的代码只能将它看做 <code>Stream</code>，因此它们不会注意到其中的区别。
+</p>
+
+<div class="english">
 <h3 id="interface_methods">Interfaces and methods</h3>
+</div>
+
+<h3 id="接口方法">接口和方法</h3>
+
+<div class="english">
 <p>
 Since almost anything can have methods attached, almost anything can
 satisfy an interface.  One illustrative example is in the <code>http</code>
 package, which defines the <code>Handler</code> interface.  Any object
 that implements <code>Handler</code> can serve HTTP requests.
 </p>
+</div>
+
+<p>
+由于几乎任何类型都能添加方法，因此几乎任何类型都能满足一个接口。一个很直观的例子就是
+<code>http</code> 包中定义的 <code>Handler</code> 接口。任何实现了
+<code>Handler</code> 的对象都能够处理HTTP请求。
+</p>
+
 <pre>
 type Handler interface {
     ServeHTTP(ResponseWriter, *Request)
 }
 </pre>
+
+<div class="english">
 <p>
 <code>ResponseWriter</code> is itself an interface that provides access
 to the methods needed to return the response to the client.
@@ -4312,6 +4477,16 @@ can be used.
 <code>Request</code> is a struct containing a parsed representation
 of the request from the client.
 </p>
+</div>
+
+<p>
+<code>ResponseWriter</code> 接口提供了对方法的访问，这些方法需要响应客户端的请求。
+由于这些方法包含了标准的 <code>Write</code> 方法，因此 <code>http.ResponseWriter</code>
+可用于任何 <code>io.Writer</code> 适用的场景。<code>Request</code>
+结构体包含已解析的客户端请求。
+</p>
+
+<div class="english">
 <p>
 For brevity, let's ignore POSTs and assume HTTP requests are always
 GETs; that simplification does not affect the way the handlers are
@@ -4319,6 +4494,15 @@ set up.  Here's a trivial but complete implementation of a handler to
 count the number of times the
 page is visited.
 </p>
+</div>
+
+<p>
+为简单起见，我们假设所有的HTTP请求都是GET方法，而忽略POST方法，
+这种简化不会影响处理程序的建立方式。这里有个短小却完整的处理程序实现，
+它用于记录某个页面被访问的次数。
+</p>
+
+<div class="english">
 <pre>
 // Simple counter server.
 type Counter struct {
@@ -4330,21 +4514,54 @@ func (ctr *Counter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
     fmt.Fprintf(w, "counter = %d\n", ctr.n)
 }
 </pre>
+</div>
+
+<pre>
+// 简单的计数器服务。
+type Counter struct {
+    n int
+}
+
+func (ctr *Counter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+    ctr.n++
+    fmt.Fprintf(w, "counter = %d\n", ctr.n)
+}
+</pre>
+
+<div class="english">
 <p>
 (Keeping with our theme, note how <code>Fprintf</code> can print to an
 <code>http.ResponseWriter</code>.)
 For reference, here's how to attach such a server to a node on the URL tree.
 </p>
+</div>
+
+<p>
+（紧跟我们的主题，注意 <code>Fprintf</code> 如何能输出到
+<code>http.ResponseWriter</code>。）
+作为参考，这里演示了如何将这样一个服务器添加到URL树的一个节点上。
+</p>
+
 <pre>
 import "net/http"
 ...
 ctr := new(Counter)
 http.Handle("/counter", ctr)
 </pre>
+
+<div class="english">
 <p>
 But why make <code>Counter</code> a struct?  An integer is all that's needed.
 (The receiver needs to be a pointer so the increment is visible to the caller.)
 </p>
+</div>
+
+<p>
+但为什么 <code>Counter</code> 要是结构体呢？一个整数就够了。  An integer is all that's needed.
+（接收者必须为指针，增量操作对于调用者才可见。）
+</p>
+
+<div class="english">
 <pre>
 // Simpler counter server.
 type Counter int
@@ -4354,10 +4571,30 @@ func (ctr *Counter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
     fmt.Fprintf(w, "counter = %d\n", *ctr)
 }
 </pre>
+</div>
+
+<pre>
+// 简单的计数器服务。
+type Counter int
+
+func (ctr *Counter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+    *ctr++
+    fmt.Fprintf(w, "counter = %d\n", *ctr)
+}
+</pre>
+
+<div class="english">
 <p>
 What if your program has some internal state that needs to be notified that a page
 has been visited?  Tie a channel to the web page.
 </p>
+</div>
+
+<p>
+当页面被访问时，怎样通知你的程序去更新一些内部状态呢？为Web页面绑定个信道吧。
+</p>
+
+<div class="english">
 <pre>
 // A channel that sends a notification on each visit.
 // (Probably want the channel to be buffered.)
@@ -4368,16 +4605,38 @@ func (ch Chan) ServeHTTP(w http.ResponseWriter, req *http.Request) {
     fmt.Fprint(w, "notification sent")
 }
 </pre>
+</div>
+
+<pre>
+// 每次浏览该信道都会发送一个提醒。
+// （可能需要带缓冲的信道。）
+type Chan chan *http.Request
+
+func (ch Chan) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+    ch &lt;- req
+    fmt.Fprint(w, "notification sent")
+}
+</pre>
+
+<div class="english">
 <p>
 Finally, let's say we wanted to present on <code>/args</code> the arguments
 used when invoking the server binary.
 It's easy to write a function to print the arguments.
+</p>
+</div>
+
+<p>
+最后，假设我们需要输出调用服务器二进制程序时使用的实参 <code>/args</code>。
+很简单，写个打印实参的函数就行了。
 </p>
 <pre>
 func ArgServer() {
     fmt.Println(os.Args)
 }
 </pre>
+
+<div class="english">
 <p>
 How do we turn that into an HTTP server?  We could make <code>ArgServer</code>
 a method of some type whose value we ignore, but there's a cleaner way.
@@ -4385,6 +4644,16 @@ Since we can define a method for any type except pointers and interfaces,
 we can write a method for a function.
 The <code>http</code> package contains this code:
 </p>
+</div>
+
+<p>
+我们如何将它转换为HTTP服务器呢？我们可以将 <code>ArgServer</code>
+实现为某种可忽略值的方法，不过还有种更简单的方法。
+既然我们可以为除指针和接口以外的任何类型定义方法，同样也能为一个函数写一个方法。
+<code>http</code> 包包含以下代码：
+</p>
+
+<div class="english">
 <pre>
 // The HandlerFunc type is an adapter to allow the use of
 // ordinary functions as HTTP handlers.  If f is a function
@@ -4397,6 +4666,20 @@ func (f HandlerFunc) ServeHTTP(w ResponseWriter, req *Request) {
     f(w, req)
 }
 </pre>
+</div>
+
+<pre>
+// HandlerFunc 类型是一个适配器，它允许将普通函数用做HTTP处理程序。
+// 若 f 是个具有适当签名的函数，HandlerFunc(f) 就是个调用 f 的处理程序对象。
+type HandlerFunc func(ResponseWriter, *Request)
+
+// ServeHTTP calls f(c, req).
+func (f HandlerFunc) ServeHTTP(w ResponseWriter, req *Request) {
+    f(w, req)
+}
+</pre>
+
+<div class="english">
 <p>
 <code>HandlerFunc</code> is a type with a method, <code>ServeHTTP</code>,
 so values of that type can serve HTTP requests.  Look at the implementation
@@ -4404,16 +4687,43 @@ of the method: the receiver is a function, <code>f</code>, and the method
 calls <code>f</code>.  That may seem odd but it's not that different from, say,
 the receiver being a channel and the method sending on the channel.
 </p>
+</div>
+
+<p>
+<code>HandlerFunc</code> 是个具有 <code>ServeHTTP</code> 方法的类型，
+因此该类型的值就能处理HTTP请求。我们来看看该方法的实现：接收者是一个函数
+<code>f</code>，而该方法调用 <code>f</code>。这看起来很奇怪，但不必大惊小怪，
+区别在于接收者变成了一个信道，而方法通过该信道发送消息。
+</p>
+
+<div class="english">
 <p>
 To make <code>ArgServer</code> into an HTTP server, we first modify it
 to have the right signature.
 </p>
+</div>
+
+<p>
+为了将 <code>ArgServer</code> 实现成HTTP服务器，首先我们得让它拥有合适的签名。
+</p>
+
+<div class="english">
 <pre>
 // Argument server.
 func ArgServer(w http.ResponseWriter, req *http.Request) {
     fmt.Fprintln(w, os.Args)
 }
 </pre>
+</div>
+
+<pre>
+// 实参服务器。
+func ArgServer(w http.ResponseWriter, req *http.Request) {
+    fmt.Fprintln(w, os.Args)
+}
+</pre>
+
+<div class="english">
 <p>
 <code>ArgServer</code> now has same signature as <code>HandlerFunc</code>,
 so it can be converted to that type to access its methods,
@@ -4421,9 +4731,19 @@ just as we converted <code>Sequence</code> to <code>IntSlice</code>
 to access <code>IntSlice.Sort</code>.
 The code to set it up is concise:
 </p>
+</div>
+
+<p>
+<code>ArgServer</code> 和 <code>HandlerFunc</code> 现在拥有了相同的签名，
+因此我们可将其转换为这种类型以访问它的方法，就像我们将 <code>Sequence</code>
+转换为 <code>IntSlice</code> 以访问 <code>IntSlice.Sort</code> 那样。
+建立代码非常简单：
+</p>
 <pre>
 http.Handle("/args", http.HandlerFunc(ArgServer))
 </pre>
+
+<div class="english">
 <p>
 When someone visits the page <code>/args</code>,
 the handler installed at that page has value <code>ArgServer</code>
@@ -4434,14 +4754,36 @@ of that type, with <code>ArgServer</code> as the receiver, which will in turn ca
 inside <code>HandlerFunc.ServeHTTP</code>).
 The arguments will then be displayed.
 </p>
+</div>
+
+<p>
+当有人访问 <code>/args</code> 页面时，安装到该页面的处理程序就有了值
+<code>ArgServer</code> 和类型 <code>HandlerFunc</code>。
+HTTP服务器会以 <code>ArgServer</code> 为接收者，调用该类型的
+<code>ServeHTTP</code> 方法，它会反过来调用 <code>ArgServer</code>（通过
+<code>f(c, req)</code>），接着实参就会被显示出来。
+</p>
+
+<div class="english">
 <p>
 In this section we have made an HTTP server from a struct, an integer,
 a channel, and a function, all because interfaces are just sets of
 methods, which can be defined for (almost) any type.
 </p>
+</div>
 
+<p>
+在本节中，我们通过一个结构体，一个整数，一个信道和一个函数，建立了一个HTTP服务器，
+这一切都是因为接口只是方法的集和，而几乎任何类型都能定义方法。
+</p>
+
+<div class="english">
 <h2 id="blank">The blank identifier</h2>
+</div>
 
+<h2 id="空白">空白标识符</h2>
+
+<div class="english">
 <p>
 We've mentioned the blank identifier a couple of times now, in the context of
 <a href="#for"><code>for</code> <code>range</code> loops</a>
@@ -4454,12 +4796,33 @@ to be used as a place-holder
 where a variable is needed but the actual value is irrelevant.
 It has uses beyond those we've seen already.
 </p>
+</div>
 
+<p>
+我们在 <a href="#for"><code>for-range</code> 循环</a>和<a href="#映射">映射</a>中提过几次空白标识符。
+空白标识符可被赋予或声明为任何类型的任何值，而其值会被无害地丢弃。它有点像Unix中的
+<code>/dev/null</code> 文件：它表示只写的值，在需要变量但不需要实际值的地方用作占位符。
+我们在前面已经见过它的用法了。
+</p>
+
+<div class="english">
 <h3 id="blank_assign">The blank identifier in multiple assignment</h3>
+</div>
 
+<h3 id="空白赋值">多重赋值中的空白标识符</h3>
+
+<div class="english">
 <p>
 The use of a blank identifier in a <code>for</code> <code>range</code> loop is a
 special case of a general situation: multiple assignment.
+</p>
+</div>
+
+<p>
+<code>for range</code> 循环中对空表标识符的用法是一种具体情况，更一般的情况即为多重赋值。
+</p>
+
+<div class="english">
 <p>
 If an assignment requires multiple values on the left side,
 but one of the values will not be used by the program,
@@ -4471,6 +4834,14 @@ For instance, when calling a function that returns
 a value and an error, but only the error is important,
 use the blank identifier to discard the irrelevant value.
 </p>
+</div>
+
+<p>
+若某次赋值需要匹配多个左值，但其中某个不会被程序使用，
+那么在该赋值的左侧使用空白标识符可避免创建无用的变量，并且能清楚地表明该值将被丢弃。
+例如，当调用某个函数时，它会返回一个值和一个错误，但只有错误很重要，
+那么可使用空白标识符来丢弃无关的值。
+</p>
 
 <pre>
 if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -4478,12 +4849,20 @@ if _, err := os.Stat(path); os.IsNotExist(err) {
 }
 </pre>
 
+<div class="english">
 <p>
 Occasionally you'll see code that discards the error value in order
 to ignore the error; this is terrible practice. Always check error returns;
 they're provided for a reason.
 </p>
+</div>
 
+<p>
+你偶尔会看见为忽略错误而丢弃错误值的代码，这是种糟糕的实践。请务必检查错误返回，
+它们会提供错误的理由。
+</p>
+
+<div class="english">
 <pre>
 // Bad! This code will crash if path does not exist.
 fi, _ := os.Stat(path)
@@ -4491,9 +4870,23 @@ if fi.IsDir() {
     fmt.Printf("%s is a directory\n", path)
 }
 </pre>
+</div>
 
+<pre>
+// 烂代码！若路径不存在，它就会崩溃。
+fi, _ := os.Stat(path)
+if fi.IsDir() {
+    fmt.Printf("%s is a directory\n", path)
+}
+</pre>
+
+<div class="english">
 <h3 id="blank_unused">Unused imports and variables</h3>
+</div>
 
+<h3 id="空白未使用">未使用的导入和变量</h3>
+
+<div class="english">
 <p>
 It is an error to import a package or to declare a variable without using it.
 Unused imports bloat the program and slow compilation,
@@ -4506,6 +4899,16 @@ be annoying to delete them just to have the compilation proceed,
 only to have them be needed again later.
 The blank identifier provides a workaround.
 </p>
+</div>
+
+<p>
+若导入某个包或声明某个变量而不使用它就会产生错误。未使用的包会让程序膨胀并拖慢编译速度，
+而已初始化但未使用的变量不仅会浪费计算能力，还有可能暗藏着更大的Bug。
+然而在程序开发过程中，经常会产生未使用的导入和变量。虽然以后会用到它们，
+但为了完成编译又不得不删除它们才行，这很让人烦恼。空白标识符就能提供一个工作空间。
+</p>
+
+<div class="english">
 <p>
 This half-written program has two unused imports
 (<code>fmt</code> and <code>io</code>)
@@ -4513,7 +4916,17 @@ and an unused variable (<code>fd</code>),
 so it will not compile, but it would be nice to see if the
 code so far is correct.
 </p>
+</div>
+
+<p>
+这个写了一半的程序有两个未使用的导入（<code>fmt</code> 和
+<code>io</code>）以及一个未使用的变量（<code>fd</code>），因此它不能编译，
+但若到目前为止代码还是正确的，我们还是很乐意看到它们的。
+</p>
+
 {{code "/doc/progs/eff_unused1.go" `/package/` `$`}}
+
+<div class="english">
 <p>
 To silence complaints about the unused imports, use a
 blank identifier to refer to a symbol from the imported package.
@@ -4521,16 +4934,36 @@ Similarly, assigning the unused variable <code>fd</code>
 to the blank identifier will silence the unused variable error.
 This version of the program does compile.
 </p>
+</div>
+
+<p>
+要让编译器停止关于未使用导入的抱怨，需要空白标识符来引用已导入包中的符号。
+同样，将未使用的变量 <code>fd</code> 赋予空白标识符也能关闭未使用变量错误。
+该程序的以下版本可以编译。
+</p>
+
 {{code "/doc/progs/eff_unused2.go" `/package/` `$`}}
 
+<div class="english">
 <p>
 By convention, the global declarations to silence import errors
 should come right after the imports and be commented,
 both to make them easy to find and as a reminder to clean things up later.
 </p>
+</div>
 
+<p>
+按照惯例，我们应在导入并加以注释后，再使全局声明导入错误静默，这样可以让它们更易找到，
+并作为以后清理它的提醒。
+</p>
+
+<div class="english">
 <h3 id="blank_import">Import for side effect</h3>
+</div>
 
+<h3 id="空白导入">为副作用而导入</h3>
+
+<div class="english">
 <p>
 An unused import like <code>fmt</code> or <code>io</code> in the
 previous example should eventually be used or removed:
@@ -4546,18 +4979,42 @@ access the data through a web page.
 To import the package only for its side effects, rename the package
 to the blank identifier:
 </p>
+</div>
+
+<p>
+像前例中 <code>fmt</code> 或 <code>io</code> 这种未使用的导入总应在最后被使用或移除：
+空白赋值会将代码标识为工作正在进行中。但有时导入某个包只是为了其副作用，
+而没有任何明确的使用。例如，在 <code><a href="/pkg/net/http/pprof/">net/http/pprof</a></code>
+包的 <code>init</code> 函数中记录了HTTP处理程序的调试信息。它有个可导出的API，
+但大部分客户端只需要该处理程序的记录和通过Web叶访问数据。只为了其副作用来哦导入该包，
+只需将包重命名为空白标识符：
+</p>
+
 <pre>
 import _ "net/http/pprof"
 </pre>
+
+<div class="english">
 <p>
 This form of import makes clear that the package is being
 imported for its side effects, because there is no other possible
 use of the package: in this file, it doesn't have a name.
 (If it did, and we didn't use that name, the compiler would reject the program.)
 </p>
+</div>
 
+<p>
+这种导入格式能明确表示该包是为其副作用而导入的，因为没有其它使用该包的可能：
+在此文件中，它没有名字。（若它有名字而我们没有使用，编译器就会拒绝该程序。）
+</p>
+
+<div class="english">
 <h3 id="blank_implements">Interface checks</h3>
+</div>
 
+<h3 id="空白实现">接口检查</h3>
+
+<div class="english">
 <p>
 As we saw in the discussion of <a href="#interfaces_and_types">interfaces</a> above,
 a type need not declare explicitly that it implements an interface.
@@ -4567,7 +5024,17 @@ For example, passing an <code>*os.File</code> to a function
 expecting an <code>io.Reader</code> will not compile unless
 <code>*os.File</code> implements the <code>io.Reader</code> interface.
 </p>
+</div>
 
+<p>
+就像我们在前面<a href="#接口与类型">接口</a>中讨论的那样，
+一个类型无需显式地声明它实现了某个接口。取而代之，该类型只要实现了某个接口的方法，
+其实就实现了该接口。在实践中，大部分接口转换都是静态的，因此会在编译时检测。
+例如，将一个 <code>*os.File</code> 传入一个预期的 <code>io.Reader</code> 函数将不会被编译，
+除非 <code>*os.File</code> 实现了 <code>io.Reader</code> 接口。
+</p>
+
+<div class="english">
 <p>
 Some interface checks do happen at run-time, though.
 One instance is in the <code><a href="/pkg/encoding/json/">encoding/json</a></code>
@@ -4577,15 +5044,31 @@ the encoder invokes the value's marshaling method to convert it to JSON
 instead of doing the standard conversion.
 The encoder checks this property at run time with a <a href="#interface_conversions">type assertion</a> like:
 </p>
+</div>
+
+<p>
+尽管有些接口检查会在运行时进行。<code><a href="/pkg/encoding/json/">encoding/json</a></code>
+包中就有个实例它定义了一个 <code><a href="/pkg/encoding/json/#Marshaler">Marshaler</a></code>
+接口。当JSON编码器接收到一个实现了该接口的值，那么该编码器就会调用该值的编组方法，
+将其转换为JSON，而非进行标准的类型转换。
+编码器在运行时通过<a href="#接口转换">类型断言</a>检查其属性，就像这样：
+</p>
 
 <pre>
 m, ok := val.(json.Marshaler)
 </pre>
 
+<div class="english">
 <p>
 If it's necessary only to ask whether a type implements an interface, without
 actually using the interface itself, perhaps as part of an error check, use the blank
 identifier to ignore the type-asserted value:
+</p>
+</div>
+
+<p>
+若只需要判断某个类型是否是实现了某个接口，而不需要实际使用接口本身
+（可能是错误检查部分），就使用空白标识符来忽略类型断言的值：
 </p>
 
 <pre>
@@ -4594,6 +5077,7 @@ if _, ok := val.(json.Marshaler); ok {
 }
 </pre>
 
+<div class="english">
 <p>
 One place this situation arises is when it is necessary to guarantee within the package implementing the type that
 it actually satisfies the interface.
@@ -4607,9 +5091,22 @@ but will not use the custom implementation.
 To guarantee that the implementation is correct,
 a global declaration using the blank identifier can be used in the package:
 </p>
+</div>
+
+<p>
+当需要确保某个包中实现的类型一定满足该接口时，就会遇到这种情况。
+若某个类型（例如 <code><a href="/pkg/encoding/json/#RawMessage">json.RawMessage</a></code>）
+需要一种定制的JSON表现时，它应当实现 <code>json.Marshaler</code>，
+不过现在没有静态转换可以让编译器去自动验证它。若该类型通过忽略转换失败来满足该接口，
+那么JSON编码器仍可工作，但它却不会使用定制的实现。为确保其实现正确，
+可在该包中用空白标识符声明一个全局变量：
+</p>
+
 <pre>
 var _ json.Marshaler = (*RawMessage)(nil)
 </pre>
+
+<div class="english">
 <p>
 In this declaration, the assignment involving a conversion of a
 <code>*RawMessage</code> to a <code>Marshaler</code>
@@ -4618,7 +5115,17 @@ and that property will be checked at compile time.
 Should the <code>json.Marshaler</code> interface change, this package
 will no longer compile and we will be on notice that it needs to be updated.
 </p>
+</div>
 
+<p>
+在此声明中，我们调用了一个 <code>*RawMessage</code> 转换并将其赋予了
+<code>Marshaler</code>，以此来要求 <code>*RawMessage</code> 实现
+<code>Marshaler</code>，这时其属性就会在编译时被检测。
+若 <code>json.Marshaler</code> 接口被更改，此包将无法通过编译，
+而我们则会注意到它需要更新。
+</p>
+
+<div class="english">
 <p>
 The appearance of the blank identifier in this construct indicates that
 the declaration exists only for the type checking,
@@ -4628,9 +5135,20 @@ By convention, such declarations are only used
 when there are no static conversions already present in the code,
 which is a rare event.
 </p>
+</div>
+
+<p>
+在这种结构中出现空白标识符，即表示该声明的存在只是为了类型检查。
+不过请不要为满足接口就将它用于任何类型。作为约定，
+仅当代码中不存在静态类型转换时才能这种声明，毕竟这是种罕见的情况。
+</p>
 
 
+<div class="english">
 <h2 id="embedding">Embedding</h2>
+</div>
+
+<h2 id="内嵌">内嵌</h2>
 
 <p>
 Go does not provide the typical, type-driven notion of subclassing,

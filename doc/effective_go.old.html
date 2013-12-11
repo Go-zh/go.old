@@ -4203,7 +4203,7 @@ methods, which can be defined for (almost) any type.
 <h2 id="embedding">Embedding</h2>
 </div>
 
-<h2 id="嵌入">嵌入</h2>
+<h2 id="内嵌">内嵌</h2>
 
 <div class="english">
 <p>
@@ -4215,7 +4215,7 @@ interface.
 </div>
 
 <p>
-Go不提供典型的、类型驱动的子类化概念，但它通过在一个结构或接口中 <em>嵌入</em>
+Go不提供典型的、类型驱动的子类化概念，但它通过在一个结构或接口中 <em>内嵌</em>
 类型而能够从前者的实现中“借用”一些东西。
 </p>
 
@@ -4228,7 +4228,7 @@ here are their definitions.
 </div>
 
 <p>
-接口的嵌入非常简单。前面我们已经提到了 <code>io.Reader</code> 和 <code>io.Writer</code>
+接口的内嵌非常简单。前面我们已经提到了 <code>io.Reader</code> 和 <code>io.Writer</code>
 接口。这里是它们的定义。
 </p>
 
@@ -4258,7 +4258,7 @@ to embed the two interfaces to form the new one, like this:
 <code>io</code> 包同时也导出了几个其他的接口来指定对象能够实现的几个类似的方法。
 例如，<code>io.ReadWriter</code> 就是一个包含 <code>Read</code> 和 <code>Write</code>
 的接口。我们可以通过显式地列出这两个方法来定义 <code>io.ReadWriter</code>，
-但更简便且更被理解的是嵌入这两个接口而形成新的一个，如下所示：
+但更简便且更被理解的是内嵌这两个接口而形成新的一个，如下所示：
 </p>
 
 <div class="english">
@@ -4291,8 +4291,8 @@ Only interfaces can be embedded within interfaces.
 
 <p>
 正如该代码看起来那样：<code>ReadWriter</code> 能够完成 <code>Reader</code>
-<em>和</em> <code>Writer</code> 所完成的工作；它是被嵌入接口（它们的方法不能有交集）的一个并集。
-只有接口才能被嵌入到接口中。
+<em>和</em> <code>Writer</code> 所完成的工作；它是被内嵌接口（它们的方法不能有交集）的一个并集。
+只有接口才能被内嵌到接口中。
 </p>
 
 <div class="english">
@@ -4313,7 +4313,7 @@ but does not give them field names.
 同样的理念也可被应用于结构中，但却有更多的深意。<code>bufio</code> 包有两个结构类型，
 <code>bufio.Reader</code> 和 <code>bufio.Writer</code>，两者各自实现了来自 <code>io</code>
 的对应接口。另外 <code>bufio</code> 还实现了一个缓冲的 <code>reader/writer</code>，
-这是使用嵌入将一个 <code>reader</code> 和一个 <code>writer</code>
+这是使用内嵌将一个 <code>reader</code> 和一个 <code>writer</code>
 组合成一个结构：它在结构内列出了这些类型但并没有给出这些类型的字段名称。
 </p>
 
@@ -4347,7 +4347,7 @@ The <code>ReadWriter</code> struct could be written as
 </div>
 
 <p>
-若被嵌入的元素是指向结构的指针，则在可以使用这些类型之前必须将其初始化，使它们指向合法的结构。
+若被内嵌的元素是指向结构的指针，则在可以使用这些类型之前必须将其初始化，使它们指向合法的结构。
 <code>ReadWriter</code> 结构也可以如下方式定义
 </p>
 
@@ -4390,7 +4390,7 @@ it also satisfies all three interfaces:
 </div>
 
 <p>
-而通过直接嵌入结构，就可以不必这么繁琐。嵌入类型的方法被自动继承得来，这意味着
+而通过直接内嵌结构，就可以不必这么繁琐。内嵌类型的方法被自动继承得来，这意味着
 <code>bufio.ReadWriter</code> 不仅具有 <code>bufio.Reader</code> 和 <code>bufio.Writer</code>
 方法，同时还满足三个接口：<code>io.Reader</code>、<code>io.Writer</code>
 和 <code>io.ReadWriter</code>。
@@ -4409,7 +4409,7 @@ the receiver is the <code>reader</code> field of the <code>ReadWriter</code>, no
 </div>
 
 <p>
-嵌入与子类化有一个重大不同。当嵌入一个类型时，此类型的方法变为外部一级类型的方法，
+内嵌与子类化有一个重大不同。当内嵌一个类型时，此类型的方法变为外部一级类型的方法，
 而当这些方法被调用时，它们的接受者是内部一级的内省，而非外部一级。在上例中，当调用
 <code>bufio.ReadWriter</code> 的 <code>Read</code>方法时，将出现与以上转发的方法相同的结果；
 其接受者为 <code>ReadWriter</code> 的 <code>reader</code> 字段，而非<code>ReadWriter</code>本身。
@@ -4423,7 +4423,7 @@ This example shows an embedded field alongside a regular, named field.
 </div>
 
 <p>
-嵌入还有另外一个小便利，如下例子一个嵌入字段以及一个正常的命名字段。
+内嵌还有另外一个小便利，如下例子一个内嵌字段以及一个正常的命名字段。
 </p>
 
 <pre>
@@ -4496,7 +4496,7 @@ This would be useful if we wanted to refine the methods of <code>Logger</code>.
 </div>
 
 <p>
-如果我们需要直接引用嵌入的字段，就使用字段的类型名称，像使用字段名称一样省略包限定词。
+如果我们需要直接引用内嵌的字段，就使用字段的类型名称，像使用字段名称一样省略包限定词。
 如果我们需要访问 <code>Job</code> 类型的 <code>job</code> 变量的 <code>*log.Logger</code>，
 写成 <code>job.Logger</code> 就行了。当我们想要改进 <code>Logger</code> 方法时，这种方式将很有用。
 </p>
@@ -4519,8 +4519,8 @@ of <code>Job</code> would dominate it.
 </div>
 
 <p>
-嵌入类型会引入类型冲突的问题，但解决的规则也很简单。首先，一个字段或方法 <code>X</code>
-将隐藏更深层嵌入类型的 <code>X</code> 项。如果 <code>log.Logger</code>包含一个名称为
+内嵌类型会引入类型冲突的问题，但解决的规则也很简单。首先，一个字段或方法 <code>X</code>
+将隐藏更深层内嵌类型的 <code>X</code> 项。如果 <code>log.Logger</code>包含一个名称为
 <code>Command</code> 的字段或方法，将只使用 <code>Job</code> 的 <code>Command</code> 字段。
 </p>
 
@@ -4538,9 +4538,9 @@ is ever used.
 
 <p>
 其次，如果相同的嵌套级别上出现相同的名称，这将出现一个错误；如果 <code>Job</code>
-结构包含另外一个名称为 <code>Logger</code> 的字段或方法，则再嵌入 <code>log.Logger</code>
+结构包含另外一个名称为 <code>Logger</code> 的字段或方法，则再内嵌 <code>log.Logger</code>
 将产生错误。但是，如果重复的名字从未在类型定义以外的程序中用到过，就不会出现问题。
-这种限定对外部嵌入类型更改的一些保护；如果所添加的一个字段与另一个次级类型中的另一个字段产生冲突，
+这种限定对外部内嵌类型更改的一些保护；如果所添加的一个字段与另一个次级类型中的另一个字段产生冲突，
 但两个字段都没有被用到过，就不会发生问题。
 </p>
 
