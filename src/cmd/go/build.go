@@ -1914,6 +1914,9 @@ func (b *builder) ccompilerCmd(envvar, defcmd, objdir string) []string {
 		a = append(a, "-Qunused-arguments")
 	}
 
+	// disable word wrapping in error messages
+	a = append(a, "-fmessage-length=0")
+
 	// On OS X, some of the compilers behave as if -fno-common
 	// is always set, and the Mach-O linker in 6l/8l assumes this.
 	// See http://golang.org/issue/3253.

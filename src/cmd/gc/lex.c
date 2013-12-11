@@ -14,7 +14,6 @@
 #define	ungetc	ccungetc
 
 extern int yychar;
-int windows;
 int yyprev;
 int yylast;
 
@@ -189,6 +188,8 @@ main(int argc, char *argv[])
 	signal(SIGSEGV, fault);
 #endif
 
+	ctxt = linknew(thelinkarch);
+
 	localpkg = mkpkg(strlit(""));
 	localpkg->prefix = "\"\"";
 	
@@ -317,20 +318,6 @@ main(int argc, char *argv[])
 			use_sse = 1;
 		else
 			sysfatal("unsupported setting GO386=%s", p);
-	}
-
-	pathname = mal(1000);
-	if(getwd(pathname, 999) == 0)
-		strcpy(pathname, "/???");
-
-	if(yy_isalpha(pathname[0]) && pathname[1] == ':') {
-		// On Windows.
-		windows = 1;
-
-		// Canonicalize path by converting \ to / (Windows accepts both).
-		for(p=pathname; *p; p++)
-			if(*p == '\\')
-				*p = '/';
 	}
 
 	fmtinstallgo();
@@ -560,7 +547,7 @@ islocalname(Strlit *name)
 {
 	if(name->len >= 1 && name->s[0] == '/')
 		return 1;
-	if(windows && name->len >= 3 &&
+	if(ctxt->windows && name->len >= 3 &&
 	   yy_isalpha(name->s[0]) && name->s[1] == ':' && name->s[2] == '/')
 	   	return 1;
 	if(name->len >= 2 && strncmp(name->s, "./", 2) == 0)
@@ -702,7 +689,7 @@ importfile(Val *f, int line)
 			fakeimport();
 			return;
 		}
-		prefix = pathname;
+		prefix = ctxt->pathname;
 		if(localimport != nil)
 			prefix = localimport;
 		cleanbuf = mal(strlen(prefix) + strlen(path->s) + 2);
@@ -719,7 +706,7 @@ importfile(Val *f, int line)
 	}
 
 	if(!findpkg(path)) {
-		yyerror("can't find import: \"%Z\"", f->u.sval);
+		yyerror("can't find import: \"%Z\" [path=%Z]", f->u.sval, path);
 		errorexit();
 	}
 	importpkg = mkpkg(path);
@@ -1528,7 +1515,7 @@ getlinepragma(void)
 		goto out;
 
 	// try to avoid allocating file name over and over
-	for(h=hist; h!=H; h=h->link) {
+	for(h=ctxt->hist; h!=nil; h=h->link) {
 		if(h->name != nil && strcmp(h->name, lexbuf) == 0) {
 			linehist(h->name, n, 0);
 			goto out;
@@ -2354,7 +2341,7 @@ mkpackage(char* pkgname)
 
 	if(outfile == nil) {
 		p = strrchr(infile, '/');
-		if(windows) {
+		if(ctxt->windows) {
 			q = strrchr(infile, '\\');
 			if(q > p)
 				p = q;
