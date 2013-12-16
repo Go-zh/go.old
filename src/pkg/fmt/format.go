@@ -420,7 +420,10 @@ func (f *fmt) formatFloat(v float64, verb byte, prec, n int) {
 		// There's no sign, but we might need one.
 		// 它还没有符号，但我们可能会需要。
 		if f.plus {
-			slice[0] = '+'
+			f.buf.WriteByte('+')
+			f.wid--
+			f.pad(slice[1:])
+			return
 		} else if f.space {
 			// space is already there
 			// 已经有空格了

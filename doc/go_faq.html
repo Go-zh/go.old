@@ -904,7 +904,7 @@ Why are map operations not defined to be atomic?</h3>
 <div class="english">
 <p>
 After long discussion it was decided that the typical use of maps did not require
-safe access from multiple threads, and in those cases where it did, the map was
+safe access from multiple goroutines, and in those cases where it did, the map was
 probably part of some larger data structure or computation that was already
 synchronized.  Therefore requiring that all map operations grab a mutex would slow
 down most programs and add safety to few.  This was not an easy decision,
@@ -913,7 +913,7 @@ however, since it means uncontrolled map access can crash the program.
 </div>
 
 <p>
-经过长时间的讨论，决定了映射的典型使用无需从多线程中安全地访问，在那些情况下，
+经过长时间的讨论，决定了映射的典型使用无需从多Go程中安全地访问，在那些情况下，
 映射可能是一些大型数据结构的一部分或已经同步的计算。
 所以要求所有映射操作抓取互斥会减慢大部分程序并添加一些安全性。
 这并不是个容易的决定，然而，这也就意味着不受控制的映射访问会使程序崩溃。
