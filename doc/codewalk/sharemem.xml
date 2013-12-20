@@ -21,7 +21,7 @@ URLs, checking their HTTP response codes and periodically printing their state.
 </step>
 </div>
 
-<step title="前言" src="doc/codewalk/urlpoll.go">
+<step title="引言" src="doc/codewalk/urlpoll.go">
 Go实现并发的方式，不同于传统的使用线程共享内存的方式。从哲学上，它可以概括为：
 <br/><br/>
 <i>不要通过共享内存来通信，而要通过通信来共享内存。</i>

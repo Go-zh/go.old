@@ -18,7 +18,7 @@ license that can be found in the LICENSE file.
 </step>
 </div>
 
-<step title="前言" src="doc/codewalk/markov.go:/生成/,/指定。/">
+<step title="引言" src="doc/codewalk/markov.go:/生成/,/指定。/">
 	这段代码漫步描述了一个使用马尔可夫链算法生成任意文本的程序。包注释则描述了
 	该算法以及此程序的操作。请在继续学习前阅读它。
 </step>

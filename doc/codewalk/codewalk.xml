@@ -27,7 +27,7 @@
 </step>
 </div>
 
-<step title="前言" src="doc/codewalk/codewalk.xml">
+<step title="引言" src="doc/codewalk/codewalk.xml">
 	代码漫步就是贯穿一篇代码的指导教程，它由一系列的步骤构成。
 	其中的每一步都高亮并讲解了一节代码。
 	<br/><br/>
@@ -75,7 +75,7 @@
 </step>
 </div>
 
-<step title="步骤" src="doc/codewalk/codewalk.xml:/前言/,/step&gt;/">
+<step title="步骤" src="doc/codewalk/codewalk.xml:/引言/,/step&gt;/">
 	代码漫步中的每一个步骤都是嵌套在主 <code>&lt;codewalk&gt;</code> 中的
 	<code>&lt;step&gt;</code> 元素。
 	<code>&lt;step&gt;</code> 元素的 <code>title</code> 属性为该步骤赋予了标题，
@@ -155,7 +155,7 @@
 	而包含<i>regexp2</i>匹配的第一个行将是最后一个。
 	<br/><br/>
 
-	地址 <code>/<i>前言</i>/,/step&gt;</code> 在本文件中查找第一个 <code>/<i>前言</i>/</code>
+	地址 <code>/<i>引言</i>/,/step&gt;</code> 在本文件中查找第一个 <code>/<i>引言</i>/</code>
 	的实例，接着从此处往后，找到第一个 <code>/step&gt;/</code>的实例。
 	（点击上面的“步骤”这一步查看高亮的作用。）请注意 <code>&lt;</code> 和
 	<code>&gt;</code> 必使用XML转义来保证它是有效的XML。

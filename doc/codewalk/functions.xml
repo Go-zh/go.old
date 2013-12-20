@@ -20,7 +20,7 @@
 </step>
 </div>
 
-<step title="前言" src="doc/codewalk/pig.go">
+<step title="引言" src="doc/codewalk/pig.go">
 	Go支持一等函数、高阶函数、用户定义的函数类型、函数字面、闭包以及多返回值。
 	<br/><br/>
 
