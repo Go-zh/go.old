@@ -348,7 +348,7 @@ walkexpr(Node **np, NodeList **init)
 	int64 v;
 	int32 lno;
 	Node *n, *fn, *n1, *n2;
-	Sym *sym, *zero;
+	Sym *sym;
 	char buf[100], *p;
 
 	n = *np;
@@ -713,8 +713,8 @@ walkexpr(Node **np, NodeList **init)
 		typecheck(&n, Etop);
 		walkexpr(&n, init);
 		// mapaccess needs a zero value to be at least this big.
-		zero = pkglookup("zerovalue", runtimepkg);
-		ggloblsym(zero, t->type->width, 1, 1);
+		if(zerosize < t->type->width)
+			zerosize = t->type->width;
 		// TODO: ptr is always non-nil, so disable nil check for this OIND op.
 		goto ret;
 
@@ -898,7 +898,20 @@ walkexpr(Node **np, NodeList **init)
 				goto ret;
 			}
 		}
-		ll = list(ll, n->left);
+		if(isinter(n->left->type)) {
+			ll = list(ll, n->left);
+		} else {
+			// regular types are passed by reference to avoid C vararg calls
+			if(islvalue(n->left)) {
+				ll = list(ll, nod(OADDR, n->left, N));
+			} else {
+				var = temp(n->left->type);
+				n1 = nod(OAS, var, n->left);
+				typecheck(&n1, Etop);
+				*init = list(*init, n1);
+				ll = list(ll, nod(OADDR, var, N));
+			}
+		}
 		argtype(fn, n->left->type);
 		argtype(fn, n->type);
 		dowidth(fn->type);
@@ -1130,8 +1143,8 @@ walkexpr(Node **np, NodeList **init)
 		n->type = t->type;
 		n->typecheck = 1;
 		// mapaccess needs a zero value to be at least this big.
-		zero = pkglookup("zerovalue", runtimepkg);
-		ggloblsym(zero, t->type->width, 1, 1);
+		if(zerosize < t->type->width)
+			zerosize = t->type->width;
 		goto ret;
 
 	case ORECV:
@@ -2873,17 +2886,13 @@ sliceany(Node* n, NodeList **init)
 
 	if(isconst(cb, CTINT)) {
 		cbv = mpgetfix(cb->val.u.xval);
-		if(cbv < 0 || cbv > bv) {
+		if(cbv < 0 || cbv > bv)
 			yyerror("slice index out of bounds");
-			cbv = -1;
-		}
 	}
 	if(isconst(hb, CTINT)) {
 		hbv = mpgetfix(hb->val.u.xval);
-		if(hbv < 0 || hbv > bv) {
+		if(hbv < 0 || hbv > bv)
 			yyerror("slice index out of bounds");
-			hbv = -1;
-		}
 	}
 	if(isconst(lb, CTINT)) {
 		lbv = mpgetfix(lb->val.u.xval);

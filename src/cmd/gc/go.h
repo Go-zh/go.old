@@ -977,6 +977,9 @@ EXTERN	Link*	ctxt;
 EXTERN	int	nointerface;
 EXTERN	int	fieldtrack_enabled;
 EXTERN	int	precisestack_enabled;
+EXTERN	int	writearchive;
+
+EXTERN	Biobuf	bstdout;
 
 /*
  *	y.tab.c
@@ -1460,6 +1463,7 @@ EXTERN	Prog*	retpc;
 
 EXTERN	Node*	nodfp;
 EXTERN	int	disable_checknil;
+EXTERN	vlong	zerosize;
 
 int	anyregalloc(void);
 void	betypeinit(void);

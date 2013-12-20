@@ -88,6 +88,7 @@ flusherrors(void)
 {
 	int i;
 
+	Bflush(&bstdout);
 	if(nerr == 0)
 		return;
 	qsort(err, nerr, sizeof err[0], errcmp);
@@ -3613,7 +3614,8 @@ ngotype(Node *n)
  * only in the last segment of the path, and it makes for happier
  * users if we escape that as little as possible.
  *
- * If you edit this, edit ../ld/lib.c:/^pathtoprefix copy too.
+ * If you edit this, edit ../ld/lib.c:/^pathtoprefix too.
+ * If you edit this, edit ../../pkg/debug/goobj/read.go:/importPathToPrefix too.
  */
 static char*
 pathtoprefix(char *s)

@@ -16,7 +16,14 @@ type testpair struct {
 }
 
 var pairs = []testpair{
-	// Wikipedia example   // 维基例子
+	// Encode returns 0 when len(src) is 0
+	// 当 len(src) 为 0 时 Encode 返回 0
+	{
+		"",
+		"",
+	},
+	// Wikipedia example
+	// 维基例子
 	{
 		"Man is distinguished, not only by his reason, but by this singular passion from " +
 			"other animals, which is a lust of the mind, that by a perseverance of delight in " +

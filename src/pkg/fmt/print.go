@@ -154,51 +154,15 @@ type pp struct {
 	fmt        fmt
 }
 
-// A cache holds a set of reusable objects.
-// The slice is a stack (LIFO).
-// If more are needed, the cache creates them by calling new.
-
-// cache 保存了可重用对象的集合。
-// 其切片是一个栈结构（LIFO 后进先出）。
-// 如需保存更多对象，cache 会调用 new 创建它们。
-type cache struct {
-	mu    sync.Mutex
-	saved []interface{}
-	new   func() interface{}
+var ppFree = sync.Pool {
+	New: func() interface{} { return new(pp) },
 }
-
-func (c *cache) put(x interface{}) {
-	c.mu.Lock()
-	if len(c.saved) < cap(c.saved) {
-		c.saved = append(c.saved, x)
-	}
-	c.mu.Unlock()
-}
-
-func (c *cache) get() interface{} {
-	c.mu.Lock()
-	n := len(c.saved)
-	if n == 0 {
-		c.mu.Unlock()
-		return c.new()
-	}
-	x := c.saved[n-1]
-	c.saved = c.saved[0 : n-1]
-	c.mu.Unlock()
-	return x
-}
-
-func newCache(f func() interface{}) *cache {
-	return &cache{saved: make([]interface{}, 0, 100), new: f}
-}
-
-var ppFree = newCache(func() interface{} { return new(pp) })
 
 // newPrinter allocates a new pp struct or grab a cached one.
 
 // newPrinter 分配一个新的，或抓取一个已缓存的 pp 结构体。
 func newPrinter() *pp {
-	p := ppFree.get().(*pp)
+	p := ppFree.Get().(*pp)
 	p.panicking = false
 	p.erroring = false
 	p.fmt.init(&p.buf)
@@ -217,7 +181,7 @@ func (p *pp) free() {
 	p.buf = p.buf[:0]
 	p.arg = nil
 	p.value = reflect.Value{}
-	ppFree.put(p)
+	ppFree.Put(p)
 }
 
 func (p *pp) Width() (wid int, ok bool) { return p.fmt.wid, p.fmt.widPresent }

@@ -1,3 +1,8 @@
+
+// Copyright 2013 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 // 生成自
 //	maketables --tables=all --data=http://www.unicode.org/Public/6.2.0/ucd/UnicodeData.txt --casefolding=http://www.unicode.org/Public/6.2.0/ucd/CaseFolding.txt
 // 请勿编辑！

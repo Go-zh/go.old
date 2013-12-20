@@ -101,7 +101,8 @@ type decoder struct {
 	// From graphics control.
 
 	// 从图像control得到。
-	transparentIndex byte
+	transparentIndex    byte
+	hasTransparentIndex bool
 
 	// Computed.
 
@@ -208,10 +209,11 @@ func (d *decoder) decode(r io.Reader, configOnly bool) error {
 				if err != nil {
 					return err
 				}
-				// TODO: do we set transparency in this map too? That would be
-				// d.setTransparency(m.Palette)
 			} else {
 				m.Palette = d.globalColorMap
+			}
+			if d.hasTransparentIndex && int(d.transparentIndex) < len(m.Palette) {
+				m.Palette[d.transparentIndex] = color.RGBA{}
 			}
 			litWidth, err := d.r.ReadByte()
 			if err != nil {
@@ -261,7 +263,11 @@ func (d *decoder) decode(r io.Reader, configOnly bool) error {
 
 			d.image = append(d.image, m)
 			d.delay = append(d.delay, d.delayTime)
-			d.delayTime = 0 // TODO: is this correct, or should we hold on to the value?
+			// The GIF89a spec, Section 23 (Graphic Control Extension) says:
+			// "The scope of this extension is the first graphic rendering block
+			// to follow." We therefore reset the GCE fields to zero.
+			d.delayTime = 0
+			d.hasTransparentIndex = false
 
 		case sTrailer:
 			if len(d.image) == 0 {
@@ -372,15 +378,9 @@ func (d *decoder) readGraphicControl() error {
 	d.delayTime = int(d.tmp[2]) | int(d.tmp[3])<<8
 	if d.flags&gcTransparentColorSet != 0 {
 		d.transparentIndex = d.tmp[4]
-		d.setTransparency(d.globalColorMap)
+		d.hasTransparentIndex = true
 	}
 	return nil
-}
-
-func (d *decoder) setTransparency(colorMap color.Palette) {
-	if int(d.transparentIndex) < len(colorMap) {
-		colorMap[d.transparentIndex] = color.RGBA{}
-	}
 }
 
 func (d *decoder) newImageFromDescriptor() (*image.Paletted, error) {

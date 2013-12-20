@@ -383,8 +383,6 @@ static int32	oshrr(Link*, int, int, int, int);
 static int32	omvl(Link*, Prog*, Addr*, int);
 static int32	immaddr(int32);
 static int	aclass(Link*, Addr*);
-static int	chipzero(Link*, float64);
-static int	chipfloat(Link*, float64);
 static int32	immrot(uint32);
 static int32	immaddr(int32);
 static int32	opbra(Link*, int, int);
@@ -481,8 +479,10 @@ span5(Link *ctxt, LSym *cursym)
 		m = o->size;
 		// must check literal pool here in case p generates many instructions
 		if(ctxt->blitrl){
-			if(checkpool(ctxt, op, p->as == ACASE ? casesz(ctxt, p) : m))
-				c = p->pc = scan(ctxt, op, p, c);
+			if(checkpool(ctxt, op, p->as == ACASE ? casesz(ctxt, p) : m)) {
+				p->pc = scan(ctxt, op, p, c);
+				c = p->pc;
+			}
 		}
 		if(m == 0 && (p->as != AFUNCDATA && p->as != APCDATA)) {
 			ctxt->diag("zero-width instruction\n%P", p);
@@ -562,8 +562,6 @@ span5(Link *ctxt, LSym *cursym)
 		cursym->size = c;
 	} while(bflag);
 
-	c += c&4;
-
 	/*
 	 * lay out the code.  all the pc-relative code references,
 	 * even cross-function, are resolved now;
@@ -619,7 +617,7 @@ flushpool(Link *ctxt, Prog *p, int skip, int force)
 
 	if(ctxt->blitrl) {
 		if(skip){
-			if(0 && skip==1)print("note: flush literal pool at %ux: len=%ud ref=%ux\n", p->pc+4, pool.size, pool.start);
+			if(0 && skip==1)print("note: flush literal pool at %llux: len=%ud ref=%ux\n", p->pc+4, pool.size, pool.start);
 			q = ctxt->arch->prg();
 			q->as = AB;
 			q->to.type = D_BRANCH;
@@ -857,9 +855,9 @@ aclass(Link *ctxt, Addr *a)
 		return C_GOK;
 
 	case D_FCONST:
-		if(chipzero(ctxt, a->u.dval) >= 0)
+		if(chipzero5(ctxt, a->u.dval) >= 0)
 			return C_ZFCON;
-		if(chipfloat(ctxt, a->u.dval) >= 0)
+		if(chipfloat5(ctxt, a->u.dval) >= 0)
 			return C_SFCON;
 		return C_LFCON;
 
@@ -950,7 +948,7 @@ oplook(Link *ctxt, Prog *p)
 		o = oprange[r].stop; /* just generate an error */
 	}
 	if(0 /*debug['O']*/) {
-		print("oplook %A %O %O %O\n",
+		print("oplook %A %d %d %d\n",
 			(int)p->as, a1, a2, a3);
 		print("		%d %d\n", p->from.type, p->to.type);
 	}
@@ -964,8 +962,9 @@ oplook(Link *ctxt, Prog *p)
 			p->optab = (o-optab)+1;
 			return o;
 		}
-	ctxt->diag("illegal combination %A %O %O %O, %d %d",
-		p->as, a1, a2, a3, p->from.type, p->to.type);
+	ctxt->diag("illegal combination %P; %d %d %d, %d %d",
+		p, a1, a2, a3, p->from.type, p->to.type);
+	ctxt->diag("from %d %d to %d %d\n", p->from.type, p->from.name, p->to.type, p->to.name);
 	prasm(p);
 	if(o == 0)
 		o = optab;
@@ -1213,7 +1212,7 @@ buildop(Link *ctxt)
 	}
 }
 
-void
+static void
 asmout(Link *ctxt, Prog *p, Optab *o, int32 *out, LSym *gmsym)
 {
 	int32 o1, o2, o3, o4, o5, o6, v;
@@ -1557,7 +1556,7 @@ if(0 /*debug['G']*/) print("%ux: %s: arm %d\n", (uint32)(p->pc), p->from.sym->na
 		aclass(ctxt, &p->from);
 	movm:
 		if(ctxt->instoffset != 0)
-			ctxt->diag("offset must be zero in MOVM");
+			ctxt->diag("offset must be zero in MOVM; %P", p);
 		o1 |= (p->scond & C_SCOND) << 28;
 		if(p->scond & C_PBIT)
 			o1 |= 1 << 24;
@@ -1878,7 +1877,7 @@ if(0 /*debug['G']*/) print("%ux: %s: arm %d\n", (uint32)(p->pc), p->from.sym->na
 			o1 = 0xeeb00b00;	// VMOV imm 64
 		o1 |= (p->scond & C_SCOND) << 28;
 		o1 |= p->to.reg << 12;
-		v = chipfloat(ctxt, p->from.u.dval);
+		v = chipfloat5(ctxt, p->from.u.dval);
 		o1 |= (v&0xf) << 0;
 		o1 |= (v&0xf0) << 12;
 		break;
@@ -2083,7 +2082,7 @@ if(0 /*debug['G']*/) print("%ux: %s: arm %d\n", (uint32)(p->pc), p->from.sym->na
 #endif
 }
 
-int32
+static int32
 oprrr(Link *ctxt, int a, int sc)
 {
 	int32 o;
@@ -2197,7 +2196,7 @@ oprrr(Link *ctxt, int a, int sc)
 	return 0;
 }
 
-int32
+static int32
 opbra(Link *ctxt, int a, int sc)
 {
 
@@ -2232,7 +2231,7 @@ opbra(Link *ctxt, int a, int sc)
 	return 0;
 }
 
-int32
+static int32
 olr(Link *ctxt, int32 v, int b, int r, int sc)
 {
 	int32 o;
@@ -2261,7 +2260,7 @@ olr(Link *ctxt, int32 v, int b, int r, int sc)
 	return o;
 }
 
-int32
+static int32
 olhr(Link *ctxt, int32 v, int b, int r, int sc)
 {
 	int32 o;
@@ -2286,7 +2285,7 @@ olhr(Link *ctxt, int32 v, int b, int r, int sc)
 	return o;
 }
 
-int32
+static int32
 osr(Link *ctxt, int a, int r, int32 v, int b, int sc)
 {
 	int32 o;
@@ -2297,7 +2296,7 @@ osr(Link *ctxt, int a, int r, int32 v, int b, int sc)
 	return o;
 }
 
-int32
+static int32
 oshr(Link *ctxt, int r, int32 v, int b, int sc)
 {
 	int32 o;
@@ -2307,33 +2306,33 @@ oshr(Link *ctxt, int r, int32 v, int b, int sc)
 }
 
 
-int32
+static int32
 osrr(Link *ctxt, int r, int i, int b, int sc)
 {
 
 	return olr(ctxt, i, b, r, sc) ^ ((1<<25) | (1<<20));
 }
 
-int32
+static int32
 oshrr(Link *ctxt, int r, int i, int b, int sc)
 {
 	return olhr(ctxt, i, b, r, sc) ^ ((1<<22) | (1<<20));
 }
 
-int32
+static int32
 olrr(Link *ctxt, int i, int b, int r, int sc)
 {
 
 	return olr(ctxt, i, b, r, sc) ^ (1<<25);
 }
 
-int32
+static int32
 olhrr(Link *ctxt, int i, int b, int r, int sc)
 {
 	return olhr(ctxt, i, b, r, sc) ^ (1<<22);
 }
 
-int32
+static int32
 ofsr(Link *ctxt, int a, int r, int32 v, int b, int sc, Prog *p)
 {
 	int32 o;
@@ -2370,7 +2369,7 @@ ofsr(Link *ctxt, int a, int r, int32 v, int b, int sc, Prog *p)
 	return o;
 }
 
-int32
+static int32
 omvl(Link *ctxt, Prog *p, Addr *a, int dr)
 {
 	int32 v, o1;
@@ -2392,8 +2391,8 @@ omvl(Link *ctxt, Prog *p, Addr *a, int dr)
 	return o1;
 }
 
-static int
-chipzero(Link *ctxt, float64 e)
+int
+chipzero5(Link *ctxt, float64 e)
 {
 	// We use GOARM=7 to gate the use of VFPv3 vmov (imm) instructions.
 	if(ctxt->goarm < 7 || e != 0)
@@ -2401,8 +2400,8 @@ chipzero(Link *ctxt, float64 e)
 	return 0;
 }
 
-static int
-chipfloat(Link *ctxt, float64 e)
+int
+chipfloat5(Link *ctxt, float64 e)
 {
 	int n;
 	ulong h1;

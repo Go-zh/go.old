@@ -349,7 +349,6 @@ type FlagSet struct {
 	actual        map[string]*Flag
 	formal        map[string]*Flag
 	args          []string // arguments after flags  // flags后面的参数
-	exitOnError   bool     // does the program exit if there's an error?  // 是否当错误发生的时候，程序会退出？
 	errorHandling ErrorHandling
 	output        io.Writer // nil means stderr; use out() accessor  // nil代表控制台输出，使用out()来访问这个字段
 }

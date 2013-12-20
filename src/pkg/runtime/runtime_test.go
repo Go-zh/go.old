@@ -93,6 +93,10 @@ func BenchmarkDeferMany(b *testing.B) {
 // The value reported will include the padding between runtime.gogo and the
 // next function in memory. That's fine.
 func TestRuntimeGogoBytes(t *testing.T) {
+	// TODO(brainman): delete when issue 6973 is fixed.
+	if GOOS == "windows" {
+		t.Skip("skipping broken test on windows")
+	}
 	dir, err := ioutil.TempDir("", "go-build")
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
@@ -104,7 +108,7 @@ func TestRuntimeGogoBytes(t *testing.T) {
 		t.Fatalf("building hello world: %v\n%s", err, out)
 	}
 
-	out, err = exec.Command("go", "tool", "nm", "-S", dir+"/hello").CombinedOutput()
+	out, err = exec.Command("go", "tool", "nm", "-size", dir+"/hello").CombinedOutput()
 	if err != nil {
 		t.Fatalf("go tool nm: %v\n%s", err, out)
 	}

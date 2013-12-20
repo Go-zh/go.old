@@ -97,8 +97,10 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 		runtime·markspan(v, 0, 0, true);
 	}
 
-	if(!(flag & FlagNoGC))
-		runtime·markallocated(v, size, (flag&FlagNoScan) != 0);
+	if(flag & FlagNoGC)
+		runtime·marknogc(v);
+	else if(!(flag & FlagNoScan))
+		runtime·markscan(v);
 
 	if(DebugTypeAtBlockEnd)
 		*(uintptr*)((uintptr)v+size-sizeof(uintptr)) = typ;
@@ -760,12 +762,15 @@ func SetFinalizer(obj Eface, finalizer Eface) {
 		runtime·printf("runtime.SetFinalizer: first argument is %S, not pointer\n", *obj.type->string);
 		goto throw;
 	}
+	ot = (PtrType*)obj.type;
+	if(ot->elem != nil && ot->elem->size == 0) {
+		return;
+	}
 	if(!runtime·mlookup(obj.data, &base, &size, nil) || obj.data != base) {
 		runtime·printf("runtime.SetFinalizer: pointer not at beginning of allocated block\n");
 		goto throw;
 	}
 	nret = 0;
-	ot = (PtrType*)obj.type;
 	fint = nil;
 	if(finalizer.type != nil) {
 		if(finalizer.type->kind != KindFunc)

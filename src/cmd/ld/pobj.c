@@ -42,30 +42,13 @@
 char	*noname		= "<none>";
 char*	paramspace	= "FP";
 
-Header headers[] = {
-	"darwin",	Hdarwin,
-	"dragonfly",	Hdragonfly,
-	"elf",		Helf,
-	"freebsd",	Hfreebsd,
-	"linux",	Hlinux,
-	"netbsd",	Hnetbsd,
-	"openbsd",	Hopenbsd,
-	"plan9",	Hplan9,
-	"windows",	Hwindows,
-	"windowsgui",	Hwindows,
-	0, 0
-};
-
 void
 main(int argc, char *argv[])
 {
-	char *p;
-
 	ctxt = linknew(thelinkarch);
 	ctxt->thechar = thechar;
 	ctxt->thestring = thestring;
 	ctxt->diag = diag;
-	ctxt->dwarfaddfrag = dwarfaddfrag;
 	ctxt->bso = &bso;
 
 	Binit(&bso, 1, OWRITE);
@@ -81,16 +64,8 @@ main(int argc, char *argv[])
 	linkmode = LinkAuto;
 	nuxiinit();
 	
-	if(thechar == '5') {
-		p = getgoarm();
-		if(p != nil)
-			goarm = atoi(p);
-		else
-			goarm = 6;
-		if(goarm == 5)
-			debug['F'] = 1;
-		ctxt->goarm = goarm;
-	}
+	if(thechar == '5' && ctxt->goarm == 5)
+		debug['F'] = 1;
 
 	flagcount("1", "use alternate profiling code", &debug['1']);
 	if(thechar == '6')
@@ -163,6 +138,8 @@ main(int argc, char *argv[])
 	if(HEADTYPE == -1)
 		HEADTYPE = headtype(goos);
 	ctxt->headtype = HEADTYPE;
+	if (headstring == nil)
+		headstring = headstr(HEADTYPE);
 
 	archinit();
 	ctxt->linkmode = linkmode;
@@ -186,13 +163,8 @@ main(int argc, char *argv[])
 		mark(linklookup(ctxt, "runtime.read_tls_fallback", 0));
 	}
 
-	patch();
 	deadcode();
-	follow();
-	dostkoff();
 	paramspace = "SP";	/* (FP) now (SP) on output */
-	span();
-	pcln();
 
 	doelf();
 	if(HEADTYPE == Hdarwin)

@@ -189,6 +189,9 @@ main(int argc, char *argv[])
 #endif
 
 	ctxt = linknew(thelinkarch);
+	ctxt->diag = yyerror;
+	ctxt->bso = &bstdout;
+	Binit(&bstdout, 1, OWRITE);
 
 	localpkg = mkpkg(strlit(""));
 	localpkg->prefix = "\"\"";
@@ -264,6 +267,7 @@ main(int argc, char *argv[])
 	flagcount("m", "print optimization decisions", &debug['m']);
 	flagstr("o", "obj: set output file", &outfile);
 	flagstr("p", "path: set expected package import path", &myimportpath);
+	flagcount("pack", "write package file instead of object file", &writearchive);
 	flagcount("r", "debug generated wrappers", &debug['r']);
 	flagcount("race", "enable race detector", &flag_race);
 	flagcount("s", "warn about composite literals that can be simplified", &debug['s']);
@@ -276,6 +280,7 @@ main(int argc, char *argv[])
 		flagcount("largemodel", "generate code that assumes a large memory model", &flag_largemodel);
 
 	flagparse(&argc, &argv, usage);
+	ctxt->debugasm = debug['S'];
 
 	if(argc < 1)
 		usage();
@@ -514,12 +519,13 @@ skiptopkgdef(Biobuf *b)
 		return 0;
 	if(memcmp(p, "!<arch>\n", 8) != 0)
 		return 0;
-	/* symbol table is first; skip it */
+	/* symbol table may be first; skip it */
 	sz = arsize(b, "__.GOSYMDEF");
-	if(sz < 0)
-		return 0;
-	Bseek(b, sz, 1);
-	/* package export block is second */
+	if(sz >= 0)
+		Bseek(b, sz, 1);
+	else
+		Bseek(b, 8, 0);
+	/* package export block is next */
 	sz = arsize(b, "__.PKGDEF");
 	if(sz <= 0)
 		return 0;
@@ -706,7 +712,7 @@ importfile(Val *f, int line)
 	}
 
 	if(!findpkg(path)) {
-		yyerror("can't find import: \"%Z\" [path=%Z]", f->u.sval, path);
+		yyerror("can't find import: \"%Z\"", f->u.sval);
 		errorexit();
 	}
 	importpkg = mkpkg(path);

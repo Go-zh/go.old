@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"container/heap"
 	"errors"
@@ -86,8 +87,8 @@ The build flags are shared by the build, install, run, and test commands:
 		arguments to pass on each 5l, 6l, or 8l linker invocation.
 	-tags 'tag list'
 		a list of build tags to consider satisfied during the build.
-		See the documentation for the go/build package for
-		more information about build tags.
+		For more information about build tags, see the description of
+		build constraints in the documentation for the go/build package.
 
 The list flags accept a space-separated list of strings. To embed spaces
 in an element in the list, surround it with either single or double quotes.
@@ -901,7 +902,7 @@ func (b *builder) build(a *action) (err error) {
 
 	// Compile Go.
 	if len(gofiles) > 0 {
-		ofile, out, err := buildToolchain.gc(b, a.p, obj, inc, gofiles)
+		ofile, out, err := buildToolchain.gc(b, a.p, a.objpkg, obj, inc, gofiles)
 		if len(out) > 0 {
 			b.showOutput(a.p.Dir, a.p.ImportPath, b.processOutput(out))
 			if err != nil {
@@ -911,7 +912,9 @@ func (b *builder) build(a *action) (err error) {
 		if err != nil {
 			return err
 		}
-		objects = append(objects, ofile)
+		if ofile != a.objpkg {
+			objects = append(objects, ofile)
+		}
 	}
 
 	// Copy .h files named for goos or goarch or goos_goarch
@@ -974,9 +977,15 @@ func (b *builder) build(a *action) (err error) {
 		objects = append(objects, filepath.Join(a.p.Dir, syso))
 	}
 
-	// Pack into archive in obj directory
-	if err := buildToolchain.pack(b, a.p, obj, a.objpkg, objects); err != nil {
-		return err
+	// Pack into archive in obj directory.
+	// If the Go compiler wrote an archive, we only need to add the
+	// object files for non-Go sources to the archive.
+	// If the Go compiler wrote an archive and the package is entirely
+	// Go sources, there is no pack to execute at all.
+	if len(objects) > 0 {
+		if err := buildToolchain.pack(b, a.p, obj, a.objpkg, objects); err != nil {
+			return err
+		}
 	}
 
 	// Link if needed.
@@ -1038,7 +1047,7 @@ func (b *builder) install(a *action) (err error) {
 		}
 	}
 
-	return b.copyFile(a, a.target, a1.target, perm)
+	return b.moveOrCopyFile(a, a.target, a1.target, perm)
 }
 
 // includeArgs returns the -I or -L directory list for access
@@ -1082,6 +1091,27 @@ func (b *builder) includeArgs(flag string, all []*action) []string {
 	}
 
 	return inc
+}
+
+// moveOrCopyFile is like 'mv src dst' or 'cp src dst'.
+func (b *builder) moveOrCopyFile(a *action, dst, src string, perm os.FileMode) error {
+	if buildN {
+		b.showcmd("", "mv %s %s", src, dst)
+		return nil
+	}
+
+	// If we can update the mode and rename to the dst, do it.
+	// Otherwise fall back to standard copy.
+	if err := os.Chmod(src, perm); err == nil {
+		if err := os.Rename(src, dst); err == nil {
+			if buildX {
+				b.showcmd("", "mv %s %s", src, dst)
+			}
+			return nil
+		}
+	}
+
+	return b.copyFile(a, dst, src, perm)
 }
 
 // copyFile is like 'cp src dst'.
@@ -1454,7 +1484,7 @@ type toolchain interface {
 	// gc runs the compiler in a specific directory on a set of files
 	// and returns the name of the generated output file.
 	// The compiler runs in the directory dir.
-	gc(b *builder, p *Package, obj string, importArgs []string, gofiles []string) (ofile string, out []byte, err error)
+	gc(b *builder, p *Package, archive, obj string, importArgs []string, gofiles []string) (ofile string, out []byte, err error)
 	// cc runs the toolchain's C compiler in a directory on a C file
 	// to produce an output file.
 	cc(b *builder, p *Package, objdir, ofile, cfile string) error
@@ -1491,7 +1521,7 @@ func (noToolchain) linker() string {
 	return ""
 }
 
-func (noToolchain) gc(b *builder, p *Package, obj string, importArgs []string, gofiles []string) (ofile string, out []byte, err error) {
+func (noToolchain) gc(b *builder, p *Package, archive, obj string, importArgs []string, gofiles []string) (ofile string, out []byte, err error) {
 	return "", nil, noCompiler()
 }
 
@@ -1527,9 +1557,14 @@ func (gcToolchain) linker() string {
 	return tool(archChar + "l")
 }
 
-func (gcToolchain) gc(b *builder, p *Package, obj string, importArgs []string, gofiles []string) (ofile string, output []byte, err error) {
-	out := "_go_." + archChar
-	ofile = obj + out
+func (gcToolchain) gc(b *builder, p *Package, archive, obj string, importArgs []string, gofiles []string) (ofile string, output []byte, err error) {
+	if archive != "" {
+		ofile = archive
+	} else {
+		out := "_go_." + archChar
+		ofile = obj + out
+	}
+
 	gcargs := []string{"-p", p.ImportPath}
 	if p.Standard && p.ImportPath == "runtime" {
 		// runtime compiles with a special 6g flag to emit
@@ -1556,6 +1591,9 @@ func (gcToolchain) gc(b *builder, p *Package, obj string, importArgs []string, g
 	}
 
 	args := stringList(tool(archChar+"g"), "-o", ofile, buildGcflags, gcargs, "-D", p.localPrefix, importArgs)
+	if ofile == archive {
+		args = append(args, "-pack")
+	}
 	for _, f := range gofiles {
 		args = append(args, mkAbs(p.Dir, f))
 	}
@@ -1579,7 +1617,83 @@ func (gcToolchain) pack(b *builder, p *Package, objDir, afile string, ofiles []s
 	for _, f := range ofiles {
 		absOfiles = append(absOfiles, mkAbs(objDir, f))
 	}
-	return b.run(p.Dir, p.ImportPath, nil, tool("pack"), "grcP", b.work, mkAbs(objDir, afile), absOfiles)
+	cmd := "grcP"
+	absAfile := mkAbs(objDir, afile)
+	appending := false
+	if _, err := os.Stat(absAfile); err == nil {
+		appending = true
+		cmd = "rqP"
+	}
+
+	cmdline := stringList("pack", cmd, b.work, absAfile, absOfiles)
+
+	if appending {
+		if buildN || buildX {
+			b.showcmd(p.Dir, "%s # internal", joinUnambiguously(cmdline))
+		}
+		if buildN {
+			return nil
+		}
+		if err := packInternal(b, absAfile, absOfiles); err != nil {
+			b.showOutput(p.Dir, p.ImportPath, err.Error()+"\n")
+			return errPrintedOutput
+		}
+		return nil
+	}
+
+	// Need actual pack.
+	cmdline[0] = tool("pack")
+	return b.run(p.Dir, p.ImportPath, nil, cmdline)
+}
+
+func packInternal(b *builder, afile string, ofiles []string) error {
+	dst, err := os.OpenFile(afile, os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		return err
+	}
+	defer dst.Close() // only for error returns or panics
+	w := bufio.NewWriter(dst)
+
+	for _, ofile := range ofiles {
+		src, err := os.Open(ofile)
+		if err != nil {
+			return err
+		}
+		fi, err := src.Stat()
+		if err != nil {
+			src.Close()
+			return err
+		}
+		// Note: Not using %-16.16s format because we care
+		// about bytes, not runes.
+		name := fi.Name()
+		if len(name) > 16 {
+			name = name[:16]
+		} else {
+			name += strings.Repeat(" ", 16-len(name))
+		}
+		size := fi.Size()
+		fmt.Fprintf(w, "%s%-12d%-6d%-6d%-8o%-10d`\n",
+			name, 0, 0, 0, 0644, size)
+		n, err := io.Copy(w, src)
+		src.Close()
+		if err == nil && n < size {
+			err = io.ErrUnexpectedEOF
+		} else if err == nil && n > size {
+			err = fmt.Errorf("file larger than size reported by stat")
+		}
+		if err != nil {
+			return fmt.Errorf("copying %s to %s: %v", ofile, afile, err)
+		}
+		if size&1 != 0 {
+			w.WriteByte(0)
+		}
+	}
+
+	if err := w.Flush(); err != nil {
+		return err
+	}
+	return dst.Close()
 }
 
 func (gcToolchain) ld(b *builder, p *Package, out string, allactions []*action, mainpkg string, ofiles []string) error {
@@ -1672,7 +1786,7 @@ func (gccgoToolchain) linker() string {
 	return gccgoBin
 }
 
-func (gccgoToolchain) gc(b *builder, p *Package, obj string, importArgs []string, gofiles []string) (ofile string, output []byte, err error) {
+func (gccgoToolchain) gc(b *builder, p *Package, archive, obj string, importArgs []string, gofiles []string) (ofile string, output []byte, err error) {
 	out := p.Name + ".o"
 	ofile = obj + out
 	gcargs := []string{"-g"}
@@ -2242,7 +2356,7 @@ func (b *builder) swigIntSize(obj string) (intsize string, err error) {
 
 	p := goFilesPackage(srcs)
 
-	if _, _, e := buildToolchain.gc(b, p, obj, nil, srcs); e != nil {
+	if _, _, e := buildToolchain.gc(b, p, "", obj, nil, srcs); e != nil {
 		return "32", nil
 	}
 	return "64", nil
