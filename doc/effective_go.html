@@ -1,10 +1,12 @@
 <!--{
 	"Title": "实效Go编程",
+	"Subtitle": "版本：2013年12月22日",
 	"Template": true
 }-->
 
 <!--{
 	"Title": "Effective Go",
+	"Subtitle": "Version of Nov 13, 2013",
 	"Template": true
 }-->
 
@@ -165,16 +167,16 @@ declaration
 <div class="english">
 <pre>
 type T struct {
-    name string // name of the object
-    value int // its value
+	name string // name of the object
+	value int // its value
 }
 </pre>
 </div>
 
 <pre>
 type T struct {
-    name string // 对象名
-    value int // 对象值
+	name string // 对象名
+	value int // 对象值
 }
 </pre>
 
@@ -191,16 +193,16 @@ type T struct {
 <div class="english">
 <pre>
 type T struct {
-    name    string // name of the object
-    value   int    // its value
+	name    string // name of the object
+	value   int    // its value
 }
 </pre>
 </div>
 
 <pre>
 type T struct {
-    name    string // 对象名
-    value   int    // 对象值
+	name    string // 对象名
+	value   int    // 对象值
 }
 </pre>
 
@@ -226,47 +228,47 @@ Some formatting details remain.  Very briefly:
 
 <div class="english">
 <dl>
-    <dt>Indentation</dt>
-    <dd>We use tabs for indentation and <code>gofmt</code> emits them by default.
-    Use spaces only if you must.
-    </dd>
-    <dt>Line length</dt>
-    <dd>
-    Go has no line length limit.  Don't worry about overflowing a punched card.
-    If a line feels too long, wrap it and indent with an extra tab.
-    </dd>
-    <dt>Parentheses</dt>
-    <dd>
-    Go needs fewer parentheses than C and Java: control structures (<code>if</code>,
-    <code>for</code>, <code>switch</code>) do not have parentheses in
-    their syntax.
-    Also, the operator precedence hierarchy is shorter and clearer, so
+	<dt>Indentation</dt>
+	<dd>We use tabs for indentation and <code>gofmt</code> emits them by default.
+	Use spaces only if you must.
+	</dd>
+	<dt>Line length</dt>
+	<dd>
+	Go has no line length limit.  Don't worry about overflowing a punched card.
+	If a line feels too long, wrap it and indent with an extra tab.
+	</dd>
+	<dt>Parentheses</dt>
+	<dd>
+	Go needs fewer parentheses than C and Java: control structures (<code>if</code>,
+	<code>for</code>, <code>switch</code>) do not have parentheses in
+	their syntax.
+	Also, the operator precedence hierarchy is shorter and clearer, so
 <pre>
 x&lt;&lt;8 + y&lt;&lt;16
 </pre>
-    means what the spacing implies, unlike in the other languages.
-    </dd>
+	means what the spacing implies, unlike in the other languages.
+	</dd>
 </dl>
 </div>
 
 <dl>
-    <dt>缩进</dt>
-    <dd>
-    我们使用制表符（tab）缩进，<code>gofmt</code> 默认也使用它。在你认为确实有必要时再使用空格。
-    </dd>
-    <dt>行的长度</dt>
-    <dd>
-    Go对行的长度没有限制，别担心打孔纸不够长。如果一行实在太长，也可进行折行并插入适当的tab缩进。
-    </dd>
-    <dt>括号</dt>
-    <dd>
-    比起C和Java，Go所需的括号更少：控制结构（<code>if</code>、<code>for</code> 和
-    <code>switch</code>）在语法上并不需要圆括号。此外，操作符优先级处理变得更加简洁，因此
+	<dt>缩进</dt>
+	<dd>
+	我们使用制表符（tab）缩进，<code>gofmt</code> 默认也使用它。在你认为确实有必要时再使用空格。
+	</dd>
+	<dt>行的长度</dt>
+	<dd>
+	Go对行的长度没有限制，别担心打孔纸不够长。如果一行实在太长，也可进行折行并插入适当的tab缩进。
+	</dd>
+	<dt>括号</dt>
+	<dd>
+	比起C和Java，Go所需的括号更少：控制结构（<code>if</code>、<code>for</code> 和
+	<code>switch</code>）在语法上并不需要圆括号。此外，操作符优先级处理变得更加简洁，因此
 <pre>
 x&lt;&lt;8 + y&lt;&lt;16
 </pre>
-    正表述了空格符所传达的含义。
-    </dd>
+	正表述了空格符所传达的含义。
+	</dd>
 </dl>
 
 <div class="english">
@@ -334,19 +336,19 @@ Package regexp implements a simple library for regular expressions.
 
 The syntax of the regular expressions accepted is:
 
-    regexp:
-        concatenation { '|' concatenation }
-    concatenation:
-        { closure }
-    closure:
-        term [ '*' | '+' | '?' ]
-    term:
-        '^'
-        '$'
-        '.'
-        character
-        '[' [ '^' ] character-ranges ']'
-        '(' regexp ')'
+	regexp:
+		concatenation { '|' concatenation }
+	concatenation:
+		{ closure }
+	closure:
+		term [ '*' | '+' | '?' ]
+	term:
+		'^'
+		'$'
+		'.'
+		character
+		'[' [ '^' ] character-ranges ']'
+		'(' regexp ')'
 */
 package regexp
 </pre>
@@ -354,23 +356,23 @@ package regexp
 
 <pre>
 /*
-    regexp 包为正则表达式实现了一个简单的库。
+	regexp 包为正则表达式实现了一个简单的库。
 
-    该库接受的正则表达式语法为：
+	该库接受的正则表达式语法为：
 
-    正则表达式:
-        串联 { '|' 串联 }
-    串联:
-        { 闭包 }
-    闭包:
-        条目 [ '*' | '+' | '?' ]
-    条目:
-        '^'
-        '$'
-        '.'
-        字符
-        '[' [ '^' ] 字符遍历 ']'
-        '(' 正则表达式 ')'
+	正则表达式:
+		串联 { '|' 串联 }
+	串联:
+		{ 闭包 }
+	闭包:
+		条目 [ '*' | '+' | '?' ]
+	条目:
+		'^'
+		'$'
+		'.'
+		字符
+		'[' [ '^' ] 字符遍历 ']'
+		'(' 正则表达式 ')'
 */
 package regexp
 </pre>
@@ -513,18 +515,18 @@ which recalls the word you're looking for.
 <div class="english">
 <pre>
 $ godoc regexp | grep parse
-    Compile parses a regular expression and returns, if successful, a Regexp
-    parsed. It simplifies safe initialization of global variables holding
-    cannot be parsed. It simplifies safe initialization of global variables
+	Compile parses a regular expression and returns, if successful, a Regexp
+	parsed. It simplifies safe initialization of global variables holding
+	cannot be parsed. It simplifies safe initialization of global variables
 $
 </pre>
 </div>
 
 <pre>
 $ godoc regexp | grep parse
-    Compile parses a regular expression and returns, if successful, a Regexp
-    parsed. It simplifies safe initialization of global variables holding
-    cannot be parsed. It simplifies safe initialization of global variables
+	Compile parses a regular expression and returns, if successful, a Regexp
+	parsed. It simplifies safe initialization of global variables holding
+	cannot be parsed. It simplifies safe initialization of global variables
 $
 </pre>
 
@@ -545,10 +547,10 @@ Go的声明语法允许成组声明。单个文档注释应介绍一组相关的
 <pre>
 // Error codes returned by failures to parse an expression.
 var (
-    ErrInternal      = errors.New("regexp: internal error")
-    ErrUnmatchedLpar = errors.New("regexp: unmatched '('")
-    ErrUnmatchedRpar = errors.New("regexp: unmatched ')'")
-    ...
+	ErrInternal      = errors.New("regexp: internal error")
+	ErrUnmatchedLpar = errors.New("regexp: unmatched '('")
+	ErrUnmatchedRpar = errors.New("regexp: unmatched ')'")
+	...
 )
 </pre>
 </div>
@@ -556,10 +558,10 @@ var (
 <pre>
 // 表达式解析失败后返回错误代码。
 var (
-    ErrInternal      = errors.New("regexp: internal error")
-    ErrUnmatchedLpar = errors.New("regexp: unmatched '('")
-    ErrUnmatchedRpar = errors.New("regexp: unmatched ')'")
-    ...
+	ErrInternal      = errors.New("regexp: internal error")
+	ErrUnmatchedLpar = errors.New("regexp: unmatched '('")
+	ErrUnmatchedRpar = errors.New("regexp: unmatched ')'")
+	...
 )
 </pre>
 
@@ -576,10 +578,10 @@ such as the fact that a set of variables is protected by a mutex.
 
 <pre>
 var (
-    countLock   sync.Mutex
-    inputCount  uint32
-    outputCount uint32
-    errorCount  uint32
+	countLock   sync.Mutex
+	inputCount  uint32
+	outputCount uint32
+	errorCount  uint32
 )
 </pre>
 
@@ -761,7 +763,7 @@ Go并不对获取器（getter）和设置器（setter）提供自动支持。
 <pre>
 owner := obj.Owner()
 if owner != user {
-    obj.SetOwner(user)
+	obj.SetOwner(user)
 }
 </pre>
 
@@ -893,7 +895,7 @@ so a statement such as
 </p>
 
 <pre>
-    go func() { for { dst &lt;- &lt;-src } }()
+	go func() { for { dst &lt;- &lt;-src } }()
 </pre>
 
 <div class="english">
@@ -931,7 +933,7 @@ effects.  Write them like this
 <div class="english">
 <pre>
 if i &lt; f() {
-    g()
+	g()
 }
 </pre>
 <p>
@@ -940,14 +942,14 @@ not like this
 <pre>
 if i &lt; f()  // wrong!
 {           // wrong!
-    g()
+	g()
 }
 </pre>
 </div>
 
 <pre>
 if i &lt; f() {
-    g()
+	g()
 }
 </pre>
 <p>
@@ -956,7 +958,7 @@ if i &lt; f() {
 <pre>
 if i &lt; f()  // 错！
 {           // 错！
-    g()
+	g()
 }
 </pre>
 
@@ -1010,7 +1012,7 @@ In Go a simple <code>if</code> looks like this:
 
 <pre>
 if x &gt; 0 {
-    return y
+	return y
 }
 </pre>
 
@@ -1042,8 +1044,8 @@ statement, it's common to see one used to set up a local variable.
 
 <pre>
 if err := file.Chmod(0664); err != nil {
-    log.Print(err)
-    return err
+	log.Print(err)
+	return err
 }
 </pre>
 
@@ -1066,7 +1068,7 @@ the body ends in <code>break</code>, <code>continue</code>,
 <pre>
 f, err := os.Open(name)
 if err != nil {
-    return err
+	return err
 }
 codeUsing(f)
 </pre>
@@ -1090,12 +1092,12 @@ statements, the resulting code needs no <code>else</code> statements.
 <pre>
 f, err := os.Open(name)
 if err != nil {
-    return err
+	return err
 }
 d, err := f.Stat()
 if err != nil {
-    f.Close()
-    return err
+	f.Close()
+	return err
 }
 codeUsing(f, d)
 </pre>
@@ -1265,7 +1267,7 @@ Short declarations make it easy to declare the index variable right in the loop.
 <pre>
 sum := 0
 for i := 0; i &lt; 10; i++ {
-    sum += i
+	sum += i
 }
 </pre>
 
@@ -1284,7 +1286,7 @@ manage the loop.
 
 <pre>
 for key, value := range oldMap {
-    newMap[key] = value
+	newMap[key] = value
 }
 </pre>
 
@@ -1300,9 +1302,9 @@ If you only need the first item in the range (the key or index), drop the second
 
 <pre>
 for key := range m {
-    if key.expired() {
-        delete(m, key)
-    }
+	if key.expired() {
+		delete(m, key)
+	}
 }
 </pre>
 
@@ -1319,7 +1321,7 @@ If you only need the second item in the range (the value), use the <em>blank ide
 <pre>
 sum := 0
 for _, value := range array {
-    sum += value
+	sum += value
 }
 </pre>
 
@@ -1357,7 +1359,7 @@ The loop
 <div class="english">
 <pre>
 for pos, char := range "日本\x80語" { // \x80 is an illegal UTF-8 encoding
-    fmt.Printf("character %#U starts at byte position %d\n", char, pos)
+	fmt.Printf("character %#U starts at byte position %d\n", char, pos)
 }
 </pre>
 <p>
@@ -1373,7 +1375,7 @@ character U+8A9E '語' starts at byte position 7
 
 <pre>
 for pos, char := range "日本\x80語" { // \x80 是个非法的UTF-8编码
-    fmt.Printf("字符 %#U 始于字节位置 %d\n", char, pos)
+	fmt.Printf("字符 %#U 始于字节位置 %d\n", char, pos)
 }
 </pre>
 <p>
@@ -1404,7 +1406,7 @@ you should use parallel assignment (although that precludes <code>++</code> and 
 <pre>
 // Reverse a
 for i, j := 0, len(a)-1; i &lt; j; i, j = i+1, j-1 {
-    a[i], a[j] = a[j], a[i]
+	a[i], a[j] = a[j], a[i]
 }
 </pre>
 </div>
@@ -1412,7 +1414,7 @@ for i, j := 0, len(a)-1; i &lt; j; i, j = i+1, j-1 {
 <pre>
 // 反转 a
 for i, j := 0, len(a)-1; i &lt; j; i, j = i+1, j-1 {
-    a[i], a[j] = a[j], a[i]
+	a[i], a[j] = a[j], a[i]
 }
 </pre>
 
@@ -1440,15 +1442,15 @@ Go的 <code>switch</code> 比C的更通用。其表达式无需为常量或整�
 
 <pre>
 func unhex(c byte) byte {
-    switch {
-    case '0' &lt;= c &amp;&amp; c &lt;= '9':
-        return c - '0'
-    case 'a' &lt;= c &amp;&amp; c &lt;= 'f':
-        return c - 'a' + 10
-    case 'A' &lt;= c &amp;&amp; c &lt;= 'F':
-        return c - 'A' + 10
-    }
-    return 0
+	switch {
+	case '0' &lt;= c &amp;&amp; c &lt;= '9':
+		return c - '0'
+	case 'a' &lt;= c &amp;&amp; c &lt;= 'f':
+		return c - 'a' + 10
+	case 'A' &lt;= c &amp;&amp; c &lt;= 'F':
+		return c - 'A' + 10
+	}
+	return 0
 }
 </pre>
 
@@ -1465,11 +1467,11 @@ in comma-separated lists.
 </p>
 <pre>
 func shouldEscape(c byte) bool {
-    switch c {
-    case ' ', '?', '&amp;', '=', '#', '+', '%':
-        return true
-    }
-    return false
+	switch c {
+	case ' ', '?', '&amp;', '=', '#', '+', '%':
+		return true
+	}
+	return false
 }
 </pre>
 
@@ -1538,21 +1540,21 @@ To close this section, here's a comparison routine for byte slices that uses two
 // lexicographically.
 // The result will be 0 if a == b, -1 if a &lt; b, and +1 if a &gt; b
 func Compare(a, b []byte) int {
-    for i := 0; i &lt; len(a) &amp;&amp; i &lt; len(b); i++ {
-        switch {
-        case a[i] &gt; b[i]:
-            return 1
-        case a[i] &lt; b[i]:
-            return -1
-        }
-    }
-    switch {
-    case len(a) &gt; len(b):
-        return 1
-    case len(a) &lt; len(b):
-        return -1
-    }
-    return 0
+	for i := 0; i &lt; len(a) &amp;&amp; i &lt; len(b); i++ {
+		switch {
+		case a[i] &gt; b[i]:
+			return 1
+		case a[i] &lt; b[i]:
+			return -1
+		}
+	}
+	switch {
+	case len(a) &gt; len(b):
+		return 1
+	case len(a) &lt; len(b):
+		return -1
+	}
+	return 0
 }
 </pre>
 </div>
@@ -1564,21 +1566,21 @@ func Compare(a, b []byte) int {
 // Compare 按字典顺序比较两个字节切片并返回一个整数。
 // 若 a == b，则结果为零；若 a &lt; b；则结果为 -1；若 a &gt; b，则结果为 +1。
 func Compare(a, b []byte) int {
-    for i := 0; i &lt; len(a) &amp;&amp; i &lt; len(b); i++ {
-        switch {
-        case a[i] &gt; b[i]:
-            return 1
-        case a[i] &lt; b[i]:
-            return -1
-        }
-    }
-    switch {
-    case len(a) &gt; len(b):
-        return 1
-    case len(a) &lt; len(b):
-        return -1
-    }
-    return 0
+	for i := 0; i &lt; len(a) &amp;&amp; i &lt; len(b); i++ {
+		switch {
+		case a[i] &gt; b[i]:
+			return 1
+		case a[i] &lt; b[i]:
+			return -1
+		}
+	}
+	switch {
+	case len(a) &gt; len(b):
+		return 1
+	case len(a) &lt; len(b):
+		return -1
+	}
+	return 0
 }
 </pre>
 
@@ -1603,15 +1605,15 @@ var t interface{}
 t = functionOfSomeType()
 switch t := t.(type) {
 default:
-    fmt.Printf("unexpected type %T", t)       // %T prints whatever type t has
+	fmt.Printf("unexpected type %T", t)       // %T prints whatever type t has
 case bool:
-    fmt.Printf("boolean %t\n", t)             // t has type bool
+	fmt.Printf("boolean %t\n", t)             // t has type bool
 case int:
-    fmt.Printf("integer %d\n", t)             // t has type int
+	fmt.Printf("integer %d\n", t)             // t has type int
 case *bool:
-    fmt.Printf("pointer to boolean %t\n", *t) // t has type *bool
+	fmt.Printf("pointer to boolean %t\n", *t) // t has type *bool
 case *int:
-    fmt.Printf("pointer to integer %d\n", *t) // t has type *int
+	fmt.Printf("pointer to integer %d\n", *t) // t has type *int
 }
 </pre>
 </div>
@@ -1626,15 +1628,15 @@ var t interface{}
 t = functionOfSomeType()
 switch t := t.(type) {
 default:
-    fmt.Printf("unexpected type %T", t)       // %T 输出 t 是什么类型
+	fmt.Printf("unexpected type %T", t)       // %T 输出 t 是什么类型
 case bool:
-    fmt.Printf("boolean %t\n", t)             // t 是 bool 类型
+	fmt.Printf("boolean %t\n", t)             // t 是 bool 类型
 case int:
-    fmt.Printf("integer %d\n", t)             // t 是 int 类型
+	fmt.Printf("integer %d\n", t)             // t 是 int 类型
 case *bool:
-    fmt.Printf("pointer to boolean %t\n", *t) // t 是 *bool 类型
+	fmt.Printf("pointer to boolean %t\n", *t) // t 是 *bool 类型
 case *int:
-    fmt.Printf("pointer to integer %d\n", *t) // t 是 *int 类型
+	fmt.Printf("pointer to integer %d\n", *t) // t 是 *int 类型
 }
 </pre>
 
@@ -1720,13 +1722,13 @@ and the next position.
 
 <pre>
 func nextInt(b []byte, i int) (int, int) {
-    for ; i &lt; len(b) &amp;&amp; !isDigit(b[i]); i++ {
-    }
-    x := 0
-    for ; i &lt; len(b) &amp;&amp; isDigit(b[i]); i++ {
-        x = x*10 + int(b[i]) - '0'
-    }
-    return x, i
+	for ; i &lt; len(b) &amp;&amp; !isDigit(b[i]); i++ {
+	}
+	x := 0
+	for ; i &lt; len(b) &amp;&amp; isDigit(b[i]); i++ {
+		x = x*10 + int(b[i]) - '0'
+	}
+	return x, i
 }
 </pre>
 
@@ -1741,10 +1743,10 @@ You could use it to scan the numbers in an input slice <code>b</code> like this:
 </p>
 
 <pre>
-    for i := 0; i &lt; len(b); {
-        x, i = nextInt(b, i)
-        fmt.Println(x)
-    }
+	for i := 0; i &lt; len(b); {
+		x, i = nextInt(b, i)
+		fmt.Println(x)
+	}
 </pre>
 
 <div class="english">
@@ -1804,13 +1806,13 @@ of <code>io.ReadFull</code> that uses them well:
 
 <pre>
 func ReadFull(r Reader, buf []byte) (n int, err error) {
-    for len(buf) &gt; 0 &amp;&amp; err == nil {
-        var nr int
-        nr, err = r.Read(buf)
-        n += nr
-        buf = buf[nr:]
-    }
-    return
+	for len(buf) &gt; 0 &amp;&amp; err == nil {
+		var nr int
+		nr, err = r.Read(buf)
+		n += nr
+		buf = buf[nr:]
+	}
+	return
 }
 </pre>
 
@@ -1838,25 +1840,25 @@ Go的 <code>defer</code> 语句用于预设一个函数调用（即<b>推迟执�
 <pre>
 // Contents returns the file's contents as a string.
 func Contents(filename string) (string, error) {
-    f, err := os.Open(filename)
-    if err != nil {
-        return "", err
-    }
-    defer f.Close()  // f.Close will run when we're finished.
+	f, err := os.Open(filename)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()  // f.Close will run when we're finished.
 
-    var result []byte
-    buf := make([]byte, 100)
-    for {
-        n, err := f.Read(buf[0:])
-        result = append(result, buf[0:n]...) // append is discussed later.
-        if err != nil {
-            if err == io.EOF {
-                break
-            }
-            return "", err  // f will be closed if we return here.
-        }
-    }
-    return string(result), nil // f will be closed if we return here.
+	var result []byte
+	buf := make([]byte, 100)
+	for {
+		n, err := f.Read(buf[0:])
+		result = append(result, buf[0:n]...) // append is discussed later.
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return "", err  // f will be closed if we return here.
+		}
+	}
+	return string(result), nil // f will be closed if we return here.
 }
 </pre>
 </div>
@@ -1864,25 +1866,25 @@ func Contents(filename string) (string, error) {
 <pre>
 // Contents 将文件的内容作为字符串返回。
 func Contents(filename string) (string, error) {
-    f, err := os.Open(filename)
-    if err != nil {
-        return "", err
-    }
-    defer f.Close()  // f.Close 会在我们结束后运行。
+	f, err := os.Open(filename)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()  // f.Close 会在我们结束后运行。
 
-    var result []byte
-    buf := make([]byte, 100)
-    for {
-        n, err := f.Read(buf[0:])
-        result = append(result, buf[0:n]...) // append 将在后面讨论。
-        if err != nil {
-            if err == io.EOF {
-                break
-            }
-            return "", err  // 我们在这里返回后，f 就会被关闭。
-        }
-    }
-    return string(result), nil // 我们在这里返回后，f 就会被关闭。
+	var result []byte
+	buf := make([]byte, 100)
+	for {
+		n, err := f.Read(buf[0:])
+		result = append(result, buf[0:n]...) // append 将在后面讨论。
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return "", err  // 我们在这里返回后，f 就会被关闭。
+		}
+	}
+	return string(result), nil // 我们在这里返回后，f 就会被关闭。
 }
 </pre>
 
@@ -1922,7 +1924,7 @@ executions.  Here's a silly example.
 
 <pre>
 for i := 0; i &lt; 5; i++ {
-    defer fmt.Printf("%d ", i)
+	defer fmt.Printf("%d ", i)
 }
 </pre>
 
@@ -1949,9 +1951,9 @@ func untrace(s string) { fmt.Println("leaving:", s) }
 
 // Use them like this:
 func a() {
-    trace("a")
-    defer untrace("a")
-    // do something....
+	trace("a")
+	defer untrace("a")
+	// do something....
 }
 </pre>
 </div>
@@ -1962,9 +1964,9 @@ func untrace(s string) { fmt.Println("leaving:", s) }
 
 // 像这样使用它们：
 func a() {
-    trace("a")
-    defer untrace("a")
-    // 做一些事情....
+	trace("a")
+	defer untrace("a")
+	// 做一些事情....
 }
 </pre>
 
@@ -1984,27 +1986,27 @@ This example:
 
 <pre>
 func trace(s string) string {
-    fmt.Println("entering:", s)
-    return s
+	fmt.Println("entering:", s)
+	return s
 }
 
 func un(s string) {
-    fmt.Println("leaving:", s)
+	fmt.Println("leaving:", s)
 }
 
 func a() {
-    defer un(trace("a"))
-    fmt.Println("in a")
+	defer un(trace("a"))
+	fmt.Println("in a")
 }
 
 func b() {
-    defer un(trace("b"))
-    fmt.Println("in b")
-    a()
+	defer un(trace("b"))
+	fmt.Println("in b")
+	a()
 }
 
 func main() {
-    b()
+	b()
 }
 </pre>
 
@@ -2121,8 +2123,8 @@ The zero-value-is-useful property works transitively. Consider this type declara
 
 <pre>
 type SyncedBuffer struct {
-    lock    sync.Mutex
-    buffer  bytes.Buffer
+	lock    sync.Mutex
+	buffer  bytes.Buffer
 }
 </pre>
 
@@ -2165,15 +2167,15 @@ package <code>os</code>.
 
 <pre>
 func NewFile(fd int, name string) *File {
-    if fd &lt; 0 {
-        return nil
-    }
-    f := new(File)
-    f.fd = fd
-    f.name = name
-    f.dirinfo = nil
-    f.nepipe = 0
-    return f
+	if fd &lt; 0 {
+		return nil
+	}
+	f := new(File)
+	f.fd = fd
+	f.name = name
+	f.dirinfo = nil
+	f.nepipe = 0
+	return f
 }
 </pre>
 
@@ -2193,11 +2195,11 @@ new instance each time it is evaluated.
 
 <pre>
 func NewFile(fd int, name string) *File {
-    if fd &lt; 0 {
-        return nil
-    }
-    f := File{fd, name, nil, 0}
-    return &amp;f
+	if fd &lt; 0 {
+		return nil
+	}
+	f := File{fd, name, nil, 0}
+	return &amp;f
 }
 </pre>
 
@@ -2219,7 +2221,7 @@ so we can combine these last two lines.
 </p>
 
 <pre>
-    return &amp;File{fd, name, nil, 0}
+	return &amp;File{fd, name, nil, 0}
 </pre>
 
 <div class="english">
@@ -2238,7 +2240,7 @@ order, with the missing ones left as their respective zero values.  Thus we coul
 </p>
 
 <pre>
-    return &amp;File{fd: fd, name: name}
+	return &amp;File{fd: fd, name: name}
 </pre>
 
 <div class="english">
@@ -2452,10 +2454,10 @@ you can pass a pointer to the array.
 <div class="english">
 <pre>
 func Sum(a *[3]float64) (sum float64) {
-    for _, v := range *a {
-        sum += v
-    }
-    return
+	for _, v := range *a {
+		sum += v
+	}
+	return
 }
 
 array := [...]float64{7.0, 8.5, 9.1}
@@ -2465,10 +2467,10 @@ x := Sum(&amp;array)  // Note the explicit address-of operator
 
 <pre>
 func Sum(a *[3]float64) (sum float64) {
-    for _, v := range *a {
-        sum += v
-    }
-    return
+	for _, v := range *a {
+		sum += v
+	}
+	return
 }
 
 array := [...]float64{7.0, 8.5, 9.1}
@@ -2547,7 +2549,7 @@ any.  To read into the first 32 bytes of a larger buffer
 </p>
 
 <pre>
-    n, err := f.Read(buf[0:32])
+	n, err := f.Read(buf[0:32])
 </pre>
 
 <div class="english">
@@ -2563,30 +2565,30 @@ the moment, the following snippet would also read the first 32 bytes of the buff
 
 <div class="english">
 <pre>
-    var n int
-    var err error
-    for i := 0; i &lt; 32; i++ {
-        nbytes, e := f.Read(buf[i:i+1])  // Read one byte.
-        if nbytes == 0 || e != nil {
-            err = e
-            break
-        }
-        n += nbytes
-    }
+	var n int
+	var err error
+	for i := 0; i &lt; 32; i++ {
+		nbytes, e := f.Read(buf[i:i+1])  // Read one byte.
+		if nbytes == 0 || e != nil {
+			err = e
+			break
+		}
+		n += nbytes
+	}
 </pre>
 </div>
 
 <pre>
-    var n int
-    var err error
-    for i := 0; i &lt; 32; i++ {
-        nbytes, e := f.Read(buf[i:i+1])  // 读取一个字节
-        if nbytes == 0 || e != nil {
-            err = e
-            break
-        }
-        n += nbytes
-    }
+	var n int
+	var err error
+	for i := 0; i &lt; 32; i++ {
+		nbytes, e := f.Read(buf[i:i+1])  // 读取一个字节
+		if nbytes == 0 || e != nil {
+			err = e
+			break
+		}
+		n += nbytes
+	}
 </pre>
 
 <div class="english">
@@ -2614,38 +2616,38 @@ resulting slice is returned.  The function uses the fact that
 <div class="english">
 <pre>
 func Append(slice, data[]byte) []byte {
-    l := len(slice)
-    if l + len(data) &gt; cap(slice) {  // reallocate
-        // Allocate double what's needed, for future growth.
-        newSlice := make([]byte, (l+len(data))*2)
-        // The copy function is predeclared and works for any slice type.
-        copy(newSlice, slice)
-        slice = newSlice
-    }
-    slice = slice[0:l+len(data)]
-    for i, c := range data {
-        slice[l+i] = c
-    }
-    return slice
+	l := len(slice)
+	if l + len(data) &gt; cap(slice) {  // reallocate
+		// Allocate double what's needed, for future growth.
+		newSlice := make([]byte, (l+len(data))*2)
+		// The copy function is predeclared and works for any slice type.
+		copy(newSlice, slice)
+		slice = newSlice
+	}
+	slice = slice[0:l+len(data)]
+	for i, c := range data {
+		slice[l+i] = c
+	}
+	return slice
 }
 </pre>
 </div>
 
 <pre>
 func Append(slice, data[]byte) []byte {
-    l := len(slice)
-    if l + len(data) &gt; cap(slice) {  // 重新分配
-        // 为了后面的增长，需分配两份。
-        newSlice := make([]byte, (l+len(data))*2)
-        // copy 函数是预声明的，且可用于任何切片类型。
-        copy(newSlice, slice)
-        slice = newSlice
-    }
-    slice = slice[0:l+len(data)]
-    for i, c := range data {
-        slice[l+i] = c
-    }
-    return slice
+	l := len(slice)
+	if l + len(data) &gt; cap(slice) {  // 重新分配
+		// 为了后面的增长，需分配两份。
+		newSlice := make([]byte, (l+len(data))*2)
+		// copy 函数是预声明的，且可用于任何切片类型。
+		copy(newSlice, slice)
+		slice = newSlice
+	}
+	slice = slice[0:l+len(data)]
+	for i, c := range data {
+		slice[l+i] = c
+	}
+	return slice
 }
 </pre>
 
@@ -2770,7 +2772,7 @@ for i := range picture {
 picture := make([][]uint8, YSize) // 每 y 个单元一行。
 // 遍历行，为每一行都分配切片
 for i := range picture {
-    picture[i] = make([]uint8, XSize)
+	picture[i] = make([]uint8, XSize)
 }
 </pre>
 
@@ -2792,7 +2794,7 @@ picture := make([][]uint8, YSize) // One row per unit of y.
 pixels := make([]uint8, XSize*YSize) // Has type []uint8 even though picture is [][]uint8.
 // Loop over the rows, slicing each row from the front of the remaining pixels slice.
 for i := range picture {
-    picture[i], pixels = pixels[:XSize], pixels[XSize:]
+	picture[i], pixels = pixels[:XSize], pixels[XSize:]
 }
 </pre>
 </div>
@@ -2804,7 +2806,7 @@ picture := make([][]uint8, YSize) // 每 y 个单元一行。
 pixels := make([]uint8, XSize*YSize) // 拥有类型 []uint8，尽管图片是 [][]uint8.
 // 遍历行，从剩余像素切片的前面切出每行来。
 for i := range picture {
-    picture[i], pixels = pixels[:XSize], pixels[XSize:]
+	picture[i], pixels = pixels[:XSize], pixels[XSize:]
 }
 </pre>
 
@@ -2854,11 +2856,11 @@ so it's easy to build them during initialization.
 
 <pre>
 var timeZone = map[string]int{
-    "UTC":  0*60*60,
-    "EST": -5*60*60,
-    "CST": -6*60*60,
-    "MST": -7*60*60,
-    "PST": -8*60*60,
+	"UTC":  0*60*60,
+	"EST": -5*60*60,
+	"CST": -6*60*60,
+	"MST": -7*60*60,
+	"PST": -8*60*60,
 }
 </pre>
 
@@ -2901,26 +2903,26 @@ test it by simple indexing.
 <div class="english">
 <pre>
 attended := map[string]bool{
-    "Ann": true,
-    "Joe": true,
-    ...
+	"Ann": true,
+	"Joe": true,
+	...
 }
 
 if attended[person] { // will be false if person is not in the map
-    fmt.Println(person, "was at the meeting")
+	fmt.Println(person, "was at the meeting")
 }
 </pre>
 </div>
 
 <pre>
 attended := map[string]bool{
-    "Ann": true,
-    "Joe": true,
-    ...
+	"Ann": true,
+	"Joe": true,
+	...
 }
 
 if attended[person] { // 若某人不在此映射中，则为 false
-    fmt.Println(person, "正在开会")
+	fmt.Println(person, "正在开会")
 }
 </pre>
 
@@ -2964,11 +2966,11 @@ Here's a function that puts it together with a nice error report:
 
 <pre>
 func offset(tz string) int {
-    if seconds, ok := timeZone[tz]; ok {
-        return seconds
-    }
-    log.Println("unknown time zone:", tz)
-    return 0
+	if seconds, ok := timeZone[tz]; ok {
+		return seconds
+	}
+	log.Println("unknown time zone:", tz)
+	return 0
 }
 </pre>
 
@@ -3166,9 +3168,9 @@ format <code>%#v</code> prints the value in full Go syntax.
 
 <pre>
 type T struct {
-    a int
-    b float64
-    c string
+	a int
+	b float64
+	c string
 }
 t := &amp;T{ 7, -2.35, "abc\tdef" }
 fmt.Printf("%v\n", t)
@@ -3259,7 +3261,7 @@ For our simple type <code>T</code>, that might look like this.
 
 <pre>
 func (t *T) String() string {
-    return fmt.Sprintf("%d/%g/%q", t.a, t.b, t.c)
+	return fmt.Sprintf("%d/%g/%q", t.a, t.b, t.c)
 }
 fmt.Printf("%v\n", t)
 </pre>
@@ -3319,7 +3321,7 @@ to make, as this example shows.
 type MyString string
 
 func (m MyString) String() string {
-    return fmt.Sprintf("MyString=%s", m) // Error: will recur forever.
+	return fmt.Sprintf("MyString=%s", m) // Error: will recur forever.
 }
 </pre>
 </div>
@@ -3328,7 +3330,7 @@ func (m MyString) String() string {
 type MyString string
 
 func (m MyString) String() string {
-    return fmt.Sprintf("MyString=%s", m) // 错误：会无限递归
+	return fmt.Sprintf("MyString=%s", m) // 错误：会无限递归
 }
 </pre>
 
@@ -3347,7 +3349,7 @@ method.
 <pre>
 type MyString string
 func (m MyString) String() string {
-    return fmt.Sprintf("MyString=%s", string(m)) // OK: note conversion.
+	return fmt.Sprintf("MyString=%s", string(m)) // OK: note conversion.
 }
 </pre>
 </div>
@@ -3355,7 +3357,7 @@ func (m MyString) String() string {
 <pre>
 type MyString string
 func (m MyString) String() string {
-    return fmt.Sprintf("MyString=%s", string(m)) // 可以：注意转换
+	return fmt.Sprintf("MyString=%s", string(m)) // 可以：注意转换
 }
 </pre>
 
@@ -3410,7 +3412,7 @@ function <code>log.Println</code> we used above. It passes its arguments directl
 <pre>
 // Println prints to the standard logger in the manner of fmt.Println.
 func Println(v ...interface{}) {
-    std.Output(2, fmt.Sprintln(v...))  // Output takes parameters (int, string)
+	std.Output(2, fmt.Sprintln(v...))  // Output takes parameters (int, string)
 }
 </pre>
 </div>
@@ -3418,7 +3420,7 @@ func Println(v ...interface{}) {
 <pre>
 // Println 通过 fmt.Println 的方式将日志打印到标准记录器。
 func Println(v ...interface{}) {
-    std.Output(2, fmt.Sprintln(v...))  // Output 接受形参 (int, string)
+	std.Output(2, fmt.Sprintln(v...))  // Output 接受形参 (int, string)
 }
 </pre>
 
@@ -3462,26 +3464,26 @@ for a min function that chooses the least of a list of integers:
 <div class="english">
 <pre>
 func Min(a ...int) int {
-    min := int(^uint(0) >> 1)  // largest int
-    for _, i := range a {
-        if i &lt; min {
-            min = i
-        }
-    }
-    return min
+	min := int(^uint(0) >> 1)  // largest int
+	for _, i := range a {
+		if i &lt; min {
+			min = i
+		}
+	}
+	return min
 }
 </pre>
 </div>
 
 <pre>
 func Min(a ...int) int {
-    min := int(^uint(0) >> 1)  // 最大的 int
-    for _, i := range a {
-        if i &lt; min {
-            min = i
-        }
-    }
-    return min
+	min := int(^uint(0) >> 1)  // 最大的 int
+	for _, i := range a {
+		if i &lt; min {
+			min = i
+		}
+	}
+	return min
 }
 </pre>
 
@@ -3734,9 +3736,9 @@ initializer can be a general expression computed at run time.
 
 <pre>
 var (
-    home   = os.Getenv("HOME")
-    user   = os.Getenv("USER")
-    gopath = os.Getenv("GOPATH")
+	home   = os.Getenv("HOME")
+	user   = os.Getenv("USER")
+	gopath = os.Getenv("GOPATH")
 )
 </pre>
 
@@ -3781,34 +3783,34 @@ correctness of the program state before real execution begins.
 <div class="english">
 <pre>
 func init() {
-    if user == "" {
-        log.Fatal("$USER not set")
-    }
-    if home == "" {
-        home = "/home/" + user
-    }
-    if gopath == "" {
-        gopath = home + "/go"
-    }
-    // gopath may be overridden by --gopath flag on command line.
-    flag.StringVar(&amp;gopath, "gopath", gopath, "override default GOPATH")
+	if user == "" {
+		log.Fatal("$USER not set")
+	}
+	if home == "" {
+		home = "/home/" + user
+	}
+	if gopath == "" {
+		gopath = home + "/go"
+	}
+	// gopath may be overridden by --gopath flag on command line.
+	flag.StringVar(&amp;gopath, "gopath", gopath, "override default GOPATH")
 }
 </pre>
 </div>
 
 <pre>
 func init() {
-    if user == "" {
-        log.Fatal("$USER not set")
-    }
-    if home == "" {
-        home = "/home/" + user
-    }
-    if gopath == "" {
-        gopath = home + "/go"
-    }
-    // gopath 可通过命令行中的 --gopath 标记覆盖掉。
-    flag.StringVar(&amp;gopath, "gopath", gopath, "override default GOPATH")
+	if user == "" {
+		log.Fatal("$USER not set")
+	}
+	if home == "" {
+		home = "/home/" + user
+	}
+	if gopath == "" {
+		gopath = home + "/go"
+	}
+	// gopath 可通过命令行中的 --gopath 标记覆盖掉。
+	flag.StringVar(&amp;gopath, "gopath", gopath, "override default GOPATH")
 }
 </pre>
 
@@ -3857,7 +3859,7 @@ then make the receiver for the method a value of that type.
 type ByteSlice []byte
 
 func (slice ByteSlice) Append(data []byte) []byte {
-    // Body exactly the same as above
+	// Body exactly the same as above
 }
 </pre>
 </div>
@@ -3866,7 +3868,7 @@ func (slice ByteSlice) Append(data []byte) []byte {
 type ByteSlice []byte
 
 func (slice ByteSlice) Append(data []byte) []byte {
-    // 主体和前面相同。
+	// 主体和前面相同。
 }
 </pre>
 
@@ -3888,18 +3890,18 @@ method can overwrite the caller's slice.
 <div class="english">
 <pre>
 func (p *ByteSlice) Append(data []byte) {
-    slice := *p
-    // Body as above, without the return.
-    *p = slice
+	slice := *p
+	// Body as above, without the return.
+	*p = slice
 }
 </pre>
 </div>
 
 <pre>
 func (p *ByteSlice) Append(data []byte) {
-    slice := *p
-    // 主体和前面相同，但没有 return。
-    *p = slice
+	slice := *p
+	// 主体和前面相同，但没有 return。
+	*p = slice
 }
 </pre>
 
@@ -3917,20 +3919,20 @@ like a standard <code>Write</code> method, like this,
 <div class="english">
 <pre>
 func (p *ByteSlice) Write(data []byte) (n int, err error) {
-    slice := *p
-    // Again as above.
-    *p = slice
-    return len(data), nil
+	slice := *p
+	// Again as above.
+	*p = slice
+	return len(data), nil
 }
 </pre>
 </div>
 
 <pre>
 func (p *ByteSlice) Write(data []byte) (n int, err error) {
-    slice := *p
-    // 依旧和前面相同。
-    *p = slice
-    return len(data), nil
+	slice := *p
+	// 依旧和前面相同。
+	*p = slice
+	return len(data), nil
 }
 </pre>
 
@@ -3948,8 +3950,8 @@ print into one.
 </p>
 
 <pre>
-    var b ByteSlice
-    fmt.Fprintf(&amp;b, "This hour has %d days\n", 7)
+	var b ByteSlice
+	fmt.Fprintf(&amp;b, "This hour has %d days\n", 7)
 </pre>
 
 <div class="english">
@@ -4057,8 +4059,8 @@ effort if we convert the <code>Sequence</code> to a plain
 
 <pre>
 func (s Sequence) String() string {
-    sort.Sort(s)
-    return fmt.Sprint([]int(s))
+	sort.Sort(s)
+	return fmt.Sprint([]int(s))
 }
 </pre>
 
@@ -4104,8 +4106,8 @@ type Sequence []int
 
 // Method for printing - sorts the elements before printing
 func (s Sequence) String() string {
-    sort.IntSlice(s).Sort()
-    return fmt.Sprint([]int(s))
+	sort.IntSlice(s).Sort()
+	return fmt.Sprint([]int(s))
 }
 </pre>
 </div>
@@ -4115,8 +4117,8 @@ type Sequence []int
 
 // // 用于打印的方法 - 在打印前对元素进行排序。
 func (s Sequence) String() string {
-    sort.IntSlice(s).Sort()
-    return fmt.Sprint([]int(s))
+	sort.IntSlice(s).Sort()
+	return fmt.Sprint([]int(s))
 }
 </pre>
 
@@ -4165,30 +4167,30 @@ If it's already a string, we want the actual string value held by the interface,
 <div class="english">
 <pre>
 type Stringer interface {
-    String() string
+	String() string
 }
 
 var value interface{} // Value provided by caller.
 switch str := value.(type) {
 case string:
-    return str
+	return str
 case Stringer:
-    return str.String()
+	return str.String()
 }
 </pre>
 </div>
 
 <pre>
 type Stringer interface {
-    String() string
+	String() string
 }
 
 var value interface{} // 调用者提供的值。
 switch str := value.(type) {
 case string:
-    return str
+	return str
 case Stringer:
-    return str.String()
+	return str.String()
 }
 </pre>
 
@@ -4259,9 +4261,9 @@ To guard against that, use the "comma, ok" idiom to test, safely, whether the va
 <pre>
 str, ok := value.(string)
 if ok {
-    fmt.Printf("string value is: %q\n", str)
+	fmt.Printf("string value is: %q\n", str)
 } else {
-    fmt.Printf("value is not a string\n")
+	fmt.Printf("value is not a string\n")
 }
 </pre>
 </div>
@@ -4269,9 +4271,9 @@ if ok {
 <pre>
 str, ok := value.(string)
 if ok {
-    fmt.Printf("字符串值为 %q\n", str)
+	fmt.Printf("字符串值为 %q\n", str)
 } else {
-    fmt.Printf("该值非字符串\n")
+	fmt.Printf("该值非字符串\n")
 }
 </pre>
 
@@ -4299,9 +4301,9 @@ statement that's equivalent to the type switch that opened this section.
 
 <pre>
 if str, ok := value.(string); ok {
-    return str
+	return str
 } else if str, ok := value.(Stringer); ok {
-    return str.String()
+	return str.String()
 }
 </pre>
 
@@ -4384,13 +4386,13 @@ The  <code>crypto/cipher</code> interfaces look like this:
 
 <pre>
 type Block interface {
-    BlockSize() int
-    Encrypt(src, dst []byte)
-    Decrypt(src, dst []byte)
+	BlockSize() int
+	Encrypt(src, dst []byte)
+	Decrypt(src, dst []byte)
 }
 
 type Stream interface {
-    XORKeyStream(dst, src []byte)
+	XORKeyStream(dst, src []byte)
 }
 </pre>
 
@@ -4463,7 +4465,7 @@ that implements <code>Handler</code> can serve HTTP requests.
 
 <pre>
 type Handler interface {
-    ServeHTTP(ResponseWriter, *Request)
+	ServeHTTP(ResponseWriter, *Request)
 }
 </pre>
 
@@ -4506,12 +4508,12 @@ page is visited.
 <pre>
 // Simple counter server.
 type Counter struct {
-    n int
+	n int
 }
 
 func (ctr *Counter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-    ctr.n++
-    fmt.Fprintf(w, "counter = %d\n", ctr.n)
+	ctr.n++
+	fmt.Fprintf(w, "counter = %d\n", ctr.n)
 }
 </pre>
 </div>
@@ -4519,12 +4521,12 @@ func (ctr *Counter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 <pre>
 // 简单的计数器服务。
 type Counter struct {
-    n int
+	n int
 }
 
 func (ctr *Counter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-    ctr.n++
-    fmt.Fprintf(w, "counter = %d\n", ctr.n)
+	ctr.n++
+	fmt.Fprintf(w, "counter = %d\n", ctr.n)
 }
 </pre>
 
@@ -4567,8 +4569,8 @@ But why make <code>Counter</code> a struct?  An integer is all that's needed.
 type Counter int
 
 func (ctr *Counter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-    *ctr++
-    fmt.Fprintf(w, "counter = %d\n", *ctr)
+	*ctr++
+	fmt.Fprintf(w, "counter = %d\n", *ctr)
 }
 </pre>
 </div>
@@ -4578,8 +4580,8 @@ func (ctr *Counter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 type Counter int
 
 func (ctr *Counter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-    *ctr++
-    fmt.Fprintf(w, "counter = %d\n", *ctr)
+	*ctr++
+	fmt.Fprintf(w, "counter = %d\n", *ctr)
 }
 </pre>
 
@@ -4601,8 +4603,8 @@ has been visited?  Tie a channel to the web page.
 type Chan chan *http.Request
 
 func (ch Chan) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-    ch &lt;- req
-    fmt.Fprint(w, "notification sent")
+	ch &lt;- req
+	fmt.Fprint(w, "notification sent")
 }
 </pre>
 </div>
@@ -4613,8 +4615,8 @@ func (ch Chan) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 type Chan chan *http.Request
 
 func (ch Chan) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-    ch &lt;- req
-    fmt.Fprint(w, "notification sent")
+	ch &lt;- req
+	fmt.Fprint(w, "notification sent")
 }
 </pre>
 
@@ -4632,7 +4634,7 @@ It's easy to write a function to print the arguments.
 </p>
 <pre>
 func ArgServer() {
-    fmt.Println(os.Args)
+	fmt.Println(os.Args)
 }
 </pre>
 
@@ -4663,7 +4665,7 @@ type HandlerFunc func(ResponseWriter, *Request)
 
 // ServeHTTP calls f(c, req).
 func (f HandlerFunc) ServeHTTP(w ResponseWriter, req *Request) {
-    f(w, req)
+	f(w, req)
 }
 </pre>
 </div>
@@ -4675,7 +4677,7 @@ type HandlerFunc func(ResponseWriter, *Request)
 
 // ServeHTTP calls f(c, req).
 func (f HandlerFunc) ServeHTTP(w ResponseWriter, req *Request) {
-    f(w, req)
+	f(w, req)
 }
 </pre>
 
@@ -4711,7 +4713,7 @@ to have the right signature.
 <pre>
 // Argument server.
 func ArgServer(w http.ResponseWriter, req *http.Request) {
-    fmt.Fprintln(w, os.Args)
+	fmt.Fprintln(w, os.Args)
 }
 </pre>
 </div>
@@ -4719,7 +4721,7 @@ func ArgServer(w http.ResponseWriter, req *http.Request) {
 <pre>
 // 实参服务器。
 func ArgServer(w http.ResponseWriter, req *http.Request) {
-    fmt.Fprintln(w, os.Args)
+	fmt.Fprintln(w, os.Args)
 }
 </pre>
 
@@ -4867,7 +4869,7 @@ they're provided for a reason.
 // Bad! This code will crash if path does not exist.
 fi, _ := os.Stat(path)
 if fi.IsDir() {
-    fmt.Printf("%s is a directory\n", path)
+	fmt.Printf("%s is a directory\n", path)
 }
 </pre>
 </div>
@@ -4876,7 +4878,7 @@ if fi.IsDir() {
 // 烂代码！若路径不存在，它就会崩溃。
 fi, _ := os.Stat(path)
 if fi.IsDir() {
-    fmt.Printf("%s is a directory\n", path)
+	fmt.Printf("%s is a directory\n", path)
 }
 </pre>
 
@@ -5073,7 +5075,7 @@ identifier to ignore the type-asserted value:
 
 <pre>
 if _, ok := val.(json.Marshaler); ok {
-    fmt.Printf("value %v of type %T implements json.Marshaler\n", val, val)
+	fmt.Printf("value %v of type %T implements json.Marshaler\n", val, val)
 }
 </pre>
 
@@ -5179,11 +5181,11 @@ here are their definitions.
 
 <pre>
 type Reader interface {
-    Read(p []byte) (n int, err error)
+	Read(p []byte) (n int, err error)
 }
 
 type Writer interface {
-    Write(p []byte) (n int, err error)
+	Write(p []byte) (n int, err error)
 }
 </pre>
 
@@ -5210,8 +5212,8 @@ to embed the two interfaces to form the new one, like this:
 <pre>
 // ReadWriter is the interface that combines the Reader and Writer interfaces.
 type ReadWriter interface {
-    Reader
-    Writer
+	Reader
+	Writer
 }
 </pre>
 </div>
@@ -5219,8 +5221,8 @@ type ReadWriter interface {
 <pre>
 // ReadWriter 接口结合了 Reader 和 Writer 接口。
 type ReadWriter interface {
-    Reader
-    Writer
+	Reader
+	Writer
 }
 </pre>
 
@@ -5267,8 +5269,8 @@ but does not give them field names.
 // ReadWriter stores pointers to a Reader and a Writer.
 // It implements io.ReadWriter.
 type ReadWriter struct {
-    *Reader  // *bufio.Reader
-    *Writer  // *bufio.Writer
+	*Reader  // *bufio.Reader
+	*Writer  // *bufio.Writer
 }
 </pre>
 </div>
@@ -5277,8 +5279,8 @@ type ReadWriter struct {
 // ReadWriter 存储了指向 Reader 和 Writer 的指针。
 // 它实现了 io.ReadWriter。
 type ReadWriter struct {
-    *Reader  // *bufio.Reader
-    *Writer  // *bufio.Writer
+	*Reader  // *bufio.Reader
+	*Writer  // *bufio.Writer
 }
 </pre>
 
@@ -5298,8 +5300,8 @@ The <code>ReadWriter</code> struct could be written as
 
 <pre>
 type ReadWriter struct {
-    reader *Reader
-    writer *Writer
+	reader *Reader
+	writer *Writer
 }
 </pre>
 
@@ -5318,7 +5320,7 @@ to provide forwarding methods, like this:
 
 <pre>
 func (rw *ReadWriter) Read(p []byte) (n int, err error) {
-    return rw.reader.Read(p)
+	return rw.reader.Read(p)
 }
 </pre>
 
@@ -5374,8 +5376,8 @@ This example shows an embedded field alongside a regular, named field.
 
 <pre>
 type Job struct {
-    Command string
-    *log.Logger
+	Command string
+	*log.Logger
 }
 </pre>
 
@@ -5414,7 +5416,7 @@ so we can initialize it in the usual way inside the constructor for <code>Job</c
 
 <pre>
 func NewJob(command string, logger *log.Logger) *Job {
-    return &amp;Job{command, logger}
+	return &amp;Job{command, logger}
 }
 </pre>
 
@@ -5454,7 +5456,7 @@ which would be useful if we wanted to refine the methods of <code>Logger</code>.
 
 <pre>
 func (job *Job) Logf(format string, args ...interface{}) {
-    job.Logger.Logf("%q: %s", job.Command, fmt.Sprintf(format, args...))
+	job.Logger.Logf("%q: %s", job.Command, fmt.Sprintf(format, args...))
 }
 </pre>
 
@@ -5665,20 +5667,20 @@ A function literal can be handy in a goroutine invocation.
 <div class="english">
 <pre>
 func Announce(message string, delay time.Duration) {
-    go func() {
-        time.Sleep(delay)
-        fmt.Println(message)
-    }()  // Note the parentheses - must call the function.
+	go func() {
+		time.Sleep(delay)
+		fmt.Println(message)
+	}()  // Note the parentheses - must call the function.
 }
 </pre>
 </div>
 
 <pre>
 func Announce(message string, delay time.Duration) {
-    go func() {
-        time.Sleep(delay)
-        fmt.Println(message)
-    }()  // 注意括号 - 必须调用该函数。
+	go func() {
+		time.Sleep(delay)
+		fmt.Println(message)
+	}()  // 注意括号 - 必须调用该函数。
 }
 </pre>
 
@@ -5768,8 +5770,8 @@ can allow the launching goroutine to wait for the sort to complete.
 c := make(chan int)  // Allocate a channel.
 // Start the sort in a goroutine; when it completes, signal on the channel.
 go func() {
-    list.Sort()
-    c &lt;- 1  // Send a signal; value does not matter.
+	list.Sort()
+	c &lt;- 1  // Send a signal; value does not matter.
 }()
 doSomethingForAWhile()
 &lt;-c   // Wait for sort to finish; discard sent value.
@@ -5780,8 +5782,8 @@ doSomethingForAWhile()
 c := make(chan int)  // 分配一个信道
 // 在Go程中启动排序。当它完成后，在信道上发送信号。
 go func() {
-    list.Sort()
-    c &lt;- 1  // 发送信号，什么值无所谓。
+	list.Sort()
+	c &lt;- 1  // 发送信号，什么值无所谓。
 }()
 doSomethingForAWhile()
 &lt;-c   // 等待排序结束，丢弃发来的值。
@@ -5829,22 +5831,22 @@ so during initialization we prime the channel by filling it to capacity.
 var sem = make(chan int, MaxOutstanding)
 
 func handle(r *Request) {
-    &lt;-sem          // Wait for active queue to drain.
-    process(r)     // May take a long time.
-    sem &lt;- 1       // Done; enable next request to run.
+	&lt;-sem          // Wait for active queue to drain.
+	process(r)     // May take a long time.
+	sem &lt;- 1       // Done; enable next request to run.
 }
 
 func init() {
-    for i := 0; i &lt; MaxOutstanding; i++ {
-        sem &lt;- 1
-    }
+	for i := 0; i &lt; MaxOutstanding; i++ {
+		sem &lt;- 1
+	}
 }
 
 func Serve(queue chan *Request) {
-    for {
-        req := &lt;-queue
-        go handle(req)  // Don't wait for handle to finish.
-    }
+	for {
+		req := &lt;-queue
+		go handle(req)  // Don't wait for handle to finish.
+	}
 }
 </pre>
 </div>
@@ -5853,22 +5855,22 @@ func Serve(queue chan *Request) {
 var sem = make(chan int, MaxOutstanding)
 
 func handle(r *Request) {
-    &lt;-sem    // 等待活动队列清空。
-    process(r)  // 可能需要很长时间。
-    sem &lt;- 1 // 完成；使下一个请求可以运行。
+	&lt;-sem    // 等待活动队列清空。
+	process(r)  // 可能需要很长时间。
+	sem &lt;- 1 // 完成；使下一个请求可以运行。
 }
 
 func init() {
-    for i := 0; i &lt; MaxOutstanding; i++ {
-        sem &lt;- 1
-    }
+	for i := 0; i &lt; MaxOutstanding; i++ {
+		sem &lt;- 1
+	}
 }
 
 func Serve(queue chan *Request) {
-    for {
-        req := &lt;-queue
-        go handle(req)  // 无需等待 handle 结束。
-    }
+	for {
+		req := &lt;-queue
+		go handle(req)  // 无需等待 handle 结束。
+	}
 }
 </pre>
 
@@ -5909,25 +5911,25 @@ Here's an obvious solution, but beware it has a bug we'll fix subsequently:
 <div class="english">
 <pre>
 func Serve(queue chan *Request) {
-    for req := range queue {
-        &lt;-sem
-        go func() {
-            process(req) // Buggy; see explanation below.
-            sem &lt;- 1
-        }()
-    }
+	for req := range queue {
+		&lt;-sem
+		go func() {
+			process(req) // Buggy; see explanation below.
+			sem &lt;- 1
+		}()
+	}
 }</pre>
 </div>
 
 <pre>
 func Serve(queue chan *Request) {
-    for req := range queue {
-        &lt;-sem
-        go func() {
-            process(req) // 这儿有Bug，解释见下。
-            sem &lt;- 1
-        }()
-    }
+	for req := range queue {
+		&lt;-sem
+		go func() {
+			process(req) // 这儿有Bug，解释见下。
+			sem &lt;- 1
+		}()
+	}
 }</pre>
 
 <div class="english">
@@ -5951,13 +5953,13 @@ Bug出现在Go的 <code>for</code> 循环中，该循环变量在每次迭代时
 
 <pre>
 func Serve(queue chan *Request) {
-    for req := range queue {
-        &lt;-sem
-        go func(req *Request) {
-            process(req)
-            sem &lt;- 1
-        }(req)
-    }
+	for req := range queue {
+		&lt;-sem
+		go func(req *Request) {
+			process(req)
+			sem &lt;- 1
+		}(req)
+	}
 }</pre>
 
 <div class="english">
@@ -5977,27 +5979,27 @@ name, as in this example:
 <div class="english">
 <pre>
 func Serve(queue chan *Request) {
-    for req := range queue {
-        &lt;-sem
-        req := req // Create new instance of req for the goroutine.
-        go func() {
-            process(req)
-            sem &lt;- 1
-        }()
-    }
+	for req := range queue {
+		&lt;-sem
+		req := req // Create new instance of req for the goroutine.
+		go func() {
+			process(req)
+			sem &lt;- 1
+		}()
+	}
 }</pre>
 </div>
 
 <pre>
 func Serve(queue chan *Request) {
-    for req := range queue {
-        &lt;-sem
-        req := req // 为该Go程创建 req 的新实例。
-        go func() {
-            process(req)
-            sem &lt;- 1
-        }()
-    }
+	for req := range queue {
+		&lt;-sem
+		req := req // 为该Go程创建 req 的新实例。
+		go func() {
+			process(req)
+			sem &lt;- 1
+		}()
+	}
 }
 </pre>
 
@@ -6052,34 +6054,34 @@ receiving from that channel.
 <div class="english">
 <pre>
 func handle(queue chan *Request) {
-    for r := range queue {
-        process(r)
-    }
+	for r := range queue {
+		process(r)
+	}
 }
 
 func Serve(clientRequests chan *Request, quit chan bool) {
-    // Start handlers
-    for i := 0; i &lt; MaxOutstanding; i++ {
-        go handle(clientRequests)
-    }
-    &lt;-quit  // Wait to be told to exit.
+	// Start handlers
+	for i := 0; i &lt; MaxOutstanding; i++ {
+		go handle(clientRequests)
+	}
+	&lt;-quit  // Wait to be told to exit.
 }
 </pre>
 </div>
 
 <pre>
 func handle(queue chan *Request) {
-    for r := range queue {
-        process(r)
-    }
+	for r := range queue {
+		process(r)
+	}
 }
 
 func Serve(clientRequests chan *Request, quit chan bool) {
-    // 启动处理程序
-    for i := 0; i &lt; MaxOutstanding; i++ {
-        go handle(clientRequests)
-    }
-    &lt;-quit  // 等待通知退出。
+	// 启动处理程序
+	for i := 0; i &lt; MaxOutstanding; i++ {
+		go handle(clientRequests)
+	}
+	&lt;-quit  // 等待通知退出。
 }
 </pre>
 
@@ -6122,9 +6124,9 @@ Here's a schematic definition of type <code>Request</code>.
 
 <pre>
 type Request struct {
-    args        []int
-    f           func([]int) int
-    resultChan  chan int
+	args        []int
+	f           func([]int) int
+	resultChan  chan int
 }
 </pre>
 
@@ -6142,10 +6144,10 @@ a channel inside the request object on which to receive the answer.
 <div class="english">
 <pre>
 func sum(a []int) (s int) {
-    for _, v := range a {
-        s += v
-    }
-    return
+	for _, v := range a {
+		s += v
+	}
+	return
 }
 
 request := &amp;Request{[]int{3, 4, 5}, sum, make(chan int)}
@@ -6158,10 +6160,10 @@ fmt.Printf("answer: %d\n", &lt;-request.resultChan)
 
 <pre>
 func sum(a []int) (s int) {
-    for _, v := range a {
-        s += v
-    }
-    return
+	for _, v := range a {
+		s += v
+	}
+	return
 }
 
 request := &amp;Request{[]int{3, 4, 5}, sum, make(chan int)}
@@ -6176,9 +6178,9 @@ On the server side, the handler function is the only thing that changes.
 </p>
 <pre>
 func handle(queue chan *Request) {
-    for req := range queue {
-        req.resultChan &lt;- req.f(req.args)
-    }
+	for req := range queue {
+		req.resultChan &lt;- req.f(req.args)
+	}
 }
 </pre>
 
@@ -6234,10 +6236,10 @@ type Vector []float64
 
 // Apply the operation to v[i], v[i+1] ... up to v[n-1].
 func (v Vector) DoSome(i, n int, u Vector, c chan int) {
-    for ; i &lt; n; i++ {
-        v[i] += u.Op(v[i])
-    }
-    c &lt;- 1    // signal that this piece is done
+	for ; i &lt; n; i++ {
+		v[i] += u.Op(v[i])
+	}
+	c &lt;- 1    // signal that this piece is done
 }
 </pre>
 </div>
@@ -6247,10 +6249,10 @@ type Vector []float64
 
 // 将此操应用至 v[i], v[i+1] ... 直到 v[n-1]
 func (v Vector) DoSome(i, n int, u Vector, c chan int) {
-    for ; i &lt; n; i++ {
-        v[i] += u.Op(v[i])
-    }
-    c &lt;- 1    // 发信号表示这一块计算完成。
+	for ; i &lt; n; i++ {
+		v[i] += u.Op(v[i])
+	}
+	c &lt;- 1    // 发信号表示这一块计算完成。
 }
 </pre>
 
@@ -6274,15 +6276,15 @@ launching all the goroutines.
 const NCPU = 4  // number of CPU cores
 
 func (v Vector) DoAll(u Vector) {
-    c := make(chan int, NCPU)  // Buffering optional but sensible.
-    for i := 0; i &lt; NCPU; i++ {
-        go v.DoSome(i*len(v)/NCPU, (i+1)*len(v)/NCPU, u, c)
-    }
-    // Drain the channel.
-    for i := 0; i &lt; NCPU; i++ {
-        &lt;-c    // wait for one task to complete
-    }
-    // All done.
+	c := make(chan int, NCPU)  // Buffering optional but sensible.
+	for i := 0; i &lt; NCPU; i++ {
+		go v.DoSome(i*len(v)/NCPU, (i+1)*len(v)/NCPU, u, c)
+	}
+	// Drain the channel.
+	for i := 0; i &lt; NCPU; i++ {
+		&lt;-c    // wait for one task to complete
+	}
+	// All done.
 }
 </pre>
 </div>
@@ -6291,15 +6293,15 @@ func (v Vector) DoAll(u Vector) {
 const NCPU = 4  // CPU核心数
 
 func (v Vector) DoAll(u Vector) {
-    c := make(chan int, NCPU)  // 缓冲区是可选的，但明显用上更好
-    for i := 0; i &lt; NCPU; i++ {
-        go v.DoSome(i*len(v)/NCPU, (i+1)*len(v)/NCPU, u, c)
-    }
-    // 排空信道。
-    for i := 0; i &lt; NCPU; i++ {
-        &lt;-c    // 等待任务完成
-    }
-    // 一切完成。
+	c := make(chan int, NCPU)  // 缓冲区是可选的，但明显用上更好
+	for i := 0; i &lt; NCPU; i++ {
+		go v.DoSome(i*len(v)/NCPU, (i+1)*len(v)/NCPU, u, c)
+	}
+	// 排空信道。
+	for i := 0; i &lt; NCPU; i++ {
+		&lt;-c    // 等待任务完成
+	}
+	// 一切完成。
 }
 </pre>
 
@@ -6389,19 +6391,19 @@ var freeList = make(chan *Buffer, 100)
 var serverChan = make(chan *Buffer)
 
 func client() {
-    for {
-        var b *Buffer
-        // Grab a buffer if available; allocate if not.
-        select {
-        case b = &lt;-freeList:
-            // Got one; nothing more to do.
-        default:
-            // None free, so allocate a new one.
-            b = new(Buffer)
-        }
-        load(b)              // Read next message from the net.
-        serverChan &lt;- b      // Send to server.
-    }
+	for {
+		var b *Buffer
+		// Grab a buffer if available; allocate if not.
+		select {
+		case b = &lt;-freeList:
+			// Got one; nothing more to do.
+		default:
+			// None free, so allocate a new one.
+			b = new(Buffer)
+		}
+		load(b)              // Read next message from the net.
+		serverChan &lt;- b      // Send to server.
+	}
 }
 </pre>
 </div>
@@ -6411,19 +6413,19 @@ var freeList = make(chan *Buffer, 100)
 var serverChan = make(chan *Buffer)
 
 func client() {
-    for {
-        var b *Buffer
-        // 若缓冲区可用就用它，不可用就分配个新的。
-        select {
-        case b = &lt;-freeList:
-            // 获取一个，不做别的。
-        default:
-            // 非空闲，因此分配一个新的。
-            b = new(Buffer)
-        }
-        load(b)              // 从网络中读取下一条消息。
-        serverChan &lt;- b   // 发送至服务器。
-    }
+	for {
+		var b *Buffer
+		// 若缓冲区可用就用它，不可用就分配个新的。
+		select {
+		case b = &lt;-freeList:
+			// 获取一个，不做别的。
+		default:
+			// 非空闲，因此分配一个新的。
+			b = new(Buffer)
+		}
+		load(b)              // 从网络中读取下一条消息。
+		serverChan &lt;- b   // 发送至服务器。
+	}
 }
 </pre>
 
@@ -6441,34 +6443,34 @@ and returns the buffer to the free list.
 <div class="english">
 <pre>
 func server() {
-    for {
-        b := &lt;-serverChan    // Wait for work.
-        process(b)
-        // Reuse buffer if there's room.
-        select {
-        case freeList &lt;- b:
-            // Buffer on free list; nothing more to do.
-        default:
-            // Free list full, just carry on.
-        }
-    }
+	for {
+		b := &lt;-serverChan    // Wait for work.
+		process(b)
+		// Reuse buffer if there's room.
+		select {
+		case freeList &lt;- b:
+			// Buffer on free list; nothing more to do.
+		default:
+			// Free list full, just carry on.
+		}
+	}
 }
 </pre>
 </div>
 
 <pre>
 func server() {
-    for {
-        b := &lt;-serverChan    // 等待工作。
-        process(b)
-        // 若缓冲区有空间就重用它。
-        select {
-        case freeList &lt;- b:
-            // 将缓冲区放大空闲列表中，不做别的。
-        default:
-            // 空闲列表已满，保持就好。
-        }
-    }
+	for {
+		b := &lt;-serverChan    // 等待工作。
+		process(b)
+		// 若缓冲区有空间就重用它。
+		select {
+		case freeList &lt;- b:
+			// 将缓冲区放大空闲列表中，不做别的。
+		default:
+			// 空闲列表已满，保持就好。
+		}
+	}
 }
 </pre>
 
@@ -6522,7 +6524,7 @@ a simple built-in interface.
 
 <pre>
 type error interface {
-    Error() string
+	Error() string
 }
 </pre>
 
@@ -6545,13 +6547,13 @@ For example, <code>os.Open</code> returns an <code>os.PathError</code>.
 // PathError records an error and the operation and
 // file path that caused it.
 type PathError struct {
-    Op string    // "open", "unlink", etc.
-    Path string  // The associated file.
-    Err error    // Returned by the system call.
+	Op string    // "open", "unlink", etc.
+	Path string  // The associated file.
+	Err error    // Returned by the system call.
 }
 
 func (e *PathError) Error() string {
-    return e.Op + " " + e.Path + ": " + e.Err.Error()
+	return e.Op + " " + e.Path + ": " + e.Err.Error()
 }
 </pre>
 </div>
@@ -6559,13 +6561,13 @@ func (e *PathError) Error() string {
 <pre>
 // PathError 记录一个错误以及产生该错误的路径和操作。
 type PathError struct {
-    Op string    // "open"、"unlink" 等等。
-    Path string  // 相关联的文件。
-    Err error    // 由系统调用返回。
+	Op string    // "open"、"unlink" 等等。
+	Path string  // 相关联的文件。
+	Err error    // 由系统调用返回。
 }
 
 func (e *PathError) Error() string {
-    return e.Op + " " + e.Path + ": " + e.Err.Error()
+	return e.Op + " " + e.Path + ": " + e.Err.Error()
 }
 </pre>
 
@@ -6632,30 +6634,30 @@ field for recoverable failures.
 <div class="english">
 <pre>
 for try := 0; try &lt; 2; try++ {
-    file, err = os.Create(filename)
-    if err == nil {
-        return
-    }
-    if e, ok := err.(*os.PathError); ok &amp;&amp; e.Err == syscall.ENOSPC {
-        deleteTempFiles()  // Recover some space.
-        continue
-    }
-    return
+	file, err = os.Create(filename)
+	if err == nil {
+		return
+	}
+	if e, ok := err.(*os.PathError); ok &amp;&amp; e.Err == syscall.ENOSPC {
+		deleteTempFiles()  // Recover some space.
+		continue
+	}
+	return
 }
 </pre>
 </div>
 
 <pre>
 for try := 0; try &lt; 2; try++ {
-    file, err = os.Create(filename)
-    if err == nil {
-        return
-    }
-    if e, ok := err.(*os.PathError); ok &amp;&amp; e.Err == syscall.ENOSPC {
-        deleteTempFiles()  // 恢复一些空间。
-        continue
-    }
-    return
+	file, err = os.Create(filename)
+	if err == nil {
+		return
+	}
+	if e, ok := err.(*os.PathError); ok &amp;&amp; e.Err == syscall.ENOSPC {
+		deleteTempFiles()  // 恢复一些空间。
+		continue
+	}
+	return
 }
 </pre>
 
@@ -6720,16 +6722,16 @@ happened, such as exiting an infinite loop.
 <pre>
 // A toy implementation of cube root using Newton's method.
 func CubeRoot(x float64) float64 {
-    z := x/3   // Arbitrary initial value
-    for i := 0; i &lt; 1e6; i++ {
-        prevz := z
-        z -= (z*z*z-x) / (3*z*z)
-        if veryClose(z, prevz) {
-            return z
-        }
-    }
-    // A million iterations has not converged; something is wrong.
-    panic(fmt.Sprintf("CubeRoot(%g) did not converge", x))
+	z := x/3   // Arbitrary initial value
+	for i := 0; i &lt; 1e6; i++ {
+		prevz := z
+		z -= (z*z*z-x) / (3*z*z)
+		if veryClose(z, prevz) {
+			return z
+		}
+	}
+	// A million iterations has not converged; something is wrong.
+	panic(fmt.Sprintf("CubeRoot(%g) did not converge", x))
 }
 </pre>
 </div>
@@ -6737,16 +6739,16 @@ func CubeRoot(x float64) float64 {
 <pre>
 // 用牛顿法计算立方根的一个玩具实现。
 func CubeRoot(x float64) float64 {
-    z := x/3   // 任意初始值
-    for i := 0; i &lt; 1e6; i++ {
-        prevz := z
-        z -= (z*z*z-x) / (3*z*z)
-        if veryClose(z, prevz) {
-            return z
-        }
-    }
-    // 一百万次迭代并未收敛，事情出错了。
-    panic(fmt.Sprintf("CubeRoot(%g) did not converge", x))
+	z := x/3   // 任意初始值
+	for i := 0; i &lt; 1e6; i++ {
+		prevz := z
+		z -= (z*z*z-x) / (3*z*z)
+		if veryClose(z, prevz) {
+			return z
+		}
+	}
+	// 一百万次迭代并未收敛，事情出错了。
+	panic(fmt.Sprintf("CubeRoot(%g) did not converge", x))
 }
 </pre>
 
@@ -6771,9 +6773,9 @@ it might be reasonable to panic, so to speak.
 var user = os.Getenv("USER")
 
 func init() {
-    if user == "" {
-        panic("no value for $USER")
-    }
+	if user == "" {
+		panic("no value for $USER")
+	}
 }
 </pre>
 
@@ -6831,18 +6833,18 @@ inside a server without killing the other executing goroutines.
 
 <pre>
 func server(workChan &lt;-chan *Work) {
-    for work := range workChan {
-        go safelyDo(work)
-    }
+	for work := range workChan {
+		go safelyDo(work)
+	}
 }
 
 func safelyDo(work *Work) {
-    defer func() {
-        if err := recover(); err != nil {
-            log.Println("work failed:", err)
-        }
-    }()
-    do(work)
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("work failed:", err)
+		}
+	}()
+	do(work)
 }
 </pre>
 
@@ -6905,26 +6907,26 @@ an <code>error</code> method, and the <code>Compile</code> function.
 // Error is the type of a parse error; it satisfies the error interface.
 type Error string
 func (e Error) Error() string {
-    return string(e)
+	return string(e)
 }
 
 // error is a method of *Regexp that reports parsing errors by
 // panicking with an Error.
 func (regexp *Regexp) error(err string) {
-    panic(Error(err))
+	panic(Error(err))
 }
 
 // Compile returns a parsed representation of the regular expression.
 func Compile(str string) (regexp *Regexp, err error) {
-    regexp = new(Regexp)
-    // doParse will panic if there is a parse error.
-    defer func() {
-        if e := recover(); e != nil {
-            regexp = nil    // Clear return value.
-            err = e.(Error) // Will re-panic if not a parse error.
-        }
-    }()
-    return regexp.doParse(str), nil
+	regexp = new(Regexp)
+	// doParse will panic if there is a parse error.
+	defer func() {
+		if e := recover(); e != nil {
+			regexp = nil    // Clear return value.
+			err = e.(Error) // Will re-panic if not a parse error.
+		}
+	}()
+	return regexp.doParse(str), nil
 }
 </pre>
 </div>
@@ -6933,25 +6935,25 @@ func Compile(str string) (regexp *Regexp, err error) {
 // Error 是解析错误的类型，它满足 error 接口。
 type Error string
 func (e Error) Error() string {
-    return string(e)
+	return string(e)
 }
 
 // error 是 *Regexp 的方法，它通过用一个 Error 触发Panic来报告解析错误。
 func (regexp *Regexp) error(err string) {
-    panic(Error(err))
+	panic(Error(err))
 }
 
 // Compile 返回该正则表达式解析后的表示。
 func Compile(str string) (regexp *Regexp, err error) {
-    regexp = new(Regexp)
-    // doParse will panic if there is a parse error.
-    defer func() {
-        if e := recover(); e != nil {
-            regexp = nil    // 清理返回值。
-            err = e.(Error) // 若它不是解析错误，将重新触发Panic。
-        }
-    }()
-    return regexp.doParse(str), nil
+	regexp = new(Regexp)
+	// doParse will panic if there is a parse error.
+	defer func() {
+		if e := recover(); e != nil {
+			regexp = nil    // 清理返回值。
+			err = e.(Error) // 若它不是解析错误，将重新触发Panic。
+		}
+	}()
+	return regexp.doParse(str), nil
 }
 </pre>
 
@@ -6999,7 +7001,7 @@ the parse stack by hand:
 
 <pre>
 if pos == 0 {
-    re.error("'*' illegal at start of expression")
+	re.error("'*' illegal at start of expression")
 }
 </pre>
 
