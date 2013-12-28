@@ -656,7 +656,7 @@ func (db *DB) maybeOpenNewConnections() {
 	}
 }
 
-// Runs in a seperate goroutine, opens new connections when requested.
+// Runs in a separate goroutine, opens new connections when requested.
 func (db *DB) connectionOpener() {
 	for _ = range db.openerCh {
 		db.openNewConnection()
@@ -709,8 +709,8 @@ func (db *DB) conn() (*driverConn, error) {
 	}
 
 	// If db.maxOpen > 0 and the number of open connections is over the limit
-	// or there are no free connection, then make a request and wait.
-	if db.maxOpen > 0 && (db.numOpen >= db.maxOpen || db.freeConn.Len() == 0) {
+	// and there are no free connection, make a request and wait.
+	if db.maxOpen > 0 && db.numOpen >= db.maxOpen && db.freeConn.Len() == 0 {
 		// Make the connRequest channel. It's buffered so that the
 		// connectionOpener doesn't block while waiting for the req to be read.
 		ch := make(chan interface{}, 1)

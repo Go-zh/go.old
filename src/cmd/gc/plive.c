@@ -149,29 +149,43 @@ addedge(BasicBlock *from, BasicBlock *to)
 	arrayadd(to->pred, &from);
 }
 
-// Inserts a new instruction ahead of an existing instruction in the instruction
+// Inserts prev before curr in the instruction
 // stream.  Any control flow, such as branches or fall throughs, that target the
 // existing instruction are adjusted to target the new instruction.
 static void
 splicebefore(Liveness *lv, BasicBlock *bb, Prog *prev, Prog *curr)
 {
-	Prog *p;
+	Prog *next, tmp;
 
-	prev->opt = curr->opt;
-	curr->opt = prev;
-	prev->link = curr;
-	if(prev->opt != nil)
-		((Prog*)prev->opt)->link = prev;
-	else
-		bb->first = prev;
-	for(p = lv->ptxt; p != nil; p = p->link) {
-		if(p != prev) {
-			if(p->link == curr)
-				p->link = prev;
-			if(p->as != ACALL && p->to.type == D_BRANCH && p->to.u.branch == curr)
-				p->to.u.branch = prev;
-		}
-	}
+	USED(lv);
+
+	// There may be other instructions pointing at curr,
+	// and we want them to now point at prev. Instead of
+	// trying to find all such instructions, swap the contents
+	// so that the problem becomes inserting next after curr.
+	// The "opt" field is the backward link in the linked list.
+
+	// Overwrite curr's data with prev, but keep the list links.
+	tmp = *curr;
+	*curr = *prev;
+	curr->opt = tmp.opt;
+	curr->link = tmp.link;
+	
+	// Overwrite prev (now next) with curr's old data.
+	next = prev;
+	*next = tmp;
+	next->opt = nil;
+	next->link = nil;
+
+	// Now insert next after curr.
+	next->link = curr->link;
+	next->opt = curr;
+	curr->link = next;
+	if(next->link && next->link->opt == curr)
+		next->link->opt = next;
+
+	if(bb->last == curr)
+		bb->last = next;
 }
 
 // A pretty printer for basic blocks.
@@ -676,7 +690,7 @@ progeffects(Prog *prog, Array *vars, Bvec *uevar, Bvec *varkill)
 // liveness computation.  The cfg argument is an array of BasicBlock*s and the
 // vars argument is an array of Node*s.
 static Liveness*
-newliveness(Node *fn, Prog *ptxt, Array *cfg, Array *vars)
+newliveness(Node *fn, Prog *ptxt, Array *cfg, Array *vars, int computedead)
 {
 	Liveness *result;
 	int32 i;
@@ -705,8 +719,13 @@ newliveness(Node *fn, Prog *ptxt, Array *cfg, Array *vars)
 
 	result->livepointers = arraynew(0, sizeof(Bvec*));
 	result->argslivepointers = arraynew(0, sizeof(Bvec*));
-	result->deadvalues = arraynew(0, sizeof(Bvec*));
-	result->argsdeadvalues = arraynew(0, sizeof(Bvec*));
+	if(computedead) {
+		result->deadvalues = arraynew(0, sizeof(Bvec*));
+		result->argsdeadvalues = arraynew(0, sizeof(Bvec*));
+	} else {
+		result->deadvalues = nil;
+		result->argsdeadvalues = nil;
+	}
 	return result;
 }
 
@@ -727,13 +746,15 @@ freeliveness(Liveness *lv)
 		free(*(Bvec**)arrayget(lv->argslivepointers, i));
 	arrayfree(lv->argslivepointers);
 
-	for(i = 0; i < arraylength(lv->deadvalues); i++)
-		free(*(Bvec**)arrayget(lv->deadvalues, i));
-	arrayfree(lv->deadvalues);
-
-	for(i = 0; i < arraylength(lv->argsdeadvalues); i++)
-		free(*(Bvec**)arrayget(lv->argsdeadvalues, i));
-	arrayfree(lv->argsdeadvalues);
+	if(lv->deadvalues != nil) {
+		for(i = 0; i < arraylength(lv->deadvalues); i++)
+			free(*(Bvec**)arrayget(lv->deadvalues, i));
+		arrayfree(lv->deadvalues);
+	
+		for(i = 0; i < arraylength(lv->argsdeadvalues); i++)
+			free(*(Bvec**)arrayget(lv->argsdeadvalues, i));
+		arrayfree(lv->argsdeadvalues);
+	}
 
 	for(i = 0; i < arraylength(lv->cfg); i++) {
 		free(lv->uevar[i]);
@@ -949,6 +970,10 @@ checkptxt(Node *fn, Prog *firstp)
 	}
 }
 
+// NOTE: The bitmap for a specific type t should be cached in t after the first run
+// and then simply copied into bv at the correct offset on future calls with
+// the same type t. On https://rsc.googlecode.com/hg/testdata/slow.go, twobitwalktype1
+// accounts for 40% of the 6g execution time.
 static void
 twobitwalktype1(Type *t, vlong *xoffset, Bvec *bv)
 {
@@ -957,7 +982,7 @@ twobitwalktype1(Type *t, vlong *xoffset, Bvec *bv)
 	vlong o;
 	Type *t1;
 
-	if(t->align > 0 && (*xoffset % t->align) != 0)
+	if(t->align > 0 && (*xoffset & (t->align - 1)) != 0)
 		fatal("twobitwalktype1: invalid initial alignment, %T", t);
 
 	switch(t->etype) {
@@ -986,7 +1011,7 @@ twobitwalktype1(Type *t, vlong *xoffset, Bvec *bv)
 	case TFUNC:
 	case TCHAN:
 	case TMAP:
-		if(*xoffset % widthptr != 0)
+		if((*xoffset & (widthptr-1)) != 0)
 			fatal("twobitwalktype1: invalid alignment, %T", t);
 		bvset(bv, (*xoffset / widthptr) * BitsPerPointer);
 		*xoffset += t->width;
@@ -994,7 +1019,7 @@ twobitwalktype1(Type *t, vlong *xoffset, Bvec *bv)
 
 	case TSTRING:
 		// struct { byte *str; intgo len; }
-		if(*xoffset % widthptr != 0)
+		if((*xoffset & (widthptr-1)) != 0)
 			fatal("twobitwalktype1: invalid alignment, %T", t);
 		bvset(bv, (*xoffset / widthptr) * BitsPerPointer);
 		*xoffset += t->width;
@@ -1004,7 +1029,7 @@ twobitwalktype1(Type *t, vlong *xoffset, Bvec *bv)
 		// struct { Itab *tab;	union { void *ptr, uintptr val } data; }
 		// or, when isnilinter(t)==true:
 		// struct { Type *type; union { void *ptr, uintptr val } data; }
-		if(*xoffset % widthptr != 0)
+		if((*xoffset & (widthptr-1)) != 0)
 			fatal("twobitwalktype1: invalid alignment, %T", t);
 		bvset(bv, ((*xoffset / widthptr) * BitsPerPointer) + 1);
 		if(isnilinter(t))
@@ -1019,7 +1044,7 @@ twobitwalktype1(Type *t, vlong *xoffset, Bvec *bv)
 			fatal("twobitwalktype1: invalid bound, %T", t);
 		if(isslice(t)) {
 			// struct { byte *array; uintgo len; uintgo cap; }
-			if(*xoffset % widthptr != 0)
+			if((*xoffset & (widthptr-1)) != 0)
 				fatal("twobitwalktype1: invalid TARRAY alignment, %T", t);
 			bvset(bv, (*xoffset / widthptr) * BitsPerPointer);
 			*xoffset += t->width;
@@ -1285,7 +1310,7 @@ livenessepilogue(Liveness *lv)
 	Bvec *varkill;
 	Bvec *args;
 	Bvec *locals;
-	Prog *p;
+	Prog *p, *next;
 	int32 i;
 	int32 nvars;
 	int32 pos;
@@ -1315,10 +1340,12 @@ livenessepilogue(Liveness *lv)
 			arrayadd(lv->livepointers, &locals);
 
 			// Dead stuff second.
-			args = bvalloc(argswords() * BitsPerPointer);
-			arrayadd(lv->argsdeadvalues, &args);
-			locals = bvalloc(localswords() * BitsPerPointer);
-			arrayadd(lv->deadvalues, &locals);
+			if(lv->deadvalues != nil) {
+				args = bvalloc(argswords() * BitsPerPointer);
+				arrayadd(lv->argsdeadvalues, &args);
+				locals = bvalloc(localswords() * BitsPerPointer);
+				arrayadd(lv->deadvalues, &locals);
+			}
 		}
 
 		// walk backward, emit pcdata and populate the maps
@@ -1329,7 +1356,8 @@ livenessepilogue(Liveness *lv)
 			fatal("livenessepilogue");
 		}
 
-		for(p = bb->last; p != nil; p = p->opt) {
+		for(p = bb->last; p != nil; p = next) {
+			next = p->opt; // splicebefore modifies p->opt
 			// Propagate liveness information
 			progeffects(p, lv->vars, uevar, varkill);
 			bvcopy(liveout, livein);
@@ -1372,9 +1400,11 @@ livenessepilogue(Liveness *lv)
 				twobitlivepointermap(lv, liveout, lv->vars, args, locals);
 
 				// Record dead values.
-				args = *(Bvec**)arrayget(lv->argsdeadvalues, pos);
-				locals = *(Bvec**)arrayget(lv->deadvalues, pos);
-				twobitdeadvaluemap(lv, liveout, lv->vars, args, locals);
+				if(lv->deadvalues != nil) {
+					args = *(Bvec**)arrayget(lv->argsdeadvalues, pos);
+					locals = *(Bvec**)arrayget(lv->deadvalues, pos);
+					twobitdeadvaluemap(lv, liveout, lv->vars, args, locals);
+				}
 
 				pos--;
 			}
@@ -1468,7 +1498,7 @@ liveness(Node *fn, Prog *firstp, Sym *argssym, Sym *livesym, Sym *deadsym)
 	cfg = newcfg(firstp);
 	if(0) printcfg(cfg);
 	vars = getvariables(fn);
-	lv = newliveness(fn, firstp, cfg, vars);
+	lv = newliveness(fn, firstp, cfg, vars, deadsym != nil);
 
 	// Run the dataflow framework.
 	livenessprologue(lv);
