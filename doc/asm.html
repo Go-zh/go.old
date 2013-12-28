@@ -1,10 +1,20 @@
 <!--{
+	"Title": "Go汇编器快速指南",
+	"Path":  "/doc/asm"
+}-->
+
+<!--{
 	"Title": "A Quick Guide to Go's Assembler",
 	"Path":  "/doc/asm"
 }-->
 
+<div class="english">
 <h2 id="introduction">A Quick Guide to Go's Assembler</h2>
+</div>
 
+<h2 id="引言">Go汇编器快速指南</h2>
+
+<div class="english">
 <p>
 This document is a quick outline of the unusual form of assembly language used by the <code>gc</code>
 suite of Go compilers (<code>6g</code>, <code>8g</code>, etc.).
@@ -14,13 +24,40 @@ If you plan to write assembly language, you should read that document although m
 This document provides a summary of the syntax and
 describes the peculiarities that apply when writing assembly code to interact with Go.
 </p>
+</div>
 
+<p>
+此文档简述了Go编译器套件（<code>6g</code>、<code>8g</code> 等）中 <code>gc</code>
+使用的非一般形式的汇编语言。它基于Plan 9汇编器的输入，详情见
+<a href="http://plan9.bell-labs.com/sys/doc/asm.html">Plan 9</a>上的文档。
+尽管它是Plan 9的规范，但你若想编写汇编语言，同样需要阅读该文档。本文档提供了语法的概括，
+并描述了编写汇编代码与Go交互时所要用到的特性。
+</p>
+
+<div class="english">
 <p>
 The most important thing to know about Go's assembler is that it is not a direct representation of the underlying machine.
 Some of the details map precisely to the machine, but some do not.
 This is because the compiler suite (see
 <a href="http://plan9.bell-labs.com/sys/doc/compiler.html">this description</a>)
 needs no assembler pass in the usual pipeline.
+Instead, the compiler emits a kind of incompletely defined instruction set, in binary form, which the linker
+then completes.
+In particular, the linker does instruction selection, so when you see an instruction like <code>MOV</code>
+what the linker actually generates for that operation might not be a move instruction at all, perhaps a clear or load.
+Or it might correspond exactly to the machine instruction with that name.
+In general, machine-specific operations tend to appear as themselves, while more general concepts like
+memory move and subroutine call and return are more abstract.
+The details vary with architecture, and we apologize for the imprecision; the situation is not well-defined.
+</p>
+</div>
+
+<p>
+关于Go的汇编，你要知道它并非底层机器码的直接表示。其中有些细节与机器码精确对应，
+但有些则不是。这是因为该编译器套件
+（见<a href="http://plan9.bell-labs.com/sys/doc/compiler.html">此描述</a>）
+并不需要在一般管道中传递汇编，而是由编译器按二进制形式产生一种未完整定义的指令集，
+随后它将由连接器完成。
 Instead, the compiler emits a kind of incompletely defined instruction set, in binary form, which the linker
 then completes.
 In particular, the linker does instruction selection, so when you see an instruction like <code>MOV</code>
@@ -68,7 +105,7 @@ $ go tool 6g -S x.go        # or: go build -gcflags -S x.go
 <p>
 The <code>FUNCDATA</code> and <code>PCDATA</code> directives contain information
 for use by the garbage collector; they are introduced by the compiler.
-</p> 
+</p>
 
 <p>
 To see what gets put in the binary after linking, add the <code>-a</code> flag to the linker:
@@ -146,7 +183,7 @@ that assembly programming is a fraught endeavor.
 </p>
 
 <p>
-In Go object files and binaries, the full name of a symbol is the 
+In Go object files and binaries, the full name of a symbol is the
 package path followed by a period and the symbol name:
 <code>fmt.Printf</code> or <code>math/rand.Int</code>.
 Because the assembler's parser treats period and slash as punctuation,
