@@ -691,12 +691,6 @@ A single call of <code>f()</code> from <code>once.Do(f)</code> happens (returns)
 </p>
 </div>
 
-<div class="english">
-<p class="rule">
-A single call of <code>f()</code> from <code>once.Do(f)</code> happens (returns) before any call of <code>once.Do(f)</code> returns.
-</p>
-</div>
-
 <p class="rule">
 通过 <code>once.Do(f)</code> 对 <code>f()</code> 的单次调用在对任何其它的
 <code>once.Do(f)</code> 调用返回之前发生（返回）。
@@ -904,14 +898,6 @@ guaranteed to finish.
 </div>
 
 <p>
-As before, there is no guarantee that, in <code>main</code>,
-observing the write to <code>done</code>
-implies observing the write to <code>a</code>, so this program could
-print an empty string too.
-Worse, there is no guarantee that the write to <code>done</code> will ever
-be observed by <code>main</code>, since there are no synchronization
-events between the two threads.  The loop in <code>main</code> is not
-guaranteed to finish.
 和前面一样，这里不保证在 <code>main</code> 中对 <code>done</code> 的写入的监测，
 蕴含对 <code>a</code> 的写入也进行监测，因此该程序也可能会打印出一个空字符串。
 更糟的是，由于在两个线程之间没有同步事件，因此无法保证对 <code>done</code> 的写入总能被
