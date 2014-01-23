@@ -52,6 +52,7 @@ static char *okgoos[] = {
 	"darwin",
 	"dragonfly",
 	"linux",
+	"solaris",
 	"freebsd",
 	"netbsd",
 	"openbsd",
@@ -1299,7 +1300,6 @@ static char *buildorder[] = {
 
 	"cmd/addr2line",
 	"cmd/objdump",
-	"cmd/pack",
 	"cmd/prof",
 
 	"cmd/cc",  // must be before c
@@ -1378,7 +1378,6 @@ static char *cleantab[] = {
 	"cmd/gc",
 	"cmd/go",	
 	"cmd/objdump",
-	"cmd/pack",
 	"cmd/prof",
 	"lib9",
 	"libbio",

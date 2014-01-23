@@ -70,7 +70,6 @@ import (
 var debug = false
 
 // Regexp is the representation of a compiled regular expression.
-// The public interface is entirely through methods.
 // A Regexp is safe for concurrent use by multiple goroutines.
 type Regexp struct {
 	// read-only after Compile
@@ -85,8 +84,9 @@ type Regexp struct {
 	subexpNames    []string
 	longest        bool
 
-	// pool of machines for running regexp
-	machinePool sync.Pool // of *machine
+	// cache of machines for running regexp
+	mu      sync.Mutex
+	machine []*machine
 }
 
 // String returns the source text used to compile the regular expression.
@@ -174,9 +174,14 @@ func compile(expr string, mode syntax.Flags, longest bool) (*Regexp, error) {
 // It uses the re's machine cache if possible, to avoid
 // unnecessary allocation.
 func (re *Regexp) get() *machine {
-	if v := re.machinePool.Get(); v != nil {
-		return v.(*machine)
+	re.mu.Lock()
+	if n := len(re.machine); n > 0 {
+		z := re.machine[n-1]
+		re.machine = re.machine[:n-1]
+		re.mu.Unlock()
+		return z
 	}
+	re.mu.Unlock()
 	z := progMachine(re.prog)
 	z.re = re
 	return z
@@ -187,7 +192,9 @@ func (re *Regexp) get() *machine {
 // grow to the maximum number of simultaneous matches
 // run using re.  (The cache empties when re gets garbage collected.)
 func (re *Regexp) put(z *machine) {
-	re.machinePool.Put(z)
+	re.mu.Lock()
+	re.machine = append(re.machine, z)
+	re.mu.Unlock()
 }
 
 // MustCompile is like Compile but panics if the expression cannot be parsed.

@@ -11,6 +11,7 @@ const (
 	ERROR_ACCESS_DENIED       Errno = 5
 	ERROR_NO_MORE_FILES       Errno = 18
 	ERROR_HANDLE_EOF          Errno = 38
+	ERROR_NETNAME_DELETED     Errno = 64
 	ERROR_FILE_EXISTS         Errno = 80
 	ERROR_BROKEN_PIPE         Errno = 109
 	ERROR_BUFFER_OVERFLOW     Errno = 111
@@ -23,6 +24,7 @@ const (
 	ERROR_IO_PENDING          Errno = 997
 	ERROR_NOT_FOUND           Errno = 1168
 	WSAEACCES                 Errno = 10013
+	WSAECONNRESET             Errno = 10054
 )
 
 const (
@@ -512,9 +514,11 @@ const (
 
 	IOC_OUT                            = 0x40000000
 	IOC_IN                             = 0x80000000
+	IOC_VENDOR                         = 0x18000000
 	IOC_INOUT                          = IOC_IN | IOC_OUT
 	IOC_WS2                            = 0x08000000
 	SIO_GET_EXTENSION_FUNCTION_POINTER = IOC_INOUT | IOC_WS2 | 6
+	SIO_KEEPALIVE_VALS                 = IOC_IN | IOC_VENDOR | 4
 
 	// cf. http://support.microsoft.com/default.aspx?scid=kb;en-us;257460
 
@@ -1030,4 +1034,10 @@ type WSAProtocolInfo struct {
 type WSAProtocolChain struct {
 	ChainLen     int32
 	ChainEntries [MAX_PROTOCOL_CHAIN]uint32
+}
+
+type TCPKeepalive struct {
+	OnOff    uint32
+	Time     uint32
+	Interval uint32
 }

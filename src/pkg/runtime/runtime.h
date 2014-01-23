@@ -66,16 +66,16 @@ typedef	struct	Itab		Itab;
 typedef	struct	InterfaceType	InterfaceType;
 typedef	struct	Eface		Eface;
 typedef	struct	Type		Type;
+typedef	struct	PtrType		PtrType;
 typedef	struct	ChanType		ChanType;
 typedef	struct	MapType		MapType;
 typedef	struct	Defer		Defer;
-typedef	struct	DeferChunk	DeferChunk;
 typedef	struct	Panic		Panic;
 typedef	struct	Hmap		Hmap;
 typedef	struct	Hchan		Hchan;
 typedef	struct	Complex64	Complex64;
 typedef	struct	Complex128	Complex128;
-typedef	struct	WinCall		WinCall;
+typedef	struct	LibCall		LibCall;
 typedef	struct	SEH		SEH;
 typedef	struct	WinCallbackContext	WinCallbackContext;
 typedef	struct	Timers		Timers;
@@ -223,7 +223,7 @@ struct	GCStats
 	uint64	nsleep;
 };
 
-struct	WinCall
+struct	LibCall
 {
 	void	(*fn)(void*);
 	uintptr	n;	// number of parameters
@@ -263,10 +263,10 @@ struct	G
 	uintptr	stackguard;	// same as stackguard0, but not set to StackPreempt
 	uintptr	stack0;
 	uintptr	stacksize;
-	G*	alllink;	// on allg
 	void*	param;		// passed parameter on wakeup
 	int16	status;
 	int64	goid;
+	int64	waitsince;	// approx time when the G become blocked
 	int8*	waitreason;	// if status==Gwaiting
 	G*	schedlink;
 	bool	ispanic;
@@ -279,8 +279,6 @@ struct	G
 	int32	sig;
 	int32	writenbuf;
 	byte*	writebuf;
-	DeferChunk*	dchunk;
-	DeferChunk*	dchunknext;
 	uintptr	sigcode0;
 	uintptr	sigcode1;
 	uintptr	sigpc;
@@ -341,7 +339,7 @@ struct	M
 	GCStats	gcstats;
 	bool	racecall;
 	bool	needextram;
-	void	(*waitunlockf)(Lock*);
+	bool	(*waitunlockf)(G*, void*);
 	void*	waitlock;
 
 	uintptr	settype_buf[1024];
@@ -349,7 +347,22 @@ struct	M
 
 #ifdef GOOS_windows
 	void*	thread;		// thread handle
-	WinCall	wincall;
+	// these are here because they are too large to be on the stack
+	// of low-level NOSPLIT functions.
+	LibCall	libcall;
+#endif
+#ifdef GOOS_solaris
+	int32*	perrno; 	// pointer to TLS errno
+	// these are here because they are too large to be on the stack
+	// of low-level NOSPLIT functions.
+	LibCall	libcall;
+	struct {
+		int64	tv_sec;
+		int64	tv_nsec;
+	} ts;
+	struct {
+		uintptr v[6];
+	} scratch;
 #endif
 #ifdef GOOS_plan9
 	int8*	notesig;
@@ -370,12 +383,16 @@ struct P
 	uint32	syscalltick;	// incremented on every system call
 	M*	m;		// back-link to associated M (nil if idle)
 	MCache*	mcache;
+	Defer*	deferpool[5];	// pool of available Defer structs of different sizes (see panic.c)
+
+	// Cache of goroutine ids, amortizes accesses to runtime·sched.goidgen.
+	uint64	goidcache;
+	uint64	goidcacheend;
 
 	// Queue of runnable goroutines.
-	G**	runq;
-	int32	runqhead;
-	int32	runqtail;
-	int32	runqsize;
+	uint32	runqhead;
+	uint32	runqtail;
+	G*	runq[256];
 
 	// Available G's (status == Gdead)
 	G*	gfree;
@@ -464,6 +481,15 @@ enum {
 #else
 enum {
    Windows = 0
+};
+#endif
+#ifdef GOOS_solaris
+enum {
+   Solaris = 1
+};
+#else
+enum {
+   Solaris = 0
 };
 #endif
 
@@ -651,18 +677,11 @@ struct Defer
 {
 	int32	siz;
 	bool	special;	// not part of defer frame
-	bool	free;		// if special, free when done
 	byte*	argp;		// where args were copied from
 	byte*	pc;
 	FuncVal*	fn;
 	Defer*	link;
 	void*	args[1];	// padded to actual size
-};
-
-struct DeferChunk
-{
-	DeferChunk	*prev;
-	uintptr	off;
 };
 
 /*
@@ -703,7 +722,8 @@ bool	runtime·topofstack(Func*);
  */
 extern	String	runtime·emptystring;
 extern	uintptr runtime·zerobase;
-extern	G*	runtime·allg;
+extern	G**	runtime·allg;
+extern	uintptr runtime·allglen;
 extern	G*	runtime·lastg;
 extern	M*	runtime·allm;
 extern	P**	runtime·allp;
@@ -770,21 +790,6 @@ int32	runtime·read(int32, void*, int32);
 int32	runtime·write(int32, void*, int32);
 int32	runtime·close(int32);
 int32	runtime·mincore(void*, uintptr, byte*);
-bool	runtime·cas(uint32*, uint32, uint32);
-bool	runtime·cas64(uint64*, uint64, uint64);
-bool	runtime·casp(void**, void*, void*);
-// Don't confuse with XADD x86 instruction,
-// this one is actually 'addx', that is, add-and-fetch.
-uint32	runtime·xadd(uint32 volatile*, int32);
-uint64	runtime·xadd64(uint64 volatile*, int64);
-uint32	runtime·xchg(uint32 volatile*, uint32);
-uint64	runtime·xchg64(uint64 volatile*, uint64);
-uint32	runtime·atomicload(uint32 volatile*);
-void	runtime·atomicstore(uint32 volatile*, uint32);
-void	runtime·atomicstore64(uint64 volatile*, uint64);
-uint64	runtime·atomicload64(uint64 volatile*);
-void*	runtime·atomicloadp(void* volatile*);
-void	runtime·atomicstorep(void* volatile*, void*);
 void	runtime·jmpdefer(FuncVal*, void*);
 void	runtime·exit1(int32);
 void	runtime·ready(G*);
@@ -810,7 +815,6 @@ void	runtime·stackfree(void*, uintptr);
 MCache*	runtime·allocmcache(void);
 void	runtime·freemcache(MCache*);
 void	runtime·mallocinit(void);
-void	runtime·mprofinit(void);
 bool	runtime·ifaceeq_c(Iface, Iface);
 bool	runtime·efaceeq_c(Eface, Eface);
 uintptr	runtime·ifacehash(Iface, uintptr);
@@ -826,14 +830,33 @@ uint32	runtime·fastrand1(void);
 void	runtime·rewindmorestack(Gobuf*);
 int32	runtime·timediv(int64, int32, int32*);
 
-void runtime·setmg(M*, G*);
-void runtime·newextram(void);
+// atomic operations
+bool	runtime·cas(uint32*, uint32, uint32);
+bool	runtime·cas64(uint64*, uint64, uint64);
+bool	runtime·casp(void**, void*, void*);
+// Don't confuse with XADD x86 instruction,
+// this one is actually 'addx', that is, add-and-fetch.
+uint32	runtime·xadd(uint32 volatile*, int32);
+uint64	runtime·xadd64(uint64 volatile*, int64);
+uint32	runtime·xchg(uint32 volatile*, uint32);
+uint64	runtime·xchg64(uint64 volatile*, uint64);
+void*	runtime·xchgp(void* volatile*, void*);
+uint32	runtime·atomicload(uint32 volatile*);
+void	runtime·atomicstore(uint32 volatile*, uint32);
+void	runtime·atomicstore64(uint64 volatile*, uint64);
+uint64	runtime·atomicload64(uint64 volatile*);
+void*	runtime·atomicloadp(void* volatile*);
+void	runtime·atomicstorep(void* volatile*, void*);
+
+void	runtime·setmg(M*, G*);
+void	runtime·newextram(void);
 void	runtime·exit(int32);
 void	runtime·breakpoint(void);
 void	runtime·gosched(void);
 void	runtime·gosched0(G*);
 void	runtime·schedtrace(bool);
-void	runtime·park(void(*)(Lock*), Lock*, int8*);
+void	runtime·park(bool(*)(G*, void*), void*, int8*);
+void	runtime·parkunlock(Lock*, int8*);
 void	runtime·tsleep(int64, int8*);
 M*	runtime·newm(void);
 void	runtime·goexit(void);
@@ -849,7 +872,7 @@ void	runtime·dopanic(int32);
 void	runtime·startpanic(void);
 void	runtime·freezetheworld(void);
 void	runtime·unwindstack(G*, byte*);
-void	runtime·sigprof(uint8 *pc, uint8 *sp, uint8 *lr, G *gp);
+void	runtime·sigprof(uint8 *pc, uint8 *sp, uint8 *lr, G *gp, M *mp);
 void	runtime·resetcpuprofiler(int32);
 void	runtime·setcpuprofilerate(void(*)(uintptr*, int32), int32);
 void	runtime·usleep(uint32);
@@ -865,6 +888,8 @@ int32	runtime·netpollopen(uintptr, PollDesc*);
 int32   runtime·netpollclose(uintptr);
 void	runtime·netpollready(G**, PollDesc*, int32);
 uintptr	runtime·netpollfd(PollDesc*);
+void	runtime·netpollarmread(uintptr fd);
+void	runtime·netpollarmwrite(uintptr fd);
 void	runtime·crash(void);
 void	runtime·parsedebugvars(void);
 void	_rt0_go(void);

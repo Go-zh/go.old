@@ -23,7 +23,7 @@ import (
 	"text/tabwriter"
 )
 
-// BUG(rsc): Profiles are incomplete and inaccuate on NetBSD, OpenBSD, and OS X.
+// BUG(rsc): Profiles are incomplete and inaccuate on NetBSD and OS X.
 // See http://golang.org/issue/6047 for details.
 
 // BUG(rsc): OS X Snow Leopard 64位内核有一个bug会妨碍CPU分析为该系统提供准确的结果。

@@ -6,7 +6,7 @@
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of Nov 13, 2013",
+	"Subtitle": "Version of Jan 14, 2014",
 	"Path": "/ref/spec"
 }-->
 
@@ -1111,7 +1111,7 @@ A field declaration may be followed by an optional string literal <i>tag</i>,
 which becomes an attribute for all the fields in the corresponding
 field declaration. The tags are made
 visible through a <a href="/pkg/reflect/#StructTag">reflection interface</a>
-and take part in <a href="Type_identity">type identity</a> for structs
+and take part in <a href="#Type_identity">type identity</a> for structs
 but are otherwise ignored.
 </p>
 
@@ -4031,7 +4031,7 @@ an untyped complex constant.
 
 <pre>
 const ic = complex(0, c)   // ic == 3.75i  (untyped complex constant)
-const iΘ = complex(0, Θ)   // iΘ == 1.5i   (type complex128)
+const iΘ = complex(0, Θ)   // iΘ == 1i     (type complex128)
 </pre>
 
 <p>
@@ -5365,7 +5365,7 @@ At any time the following relationship holds:
 
 <p>
 The length of a <code>nil</code> slice, map or channel is 0.
-The capacity of a <code>nil</code> slice and channel is 0.
+The capacity of a <code>nil</code> slice or channel is 0.
 </p>
 
 <p>
@@ -5771,7 +5771,7 @@ If the PackageName is omitted, it defaults to the identifier specified in the
 If an explicit period (<code>.</code>) appears instead of a name, all the
 package's exported identifiers declared in that package's
 <a href="#Blocks">package block</a> will be declared in the importing source
-file's file block and can be accessed without a qualifier.
+file's file block and must be accessed without a qualifier.
 </p>
 
 <p>
@@ -5795,7 +5795,7 @@ Assume we have compiled a package containing the package clause
 <code>package math</code>, which exports function <code>Sin</code>, and
 installed the compiled package in the file identified by
 <code>"lib/math"</code>.
-This table illustrates how <code>Sin</code> may be accessed in files
+This table illustrates how <code>Sin</code> is accessed in files
 that import the package after the
 various types of import declaration.
 </p>

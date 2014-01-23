@@ -58,7 +58,7 @@ func main() {
 	flag.Parse()
 
 	switch *sortOrder {
-	case "address", "name", "none":
+	case "address", "name", "none", "size":
 		// ok
 	default:
 		fmt.Fprintf(os.Stderr, "nm: unknown sort order %q\n", *sortOrder)
@@ -105,6 +105,10 @@ var parsers = []struct {
 	{[]byte("\xCE\xFA\xED\xFE"), machoSymbols},
 	{[]byte("\xCF\xFA\xED\xFE"), machoSymbols},
 	{[]byte("MZ"), peSymbols},
+	{[]byte("\x00\x00\x01\xEB"), plan9Symbols}, // 386
+	{[]byte("\x00\x00\x04\x07"), plan9Symbols}, // mips
+	{[]byte("\x00\x00\x06\x47"), plan9Symbols}, // arm
+	{[]byte("\x00\x00\x8A\x97"), plan9Symbols}, // amd64
 }
 
 func nm(file string) {
@@ -135,6 +139,8 @@ HaveSyms:
 		sort.Sort(byAddr(syms))
 	case "name":
 		sort.Sort(byName(syms))
+	case "size":
+		sort.Sort(bySize(syms))
 	}
 
 	w := bufio.NewWriter(os.Stdout)
@@ -170,3 +176,9 @@ type byName []Sym
 func (x byName) Len() int           { return len(x) }
 func (x byName) Swap(i, j int)      { x[i], x[j] = x[j], x[i] }
 func (x byName) Less(i, j int) bool { return x[i].Name < x[j].Name }
+
+type bySize []Sym
+
+func (x bySize) Len() int           { return len(x) }
+func (x bySize) Swap(i, j int)      { x[i], x[j] = x[j], x[i] }
+func (x bySize) Less(i, j int) bool { return x[i].Size > x[j].Size }

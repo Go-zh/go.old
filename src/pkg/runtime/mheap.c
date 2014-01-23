@@ -57,6 +57,8 @@ runtime·MHeap_Init(MHeap *h)
 
 	runtime·FixAlloc_Init(&h->spanalloc, sizeof(MSpan), RecordSpan, h, &mstats.mspan_sys);
 	runtime·FixAlloc_Init(&h->cachealloc, sizeof(MCache), nil, nil, &mstats.mcache_sys);
+	runtime·FixAlloc_Init(&h->specialfinalizeralloc, sizeof(SpecialFinalizer), nil, nil, &mstats.other_sys);
+	runtime·FixAlloc_Init(&h->specialprofilealloc, sizeof(SpecialProfile), nil, nil, &mstats.other_sys);
 	// h->mapcache needs no init
 	for(i=0; i<nelem(h->free); i++)
 		runtime·MSpanList_Init(&h->free[i]);
@@ -72,8 +74,7 @@ runtime·MHeap_MapSpans(MHeap *h)
 
 	// Map spans array, PageSize at a time.
 	n = (uintptr)h->arena_used;
-	if(sizeof(void*) == 8)
-		n -= (uintptr)h->arena_start;
+	n -= (uintptr)h->arena_start;
 	n = n / PageSize * sizeof(h->spans[0]);
 	n = ROUND(n, PageSize);
 	if(h->spans_mapped >= n)
@@ -167,8 +168,7 @@ HaveSpan:
 		runtime·MSpan_Init(t, s->start + npage, s->npages - npage);
 		s->npages = npage;
 		p = t->start;
-		if(sizeof(void*) == 8)
-			p -= ((uintptr)h->arena_start>>PageShift);
+		p -= ((uintptr)h->arena_start>>PageShift);
 		if(p > 0)
 			h->spans[p-1] = s;
 		h->spans[p] = t;
@@ -186,8 +186,7 @@ HaveSpan:
 	s->elemsize = (sizeclass==0 ? s->npages<<PageShift : runtime·class_to_size[sizeclass]);
 	s->types.compression = MTypes_Empty;
 	p = s->start;
-	if(sizeof(void*) == 8)
-		p -= ((uintptr)h->arena_start>>PageShift);
+	p -= ((uintptr)h->arena_start>>PageShift);
 	for(n=0; n<npage; n++)
 		h->spans[p+n] = s;
 	return s;
@@ -255,8 +254,7 @@ MHeap_Grow(MHeap *h, uintptr npage)
 	s = runtime·FixAlloc_Alloc(&h->spanalloc);
 	runtime·MSpan_Init(s, (uintptr)v>>PageShift, ask>>PageShift);
 	p = s->start;
-	if(sizeof(void*) == 8)
-		p -= ((uintptr)h->arena_start>>PageShift);
+	p -= ((uintptr)h->arena_start>>PageShift);
 	h->spans[p] = s;
 	h->spans[p + s->npages - 1] = s;
 	s->state = MSpanInUse;
@@ -273,8 +271,7 @@ runtime·MHeap_Lookup(MHeap *h, void *v)
 	uintptr p;
 	
 	p = (uintptr)v;
-	if(sizeof(void*) == 8)
-		p -= (uintptr)h->arena_start;
+	p -= (uintptr)h->arena_start;
 	return h->spans[p >> PageShift];
 }
 
@@ -295,8 +292,7 @@ runtime·MHeap_LookupMaybe(MHeap *h, void *v)
 		return nil;
 	p = (uintptr)v>>PageShift;
 	q = p;
-	if(sizeof(void*) == 8)
-		q -= (uintptr)h->arena_start >> PageShift;
+	q -= (uintptr)h->arena_start >> PageShift;
 	s = h->spans[q];
 	if(s == nil || p < s->start || v >= s->limit || s->state != MSpanInUse)
 		return nil;
@@ -343,8 +339,7 @@ MHeap_FreeLocked(MHeap *h, MSpan *s)
 
 	// Coalesce with earlier, later spans.
 	p = s->start;
-	if(sizeof(void*) == 8)
-		p -= (uintptr)h->arena_start >> PageShift;
+	p -= (uintptr)h->arena_start >> PageShift;
 	if(p > 0 && (t = h->spans[p-1]) != nil && t->state != MSpanInUse) {
 		if(t->npreleased == 0) {  // cant't touch this otherwise
 			tp = (uintptr*)(t->start<<PageShift);
@@ -508,6 +503,8 @@ runtime·MSpan_Init(MSpan *span, PageID start, uintptr npages)
 	span->unusedsince = 0;
 	span->npreleased = 0;
 	span->types.compression = MTypes_Empty;
+	span->specialLock.key = 0;
+	span->specials = nil;
 }
 
 // Initialize an empty doubly-linked list.
@@ -549,4 +546,188 @@ runtime·MSpanList_Insert(MSpan *list, MSpan *span)
 	span->prev->next = span;
 }
 
+// Adds the special record s to the list of special records for
+// the object p.  All fields of s should be filled in except for
+// offset & next, which this routine will fill in.
+// Returns true if the special was successfully added, false otherwise.
+// (The add will fail only if a record with the same p and s->kind
+//  already exists.)
+static bool
+addspecial(void *p, Special *s)
+{
+	MSpan *span;
+	Special **t, *x;
+	uintptr offset;
+	byte kind;
 
+	span = runtime·MHeap_LookupMaybe(&runtime·mheap, p);
+	if(span == nil)
+		runtime·throw("addspecial on invalid pointer");
+	offset = (uintptr)p - (span->start << PageShift);
+	kind = s->kind;
+
+	runtime·lock(&span->specialLock);
+
+	// Find splice point, check for existing record.
+	t = &span->specials;
+	while((x = *t) != nil) {
+		if(offset == x->offset && kind == x->kind) {
+			runtime·unlock(&span->specialLock);
+			return false; // already exists
+		}
+		if(offset < x->offset || (offset == x->offset && kind < x->kind))
+			break;
+		t = &x->next;
+	}
+	// Splice in record, fill in offset.
+	s->offset = offset;
+	s->next = x;
+	*t = s;
+	runtime·unlock(&span->specialLock);
+	return true;
+}
+
+// Removes the Special record of the given kind for the object p.
+// Returns the record if the record existed, nil otherwise.
+// The caller must FixAlloc_Free the result.
+static Special*
+removespecial(void *p, byte kind)
+{
+	MSpan *span;
+	Special *s, **t;
+	uintptr offset;
+
+	span = runtime·MHeap_LookupMaybe(&runtime·mheap, p);
+	if(span == nil)
+		runtime·throw("removespecial on invalid pointer");
+	offset = (uintptr)p - (span->start << PageShift);
+
+	runtime·lock(&span->specialLock);
+	t = &span->specials;
+	while((s = *t) != nil) {
+		if(offset == s->offset && kind == s->kind) {
+			*t = s->next;
+			runtime·unlock(&span->specialLock);
+			return s;
+		}
+		t = &s->next;
+	}
+	runtime·unlock(&span->specialLock);
+	return nil;
+}
+
+// Adds a finalizer to the object p.  Returns true if it succeeded.
+bool
+runtime·addfinalizer(void *p, FuncVal *f, uintptr nret, Type *fint, PtrType *ot)
+{
+	SpecialFinalizer *s;
+
+	runtime·lock(&runtime·mheap.speciallock);
+	s = runtime·FixAlloc_Alloc(&runtime·mheap.specialfinalizeralloc);
+	runtime·unlock(&runtime·mheap.speciallock);
+	s->kind = KindSpecialFinalizer;
+	s->fn = f;
+	s->nret = nret;
+	s->fint = fint;
+	s->ot = ot;
+	if(addspecial(p, s))
+		return true;
+
+	// There was an old finalizer
+	runtime·lock(&runtime·mheap.speciallock);
+	runtime·FixAlloc_Free(&runtime·mheap.specialfinalizeralloc, s);
+	runtime·unlock(&runtime·mheap.speciallock);
+	return false;
+}
+
+// Removes the finalizer (if any) from the object p.
+void
+runtime·removefinalizer(void *p)
+{
+	SpecialFinalizer *s;
+
+	s = (SpecialFinalizer*)removespecial(p, KindSpecialFinalizer);
+	if(s == nil)
+		return; // there wasn't a finalizer to remove
+	runtime·lock(&runtime·mheap.speciallock);
+	runtime·FixAlloc_Free(&runtime·mheap.specialfinalizeralloc, s);
+	runtime·unlock(&runtime·mheap.speciallock);
+}
+
+// Set the heap profile bucket associated with addr to b.
+void
+runtime·setprofilebucket(void *p, Bucket *b)
+{
+	SpecialProfile *s;
+
+	runtime·lock(&runtime·mheap.speciallock);
+	s = runtime·FixAlloc_Alloc(&runtime·mheap.specialprofilealloc);
+	runtime·unlock(&runtime·mheap.speciallock);
+	s->kind = KindSpecialProfile;
+	s->b = b;
+	if(!addspecial(p, s))
+		runtime·throw("setprofilebucket: profile already set");
+}
+
+// Do whatever cleanup needs to be done to deallocate s.  It has
+// already been unlinked from the MSpan specials list.
+// Returns true if we should keep working on deallocating p.
+bool
+runtime·freespecial(Special *s, void *p, uintptr size)
+{
+	SpecialFinalizer *sf;
+	SpecialProfile *sp;
+
+	switch(s->kind) {
+	case KindSpecialFinalizer:
+		sf = (SpecialFinalizer*)s;
+		runtime·queuefinalizer(p, sf->fn, sf->nret, sf->fint, sf->ot);
+		runtime·lock(&runtime·mheap.speciallock);
+		runtime·FixAlloc_Free(&runtime·mheap.specialfinalizeralloc, sf);
+		runtime·unlock(&runtime·mheap.speciallock);
+		return false; // don't free p until finalizer is done
+	case KindSpecialProfile:
+		sp = (SpecialProfile*)s;
+		runtime·MProf_Free(sp->b, p, size);
+		runtime·lock(&runtime·mheap.speciallock);
+		runtime·FixAlloc_Free(&runtime·mheap.specialprofilealloc, sp);
+		runtime·unlock(&runtime·mheap.speciallock);
+		return true;
+	default:
+		runtime·throw("bad special kind");
+		return true;
+	}
+}
+
+// Free all special records for p.
+void
+runtime·freeallspecials(MSpan *span, void *p, uintptr size)
+{
+	Special *s, **t, *list;
+	uintptr offset;
+
+	// first, collect all specials into the list; then, free them
+	// this is required to not cause deadlock between span->specialLock and proflock
+	list = nil;
+	offset = (uintptr)p - (span->start << PageShift);
+	runtime·lock(&span->specialLock);
+	t = &span->specials;
+	while((s = *t) != nil) {
+		if(offset < s->offset)
+			break;
+		if(offset == s->offset) {
+			*t = s->next;
+			s->next = list;
+			list = s;
+		} else
+			t = &s->next;
+	}
+	runtime·unlock(&span->specialLock);
+
+	while(list != nil) {
+		s = list;
+		list = s->next;
+		if(!runtime·freespecial(s, p, size))
+			runtime·throw("can't explicitly free an object with a finalizer");
+	}
+}

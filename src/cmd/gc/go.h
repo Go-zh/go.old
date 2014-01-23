@@ -972,6 +972,7 @@ EXTERN	char*	flag_installsuffix;
 EXTERN	int	flag_race;
 EXTERN	int	flag_largemodel;
 EXTERN	int	noescape;
+EXTERN	int	debuglive;
 EXTERN	Link*	ctxt;
 
 EXTERN	int	nointerface;
@@ -1035,6 +1036,7 @@ int	bvget(Bvec *bv, int32 i);
 int	bvisempty(Bvec *bv);
 void	bvnot(Bvec *bv);
 void	bvor(Bvec *dst, Bvec *src1, Bvec *src2);
+void	bvand(Bvec *dst, Bvec *src1, Bvec *src2);
 void	bvprint(Bvec *bv);
 void	bvreset(Bvec *bv, int32 i);
 void	bvresetall(Bvec *bv);
@@ -1263,6 +1265,7 @@ int	duintptr(Sym *s, int off, uint64 v);
 int	dsname(Sym *s, int off, char *dat, int ndat);
 void	dumpobj(void);
 Sym*	stringsym(char*, int);
+void	slicebytes(Node*, char*, int);
 LSym*	linksym(Sym*);
 
 /*

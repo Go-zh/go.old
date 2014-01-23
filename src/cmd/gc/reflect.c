@@ -252,7 +252,7 @@ hiter(Type *t)
 	//    h *Hmap
 	//    buckets *Bucket
 	//    bptr *Bucket
-	//    other [5]uintptr
+	//    other [4]uintptr
 	// }
 	// must match ../../pkg/runtime/hashmap.c:hash_iter.
 	field[0] = typ(TFIELD);
@@ -289,8 +289,8 @@ hiter(Type *t)
 	field[6] = typ(TFIELD);
 	field[6]->type = typ(TARRAY);
 	field[6]->type->type = types[TUINTPTR];
-	field[6]->type->bound = 5;
-	field[6]->type->width = 5 * widthptr;
+	field[6]->type->bound = 4;
+	field[6]->type->width = 4 * widthptr;
 	field[6]->sym = mal(sizeof(Sym));
 	field[6]->sym->name = "other";
 	
@@ -306,8 +306,8 @@ hiter(Type *t)
 	}
 	field[6]->down = T;
 	off += field[6]->type->width;
-	if(off != 11 * widthptr)
-		yyerror("hash_iter size not correct %d %d", off, 11 * widthptr);
+	if(off != 10 * widthptr)
+		yyerror("hash_iter size not correct %d %d", off, 10 * widthptr);
 	t->hiter = i;
 	i->map = t;
 	return i;
@@ -476,9 +476,8 @@ imethods(Type *t)
 			last->link = a;
 		last = a;
 
-		// Compiler can only refer to wrappers for
-		// named interface types and non-blank methods.
-		if(t->sym == S || isblanksym(method))
+		// Compiler can only refer to wrappers for non-blank methods.
+		if(isblanksym(method))
 			continue;
 
 		// NOTE(rsc): Perhaps an oversight that

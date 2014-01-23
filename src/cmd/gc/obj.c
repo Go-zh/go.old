@@ -20,7 +20,7 @@ enum
 static void
 formathdr(char *arhdr, char *name, vlong size)
 {
-	snprint(arhdr, ArhdrSize, "%-16s%-12d%-6d%-6d%-8o%-10d`",
+	snprint(arhdr, ArhdrSize, "%-16s%-12d%-6d%-6d%-8o%-10lld`",
 		name, 0, 0, 0, 0644, size);
 	arhdr[ArhdrSize-1] = '\n'; // overwrite \0 written by snprint
 }
@@ -252,4 +252,32 @@ stringsym(char *s, int len)
 	ggloblsym(sym, off, 1, 1);
 
 	return sym;	
+}
+
+void
+slicebytes(Node *nam, char *s, int len)
+{
+	int off, n, m;
+	static int gen;
+	Sym *sym;
+
+	snprint(namebuf, sizeof(namebuf), ".gobytes.%d", ++gen);
+	sym = pkglookup(namebuf, localpkg);
+	sym->def = newname(sym);
+
+	off = 0;
+	for(n=0; n<len; n+=m) {
+		m = 8;
+		if(m > len-n)
+			m = len-n;
+		off = dsname(sym, off, s+n, m);
+	}
+	ggloblsym(sym, off, 0, 0);
+	
+	if(nam->op != ONAME)
+		fatal("slicebytes %N", nam);
+	off = nam->xoffset;
+	off = dsymptr(nam->sym, off, sym, 0);
+	off = duintxx(nam->sym, off, len, widthint);
+	duintxx(nam->sym, off, len, widthint);
 }

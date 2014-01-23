@@ -7,6 +7,7 @@
 #include "malloc.h"
 #include "type.h"
 #include "race.h"
+#include "typekind.h"
 #include "../../cmd/ld/textflag.h"
 
 // This file contains the implementation of Go's map type.
@@ -745,9 +746,8 @@ struct hash_iter
 	byte *buckets; // bucket ptr at hash_iter initialization time
 	struct Bucket *bptr; // current bucket
 
-	// end point for iteration
-	uintptr endbucket;
-	bool wrapped;
+	uint8 offset; // intra-bucket offset to start from during iteration (should be big enough to hold BUCKETSIZE-1)
+	bool done;
 
 	// state of table at time iterator is initialized
 	uint8 B;
@@ -767,8 +767,8 @@ hash_iter_init(MapType *t, Hmap *h, struct hash_iter *it)
 {
 	uint32 old;
 
-	if(sizeof(struct hash_iter) / sizeof(uintptr) != 11) {
-		runtime·throw("hash_iter size incorrect"); // see ../../cmd/gc/range.c
+	if(sizeof(struct hash_iter) / sizeof(uintptr) != 10) {
+		runtime·throw("hash_iter size incorrect"); // see ../../cmd/gc/reflect.c
 	}
 	it->t = t;
 	it->h = h;
@@ -778,8 +778,9 @@ hash_iter_init(MapType *t, Hmap *h, struct hash_iter *it)
 	it->buckets = h->buckets;
 
 	// iterator state
-	it->bucket = it->endbucket = runtime·fastrand1() & (((uintptr)1 << h->B) - 1);
-	it->wrapped = false;
+	it->bucket = 0;
+	it->offset = runtime·fastrand1() & (BUCKETSIZE - 1);
+	it->done = false;
 	it->bptr = nil;
 
 	// Remember we have an iterator.
@@ -794,8 +795,8 @@ hash_iter_init(MapType *t, Hmap *h, struct hash_iter *it)
 
 	if(h->buckets == nil) {
 		// Empty map. Force next hash_next to exit without
-		// evalulating h->bucket.
-		it->wrapped = true;
+		// evaluating h->bucket.
+		it->done = true;
 	}
 }
 
@@ -809,7 +810,7 @@ hash_next(struct hash_iter *it)
 	uintptr bucket, oldbucket;
 	uintptr hash;
 	Bucket *b;
-	uintptr i;
+	uintptr i, offi;
 	intptr check_bucket;
 	bool eq;
 	byte *k, *v;
@@ -824,7 +825,7 @@ hash_next(struct hash_iter *it)
 
 next:
 	if(b == nil) {
-		if(bucket == it->endbucket && it->wrapped) {
+		if(it->done) {
 			// end of iteration
 			it->key = nil;
 			it->value = nil;
@@ -850,14 +851,15 @@ next:
 		bucket++;
 		if(bucket == ((uintptr)1 << it->B)) {
 			bucket = 0;
-			it->wrapped = true;
+			it->done = true;
 		}
 		i = 0;
 	}
-	k = b->data + h->keysize * i;
-	v = b->data + h->keysize * BUCKETSIZE + h->valuesize * i;
-	for(; i < BUCKETSIZE; i++, k += h->keysize, v += h->valuesize) {
-		if(b->tophash[i] != Empty && b->tophash[i] != EvacuatedEmpty) {
+	for(; i < BUCKETSIZE; i++) {
+		offi = (i + it->offset) & (BUCKETSIZE - 1);
+		k = b->data + h->keysize * offi;
+		v = b->data + h->keysize * BUCKETSIZE + h->valuesize * offi;
+		if(b->tophash[offi] != Empty && b->tophash[offi] != EvacuatedEmpty) {
 			if(check_bucket >= 0) {
 				// Special case: iterator was started during a grow and the
 				// grow is not done yet.  We're working on a bucket whose
@@ -883,12 +885,12 @@ next:
 					// NOTE: this case is why we need two evacuate tophash
 					// values, evacuatedX and evacuatedY, that differ in
 					// their low bit.
-					if(check_bucket >> (it->B - 1) != (b->tophash[i] & 1)) {
+					if(check_bucket >> (it->B - 1) != (b->tophash[offi] & 1)) {
 						continue;
 					}
 				}
 			}
-			if(b->tophash[i] != EvacuatedX && b->tophash[i] != EvacuatedY) {
+			if(b->tophash[offi] != EvacuatedX && b->tophash[offi] != EvacuatedY) {
 				// this is the golden data, we can return it.
 				it->key = IK(h, k);
 				it->value = IV(h, v);
@@ -997,7 +999,7 @@ runtime·mapaccess1(MapType *t, Hmap *h, byte *ak, byte *av)
 {
 	if(raceenabled && h != nil) {
 		runtime·racereadpc(h, runtime·getcallerpc(&t), runtime·mapaccess1);
-		runtime·racereadpc(ak, runtime·getcallerpc(&t), runtime·mapaccess1);
+		runtime·racereadobjectpc(ak, t->key, runtime·getcallerpc(&t), runtime·mapaccess1);
 	}
 	if(h == nil || h->count == 0) {
 		av = t->elem->zero;
@@ -1028,7 +1030,7 @@ runtime·mapaccess2(MapType *t, Hmap *h, byte *ak, byte *av, bool pres)
 {
 	if(raceenabled && h != nil) {
 		runtime·racereadpc(h, runtime·getcallerpc(&t), runtime·mapaccess2);
-		runtime·racereadpc(ak, runtime·getcallerpc(&t), runtime·mapaccess2);
+		runtime·racereadobjectpc(ak, t->key, runtime·getcallerpc(&t), runtime·mapaccess2);
 	}
 
 	if(h == nil || h->count == 0) {
@@ -1066,7 +1068,7 @@ reflect·mapaccess(MapType *t, Hmap *h, byte *key, byte *val)
 {
 	if(raceenabled && h != nil) {
 		runtime·racereadpc(h, runtime·getcallerpc(&t), reflect·mapaccess);
-		runtime·racereadrangepc(key, t->key->size, runtime·getcallerpc(&t), reflect·mapaccess);
+		runtime·racereadobjectpc(key, t->key, runtime·getcallerpc(&t), reflect·mapaccess);
 	}
 	val = hash_lookup(t, h, &key);
 	FLUSH(&val);
@@ -1082,8 +1084,8 @@ runtime·mapassign1(MapType *t, Hmap *h, byte *ak, byte *av)
 
 	if(raceenabled) {
 		runtime·racewritepc(h, runtime·getcallerpc(&t), runtime·mapassign1);
-		runtime·racereadpc(ak, runtime·getcallerpc(&t), runtime·mapassign1);
-		runtime·racereadpc(av, runtime·getcallerpc(&t), runtime·mapassign1);
+		runtime·racereadobjectpc(ak, t->key, runtime·getcallerpc(&t), runtime·mapassign1);
+		runtime·racereadobjectpc(av, t->elem, runtime·getcallerpc(&t), runtime·mapassign1);
 	}
 
 	hash_insert(t, h, ak, av);
@@ -1109,7 +1111,7 @@ runtime·mapdelete(MapType *t, Hmap *h, byte *ak)
 
 	if(raceenabled) {
 		runtime·racewritepc(h, runtime·getcallerpc(&t), runtime·mapdelete);
-		runtime·racereadpc(ak, runtime·getcallerpc(&t), runtime·mapdelete);
+		runtime·racereadobjectpc(ak, t->key, runtime·getcallerpc(&t), runtime·mapdelete);
 	}
 
 	hash_remove(t, h, ak);
@@ -1132,8 +1134,8 @@ reflect·mapassign(MapType *t, Hmap *h, byte *key, byte *val)
 		runtime·panicstring("assignment to entry in nil map");
 	if(raceenabled) {
 		runtime·racewritepc(h, runtime·getcallerpc(&t), reflect·mapassign);
-		runtime·racereadrangepc(key, t->key->size, runtime·getcallerpc(&t), reflect·mapassign);
-		runtime·racereadrangepc(val, t->elem->size, runtime·getcallerpc(&t), reflect·mapassign);
+		runtime·racereadobjectpc(key, t->key, runtime·getcallerpc(&t), reflect·mapassign);
+		runtime·racereadobjectpc(val, t->elem, runtime·getcallerpc(&t), reflect·mapassign);
 	}
 
 	hash_insert(t, h, key, val);
@@ -1157,8 +1159,8 @@ reflect·mapdelete(MapType *t, Hmap *h, byte *key)
 	if(h == nil)
 		runtime·panicstring("delete from nil map");
 	if(raceenabled) {
-		runtime·racewritepc(h, runtime·getcallerpc(&t), reflect·mapassign);
-		runtime·racereadrangepc(key, t->key->size, runtime·getcallerpc(&t), reflect·mapassign);
+		runtime·racewritepc(h, runtime·getcallerpc(&t), reflect·mapdelete);
+		runtime·racereadobjectpc(key, t->key, runtime·getcallerpc(&t), reflect·mapdelete);
 	}
 	hash_remove(t, h, key);
 

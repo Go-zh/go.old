@@ -301,7 +301,7 @@ var pkgDeps = map[string][]string{
 	// SSL/TLS.
 	"crypto/tls": {
 		"L4", "CRYPTO-MATH", "CGO", "OS",
-		"crypto/x509", "encoding/pem", "net", "syscall",
+		"container/list", "crypto/x509", "encoding/pem", "net", "syscall",
 	},
 	"crypto/x509": {
 		"L4", "CRYPTO-MATH", "OS", "CGO",
@@ -359,7 +359,7 @@ func allowed(pkg string) map[string]bool {
 }
 
 var bools = []bool{false, true}
-var geese = []string{"darwin", "dragonfly", "freebsd", "linux", "netbsd", "openbsd", "plan9", "windows"}
+var geese = []string{"darwin", "dragonfly", "freebsd", "linux", "netbsd", "openbsd", "plan9", "solaris", "windows"}
 var goarches = []string{"386", "amd64", "arm"}
 
 type osPkg struct {

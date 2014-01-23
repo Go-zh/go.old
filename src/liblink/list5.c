@@ -41,20 +41,20 @@ enum
 
 static int	Aconv(Fmt *fp);
 static int	Dconv(Fmt *fp);
-static int	Nconv(Fmt *fp);
+static int	Mconv(Fmt *fp);
 static int	Pconv(Fmt *fp);
-static int	Rconv(Fmt *fp);
-static int	Sconv(Fmt *fp);
+static int	RAconv(Fmt *fp);
+static int	DSconv(Fmt *fp);
 
 void
 listinit5(void)
 {
 	fmtinstall('A', Aconv);
 	fmtinstall('P', Pconv);
-	fmtinstall('S', Sconv);
-	fmtinstall('N', Nconv);
+	fmtinstall('$', DSconv);
+	fmtinstall('M', Mconv);
 	fmtinstall('D', Dconv);
-	fmtinstall('R', Rconv);
+	fmtinstall('@', RAconv);
 }
 
 static char *extra [] = {
@@ -85,10 +85,10 @@ Pconv(Fmt *fp)
 		strcat(sc, ".U");
 	if(a == AMOVM) {
 		if(p->from.type == D_CONST)
-			sprint(str, "	%A%s	%R,%D", a, sc, &p->from, &p->to);
+			sprint(str, "	%A%s	%@,%D", a, sc, &p->from, &p->to);
 		else
 		if(p->to.type == D_CONST)
-			sprint(str, "	%A%s	%D,%R", a, sc, &p->from, &p->to);
+			sprint(str, "	%A%s	%D,%@", a, sc, &p->from, &p->to);
 		else
 			sprint(str, "	%A%s	%D,%D", a, sc, &p->from, &p->to);
 	} else
@@ -139,14 +139,14 @@ Dconv(Fmt *fp)
 	case D_NONE:
 		str[0] = 0;
 		if(a->name != D_NONE || a->reg != NREG || a->sym != nil)
-			sprint(str, "%N(R%d)(NONE)", a, a->reg);
+			sprint(str, "%M(R%d)(NONE)", a, a->reg);
 		break;
 
 	case D_CONST:
 		if(a->reg != NREG)
-			sprint(str, "$%N(R%d)", a, a->reg);
+			sprint(str, "$%M(R%d)", a, a->reg);
 		else
-			sprint(str, "$%N", a);
+			sprint(str, "$%M", a);
 		break;
 
 	case D_CONST2:
@@ -166,27 +166,27 @@ Dconv(Fmt *fp)
 
 	case D_OREG:
 		if(a->reg != NREG)
-			sprint(str, "%N(R%d)", a, a->reg);
+			sprint(str, "%M(R%d)", a, a->reg);
 		else
-			sprint(str, "%N", a);
+			sprint(str, "%M", a);
 		break;
 
 	case D_REG:
 		sprint(str, "R%d", a->reg);
 		if(a->name != D_NONE || a->sym != nil)
-			sprint(str, "%N(R%d)(REG)", a, a->reg);
+			sprint(str, "%M(R%d)(REG)", a, a->reg);
 		break;
 
 	case D_FREG:
 		sprint(str, "F%d", a->reg);
 		if(a->name != D_NONE || a->sym != nil)
-			sprint(str, "%N(R%d)(REG)", a, a->reg);
+			sprint(str, "%M(R%d)(REG)", a, a->reg);
 		break;
 
 	case D_PSR:
 		sprint(str, "PSR");
 		if(a->name != D_NONE || a->sym != nil)
-			sprint(str, "%N(PSR)(REG)", a);
+			sprint(str, "%M(PSR)(REG)", a);
 		break;
 
 	case D_BRANCH:
@@ -203,14 +203,14 @@ Dconv(Fmt *fp)
 		break;
 
 	case D_SCONST:
-		sprint(str, "$\"%S\"", a->u.sval);
+		sprint(str, "$\"%$\"", a->u.sval);
 		break;
 	}
 	return fmtstrcpy(fp, str);
 }
 
 static int
-Rconv(Fmt *fp)
+RAconv(Fmt *fp)
 {
 	char str[STRINGSZ];
 	Addr *a;
@@ -242,7 +242,7 @@ Rconv(Fmt *fp)
 }
 
 static int
-Sconv(Fmt *fp)
+DSconv(Fmt *fp)
 {
 	int i, c;
 	char str[STRINGSZ], *p, *a;
@@ -289,7 +289,7 @@ Sconv(Fmt *fp)
 }
 
 static int
-Nconv(Fmt *fp)
+Mconv(Fmt *fp)
 {
 	char str[STRINGSZ];
 	Addr *a;

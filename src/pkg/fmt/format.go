@@ -10,7 +10,10 @@ import (
 )
 
 const (
-	nByte = 65 // %b of an int64, plus a sign.  // 带符号位 int64 的 %b 形式。
+	// %b of an int64, plus a sign.
+	// Hex can add 0x and we handle it specially.
+	// 带符号位 int64 的 %b 形式。十六进制数可添加 0x，我们可专门处理它。
+	nByte = 65
 
 	ldigits = "0123456789abcdef"
 	udigits = "0123456789ABCDEF"
@@ -176,9 +179,16 @@ func (f *fmt) integer(a int64, base uint64, signedness bool, digits string) {
 	}
 
 	var buf []byte = f.intbuf[0:]
-	if f.widPresent && f.wid > nByte {
-		// We're going to need a bigger boat.
-		buf = make([]byte, f.wid)
+	if f.widPresent {
+		width := f.wid
+		if base == 16 && f.sharp {
+			// Also adds "0x".
+			width += 2
+		}
+		if width > nByte {
+			// We're going to need a bigger boat.
+			buf = make([]byte, width)
+		}
 	}
 
 	negative := signedness == signed && a < 0

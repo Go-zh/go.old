@@ -64,8 +64,11 @@ func Setgroups(gids []int) (err error) {
 
 func ReadDirent(fd int, buf []byte) (n int, err error) {
 	// Final argument is (basep *uintptr) and the syscall doesn't take nil.
+	// 64 bits should be enough. (32 bits isn't even on 386). Since the
+	// actual system call is getdirentries64, 64 is a good guess.
 	// TODO(rsc): Can we use a single global basep for all calls?
-	return Getdirentries(fd, buf, new(uintptr))
+	var base = (*uintptr)(unsafe.Pointer(new(uint64)))
+	return Getdirentries(fd, buf, base)
 }
 
 // Wait status is 7 bits at bottom, either 0 (exited),
@@ -131,18 +134,18 @@ func Wait4(pid int, wstatus *WaitStatus, options int, rusage *Rusage) (wpid int,
 }
 
 //sys	accept(s int, rsa *RawSockaddrAny, addrlen *_Socklen) (fd int, err error)
-//sys	bind(s int, addr uintptr, addrlen _Socklen) (err error)
-//sys	connect(s int, addr uintptr, addrlen _Socklen) (err error)
+//sys	bind(s int, addr unsafe.Pointer, addrlen _Socklen) (err error)
+//sys	connect(s int, addr unsafe.Pointer, addrlen _Socklen) (err error)
 //sysnb	socket(domain int, typ int, proto int) (fd int, err error)
-//sys	getsockopt(s int, level int, name int, val uintptr, vallen *_Socklen) (err error)
-//sys	setsockopt(s int, level int, name int, val uintptr, vallen uintptr) (err error)
+//sys	getsockopt(s int, level int, name int, val unsafe.Pointer, vallen *_Socklen) (err error)
+//sys	setsockopt(s int, level int, name int, val unsafe.Pointer, vallen uintptr) (err error)
 //sysnb	getpeername(fd int, rsa *RawSockaddrAny, addrlen *_Socklen) (err error)
 //sysnb	getsockname(fd int, rsa *RawSockaddrAny, addrlen *_Socklen) (err error)
 //sys	Shutdown(s int, how int) (err error)
 
-func (sa *SockaddrInet4) sockaddr() (uintptr, _Socklen, error) {
+func (sa *SockaddrInet4) sockaddr() (unsafe.Pointer, _Socklen, error) {
 	if sa.Port < 0 || sa.Port > 0xFFFF {
-		return 0, 0, EINVAL
+		return nil, 0, EINVAL
 	}
 	sa.raw.Len = SizeofSockaddrInet4
 	sa.raw.Family = AF_INET
@@ -152,12 +155,12 @@ func (sa *SockaddrInet4) sockaddr() (uintptr, _Socklen, error) {
 	for i := 0; i < len(sa.Addr); i++ {
 		sa.raw.Addr[i] = sa.Addr[i]
 	}
-	return uintptr(unsafe.Pointer(&sa.raw)), _Socklen(sa.raw.Len), nil
+	return unsafe.Pointer(&sa.raw), _Socklen(sa.raw.Len), nil
 }
 
-func (sa *SockaddrInet6) sockaddr() (uintptr, _Socklen, error) {
+func (sa *SockaddrInet6) sockaddr() (unsafe.Pointer, _Socklen, error) {
 	if sa.Port < 0 || sa.Port > 0xFFFF {
-		return 0, 0, EINVAL
+		return nil, 0, EINVAL
 	}
 	sa.raw.Len = SizeofSockaddrInet6
 	sa.raw.Family = AF_INET6
@@ -168,26 +171,26 @@ func (sa *SockaddrInet6) sockaddr() (uintptr, _Socklen, error) {
 	for i := 0; i < len(sa.Addr); i++ {
 		sa.raw.Addr[i] = sa.Addr[i]
 	}
-	return uintptr(unsafe.Pointer(&sa.raw)), _Socklen(sa.raw.Len), nil
+	return unsafe.Pointer(&sa.raw), _Socklen(sa.raw.Len), nil
 }
 
-func (sa *SockaddrUnix) sockaddr() (uintptr, _Socklen, error) {
+func (sa *SockaddrUnix) sockaddr() (unsafe.Pointer, _Socklen, error) {
 	name := sa.Name
 	n := len(name)
 	if n >= len(sa.raw.Path) || n == 0 {
-		return 0, 0, EINVAL
+		return nil, 0, EINVAL
 	}
 	sa.raw.Len = byte(3 + n) // 2 for Family, Len; 1 for NUL
 	sa.raw.Family = AF_UNIX
 	for i := 0; i < n; i++ {
 		sa.raw.Path[i] = int8(name[i])
 	}
-	return uintptr(unsafe.Pointer(&sa.raw)), _Socklen(sa.raw.Len), nil
+	return unsafe.Pointer(&sa.raw), _Socklen(sa.raw.Len), nil
 }
 
-func (sa *SockaddrDatalink) sockaddr() (uintptr, _Socklen, error) {
+func (sa *SockaddrDatalink) sockaddr() (unsafe.Pointer, _Socklen, error) {
 	if sa.Index == 0 {
-		return 0, 0, EINVAL
+		return nil, 0, EINVAL
 	}
 	sa.raw.Len = sa.Len
 	sa.raw.Family = AF_LINK
@@ -199,7 +202,7 @@ func (sa *SockaddrDatalink) sockaddr() (uintptr, _Socklen, error) {
 	for i := 0; i < len(sa.raw.Data); i++ {
 		sa.raw.Data[i] = sa.Data[i]
 	}
-	return uintptr(unsafe.Pointer(&sa.raw)), SizeofSockaddrDatalink, nil
+	return unsafe.Pointer(&sa.raw), SizeofSockaddrDatalink, nil
 }
 
 func anyToSockaddr(rsa *RawSockaddrAny) (Sockaddr, error) {
@@ -221,14 +224,20 @@ func anyToSockaddr(rsa *RawSockaddrAny) (Sockaddr, error) {
 
 	case AF_UNIX:
 		pp := (*RawSockaddrUnix)(unsafe.Pointer(rsa))
-		if pp.Len < 3 || pp.Len > SizeofSockaddrUnix {
+		if pp.Len < 2 || pp.Len > SizeofSockaddrUnix {
 			return nil, EINVAL
 		}
 		sa := new(SockaddrUnix)
-		n := int(pp.Len) - 3 // subtract leading Family, Len, terminating NUL
+
+		// Some BSDs include the trailing NUL in the length, whereas
+		// others do not. Work around this by subtracting the leading
+		// family and len. The path is then scanned to see if a NUL
+		// terminator still exists within the length.
+		n := int(pp.Len) - 2 // subtract leading Family, Len
 		for i := 0; i < n; i++ {
 			if pp.Path[i] == 0 {
-				// found early NUL; assume Len is overestimating
+				// found early NUL; assume Len included the NUL
+				// or was overestimating.
 				n = i
 				break
 			}
@@ -290,10 +299,9 @@ func Getsockname(fd int) (sa Sockaddr, err error) {
 	if err = getsockname(fd, &rsa, &len); err != nil {
 		return
 	}
-	// TODO(jsing): Remove after OpenBSD 5.4 is released (see issue 3349).
-	// TODO(jsing): Apparently dragonfly has the same "bug", which should
-	// be reported upstream.
-	if (runtime.GOOS == "dragonfly" || runtime.GOOS == "openbsd") && rsa.Addr.Family == AF_UNSPEC && rsa.Addr.Len == 0 {
+	// TODO(jsing): DragonFly has a "bug" (see issue 3349), which should be
+	// reported upstream.
+	if runtime.GOOS == "dragonfly" && rsa.Addr.Family == AF_UNSPEC && rsa.Addr.Len == 0 {
 		rsa.Addr.Family = AF_UNIX
 		rsa.Addr.Len = SizeofSockaddrUnix
 	}
@@ -305,46 +313,46 @@ func Getsockname(fd int) (sa Sockaddr, err error) {
 func GetsockoptByte(fd, level, opt int) (value byte, err error) {
 	var n byte
 	vallen := _Socklen(1)
-	err = getsockopt(fd, level, opt, uintptr(unsafe.Pointer(&n)), &vallen)
+	err = getsockopt(fd, level, opt, unsafe.Pointer(&n), &vallen)
 	return n, err
 }
 
 func GetsockoptInet4Addr(fd, level, opt int) (value [4]byte, err error) {
 	vallen := _Socklen(4)
-	err = getsockopt(fd, level, opt, uintptr(unsafe.Pointer(&value[0])), &vallen)
+	err = getsockopt(fd, level, opt, unsafe.Pointer(&value[0]), &vallen)
 	return value, err
 }
 
 func GetsockoptIPMreq(fd, level, opt int) (*IPMreq, error) {
 	var value IPMreq
 	vallen := _Socklen(SizeofIPMreq)
-	err := getsockopt(fd, level, opt, uintptr(unsafe.Pointer(&value)), &vallen)
+	err := getsockopt(fd, level, opt, unsafe.Pointer(&value), &vallen)
 	return &value, err
 }
 
 func GetsockoptIPv6Mreq(fd, level, opt int) (*IPv6Mreq, error) {
 	var value IPv6Mreq
 	vallen := _Socklen(SizeofIPv6Mreq)
-	err := getsockopt(fd, level, opt, uintptr(unsafe.Pointer(&value)), &vallen)
+	err := getsockopt(fd, level, opt, unsafe.Pointer(&value), &vallen)
 	return &value, err
 }
 
 func GetsockoptIPv6MTUInfo(fd, level, opt int) (*IPv6MTUInfo, error) {
 	var value IPv6MTUInfo
 	vallen := _Socklen(SizeofIPv6MTUInfo)
-	err := getsockopt(fd, level, opt, uintptr(unsafe.Pointer(&value)), &vallen)
+	err := getsockopt(fd, level, opt, unsafe.Pointer(&value), &vallen)
 	return &value, err
 }
 
 func GetsockoptICMPv6Filter(fd, level, opt int) (*ICMPv6Filter, error) {
 	var value ICMPv6Filter
 	vallen := _Socklen(SizeofICMPv6Filter)
-	err := getsockopt(fd, level, opt, uintptr(unsafe.Pointer(&value)), &vallen)
+	err := getsockopt(fd, level, opt, unsafe.Pointer(&value), &vallen)
 	return &value, err
 }
 
 //sys   recvfrom(fd int, p []byte, flags int, from *RawSockaddrAny, fromlen *_Socklen) (n int, err error)
-//sys   sendto(s int, buf []byte, flags int, to uintptr, addrlen _Socklen) (err error)
+//sys   sendto(s int, buf []byte, flags int, to unsafe.Pointer, addrlen _Socklen) (err error)
 //sys	recvmsg(s int, msg *Msghdr, flags int) (n int, err error)
 
 func Recvmsg(fd int, p, oob []byte, flags int) (n, oobn int, recvflags int, from Sockaddr, err error) {
@@ -384,7 +392,7 @@ func Recvmsg(fd int, p, oob []byte, flags int) (n, oobn int, recvflags int, from
 //sys	sendmsg(s int, msg *Msghdr, flags int) (err error)
 
 func Sendmsg(fd int, p, oob []byte, to Sockaddr, flags int) (err error) {
-	var ptr uintptr
+	var ptr unsafe.Pointer
 	var salen _Socklen
 	if to != nil {
 		ptr, salen, err = to.sockaddr()
@@ -418,15 +426,15 @@ func Sendmsg(fd int, p, oob []byte, to Sockaddr, flags int) (err error) {
 	return
 }
 
-//sys	kevent(kq int, change uintptr, nchange int, event uintptr, nevent int, timeout *Timespec) (n int, err error)
+//sys	kevent(kq int, change unsafe.Pointer, nchange int, event unsafe.Pointer, nevent int, timeout *Timespec) (n int, err error)
 
 func Kevent(kq int, changes, events []Kevent_t, timeout *Timespec) (n int, err error) {
-	var change, event uintptr
+	var change, event unsafe.Pointer
 	if len(changes) > 0 {
-		change = uintptr(unsafe.Pointer(&changes[0]))
+		change = unsafe.Pointer(&changes[0])
 	}
 	if len(events) > 0 {
-		event = uintptr(unsafe.Pointer(&events[0]))
+		event = unsafe.Pointer(&events[0])
 	}
 	return kevent(kq, change, len(changes), event, len(events), timeout)
 }

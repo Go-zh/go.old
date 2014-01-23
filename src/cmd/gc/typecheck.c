@@ -723,6 +723,8 @@ reswitch:
 		checklvalue(n->left, "take the address of");
 		for(l=n->left; l->op == ODOT; l=l->left)
 			l->addrtaken = 1;
+		if(l->orig != l && l->op == ONAME)
+			fatal("found non-orig name node %N", l);
 		l->addrtaken = 1;
 		defaultlit(&n->left, T);
 		l = n->left;
@@ -1406,6 +1408,9 @@ reswitch:
 			}
 			break;
 		case OSTRARRAYBYTE:
+			// do not use stringtoarraylit.
+			// generated code and compiler memory footprint is better without it.
+			break;
 		case OSTRARRAYRUNE:
 			if(n->left->op == OLITERAL)
 				stringtoarraylit(&n);
@@ -2680,6 +2685,11 @@ checkassign(Node *n)
 		n->etype = 1;
 		return;
 	}
+
+	// have already complained about n being undefined
+	if(n->op == ONONAME)
+		return;
+
 	yyerror("cannot assign to %N", n);
 }
 
@@ -2804,7 +2814,7 @@ typecheckas2(Node *n)
 			n->op = OAS2FUNC;
 			t = structfirst(&s, &r->type);
 			for(ll=n->list; ll; ll=ll->next) {
-				if(ll->n->type != T)
+				if(t->type != T && ll->n->type != T)
 					checkassignto(t->type, ll->n);
 				if(ll->n->defn == n && ll->n->ntype == N)
 					ll->n->type = t->type;

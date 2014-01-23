@@ -91,7 +91,7 @@ TEXT runtime·breakpoint(SB),NOSPLIT,$0-0
 
 TEXT runtime·asminit(SB),NOSPLIT,$0-0
 	// disable runfast (flush-to-zero) mode of vfp if runtime.goarm > 5
-	MOVW	runtime·goarm(SB), R11
+	MOVB	runtime·goarm(SB), R11
 	CMP	$5, R11
 	BLE	4(PC)
 	WORD	$0xeef1ba10	// vmrs r11, fpscr
@@ -627,14 +627,19 @@ _next:
 // Note: all three functions will clobber R0, and the last
 // two can be called from 5c ABI code.
 
-// g (R10) at 8(TP), m (R9) at 12(TP)
 TEXT runtime·save_gm(SB),NOSPLIT,$0
+	// NOTE: Liblink adds some instructions following the MRC
+	// to adjust R0 so that 8(R0) and 12(R0) are the TLS copies of
+	// the g and m registers. It's a bit too magical for its own good.
 	MRC		15, 0, R0, C13, C0, 3 // Fetch TLS register
 	MOVW	g, 8(R0)
 	MOVW	m, 12(R0)
 	RET
 
 TEXT runtime·load_gm(SB),NOSPLIT,$0
+	// NOTE: Liblink adds some instructions following the MRC
+	// to adjust R0 so that 8(R0) and 12(R0) are the TLS copies of
+	// the g and m registers. It's a bit too magical for its own good.
 	MRC		15, 0, R0, C13, C0, 3 // Fetch TLS register
 	MOVW	8(R0), g
 	MOVW	12(R0), m
@@ -645,7 +650,6 @@ TEXT setmg_gcc<>(SB),NOSPLIT,$0
 	MOVW	R0, m
 	MOVW	R1, g
 	B		runtime·save_gm(SB)
-
 
 // TODO: share code with memeq?
 TEXT bytes·Equal(SB),NOSPLIT,$0

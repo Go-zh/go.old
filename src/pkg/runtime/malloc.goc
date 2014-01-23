@@ -75,7 +75,7 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 		if(!(flag & FlagNoZero)) {
 			v->next = nil;
 			// block is zeroed iff second word is zero ...
-			if(size > sizeof(uintptr) && ((uintptr*)v)[1] != 0)
+			if(size > 2*sizeof(uintptr) && ((uintptr*)v)[1] != 0)
 				runtime·memclr((byte*)v, size);
 		}
 		c->local_cachealloc += size;
@@ -139,7 +139,6 @@ runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
 				rate = 0x3fffffff;
 			m->mcache->next_sample = runtime·fastrand1() % (2*rate);
 		profile:
-			runtime·setblockspecial(v, true);
 			runtime·MProf_Malloc(v, size, typ);
 		}
 	}
@@ -165,7 +164,6 @@ runtime·free(void *v)
 	int32 sizeclass;
 	MSpan *s;
 	MCache *c;
-	uint32 prof;
 	uintptr size;
 
 	if(v == nil)
@@ -182,17 +180,18 @@ runtime·free(void *v)
 		runtime·printf("free %p: not an allocated block\n", v);
 		runtime·throw("free runtime·mlookup");
 	}
-	prof = runtime·blockspecial(v);
+	size = s->elemsize;
+	sizeclass = s->sizeclass;
 
 	if(raceenabled)
 		runtime·racefree(v);
 
-	// Find size class for v.
-	sizeclass = s->sizeclass;
+	if(s->specials != nil)
+		runtime·freeallspecials(s, v, size);
+
 	c = m->mcache;
 	if(sizeclass == 0) {
 		// Large object.
-		size = s->npages<<PageShift;
 		*(uintptr*)(s->start<<PageShift) = (uintptr)0xfeedfeedfeedfeedll;	// mark as "needs to be zeroed"
 		// Must mark v freed before calling unmarkspan and MHeap_Free:
 		// they might coalesce v into other spans and change the bitmap further.
@@ -206,9 +205,10 @@ runtime·free(void *v)
 		c->local_largefree += size;
 	} else {
 		// Small object.
-		size = runtime·class_to_size[sizeclass];
-		if(size > sizeof(uintptr))
+		if(size > 2*sizeof(uintptr))
 			((uintptr*)v)[1] = (uintptr)0xfeedfeedfeedfeedll;	// mark as "needs to be zeroed"
+		else if(size > sizeof(uintptr))
+			((uintptr*)v)[1] = 0;
 		// Must mark v freed before calling MCache_Free:
 		// it might coalesce v and other blocks into a bigger span
 		// and change the bitmap further.
@@ -216,8 +216,6 @@ runtime·free(void *v)
 		c->local_nsmallfree[sizeclass]++;
 		runtime·MCache_Free(c, v, sizeclass, size);
 	}
-	if(prof)
-		runtime·MProf_Free(v, size);
 	m->mallocing = 0;
 }
 
@@ -597,8 +595,7 @@ runtime·settype_flush(M *mp)
 
 		// (Manually inlined copy of runtime·MHeap_Lookup)
 		p = (uintptr)v>>PageShift;
-		if(sizeof(void*) == 8)
-			p -= (uintptr)runtime·mheap.arena_start >> PageShift;
+		p -= (uintptr)runtime·mheap.arena_start >> PageShift;
 		s = runtime·mheap.spans[p];
 
 		if(s->sizeclass == 0) {
@@ -770,8 +767,6 @@ func SetFinalizer(obj Eface, finalizer Eface) {
 		runtime·printf("runtime.SetFinalizer: pointer not at beginning of allocated block\n");
 		goto throw;
 	}
-	nret = 0;
-	fint = nil;
 	if(finalizer.type != nil) {
 		if(finalizer.type->kind != KindFunc)
 			goto badfunc;
@@ -792,16 +787,20 @@ func SetFinalizer(obj Eface, finalizer Eface) {
 			goto badfunc;
 
 		// compute size needed for return parameters
+		nret = 0;
 		for(i=0; i<ft->out.len; i++) {
 			t = ((Type**)ft->out.array)[i];
 			nret = ROUND(nret, t->align) + t->size;
 		}
 		nret = ROUND(nret, sizeof(void*));
-	}
-	
-	if(!runtime·addfinalizer(obj.data, finalizer.data, nret, fint, ot)) {
-		runtime·printf("runtime.SetFinalizer: finalizer already set\n");
-		goto throw;
+		ot = (PtrType*)obj.type;
+		if(!runtime·addfinalizer(obj.data, finalizer.data, nret, fint, ot)) {
+			runtime·printf("runtime.SetFinalizer: finalizer already set\n");
+			goto throw;
+		}
+	} else {
+		// NOTE: asking to remove a finalizer when there currently isn't one set is OK.
+		runtime·removefinalizer(obj.data);
 	}
 	return;
 

@@ -2062,31 +2062,145 @@ func TestServerReaderFromOrder(t *testing.T) {
 	}
 }
 
-// Issue 6157
-func TestNoContentTypeOnNotModified(t *testing.T) {
-	ht := newHandlerTest(HandlerFunc(func(w ResponseWriter, r *Request) {
-		if r.URL.Path == "/header" {
-			w.Header().Set("Content-Length", "123")
+// Issue 6157, Issue 6685
+func TestCodesPreventingContentTypeAndBody(t *testing.T) {
+	for _, code := range []int{StatusNotModified, StatusNoContent, StatusContinue} {
+		ht := newHandlerTest(HandlerFunc(func(w ResponseWriter, r *Request) {
+			if r.URL.Path == "/header" {
+				w.Header().Set("Content-Length", "123")
+			}
+			w.WriteHeader(code)
+			if r.URL.Path == "/more" {
+				w.Write([]byte("stuff"))
+			}
+		}))
+		for _, req := range []string{
+			"GET / HTTP/1.0",
+			"GET /header HTTP/1.0",
+			"GET /more HTTP/1.0",
+			"GET / HTTP/1.1",
+			"GET /header HTTP/1.1",
+			"GET /more HTTP/1.1",
+		} {
+			got := ht.rawResponse(req)
+			wantStatus := fmt.Sprintf("%d %s", code, StatusText(code))
+			if !strings.Contains(got, wantStatus) {
+				t.Errorf("Code %d: Wanted %q Modified for %q: %s", code, req, got)
+			} else if strings.Contains(got, "Content-Length") {
+				t.Errorf("Code %d: Got a Content-Length from %q: %s", code, req, got)
+			} else if strings.Contains(got, "stuff") {
+				t.Errorf("Code %d: Response contains a body from %q: %s", code, req, got)
+			}
 		}
-		w.WriteHeader(StatusNotModified)
-		if r.URL.Path == "/more" {
-			w.Write([]byte("stuff"))
-		}
+	}
+}
+
+// Issue 6995
+// A server Handler can receive a Request, and then turn around and
+// give a copy of that Request.Body out to the Transport (e.g. any
+// proxy).  So then two people own that Request.Body (both the server
+// and the http client), and both think they can close it on failure.
+// Therefore, all incoming server requests Bodies need to be thread-safe.
+func TestTransportAndServerSharedBodyRace(t *testing.T) {
+	defer afterTest(t)
+
+	const bodySize = 1 << 20
+
+	unblockBackend := make(chan bool)
+	backend := httptest.NewServer(HandlerFunc(func(rw ResponseWriter, req *Request) {
+		io.CopyN(rw, req.Body, bodySize/2)
+		<-unblockBackend
 	}))
-	for _, req := range []string{
-		"GET / HTTP/1.0",
-		"GET /header HTTP/1.0",
-		"GET /more HTTP/1.0",
-		"GET / HTTP/1.1",
-		"GET /header HTTP/1.1",
-		"GET /more HTTP/1.1",
-	} {
-		got := ht.rawResponse(req)
-		if !strings.Contains(got, "304 Not Modified") {
-			t.Errorf("Non-304 Not Modified for %q: %s", req, got)
-		} else if strings.Contains(got, "Content-Length") {
-			t.Errorf("Got a Content-Length from %q: %s", req, got)
+	defer backend.Close()
+
+	backendRespc := make(chan *Response, 1)
+	proxy := httptest.NewServer(HandlerFunc(func(rw ResponseWriter, req *Request) {
+		if req.RequestURI == "/foo" {
+			rw.Write([]byte("bar"))
+			return
 		}
+		req2, _ := NewRequest("POST", backend.URL, req.Body)
+		req2.ContentLength = bodySize
+
+		bresp, err := DefaultClient.Do(req2)
+		if err != nil {
+			t.Errorf("Proxy outbound request: %v", err)
+			return
+		}
+		_, err = io.CopyN(ioutil.Discard, bresp.Body, bodySize/4)
+		if err != nil {
+			t.Errorf("Proxy copy error: %v", err)
+			return
+		}
+		backendRespc <- bresp // to close later
+
+		// Try to cause a race: Both the DefaultTransport and the proxy handler's Server
+		// will try to read/close req.Body (aka req2.Body)
+		DefaultTransport.(*Transport).CancelRequest(req2)
+		rw.Write([]byte("OK"))
+	}))
+	defer proxy.Close()
+
+	req, _ := NewRequest("POST", proxy.URL, io.LimitReader(neverEnding('a'), bodySize))
+	res, err := DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Original request: %v", err)
+	}
+
+	// Cleanup, so we don't leak goroutines.
+	res.Body.Close()
+	close(unblockBackend)
+	(<-backendRespc).Body.Close()
+}
+
+// Test that a hanging Request.Body.Read from another goroutine can't
+// cause the Handler goroutine's Request.Body.Close to block.
+func TestRequestBodyCloseDoesntBlock(t *testing.T) {
+	t.Skipf("Skipping known issue; see golang.org/issue/7121")
+	if testing.Short() {
+		t.Skip("skipping in -short mode")
+	}
+	defer afterTest(t)
+
+	readErrCh := make(chan error, 1)
+	errCh := make(chan error, 2)
+
+	server := httptest.NewServer(HandlerFunc(func(rw ResponseWriter, req *Request) {
+		go func(body io.Reader) {
+			_, err := body.Read(make([]byte, 100))
+			readErrCh <- err
+		}(req.Body)
+		time.Sleep(500 * time.Millisecond)
+	}))
+	defer server.Close()
+
+	closeConn := make(chan bool)
+	defer close(closeConn)
+	go func() {
+		conn, err := net.Dial("tcp", server.Listener.Addr().String())
+		if err != nil {
+			errCh <- err
+			return
+		}
+		defer conn.Close()
+		_, err = conn.Write([]byte("POST / HTTP/1.1\r\nConnection: close\r\nHost: foo\r\nContent-Length: 100000\r\n\r\n"))
+		if err != nil {
+			errCh <- err
+			return
+		}
+		// And now just block, making the server block on our
+		// 100000 bytes of body that will never arrive.
+		<-closeConn
+	}()
+	select {
+	case err := <-readErrCh:
+		if err == nil {
+			t.Error("Read was nil. Expected error.")
+		}
+	case err := <-errCh:
+		t.Error(err)
+	case <-time.After(5 * time.Second):
+		t.Error("timeout")
 	}
 }
 

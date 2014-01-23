@@ -359,6 +359,7 @@ staticcopy(Node *l, Node *r, NodeList **out)
 					// copying someone else's computation.
 					rr = nod(OXXX, N, N);
 					*rr = *orig;
+					rr->orig = rr; // completely separate copy
 					rr->type = ll->type;
 					rr->xoffset += e->xoffset;
 					*out = list(*out, nod(OAS, ll, rr));
@@ -378,6 +379,7 @@ staticassign(Node *l, Node *r, NodeList **out)
 	InitPlan *p;
 	InitEntry *e;
 	int i;
+	Strlit *sval;
 	
 	switch(r->op) {
 	default:
@@ -426,6 +428,14 @@ staticassign(Node *l, Node *r, NodeList **out)
 		}
 		break;
 
+	case OSTRARRAYBYTE:
+		if(l->class == PEXTERN && r->left->op == OLITERAL) {
+			sval = r->left->val.u.sval;
+			slicebytes(l, sval->s, sval->len);
+			return 1;
+		}
+		break;
+
 	case OARRAYLIT:
 		initplan(r);
 		if(isslice(r->type)) {
@@ -459,6 +469,7 @@ staticassign(Node *l, Node *r, NodeList **out)
 			else {
 				a = nod(OXXX, N, N);
 				*a = n1;
+				a->orig = a; // completely separate copy
 				if(!staticassign(a, e->expr, out))
 					*out = list(*out, nod(OAS, a, e->expr));
 			}
