@@ -12,7 +12,7 @@
 <h2 id="introduction">A Quick Guide to Go's Assembler</h2>
 </div>
 
-<h2 id="引言">Go汇编器快速指南</h2>
+<h2 id="引言">Go汇编快速指南</h2>
 
 <div class="english">
 <p>
@@ -28,7 +28,7 @@ describes the peculiarities that apply when writing assembly code to interact wi
 
 <p>
 此文档简述了Go编译器套件（<code>6g</code>、<code>8g</code> 等）中 <code>gc</code>
-使用的非一般形式的汇编语言。它基于Plan 9汇编器的输入，详情见
+使用的非一般形式的汇编语言。它基于Plan 9汇编的输入，详情见
 <a href="http://plan9.bell-labs.com/sys/doc/asm.html">Plan 9</a>上的文档。
 尽管它是Plan 9的规范，但你若想编写汇编语言，同样需要阅读该文档。本文档提供了语法的概括，
 并描述了编写汇编代码与Go交互时所要用到的特性。
@@ -53,21 +53,18 @@ The details vary with architecture, and we apologize for the imprecision; the si
 </div>
 
 <p>
-关于Go的汇编，你要知道它并非底层机器码的直接表示。其中有些细节与机器码精确对应，
-但有些则不是。这是因为该编译器套件
+关于Go的汇编，最重要的一点就是它并非底层机器码的直接表示。其中有些细节与机器码精确对应，
+有些则不是。这是因为该编译器套件
 （见<a href="http://plan9.bell-labs.com/sys/doc/compiler.html">此描述</a>）
-并不需要在一般管道中传递汇编，而是由编译器按二进制形式产生一种未完整定义的指令集，
-随后它将由连接器完成。
-Instead, the compiler emits a kind of incompletely defined instruction set, in binary form, which the linker
-then completes.
-In particular, the linker does instruction selection, so when you see an instruction like <code>MOV</code>
-what the linker actually generates for that operation might not be a move instruction at all, perhaps a clear or load.
-Or it might correspond exactly to the machine instruction with that name.
-In general, machine-specific operations tend to appear as themselves, while more general concepts like
-memory move and subroutine call and return are more abstract.
-The details vary with architecture, and we apologize for the imprecision; the situation is not well-defined.
+并不需要在普通管道中传递汇编，而是由编译器按二进制形式产生一种未完整定义的指令集，
+随后它将由链接器补充完整。具体来说，就是指令由链接器选择。因此当你看到像 <code>MOV</code>
+这样的指令时，链接器实际为该操作生成的可能完全不是移动指令，也许是清理或加载指令，
+也可能刚好对应于同名的机器指令。一般来说，机器特定的操作往往以它们自身出现，
+而更一般的概念如内存移动或子程序调用和返回则更抽象。细节随架构而变，
+我们为这种笼统的定义致歉，这种情况仍未明确定义。
 </p>
 
+<div class="english">
 <p>
 The assembler program is a way to generate that intermediate, incompletely defined instruction sequence
 as input for the linker.
@@ -76,6 +73,15 @@ are many examples in the sources of the standard library, in packages such as
 <a href="/pkg/runtime/"><code>runtime</code></a> and
 <a href="/pkg/math/big/"><code>math/big</code></a>.
 You can also examine what the compiler emits as assembly code:
+</p>
+</div>
+
+<p>
+汇编器程序用于生成中间的、未完整定义的指令序列，它们将作为链接器的输入。
+若你想查看给定架构（比如 amd64）指令的汇编形式，可参考标准库中
+<a href="/pkg/runtime/"><code>runtime</code></a> 和
+<a href="/pkg/math/big/"><code>math/big</code></a> 包内源码的例子。
+你也可以查看编译器产生的汇编码：
 </p>
 
 <pre>
@@ -102,13 +108,26 @@ $ go tool 6g -S x.go        # or: go build -gcflags -S x.go
 ...
 </pre>
 
+<div class="english">
 <p>
 The <code>FUNCDATA</code> and <code>PCDATA</code> directives contain information
 for use by the garbage collector; they are introduced by the compiler.
 </p>
+</div>
 
 <p>
+<code>FUNCDATA</code> 和 <code>PCDATA</code> 命令包含了垃圾回收器所要用到的信息，
+它们由编译器引入。
+</p>
+
+<div class="english">
+<p>
 To see what gets put in the binary after linking, add the <code>-a</code> flag to the linker:
+</p>
+</div>
+
+<p>
+要查看链接后加入二进制文件中的信息，请在链接器后面添加 <code>-a</code> 标志。
 </p>
 
 <pre>
@@ -136,19 +155,39 @@ codeblk [0x2000,0x1d059) at offset 0x1000
 </pre>
 
 
+<div class="english">
 <h3 id="symbols">Symbols</h3>
+</div>
 
+<h3 id="符号">符号</h3>
+
+<div class="english">
 <p>
 Some symbols, such as <code>PC</code>, <code>R0</code> and <code>SP</code>, are predeclared and refer to registers.
 There are two other predeclared symbols, <code>SB</code> (static base) and <code>FP</code> (frame pointer).
 All user-defined symbols other than jump labels are written as offsets to these pseudo-registers.
 </p>
+</div>
 
+<p>
+有些符号，例如 <code>PC</code>、<code>R0</code> 和 <code>SP</code> 都是预声明且
+引用寄存器。还有两个预声明的符号，即 <code>SB</code>（静态基）和
+<code>FP</code>（帧指针）。除跳转标签外，所有用户定义的符号都会写作这些伪寄存器的偏移量。
+</p>
+
+<div class="english">
 <p>
 The <code>SB</code> pseudo-register can be thought of as the origin of memory, so the symbol <code>foo(SB)</code>
 is the name <code>foo</code> as an address in memory.
 </p>
+</div>
 
+<p>
+<code>SB</code> 伪寄存器可视作内存的来源，因此符号 <code>foo(SB)</code>
+是将名字 <code>foo</code> 作为内存中的地址。
+</p>
+
+<div class="english">
 <p>
 The <code>FP</code> pseudo-register is a virtual frame pointer
 used to refer to function arguments.
@@ -161,7 +200,18 @@ Some of the assemblers enforce this convention, rejecting plain <code>0(FP)</cod
 For assembly functions with Go prototypes, <code>go vet</code> will check that the argument names
 and offsets match.
 </p>
+</div>
 
+<p>
+<code>FP</code> 伪寄存器是一个用于引用函数实参的虚拟帧指针，因此 <code>0(FP)</code>
+就是函数的第一个实参，而 <code>8(FP)</code> 就是第二个（在64位机器上），依次类推。
+当通过这种方式引用一个函数实参时，约定将名字放在前面，就像 <code>first_arg+0(FP)</code>
+和 <code>second_arg+8(FP)</code> 这样。有些汇编器强制遵循此约定，拒绝单纯的
+<code>0(FP)</code> 和 <code>8(FP)</code>。对于带Go原型的汇编函数，<code>go vet</code>
+会检查该实参的名称和偏移匹配。
+</p>
+
+<div class="english">
 <p>
 The <code>SP</code> pseudo-register is a virtual stack pointer
 used to refer to frame-local variables and the arguments being
@@ -175,13 +225,31 @@ That is, <code>x-8(SP)</code> and <code>-8(SP)</code> are different memory locat
 the first refers to the virtual stack pointer pseudo-register, while the second refers to the
 hardware's <code>SP</code> register.
 </p>
+</div>
 
+<p>
+<code>SP</code> 伪寄存器是一个用于引用局部栈帧变量的虚拟栈指针，其实参用于函数调用。
+它指向局部栈帧的顶端，因此引用需使用区间 [−framesize, 0) 的负值作为偏移量：
+如 <code>x-8(SP)</code>、<code>y-4(SP)</code>、等等。在真实存在名为 <code>SP</code>
+寄存器的架构上，可通过名称前缀来区分引用虚拟栈指针和该架构上的 <code>SP</code>
+寄存器。换言之，<code>x-8(SP)</code> 和 <code>-8(SP)</code> 是不同的内存位置。
+第一个时引用了虚拟栈指针的伪寄存器，而第二个则引用了硬件上的 <code>SP</code> 寄存器。
+</p>
+
+<div class="english">
 <p>
 Instructions, registers, and assembler directives are always in UPPER CASE to remind you
 that assembly programming is a fraught endeavor.
 (Exceptions: the <code>m</code> and <code>g</code> register renamings on ARM.)
 </p>
+</div>
 
+<p>
+指令、寄存器和汇编命令总是<b>大写</b>的，以此来提醒你汇编语言需要非常慎重地对待。
+（例外：<code>m</code> 和 <code>g</code> 寄存器在ARM上重命名了。）
+</p>
+
+<div class="english">
 <p>
 In Go object files and binaries, the full name of a symbol is the
 package path followed by a period and the symbol name:
@@ -197,6 +265,29 @@ The assembly listings generated by the compilers when using the <code>-S</code> 
 show the period and slash directly instead of the Unicode replacements
 required by the assemblers.
 </p>
+</div>
+
+<p>
+在 Go 目标文件和二进制文件中，符号的全名为包路径后跟一个点号和符号名：
+如 <code>fmt.Printf</code> 或 <code>math/rand.Int</code>。由于汇编的解析器将点号
+和斜杠视作标点，因此那些字符串不能直接用作标识符明。取而代之，汇编器允许分隔符
+U+00B7 和除法斜杠 U+2215 出现在标识符中，并将它们重写为纯粹点号和斜杠。
+在汇编源文件中，上面的符号应写作 <code>fmt·Printf</code> 和 <code>math∕rand·Int</code>.
+当使用 <code>-S</code> 标志时，由编译器生成的汇编列表会直接显示点号和斜杠，
+而非汇编器需要的 Unicode 替代符。
+</p>
+
+<div class="english">
+<p>
+Most hand-written assembly files do not include the full package path
+in symbol names, because the linker inserts the package path of the current
+object file at the beginning of any name starting with a period:
+in an assembly source file within the math/rand package implementation,
+the package's Int function can be referred to as <code>·Int</code>.
+This convention avoids the need to hard-code a package's import path in its
+own source code, making it easier to move the code from one location to another.
+</p>
+</div>
 
 <p>
 Most hand-written assembly files do not include the full package path
