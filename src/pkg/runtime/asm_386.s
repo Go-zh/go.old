@@ -247,6 +247,10 @@ TEXT runtime·morestack(SB),NOSPLIT,$0-0
 	MOVL	$0, 0x1003	// crash if newstack returns
 	RET
 
+TEXT runtime·morestack_noctxt(SB),NOSPLIT,$0-0
+	MOVL	$0, DX
+	JMP runtime·morestack(SB)
+
 // Called from panic.  Mimics morestack,
 // reuses stack growth code to create a frame
 // with the desired args running the desired function.
@@ -340,7 +344,7 @@ TEXT reflect·call(SB), NOSPLIT, $0-12
 	JMP	AX
 
 #define CALLFN(NAME,MAXSIZE)			\
-TEXT runtime·NAME(SB), WRAPPER, $MAXSIZE-12;		\
+TEXT runtime·NAME(SB), WRAPPER, $MAXSIZE-12;	\
 	/* copy arguments to stack */		\
 	MOVL	argptr+4(FP), SI;		\
 	MOVL	argsize+8(FP), CX;		\
@@ -348,7 +352,8 @@ TEXT runtime·NAME(SB), WRAPPER, $MAXSIZE-12;		\
 	REP;MOVSB;				\
 	/* call function */			\
 	MOVL	f+0(FP), DX;			\
-	CALL	(DX);				\
+	MOVL	(DX), AX; 			\
+	CALL	AX;				\
 	/* copy return values back */		\
 	MOVL	argptr+4(FP), DI;		\
 	MOVL	argsize+8(FP), CX;		\
@@ -652,7 +657,6 @@ havem:
 	// Save current sp in m->g0->sched.sp in preparation for
 	// switch back to m->curg stack.
 	// NOTE: unwindm knows that the saved g->sched.sp is at 0(SP).
-	// On Windows, the SEH is at 4(SP) and 8(SP).
 	MOVL	m_g0(BP), SI
 	MOVL	(g_sched+gobuf_sp)(SI), AX
 	MOVL	AX, 0(SP)
@@ -751,21 +755,6 @@ TEXT runtime·stackcheck(SB), NOSPLIT, $0-0
 	CMPL	SP, g_stackguard(AX)
 	JHI	2(PC)
 	INT	$3
-	RET
-
-TEXT runtime·memclr(SB),NOSPLIT,$0-8
-	MOVL	4(SP), DI		// arg 1 addr
-	MOVL	8(SP), CX		// arg 2 count
-	MOVL	CX, BX
-	ANDL	$3, BX
-	SHRL	$2, CX
-	MOVL	$0, AX
-	CLD
-	REP
-	STOSL
-	MOVL	BX, CX
-	REP
-	STOSB
 	RET
 
 TEXT runtime·getcallerpc(SB),NOSPLIT,$0-4

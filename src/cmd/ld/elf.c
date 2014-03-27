@@ -355,7 +355,7 @@ elfnote(ElfShdr *sh, uint64 startva, uint64 resoff, int sz)
 	sh->addralign = 4;
 	sh->addr = startva + resoff - n;
 	sh->off = resoff - n;
-	sh->size = n;
+	sh->size = n - resoff % 4;
 
 	return n;
 }
@@ -677,6 +677,23 @@ elfdynhash(void)
 		elfwritedynent(s, DT_VERNEEDNUM, nfile);
 		elfwritedynentsym(s, DT_VERSYM, linklookup(ctxt, ".gnu.version", 0));
 	}
+
+	if(thechar == '6') {
+		sy = linklookup(ctxt, ".rela.plt", 0);
+		if(sy->size > 0) {
+			elfwritedynent(s, DT_PLTREL, DT_RELA);
+			elfwritedynentsymsize(s, DT_PLTRELSZ, sy);
+			elfwritedynentsym(s, DT_JMPREL, sy);
+		}
+	} else {
+		sy = linklookup(ctxt, ".rel.plt", 0);
+		if(sy->size > 0) {
+			elfwritedynent(s, DT_PLTREL, DT_REL);
+			elfwritedynentsymsize(s, DT_PLTRELSZ, sy);
+			elfwritedynentsym(s, DT_JMPREL, sy);
+		}
+	}
+
 	elfwritedynent(s, DT_NULL, 0);
 }
 
@@ -797,12 +814,12 @@ elfshreloc(Section *sect)
 	snprint(buf, sizeof buf, "%s%s", prefix, sect->name);
 	sh = elfshname(buf);
 	sh->type = typ;
-	sh->entsize = PtrSize*(2+(typ==SHT_RELA));
+	sh->entsize = RegSize*(2+(typ==SHT_RELA));
 	sh->link = elfshname(".symtab")->shnum;
 	sh->info = sect->elfsect->shnum;
 	sh->off = sect->reloff;
 	sh->size = sect->rellen;
-	sh->addralign = PtrSize;
+	sh->addralign = RegSize;
 	return sh;
 }
 
@@ -1058,16 +1075,10 @@ doelf(void)
 		
 		elfwritedynentsym(s, DT_PLTGOT, linklookup(ctxt, ".got.plt", 0));
 
-		if(thechar == '6') {
-			elfwritedynent(s, DT_PLTREL, DT_RELA);
-			elfwritedynentsymsize(s, DT_PLTRELSZ, linklookup(ctxt, ".rela.plt", 0));
-			elfwritedynentsym(s, DT_JMPREL, linklookup(ctxt, ".rela.plt", 0));
-		} else {
-			elfwritedynent(s, DT_PLTREL, DT_REL);
-			elfwritedynentsymsize(s, DT_PLTRELSZ, linklookup(ctxt, ".rel.plt", 0));
-			elfwritedynentsym(s, DT_JMPREL, linklookup(ctxt, ".rel.plt", 0));
-		}
-		
+		// Solaris dynamic linker can't handle an empty .rela.plt if
+		// DT_JMPREL is emitted so we have to defer generation of DT_PLTREL,
+		// DT_PLTRELSZ, and DT_JMPREL dynamic entries until after we know the
+		// size of .rel(a).plt section.
 		elfwritedynent(s, DT_DEBUG, 0);
 
 		// Do not write DT_NULL.  elfdynhash will finish it.
@@ -1152,7 +1163,7 @@ asmbelf(vlong symo)
 	/* program header info */
 	pph = newElfPhdr();
 	pph->type = PT_PHDR;
-	pph->flags = PF_R + PF_X;
+	pph->flags = PF_R;
 	pph->off = eh->ehsize;
 	pph->vaddr = INITTEXT - HEADR + pph->off;
 	pph->paddr = INITTEXT - HEADR + pph->off;
@@ -1161,13 +1172,16 @@ asmbelf(vlong symo)
 	/*
 	 * PHDR must be in a loaded segment. Adjust the text
 	 * segment boundaries downwards to include it.
+	 * Except on NaCl where it must not be loaded.
 	 */
-	o = segtext.vaddr - pph->vaddr;
-	segtext.vaddr -= o;
-	segtext.len += o;
-	o = segtext.fileoff - pph->off;
-	segtext.fileoff -= o;
-	segtext.filelen += o;
+	if(HEADTYPE != Hnacl) {
+		o = segtext.vaddr - pph->vaddr;
+		segtext.vaddr -= o;
+		segtext.len += o;
+		o = segtext.fileoff - pph->off;
+		segtext.fileoff -= o;
+		segtext.filelen += o;
+	}
 
 	if(!debug['d']) {
 		/* interpreter */
@@ -1191,6 +1205,9 @@ asmbelf(vlong symo)
 				break;
 			case Hdragonfly:
 				interpreter = dragonflydynld;
+				break;
+			case Hsolaris:
+				interpreter = solarisdynld;
 				break;
 			}
 		}
@@ -1247,11 +1264,11 @@ asmbelf(vlong symo)
 		sh = elfshname(".dynsym");
 		sh->type = SHT_DYNSYM;
 		sh->flags = SHF_ALLOC;
-		if(PtrSize == 8)
+		if(elf64)
 			sh->entsize = ELF64SYMSIZE;
 		else
 			sh->entsize = ELF32SYMSIZE;
-		sh->addralign = PtrSize;
+		sh->addralign = RegSize;
 		sh->link = elfshname(".dynstr")->shnum;
 		// sh->info = index of first non-local symbol (number of local symbols)
 		shsym(sh, linklookup(ctxt, ".dynsym", 0));
@@ -1274,7 +1291,7 @@ asmbelf(vlong symo)
 			sh = elfshname(".gnu.version_r");
 			sh->type = SHT_GNU_VERNEED;
 			sh->flags = SHF_ALLOC;
-			sh->addralign = PtrSize;
+			sh->addralign = RegSize;
 			sh->info = elfverneed;
 			sh->link = elfshname(".dynstr")->shnum;
 			shsym(sh, linklookup(ctxt, ".gnu.version_r", 0));
@@ -1286,7 +1303,7 @@ asmbelf(vlong symo)
 			sh->type = SHT_RELA;
 			sh->flags = SHF_ALLOC;
 			sh->entsize = ELF64RELASIZE;
-			sh->addralign = PtrSize;
+			sh->addralign = RegSize;
 			sh->link = elfshname(".dynsym")->shnum;
 			sh->info = elfshname(".plt")->shnum;
 			shsym(sh, linklookup(ctxt, ".rela.plt", 0));
@@ -1331,22 +1348,22 @@ asmbelf(vlong symo)
 		sh = elfshname(".got");
 		sh->type = SHT_PROGBITS;
 		sh->flags = SHF_ALLOC+SHF_WRITE;
-		sh->entsize = PtrSize;
-		sh->addralign = PtrSize;
+		sh->entsize = RegSize;
+		sh->addralign = RegSize;
 		shsym(sh, linklookup(ctxt, ".got", 0));
 
 		sh = elfshname(".got.plt");
 		sh->type = SHT_PROGBITS;
 		sh->flags = SHF_ALLOC+SHF_WRITE;
-		sh->entsize = PtrSize;
-		sh->addralign = PtrSize;
+		sh->entsize = RegSize;
+		sh->addralign = RegSize;
 		shsym(sh, linklookup(ctxt, ".got.plt", 0));
 		
 		sh = elfshname(".hash");
 		sh->type = SHT_HASH;
 		sh->flags = SHF_ALLOC;
 		sh->entsize = 4;
-		sh->addralign = PtrSize;
+		sh->addralign = RegSize;
 		sh->link = elfshname(".dynsym")->shnum;
 		shsym(sh, linklookup(ctxt, ".hash", 0));
 
@@ -1354,8 +1371,8 @@ asmbelf(vlong symo)
 		sh = elfshname(".dynamic");
 		sh->type = SHT_DYNAMIC;
 		sh->flags = SHF_ALLOC+SHF_WRITE;
-		sh->entsize = 2*PtrSize;
-		sh->addralign = PtrSize;
+		sh->entsize = 2*RegSize;
+		sh->addralign = RegSize;
 		sh->link = elfshname(".dynstr")->shnum;
 		shsym(sh, linklookup(ctxt, ".dynamic", 0));
 		ph = newElfPhdr();
@@ -1374,7 +1391,7 @@ asmbelf(vlong symo)
 			ph->type = PT_TLS;
 			ph->flags = PF_R;
 			ph->memsz = -ctxt->tlsoffset;
-			ph->align = PtrSize;
+			ph->align = RegSize;
 		}
 	}
 
@@ -1382,12 +1399,12 @@ asmbelf(vlong symo)
 		ph = newElfPhdr();
 		ph->type = PT_GNU_STACK;
 		ph->flags = PF_W+PF_R;
-		ph->align = PtrSize;
+		ph->align = RegSize;
 		
 		ph = newElfPhdr();
 		ph->type = PT_PAX_FLAGS;
 		ph->flags = 0x2a00; // mprotect, randexec, emutramp disabled
-		ph->align = PtrSize;
+		ph->align = RegSize;
 	}
 
 elfobj:
@@ -1429,7 +1446,7 @@ elfobj:
 	if(linkmode == LinkInternal && !debug['d'] && HEADTYPE != Hopenbsd) {
 		sh = elfshname(".tbss");
 		sh->type = SHT_NOBITS;
-		sh->addralign = PtrSize;
+		sh->addralign = RegSize;
 		sh->size = -ctxt->tlsoffset;
 		sh->flags = SHF_ALLOC | SHF_TLS | SHF_WRITE;
 	}
@@ -1439,8 +1456,8 @@ elfobj:
 		sh->type = SHT_SYMTAB;
 		sh->off = symo;
 		sh->size = symsize;
-		sh->addralign = PtrSize;
-		sh->entsize = 8+2*PtrSize;
+		sh->addralign = RegSize;
+		sh->entsize = 8+2*RegSize;
 		sh->link = elfshname(".strtab")->shnum;
 		sh->info = elfglobalsymndx;
 
@@ -1466,7 +1483,7 @@ elfobj:
 		eh->ident[EI_OSABI] = ELFOSABI_OPENBSD;
 	else if(HEADTYPE == Hdragonfly)
 		eh->ident[EI_OSABI] = ELFOSABI_NONE;
-	if(PtrSize == 8)
+	if(elf64)
 		eh->ident[EI_CLASS] = ELFCLASS64;
 	else
 		eh->ident[EI_CLASS] = ELFCLASS32;

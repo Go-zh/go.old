@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Pool is no-op under race detector, so all these tests do not work.
+// +build !race
+
 package sync_test
 
 import (
@@ -11,7 +14,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-	"unsafe"
 )
 
 func TestPool(t *testing.T) {
@@ -74,8 +76,8 @@ func TestPoolGC(t *testing.T) {
 	var fin uint32
 	const N = 100
 	for i := 0; i < N; i++ {
-		v := new(int)
-		runtime.SetFinalizer(v, func(vv *int) {
+		v := new(string)
+		runtime.SetFinalizer(v, func(vv *string) {
 			atomic.AddUint32(&fin, 1)
 		})
 		p.Put(v)
@@ -85,7 +87,7 @@ func TestPoolGC(t *testing.T) {
 	}
 	for i := 0; i < 5; i++ {
 		runtime.GC()
-		time.Sleep(time.Millisecond)
+		time.Sleep(time.Duration(i*100+10) * time.Millisecond)
 		// 1 pointer can remain on stack or elsewhere
 		if atomic.LoadUint32(&fin) >= N-1 {
 			return
@@ -125,30 +127,25 @@ func TestPoolStress(t *testing.T) {
 }
 
 func BenchmarkPool(b *testing.B) {
-	procs := runtime.GOMAXPROCS(-1)
-	var dec func() bool
-	if unsafe.Sizeof(b.N) == 8 {
-		n := int64(b.N)
-		dec = func() bool {
-			return atomic.AddInt64(&n, -1) >= 0
-		}
-	} else {
-		n := int32(b.N)
-		dec = func() bool {
-			return atomic.AddInt32(&n, -1) >= 0
-		}
-	}
 	var p Pool
-	var wg WaitGroup
-	for i := 0; i < procs; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for dec() {
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			p.Put(1)
+			p.Get()
+		}
+	})
+}
+
+func BenchmarkPoolOverlflow(b *testing.B) {
+	var p Pool
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			for b := 0; b < 100; b++ {
 				p.Put(1)
+			}
+			for b := 0; b < 100; b++ {
 				p.Get()
 			}
-		}()
-	}
-	wg.Wait()
+		}
+	})
 }

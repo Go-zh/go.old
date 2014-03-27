@@ -6,20 +6,17 @@
 
 // HTTP网络协议的“chunked”传输编码.
 
-// This code is a duplicate of ../chunked.go with these edits:
-//	s/newChunked/NewChunked/g
-//	s/package http/package httputil/
+// This code is duplicated in net/http and net/http/httputil.
 // Please make any changes in both files.
 
-// 这个代码是../chunked.go的复制：
-//  s/newChunked/NewChunked/g
-//	s/package http/package httputil/
-// 改动的话请对以上所有文件进行改动。
+// 此代码同样存在于 net/http 和 net/http/httputil 中。
+// 改动时请一同进行。
 
 package httputil
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -29,11 +26,11 @@ const maxLineLength = 4096 // assumed <= bufio.defaultBufSize
 
 var ErrLineTooLong = errors.New("header line too long")
 
-// NewChunkedReader returns a new chunkedReader that translates the data read from r
+// newChunkedReader returns a new chunkedReader that translates the data read from r
 // out of HTTP "chunked" format before returning it.
 // The chunkedReader returns io.EOF when the final 0-length chunk is read.
 //
-// NewChunkedReader is not needed by normal applications. The http package
+// newChunkedReader is not needed by normal applications. The http package
 // automatically decodes chunking when reading response bodies.
 
 // NewChunkedReader返回一个新的chunkedReader。这个chunkedReader能翻译从r中的HTTP “chunked”
@@ -41,7 +38,7 @@ var ErrLineTooLong = errors.New("header line too long")
 // chunkedReader当读取到最后的0长度的chunk的时候返回io.EOF。
 //
 // NewChunkedReader在通常的应用中并不需要。http包会在读取回复的消息体的时候自动解码。
-func NewChunkedReader(r io.Reader) io.Reader {
+func newChunkedReader(r io.Reader) io.Reader {
 	br, ok := r.(*bufio.Reader)
 	if !ok {
 		br = bufio.NewReader(r)
@@ -72,26 +69,45 @@ func (cr *chunkedReader) beginChunk() {
 	}
 }
 
+func (cr *chunkedReader) chunkHeaderAvailable() bool {
+	n := cr.r.Buffered()
+	if n > 0 {
+		peek, _ := cr.r.Peek(n)
+		return bytes.IndexByte(peek, '\n') >= 0
+	}
+	return false
+}
+
 func (cr *chunkedReader) Read(b []uint8) (n int, err error) {
-	if cr.err != nil {
-		return 0, cr.err
-	}
-	if cr.n == 0 {
-		cr.beginChunk()
-		if cr.err != nil {
-			return 0, cr.err
+	for cr.err == nil {
+		if cr.n == 0 {
+			if n > 0 && !cr.chunkHeaderAvailable() {
+				// We've read enough. Don't potentially block
+				// reading a new chunk header.
+				break
+			}
+			cr.beginChunk()
+			continue
 		}
-	}
-	if uint64(len(b)) > cr.n {
-		b = b[0:cr.n]
-	}
-	n, cr.err = cr.r.Read(b)
-	cr.n -= uint64(n)
-	if cr.n == 0 && cr.err == nil {
-		// end of chunk (CRLF)
-		if _, cr.err = io.ReadFull(cr.r, cr.buf[:]); cr.err == nil {
-			if cr.buf[0] != '\r' || cr.buf[1] != '\n' {
-				cr.err = errors.New("malformed chunked encoding")
+		if len(b) == 0 {
+			break
+		}
+		rbuf := b
+		if uint64(len(rbuf)) > cr.n {
+			rbuf = rbuf[:cr.n]
+		}
+		var n0 int
+		n0, cr.err = cr.r.Read(rbuf)
+		n += n0
+		b = b[n0:]
+		cr.n -= uint64(n0)
+		// If we're at the end of a chunk, read the next two
+		// bytes to verify they are "\r\n".
+		if cr.n == 0 && cr.err == nil {
+			if _, cr.err = io.ReadFull(cr.r, cr.buf[:2]); cr.err == nil {
+				if cr.buf[0] != '\r' || cr.buf[1] != '\n' {
+					cr.err = errors.New("malformed chunked encoding")
+				}
 			}
 		}
 	}
@@ -134,13 +150,13 @@ func isASCIISpace(b byte) bool {
 	return b == ' ' || b == '\t' || b == '\n' || b == '\r'
 }
 
-// NewChunkedWriter returns a new chunkedWriter that translates writes into HTTP
+// newChunkedWriter returns a new chunkedWriter that translates writes into HTTP
 // "chunked" format before writing them to w. Closing the returned chunkedWriter
 // sends the final 0-length chunk that marks the end of the stream.
 //
-// NewChunkedWriter is not needed by normal applications. The http
+// newChunkedWriter is not needed by normal applications. The http
 // package adds chunking automatically if handlers don't set a
-// Content-Length header. Using NewChunkedWriter inside a handler
+// Content-Length header. Using newChunkedWriter inside a handler
 // would result in double chunking or chunking with a Content-Length
 // length, both of which are wrong.
 
@@ -149,7 +165,7 @@ func isASCIISpace(b byte) bool {
 //
 // 一般的应用并不需要使用NewChunkedWriter。如果不设置Content-Length头的话，http包会自动增加chunk。
 // 在handler中使用NewChunkedWriter会导致重复块，或者有Content-length长度的块，这两种都是错误的。
-func NewChunkedWriter(w io.Writer) io.WriteCloser {
+func newChunkedWriter(w io.Writer) io.WriteCloser {
 	return &chunkedWriter{w}
 }
 

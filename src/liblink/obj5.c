@@ -92,6 +92,7 @@ progedit(Link *ctxt, Prog *p)
 {
 	char literal[64];
 	LSym *s;
+	LSym *tlsfallback;
 
 	p->from.class = 0;
 	p->to.class = 0;
@@ -102,6 +103,25 @@ progedit(Link *ctxt, Prog *p)
 	case ABL:
 		if(p->to.type == D_OREG && (p->to.name == D_EXTERN || p->to.name == D_STATIC) && p->to.sym != nil)
 			p->to.type = D_BRANCH;
+		break;
+	}
+
+	// Replace TLS register fetches on older ARM procesors.
+	switch(p->as) {
+	case AMRC:
+		// If the instruction matches MRC 15, 0, <reg>, C13, C0, 3, replace it.
+		if(ctxt->goarm < 7 && (p->to.offset & 0xffff0fff) == 0xee1d0f70) {
+			tlsfallback = linklookup(ctxt, "runtime.read_tls_fallback", 0);
+
+			// BL runtime.read_tls_fallback(SB)
+			p->as = ABL;
+			p->to.type = D_BRANCH;
+			p->to.sym = tlsfallback;
+			p->to.offset = 0;
+		} else {
+			// Otherwise, MRC/MCR instructions need no further treatment.
+			p->as = AWORD;
+		}
 		break;
 	}
 
@@ -147,6 +167,21 @@ progedit(Link *ctxt, Prog *p)
 		}
 		break;
 	}
+
+	if(ctxt->flag_shared) {
+		// Shared libraries use R_ARM_TLS_IE32 instead of 
+		// R_ARM_TLS_LE32, replacing the link time constant TLS offset in
+		// runtime.tlsgm with an address to a GOT entry containing the 
+		// offset. Rewrite $runtime.tlsgm(SB) to runtime.tlsgm(SB) to
+		// compensate.
+		if(ctxt->gmsym == nil)
+			ctxt->gmsym = linklookup(ctxt, "runtime.tlsgm", 0);
+
+		if(p->from.type == D_CONST && p->from.name == D_EXTERN && p->from.sym == ctxt->gmsym)
+			p->from.type = D_OREG;
+		if(p->to.type == D_CONST && p->to.name == D_EXTERN && p->to.sym == ctxt->gmsym)
+			p->to.type = D_OREG;
+	}
 }
 
 static Prog*
@@ -159,7 +194,7 @@ prg(void)
 	return p;
 }
 
-static	Prog*	stacksplit(Link*, Prog*, int32);
+static	Prog*	stacksplit(Link*, Prog*, int32, int);
 static	void		initdiv(Link*);
 static	void	softfloat(Link*, LSym*);
 
@@ -198,17 +233,15 @@ addstacksplit(Link *ctxt, LSym *cursym)
 {
 	Prog *p, *pl, *q, *q1, *q2;
 	int o;
-	LSym *tlsfallback;
 	int32 autosize, autoffset;
 	
 	autosize = 0;
 
-	if(ctxt->symmorestack[0] == nil)
+	if(ctxt->symmorestack[0] == nil) {
 		ctxt->symmorestack[0] = linklookup(ctxt, "runtime.morestack", 0);
-	
-	tlsfallback = linklookup(ctxt, "runtime.read_tls_fallback", 0);
-	if(ctxt->gmsym == nil)
-		ctxt->gmsym = linklookup(ctxt, "runtime.tlsgm", 0);
+		ctxt->symmorestack[1] = linklookup(ctxt, "runtime.morestack_noctxt", 0);
+	}
+
 	q = nil;
 	
 	ctxt->cursym = cursym;
@@ -284,7 +317,6 @@ addstacksplit(Link *ctxt, LSym *cursym)
 	 * strip NOPs
 	 * expand RET
 	 * expand BECOME pseudo
-	 * fixup TLS
 	 */
 
 	for(p = cursym->text; p != nil; p = p->link) {
@@ -349,78 +381,6 @@ addstacksplit(Link *ctxt, LSym *cursym)
 				}
 			}
 			break;
-		case AWORD:
-			// Rewrite TLS register fetch: MRC 15, 0, <reg>, C13, C0, 3
-			if((p->to.offset & 0xffff0fff) == 0xee1d0f70) {
-				if(ctxt->headtype == Hopenbsd) {
-					p->as = ARET;
-					break;
-				}
-				if(ctxt->goarm < 7) {
-					// BL runtime.read_tls_fallback(SB)
-					p->as = ABL;
-					p->to.type = D_BRANCH;
-					p->to.sym = tlsfallback;
-					p->to.offset = 0;
-					cursym->text->mark &= ~LEAF;
-				}
-				// runtime.tlsgm is relocated with R_ARM_TLS_LE32
-				// and $runtime.tlsgm will contain the TLS offset.
-				//
-				// MOV $runtime.tlsgm+ctxt->tlsoffset(SB), REGTMP
-				// ADD REGTMP, <reg>
-				//
-				// In shared mode, runtime.tlsgm is relocated with
-				// R_ARM_TLS_IE32 and runtime.tlsgm(SB) will point
-				// to the GOT entry containing the TLS offset.
-				//
-				// MOV runtime.tlsgm(SB), REGTMP
-				// ADD REGTMP, <reg>
-				// SUB -ctxt->tlsoffset, <reg>
-				//
-				// The SUB compensates for ctxt->tlsoffset
-				// used in runtime.save_gm and runtime.load_gm.
-				q = p;
-				p = appendp(ctxt, p);
-				p->as = AMOVW;
-				p->scond = C_SCOND_NONE;
-				p->reg = NREG;
-				if(ctxt->flag_shared) {
-					p->from.type = D_OREG;
-					p->from.offset = 0;
-				} else {
-					p->from.type = D_CONST;
-					p->from.offset = ctxt->tlsoffset;
-				}
-				p->from.sym = ctxt->gmsym;
-				p->from.name = D_EXTERN;
-				p->to.type = D_REG;
-				p->to.reg = REGTMP;
-				p->to.offset = 0;
-
-				p = appendp(ctxt, p);
-				p->as = AADD;
-				p->scond = C_SCOND_NONE;
-				p->reg = NREG;
-				p->from.type = D_REG;
-				p->from.reg = REGTMP;
-				p->to.type = D_REG;
-				p->to.reg = (q->to.offset & 0xf000) >> 12;
-				p->to.offset = 0;
-
-				if(ctxt->flag_shared) {
-					p = appendp(ctxt, p);
-					p->as = ASUB;
-					p->scond = C_SCOND_NONE;
-					p->reg = NREG;
-					p->from.type = D_CONST;
-					p->from.offset = -ctxt->tlsoffset;
-					p->to.type = D_REG;
-					p->to.reg = (q->to.offset & 0xf000) >> 12;
-					p->to.offset = 0;
-				}
-				break;
-			}
 		}
 		q = p;
 	}
@@ -451,7 +411,7 @@ addstacksplit(Link *ctxt, LSym *cursym)
 			}
 
 			if(!(p->reg & NOSPLIT))
-				p = stacksplit(ctxt, p, autosize); // emit split check
+				p = stacksplit(ctxt, p, autosize, !(cursym->text->reg&NEEDCTXT)); // emit split check
 			
 			// MOVW.W		R14,$-autosize(SP)
 			p = appendp(ctxt, p);
@@ -769,7 +729,7 @@ softfloat(Link *ctxt, LSym *cursym)
 }
 
 static Prog*
-stacksplit(Link *ctxt, Prog *p, int32 framesize)
+stacksplit(Link *ctxt, Prog *p, int32 framesize, int noctxt)
 {
 	int32 arg;
 
@@ -893,7 +853,7 @@ stacksplit(Link *ctxt, Prog *p, int32 framesize)
 	p->as = ABL;
 	p->scond = C_SCOND_LS;
 	p->to.type = D_BRANCH;
-	p->to.sym = ctxt->symmorestack[0];
+	p->to.sym = ctxt->symmorestack[noctxt];
 	
 	// BLS	start
 	p = appendp(ctxt, p);
@@ -1076,6 +1036,7 @@ LinkArch linkarm = {
 
 	.minlc = 4,
 	.ptrsize = 4,
+	.regsize = 4,
 
 	.D_ADDR = D_ADDR,
 	.D_BRANCH = D_BRANCH,

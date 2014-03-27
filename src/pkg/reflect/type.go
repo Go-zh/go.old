@@ -16,6 +16,7 @@
 package reflect
 
 import (
+	"runtime"
 	"strconv"
 	"sync"
 	"unsafe"
@@ -1572,6 +1573,10 @@ func bucketOf(ktyp, etyp *rtype) *rtype {
 	gc = append(gc, _GC_PTR, offset, 0 /*self pointer set below*/) // overflow
 	offset += ptrsize
 
+	if runtime.GOARCH == "amd64p32" {
+		offset += 4
+	}
+
 	// keys
 	if ktyp.kind&kindNoPointers == 0 {
 		gc = append(gc, _GC_ARRAY_START, offset, _BUCKETSIZE, ktyp.size)
@@ -1809,9 +1814,15 @@ type layoutKey struct {
 	rcvr *rtype // receiver type, or nil if none
 }
 
+type layoutType struct {
+	t         *rtype
+	argSize   uintptr // size of arguments
+	retOffset uintptr // offset of return values.
+}
+
 var layoutCache struct {
 	sync.RWMutex
-	m map[layoutKey]*rtype
+	m map[layoutKey]layoutType
 }
 
 // funcLayout computes a struct type representing the layout of the
@@ -1820,21 +1831,21 @@ var layoutCache struct {
 // The returned type exists only for GC, so we only fill out GC relevant info.
 // Currently, that's just size and the GC program.  We also fill in
 // the name for possible debugging use.
-func funcLayout(t *rtype, rcvr *rtype) *rtype {
+func funcLayout(t *rtype, rcvr *rtype) (frametype *rtype, argSize, retOffset uintptr) {
 	if t.Kind() != Func {
 		panic("reflect: funcSignature of non-func type")
 	}
 	k := layoutKey{t, rcvr}
 	layoutCache.RLock()
-	if x := layoutCache.m[k]; x != nil {
+	if x := layoutCache.m[k]; x.t != nil {
 		layoutCache.RUnlock()
-		return x
+		return x.t, x.argSize, x.retOffset
 	}
 	layoutCache.RUnlock()
 	layoutCache.Lock()
-	if x := layoutCache.m[k]; x != nil {
+	if x := layoutCache.m[k]; x.t != nil {
 		layoutCache.Unlock()
-		return x
+		return x.t, x.argSize, x.retOffset
 	}
 
 	tt := (*funcType)(unsafe.Pointer(t))
@@ -1863,7 +1874,12 @@ func funcLayout(t *rtype, rcvr *rtype) *rtype {
 		}
 		offset += arg.size
 	}
+	argSize = offset
+	if runtime.GOARCH == "amd64p32" {
+		offset = align(offset, 8)
+	}
 	offset = align(offset, ptrSize)
+	retOffset = offset
 	for _, res := range tt.out {
 		offset = align(offset, uintptr(res.align))
 		if res.pointers() {
@@ -1888,9 +1904,13 @@ func funcLayout(t *rtype, rcvr *rtype) *rtype {
 
 	// cache result for future callers
 	if layoutCache.m == nil {
-		layoutCache.m = make(map[layoutKey]*rtype)
+		layoutCache.m = make(map[layoutKey]layoutType)
 	}
-	layoutCache.m[k] = x
+	layoutCache.m[k] = layoutType{
+		t:         x,
+		argSize:   argSize,
+		retOffset: retOffset,
+	}
 	layoutCache.Unlock()
-	return x
+	return x, argSize, retOffset
 }

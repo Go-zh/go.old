@@ -10,7 +10,9 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -88,10 +90,12 @@ func TestTableOfContents(t *testing.T) {
 	defer os.RemoveAll(dir)
 	name := filepath.Join(dir, "pack.a")
 	ar := archive(name, os.O_RDWR, nil)
+
 	// Add some entries by hand.
 	ar.addFile(helloFile.Reset())
 	ar.addFile(goodbyeFile.Reset())
 	ar.fd.Close()
+
 	// Now print it.
 	ar = archive(name, os.O_RDONLY, nil)
 	var buf bytes.Buffer
@@ -109,6 +113,7 @@ func TestTableOfContents(t *testing.T) {
 	if result != expect {
 		t.Fatalf("expected %q got %q", expect, result)
 	}
+
 	// Do it again without verbose.
 	verbose = false
 	buf.Reset()
@@ -118,6 +123,19 @@ func TestTableOfContents(t *testing.T) {
 	result = buf.String()
 	// Expect non-verbose listing.
 	expect = fmt.Sprintf("%s\n%s\n", helloFile.name, goodbyeFile.name)
+	if result != expect {
+		t.Fatalf("expected %q got %q", expect, result)
+	}
+
+	// Do it again with file list arguments.
+	verbose = false
+	buf.Reset()
+	ar = archive(name, os.O_RDONLY, []string{helloFile.name})
+	ar.scan(ar.tableOfContents)
+	ar.fd.Close()
+	result = buf.String()
+	// Expect only helloFile.
+	expect = fmt.Sprintf("%s\n", helloFile.name)
 	if result != expect {
 		t.Fatalf("expected %q got %q", expect, result)
 	}
@@ -161,6 +179,52 @@ func TestExtract(t *testing.T) {
 	expect := goodbyeFile.contents
 	if result != expect {
 		t.Fatalf("expected %q got %q", expect, result)
+	}
+}
+
+// Test that pack-created archives can be understood by the tools.
+func TestHello(t *testing.T) {
+	dir := tmpDir(t)
+	defer os.RemoveAll(dir)
+	hello := filepath.Join(dir, "hello.go")
+	prog := `
+		package main
+		func main() {
+			println("hello world")
+		}
+	`
+	err := ioutil.WriteFile(hello, []byte(prog), 0666)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	run := func(args ...string) string {
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v: %v\n%s", args, err, string(out))
+		}
+		return string(out)
+	}
+
+	out := run("go", "env")
+	re, err := regexp.Compile(`\s*GOCHAR=['"]?(\w)['"]?`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := re.FindStringSubmatch(out)
+	if fields == nil {
+		t.Fatal("cannot find GOCHAR in 'go env' output:\n", out)
+	}
+	char := fields[1]
+	run("go", "build", "-o", "pack", "cmd/pack") // writes pack binary to dir
+	run("go", "tool", char+"g", "hello.go")
+	run("./pack", "grc", "hello.a", "hello."+char)
+	run("go", "tool", char+"l", "-o", "a.out", "hello.a")
+	out = run("./a.out")
+	if out != "hello world\n" {
+		t.Fatal("incorrect output: %q, want %q", out, "hello world\n")
 	}
 }
 

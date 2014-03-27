@@ -60,7 +60,7 @@ static void
 addexp(char *s)
 {
 	int i;
-	
+
 	for(i=0; exper[i].name != nil; i++) {
 		if(strcmp(exper[i].name, s) == 0) {
 			*exper[i].val = 1;
@@ -77,8 +77,10 @@ setexp(void)
 {
 	char *f[20];
 	int i, nf;
-	
-	// The makefile #defines GOEXPERIMENT for us.
+
+	precisestack_enabled = 1; // on by default
+
+	// cmd/dist #defines GOEXPERIMENT for us.
 	nf = getfields(GOEXPERIMENT, f, nelem(f), 1, ",");
 	for(i=0; i<nf; i++)
 		addexp(f[i]);
@@ -164,6 +166,21 @@ fault(int s)
 	fatal("fault");
 }
 
+#ifdef	PLAN9
+void
+catcher(void *v, char *s)
+{
+	USED(v);
+
+	if(strncmp(s, "sys: trap: fault read", 21) == 0) {
+		if(nsavederrors + nerrors > 0)
+			errorexit();
+		fatal("fault");
+	}
+	noted(NDFLT);
+}
+#endif
+
 void
 doversion(void)
 {
@@ -188,6 +205,19 @@ main(int argc, char *argv[])
 	signal(SIGSEGV, fault);
 #endif
 
+#ifdef	PLAN9
+	notify(catcher);
+	// Tell the FPU to handle all exceptions.
+	setfcr(FPPDBL|FPRNR);
+#endif
+	// Allow GOARCH=thestring or GOARCH=thestringsuffix,
+	// but not other values.	
+	p = getgoarch();
+	if(strncmp(p, thestring, strlen(thestring)) != 0)
+		fatal("cannot use %cg with GOARCH=%s", thechar, p);
+	goarch = p;
+
+	linkarchinit();
 	ctxt = linknew(thelinkarch);
 	ctxt->diag = yyerror;
 	ctxt->bso = &bstdout;
@@ -233,8 +263,11 @@ main(int argc, char *argv[])
 
 	goroot = getgoroot();
 	goos = getgoos();
-	goarch = thestring;
-	
+
+	nacl = strcmp(goos, "nacl") == 0;
+	if(nacl)
+		flag_largemodel = 1;
+
 	setexp();
 
 	outfile = nil;
@@ -266,6 +299,7 @@ main(int argc, char *argv[])
 	flagcount("l", "disable inlining", &debug['l']);
 	flagcount("live", "debug liveness analysis", &debuglive);
 	flagcount("m", "print optimization decisions", &debug['m']);
+	flagcount("nolocalimports", "reject local (relative) imports", &nolocalimports);
 	flagstr("o", "obj: set output file", &outfile);
 	flagstr("p", "path: set expected package import path", &myimportpath);
 	flagcount("pack", "write package file instead of object file", &writearchive);
@@ -575,7 +609,7 @@ findpkg(Strlit *name)
 	char *q, *suffix, *suffixsep;
 
 	if(islocalname(name)) {
-		if(safemode)
+		if(safemode || nolocalimports)
 			return 0;
 		// try .a before .6.  important for building libraries:
 		// if there is an array.6 in the array.a library,
@@ -754,7 +788,7 @@ importfile(Val *f, int line)
 			yyerror("import %s: not a go object file", file);
 			errorexit();
 		}
-		q = smprint("%s %s %s %s", getgoos(), thestring, getgoversion(), expstring());
+		q = smprint("%s %s %s %s", getgoos(), getgoarch(), getgoversion(), expstring());
 		if(strcmp(p+10, q) != 0) {
 			yyerror("import %s: object is [%s] expected [%s]", file, p+10, q);
 			errorexit();
@@ -2137,14 +2171,18 @@ struct
 } lexn[] =
 {
 	LANDAND,	"ANDAND",
+	LANDNOT,	"ANDNOT",
 	LASOP,		"ASOP",
 	LBREAK,		"BREAK",
 	LCASE,		"CASE",
 	LCHAN,		"CHAN",
 	LCOLAS,		"COLAS",
+	LCOMM,		"<-",
 	LCONST,		"CONST",
 	LCONTINUE,	"CONTINUE",
+	LDDD,		"...",
 	LDEC,		"DEC",
+	LDEFAULT,	"DEFAULT",
 	LDEFER,		"DEFER",
 	LELSE,		"ELSE",
 	LEQ,		"EQ",
@@ -2171,6 +2209,7 @@ struct
 	LRANGE,		"RANGE",
 	LRETURN,	"RETURN",
 	LRSH,		"RSH",
+	LSELECT,	"SELECT",
 	LSTRUCT,	"STRUCT",
 	LSWITCH,	"SWITCH",
 	LTYPE,		"TYPE",
@@ -2201,6 +2240,7 @@ struct
 	"LASOP",	"op=",
 	"LBREAK",	"break",
 	"LCASE",	"case",
+	"LCHAN",	"chan",
 	"LCOLAS",	":=",
 	"LCONST",	"const",
 	"LCONTINUE",	"continue",

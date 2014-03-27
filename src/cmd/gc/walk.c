@@ -21,7 +21,7 @@ static	NodeList*	reorder3(NodeList*);
 static	Node*	addstr(Node*, NodeList**);
 static	Node*	appendslice(Node*, NodeList**);
 static	Node*	append(Node*, NodeList**);
-static	Node*	copyany(Node*, NodeList**);
+static	Node*	copyany(Node*, NodeList**, int);
 static	Node*	sliceany(Node*, NodeList**);
 static	void	walkcompare(Node**, NodeList**);
 static	void	walkrotate(Node**);
@@ -223,6 +223,9 @@ walkstmt(Node **np)
 			walkexprlist(n->left->list, &n->ninit);
 			n->left = walkprint(n->left, &n->ninit, 1);
 			break;
+		case OCOPY:
+			n->left = copyany(n->left, &n->ninit, 1);
+			break;
 		default:
 			walkexpr(&n->left, &n->ninit);
 			break;
@@ -253,6 +256,9 @@ walkstmt(Node **np)
 		case OPRINTN:
 			walkexprlist(n->left->list, &n->ninit);
 			n->left = walkprint(n->left, &n->ninit, 1);
+			break;
+		case OCOPY:
+			n->left = copyany(n->left, &n->ninit, 1);
 			break;
 		default:
 			walkexpr(&n->left, &n->ninit);
@@ -487,6 +493,11 @@ walkexpr(Node **np, NodeList **init)
 	case OADD:
 	case OCOMPLEX:
 	case OLROT:
+		// Use results from call expression as arguments for complex.
+		if(n->op == OCOMPLEX && n->left == N && n->right == N) {
+			n->left = n->list->n;
+			n->right = n->list->next->n;
+		}
 		walkexpr(&n->left, init);
 		walkexpr(&n->right, init);
 		goto ret;
@@ -1053,7 +1064,7 @@ walkexpr(Node **np, NodeList **init)
 		switch(n->op) {
 		case OMOD:
 		case ODIV:
-			if(widthptr > 4 || (et != TUINT64 && et != TINT64))
+			if(widthreg >= 8 || (et != TUINT64 && et != TINT64))
 				goto ret;
 			if(et == TINT64)
 				strcpy(namebuf, "int64");
@@ -1311,19 +1322,7 @@ walkexpr(Node **np, NodeList **init)
 		goto ret;
 
 	case OCOPY:
-		if(flag_race) {
-			if(n->right->type->etype == TSTRING)
-				fn = syslook("slicestringcopy", 1);
-			else
-				fn = syslook("copy", 1);
-			argtype(fn, n->left->type);
-			argtype(fn, n->right->type);
-			n = mkcall1(fn, n->type, init,
-					n->left, n->right,
-					nodintconst(n->left->type->type->width));
-			goto ret;
-		}
-		n = copyany(n, init);
+		n = copyany(n, init, flag_race);
 		goto ret;
 
 	case OCLOSE:
@@ -2211,7 +2210,7 @@ reorder3save(Node **np, NodeList *all, NodeList *stop, NodeList **early)
  * what's the outer value that a write to n affects?
  * outer value means containing struct or array.
  */
-static Node*
+Node*
 outervalue(Node *n)
 {	
 	for(;;) {
@@ -2430,7 +2429,7 @@ paramstoheap(Type **argin, int out)
 	nn = nil;
 	for(t = structfirst(&savet, argin); t != T; t = structnext(&savet)) {
 		v = t->nname;
-		if(v && v->sym && v->sym->name[0] == '~')
+		if(v && v->sym && v->sym->name[0] == '~' && v->sym->name[1] == 'r') // unnamed result
 			v = N;
 		// In precisestack mode, the garbage collector assumes results
 		// are always live, so zero them always.
@@ -2713,9 +2712,10 @@ appendslice(Node *n, NodeList **init)
 			fn = syslook("copy", 1);
 		argtype(fn, l1->type);
 		argtype(fn, l2->type);
-		l = list(l, mkcall1(fn, types[TINT], init,
+		nt = mkcall1(fn, types[TINT], &l,
 				nptr1, nptr2,
-				nodintconst(s->type->type->width)));
+				nodintconst(s->type->type->width));
+		l = list(l, nt);
 	} else {
 		// memmove(&s[len(l1)], &l2[0], len(l2)*sizeof(T))
 		nptr1 = nod(OINDEX, s, nod(OLEN, l1, N));
@@ -2730,7 +2730,8 @@ appendslice(Node *n, NodeList **init)
 
 		nwid = cheapexpr(conv(nod(OLEN, l2, N), types[TUINTPTR]), &l);
 		nwid = nod(OMUL, nwid, nodintconst(s->type->type->width));
-		l = list(l, mkcall1(fn, T, init, nptr1, nptr2, nwid));
+		nt = mkcall1(fn, T, &l, nptr1, nptr2, nwid);
+		l = list(l, nt);
 	}
 
 	// s = s[:len(l1)+len(l2)]
@@ -2776,6 +2777,10 @@ append(Node *n, NodeList **init)
 		l->n = cheapexpr(l->n, init);
 
 	nsrc = n->list->n;
+
+	// Resolve slice type of multi-valued return.
+	if(istype(nsrc->type, TSTRUCT))
+		nsrc->type = nsrc->type->type->type;
 	argc = count(n->list) - 1;
 	if (argc < 1) {
 		return nsrc;
@@ -2821,7 +2826,7 @@ append(Node *n, NodeList **init)
 	return ns;
 }
 
-// Lower copy(a, b) to a memmove call.
+// Lower copy(a, b) to a memmove call or a runtime call.
 //
 // init {
 //   n := len(a)
@@ -2833,11 +2838,22 @@ append(Node *n, NodeList **init)
 // Also works if b is a string.
 //
 static Node*
-copyany(Node *n, NodeList **init)
+copyany(Node *n, NodeList **init, int runtimecall)
 {
 	Node *nl, *nr, *nfrm, *nto, *nif, *nlen, *nwid, *fn;
 	NodeList *l;
 
+	if(runtimecall) {
+		if(n->right->type->etype == TSTRING)
+			fn = syslook("slicestringcopy", 1);
+		else
+			fn = syslook("copy", 1);
+		argtype(fn, n->left->type);
+		argtype(fn, n->right->type);
+		return mkcall1(fn, n->type, init,
+				n->left, n->right,
+				nodintconst(n->left->type->type->width));
+	}
 	walkexpr(&n->left, init);
 	walkexpr(&n->right, init);
 	nl = temp(n->left->type);
@@ -3164,13 +3180,10 @@ walkcompare(Node **np, NodeList **init)
 		}
 		if(expr == N)
 			expr = nodbool(n->op == OEQ);
-		typecheck(&expr, Erv);
-		walkexpr(&expr, init);
-		expr->type = n->type;
-		*np = expr;
-		return;
+		r = expr;
+		goto ret;
 	}
-	
+
 	if(t->etype == TSTRUCT && countfield(t) <= 4) {
 		// Struct of four or fewer fields.
 		// Inline comparisons.
@@ -3187,13 +3200,10 @@ walkcompare(Node **np, NodeList **init)
 		}
 		if(expr == N)
 			expr = nodbool(n->op == OEQ);
-		typecheck(&expr, Erv);
-		walkexpr(&expr, init);
-		expr->type = n->type;
-		*np = expr;
-		return;
+		r = expr;
+		goto ret;
 	}
-	
+
 	// Chose not to inline, but still have addresses.
 	// Call equality function directly.
 	// The equality function requires a bool pointer for
@@ -3226,10 +3236,7 @@ walkcompare(Node **np, NodeList **init)
 
 	if(n->op != OEQ)
 		r = nod(ONOT, r, N);
-	typecheck(&r, Erv);
-	walkexpr(&r, init);
-	*np = r;
-	return;
+	goto ret;
 
 hard:
 	// Cannot take address of one or both of the operands.
@@ -3245,7 +3252,16 @@ hard:
 	r = mkcall1(fn, n->type, init, typename(n->left->type), l, r);
 	if(n->op == ONE) {
 		r = nod(ONOT, r, N);
-		typecheck(&r, Erv);
+	}
+	goto ret;
+
+ret:
+	typecheck(&r, Erv);
+	walkexpr(&r, init);
+	if(r->type != n->type) {
+		r = nod(OCONVNOP, r, N);
+		r->type = n->type;
+		r->typecheck = 1;
 	}
 	*np = r;
 	return;

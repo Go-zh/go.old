@@ -76,8 +76,9 @@ enum {
 	// The minimum stack segment size to allocate.
 	// If the amount needed for the splitting frame + StackExtra
 	// is less than this number, the stack will have this size instead.
-	StackMin = 8192,
-	FixedStack = StackMin + StackSystem,
+	StackMin = 4096,
+	StackSystemRounded = StackSystem + (-StackSystem & (StackMin-1)),
+	FixedStack = StackMin + StackSystemRounded,
 
 	// Functions that need frames bigger than this use an extra
 	// instruction to do the stack split check, to avoid overflow
@@ -102,7 +103,7 @@ enum {
 	// The assumed size of the top-of-stack data block.
 	// The actual size can be smaller than this but cannot be larger.
 	// Checked in proc.c's runtime.malg.
-	StackTop = 96,
+	StackTop = 88,
 };
 
 // Goroutine preemption request.

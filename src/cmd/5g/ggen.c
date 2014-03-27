@@ -9,21 +9,56 @@
 #include "gg.h"
 #include "opt.h"
 
+static Prog* appendpp(Prog*, int, int, int, int32, int, int, int32);
+
 void
 defframe(Prog *ptxt)
 {
 	uint32 frame;
+	Prog *p, *p1;
 
 	// fill in argument size
 	ptxt->to.type = D_CONST2;
 	ptxt->to.offset2 = rnd(curfn->type->argwid, widthptr);
 
 	// fill in final stack size
-	if(stksize > maxstksize)
-		maxstksize = stksize;
-	frame = rnd(maxstksize+maxarg, widthptr);
+	frame = rnd(stksize+maxarg, widthptr);
 	ptxt->to.offset = frame;
-	maxstksize = 0;
+	
+	p = ptxt;
+	if(stkzerosize > 0) {
+		p = appendpp(p, AMOVW, D_CONST, NREG, 0, D_REG, 0, 0);
+		p = appendpp(p, AADD, D_CONST, NREG, 4+frame-stkzerosize, D_REG, 1, 0);
+		p->reg = REGSP;	
+		p = appendpp(p, AADD, D_CONST, NREG, stkzerosize, D_REG, 2, 0);	
+		p->reg = 1;	
+		p1 = p = appendpp(p, AMOVW, D_REG, 0, 0, D_OREG, 1, 4);	
+		p->scond |= C_PBIT;	
+		p = appendpp(p, ACMP, D_REG, 1, 0, D_NONE, 0, 0);	
+		p->reg = 2;	
+		p = appendpp(p, ABNE, D_NONE, NREG, 0, D_BRANCH, NREG, 0);	
+		patch(p, p1);
+	}	
+}
+
+static Prog*	
+appendpp(Prog *p, int as, int ftype, int freg, int32 foffset, int ttype, int treg, int32 toffset)	
+{	
+	Prog *q;	
+		
+	q = mal(sizeof(*q));	
+	clearp(q);	
+	q->as = as;	
+	q->lineno = p->lineno;	
+	q->from.type = ftype;	
+	q->from.reg = freg;	
+	q->from.offset = foffset;	
+	q->to.type = ttype;	
+	q->to.reg = treg;	
+	q->to.offset = toffset;	
+	q->link = p->link;	
+	p->link = q;	
+	return q;	
 }
 
 // Sweep the prog list to mark any used nodes.
@@ -31,13 +66,13 @@ void
 markautoused(Prog* p)
 {
 	for (; p; p = p->link) {
-		if (p->as == ATYPE)
+		if (p->as == ATYPE || p->as == AVARDEF)
 			continue;
 
-		if (p->from.name == D_AUTO && p->from.node)
+		if (p->from.node)
 			p->from.node->used = 1;
 
-		if (p->to.name == D_AUTO && p->to.node)
+		if (p->to.node)
 			p->to.node->used = 1;
 	}
 }
@@ -51,6 +86,16 @@ fixautoused(Prog* p)
 	for (lp=&p; (p=*lp) != P; ) {
 		if (p->as == ATYPE && p->from.node && p->from.name == D_AUTO && !p->from.node->used) {
 			*lp = p->link;
+			continue;
+		}
+		if (p->as == AVARDEF && p->to.node && !p->to.node->used) {
+			// Cannot remove VARDEF instruction, because - unlike TYPE handled above -
+			// VARDEFs are interspersed with other code, and a jump might be using the
+			// VARDEF as a target. Replace with a no-op instead. A later pass will remove
+			// the no-ops.
+			p->to.type = D_NONE;
+			p->to.node = N;
+			p->as = ANOP;
 			continue;
 		}
 
@@ -766,13 +811,10 @@ clearfat(Node *nl)
 	if(debug['g'])
 		dump("\nclearfat", nl);
 
-
 	w = nl->type->width;
 	// Avoid taking the address for simple enough types.
 	if(componentgen(N, nl))
 		return;
-
-	gfatvardef(nl);
 
 	c = w % 4;	// bytes
 	q = w / 4;	// quads
@@ -846,7 +888,7 @@ expandchecks(Prog *firstp)
 		p1->link = p->link;
 		p->link = p1;
 		p1->lineno = p->lineno;
-		p1->loc = 9999;
+		p1->pc = 9999;
 		p1->as = AMOVW;
 		p1->from.type = D_REG;
 		p1->from.reg = reg;

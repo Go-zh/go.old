@@ -30,7 +30,14 @@ import (
 // and caches them for reuse by subsequent calls. It uses HTTP proxies
 // as directed by the $HTTP_PROXY and $NO_PROXY (or $http_proxy and
 // $no_proxy) environment variables.
-var DefaultTransport RoundTripper = &Transport{Proxy: ProxyFromEnvironment}
+var DefaultTransport RoundTripper = &Transport{
+	Proxy: ProxyFromEnvironment,
+	Dial: (&net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}).Dial,
+	TLSHandshakeTimeout: 10 * time.Second,
+}
 
 // DefaultMaxIdleConnsPerHost is the default value of Transport's
 // MaxIdleConnsPerHost.
@@ -40,13 +47,13 @@ const DefaultMaxIdleConnsPerHost = 2
 // https, and http proxies (for either http or https with CONNECT).
 // Transport can also cache connections for future re-use.
 type Transport struct {
-	idleMu     sync.Mutex
-	idleConn   map[string][]*persistConn
-	idleConnCh map[string]chan *persistConn
-	reqMu      sync.Mutex
-	reqConn    map[*Request]*persistConn
-	altMu      sync.RWMutex
-	altProto   map[string]RoundTripper // nil or map of URI scheme => RoundTripper
+	idleMu      sync.Mutex
+	idleConn    map[connectMethodKey][]*persistConn
+	idleConnCh  map[connectMethodKey]chan *persistConn
+	reqMu       sync.Mutex
+	reqCanceler map[*Request]func()
+	altMu       sync.RWMutex
+	altProto    map[string]RoundTripper // nil or map of URI scheme => RoundTripper
 
 	// Proxy specifies a function to return a proxy for a given
 	// Request. If the function returns a non-nil error, the
@@ -62,6 +69,10 @@ type Transport struct {
 	// TLSClientConfig specifies the TLS configuration to use with
 	// tls.Client. If nil, the default configuration is used.
 	TLSClientConfig *tls.Config
+
+	// TLSHandshakeTimeout specifies the maximum amount of time waiting to
+	// wait for a TLS handshake. Zero means no timeout.
+	TLSHandshakeTimeout time.Duration
 
 	// DisableKeepAlives, if true, prevents re-use of TCP connections
 	// between different HTTP requests.
@@ -179,8 +190,9 @@ func (t *Transport) RoundTrip(req *Request) (resp *Response, err error) {
 	// host (for http or https), the http proxy, or the http proxy
 	// pre-CONNECTed to https server.  In any case, we'll be ready
 	// to send it requests.
-	pconn, err := t.getConn(cm)
+	pconn, err := t.getConn(req, cm)
 	if err != nil {
+		t.setReqCanceler(req, nil)
 		return nil, err
 	}
 
@@ -232,10 +244,10 @@ func (t *Transport) CloseIdleConnections() {
 // connection.
 func (t *Transport) CancelRequest(req *Request) {
 	t.reqMu.Lock()
-	pc := t.reqConn[req]
+	cancel := t.reqCanceler[req]
 	t.reqMu.Unlock()
-	if pc != nil {
-		pc.conn.Close()
+	if cancel != nil {
+		cancel()
 	}
 }
 
@@ -281,17 +293,11 @@ func (e *envOnce) reset() {
 	e.val = ""
 }
 
-func (t *Transport) connectMethodForRequest(treq *transportRequest) (*connectMethod, error) {
-	cm := &connectMethod{
-		targetScheme: treq.URL.Scheme,
-		targetAddr:   canonicalAddr(treq.URL),
-	}
+func (t *Transport) connectMethodForRequest(treq *transportRequest) (cm connectMethod, err error) {
+	cm.targetScheme = treq.URL.Scheme
+	cm.targetAddr = canonicalAddr(treq.URL)
 	if t.Proxy != nil {
-		var err error
 		cm.proxyURL, err = t.Proxy(treq.Request)
-		if err != nil {
-			return nil, err
-		}
 	}
 	return cm, nil
 }
@@ -347,7 +353,7 @@ func (t *Transport) putIdleConn(pconn *persistConn) bool {
 		}
 	}
 	if t.idleConn == nil {
-		t.idleConn = make(map[string][]*persistConn)
+		t.idleConn = make(map[connectMethodKey][]*persistConn)
 	}
 	if len(t.idleConn[key]) >= max {
 		t.idleMu.Unlock()
@@ -367,7 +373,7 @@ func (t *Transport) putIdleConn(pconn *persistConn) bool {
 // getIdleConnCh returns a channel to receive and return idle
 // persistent connection for the given connectMethod.
 // It may return nil, if persistent connections are not being used.
-func (t *Transport) getIdleConnCh(cm *connectMethod) chan *persistConn {
+func (t *Transport) getIdleConnCh(cm connectMethod) chan *persistConn {
 	if t.DisableKeepAlives {
 		return nil
 	}
@@ -375,7 +381,7 @@ func (t *Transport) getIdleConnCh(cm *connectMethod) chan *persistConn {
 	t.idleMu.Lock()
 	defer t.idleMu.Unlock()
 	if t.idleConnCh == nil {
-		t.idleConnCh = make(map[string]chan *persistConn)
+		t.idleConnCh = make(map[connectMethodKey]chan *persistConn)
 	}
 	ch, ok := t.idleConnCh[key]
 	if !ok {
@@ -385,7 +391,7 @@ func (t *Transport) getIdleConnCh(cm *connectMethod) chan *persistConn {
 	return ch
 }
 
-func (t *Transport) getIdleConn(cm *connectMethod) (pconn *persistConn) {
+func (t *Transport) getIdleConn(cm connectMethod) (pconn *persistConn) {
 	key := cm.key()
 	t.idleMu.Lock()
 	defer t.idleMu.Unlock()
@@ -404,7 +410,7 @@ func (t *Transport) getIdleConn(cm *connectMethod) (pconn *persistConn) {
 			// 2 or more cached connections; pop last
 			// TODO: queue?
 			pconn = pconns[len(pconns)-1]
-			t.idleConn[key] = pconns[0 : len(pconns)-1]
+			t.idleConn[key] = pconns[:len(pconns)-1]
 		}
 		if !pconn.isBroken() {
 			return
@@ -412,16 +418,16 @@ func (t *Transport) getIdleConn(cm *connectMethod) (pconn *persistConn) {
 	}
 }
 
-func (t *Transport) setReqConn(r *Request, pc *persistConn) {
+func (t *Transport) setReqCanceler(r *Request, fn func()) {
 	t.reqMu.Lock()
 	defer t.reqMu.Unlock()
-	if t.reqConn == nil {
-		t.reqConn = make(map[*Request]*persistConn)
+	if t.reqCanceler == nil {
+		t.reqCanceler = make(map[*Request]func())
 	}
-	if pc != nil {
-		t.reqConn[r] = pc
+	if fn != nil {
+		t.reqCanceler[r] = fn
 	} else {
-		delete(t.reqConn, r)
+		delete(t.reqCanceler, r)
 	}
 }
 
@@ -436,7 +442,7 @@ func (t *Transport) dial(network, addr string) (c net.Conn, err error) {
 // specified in the connectMethod.  This includes doing a proxy CONNECT
 // and/or setting up TLS.  If this doesn't return an error, the persistConn
 // is ready to write requests to.
-func (t *Transport) getConn(cm *connectMethod) (*persistConn, error) {
+func (t *Transport) getConn(req *Request, cm connectMethod) (*persistConn, error) {
 	if pc := t.getIdleConn(cm); pc != nil {
 		return pc, nil
 	}
@@ -446,6 +452,16 @@ func (t *Transport) getConn(cm *connectMethod) (*persistConn, error) {
 		err error
 	}
 	dialc := make(chan dialRes)
+
+	handlePendingDial := func() {
+		if v := <-dialc; v.err == nil {
+			t.putIdleConn(v.pc)
+		}
+	}
+
+	cancelc := make(chan struct{})
+	t.setReqCanceler(req, func() { close(cancelc) })
+
 	go func() {
 		pc, err := t.dialConn(cm)
 		dialc <- dialRes{pc, err}
@@ -462,16 +478,15 @@ func (t *Transport) getConn(cm *connectMethod) (*persistConn, error) {
 		// else's dial that they didn't use.
 		// But our dial is still going, so give it away
 		// when it finishes:
-		go func() {
-			if v := <-dialc; v.err == nil {
-				t.putIdleConn(v.pc)
-			}
-		}()
+		go handlePendingDial()
 		return pc, nil
+	case <-cancelc:
+		go handlePendingDial()
+		return nil, errors.New("net/http: request canceled while waiting for connection")
 	}
 }
 
-func (t *Transport) dialConn(cm *connectMethod) (*persistConn, error) {
+func (t *Transport) dialConn(cm connectMethod) (*persistConn, error) {
 	conn, err := t.dial("tcp", cm.addr())
 	if err != nil {
 		if cm.proxyURL != nil {
@@ -542,19 +557,38 @@ func (t *Transport) dialConn(cm *connectMethod) (*persistConn, error) {
 				cfg = &clone
 			}
 		}
-		conn = tls.Client(conn, cfg)
-		if err = conn.(*tls.Conn).Handshake(); err != nil {
+		plainConn := conn
+		tlsConn := tls.Client(plainConn, cfg)
+		errc := make(chan error, 2)
+		var timer *time.Timer // for canceling TLS handshake
+		if d := t.TLSHandshakeTimeout; d != 0 {
+			timer = time.AfterFunc(d, func() {
+				errc <- tlsHandshakeTimeoutError{}
+			})
+		}
+		go func() {
+			err := tlsConn.Handshake()
+			if timer != nil {
+				timer.Stop()
+			}
+			errc <- err
+		}()
+		if err := <-errc; err != nil {
+			plainConn.Close()
 			return nil, err
 		}
 		if !cfg.InsecureSkipVerify {
-			if err = conn.(*tls.Conn).VerifyHostname(cfg.ServerName); err != nil {
+			if err := tlsConn.VerifyHostname(cfg.ServerName); err != nil {
+				plainConn.Close()
 				return nil, err
 			}
 		}
-		pconn.conn = conn
+		cs := tlsConn.ConnectionState()
+		pconn.tlsState = &cs
+		pconn.conn = tlsConn
 	}
 
-	pconn.br = bufio.NewReader(pconn.conn)
+	pconn.br = bufio.NewReader(noteEOFReader{pconn.conn, &pconn.sawEOF})
 	pconn.bw = bufio.NewWriter(pconn.conn)
 	go pconn.readLoop()
 	go pconn.writeLoop()
@@ -621,8 +655,8 @@ func useProxy(addr string) bool {
 //
 // Cache key form                Description
 // -----------------             -------------------------
-// ||http|foo.com                http directly to server, no proxy
-// ||https|foo.com               https directly to server, no proxy
+// |http|foo.com                 http directly to server, no proxy
+// |https|foo.com                https directly to server, no proxy
 // http://proxy.com|https|foo.com  http to proxy, then CONNECT to foo.com
 // http://proxy.com|http           http to proxy, http to anywhere after that
 //
@@ -634,20 +668,20 @@ type connectMethod struct {
 	targetAddr   string   // Not used if proxy + http targetScheme (4th example in table)
 }
 
-func (ck *connectMethod) key() string {
-	return ck.String() // TODO: use a struct type instead
-}
-
-func (ck *connectMethod) String() string {
+func (cm *connectMethod) key() connectMethodKey {
 	proxyStr := ""
-	targetAddr := ck.targetAddr
-	if ck.proxyURL != nil {
-		proxyStr = ck.proxyURL.String()
-		if ck.targetScheme == "http" {
+	targetAddr := cm.targetAddr
+	if cm.proxyURL != nil {
+		proxyStr = cm.proxyURL.String()
+		if cm.targetScheme == "http" {
 			targetAddr = ""
 		}
 	}
-	return strings.Join([]string{proxyStr, ck.targetScheme, targetAddr}, "|")
+	return connectMethodKey{
+		proxy:  proxyStr,
+		scheme: cm.targetScheme,
+		addr:   targetAddr,
+	}
 }
 
 // addr returns the first hop "host:port" to which we need to TCP connect.
@@ -668,14 +702,28 @@ func (cm *connectMethod) tlsHost() string {
 	return h
 }
 
+// connectMethodKey is the map key version of connectMethod, with a
+// stringified proxy URL (or the empty string) instead of a pointer to
+// a URL.
+type connectMethodKey struct {
+	proxy, scheme, addr string
+}
+
+func (k connectMethodKey) String() string {
+	// Only used by tests.
+	return fmt.Sprintf("%s|%s|%s", k.proxy, k.scheme, k.addr)
+}
+
 // persistConn wraps a connection, usually a persistent one
 // (but may be used for non-keep-alive requests as well)
 type persistConn struct {
 	t        *Transport
-	cacheKey string // its connectMethod.String()
+	cacheKey connectMethodKey
 	conn     net.Conn
+	tlsState *tls.ConnectionState
 	closed   bool                // whether conn has been closed
 	br       *bufio.Reader       // from conn
+	sawEOF   bool                // whether we've seen EOF from conn; owned by readLoop
 	bw       *bufio.Writer       // to conn
 	reqch    chan requestAndChan // written by roundTrip; read by readLoop
 	writech  chan writeRequest   // written by roundTrip; read by writeLoop
@@ -696,6 +744,10 @@ func (pc *persistConn) isBroken() bool {
 	b := pc.broken
 	pc.lk.Unlock()
 	return b
+}
+
+func (pc *persistConn) cancelRequest() {
+	pc.conn.Close()
 }
 
 var remoteSideClosedFunc func(error) bool // or nil to use default
@@ -743,6 +795,11 @@ func (pc *persistConn) readLoop() {
 				resp, err = ReadResponse(pc.br, rc.req)
 			}
 		}
+
+		if resp != nil {
+			resp.TLS = pc.tlsState
+		}
+
 		hasBody := resp != nil && rc.req.Method != "HEAD" && resp.ContentLength != 0
 
 		if err != nil {
@@ -785,6 +842,9 @@ func (pc *persistConn) readLoop() {
 				if err != nil {
 					alive1 = false
 				}
+				if alive1 && pc.sawEOF {
+					alive1 = false
+				}
 				if alive1 && !pc.t.putIdleConn(pc) {
 					alive1 = false
 				}
@@ -809,7 +869,7 @@ func (pc *persistConn) readLoop() {
 			alive = <-waitForBodyRead
 		}
 
-		pc.t.setReqConn(rc.req, nil)
+		pc.t.setReqCanceler(rc.req, nil)
 
 		if !alive {
 			pc.close()
@@ -863,8 +923,20 @@ type writeRequest struct {
 	ch  chan<- error
 }
 
+type httpError struct {
+	err     string
+	timeout bool
+}
+
+func (e *httpError) Error() string   { return e.err }
+func (e *httpError) Timeout() bool   { return e.timeout }
+func (e *httpError) Temporary() bool { return true }
+
+var errTimeout error = &httpError{err: "net/http: timeout awaiting response headers", timeout: true}
+var errClosed error = &httpError{err: "net/http: transport closed before response was received"}
+
 func (pc *persistConn) roundTrip(req *transportRequest) (resp *Response, err error) {
-	pc.t.setReqConn(req.Request, pc)
+	pc.t.setReqCanceler(req.Request, pc.cancelRequest)
 	pc.lk.Lock()
 	pc.numExpectedResponses++
 	headerFn := pc.mutateHeaderFunc
@@ -933,11 +1005,11 @@ WaitResponse:
 			pconnDeadCh = nil                               // avoid spinning
 			failTicker = time.After(100 * time.Millisecond) // arbitrary time to wait for resc
 		case <-failTicker:
-			re = responseAndError{err: errors.New("net/http: transport closed before response was received")}
+			re = responseAndError{err: errClosed}
 			break WaitResponse
 		case <-respHeaderTimer:
 			pc.close()
-			re = responseAndError{err: errors.New("net/http: timeout awaiting response headers")}
+			re = responseAndError{err: errTimeout}
 			break WaitResponse
 		case re = <-resc:
 			break WaitResponse
@@ -949,7 +1021,7 @@ WaitResponse:
 	pc.lk.Unlock()
 
 	if re.err != nil {
-		pc.t.setReqConn(req.Request, nil)
+		pc.t.setReqCanceler(req.Request, nil)
 	}
 	return re.res, re.err
 }
@@ -1059,4 +1131,23 @@ func (es *bodyEOFSignal) condfn(err error) {
 type readerAndCloser struct {
 	io.Reader
 	io.Closer
+}
+
+type tlsHandshakeTimeoutError struct{}
+
+func (tlsHandshakeTimeoutError) Timeout() bool   { return true }
+func (tlsHandshakeTimeoutError) Temporary() bool { return true }
+func (tlsHandshakeTimeoutError) Error() string   { return "net/http: TLS handshake timeout" }
+
+type noteEOFReader struct {
+	r      io.Reader
+	sawEOF *bool
+}
+
+func (nr noteEOFReader) Read(p []byte) (n int, err error) {
+	n, err = nr.r.Read(p)
+	if err == io.EOF {
+		*nr.sawEOF = true
+	}
+	return
 }

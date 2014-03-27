@@ -44,6 +44,7 @@ char freebsddynld[] = "/libexec/ld-elf.so.1";
 char openbsddynld[] = "/usr/libexec/ld.so";
 char netbsddynld[] = "/libexec/ld.elf_so";
 char dragonflydynld[] = "/usr/libexec/ld-elf.so.2";
+char solarisdynld[] = "/lib/amd64/ld.so.1";
 
 char	zeroes[32];
 
@@ -206,6 +207,15 @@ adddynrel(LSym *s, Reloc *r)
 		return;
 	
 	case D_ADDR:
+		if(s->type == STEXT && iself) {
+			// The code is asking for the address of an external
+			// function.  We provide it with the address of the
+			// correspondent GOT symbol.
+			addgotsym(targ);
+			r->sym = linklookup(ctxt, ".got", 0);
+			r->add += targ->got;
+			return;
+		}
 		if(s->type != SDATA)
 			break;
 		if(iself) {
@@ -272,9 +282,12 @@ elfreloc1(Reloc *r, vlong sectoff)
 		break;
 
 	case D_PCREL:
-		if(r->siz == 4)
-			VPUT(R_X86_64_PC32 | (uint64)elfsym<<32);
-		else
+		if(r->siz == 4) {
+			if(r->xsym->type == SDYNIMPORT)
+				VPUT(R_X86_64_GOTPCREL | (uint64)elfsym<<32);
+			else
+				VPUT(R_X86_64_PC32 | (uint64)elfsym<<32);
+		} else
 			return -1;
 		break;
 	
@@ -645,8 +658,10 @@ asmb(void)
 	case Hnetbsd:
 	case Hopenbsd:
 	case Hdragonfly:
+	case Hsolaris:
 		debug['8'] = 1;	/* 64-bit addresses */
 		break;
+	case Hnacl:
 	case Hwindows:
 		break;
 	}
@@ -674,6 +689,8 @@ asmb(void)
 		case Hnetbsd:
 		case Hopenbsd:
 		case Hdragonfly:
+		case Hsolaris:
+		case Hnacl:
 			symo = rnd(HEADR+segtext.len, INITRND)+rnd(segrodata.len, INITRND)+segdata.filelen;
 			symo = rnd(symo, INITRND);
 			break;
@@ -754,6 +771,8 @@ asmb(void)
 	case Hnetbsd:
 	case Hopenbsd:
 	case Hdragonfly:
+	case Hsolaris:
+	case Hnacl:
 		asmbelf(symo);
 		break;
 	case Hwindows:

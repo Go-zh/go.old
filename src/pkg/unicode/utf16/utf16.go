@@ -50,7 +50,7 @@ func IsSurrogate(r rune) bool {
 // 若该值对并非有效的UTF-16替代值对，DecodeRune 就会返回Unicode的替换码点U+FFFD。
 func DecodeRune(r1, r2 rune) rune {
 	if surr1 <= r1 && r1 < surr2 && surr2 <= r2 && r2 < surr3 {
-		return (rune(r1)-surr1)<<10 | (rune(r2) - surr2) + 0x10000
+		return (r1-surr1)<<10 | (r2 - surr2) + 0x10000
 	}
 	return replacementChar
 }

@@ -1412,7 +1412,7 @@ finddebugruntimepath(LSym *s)
 enum {
 	LINE_BASE = -1,
 	LINE_RANGE = 4,
-	OPCODE_BASE = 5
+	OPCODE_BASE = 10
 };
 
 static void
@@ -1541,11 +1541,16 @@ writelines(void)
 	cput(1);   // default_is_stmt
 	cput(LINE_BASE);     // line_base
 	cput(LINE_RANGE);    // line_range
-	cput(OPCODE_BASE);   // opcode_base (we only use 1..4)
+	cput(OPCODE_BASE);   // opcode_base
 	cput(0);   // standard_opcode_lengths[1]
 	cput(1);   // standard_opcode_lengths[2]
 	cput(1);   // standard_opcode_lengths[3]
 	cput(1);   // standard_opcode_lengths[4]
+	cput(1);   // standard_opcode_lengths[5]
+	cput(0);   // standard_opcode_lengths[6]
+	cput(0);   // standard_opcode_lengths[7]
+	cput(0);   // standard_opcode_lengths[8]
+	cput(1);   // standard_opcode_lengths[9]
 	cput(0);   // include_directories  (empty)
 
 	files = emallocz(ctxt->nhistfile*sizeof files[0]);
@@ -1590,29 +1595,30 @@ writelines(void)
 
 		pciterinit(&pcfile, &s->pcln->pcfile);
 		pciterinit(&pcline, &s->pcln->pcline);
+		epc = pc;
 		while(!pcfile.done && !pcline.done) {
-			if(pc - s->value >= pcfile.nextpc) {
+			if(epc - s->value >= pcfile.nextpc) {
 				pciternext(&pcfile);
 				continue;
 			}
-			if(pc - s->value >= pcline.nextpc) {
+			if(epc - s->value >= pcline.nextpc) {
 				pciternext(&pcline);
 				continue;
 			}
-
-			if(pcfile.nextpc < pcline.nextpc)
-				epc = pcfile.nextpc;
-			else
-				epc = pcline.nextpc;
-			epc += s->value;
 
 			if(file != pcfile.value) {
 				cput(DW_LNS_set_file);
 				uleb128put(pcfile.value);
 				file = pcfile.value;
 			}
-			putpclcdelta(epc - pc, pcline.value - line);
+			putpclcdelta(s->value + pcline.pc - pc, pcline.value - line);
+
 			pc = epc;
+			if(pcfile.nextpc < pcline.nextpc)
+				epc = pcfile.nextpc;
+			else
+				epc = pcline.nextpc;
+			epc += s->value;
 			line = pcline.value;
 		}
 

@@ -30,7 +30,17 @@
 
 #include "gc.h"
 
+int thechar = '6';
+char *thestring = "amd64";
+
 LinkArch	*thelinkarch = &linkamd64;
+
+void
+linkarchinit(void)
+{
+	if(strcmp(getgoarch(), "amd64p32") == 0)
+		thelinkarch = &linkamd64p32;
+}
 
 void
 ginit(void)
@@ -38,9 +48,9 @@ ginit(void)
 	int i;
 	Type *t;
 
-	thechar = '6';
-	thestring = "amd64";
-	dodefine("_64BIT");
+	dodefine("_64BITREG");
+	if(ewidth[TIND] == 8)
+		dodefine("_64BIT");
 	listinit();
 	nstring = 0;
 	mnstring = 0;
@@ -130,6 +140,10 @@ ginit(void)
 		if(i >= D_X0 && i <= D_X7)
 			reg[i] = 0;
 	}
+	if(nacl) {
+		reg[D_BP] = 1;
+		reg[D_R15] = 1;
+	}
 }
 
 void
@@ -139,6 +153,10 @@ gclean(void)
 	Sym *s;
 
 	reg[D_SP]--;
+	if(nacl) {
+		reg[D_BP]--;
+		reg[D_R15]--;
+	}
 	for(i=D_AX; i<=D_R15; i++)
 		if(reg[i])
 			diag(Z, "reg %R left allocated", i);
@@ -569,7 +587,7 @@ naddr(Node *n, Addr *a)
 		}
 		a->sym = nil;
 		a->type = D_CONST;
-		if(typev[n->type->etype] || n->type->etype == TIND)
+		if(typev[n->type->etype] || (n->type->etype == TIND && ewidth[TIND] == 8))
 			a->offset = n->vconst;
 		else
 			a->offset = convvtox(n->vconst, typeu[n->type->etype]? TULONG: TLONG);
@@ -632,6 +650,12 @@ gmove(Node *f, Node *t)
 
 	ft = f->type->etype;
 	tt = t->type->etype;
+	if(ewidth[TIND] == 4) {
+		if(ft == TIND)
+			ft = TUINT;
+		if(tt == TIND)
+			tt = TUINT;
+	}
 	t64 = tt == TVLONG || tt == TUVLONG || tt == TIND;
 	if(debug['M'])
 		print("gop: %O %O[%s],%O[%s]\n", OAS,
@@ -723,6 +747,8 @@ gmove(Node *f, Node *t)
 		goto ld;
 	case TIND:
 		a = AMOVQ;
+		if(ewidth[TIND] == 4)
+			a = AMOVL;
 
 	ld:
 		regalloc(&nod, f, t);
@@ -1228,6 +1254,8 @@ gopcode(int o, Type *ty, Node *f, Node *t)
 	et = TLONG;
 	if(ty != T)
 		et = ty->etype;
+	if(et == TIND && ewidth[TIND] == 4)
+		et = TUINT;
 	if(debug['M']) {
 		if(f != Z && f->type != T)
 			print("gop: %O %O[%s],", o, f->op, tnames[et]);
@@ -1564,7 +1592,7 @@ exreg(Type *t)
 		if(exregoffset >= 64)
 			return 0;
 		o = exregoffset;
-		exregoffset += 8;
+		exregoffset += ewidth[TIND];
 		return o+1;	// +1 to avoid 0 == failure; naddr's case OEXREG will subtract 1.
 	}
 	return 0;

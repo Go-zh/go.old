@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin dragonfly freebsd linux netbsd openbsd windows
+// +build darwin dragonfly freebsd linux nacl netbsd openbsd solaris windows
 
 package net
 
@@ -280,7 +280,11 @@ func (l *UnixListener) AcceptUnix() (*UnixConn, error) {
 	if l == nil || l.fd == nil {
 		return nil, syscall.EINVAL
 	}
-	fd, err := l.fd.accept(sockaddrToUnix)
+	toAddr := sockaddrToUnix
+	if l.fd.sotype == syscall.SOCK_SEQPACKET {
+		toAddr = sockaddrToUnixpacket
+	}
+	fd, err := l.fd.accept(toAddr)
 	if err != nil {
 		return nil, err
 	}

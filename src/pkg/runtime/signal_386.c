@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin dragonfly freebsd linux netbsd openbsd
+// +build darwin dragonfly freebsd linux nacl netbsd openbsd
 
 #include "runtime.h"
 #include "defs_GOOS_GOARCH.h"
@@ -45,7 +45,7 @@ runtime·sighandler(int32 sig, Siginfo *info, void *ctxt, G *gp)
 
 	t = &runtime·sigtab[sig];
 	if(SIG_CODE0(info, ctxt) != SI_USER && (t->flags & SigPanic)) {
-		if(gp == nil || gp == m->g0)
+		if(!runtime·canpanic(gp))
 			goto Throw;
 
 		// Make it look like a call to the signal func.
@@ -112,6 +112,7 @@ Throw:
 	runtime·printf("\n");
 
 	if(runtime·gotraceback(&crash)){
+		runtime·goroutineheader(gp);
 		runtime·traceback(SIG_EIP(info, ctxt), SIG_ESP(info, ctxt), 0, gp);
 		runtime·tracebackothers(gp);
 		runtime·printf("\n");

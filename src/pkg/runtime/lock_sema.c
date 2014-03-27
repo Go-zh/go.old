@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin netbsd openbsd plan9 solaris windows
+// +build darwin nacl netbsd openbsd plan9 solaris windows
 
 #include "runtime.h"
 #include "stack.h"
@@ -161,7 +161,9 @@ runtime·notesleep(Note *n)
 		return;
 	}
 	// Queued.  Sleep.
+	m->blocked = true;
 	runtime·semasleep(-1);
+	m->blocked = false;
 }
 
 #pragma textflag NOSPLIT
@@ -181,18 +183,23 @@ notetsleep(Note *n, int64 ns, int64 deadline, M *mp)
 
 	if(ns < 0) {
 		// Queued.  Sleep.
+		m->blocked = true;
 		runtime·semasleep(-1);
+		m->blocked = false;
 		return true;
 	}
 
 	deadline = runtime·nanotime() + ns;
 	for(;;) {
 		// Registered.  Sleep.
+		m->blocked = true;
 		if(runtime·semasleep(ns) >= 0) {
+			m->blocked = false;
 			// Acquired semaphore, semawakeup unregistered us.
 			// Done.
 			return true;
 		}
+		m->blocked = false;
 
 		// Interrupted or timed out.  Still registered.  Semaphore not acquired.
 		ns = deadline - runtime·nanotime();
@@ -214,8 +221,10 @@ notetsleep(Note *n, int64 ns, int64 deadline, M *mp)
 		} else if(mp == (M*)LOCKED) {
 			// Wakeup happened so semaphore is available.
 			// Grab it to avoid getting out of sync.
+			m->blocked = true;
 			if(runtime·semasleep(-1) < 0)
 				runtime·throw("runtime: unable to acquire - semaphore out of sync");
+			m->blocked = false;
 			return true;
 		} else
 			runtime·throw("runtime: unexpected waitm - semaphore out of sync");

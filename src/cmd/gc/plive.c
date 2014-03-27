@@ -519,12 +519,10 @@ newcfg(Prog *firstp)
 				break;
 			bb->last = p;
 
-			// Pattern match an unconditional branch followed by a
-			// dead return instruction.  This avoids a creating
+			// Stop before an unreachable RET, to avoid creating
 			// unreachable control flow nodes.
-			if(p->link != nil && p->link->link == nil)
-				if (p->as == AJMP && p->link->as == ARET && p->link->opt == nil)
-					break;
+			if(p->link != nil && p->link->as == ARET && p->link->mode == 1)
+				break;
 
 			// Collect basic blocks with selectgo calls.
 			if(isselectgocall(p))
@@ -538,6 +536,7 @@ newcfg(Prog *firstp)
 			switch(bb->last->as) {
 			case AJMP:
 			case ARET:
+			case AUNDEF:
 				break;
 			default:
 				addedge(bb, bb->last->link->opt);
@@ -584,8 +583,11 @@ newcfg(Prog *firstp)
 	// Unreachable control flow nodes are indicated by a -1 in the rpo
 	// field.  If we see these nodes something must have gone wrong in an
 	// upstream compilation phase.
-	if(bb->rpo == -1)
-		fatal("newcfg: unreferenced basic blocks");
+	if(bb->rpo == -1) {
+		print("newcfg: unreachable basic block for %P\n", bb->last);
+		printcfg(cfg);
+		fatal("newcfg: invalid control flow graph");
+	}
 
 	return cfg;
 }
@@ -620,7 +622,7 @@ freecfg(Array *cfg)
 static int
 isfunny(Node *node)
 {
-	char *names[] = { ".fp", ".args", "_", nil };
+	char *names[] = { ".fp", ".args", nil };
 	int i;
 
 	if(node->sym != nil && node->sym->name != nil)
@@ -663,12 +665,30 @@ progeffects(Prog *prog, Array *vars, Bvec *uevar, Bvec *varkill, Bvec *avarinit)
 		// Return instructions implicitly read all the arguments.  For
 		// the sake of correctness, out arguments must be read.  For the
 		// sake of backtrace quality, we read in arguments as well.
+		//
+		// A return instruction with a p->to is a tail return, which brings
+		// the stack pointer back up (if it ever went down) and then jumps
+		// to a new function entirely. That form of instruction must read
+		// all the parameters for correctness, and similarly it must not
+		// read the out arguments - they won't be set until the new
+		// function runs.
 		for(i = 0; i < arraylength(vars); i++) {
 			node = *(Node**)arrayget(vars, i);
 			switch(node->class & ~PHEAP) {
 			case PPARAM:
-			case PPARAMOUT:
 				bvset(uevar, i);
+				break;
+			case PPARAMOUT:
+				// If the result had its address taken, it is being tracked
+				// by the avarinit code, which does not use uevar.
+				// If we added it to uevar too, we'd not see any kill
+				// and decide that the varible was live entry, which it is not.
+				// So only use uevar in the non-addrtaken case.
+				// The p->to.type == D_NONE limits the bvset to
+				// non-tail-call return instructions; see note above
+				// the for loop for details.
+				if(!node->addrtaken && prog->to.type == D_NONE)
+					bvset(uevar, i);
 				break;
 			}
 		}
@@ -688,8 +708,8 @@ progeffects(Prog *prog, Array *vars, Bvec *uevar, Bvec *varkill, Bvec *avarinit)
 	}
 	if(info.flags & (LeftRead | LeftWrite | LeftAddr)) {
 		from = &prog->from;
-		if (from->node != nil && !isfunny(from->node) && from->sym != nil) {
-			switch(prog->from.node->class & ~PHEAP) {
+		if (from->node != nil && from->sym != nil) {
+			switch(from->node->class & ~PHEAP) {
 			case PAUTO:
 			case PPARAM:
 			case PPARAMOUT:
@@ -702,7 +722,7 @@ progeffects(Prog *prog, Array *vars, Bvec *uevar, Bvec *varkill, Bvec *avarinit)
 					if(info.flags & (LeftRead | LeftAddr))
 						bvset(uevar, pos);
 					if(info.flags & LeftWrite)
-						if(from->node != nil && (!isfat(from->node->type) || prog->as == AFATVARDEF))
+						if(from->node != nil && !isfat(from->node->type))
 							bvset(varkill, pos);
 				}
 			}
@@ -711,8 +731,8 @@ progeffects(Prog *prog, Array *vars, Bvec *uevar, Bvec *varkill, Bvec *avarinit)
 Next:
 	if(info.flags & (RightRead | RightWrite | RightAddr)) {
 		to = &prog->to;
-		if (to->node != nil && to->sym != nil && !isfunny(to->node)) {
-			switch(prog->to.node->class & ~PHEAP) {
+		if (to->node != nil && to->sym != nil) {
+			switch(to->node->class & ~PHEAP) {
 			case PAUTO:
 			case PPARAM:
 			case PPARAMOUT:
@@ -720,15 +740,14 @@ Next:
 				if(pos == -1)
 					goto Next1;
 				if(to->node->addrtaken) {
-					//if(prog->as == AKILL)
-					//	bvset(varkill, pos);
-					//else
-						bvset(avarinit, pos);
+					bvset(avarinit, pos);
+					if(prog->as == AVARDEF)
+						bvset(varkill, pos);
 				} else {
 					if(info.flags & (RightRead | RightAddr))
 						bvset(uevar, pos);
 					if(info.flags & RightWrite)
-						if(to->node != nil && (!isfat(to->node->type) || prog->as == AFATVARDEF))
+						if(to->node != nil && (!isfat(to->node->type) || prog->as == AVARDEF))
 							bvset(varkill, pos);
 				}
 			}
@@ -940,63 +959,39 @@ livenessprintcfg(Liveness *lv)
 }
 
 static void
-checkauto(Node *fn, Prog *p, Node *n, char *where)
+checkauto(Node *fn, Prog *p, Node *n)
 {
-	NodeList *ll;
-	int found;
-	char *fnname;
-	char *nname;
+	NodeList *l;
 
-	found = 0;
-	for(ll = fn->dcl; ll != nil; ll = ll->next) {
-		if(ll->n->op == ONAME && ll->n->class == PAUTO) {
-			if(n == ll->n) {
-				found = 1;
-				break;
-			}
-		}
-	}
-	if(found)
-		return;
-	fnname = fn->nname->sym->name ? fn->nname->sym->name : "<unknown>";
-	nname = n->sym->name ? n->sym->name : "<unknown>";
-	print("D_AUTO '%s' not found: name is '%s' function is '%s' class is %d\n", where, nname, fnname, n->class);
-	print("Here '%P'\nlooking for node %p\n", p, n);
-	for(ll = fn->dcl; ll != nil; ll = ll->next)
-		print("node=%p, node->class=%d\n", (uintptr)ll->n, ll->n->class);
+	for(l = fn->dcl; l != nil; l = l->next)
+		if(l->n->op == ONAME && l->n->class == PAUTO && l->n == n)
+			return;
+
+	print("checkauto %N: %N (%p; class=%d) not found in %P\n", curfn, n, n, n->class, p);
+	for(l = fn->dcl; l != nil; l = l->next)
+		print("\t%N (%p; class=%d)\n", l->n, l->n, l->n->class);
 	yyerror("checkauto: invariant lost");
 }
 
 static void
-checkparam(Node *fn, Prog *p, Node *n, char *where)
+checkparam(Node *fn, Prog *p, Node *n)
 {
-	NodeList *ll;
-	int found;
-	char *fnname;
-	char *nname;
+	NodeList *l;
+	Node *a;
+	int class;
 
 	if(isfunny(n))
 		return;
-	found = 0;
-	for(ll = fn->dcl; ll != nil; ll = ll->next) {
-		if(ll->n->op == ONAME && ((ll->n->class & ~PHEAP) == PPARAM ||
-					  (ll->n->class & ~PHEAP) == PPARAMOUT)) {
-			if(n == ll->n) {
-				found = 1;
-				break;
-			}
-		}
+	for(l = fn->dcl; l != nil; l = l->next) {
+		a = l->n;
+		class = a->class & ~PHEAP;
+		if(a->op == ONAME && (class == PPARAM || class == PPARAMOUT) && a == n)
+			return;
 	}
-	if(found)
-		return;
-	if(n->sym) {
-		fnname = fn->nname->sym->name ? fn->nname->sym->name : "<unknown>";
-		nname = n->sym->name ? n->sym->name : "<unknown>";
-		print("D_PARAM '%s' not found: name='%s' function='%s' class is %d\n", where, nname, fnname, n->class);
-		print("Here '%P'\nlooking for node %p\n", p, n);
-		for(ll = fn->dcl; ll != nil; ll = ll->next)
-			print("node=%p, node->class=%d\n", ll->n, ll->n->class);
-	}
+
+	print("checkparam %N: %N (%p; class=%d) not found in %P\n", curfn, n, n, n->class, p);
+	for(l = fn->dcl; l != nil; l = l->next)
+		print("\t%N (%p; class=%d)\n", l->n, l->n, l->n->class);
 	yyerror("checkparam: invariant lost");
 }
 
@@ -1004,13 +999,13 @@ static void
 checkprog(Node *fn, Prog *p)
 {
 	if(p->from.type == D_AUTO)
-		checkauto(fn, p, p->from.node, "from");
+		checkauto(fn, p, p->from.node);
 	if(p->from.type == D_PARAM)
-		checkparam(fn, p, p->from.node, "from");
+		checkparam(fn, p, p->from.node);
 	if(p->to.type == D_AUTO)
-		checkauto(fn, p, p->to.node, "to");
+		checkauto(fn, p, p->to.node);
 	if(p->to.type == D_PARAM)
-		checkparam(fn, p, p->to.node, "to");
+		checkparam(fn, p, p->to.node);
 }
 
 // Check instruction invariants.  We assume that the nodes corresponding to the
@@ -1070,6 +1065,9 @@ twobitwalktype1(Type *t, vlong *xoffset, Bvec *bv)
 	case TFLOAT64:
 	case TCOMPLEX64:
 	case TCOMPLEX128:
+		for(i = 0; i < t->width; i++) {
+			bvset(bv, ((*xoffset + i) / widthptr) * BitsPerPointer); // 1 = live scalar
+		}
 		*xoffset += t->width;
 		break;
 
@@ -1081,7 +1079,7 @@ twobitwalktype1(Type *t, vlong *xoffset, Bvec *bv)
 	case TMAP:
 		if((*xoffset & (widthptr-1)) != 0)
 			fatal("twobitwalktype1: invalid alignment, %T", t);
-		bvset(bv, (*xoffset / widthptr) * BitsPerPointer);
+		bvset(bv, (*xoffset / widthptr) * BitsPerPointer + 1); // 2 = live ptr
 		*xoffset += t->width;
 		break;
 
@@ -1089,7 +1087,8 @@ twobitwalktype1(Type *t, vlong *xoffset, Bvec *bv)
 		// struct { byte *str; intgo len; }
 		if((*xoffset & (widthptr-1)) != 0)
 			fatal("twobitwalktype1: invalid alignment, %T", t);
-		bvset(bv, (*xoffset / widthptr) * BitsPerPointer);
+		bvset(bv, (*xoffset / widthptr) * BitsPerPointer + 0);
+		bvset(bv, (*xoffset / widthptr) * BitsPerPointer + 1); // 3:0 = multiword:string
 		*xoffset += t->width;
 		break;
 
@@ -1099,9 +1098,15 @@ twobitwalktype1(Type *t, vlong *xoffset, Bvec *bv)
 		// struct { Type *type; union { void *ptr, uintptr val } data; }
 		if((*xoffset & (widthptr-1)) != 0)
 			fatal("twobitwalktype1: invalid alignment, %T", t);
-		bvset(bv, ((*xoffset / widthptr) * BitsPerPointer) + 1);
-		if(isnilinter(t))
-			bvset(bv, ((*xoffset / widthptr) * BitsPerPointer));
+		bvset(bv, ((*xoffset / widthptr) * BitsPerPointer) + 0);
+		bvset(bv, ((*xoffset / widthptr) * BitsPerPointer) + 1); // 3 = multiword
+		// next word contains 2 = Iface, 3 = Eface
+		if(isnilinter(t)) {
+			bvset(bv, ((*xoffset / widthptr) * BitsPerPointer) + 2);
+			bvset(bv, ((*xoffset / widthptr) * BitsPerPointer) + 3);
+		} else {
+			bvset(bv, ((*xoffset / widthptr) * BitsPerPointer) + 3);
+		}
 		*xoffset += t->width;
 		break;
 
@@ -1114,11 +1119,20 @@ twobitwalktype1(Type *t, vlong *xoffset, Bvec *bv)
 			// struct { byte *array; uintgo len; uintgo cap; }
 			if((*xoffset & (widthptr-1)) != 0)
 				fatal("twobitwalktype1: invalid TARRAY alignment, %T", t);
-			bvset(bv, (*xoffset / widthptr) * BitsPerPointer);
+			if(0) {
+				bvset(bv, (*xoffset / widthptr) * BitsPerPointer + 0);
+				bvset(bv, (*xoffset / widthptr) * BitsPerPointer + 1);
+				bvset(bv, (*xoffset / widthptr) * BitsPerPointer + 2); // 3:1 = multiword/slice
+			} else {
+				// Until bug 7564 is fixed, we consider a slice as
+				// a separate pointer and integer.
+				bvset(bv, (*xoffset / widthptr) * BitsPerPointer + 1);  // 2 = live ptr
+				bvset(bv, (*xoffset / widthptr) * BitsPerPointer + 2);  // 1 = live scalar
+			}
+			// mark capacity as live
+			bvset(bv, (*xoffset / widthptr) * BitsPerPointer + 4);  // 1 = live scalar
 			*xoffset += t->width;
-		} else if(!haspointers(t->type))
-				*xoffset += t->width;
-		else
+		} else
 			for(i = 0; i < t->bound; i++)
 				twobitwalktype1(t->type, xoffset, bv);
 		break;
@@ -1169,14 +1183,14 @@ twobitlivepointermap(Liveness *lv, Bvec *liveout, Array *vars, Bvec *args, Bvec 
 		node = *(Node**)arrayget(vars, i);
 		switch(node->class) {
 		case PAUTO:
-			if(bvget(liveout, i) && haspointers(node->type)) {
+			if(bvget(liveout, i)) {
 				xoffset = node->xoffset + stkptrsize;
 				twobitwalktype1(node->type, &xoffset, locals);
 			}
 			break;
 		case PPARAM:
 		case PPARAMOUT:
-			if(bvget(liveout, i) && haspointers(node->type)) {
+			if(bvget(liveout, i)) {
 				xoffset = node->xoffset;
 				twobitwalktype1(node->type, &xoffset, args);
 			}
@@ -1498,25 +1512,29 @@ livenessepilogue(Liveness *lv)
 			bvor(all, all, avarinit);
 
 			if(issafepoint(p)) {
-				if(debuglive >= 3) {
-					// Diagnose ambiguously live variables (any &^ all).
-					// livein and liveout are dead here and used as temporaries.
+				// Annotate ambiguously live variables so that they can
+				// be zeroed at function entry.
+				// livein and liveout are dead here and used as temporaries.
+				// For now, only enabled when using GOEXPERIMENT=precisestack
+				// during make.bash / all.bash.
+				if(precisestack_enabled) {
 					bvresetall(livein);
 					bvandnot(liveout, any, all);
-					if(bvcmp(livein, liveout) != 0) {
+					if(!bvisempty(liveout)) {
 						for(pos = 0; pos < liveout->n; pos++) {
-							if(bvget(liveout, pos)) {
-								n = *(Node**)arrayget(lv->vars, pos);
-								if(!n->diag && strncmp(n->sym->name, "autotmp_", 8) != 0) {
-									n->diag = 1;
-									warnl(p->lineno, "%N: %lN is ambiguously live", curfn->nname, n);
-								}
-							}
 							bvset(all, pos); // silence future warnings in this block
+							if(!bvget(liveout, pos))
+								continue;
+							n = *(Node**)arrayget(lv->vars, pos);
+							if(!n->needzero) {
+								n->needzero = 1;
+								if(debuglive >= 3)
+									warnl(p->lineno, "%N: %lN is ambiguously live", curfn->nname, n);
+							}
 						}
 					}
 				}
-
+	
 				// Allocate a bit vector for each class and facet of
 				// value we are tracking.
 	
@@ -1585,6 +1603,19 @@ livenessepilogue(Liveness *lv)
 			if(issafepoint(p)) {
 				// Found an interesting instruction, record the
 				// corresponding liveness information.  
+				
+				// Useful sanity check: on entry to the function,
+				// the only things that can possibly be live are the
+				// input parameters.
+				if(p->as == ATEXT) {
+					for(j = 0; j < liveout->n; j++) {
+						if(!bvget(liveout, j))
+							continue;
+						n = *(Node**)arrayget(lv->vars, j);
+						if(n->class != PPARAM)
+							yyerrorl(p->lineno, "internal error: %N %lN recorded as live on entry", curfn->nname, n);
+					}
+				}
 
 				// Record live pointers.
 				args = *(Bvec**)arrayget(lv->argslivepointers, pos);
@@ -1595,7 +1626,7 @@ livenessepilogue(Liveness *lv)
 				// We're interpreting the args and locals bitmap instead of liveout so that we
 				// include the bits added by the avarinit logic in the
 				// previous loop.
-				if(debuglive >= 1) {
+				if(msg != nil) {
 					fmtstrinit(&fmt);
 					fmtprint(&fmt, "%L: live at ", p->lineno);
 					if(p->as == ACALL && p->to.node)
@@ -1645,7 +1676,7 @@ livenessepilogue(Liveness *lv)
 				pos--;
 			}
 		}
-		if(debuglive >= 1) {
+		if(msg != nil) {
 			for(j=startmsg; j<nmsg; j++) 
 				if(msg[j] != nil)
 					print("%s", msg[j]);

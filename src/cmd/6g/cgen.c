@@ -813,6 +813,7 @@ agen(Node *n, Node *res)
 		// The generated code is just going to panic, so it need not
 		// be terribly efficient. See issue 3670.
 		tempname(&n1, n->type);
+		gvardef(&n1);
 		clearfat(&n1);
 		regalloc(&n2, types[tptr], res);
 		gins(ALEAQ, &n1, &n2);
@@ -1059,6 +1060,12 @@ bgen(Node *n, int true, int likely, Prog *to)
 		goto ret;
 	}
 	nr = N;
+
+	while(n->op == OCONVNOP) {
+		n = n->left;
+		if(n->ninit != nil)
+			genlist(n->ninit);
+	}
 
 	switch(n->op) {
 	default:
@@ -1337,6 +1344,7 @@ sgen(Node *n, Node *ns, int64 w)
 {
 	Node nodl, nodr, nodsi, noddi, cx, oldcx, tmp;
 	vlong c, q, odst, osrc;
+	NodeList *l;
 
 	if(debug['g']) {
 		print("\nsgen w=%lld\n", w);
@@ -1349,6 +1357,13 @@ sgen(Node *n, Node *ns, int64 w)
 
 	if(w < 0)
 		fatal("sgen copy %lld", w);
+	
+	// If copying .args, that's all the results, so record definition sites
+	// for them for the liveness analysis.
+	if(ns->op == ONAME && strcmp(ns->sym->name, ".args") == 0)
+		for(l = curfn->dcl; l != nil; l = l->next)
+			if(l->n->class == PPARAMOUT)
+				gvardef(l->n);
 
 	// Avoid taking the address for simple enough types.
 	if(componentgen(n, ns))
@@ -1380,11 +1395,16 @@ sgen(Node *n, Node *ns, int64 w)
 
 	if(n->ullman >= ns->ullman) {
 		agenr(n, &nodr, N);
+		if(ns->op == ONAME)
+			gvardef(ns);
 		agenr(ns, &nodl, N);
 	} else {
+		if(ns->op == ONAME)
+			gvardef(ns);
 		agenr(ns, &nodl, N);
 		agenr(n, &nodr, N);
 	}
+	
 	nodreg(&noddi, types[tptr], D_DI);
 	nodreg(&nodsi, types[tptr], D_SI);
 	gmove(&nodl, &noddi);
@@ -1403,23 +1423,23 @@ sgen(Node *n, Node *ns, int64 w)
 		// reverse direction
 		gins(ASTD, N, N);		// set direction flag
 		if(c > 0) {
-			gconreg(AADDQ, w-1, D_SI);
-			gconreg(AADDQ, w-1, D_DI);
+			gconreg(addptr, w-1, D_SI);
+			gconreg(addptr, w-1, D_DI);
 
-			gconreg(AMOVQ, c, D_CX);
+			gconreg(movptr, c, D_CX);
 			gins(AREP, N, N);	// repeat
 			gins(AMOVSB, N, N);	// MOVB *(SI)-,*(DI)-
 		}
 
 		if(q > 0) {
 			if(c > 0) {
-				gconreg(AADDQ, -7, D_SI);
-				gconreg(AADDQ, -7, D_DI);
+				gconreg(addptr, -7, D_SI);
+				gconreg(addptr, -7, D_DI);
 			} else {
-				gconreg(AADDQ, w-8, D_SI);
-				gconreg(AADDQ, w-8, D_DI);
+				gconreg(addptr, w-8, D_SI);
+				gconreg(addptr, w-8, D_DI);
 			}
-			gconreg(AMOVQ, q, D_CX);
+			gconreg(movptr, q, D_CX);
 			gins(AREP, N, N);	// repeat
 			gins(AMOVSQ, N, N);	// MOVQ *(SI)-,*(DI)-
 		}
@@ -1428,7 +1448,7 @@ sgen(Node *n, Node *ns, int64 w)
 	} else {
 		// normal direction
 		if(q >= 4) {
-			gconreg(AMOVQ, q, D_CX);
+			gconreg(movptr, q, D_CX);
 			gins(AREP, N, N);	// repeat
 			gins(AMOVSQ, N, N);	// MOVQ *(SI)+,*(DI)+
 		} else
@@ -1436,14 +1456,33 @@ sgen(Node *n, Node *ns, int64 w)
 			gins(AMOVSQ, N, N);	// MOVQ *(SI)+,*(DI)+
 			q--;
 		}
-
-		if(c >= 4) {
-			gins(AMOVSL, N, N);	// MOVL *(SI)+,*(DI)+
-			c -= 4;
-		}
-		while(c > 0) {
-			gins(AMOVSB, N, N);	// MOVB *(SI)+,*(DI)+
-			c--;
+		// copy the remaining c bytes
+		if(w < 4 || c <= 1 || (odst < osrc && osrc < odst+w)) {
+			while(c > 0) {
+				gins(AMOVSB, N, N);	// MOVB *(SI)+,*(DI)+
+				c--;
+			}
+		} else if(w < 8 || c <= 4) {
+			nodsi.op = OINDREG;
+			noddi.op = OINDREG;
+			nodsi.type = types[TINT32];
+			noddi.type = types[TINT32];
+			if(c > 4) {
+				nodsi.xoffset = 0;
+				noddi.xoffset = 0;
+				gmove(&nodsi, &noddi);
+			}
+			nodsi.xoffset = c-4;
+			noddi.xoffset = c-4;
+			gmove(&nodsi, &noddi);
+		} else {
+			nodsi.op = OINDREG;
+			noddi.op = OINDREG;
+			nodsi.type = types[TINT64];
+			noddi.type = types[TINT64];
+			nodsi.xoffset = c-8;
+			noddi.xoffset = c-8;
+			gmove(&nodsi, &noddi);
 		}
 	}
 
@@ -1542,6 +1581,8 @@ componentgen(Node *nr, Node *nl)
 	switch(nl->type->etype) {
 	case TARRAY:
 		// componentgen for arrays.
+		if(nl->op == ONAME)
+			gvardef(nl);
 		t = nl->type;
 		if(!isslice(t)) {
 			nodl.type = t->type;
@@ -1591,6 +1632,8 @@ componentgen(Node *nr, Node *nl)
 		goto yes;
 
 	case TSTRING:
+		if(nl->op == ONAME)
+			gvardef(nl);
 		nodl.xoffset += Array_array;
 		nodl.type = ptrto(types[TUINT8]);
 
@@ -1614,6 +1657,8 @@ componentgen(Node *nr, Node *nl)
 		goto yes;
 
 	case TINTER:
+		if(nl->op == ONAME)
+			gvardef(nl);
 		nodl.xoffset += Array_array;
 		nodl.type = ptrto(types[TUINT8]);
 
@@ -1637,6 +1682,8 @@ componentgen(Node *nr, Node *nl)
 		goto yes;
 
 	case TSTRUCT:
+		if(nl->op == ONAME)
+			gvardef(nl);
 		loffset = nodl.xoffset;
 		roffset = nodr.xoffset;
 		// funarg structs may not begin at offset zero.

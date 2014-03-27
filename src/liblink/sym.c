@@ -49,9 +49,11 @@ static struct {
 	"elf",		Helf,
 	"freebsd",	Hfreebsd,
 	"linux",	Hlinux,
+	"nacl",		Hnacl,
 	"netbsd",	Hnetbsd,
 	"openbsd",	Hopenbsd,
 	"plan9",	Hplan9,
+	"solaris",	Hsolaris,
 	"windows",	Hwindows,
 	"windowsgui",	Hwindows,
 	0, 0
@@ -95,8 +97,8 @@ linknew(LinkArch *arch)
 	ctxt->version = HistVersion;
 
 	p = getgoarch();
-	if(strncmp(p, arch->name, strlen(arch->name)) != 0)
-		sysfatal("invalid goarch %s (want %s or derivative)", p, arch->name);
+	if(strcmp(p, arch->name) != 0)
+		sysfatal("invalid goarch %s (want %s)", p, arch->name);
 	
 	if(getwd(buf, sizeof buf) == 0)
 		strcpy(buf, "/???");
@@ -129,12 +131,26 @@ linknew(LinkArch *arch)
 	case Hnetbsd:
 	case Hopenbsd:
 	case Hdragonfly:
+	case Hsolaris:
 		/*
 		 * ELF uses TLS offset negative from FS.
 		 * Translate 0(FS) and 8(FS) into -16(FS) and -8(FS).
 		 * Known to low-level assembly in package runtime and runtime/cgo.
 		 */
 		ctxt->tlsoffset = -2*ctxt->arch->ptrsize;
+		break;
+
+	case Hnacl:
+		switch(ctxt->arch->thechar) {
+		default:
+			sysfatal("unknown thread-local storage offset for nacl/%s", ctxt->arch->name);
+		case '6':
+			ctxt->tlsoffset = 0;
+			break;
+		case '8':
+			ctxt->tlsoffset = -8;
+			break;
+		}
 		break;
 
 	case Hdarwin:

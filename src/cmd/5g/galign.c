@@ -10,6 +10,11 @@ int	thechar	= '5';
 char*	thestring	= "arm";
 LinkArch*	thelinkarch = &linkarm;
 
+void
+linkarchinit(void)
+{
+}
+
 vlong MAXWIDTH = (1LL<<32) - 1;
 
 /*
@@ -29,6 +34,7 @@ betypeinit(void)
 {
 	widthptr = 4;
 	widthint = 4;
+	widthreg = 4;
 
 	zprog.link = P;
 	zprog.as = AGOK;
@@ -39,5 +45,5 @@ betypeinit(void)
 	zprog.from.reg = NREG;
 	zprog.to = zprog.from;
 
-	listinit();
+	listinit5();
 }

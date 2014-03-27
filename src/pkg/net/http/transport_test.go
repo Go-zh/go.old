@@ -11,9 +11,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/rand"
+	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	. "net/http"
@@ -271,6 +274,58 @@ func TestTransportIdleCacheKeys(t *testing.T) {
 	}
 }
 
+// Tests that the HTTP transport re-uses connections when a client
+// reads to the end of a response Body without closing it.
+func TestTransportReadToEndReusesConn(t *testing.T) {
+	defer afterTest(t)
+	const msg = "foobar"
+
+	var addrSeen map[string]int
+	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+		addrSeen[r.RemoteAddr]++
+		if r.URL.Path == "/chunked/" {
+			w.WriteHeader(200)
+			w.(http.Flusher).Flush()
+		} else {
+			w.Header().Set("Content-Type", strconv.Itoa(len(msg)))
+			w.WriteHeader(200)
+		}
+		w.Write([]byte(msg))
+	}))
+	defer ts.Close()
+
+	buf := make([]byte, len(msg))
+
+	for pi, path := range []string{"/content-length/", "/chunked/"} {
+		wantLen := []int{len(msg), -1}[pi]
+		addrSeen = make(map[string]int)
+		for i := 0; i < 3; i++ {
+			res, err := http.Get(ts.URL + path)
+			if err != nil {
+				t.Errorf("Get %s: %v", path, err)
+				continue
+			}
+			// We want to close this body eventually (before the
+			// defer afterTest at top runs), but not before the
+			// len(addrSeen) check at the bottom of this test,
+			// since Closing this early in the loop would risk
+			// making connections be re-used for the wrong reason.
+			defer res.Body.Close()
+
+			if res.ContentLength != int64(wantLen) {
+				t.Errorf("%s res.ContentLength = %d; want %d", path, res.ContentLength, wantLen)
+			}
+			n, err := res.Body.Read(buf)
+			if n != len(msg) || err != io.EOF {
+				t.Errorf("%s Read = %v, %v; want %d, EOF", path, n, err, len(msg))
+			}
+		}
+		if len(addrSeen) != 1 {
+			t.Errorf("for %s, server saw %d distinct client addresses; want 1", path, len(addrSeen))
+		}
+	}
+}
+
 func TestTransportMaxPerHostIdleConns(t *testing.T) {
 	defer afterTest(t)
 	resch := make(chan string)
@@ -295,10 +350,11 @@ func TestTransportMaxPerHostIdleConns(t *testing.T) {
 		resp, err := c.Get(ts.URL)
 		if err != nil {
 			t.Error(err)
+			return
 		}
-		_, err = ioutil.ReadAll(resp.Body)
-		if err != nil {
-			t.Fatalf("ReadAll: %v", err)
+		if _, err := ioutil.ReadAll(resp.Body); err != nil {
+			t.Errorf("ReadAll: %v", err)
+			return
 		}
 		donech <- true
 	}
@@ -741,6 +797,9 @@ func TestTransportGzipRecursive(t *testing.T) {
 
 // tests that persistent goroutine connections shut down when no longer desired.
 func TestTransportPersistConnLeak(t *testing.T) {
+	if runtime.GOOS == "plan9" {
+		t.Skip("skipping test; see http://golang.org/issue/7237")
+	}
 	defer afterTest(t)
 	gotReqCh := make(chan bool)
 	unblockCh := make(chan bool)
@@ -807,6 +866,9 @@ func TestTransportPersistConnLeak(t *testing.T) {
 // golang.org/issue/4531: Transport leaks goroutines when
 // request.ContentLength is explicitly short
 func TestTransportPersistConnLeakShortBody(t *testing.T) {
+	if runtime.GOOS == "plan9" {
+		t.Skip("skipping test; see http://golang.org/issue/7237")
+	}
 	defer afterTest(t)
 	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
 	}))
@@ -1014,6 +1076,9 @@ func TestTransportConcurrency(t *testing.T) {
 }
 
 func TestIssue4191_InfiniteGetTimeout(t *testing.T) {
+	if runtime.GOOS == "plan9" {
+		t.Skip("skipping test; see http://golang.org/issue/7237")
+	}
 	defer afterTest(t)
 	const debug = false
 	mux := NewServeMux()
@@ -1075,6 +1140,9 @@ func TestIssue4191_InfiniteGetTimeout(t *testing.T) {
 }
 
 func TestIssue4191_InfiniteGetToPutTimeout(t *testing.T) {
+	if runtime.GOOS == "plan9" {
+		t.Skip("skipping test; see http://golang.org/issue/7237")
+	}
 	defer afterTest(t)
 	const debug = false
 	mux := NewServeMux()
@@ -1173,6 +1241,20 @@ func TestTransportResponseHeaderTimeout(t *testing.T) {
 	for i, tt := range tests {
 		res, err := c.Get(ts.URL + tt.path)
 		if err != nil {
+			uerr, ok := err.(*url.Error)
+			if !ok {
+				t.Errorf("error is not an url.Error; got: %#v", err)
+				continue
+			}
+			nerr, ok := uerr.Err.(net.Error)
+			if !ok {
+				t.Errorf("error does not satisfy net.Error interface; got: %#v", err)
+				continue
+			}
+			if !nerr.Timeout() {
+				t.Errorf("want timeout error; got: %q", nerr)
+				continue
+			}
 			if strings.Contains(err.Error(), tt.wantErr) {
 				continue
 			}
@@ -1243,6 +1325,61 @@ func TestTransportCancelRequest(t *testing.T) {
 	}
 }
 
+func TestTransportCancelRequestInDial(t *testing.T) {
+	defer afterTest(t)
+	if testing.Short() {
+		t.Skip("skipping test in -short mode")
+	}
+	var logbuf bytes.Buffer
+	eventLog := log.New(&logbuf, "", 0)
+
+	unblockDial := make(chan bool)
+	defer close(unblockDial)
+
+	inDial := make(chan bool)
+	tr := &Transport{
+		Dial: func(network, addr string) (net.Conn, error) {
+			eventLog.Println("dial: blocking")
+			inDial <- true
+			<-unblockDial
+			return nil, errors.New("nope")
+		},
+	}
+	cl := &Client{Transport: tr}
+	gotres := make(chan bool)
+	req, _ := NewRequest("GET", "http://something.no-network.tld/", nil)
+	go func() {
+		_, err := cl.Do(req)
+		eventLog.Printf("Get = %v", err)
+		gotres <- true
+	}()
+
+	select {
+	case <-inDial:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timeout; never saw blocking dial")
+	}
+
+	eventLog.Printf("canceling")
+	tr.CancelRequest(req)
+
+	select {
+	case <-gotres:
+	case <-time.After(5 * time.Second):
+		panic("hang. events are: " + logbuf.String())
+		t.Fatal("timeout; cancel didn't work?")
+	}
+
+	got := logbuf.String()
+	want := `dial: blocking
+canceling
+Get = Get http://something.no-network.tld/: net/http: request canceled while waiting for connection
+`
+	if got != want {
+		t.Errorf("Got events:\n%s\nWant:\n%s", got, want)
+	}
+}
+
 // golang.org/issue/3672 -- Client can't close HTTP stream
 // Calling Close on a Response.Body used to just read until EOF.
 // Now it actually closes the TCP connection.
@@ -1283,7 +1420,7 @@ func TestTransportCloseResponseBody(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(buf, want) {
-		t.Errorf("read %q; want %q", buf, want)
+		t.Fatalf("read %q; want %q", buf, want)
 	}
 	didClose := make(chan error, 1)
 	go func() {
@@ -1559,10 +1696,7 @@ var proxyFromEnvTests = []proxyFromEnvTest{
 }
 
 func TestProxyFromEnvironment(t *testing.T) {
-	os.Setenv("HTTP_PROXY", "")
-	os.Setenv("http_proxy", "")
-	os.Setenv("NO_PROXY", "")
-	os.Setenv("no_proxy", "")
+	ResetProxyEnv()
 	for _, tt := range proxyFromEnvTests {
 		os.Setenv("HTTP_PROXY", tt.env)
 		os.Setenv("NO_PROXY", tt.noenv)
@@ -1642,6 +1776,144 @@ func TestTransportClosesRequestBody(t *testing.T) {
 	if closes != 1 {
 		t.Errorf("closes = %d; want 1", closes)
 	}
+}
+
+func TestTransportTLSHandshakeTimeout(t *testing.T) {
+	defer afterTest(t)
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
+	ln := newLocalListener(t)
+	defer ln.Close()
+	testdonec := make(chan struct{})
+	defer close(testdonec)
+
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		<-testdonec
+		c.Close()
+	}()
+
+	getdonec := make(chan struct{})
+	go func() {
+		defer close(getdonec)
+		tr := &Transport{
+			Dial: func(_, _ string) (net.Conn, error) {
+				return net.Dial("tcp", ln.Addr().String())
+			},
+			TLSHandshakeTimeout: 250 * time.Millisecond,
+		}
+		cl := &Client{Transport: tr}
+		_, err := cl.Get("https://dummy.tld/")
+		if err == nil {
+			t.Error("expected error")
+			return
+		}
+		ue, ok := err.(*url.Error)
+		if !ok {
+			t.Errorf("expected url.Error; got %#v", err)
+			return
+		}
+		ne, ok := ue.Err.(net.Error)
+		if !ok {
+			t.Errorf("expected net.Error; got %#v", err)
+			return
+		}
+		if !ne.Timeout() {
+			t.Error("expected timeout error; got %v", err)
+		}
+		if !strings.Contains(err.Error(), "handshake timeout") {
+			t.Error("expected 'handshake timeout' in error; got %v", err)
+		}
+	}()
+	select {
+	case <-getdonec:
+	case <-time.After(5 * time.Second):
+		t.Error("test timeout; TLS handshake hung?")
+	}
+}
+
+// Trying to repro golang.org/issue/3514
+func TestTLSServerClosesConnection(t *testing.T) {
+	defer afterTest(t)
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping flaky test on Windows; golang.org/issue/7634")
+	}
+	closedc := make(chan bool, 1)
+	ts := httptest.NewTLSServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+		if strings.Contains(r.URL.Path, "/keep-alive-then-die") {
+			conn, _, _ := w.(Hijacker).Hijack()
+			conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nfoo"))
+			conn.Close()
+			closedc <- true
+			return
+		}
+		fmt.Fprintf(w, "hello")
+	}))
+	defer ts.Close()
+	tr := &Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	}
+	defer tr.CloseIdleConnections()
+	client := &Client{Transport: tr}
+
+	var nSuccess = 0
+	var errs []error
+	const trials = 20
+	for i := 0; i < trials; i++ {
+		tr.CloseIdleConnections()
+		res, err := client.Get(ts.URL + "/keep-alive-then-die")
+		if err != nil {
+			t.Fatal(err)
+		}
+		<-closedc
+		slurp, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(slurp) != "foo" {
+			t.Errorf("Got %q, want foo", slurp)
+		}
+
+		// Now try again and see if we successfully
+		// pick a new connection.
+		res, err = client.Get(ts.URL + "/")
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		slurp, err = ioutil.ReadAll(res.Body)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		nSuccess++
+	}
+	if nSuccess > 0 {
+		t.Logf("successes = %d of %d", nSuccess, trials)
+	} else {
+		t.Errorf("All runs failed:")
+	}
+	for _, err := range errs {
+		t.Logf("  err: %v", err)
+	}
+}
+
+func newLocalListener(t *testing.T) net.Listener {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		ln, err = net.Listen("tcp6", "[::1]:0")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ln
 }
 
 type countCloseReader struct {

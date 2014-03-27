@@ -427,10 +427,10 @@ d=$(TMPDIR=$tmp mktemp -d -t testgoXXX)
 mkdir -p $d/src
 (
 	ln -s $d $d/src/dir1
-	cd $d/src/dir1
-	echo package p >p.go
+	cd $d/src
+	echo package p >dir1/p.go
 	export GOPATH=$d
-	if [ "$($old/testgo list -f '{{.Root}}' .)" != "$d" ]; then
+	if [ "$($old/testgo list -f '{{.Root}}' dir1)" != "$d" ]; then
 		echo Confused by symlinks.
 		echo "Package in current directory $(pwd) should have Root $d"
 		env|grep WD
@@ -479,13 +479,19 @@ rm -rf $d
 TEST case collisions '(issue 4773)'
 d=$(TMPDIR=/var/tmp mktemp -d -t testgoXXX)
 export GOPATH=$d
-mkdir -p $d/src/example/a $d/src/example/b
+mkdir -p $d/src/example/{a/pkg,a/Pkg,b}
 cat >$d/src/example/a/a.go <<EOF
 package p
 import (
-	_ "math/rand"
-	_ "math/Rand"
+	_ "example/a/pkg"
+	_ "example/a/Pkg"
 )
+EOF
+cat >$d/src/example/a/pkg/pkg.go <<EOF
+package pkg
+EOF
+cat >$d/src/example/a/Pkg/pkg.go <<EOF
+package pkg
 EOF
 if ./testgo list example/a 2>$d/out; then
 	echo go list example/a should have failed, did not.
@@ -547,7 +553,7 @@ fi
 
 # The error for go install should mention the conflicting directory.
 err=$(! ./testgo install ./testdata/shadow/root2/src/foo 2>&1)
-if [ "$err" != "go install: no install location for directory $(pwd)/testdata/shadow/root2/src/foo hidden by $(pwd)/testdata/shadow/root1/src/foo" ]; then
+if [ "$err" != "go install: no install location for $(pwd)/testdata/shadow/root2/src/foo: hidden by $(pwd)/testdata/shadow/root1/src/foo" ]; then
 	echo wrong shadowed install error: "$err"
 	ok=false
 fi
@@ -561,6 +567,47 @@ TEST source file name order preserved
 TEST coverage runs
 ./testgo test -short -coverpkg=strings strings regexp || ok=false
 ./testgo test -short -cover strings math regexp || ok=false
+
+# Check that coverage analysis uses set mode.
+TEST coverage uses set mode
+if ./testgo test -short -coverpkg=encoding/binary -coverprofile=testdata/cover.out; then
+	if ! grep -q 'mode: set' testdata/cover.out; then
+		ok=false
+	fi
+else
+	ok=false
+fi
+rm -f testdata/cover.out
+
+TEST coverage uses atomic mode for -race.
+if ./testgo test -short -race -coverpkg=encoding/binary -coverprofile=testdata/cover.out; then
+	if ! grep -q 'mode: atomic' testdata/cover.out; then
+		ok=false
+	fi
+else
+	ok=false
+fi
+rm -f testdata/cover.out
+
+TEST coverage uses actual setting to override even for -race.
+if ./testgo test -short -race -coverpkg=encoding/binary -covermode=count -coverprofile=testdata/cover.out; then
+	if ! grep -q 'mode: count' testdata/cover.out; then
+		ok=false
+	fi
+else
+	ok=false
+fi
+rm -f testdata/cover.out
+
+TEST coverage with cgo
+d=$(TMPDIR=/var/tmp mktemp -d -t testgoXXX)
+./testgo test -short -cover ./testdata/cgocover >$d/cgo.out 2>&1 || ok=false
+cat $d/cgo.out
+if grep 'coverage: 0.0%' $d/cgo.out >/dev/null; then 
+	ok=false
+	echo no coverage for cgo package
+	ok=false
+fi
 
 TEST cgo depends on syscall
 rm -rf $GOROOT/pkg/*_race
@@ -602,7 +649,7 @@ export GOPATH=$d
 mkdir -p $d/src/origin
 echo '
 package origin
-// #cgo LDFLAGS: -Wl,-rpath -Wl,$ORIGIN
+// #cgo !darwin LDFLAGS: -Wl,-rpath -Wl,$ORIGIN
 // void f(void) {}
 import "C"
 
@@ -621,6 +668,31 @@ if ! ./testgo test -c -test.bench=XXX fmt; then
 	ok=false
 fi
 rm -f fmt.test
+
+TEST 'Issue 7573: cmd/cgo: undefined reference when linking a C-library using gccgo'
+d=$(mktemp -d -t testgoXXX)
+export GOPATH=$d
+mkdir -p $d/src/cgoref
+ldflags="-L alibpath -lalib"
+echo "
+package main
+// #cgo LDFLAGS: $ldflags
+// void f(void) {}
+import \"C\"
+
+func main() { C.f() }
+" >$d/src/cgoref/cgoref.go
+go_cmds="$(./testgo build -n -compiler gccgo cgoref 2>&1 1>/dev/null)"
+ldflags_count="$(echo "$go_cmds" | egrep -c "^gccgo.*$(echo $ldflags | sed -e 's/-/\\-/g')" || true)"
+if [ "$ldflags_count" -lt 1 ]; then
+	echo "No Go-inline "#cgo LDFLAGS:" (\"$ldflags\") passed to gccgo linking stage."
+	ok=false
+fi
+rm -rf $d
+unset ldflags_count
+unset go_cmds
+unset ldflags
+unset GOPATH
 
 # clean up
 if $started; then stop; fi

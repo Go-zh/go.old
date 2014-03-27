@@ -101,7 +101,7 @@ const (
 
 type d [MaxCase]rune // to make the CaseRanges text shorter // 让 CaseRange 短一点。
 
-// If the Delta field of a CaseRange is UpperLower or LowerUpper, it means
+// If the Delta field of a CaseRange is UpperLower, it means
 // this CaseRange represents a sequence of the form (say)
 // Upper Lower Upper Lower.
 

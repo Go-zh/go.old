@@ -51,6 +51,9 @@ noreturn(Prog *p)
 		symlist[2] = pkglookup("throwinit", runtimepkg);
 		symlist[3] = pkglookup("panic", runtimepkg);
 		symlist[4] = pkglookup("panicwrap", runtimepkg);
+		symlist[5] = pkglookup("throwreturn", runtimepkg);
+		symlist[6] = pkglookup("selectgo", runtimepkg);
+		symlist[7] = pkglookup("block", runtimepkg);
 	}
 
 	if(p->to.node == nil)
@@ -146,7 +149,13 @@ fixjmp(Prog *firstp)
 		if(p->opt == dead) {
 			if(p->link == P && p->as == ARET && last && last->as != ARET) {
 				// This is the final ARET, and the code so far doesn't have one.
-				// Let it stay.
+				// Let it stay. The register allocator assumes that all live code in
+				// the function can be traversed by starting at all the RET instructions
+				// and following predecessor links. If we remove the final RET,
+				// this assumption will not hold in the case of an infinite loop
+				// at the end of a function.
+				// Keep the RET but mark it dead for the liveness analysis.
+				p->mode = 1;
 			} else {
 				if(debug['R'] && debug['v'])
 					print("del %P\n", p);
@@ -491,8 +500,8 @@ struct TempVar
 	TempFlow *use; // use list, chained through TempFlow.uselink
 	TempVar *freelink; // next free temp in Type.opt list
 	TempVar *merge; // merge var with this one
-	uint32 start; // smallest Prog.loc in live range
-	uint32 end; // largest Prog.loc in live range
+	vlong start; // smallest Prog.pc in live range
+	vlong end; // largest Prog.pc in live range
 	uchar addr; // address taken - no accurate end
 	uchar removed; // removed from program
 };
@@ -697,7 +706,7 @@ mergetemp(Prog *firstp)
 	if(Debug) {
 		print("%S [%d - %d]\n", curfn->nname->sym, nvar, nkill);
 		for(v=var; v<var+nvar; v++) {
-			print("var %#N %T %d-%d", v->node, v->node->type, v->start, v->end);
+			print("var %#N %T %lld-%lld", v->node, v->node->type, v->start, v->end);
 			if(v->addr)
 				print(" addr=1");
 			if(v->removed)
@@ -754,10 +763,10 @@ mergewalk(TempVar *v, TempFlow *r0, uint32 gen)
 			break;
 		r1->f.active = gen;
 		p = r1->f.prog;
-		if(v->end < p->loc)
-			v->end = p->loc;
+		if(v->end < p->pc)
+			v->end = p->pc;
 		if(r1 == v->def) {
-			v->start = p->loc;
+			v->start = p->pc;
 			break;
 		}
 	}

@@ -1681,6 +1681,7 @@ func (s *Stmt) finalClose() error {
 //
 //     rows, err := db.Query("SELECT ...")
 //     ...
+//     defer rows.Close()
 //     for rows.Next() {
 //         var id int
 //         var name string
@@ -1725,7 +1726,6 @@ type Rows struct {
 // 应通过 Err 来区分这两种情况。
 //
 // 每次调用来Scan获取数据，甚至是第一行数据，都需要调用Next来处理。
->>>>>>> other
 func (rs *Rows) Next() bool {
 	if rs.closed {
 		return false

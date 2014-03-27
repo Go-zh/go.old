@@ -42,16 +42,26 @@ go test std -short -timeout=120s
 if errorlevel 1 goto fail
 echo.
 
-echo # runtime -cpu=1,2,4
+set OLDGOMAXPROCS=%GOMAXPROCS%
+
+:: We set GOMAXPROCS=2 in addition to -cpu=1,2,4 in order to test runtime bootstrap code,
+:: creation of first goroutines and first garbage collections in the parallel setting.
+echo # GOMAXPROCS=2 runtime -cpu=1,2,4
+set GOMAXPROCS=2
 go test runtime -short -timeout=300s -cpu=1,2,4
 if errorlevel 1 goto fail
 echo.
+
+set GOMAXPROCS=%OLDGOMAXPROCS%
+set OLDGOMAXPROCS=
 
 echo # sync -cpu=10
 go test sync -short -timeout=120s -cpu=10
 if errorlevel 1 goto fail
 echo.
 
+:: Race detector only supported on Linux and OS X,
+:: and only on amd64, and only when cgo is enabled.
 if not "%GOHOSTOS%-%GOOS%-%GOARCH%-%CGO_ENABLED%" == "windows-windows-amd64-1" goto norace
 echo # Testing race detector.
 go test -race -i runtime/race flag

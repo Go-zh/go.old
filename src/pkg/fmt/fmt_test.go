@@ -11,7 +11,6 @@ import (
 	"math"
 	"runtime"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 	"unicode"
@@ -231,6 +230,8 @@ var fmtTests = []struct {
 	{"%+.3e", 0.0, "+0.000e+00"},
 	{"%+.3e", 1.0, "+1.000e+00"},
 	{"%+.3f", -1.0, "-1.000"},
+	{"%+.3F", -1.0, "-1.000"},
+	{"%+.3F", float32(-1.0), "-1.000"},
 	{"%+07.2f", 1.0, "+001.00"},
 	{"%+07.2f", -1.0, "-001.00"},
 	{"% .3E", -1.0, "-1.000E+00"},
@@ -253,6 +254,8 @@ var fmtTests = []struct {
 	{"%+.3g", 1 + 2i, "(+1+2i)"},
 	{"%.3e", 0i, "(0.000e+00+0.000e+00i)"},
 	{"%.3f", 0i, "(0.000+0.000i)"},
+	{"%.3F", 0i, "(0.000+0.000i)"},
+	{"%.3F", complex64(0i), "(0.000+0.000i)"},
 	{"%.3g", 0i, "(0+0i)"},
 	{"%.3e", 1 + 2i, "(1.000e+00+2.000e+00i)"},
 	{"%.3f", 1 + 2i, "(1.000+2.000i)"},
@@ -671,67 +674,61 @@ func TestReorder(t *testing.T) {
 }
 
 func BenchmarkSprintfEmpty(b *testing.B) {
-	benchmarkSprintf(b, func(buf *bytes.Buffer) {
-		Sprintf("")
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			Sprintf("")
+		}
 	})
 }
 
 func BenchmarkSprintfString(b *testing.B) {
-	benchmarkSprintf(b, func(buf *bytes.Buffer) {
-		Sprintf("%s", "hello")
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			Sprintf("%s", "hello")
+		}
 	})
 }
 
 func BenchmarkSprintfInt(b *testing.B) {
-	benchmarkSprintf(b, func(buf *bytes.Buffer) {
-		Sprintf("%d", 5)
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			Sprintf("%d", 5)
+		}
 	})
 }
 
 func BenchmarkSprintfIntInt(b *testing.B) {
-	benchmarkSprintf(b, func(buf *bytes.Buffer) {
-		Sprintf("%d %d", 5, 6)
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			Sprintf("%d %d", 5, 6)
+		}
 	})
 }
 
 func BenchmarkSprintfPrefixedInt(b *testing.B) {
-	benchmarkSprintf(b, func(buf *bytes.Buffer) {
-		Sprintf("This is some meaningless prefix text that needs to be scanned %d", 6)
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			Sprintf("This is some meaningless prefix text that needs to be scanned %d", 6)
+		}
 	})
 }
 
 func BenchmarkSprintfFloat(b *testing.B) {
-	benchmarkSprintf(b, func(buf *bytes.Buffer) {
-		Sprintf("%g", 5.23184)
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			Sprintf("%g", 5.23184)
+		}
 	})
 }
 
 func BenchmarkManyArgs(b *testing.B) {
-	benchmarkSprintf(b, func(buf *bytes.Buffer) {
-		buf.Reset()
-		Fprintf(buf, "%2d/%2d/%2d %d:%d:%d %s %s\n", 3, 4, 5, 11, 12, 13, "hello", "world")
+	b.RunParallel(func(pb *testing.PB) {
+		var buf bytes.Buffer
+		for pb.Next() {
+			buf.Reset()
+			Fprintf(&buf, "%2d/%2d/%2d %d:%d:%d %s %s\n", 3, 4, 5, 11, 12, 13, "hello", "world")
+		}
 	})
-}
-
-func benchmarkSprintf(b *testing.B, f func(buf *bytes.Buffer)) {
-	const CallsPerSched = 1000
-	procs := runtime.GOMAXPROCS(-1)
-	N := int32(b.N / CallsPerSched)
-	c := make(chan bool, procs)
-	for p := 0; p < procs; p++ {
-		go func() {
-			var buf bytes.Buffer
-			for atomic.AddInt32(&N, -1) >= 0 {
-				for g := 0; g < CallsPerSched; g++ {
-					f(&buf)
-				}
-			}
-			c <- true
-		}()
-	}
-	for p := 0; p < procs; p++ {
-		<-c
-	}
 }
 
 var mallocBuf bytes.Buffer

@@ -27,7 +27,10 @@ char *gochar;
 char *goversion;
 char *slash;	// / for unix, \ for windows
 char *defaultcc;
-char *defaultcxx;
+char *defaultcflags;
+char *defaultldflags;
+char *defaultcxxtarget;
+char *defaultcctarget;
 bool	rebuildall;
 bool defaultclang;
 
@@ -37,13 +40,14 @@ static void dopack(char*, char*, char**, int);
 static char *findgoversion(void);
 
 // The known architecture letters.
-static char *gochars = "568";
+static char *gochars = "5668";
 
 // The known architectures.
 static char *okgoarch[] = {
 	// same order as gochars
 	"arm",
 	"amd64",
+	"amd64p32",
 	"386",
 };
 
@@ -54,6 +58,7 @@ static char *okgoos[] = {
 	"linux",
 	"solaris",
 	"freebsd",
+	"nacl",
 	"netbsd",
 	"openbsd",
 	"plan9",
@@ -166,14 +171,29 @@ init(void)
 	}
 	defaultcc = btake(&b);
 
-	xgetenv(&b, "CXX");
+	xgetenv(&b, "CFLAGS");
+	defaultcflags = btake(&b);
+
+	xgetenv(&b, "LDFLAGS");
+	defaultldflags = btake(&b);
+
+	xgetenv(&b, "CC_FOR_TARGET");
 	if(b.len == 0) {
-		if(defaultclang)
-			bprintf(&b, "clang++");
-		else
-			bprintf(&b, "g++");
+		bprintf(&b, defaultcc);
 	}
-	defaultcxx = btake(&b);
+	defaultcctarget = btake(&b);
+
+	xgetenv(&b, "CXX_FOR_TARGET");
+	if(b.len == 0) {
+		xgetenv(&b, "CXX");
+		if(b.len == 0) {
+			if(defaultclang)
+				bprintf(&b, "clang++");
+			else
+				bprintf(&b, "g++");
+		}
+	}
+	defaultcxxtarget = btake(&b);
 
 	xsetenv("GOROOT", goroot);
 	xsetenv("GOARCH", goarch);
@@ -437,7 +457,6 @@ static char *proto_gccargs[] = {
 	"-Wstrict-prototypes",
 	"-Wextra",
 	"-Wunused",
-	"-Wuninitialized",
 	"-Wno-sign-compare",
 	"-Wno-missing-braces",
 	"-Wno-parentheses",
@@ -449,6 +468,15 @@ static char *proto_gccargs[] = {
 	"-fno-common",
 	"-ggdb",
 	"-pipe",
+};
+
+// gccargs2 is the second part of gccargs.
+// it is used if the environment isn't defining CFLAGS.
+static char *proto_gccargs2[] = {
+	// on older versions of GCC, -Wuninitialized is not supported
+	// without -O, so put it here together with -O settings in case
+	// the user's $CFLAGS doesn't include -O.
+	"-Wuninitialized",
 #if defined(__NetBSD__) && defined(__arm__)
 	// GCC 4.5.4 (NetBSD nb1 20120916) on ARM is known to mis-optimize gc/mparith3.c
 	// Fix available at http://patchwork.ozlabs.org/patch/64562/.
@@ -458,7 +486,7 @@ static char *proto_gccargs[] = {
 #endif
 };
 
-static Vec gccargs;
+static Vec gccargs, ldargs;
 
 // deptab lists changes to the default dependencies for a given prefix.
 // deps ending in /* read the whole directory; deps beginning with -
@@ -670,10 +698,14 @@ install(char *dir)
 
 	// set up gcc command line on first run.
 	if(gccargs.len == 0) {
-		bprintf(&b, "%s", defaultcc);
+		bprintf(&b, "%s %s", defaultcc, defaultcflags);
 		splitfields(&gccargs, bstr(&b));
 		for(i=0; i<nelem(proto_gccargs); i++)
 			vadd(&gccargs, proto_gccargs[i]);
+		if(defaultcflags[0] == '\0') {
+			for(i=0; i<nelem(proto_gccargs2); i++)
+				vadd(&gccargs, proto_gccargs2[i]);
+		}
 		if(contains(gccargs.p[0], "clang")) {
 			// disable ASCII art in clang errors, if possible
 			vadd(&gccargs, "-fno-caret-diagnostics");
@@ -686,6 +718,10 @@ install(char *dir)
 			// golang.org/issue/5261
 			vadd(&gccargs, "-mmacosx-version-min=10.6");
 		}
+	}
+	if(ldargs.len == 0 && defaultldflags[0] != '\0') {
+		bprintf(&b, "%s", defaultldflags);
+		splitfields(&ldargs, bstr(&b));
 	}
 
 	islib = hasprefix(dir, "lib") || streq(dir, "cmd/cc") || streq(dir, "cmd/gc");
@@ -730,7 +766,7 @@ install(char *dir)
 		targ = link.len;
 		vadd(&link, bpathf(&b, "%s/%s%s", tooldir, elem, exe));
 	} else {
-		// C command. Use gccargs.
+		// C command. Use gccargs and ldargs.
 		if(streq(gohostos, "plan9")) {
 			vadd(&link, bprintf(&b, "%sl", gohostchar));
 			vadd(&link, "-o");
@@ -738,6 +774,7 @@ install(char *dir)
 			vadd(&link, bpathf(&b, "%s/%s", tooldir, name));
 		} else {
 			vcopy(&link, gccargs.p, gccargs.len);
+			vcopy(&link, ldargs.p, ldargs.len);
 			if(sflag)
 				vadd(&link, "-static");
 			vadd(&link, "-o");
@@ -772,7 +809,8 @@ install(char *dir)
 	files.len = n;
 
 	for(i=0; i<nelem(deptab); i++) {
-		if(hasprefix(dir, deptab[i].prefix)) {
+		if(streq(dir, deptab[i].prefix) ||
+		   (hassuffix(deptab[i].prefix, "/") && hasprefix(dir, deptab[i].prefix))) {
 			for(j=0; (p=deptab[i].dep[j])!=nil; j++) {
 				breset(&b1);
 				bwritestr(&b1, p);
@@ -958,12 +996,14 @@ install(char *dir)
 					vadd(&compile, "-m64");
 				else if(streq(gohostarch, "386"))
 					vadd(&compile, "-m32");
-				if(streq(dir, "lib9"))
-					vadd(&compile, "-DPLAN9PORT");
 	
 				vadd(&compile, "-I");
 				vadd(&compile, bpathf(&b, "%s/include", goroot));
 			}
+
+			if(streq(dir, "lib9"))
+				vadd(&compile, "-DPLAN9PORT");
+
 
 			vadd(&compile, "-I");
 			vadd(&compile, bstr(&path));
@@ -1149,19 +1189,6 @@ shouldbuild(char *file, char *dir)
 	int i, j, ret;
 	Buf b;
 	Vec lines, fields;
-
-	// On Plan 9, most of the libraries are already present.
-	// The main exception is libmach which has been modified
-	// in various places to support Go object files.
-	if(streq(gohostos, "plan9")) {
-		if(streq(dir, "lib9")) {
-			name = lastelem(file);
-			if(streq(name, "goos.c") || streq(name, "flag.c"))
-				return 1;
-			if(!contains(name, "plan9"))
-				return 0;
-		}
-	}
 	
 	// Check file name for GOOS or GOARCH.
 	name = lastelem(file);
@@ -1298,7 +1325,6 @@ static char *buildorder[] = {
 
 	"misc/pprof",
 
-	"cmd/addr2line",
 	"cmd/objdump",
 	"cmd/prof",
 
@@ -1373,7 +1399,6 @@ static char *cleantab[] = {
 	"cmd/8c",
 	"cmd/8g",
 	"cmd/8l",
-	"cmd/addr2line",
 	"cmd/cc",
 	"cmd/gc",
 	"cmd/go",	
@@ -1537,6 +1562,7 @@ cmdenv(int argc, char **argv)
 		usage();
 
 	xprintf(format, "CC", defaultcc);
+	xprintf(format, "CC_FOR_TARGET", defaultcctarget);
 	xprintf(format, "GOROOT", goroot);
 	xprintf(format, "GOBIN", gobin);
 	xprintf(format, "GOARCH", goarch);

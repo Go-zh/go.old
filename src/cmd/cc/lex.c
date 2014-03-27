@@ -117,9 +117,23 @@ void
 main(int argc, char *argv[])
 {
 	int c;
+	char *p;
+
+	// Allow GOARCH=thestring or GOARCH=thestringsuffix,
+	// but not other values.	
+	p = getgoarch();
+	if(strncmp(p, thestring, strlen(thestring)) != 0)
+		sysfatal("cannot use %cc with GOARCH=%s", thechar, p);
+	if(strcmp(p, "amd64p32") == 0) // must be before cinit
+		ewidth[TIND] = 4;
+		
+	nacl = strcmp(getgoos(), "nacl") == 0;
+	if(nacl)
+		flag_largemodel = 1;
 
 	quotefmtinstall(); // before cinit, which overrides %Q
 
+	linkarchinit();
 	ctxt = linknew(thelinkarch);
 	ctxt->diag = yyerror;
 	ctxt->bso = &bstdout;
@@ -1316,6 +1330,7 @@ cinit(void)
 	fmtinstall('Q', Qconv);
 	fmtinstall('|', VBconv);
 	fmtinstall('U', Uconv);
+	fmtinstall('B', Bconv);
 }
 
 int
@@ -1484,6 +1499,32 @@ VBconv(Fmt *fp)
 	}
 	str[i] = 0;
 
+	return fmtstrcpy(fp, str);
+}
+
+int
+Bconv(Fmt *fp)
+{
+	char str[STRINGSZ], ss[STRINGSZ], *s;
+	Bits bits;
+	int i;
+
+	str[0] = 0;
+	bits = va_arg(fp->args, Bits);
+	while(bany(&bits)) {
+		i = bnum(bits);
+		if(str[0])
+			strcat(str, " ");
+		if(var[i].sym == nil) {
+			sprint(ss, "$%lld", var[i].offset);
+			s = ss;
+		} else
+			s = var[i].sym->name;
+		if(strlen(str) + strlen(s) + 1 >= STRINGSZ)
+			break;
+		strcat(str, s);
+		bits.b[i/32] &= ~(1L << (i%32));
+	}
 	return fmtstrcpy(fp, str);
 }
 

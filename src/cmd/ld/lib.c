@@ -85,12 +85,11 @@ libinit(void)
 {
 	char *suffix, *suffixsep;
 
+	funcalign = FuncAlign;
 	fmtinstall('i', iconv);
 	fmtinstall('Y', Yconv);
 	fmtinstall('Z', Zconv);
 	mywhatsys();	// get goroot, goarch, goos
-	if(strcmp(goarch, thestring) != 0)
-		print("goarch is not known: %s\n", goarch);
 
 	// add goroot to the end of the libdir list.
 	suffix = "";
@@ -164,6 +163,7 @@ loadlib(void)
 {
 	int i, w, x;
 	LSym *s, *gmsym;
+	char* cgostrsym;
 
 	if(flag_shared) {
 		s = linklookup(ctxt, "runtime.islibrary", 0);
@@ -176,24 +176,6 @@ loadlib(void)
 		loadinternal("math");
 	if(flag_race)
 		loadinternal("runtime/race");
-	if(linkmode == LinkExternal) {
-		// This indicates a user requested -linkmode=external.
-		// The startup code uses an import of runtime/cgo to decide
-		// whether to initialize the TLS.  So give it one.  This could
-		// be handled differently but it's an unusual case.
-		loadinternal("runtime/cgo");
-
-		// Pretend that we really imported the package.
-		// This will do no harm if we did in fact import it.
-		s = linklookup(ctxt, "go.importpath.runtime/cgo.", 0);
-		s->type = SDATA;
-		s->dupok = 1;
-		s->reachable = 1;
-
-		// Provided by the code that imports the package.
-		// Since we are simulating the import, we have to provide this string.
-		addstrdata("go.string.\"runtime/cgo\"", "runtime/cgo");
-	}
 
 	for(i=0; i<ctxt->libraryp; i++) {
 		if(debug['v'] > 1)
@@ -202,6 +184,26 @@ loadlib(void)
 		objfile(ctxt->library[i].file, ctxt->library[i].pkg);
 	}
 	
+	if(linkmode == LinkExternal && !iscgo) {
+		// This indicates a user requested -linkmode=external.
+		// The startup code uses an import of runtime/cgo to decide
+		// whether to initialize the TLS.  So give it one.  This could
+		// be handled differently but it's an unusual case.
+		loadinternal("runtime/cgo");
+
+		// Pretend that we really imported the package.
+		s = linklookup(ctxt, "go.importpath.runtime/cgo.", 0);
+		s->type = SDATA;
+		s->dupok = 1;
+		s->reachable = 1;
+
+		// Provided by the code that imports the package.
+		// Since we are simulating the import, we have to provide this string.
+		cgostrsym = "go.string.\"runtime/cgo\"";
+		if(linkrlookup(ctxt, cgostrsym, 0) == nil)
+			addstrdata(cgostrsym, "runtime/cgo");
+	}
+
 	if(linkmode == LinkAuto) {
 		if(iscgo && externalobj)
 			linkmode = LinkExternal;
@@ -229,10 +231,7 @@ loadlib(void)
 	gmsym->type = STLSBSS;
 	gmsym->size = 2*PtrSize;
 	gmsym->hide = 1;
-	if(linkmode == LinkExternal && iself && HEADTYPE != Hopenbsd)
-		gmsym->reachable = 1;
-	else
-		gmsym->reachable = 0;
+	gmsym->reachable = 1;
 
 	// Now that we know the link mode, trim the dynexp list.
 	x = CgoExportDynamic;
@@ -259,7 +258,9 @@ loadlib(void)
 	//
 	// Exception: on OS X, programs such as Shark only work with dynamic
 	// binaries, so leave it enabled on OS X (Mach-O) binaries.
-	if(!flag_shared && !havedynamic && HEADTYPE != Hdarwin)
+	// Also leave it enabled on Solaris which doesn't support
+	// statically linked binaries.
+	if(!flag_shared && !havedynamic && HEADTYPE != Hdarwin && HEADTYPE != Hsolaris)
 		debug['d'] = 1;
 	
 	importcycles();
@@ -724,8 +725,8 @@ ldobj(Biobuf *f, char *pkg, int64 len, char *pn, char *file, int whence)
 		return;
 	}
 	
-	// First, check that the basic goos, string, and version match.
-	t = smprint("%s %s %s ", goos, thestring, getgoversion());
+	// First, check that the basic goos, goarch, and version match.
+	t = smprint("%s %s %s ", goos, getgoarch(), getgoversion());
 	line[n] = ' ';
 	if(strncmp(line+10, t, strlen(t)) != 0 && !debug['f']) {
 		line[n] = '\0';
@@ -794,7 +795,10 @@ mywhatsys(void)
 {
 	goroot = getgoroot();
 	goos = getgoos();
-	goarch = thestring;	// ignore $GOARCH - we know who we are
+	goarch = getgoarch();
+
+	if(strncmp(goarch, thestring, strlen(thestring)) != 0)
+		sysfatal("cannot use %cc with GOARCH=%s", thechar, goarch);
 }
 
 int
@@ -983,11 +987,18 @@ static LSym *newstack;
 enum
 {
 	HasLinkRegister = (thechar == '5'),
-	CallSize = (!HasLinkRegister)*PtrSize,	// bytes of stack required for a call
 };
 
 // TODO: Record enough information in new object files to
 // allow stack checks here.
+
+static int
+callsize(void)
+{
+	if(thechar == '5')
+		return 0;
+	return RegSize;
+}
 
 void
 dostkcheck(void)
@@ -1006,7 +1017,7 @@ dostkcheck(void)
 		ctxt->cursym = s;
 		ch.up = nil;
 		ch.sym = s;
-		ch.limit = StackLimit - CallSize;
+		ch.limit = StackLimit - callsize();
 		stkcheck(&ch, 0);
 		s->stkcheck = 1;
 	}
@@ -1022,7 +1033,7 @@ dostkcheck(void)
 		ctxt->cursym = s;
 		ch.up = nil;
 		ch.sym = s;
-		ch.limit = StackLimit - CallSize;
+		ch.limit = StackLimit - callsize();
 		stkcheck(&ch, 0);
 	}
 }
@@ -1040,7 +1051,7 @@ stkcheck(Chain *up, int depth)
 	p = s->text;
 	
 	// Small optimization: don't repeat work at top.
-	if(s->stkcheck && limit == StackLimit-CallSize)
+	if(s->stkcheck && limit == StackLimit-callsize())
 		return 0;
 	
 	if(depth > 100) {
@@ -1090,7 +1101,7 @@ stkcheck(Chain *up, int depth)
 			return -1;
 		}
 		if(ctxt->arch->iscall(p)) {
-			limit -= CallSize;
+			limit -= callsize();
 			ch.limit = limit;
 			if(p->to.type == D_BRANCH) {
 				// Direct call.
@@ -1100,16 +1111,16 @@ stkcheck(Chain *up, int depth)
 			} else {
 				// Indirect call.  Assume it is a splitting function,
 				// so we have to make sure it can call morestack.
-				limit -= CallSize;
+				limit -= callsize();
 				ch.sym = nil;
 				ch1.limit = limit;
 				ch1.up = &ch;
 				ch1.sym = morestack;
 				if(stkcheck(&ch1, depth+2) < 0)
 					return -1;
-				limit += CallSize;
+				limit += callsize();
 			}
-			limit += CallSize;
+			limit += callsize();
 		}
 		
 	}
@@ -1330,6 +1341,9 @@ genasmsym(void (*put)(LSym*, char*, int, vlong, vlong, int, LSym*))
 	for(s = ctxt->textp; s != nil; s = s->next) {
 		put(s, s->name, 'T', s->value, s->size, s->version, s->gotype);
 
+		// NOTE(ality): acid can't produce a stack trace without .frame symbols
+		put(nil, ".frame", 'm', s->locals+PtrSize, 0, 0, 0);
+
 		for(a=s->autom; a; a=a->link) {
 			// Emit a or p according to actual offset, even if label is wrong.
 			// This avoids negative offsets, which cannot be encoded.
@@ -1440,4 +1454,28 @@ undef(void)
 		undefsym(s);
 	if(nerrors > 0)
 		errorexit();
+}
+
+void
+diag(char *fmt, ...)
+{
+	char buf[1024], *tn, *sep;
+	va_list arg;
+
+	tn = "";
+	sep = "";
+	if(ctxt->cursym != S) {
+		tn = ctxt->cursym->name;
+		sep = ": ";
+	}
+	va_start(arg, fmt);
+	vseprint(buf, buf+sizeof(buf), fmt, arg);
+	va_end(arg);
+	print("%s%s%s\n", tn, sep, buf);
+
+	nerrors++;
+	if(nerrors > 20) {
+		print("too many errors\n");
+		errorexit();
+	}
 }

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin dragonfly freebsd linux netbsd openbsd
+// +build darwin dragonfly freebsd linux nacl netbsd openbsd solaris
 
 package net
 
@@ -75,29 +75,47 @@ func (fd *netFD) connect(la, ra syscall.Sockaddr) error {
 	if err := fd.pd.PrepareWrite(); err != nil {
 		return err
 	}
-	for {
-		err := syscall.Connect(fd.sysfd, ra)
-		if err == nil || err == syscall.EISCONN {
-			break
-		}
-
+	switch err := syscall.Connect(fd.sysfd, ra); err {
+	case syscall.EINPROGRESS, syscall.EALREADY, syscall.EINTR:
+	case nil, syscall.EISCONN:
+		return nil
+	case syscall.EINVAL:
 		// On Solaris we can see EINVAL if the socket has
 		// already been accepted and closed by the server.
 		// Treat this as a successful connection--writes to
 		// the socket will see EOF.  For details and a test
 		// case in C see http://golang.org/issue/6828.
-		if runtime.GOOS == "solaris" && err == syscall.EINVAL {
-			break
+		if runtime.GOOS == "solaris" {
+			return nil
 		}
-
-		if err != syscall.EINPROGRESS && err != syscall.EALREADY && err != syscall.EINTR {
+		fallthrough
+	default:
+		return err
+	}
+	for {
+		// Performing multiple connect system calls on a
+		// non-blocking socket under Unix variants does not
+		// necessarily result in earlier errors being
+		// returned. Instead, once runtime-integrated network
+		// poller tells us that the socket is ready, get the
+		// SO_ERROR socket option to see if the connection
+		// succeeded or failed. See issue 7474 for further
+		// details.
+		if err := fd.pd.WaitWrite(); err != nil {
 			return err
 		}
-		if err = fd.pd.WaitWrite(); err != nil {
+		nerr, err := syscall.GetsockoptInt(fd.sysfd, syscall.SOL_SOCKET, syscall.SO_ERROR)
+		if err != nil {
+			return err
+		}
+		switch err := syscall.Errno(nerr); err {
+		case syscall.EINPROGRESS, syscall.EALREADY, syscall.EINTR:
+		case syscall.Errno(0), syscall.EISCONN:
+			return nil
+		default:
 			return err
 		}
 	}
-	return nil
 }
 
 func (fd *netFD) destroy() {

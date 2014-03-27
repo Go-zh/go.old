@@ -399,38 +399,25 @@ func TestTurkishCase(t *testing.T) {
 }
 
 var simpleFoldTests = []string{
-	// SimpleFold could order its returned slices in any order it wants,
-	// but we know it orders them in increasing order starting at in
-	// and looping around from MaxRune to 0.
+	// SimpleFold(x) returns the next equivalent rune > x or wraps
+	// around to smaller values.
 	//
-	// SimpleFold 能按它想要的任何顺序排序它返回的切片，不过我们知道它会按升序排序，
-	// 并从 MaxRune 循环遍历至 0
+	// SimpleFold(x) 返回下一个等价的 rune > x 或包装成更小的值。
 
 	// Easy cases.
 	// 简单的写法。
 	"Aa",
-	"aA",
 	"δΔ",
-	"Δδ",
 
 	// ASCII special cases.
 	// ASCII的特殊写法。
 	"KkK",
-	"kKK",
-	"KKk",
 	"Ssſ",
-	"sſS",
-	"ſSs",
 
 	// Non-ASCII special cases.
 	// 非-ASCII的特殊写法。
 	"ρϱΡ",
-	"ϱΡρ",
-	"Ρρϱ",
 	"ͅΙιι",
-	"Ιιιͅ",
-	"ιιͅΙ",
-	"ιͅΙι",
 
 	// Extra special cases: has lower/upper but no case fold.
 	// 扩展的特殊写法：有大/小写但没有写法转换。

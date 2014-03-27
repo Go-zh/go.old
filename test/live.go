@@ -79,3 +79,118 @@ func f5(b1 bool) {
 	}
 	print(**z) // ERROR "live at call to printint: x y$"
 }
+
+// confusion about the _ result used to cause spurious "live at entry to f6: _".
+
+func f6() (_, y string) {
+	y = "hello"
+	return
+}
+
+// confusion about addressed results used to cause "live at entry to f7: x".
+
+func f7() (x string) {
+	_ = &x
+	x = "hello"
+	return
+}
+
+// ignoring block returns used to cause "live at entry to f8: x, y".
+
+func f8() (x, y string) {
+	return g8()
+}
+
+func g8() (string, string)
+
+// ignoring block assignments used to cause "live at entry to f9: x"
+// issue 7205
+
+var i9 interface{}
+
+func f9() bool {
+	g8()
+	x := i9
+	return x != 99
+}
+
+// liveness formerly confused by UNDEF followed by RET,
+// leading to "live at entry to f10: ~r1" (unnamed result).
+
+func f10() string {
+	panic(1)
+}
+
+// liveness formerly confused by select, thinking runtime.selectgo
+// can return to next instruction; it always jumps elsewhere.
+// note that you have to use at least two cases in the select
+// to get a true select; smaller selects compile to optimized helper functions.
+
+var c chan *int
+var b bool
+
+// this used to have a spurious "live at entry to f11a: ~r0"
+func f11a() *int {
+	select { // ERROR "live at call to selectgo: autotmp"
+	case <-c: // ERROR "live at call to selectrecv: autotmp"
+		return nil
+	case <-c: // ERROR "live at call to selectrecv: autotmp"
+		return nil
+	}
+}
+
+func f11b() *int {
+	p := new(int)
+	if b {
+		// At this point p is dead: the code here cannot
+		// get to the bottom of the function.
+		// This used to have a spurious "live at call to printint: p".
+		print(1) // nothing live here!
+		select { // ERROR "live at call to selectgo: autotmp"
+		case <-c: // ERROR "live at call to selectrecv: autotmp"
+			return nil
+		case <-c: // ERROR "live at call to selectrecv: autotmp"
+			return nil
+		}
+	}
+	println(*p)
+	return nil
+}
+
+func f11c() *int {
+	p := new(int)
+	if b {
+		// Unlike previous, the cases in this select fall through,
+		// so we can get to the println, so p is not dead.
+		print(1) // ERROR "live at call to printint: p"
+		select { // ERROR "live at call to newselect: p" "live at call to selectgo: autotmp.* p"
+		case <-c: // ERROR "live at call to selectrecv: autotmp.* p"
+		case <-c: // ERROR "live at call to selectrecv: autotmp.* p"
+		}
+	}
+	println(*p)
+	return nil
+}
+
+// similarly, select{} does not fall through.
+// this used to have a spurious "live at entry to f12: ~r0".
+
+func f12() *int {
+	if b {
+		select{}
+	} else {
+		return nil
+	}
+}
+
+// incorrectly placed VARDEF annotations can cause missing liveness annotations.
+// this used to be missing the fact that s is live during the call to g13 (because it is
+// needed for the call to h13).
+
+func f13() {
+	s := "hello"
+	s = h13(s, g13(s)) // ERROR "live at call to g13: s"
+}
+
+func g13(string) string
+func h13(string, string) string

@@ -195,6 +195,8 @@ regopt(Prog *firstp)
 
 	for(r = firstr; r != R; r = (Reg*)r->f.link) {
 		p = r->f.prog;
+		if(p->as == AVARDEF)
+			continue;
 		proginfo(&info, p);
 
 		// Avoid making variables for direct-called functions.
@@ -466,7 +468,7 @@ addmove(Reg *r, int bn, int rn, int f)
 
 	p1 = mal(sizeof(*p1));
 	clearp(p1);
-	p1->loc = 9999;
+	p1->pc = 9999;
 
 	p = r->f.prog;
 	p1->link = p->link;
@@ -485,7 +487,7 @@ addmove(Reg *r, int bn, int rn, int f)
 	// need to clean this up with wptr and
 	// some of the defaults
 	p1->as = AMOVL;
-	switch(v->etype) {
+	switch(simtype[(uchar)v->etype]) {
 	default:
 		fatal("unknown type %E", v->etype);
 	case TINT8:
@@ -499,7 +501,6 @@ addmove(Reg *r, int bn, int rn, int f)
 		break;
 	case TINT64:
 	case TUINT64:
-	case TUINTPTR:
 	case TPTR64:
 		p1->as = AMOVQ;
 		break;
@@ -509,8 +510,6 @@ addmove(Reg *r, int bn, int rn, int f)
 	case TFLOAT64:
 		p1->as = AMOVSD;
 		break;
-	case TINT:
-	case TUINT:
 	case TINT32:
 	case TUINT32:
 	case TPTR32:
@@ -1086,6 +1085,8 @@ int
 BtoR(int32 b)
 {
 	b &= 0xffffL;
+	if(nacl)
+		b &= ~((1<<(D_BP-D_AX)) | (1<<(D_R15-D_AX)));
 	if(b == 0)
 		return 0;
 	return bitno(b) + D_AX;
@@ -1174,14 +1175,14 @@ dumpit(char *str, Flow *r0, int isreg)
 		if(r1 != nil) {
 			print("	pred:");
 			for(; r1 != nil; r1 = r1->p2link)
-				print(" %.4ud", r1->prog->loc);
+				print(" %.4ud", (int)r1->prog->pc);
 			print("\n");
 		}
 //		r1 = r->s1;
 //		if(r1 != R) {
 //			print("	succ:");
 //			for(; r1 != R; r1 = r1->s1)
-//				print(" %.4ud", r1->prog->loc);
+//				print(" %.4ud", (int)r1->prog->pc);
 //			print("\n");
 //		}
 	}

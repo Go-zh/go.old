@@ -69,43 +69,66 @@ TEXT runtime·setlasterror(SB),NOSPLIT,$0
 	MOVL	AX, 0x34(FS)
 	RET
 
-TEXT runtime·sigtramp(SB),NOSPLIT,$28
-	// unwinding?
-	MOVL	info+0(FP), CX
-	TESTL	$6, 4(CX)		// exception flags
-	MOVL	$1, AX
-	JNZ	sigdone
+// Called by Windows as a Vectored Exception Handler (VEH).
+// First argument is pointer to struct containing
+// exception record and context pointers.
+// Return 0 for 'not handled', -1 for handled.
+TEXT runtime·sigtramp(SB),NOSPLIT,$0-0
+	MOVL	ptrs+0(FP), DI
+	SUBL	$28, SP
+	MOVL	0(DI), BX // ExceptionRecord*
+	MOVL	4(DI), CX // Context*
 
-	// copy arguments for call to sighandler
-	MOVL	CX, 0(SP)
-	MOVL	context+8(FP), CX
-	MOVL	CX, 4(SP)
+	// Only handle exception if executing instructions in Go binary
+	// (not Windows library code). Except don't - keep reading.
+	// 
+	// This sounds like a good idea but the tracebacks that
+	// Go provides are better than the Windows crash dialog,
+	// especially if it's something that Go needs to do.
+	// So take all the exceptions, not just the ones at Go PCs.
+	// If you re-enable this check by removing the JMP, you will
+	// need to arrange to handle exception 0x40010006 during
+	// non-Go code here. Right now that case is handled by sighandler
+	// in os_windows_386.c.
+	JMP skipcheckpc
+	MOVL	$0, AX
+	MOVL	184(CX), DX // saved PC
+	CMPL	DX, $text(SB)
+	JB	vehret
+	CMPL	DX, $etext(SB)
+	JA	vehret
 
-	get_tls(CX)
-
-	// check that m exists
-	MOVL	m(CX), AX
-	CMPL	AX, $0
-	JNE	2(PC)
-	CALL	runtime·badsignal2(SB)
-
-	MOVL	g(CX), CX
-	MOVL	CX, 8(SP)
-
+skipcheckpc:
+	// save callee-saved registers
 	MOVL	BX, 12(SP)
 	MOVL	BP, 16(SP)
 	MOVL	SI, 20(SP)
 	MOVL	DI, 24(SP)
 
+	// fetch g
+	get_tls(DX)
+	MOVL	m(DX), AX
+	CMPL	AX, $0
+	JNE	2(PC)
+	CALL	runtime·badsignal2(SB)
+	MOVL	g(DX), DX
+	// call sighandler(ExceptionRecord*, Context*, G*)
+	MOVL	BX, 0(SP)
+	MOVL	CX, 4(SP)
+	MOVL	DX, 8(SP)
 	CALL	runtime·sighandler(SB)
-	// AX is set to report result back to Windows
 
+	// restore callee-saved registers
 	MOVL	24(SP), DI
 	MOVL	20(SP), SI
 	MOVL	16(SP), BP
 	MOVL	12(SP), BX
-sigdone:
-	RET
+
+vehret:
+	ADDL	$28, SP
+	// RET 4 (return and pop 4 bytes parameters)
+	BYTE $0xC2; WORD $4
+	RET // unreached; make assembler happy
 
 TEXT runtime·ctrlhandler(SB),NOSPLIT,$0
 	PUSHL	$runtime·ctrlhandler1(SB)
@@ -182,11 +205,6 @@ TEXT runtime·callbackasm1+0(SB),NOSPLIT,$0
 	PUSHL	BP
 	PUSHL	BX
 
-	// set up SEH frame again
-	PUSHL	$runtime·sigtramp(SB)
-	PUSHL	0(FS)
-	MOVL	SP, 0(FS)
-
 	// determine index into runtime·cbctxts table
 	SUBL	$runtime·callbackasm(SB), AX
 	MOVL	$0, DX
@@ -231,10 +249,6 @@ TEXT runtime·callbackasm1+0(SB),NOSPLIT,$0
 	POPL	-4(CX)(DX*1)
 
 	MOVL	BX, CX			// cannot use BX anymore
-
-	// pop SEH frame
-	POPL	0(FS)
-	POPL	BX
 
 	// restore registers as required for windows callback
 	POPL	BX
@@ -299,35 +313,6 @@ TEXT runtime·setldt(SB),NOSPLIT,$0
 	MOVL	CX, 0x14(FS)
 	RET
 
-// void install_exception_handler()
-TEXT runtime·install_exception_handler(SB),NOSPLIT,$0
-	get_tls(CX)
-	MOVL	m(CX), CX		// m
-
-	// Set up SEH frame
-	MOVL	m_seh(CX), DX
-	MOVL	$runtime·sigtramp(SB), AX
-	MOVL	AX, seh_handler(DX)
-	MOVL	0(FS), AX
-	MOVL	AX, seh_prev(DX)
-
-	// Install it
-	MOVL	DX, 0(FS)
-
-	RET
-
-// void remove_exception_handler()
-TEXT runtime·remove_exception_handler(SB),NOSPLIT,$0
-	get_tls(CX)
-	MOVL	m(CX), CX		// m
-
-	// Remove SEH frame
-	MOVL	m_seh(CX), DX
-	MOVL	seh_prev(DX), AX
-	MOVL	AX, 0(FS)
-
-	RET
-
 // Sleep duration is in 100ns units.
 TEXT runtime·usleep1(SB),NOSPLIT,$0
 	MOVL	duration+0(FP), BX
@@ -343,19 +328,36 @@ TEXT runtime·usleep1(SB),NOSPLIT,$0
 	RET
 
 	MOVL	m(CX), BP
+
+	// leave pc/sp for cpu profiler
+	MOVL	(SP), SI
+	MOVL	SI, m_libcallpc(BP)
+	MOVL	g(CX), SI
+	MOVL	SI, m_libcallg(BP)
+	// sp must be the last, because once async cpu profiler finds
+	// all three values to be non-zero, it will use them
+	LEAL	4(SP), SI
+	MOVL	SI, m_libcallsp(BP)
+
 	MOVL	m_g0(BP), SI
 	CMPL	g(CX), SI
-	JNE	3(PC)
+	JNE	usleep1_switch
 	// executing on m->g0 already
 	CALL	AX
-	RET
+	JMP	usleep1_ret
 
+usleep1_switch:
 	// Switch to m->g0 stack and back.
 	MOVL	(g_sched+gobuf_sp)(SI), SI
 	MOVL	SP, -4(SI)
 	LEAL	-4(SI), SP
 	CALL	AX
 	MOVL	0(SP), SP
+
+usleep1_ret:
+	get_tls(CX)
+	MOVL	m(CX), BP
+	MOVL	$0, m_libcallsp(BP)
 	RET
 
 // Runs on OS stack. duration (in 100ns units) is in BX.

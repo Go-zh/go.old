@@ -11,7 +11,7 @@ unset LANG
 export LC_ALL=C
 export LC_CTYPE=C
 
-GCC=gcc
+CC=${CC:-gcc}
 
 uname=$(uname)
 
@@ -57,6 +57,7 @@ includes_DragonFly='
 '
 
 includes_FreeBSD='
+#include <sys/param.h>
 #include <sys/types.h>
 #include <sys/event.h>
 #include <sys/socket.h>
@@ -73,6 +74,14 @@ includes_FreeBSD='
 #include <termios.h>
 #include <netinet/ip.h>
 #include <netinet/ip_mroute.h>
+
+#if __FreeBSD__ >= 10
+#define IFT_CARP	0xf8	// IFT_CARP is deprecated in FreeBSD 10
+#undef SIOCAIFADDR
+#define SIOCAIFADDR	_IOW(105, 26, struct oifaliasreq)	// ifaliasreq contains if_data
+#undef SIOCSIFPHYADDR
+#define SIOCSIFPHYADDR	_IOW(105, 70, struct oifaliasreq)	// ifaliasreq contains if_data
+#endif
 '
 
 includes_Linux='
@@ -92,9 +101,12 @@ includes_Linux='
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/socket.h>
-#include <linux/if_addr.h>
+#include <linux/if.h>
+#include <linux/if_arp.h>
 #include <linux/if_ether.h>
 #include <linux/if_tun.h>
+#include <linux/if_packet.h>
+#include <linux/if_addr.h>
 #include <linux/filter.h>
 #include <linux/netlink.h>
 #include <linux/reboot.h>
@@ -103,10 +115,7 @@ includes_Linux='
 #include <linux/sched.h>
 #include <linux/wait.h>
 #include <linux/icmpv6.h>
-#include <net/if.h>
-#include <net/if_arp.h>
 #include <net/route.h>
-#include <netpacket/packet.h>
 #include <termios.h>
 
 #ifndef MSG_FASTOPEN
@@ -162,6 +171,24 @@ includes_OpenBSD='
 #include <net/if_bridge.h>
 '
 
+includes_SunOS='
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/sockio.h>
+#include <sys/mman.h>
+#include <sys/wait.h>
+#include <sys/ioctl.h>
+#include <net/bpf.h>
+#include <net/if.h>
+#include <net/if_arp.h>
+#include <net/if_types.h>
+#include <net/route.h>
+#include <netinet/in.h>
+#include <termios.h>
+#include <netinet/ip.h>
+#include <netinet/ip_mroute.h>
+'
+
 includes='
 #include <sys/types.h>
 #include <sys/file.h>
@@ -194,7 +221,7 @@ ccflags="$@"
 
 	# The gcc command line prints all the #defines
 	# it encounters while processing the input
-	echo "${!indirect} $includes" | $GCC -x c - -E -dM $ccflags |
+	echo "${!indirect} $includes" | $CC -x c - -E -dM $ccflags |
 	awk '
 		$1 != "#define" || $2 ~ /\(/ || $3 == "" {next}
 
@@ -263,24 +290,24 @@ ccflags="$@"
 
 # Pull out the error names for later.
 errors=$(
-	echo '#include <errno.h>' | $GCC -x c - -E -dM $ccflags |
+	echo '#include <errno.h>' | $CC -x c - -E -dM $ccflags |
 	awk '$1=="#define" && $2 ~ /^E[A-Z0-9_]+$/ { print $2 }' |
 	sort
 )
 
 # Pull out the signal names for later.
 signals=$(
-	echo '#include <signal.h>' | $GCC -x c - -E -dM $ccflags |
+	echo '#include <signal.h>' | $CC -x c - -E -dM $ccflags |
 	awk '$1=="#define" && $2 ~ /^SIG[A-Z0-9]+$/ { print $2 }' |
 	egrep -v '(SIGSTKSIZE|SIGSTKSZ|SIGRT)' |
 	sort
 )
 
 # Again, writing regexps to a file.
-echo '#include <errno.h>' | $GCC -x c - -E -dM $ccflags |
+echo '#include <errno.h>' | $CC -x c - -E -dM $ccflags |
 	awk '$1=="#define" && $2 ~ /^E[A-Z0-9_]+$/ { print "^\t" $2 "[ \t]*=" }' |
 	sort >_error.grep
-echo '#include <signal.h>' | $GCC -x c - -E -dM $ccflags |
+echo '#include <signal.h>' | $CC -x c - -E -dM $ccflags |
 	awk '$1=="#define" && $2 ~ /^SIG[A-Z0-9]+$/ { print "^\t" $2 "[ \t]*=" }' |
 	egrep -v '(SIGSTKSIZE|SIGSTKSZ|SIGRT)' |
 	sort >_signal.grep
@@ -304,8 +331,9 @@ echo ')'
 
 # Run C program to print error and syscall strings.
 (
-	/bin/echo "
+	echo -E "
 #include <stdio.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <ctype.h>
 #include <string.h>
@@ -319,22 +347,21 @@ int errors[] = {
 "
 	for i in $errors
 	do
-		/bin/echo '	'$i,
+		echo -E '	'$i,
 	done
 
-	/bin/echo "
+	echo -E "
 };
 
 int signals[] = {
 "
 	for i in $signals
 	do
-		/bin/echo '	'$i,
+		echo -E '	'$i,
 	done
 
-	# Use /bin/echo to avoid builtin echo,
-	# which interprets \n itself
-	/bin/echo '
+	# Use -E because on some systems bash builtin interprets \n itself.
+	echo -E '
 };
 
 static int
@@ -389,4 +416,4 @@ main(void)
 '
 ) >_errors.c
 
-$GCC $ccflags -o _errors _errors.c && $GORUN ./_errors && rm -f _errors.c _errors _const.go _error.grep _signal.grep _error.out
+$CC $ccflags -o _errors _errors.c && $GORUN ./_errors && rm -f _errors.c _errors _const.go _error.grep _signal.grep _error.out

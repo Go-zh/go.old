@@ -23,6 +23,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+// +build !plan9
+
 #include "../../cmd/ld/textflag.h"
 
 TEXT runtime·memmove(SB), NOSPLIT, $0-12

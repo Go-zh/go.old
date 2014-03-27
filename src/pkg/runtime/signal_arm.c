@@ -52,7 +52,7 @@ runtime·sighandler(int32 sig, Siginfo *info, void *ctxt, G *gp)
 
 	t = &runtime·sigtab[sig];
 	if(SIG_CODE0(info, ctxt) != SI_USER && (t->flags & SigPanic)) {
-		if(gp == nil || gp == m->g0)
+		if(!runtime·canpanic(gp))
 			goto Throw;
 
 		// Make it look like a call to the signal func.
@@ -112,6 +112,7 @@ Throw:
 	runtime·printf("\n");
 
 	if(runtime·gotraceback(&crash)){
+		runtime·goroutineheader(gp);
 		runtime·traceback(SIG_PC(info, ctxt), SIG_SP(info, ctxt), SIG_LR(info, ctxt), gp);
 		runtime·tracebackothers(gp);
 		runtime·printf("\n");

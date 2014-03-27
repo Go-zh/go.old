@@ -74,6 +74,7 @@ EXTERN	LSym**	dynexp;
 EXTERN	int	nldflag;
 EXTERN	char**	ldflag;
 EXTERN	int	havedynamic;
+EXTERN	int	funcalign;
 EXTERN	int	iscgo;
 EXTERN	int	elfglobalsymndx;
 EXTERN	char*	flag_installsuffix;
@@ -141,8 +142,9 @@ struct Header {
 EXTERN	char*	headstring;
 extern	Header	headers[];
 
-#pragma	varargck	type	"O"	int
 #pragma	varargck	type	"Y"	LSym*
+#pragma	varargck	type	"Z"	char*
+#pragma	varargck	type	"i"	char*
 
 // buffered output
 
@@ -222,6 +224,7 @@ void	hostlink(void);
 void	hostobjs(void);
 int	iconv(Fmt *fp);
 void	importcycles(void);
+void	linkarchinit(void);
 void	ldelf(Biobuf *f, char *pkg, int64 len, char *pn);
 void	ldhostobj(void (*ld)(Biobuf*, char*, int64, char*), Biobuf *f, char *pkg, int64 len, char *pn, char *file);
 void	ldmacho(Biobuf *f, char *pkg, int64 len, char *pn);
@@ -271,3 +274,6 @@ void	wputl(ushort w);
 void	xdefine(char *p, int t, vlong v);
 void	zerosig(char *sp);
 void	archinit(void);
+void	diag(char *fmt, ...);
+
+#pragma	varargck	argpos	diag	1

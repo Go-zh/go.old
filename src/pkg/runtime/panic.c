@@ -205,20 +205,28 @@ printpanics(Panic *p)
 }
 
 static void recovery(G*);
+static void abortpanic(Panic*);
+static FuncVal abortpanicV = { (void(*)(void))abortpanic };
 
 // The implementation of the predeclared function panic.
 void
 runtime·panic(Eface e)
 {
-	Defer *d;
-	Panic *p;
+	Defer *d, dabort;
+	Panic p;
 	void *pc, *argp;
-	
-	p = runtime·mal(sizeof *p);
-	p->arg = e;
-	p->link = g->panic;
-	p->stackbase = g->stackbase;
-	g->panic = p;
+
+	runtime·memclr((byte*)&p, sizeof p);
+	p.arg = e;
+	p.link = g->panic;
+	p.stackbase = g->stackbase;
+	g->panic = &p;
+
+	dabort.fn = &abortpanicV;
+	dabort.siz = sizeof(&p);
+	dabort.args[0] = &p;
+	dabort.argp = (void*)-1;  // unused because abortpanic never recovers
+	dabort.special = true;
 
 	for(;;) {
 		d = g->defer;
@@ -226,16 +234,36 @@ runtime·panic(Eface e)
 			break;
 		// take defer off list in case of recursive panic
 		g->defer = d->link;
-		g->ispanic = true;	// rock for newstack, where reflect.newstackcall ends up
+		g->ispanic = true;	// rock for runtime·newstack, where runtime·newstackcall ends up
 		argp = d->argp;
 		pc = d->pc;
+
+		// The deferred function may cause another panic,
+		// so newstackcall may not return. Set up a defer
+		// to mark this panic aborted if that happens.
+		dabort.link = g->defer;
+		g->defer = &dabort;
+		p.defer = d;
+
 		runtime·newstackcall(d->fn, (byte*)d->args, d->siz);
+
+		// Newstackcall did not panic. Remove dabort.
+		if(g->defer != &dabort)
+			runtime·throw("bad defer entry in panic");
+		g->defer = dabort.link;
+
 		freedefer(d);
-		if(p->recovered) {
-			g->panic = p->link;
+		if(p.recovered) {
+			g->panic = p.link;
+			// Aborted panics are marked but remain on the g->panic list.
+			// Recovery will unwind the stack frames containing their Panic structs.
+			// Remove them from the list and free the associated defers.
+			while(g->panic && g->panic->aborted) {
+				freedefer(g->panic->defer);
+				g->panic = g->panic->link;
+			}
 			if(g->panic == nil)	// must be done with signal
 				g->sig = 0;
-			runtime·free(p);
 			// Pass information about recovering frame to recovery.
 			g->sigcode0 = (uintptr)argp;
 			g->sigcode1 = (uintptr)pc;
@@ -247,7 +275,14 @@ runtime·panic(Eface e)
 	// ran out of deferred calls - old-school panic now
 	runtime·startpanic();
 	printpanics(g->panic);
-	runtime·dopanic(0);
+	runtime·dopanic(0);	// should not return
+	runtime·exit(1);	// not reached
+}
+
+static void
+abortpanic(Panic *p)
+{
+	p->aborted = true;
 }
 
 // Unwind the stack after a deferred function calls recover
@@ -304,10 +339,7 @@ runtime·unwindstack(G *gp, byte *sp)
 		gp->stackbase = top->stackbase;
 		gp->stackguard = top->stackguard;
 		gp->stackguard0 = gp->stackguard;
-		if(top->free != 0) {
-			gp->stacksize -= top->free;
-			runtime·stackfree(stk, top->free);
-		}
+		runtime·stackfree(gp, stk, top);
 	}
 
 	if(sp != nil && (sp < (byte*)gp->stackguard - StackGuard || (byte*)gp->stackbase < sp)) {
@@ -321,10 +353,11 @@ runtime·unwindstack(G *gp, byte *sp)
 // find the stack segment of its caller.
 #pragma textflag NOSPLIT
 void
-runtime·recover(byte *argp, Eface ret)
+runtime·recover(byte *argp, GoOutput retbase, ...)
 {
 	Panic *p;
 	Stktop *top;
+	Eface *ret;
 
 	// Must be an unrecovered panic in progress.
 	// Must be on a stack segment created for a deferred call during a panic.
@@ -335,16 +368,16 @@ runtime·recover(byte *argp, Eface ret)
 	// do not count as official calls to adjust what we consider the top frame
 	// while they are active on the stack. The linker emits adjustments of
 	// g->panicwrap in the prologue and epilogue of functions marked as wrappers.
+	ret = (Eface*)&retbase;
 	top = (Stktop*)g->stackbase;
 	p = g->panic;
 	if(p != nil && !p->recovered && top->panic && argp == (byte*)top - top->argsize - g->panicwrap) {
 		p->recovered = 1;
-		ret = p->arg;
+		*ret = p->arg;
 	} else {
-		ret.type = nil;
-		ret.data = nil;
+		ret->type = nil;
+		ret->data = nil;
 	}
-	FLUSH(&ret);
 }
 
 void
@@ -453,6 +486,29 @@ runtime·throwinit(void)
 	runtime·throw("recursive call during initialization - linker skew");
 }
 
+bool
+runtime·canpanic(G *gp)
+{
+	byte g;
+
+	USED(&g);  // don't use global g, it points to gsignal
+
+	// Is it okay for gp to panic instead of crashing the program?
+	// Yes, as long as it is running Go code, not runtime code,
+	// and not stuck in a system call.
+	if(gp == nil || gp != m->curg)
+		return false;
+	if(m->locks != 0 || m->mallocing != 0 || m->throwing != 0 || m->gcing != 0 || m->dying != 0)
+		return false;
+	if(gp->status != Grunning || gp->syscallsp != 0)
+		return false;
+#ifdef GOOS_windows
+	if(m->libcallsp != 0)
+		return false;
+#endif
+	return true;
+}
+
 void
 runtime·throw(int8 *s)
 {
@@ -487,4 +543,10 @@ runtime·Goexit(void)
 {
 	rundefer();
 	runtime·goexit();
+}
+
+void
+runtime·panicdivide(void)
+{
+	runtime·panicstring("integer divide by zero");
 }

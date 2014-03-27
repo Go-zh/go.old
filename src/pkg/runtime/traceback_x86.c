@@ -2,14 +2,21 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build amd64 386
+// +build amd64 amd64p32 386
 
 #include "runtime.h"
 #include "arch_GOARCH.h"
 #include "malloc.h"
 #include "funcdata.h"
+#ifdef GOOS_windows
+#include "defs_GOOS_GOARCH.h"
+#endif
 
 void runtime·sigpanic(void);
+
+#ifdef GOOS_windows
+void runtime·sigtramp(void);
+#endif
 
 // This code is also used for the 386 tracebacks.
 // Use uintptr for an appropriate word-sized integer.
@@ -19,7 +26,7 @@ void runtime·sigpanic(void);
 // collector (callback != nil).  A little clunky to merge these, but avoids
 // duplicating the code and all its subtlety.
 int32
-runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, uintptr *pcbuf, int32 max, void (*callback)(Stkframe*, void*), void *v, bool printall)
+runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, uintptr *pcbuf, int32 max, bool (*callback)(Stkframe*, void*), void *v, bool printall)
 {
 	int32 i, n, nprint, line;
 	uintptr tracepc;
@@ -52,7 +59,7 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 	// Start in the caller's frame.
 	if(frame.pc == 0) {
 		frame.pc = *(uintptr*)frame.sp;
-		frame.sp += sizeof(uintptr);
+		frame.sp += sizeof(uintreg);
 	}
 	
 	f = runtime·findfunc(frame.pc);
@@ -95,20 +102,62 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 			frame.fn = f;
 			continue;
 		}
+		
 		f = frame.fn;
+
+#ifdef GOOS_windows
+		// Windows exception handlers run on the actual g stack (there is room
+		// dedicated to this below the usual "bottom of stack"), not on a separate
+		// stack. As a result, we have to be able to unwind past the exception
+		// handler when called to unwind during stack growth inside the handler.
+		// Recognize the frame at the call to sighandler in sigtramp and unwind
+		// using the context argument passed to the call. This is awful.
+		if(f != nil && f->entry == (uintptr)runtime·sigtramp && frame.pc > f->entry) {
+			Context *r;
+			
+			// Invoke callback so that stack copier sees an uncopyable frame.
+			if(callback != nil) {
+				frame.argp = nil;
+				frame.arglen = 0;
+				if(!callback(&frame, v))
+					return n;
+			}
+			r = (Context*)((uintptr*)frame.sp)[1];
+#ifdef GOARCH_amd64
+			frame.pc = r->Rip;
+			frame.sp = r->Rsp;
+#else
+			frame.pc = r->Eip;
+			frame.sp = r->Esp;
+#endif
+			frame.lr = 0;
+			frame.fp = 0;
+			frame.fn = nil;
+			if(printing && runtime·showframe(nil, gp))
+				runtime·printf("----- exception handler -----\n");
+			f = runtime·findfunc(frame.pc);
+			if(f == nil) {
+				runtime·printf("runtime: unknown pc %p after exception handler\n", frame.pc);
+				if(callback != nil)
+					runtime·throw("unknown pc");
+			}
+			frame.fn = f;
+			continue;
+		}
+#endif
 
 		// Found an actual function.
 		// Derive frame pointer and link register.
 		if(frame.fp == 0) {
 			frame.fp = frame.sp + runtime·funcspdelta(f, frame.pc);
-			frame.fp += sizeof(uintptr); // caller PC
+			frame.fp += sizeof(uintreg); // caller PC
 		}
 		if(runtime·topofstack(f)) {
 			frame.lr = 0;
 			flr = nil;
 		} else {
 			if(frame.lr == 0)
-				frame.lr = ((uintptr*)frame.fp)[-1];
+				frame.lr = ((uintreg*)frame.fp)[-1];
 			flr = runtime·findfunc(frame.lr);
 			if(flr == nil) {
 				runtime·printf("runtime: unexpected return pc for %s called from %p\n", runtime·funcname(f), frame.lr);
@@ -117,7 +166,7 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 			}
 		}
 		
-		frame.varp = (byte*)frame.fp - sizeof(uintptr);
+		frame.varp = (byte*)frame.fp - sizeof(uintreg);
 
 		// Derive size of arguments.
 		// Most functions have a fixed-size argument block,
@@ -151,8 +200,10 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 
 		if(pcbuf != nil)
 			pcbuf[n] = frame.pc;
-		if(callback != nil)
-			callback(&frame, v);
+		if(callback != nil) {
+			if(!callback(&frame, v))
+				return n;
+		}
 		if(printing) {
 			if(printall || runtime·showframe(f, gp)) {
 				// Print during crash.
@@ -232,6 +283,8 @@ runtime·printcreatedby(G *gp)
 void
 runtime·traceback(uintptr pc, uintptr sp, uintptr lr, G *gp)
 {
+	int32 n;
+
 	USED(lr);
 
 	if(gp->status == Gsyscall) {
@@ -242,8 +295,11 @@ runtime·traceback(uintptr pc, uintptr sp, uintptr lr, G *gp)
 	
 	// Print traceback. By default, omits runtime frames.
 	// If that means we print nothing at all, repeat forcing all frames printed.
-	if(runtime·gentraceback(pc, sp, 0, gp, 0, nil, 100, nil, nil, false) == 0)
-		runtime·gentraceback(pc, sp, 0, gp, 0, nil, 100, nil, nil, true);
+	n = runtime·gentraceback(pc, sp, 0, gp, 0, nil, TracebackMaxFrames, nil, nil, false);
+	if(n == 0)
+		n = runtime·gentraceback(pc, sp, 0, gp, 0, nil, TracebackMaxFrames, nil, nil, true);
+	if(n == TracebackMaxFrames)
+		runtime·printf("...additional frames elided...\n");
 	runtime·printcreatedby(gp);
 }
 

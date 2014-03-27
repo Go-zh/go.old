@@ -861,9 +861,8 @@ When a coroutine blocks, such as by calling a blocking system call,
 the run-time automatically moves other coroutines on the same operating
 system thread to a different, runnable thread so they won't be blocked.
 The programmer sees none of this, which is the point.
-The result, which we call goroutines, can be very cheap: unless they spend a lot of time
-in long-running system calls, they cost little more than the memory
-for the stack, which is just a few kilobytes.
+The result, which we call goroutines, can be very cheap: they have little
+overhead beyond the memory for the stack, which is just a few kilobytes.
 </p>
 </div>
 
@@ -878,12 +877,15 @@ Go程是让使发易于使用的一部分。这个想法已经存在了一段时
 
 <div class="english">
 <p>
-To make the stacks small, Go's run-time uses segmented stacks.  A newly
+To make the stacks small, Go's run-time uses resizable, bounded stacks.  A newly
 minted goroutine is given a few kilobytes, which is almost always enough.
-When it isn't, the run-time allocates (and frees) extension segments automatically.
-The overhead averages about three cheap instructions per function call.
+When it isn't, the run-time grows (and shrinks) the memory for storing
+the stack automatically, allowing many goroutines to live in a modest
+amount of memory.
+The CPU overhead averages about three cheap instructions per function call.
 It is practical to create hundreds of thousands of goroutines in the same
-address space.  If goroutines were just threads, system resources would
+address space.
+If goroutines were just threads, system resources would
 run out at a much smaller number.
 </p>
 </div>
@@ -1912,6 +1914,21 @@ All the Go code in the repository has been run through <code>gofmt</code>.
 文档<a href="effective_go.html">高效Go编程</a>包含了一些风格建议。
 更直接的说，程序 <code>gofmt</code> 是一个美观打印工具，它的目的在于强制实施布局规则，
 它可以取代要解释该做什么和不该做什么的纲要所有代码仓库中的Go代码都运行过了 <code>gofmt</code>。
+</p>
+
+<div class="english">
+<p>
+The document titled
+<a href="http://golang.org/s/comments">Go Code Review Comments</a>
+is a collection of very short essays about details of Go idiom that are often
+missed by programmers.
+It is a handy reference for people doing code reviews for Go projects.
+</p>
+</div>
+
+<p>
+文档 <a href="http://golang.org/s/comments">Go 代码审核评注</a>
+收集了 Go 的习惯用法，程序员们经常忽视它们。它是一份便于审核人员审核Go项目代码的引用资料。
 </p>
 
 <div class="english">
@@ -3239,9 +3256,10 @@ it now. <code>Gccgo</code>'s run-time support uses <code>glibc</code>.
 <code>Gc</code> uses a custom library to keep the footprint under
 control; it is
 compiled with a version of the Plan 9 C compiler that supports
-segmented stacks for goroutines.
-The <code>gccgo</code> compiler implements segmented
-stacks on Linux only, supported by recent modifications to the gold linker.
+resizable stacks for goroutines.
+The <code>gccgo</code> compiler implements these on Linux only,
+using a technique called segmented stacks,
+supported by recent modifications to the gold linker.
 </p>
 </div>
 

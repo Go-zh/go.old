@@ -17,6 +17,12 @@ ulimit -c 0
 # Raise soft limits to hard limits for NetBSD/OpenBSD.
 # We need at least 256 files and ~300 MB of bss.
 # On OS X ulimit -S -n rejects 'unlimited'.
+#
+# Note that ulimit -S -n may fail if ulimit -H -n is set higher than a
+# non-root process is allowed to set the high limit.
+# This is a system misconfiguration and should be fixed on the
+# broken system, not "fixed" by ignoring the failure here.
+# See longer discussion on golang.org/issue/7381. 
 [ "$(ulimit -H -n)" == "unlimited" ] || ulimit -S -n $(ulimit -H -n)
 [ "$(ulimit -H -d)" == "unlimited" ] || ulimit -S -d $(ulimit -H -d)
 
@@ -48,6 +54,8 @@ echo '# Testing packages.'
 time go test std -short -timeout=$(expr 120 \* $timeout_scale)s
 echo
 
+# We set GOMAXPROCS=2 in addition to -cpu=1,2,4 in order to test runtime bootstrap code,
+# creation of first goroutines and first garbage collections in the parallel setting.
 echo '# GOMAXPROCS=2 runtime -cpu=1,2,4'
 GOMAXPROCS=2 go test runtime -short -timeout=$(expr 300 \* $timeout_scale)s -cpu=1,2,4
 echo
@@ -173,7 +181,7 @@ rm -f goplay
 
 [ "$GOARCH" == arm ] ||
 (xcd ../test/bench/shootout
-./timing.sh -test || exit 1
+time ./timing.sh -test || exit 1
 ) || exit $?
 
 [ "$GOOS" == openbsd ] || # golang.org/issue/5057

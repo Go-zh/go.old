@@ -328,6 +328,7 @@ escfunc(EscState *e, Node *func)
 			ll->n->escloopdepth = 0;
 			break;
 		case PPARAM:
+			ll->n->escloopdepth = 1; 
 			if(ll->n->type && !haspointers(ll->n->type))
 				break;
 			if(curfn->nbody == nil && !curfn->noescape)
@@ -335,7 +336,6 @@ escfunc(EscState *e, Node *func)
 			else
 				ll->n->esc = EscNone;	// prime for escflood later
 			e->noesc = list(e->noesc, ll->n);
-			ll->n->escloopdepth = 1; 
 			break;
 		}
 	}
@@ -423,6 +423,9 @@ esc(EscState *e, Node *n)
 
 	lno = setlineno(n);
 
+	// ninit logically runs at a different loopdepth than the rest of the for loop.
+	esclist(e, n->ninit);
+
 	if(n->op == OFOR || n->op == ORANGE)
 		e->loopdepth++;
 
@@ -430,7 +433,6 @@ esc(EscState *e, Node *n)
 	esc(e, n->right);
 	esc(e, n->ntest);
 	esc(e, n->nincr);
-	esclist(e, n->ninit);
 	esclist(e, n->nbody);
 	esclist(e, n->nelse);
 	esclist(e, n->list);
@@ -628,7 +630,6 @@ esc(EscState *e, Node *n)
 			escassign(e, n, a);
 		}
 		// fallthrough
-	case OADDR:
 	case OMAKECHAN:
 	case OMAKEMAP:
 	case OMAKESLICE:
@@ -636,6 +637,24 @@ esc(EscState *e, Node *n)
 		n->escloopdepth = e->loopdepth;
 		n->esc = EscNone;  // until proven otherwise
 		e->noesc = list(e->noesc, n);
+		break;
+
+	case OADDR:
+		n->esc = EscNone;  // until proven otherwise
+		e->noesc = list(e->noesc, n);
+		// current loop depth is an upper bound on actual loop depth
+		// of addressed value.
+		n->escloopdepth = e->loopdepth;
+		// for &x, use loop depth of x.
+		if(n->left->op == ONAME) {
+			switch(n->left->class) {
+			case PAUTO:
+			case PPARAM:
+			case PPARAMOUT:
+				n->escloopdepth = n->left->escloopdepth;
+				break;
+			}
+		}
 		break;
 	}
 

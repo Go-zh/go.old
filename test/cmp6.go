@@ -54,6 +54,14 @@ func main() {
 	use(p3 == p1)
 	use(p3 == p2)
 
+	// Arrays are comparable if and only if their element type is comparable.
+	var a1 [1]int
+	var a2 [1]func()
+	var a3 [0]func()
+	use(a1 == a1)
+	use(a2 == a2) // ERROR "invalid operation|invalid comparison"
+	use(a3 == a3) // ERROR "invalid operation|invalid comparison"
+
 	// Comparison of structs should have a good message
 	use(t3 == t3) // ERROR "struct|expected"
 	use(t4 == t4) // ERROR "cannot be compared|non-comparable"

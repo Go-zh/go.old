@@ -20,6 +20,7 @@ var (
 	dunno     = []byte("???")
 	centerDot = []byte("·")
 	dot       = []byte(".")
+	slash     = []byte("/")
 )
 
 // PrintStack prints to standard error the stack trace returned by Stack.
@@ -104,12 +105,18 @@ func function(pc uintptr) []byte {
 	//	runtime/debug.*T·ptrmethod
 	// and want
 	//	*T.ptrmethod
+	// Since the package path might contains dots (e.g. code.google.com/...),
+	// we first remove the path prefix if there is one.
 	//
 	// name 包括该包的路径名，若已经包含了文件名，它就不是必要的了。
 	// 另外，它有中间点，也就是说，我们看到
 	//	runtime/debug.*T·ptrmethod
 	// 而想要
 	//	*T.ptrmethod
+	// 由于包路径可能包含点（例如 code.google.com/...），因此首先要移除路径前缀。
+	if lastslash := bytes.LastIndex(name, slash); lastslash >= 0 {
+		name = name[lastslash+1:]
+	}
 	if period := bytes.Index(name, dot); period >= 0 {
 		name = name[period+1:]
 	}

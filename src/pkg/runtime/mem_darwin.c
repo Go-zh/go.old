@@ -41,11 +41,18 @@ runtime·SysFree(void *v, uintptr n, uint64 *stat)
 	runtime·munmap(v, n);
 }
 
+void
+runtime·SysFault(void *v, uintptr n)
+{
+	runtime·mmap(v, n, PROT_NONE, MAP_ANON|MAP_PRIVATE|MAP_FIXED, -1, 0);
+}
+
 void*
-runtime·SysReserve(void *v, uintptr n)
+runtime·SysReserve(void *v, uintptr n, bool *reserved)
 {
 	void *p;
 
+	*reserved = true;
 	p = runtime·mmap(v, n, PROT_NONE, MAP_ANON|MAP_PRIVATE, -1, 0);
 	if(p < (void*)4096)
 		return nil;
@@ -58,10 +65,12 @@ enum
 };
 
 void
-runtime·SysMap(void *v, uintptr n, uint64 *stat)
+runtime·SysMap(void *v, uintptr n, bool reserved, uint64 *stat)
 {
 	void *p;
 	
+	USED(reserved);
+
 	runtime·xadd64(stat, n);
 	p = runtime·mmap(v, n, PROT_READ|PROT_WRITE, MAP_ANON|MAP_FIXED|MAP_PRIVATE, -1, 0);
 	if(p == (void*)ENOMEM)

@@ -57,6 +57,14 @@ pathchar(void)
 	return '/';
 }
 
+int
+Lconv(Fmt *fp)
+{
+	return linklinefmt(ctxt, fp);
+}
+
+LinkArch*       thelinkarch = &linkamd64;
+
 void
 main(int argc, char *argv[])
 {
@@ -66,11 +74,20 @@ main(int argc, char *argv[])
 	thechar = '6';
 	thestring = "amd64";
 
-	ctxt = linknew(&linkamd64);
+	// Allow GOARCH=thestring or GOARCH=thestringsuffix,
+	// but not other values.	
+	p = getgoarch();
+	if(strncmp(p, thestring, strlen(thestring)) != 0)
+		sysfatal("cannot use %cc with GOARCH=%s", thechar, p);
+	if(strcmp(p, "amd64p32") == 0)
+		thelinkarch = &linkamd64p32;
+
+	ctxt = linknew(thelinkarch);
 	ctxt->diag = yyerror;
 	ctxt->bso = &bstdout;
 	Binit(&bstdout, 1, OWRITE);
 	listinit6();
+	fmtinstall('L', Lconv);
 
 	ensuresymb(NSYMB);
 	memset(debug, 0, sizeof(debug));
@@ -157,7 +174,7 @@ assemble(char *file)
 		errorexit();
 	}
 	Binit(&obuf, of, OWRITE);
-	Bprint(&obuf, "go object %s %s %s\n", getgoos(), thestring, getgoversion());
+	Bprint(&obuf, "go object %s %s %s\n", getgoos(), getgoarch(), getgoversion());
 	Bprint(&obuf, "!\n");
 
 	for(pass = 1; pass <= 2; pass++) {
@@ -507,6 +524,7 @@ struct
 	"MOVLQZX",	LTYPE3, AMOVLQZX,
 	"MOVNTIL",	LTYPE3,	AMOVNTIL,
 	"MOVNTIQ",	LTYPE3,	AMOVNTIQ,
+	"MOVQL",	LTYPE3, AMOVQL,
 	"MOVWLSX",	LTYPE3, AMOVWLSX,
 	"MOVWLZX",	LTYPE3, AMOVWLZX,
 	"MOVWQSX",	LTYPE3,	AMOVWQSX,

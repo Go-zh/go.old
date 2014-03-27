@@ -7,6 +7,7 @@
 (require 'cl)
 (require 'etags)
 (require 'ffap)
+(require 'find-file)
 (require 'ring)
 (require 'url)
 
@@ -168,6 +169,13 @@ from https://github.com/bradfitz/goimports."
   :type 'string
   :group 'go)
 
+(defcustom go-other-file-alist
+  '(("_test\\.go\\'" (".go"))
+    ("\\.go\\'" ("_test.go")))
+  "See the documentation of `ff-other-file-alist' for details."
+  :type '(repeat (list regexp (choice (repeat string) function)))
+  :group 'go)
+
 (defface go-coverage-untracked
   '((t (:foreground "#505050")))
   "Coverage color of untracked code."
@@ -261,7 +269,7 @@ For mode=set, all covered lines will have this weight."
    (if go-fontify-function-calls
        `((,(concat "\\(" go-identifier-regexp "\\)[[:space:]]*(") 1 font-lock-function-name-face) ;; function call/method name
          (,(concat "[^[:word:][:multibyte:]](\\(" go-identifier-regexp "\\))[[:space:]]*(") 1 font-lock-function-name-face)) ;; bracketed function call
-     `((,go-func-meth-regexp 1 font-lock-function-name-face))) ;; method name
+     `((,go-func-meth-regexp 2 font-lock-function-name-face))) ;; method name
 
    `(
      (,(concat (go--regexp-enclose-in-symbol "type") "[[:space:]]+\\([^[:space:]]+\\)") 1 font-lock-type-face) ;; types
@@ -561,6 +569,8 @@ recommended that you look at goflymake
   (set (make-local-variable 'go-dangling-cache) (make-hash-table :test 'eql))
   (add-hook 'before-change-functions (lambda (x y) (setq go-dangling-cache (make-hash-table :test 'eql))) t t)
 
+  ;; ff-find-other-file
+  (setq ff-other-file-alist 'go-other-file-alist)
 
   (setq imenu-generic-expression
         '(("type" "^type *\\([^ \t\n\r\f]*\\)" 1)
@@ -995,7 +1005,7 @@ description at POINT."
                            "-f"
                            (file-truename (buffer-file-name (go--coverage-origin-buffer)))
                            "-o"
-                           (number-to-string (go--position-bytes (point))))
+                           (number-to-string (go--position-bytes point)))
       (with-current-buffer outbuf
         (split-string (buffer-substring-no-properties (point-min) (point-max)) "\n")))))
 

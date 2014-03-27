@@ -50,7 +50,7 @@ runtime·futexsleep(uint32 *addr, uint32 val, int64 ns)
 	Timespec ts;
 
 	if(ns < 0) {
-		ret = runtime·sys_umtx_op(addr, UMTX_OP_WAIT_UINT, val, nil, nil);
+		ret = runtime·sys_umtx_op(addr, UMTX_OP_WAIT_UINT_PRIVATE, val, nil, nil);
 		if(ret >= 0 || ret == -EINTR)
 			return;
 		goto fail;
@@ -58,7 +58,7 @@ runtime·futexsleep(uint32 *addr, uint32 val, int64 ns)
 	// NOTE: tv_nsec is int64 on amd64, so this assumes a little-endian system.
 	ts.tv_nsec = 0;
 	ts.tv_sec = runtime·timediv(ns, 1000000000, (int32*)&ts.tv_nsec);
-	ret = runtime·sys_umtx_op(addr, UMTX_OP_WAIT_UINT, val, nil, &ts);
+	ret = runtime·sys_umtx_op(addr, UMTX_OP_WAIT_UINT_PRIVATE, val, nil, &ts);
 	if(ret >= 0 || ret == -EINTR)
 		return;
 
@@ -78,7 +78,7 @@ runtime·futexwakeup(uint32 *addr, uint32 cnt)
 {
 	int32 ret;
 
-	ret = runtime·sys_umtx_op(addr, UMTX_OP_WAKE, cnt, nil, nil);
+	ret = runtime·sys_umtx_op(addr, UMTX_OP_WAKE_PRIVATE, cnt, nil, nil);
 	if(ret >= 0)
 		return;
 
@@ -179,7 +179,7 @@ runtime·sigpanic(void)
 {
 	switch(g->sig) {
 	case SIGBUS:
-		if(g->sigcode0 == BUS_ADRERR && g->sigcode1 < 0x1000) {
+		if(g->sigcode0 == BUS_ADRERR && g->sigcode1 < 0x1000 || g->paniconfault) {
 			if(g->sigpc == 0)
 				runtime·panicstring("call of nil func value");
 			runtime·panicstring("invalid memory address or nil pointer dereference");
@@ -187,7 +187,7 @@ runtime·sigpanic(void)
 		runtime·printf("unexpected fault address %p\n", g->sigcode1);
 		runtime·throw("fault");
 	case SIGSEGV:
-		if((g->sigcode0 == 0 || g->sigcode0 == SEGV_MAPERR || g->sigcode0 == SEGV_ACCERR) && g->sigcode1 < 0x1000) {
+		if((g->sigcode0 == 0 || g->sigcode0 == SEGV_MAPERR || g->sigcode0 == SEGV_ACCERR) && g->sigcode1 < 0x1000 || g->paniconfault) {
 			if(g->sigpc == 0)
 				runtime·panicstring("call of nil func value");
 			runtime·panicstring("invalid memory address or nil pointer dereference");

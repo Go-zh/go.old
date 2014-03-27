@@ -11,5 +11,6 @@ enum {
 #else
 	RuntimeGogoBytes = 64,
 #endif
+	PhysPageSize = 4096,
 	PCQuantum = 1
 };

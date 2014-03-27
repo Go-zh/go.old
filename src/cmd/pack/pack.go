@@ -5,6 +5,9 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -32,7 +35,10 @@ the name, and if shorter, space padded on the right.
 */
 
 const usageMessage = `Usage: pack op file.a [name....]
-Where op is one of prtx optionally followed by v for verbose output.
+Where op is one of cprtx optionally followed by v for verbose output.
+For compatibility with old Go build environments the op string grc is
+accepted as a synonym for c.
+
 For more information, run
 	godoc cmd/pack`
 
@@ -43,6 +49,7 @@ func usage() {
 
 func main() {
 	log.SetFlags(0)
+	log.SetPrefix("pack: ")
 	// need "pack op archive" at least.
 	if len(os.Args) < 3 {
 		usage()
@@ -57,6 +64,10 @@ func main() {
 		ar = archive(os.Args[2], os.O_RDWR, os.Args[3:])
 		ar.scan(ar.skipContents)
 		ar.addFiles()
+	case 'c':
+		ar = archive(os.Args[2], os.O_RDWR|os.O_TRUNC, os.Args[3:])
+		ar.addPkgdef()
+		ar.addFiles()
 	case 't':
 		ar = archive(os.Args[2], os.O_RDONLY, os.Args[3:])
 		ar.scan(ar.tableOfContents)
@@ -67,7 +78,7 @@ func main() {
 		usage()
 	}
 	if len(ar.files) > 0 {
-		log.Fatalf("pack: file %q not in archive", ar.files[0])
+		log.Fatalf("file %q not in archive", ar.files[0])
 	}
 }
 
@@ -82,9 +93,17 @@ var (
 
 // setOp parses the operation string (first argument).
 func setOp(arg string) {
+	// Recognize 'go tool pack grc' because that was the
+	// formerly canonical way to build a new archive
+	// from a set of input files. Accepting it keeps old
+	// build systems working with both Go 1.2 and Go 1.3.
+	if arg == "grc" {
+		arg = "c"
+	}
+
 	for _, r := range arg {
 		switch r {
-		case 'p', 'r', 't', 'x':
+		case 'c', 'p', 'r', 't', 'x':
 			if op != 0 {
 				// At most one can be set.
 				usage()
@@ -113,23 +132,26 @@ const (
 // An Archive represents an open archive file. It is always scanned sequentially
 // from start to end, without backing up.
 type Archive struct {
-	fd    *os.File // Open file descriptor.
-	files []string // Explicit list of files to be processed.
+	fd       *os.File // Open file descriptor.
+	files    []string // Explicit list of files to be processed.
+	pad      int      // Padding bytes required at end of current archive file
+	matchAll bool     // match all files in archive
 }
 
 // archive opens (or if necessary creates) the named archive.
 func archive(name string, mode int, files []string) *Archive {
 	fd, err := os.OpenFile(name, mode, 0)
-	if err != nil && mode == os.O_RDWR && os.IsNotExist(err) {
+	if err != nil && mode&^os.O_TRUNC == os.O_RDWR && os.IsNotExist(err) {
 		fd, err = create(name)
 	}
 	if err != nil {
-		log.Fatal("pack: ", err)
+		log.Fatal(err)
 	}
 	mustBeArchive(fd)
 	return &Archive{
-		fd:    fd,
-		files: files,
+		fd:       fd,
+		files:    files,
+		matchAll: len(files) == 0,
 	}
 }
 
@@ -150,7 +172,7 @@ func mustBeArchive(fd *os.File) {
 	buf := make([]byte, len(arHeader))
 	_, err := io.ReadFull(fd, buf)
 	if err != nil || string(buf) != arHeader {
-		log.Fatal("pack: file is not an archive: bad header")
+		log.Fatal("file is not an archive: bad header")
 	}
 }
 
@@ -183,19 +205,19 @@ func (ar *Archive) readMetadata() *Entry {
 		return nil
 	}
 	if err != nil || buf[entryLen-2] != '`' || buf[entryLen-1] != '\n' {
-		log.Fatal("pack: file is not an archive: bad entry")
+		log.Fatal("file is not an archive: bad entry")
 	}
 	entry := new(Entry)
 	entry.name = strings.TrimRight(string(buf[:16]), " ")
 	if len(entry.name) == 0 {
-		log.Fatal("pack: file is not an archive: bad name")
+		log.Fatal("file is not an archive: bad name")
 	}
 	buf = buf[16:]
 	str := string(buf)
 	get := func(width, base, bitsize int) int64 {
 		v, err := strconv.ParseInt(strings.TrimRight(str[:width], " "), base, bitsize)
 		if err != nil {
-			log.Fatal("pack: file is not an archive: bad number in entry: ", err)
+			log.Fatal("file is not an archive: bad number in entry: ", err)
 		}
 		str = str[width:]
 		return v
@@ -234,15 +256,15 @@ func listEntry(ar *Archive, entry *Entry, verbose bool) {
 func (ar *Archive) output(entry *Entry, w io.Writer) {
 	n, err := io.Copy(w, io.LimitReader(ar.fd, entry.size))
 	if err != nil {
-		log.Fatal("pack: ", err)
+		log.Fatal(err)
 	}
 	if n != entry.size {
-		log.Fatal("pack: short file")
+		log.Fatal("short file")
 	}
 	if entry.size&1 == 1 {
 		_, err := ar.fd.Seek(1, 1)
 		if err != nil {
-			log.Fatal("pack: ", err)
+			log.Fatal(err)
 		}
 	}
 }
@@ -255,14 +277,14 @@ func (ar *Archive) skip(entry *Entry) {
 	}
 	_, err := ar.fd.Seek(size, 1)
 	if err != nil {
-		log.Fatal("pack: ", err)
+		log.Fatal(err)
 	}
 }
 
 // match reports whether the entry matches the argument list.
 // If it does, it also drops the file from the to-be-processed list.
 func (ar *Archive) match(entry *Entry) bool {
-	if len(ar.files) == 0 {
+	if ar.matchAll {
 		return true
 	}
 	for i, name := range ar.files {
@@ -288,7 +310,7 @@ func (ar *Archive) addFiles() {
 		}
 		fd, err := os.Open(file)
 		if err != nil {
-			log.Fatal("pack: ", err)
+			log.Fatal(err)
 		}
 		ar.addFile(fd)
 	}
@@ -310,29 +332,90 @@ func (ar *Archive) addFile(fd FileLike) {
 	// First, get its info.
 	info, err := fd.Stat()
 	if err != nil {
-		log.Fatal("pack: ", err)
+		log.Fatal(err)
 	}
 	// mtime, uid, gid are all zero so repeated builds produce identical output.
 	mtime := int64(0)
 	uid := 0
 	gid := 0
-	n, err := fmt.Fprintf(ar.fd, entryHeader, exactly16Bytes(info.Name()), mtime, uid, gid, info.Mode(), info.Size())
-	if err != nil || n != entryLen {
-		log.Fatal("pack: writing entry header: ", err)
-	}
+	ar.startFile(info.Name(), mtime, uid, gid, info.Mode(), info.Size())
 	n64, err := io.Copy(ar.fd, fd)
 	if err != nil {
-		log.Fatal("pack: writing file: ", err)
+		log.Fatal("writing file: ", err)
 	}
 	if n64 != info.Size() {
-		log.Fatal("pack: writing file: wrote %d bytes; file is size %d", n64, info.Size())
+		log.Fatal("writing file: wrote %d bytes; file is size %d", n64, info.Size())
 	}
-	if info.Size()&1 == 1 {
-		_, err = ar.fd.Write([]byte{0})
+	ar.endFile()
+}
+
+// startFile writes the archive entry header.
+func (ar *Archive) startFile(name string, mtime int64, uid, gid int, mode os.FileMode, size int64) {
+	n, err := fmt.Fprintf(ar.fd, entryHeader, exactly16Bytes(name), mtime, uid, gid, mode, size)
+	if err != nil || n != entryLen {
+		log.Fatal("writing entry header: ", err)
+	}
+	ar.pad = int(size & 1)
+}
+
+// endFile writes the archive entry tail (a single byte of padding, if the file size was odd).
+func (ar *Archive) endFile() {
+	if ar.pad != 0 {
+		_, err := ar.fd.Write([]byte{0})
 		if err != nil {
-			log.Fatal("pack: writing archive: ", err)
+			log.Fatal("writing archive: ", err)
 		}
+		ar.pad = 0
 	}
+}
+
+// addPkgdef adds the __.PKGDEF file to the archive, copied
+// from the first Go object file on the file list, if any.
+// The archive is known to be empty.
+func (ar *Archive) addPkgdef() {
+	for _, file := range ar.files {
+		pkgdef, err := readPkgdef(file)
+		if err != nil {
+			continue
+		}
+		if verbose {
+			fmt.Printf("__.PKGDEF # %s\n", file)
+		}
+		ar.startFile("__.PKGDEF", 0, 0, 0, 0644, int64(len(pkgdef)))
+		_, err = ar.fd.Write(pkgdef)
+		if err != nil {
+			log.Fatal("writing __.PKGDEF: ", err)
+		}
+		ar.endFile()
+		break
+	}
+}
+
+// readPkgdef extracts the __.PKGDEF data from a Go object file.
+func readPkgdef(file string) (data []byte, err error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	// Read from file, collecting header for __.PKGDEF.
+	// The header is from the beginning of the file until a line
+	// containing just "!". The first line must begin with "go object ".
+	var buf bytes.Buffer
+	scan := bufio.NewScanner(f)
+	for scan.Scan() {
+		line := scan.Text()
+		if buf.Len() == 0 && !strings.HasPrefix(line, "go object ") {
+			return nil, errors.New("not a Go object file")
+		}
+		if line == "!" {
+			break
+		}
+		buf.WriteString(line)
+		buf.WriteString("\n")
+	}
+	return buf.Bytes(), nil
 }
 
 // exactly16Bytes truncates the string if necessary so it is at most 16 bytes long,
@@ -387,7 +470,7 @@ func (ar *Archive) extractContents(entry *Entry) {
 		}
 		fd, err := os.OpenFile(entry.name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, entry.mode)
 		if err != nil {
-			log.Fatal("pack: ", err)
+			log.Fatal(err)
 		}
 		ar.output(entry, fd)
 		fd.Close()

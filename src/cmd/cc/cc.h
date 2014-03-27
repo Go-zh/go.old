@@ -55,6 +55,7 @@ typedef	struct	Bits	Bits;
 typedef	struct	Bvec	Bvec;
 typedef	struct	Dynimp	Dynimp;
 typedef	struct	Dynexp	Dynexp;
+typedef	struct	Var	Var;
 
 typedef	Rune	TRune;	/* target system type */
 
@@ -81,6 +82,14 @@ struct Bvec
 {
 	int32	n;	// number of bits
 	uint32	b[];
+};
+
+struct	Var
+{
+	vlong	offset;
+	LSym*	sym;
+	char	name;
+	char	etype;
 };
 
 struct	Node
@@ -497,8 +506,8 @@ EXTERN	Sym*	symstring;
 EXTERN	int	taggen;
 EXTERN	Type*	tfield;
 EXTERN	Type*	tufield;
-EXTERN	int	thechar;
-EXTERN	char*	thestring;
+extern	int	thechar;
+extern	char*	thestring;
 extern	LinkArch*	thelinkarch;
 EXTERN	Type*	thisfn;
 EXTERN	int32	thunk;
@@ -515,9 +524,11 @@ EXTERN	int	flag_largemodel;
 EXTERN	int	ncontin;
 EXTERN	int	canreach;
 EXTERN	int	warnreach;
+EXTERN	int	nacl;
 EXTERN	Bits	zbits;
 EXTERN	Fmt	pragcgobuf;
 EXTERN	Biobuf	bstdout;
+EXTERN	Var	var[NVAR];
 
 extern	char	*onames[], *tnames[], *gnames[];
 extern	char	*cnames[], *qnames[], *bnames[];
@@ -595,6 +606,7 @@ int	FNconv(Fmt*);
 int	Oconv(Fmt*);
 int	Qconv(Fmt*);
 int	VBconv(Fmt*);
+int	Bconv(Fmt*);
 void	setinclude(char*);
 
 /*
@@ -783,6 +795,7 @@ int32	exreg(Type*);
 int32	align(int32, Type*, int, int32*);
 int32	maxround(int32, int32);
 int	hasdotdotdot(void);
+void    linkarchinit(void);
 
 extern	schar	ewidth[];
 
@@ -806,6 +819,7 @@ int	machcap(Node*);
 #pragma	varargck	argpos	diag	2
 #pragma	varargck	argpos	yyerror	1
 
+#pragma	varargck	type	"B"	Bits
 #pragma	varargck	type	"F"	Node*
 #pragma	varargck	type	"L"	int32
 #pragma	varargck	type	"Q"	int32

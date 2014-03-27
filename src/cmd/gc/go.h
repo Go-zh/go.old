@@ -283,6 +283,7 @@ struct	Node
 	schar	likely; // likeliness of if statement
 	uchar	hasbreak;	// has break statement
 	uchar	needzero; // if it contains pointers, needs to be zeroed on function entry
+	uchar	needctxt;	// function uses context register (has closure variables)
 	uint	esc;		// EscXXX
 	int	funcdepth;
 
@@ -861,6 +862,7 @@ EXTERN	int	nerrors;
 EXTERN	int	nsavederrors;
 EXTERN	int	nsyntaxerrors;
 EXTERN	int	safemode;
+EXTERN	int	nolocalimports;
 EXTERN	char	namebuf[NSYMB];
 EXTERN	char	lexbuf[NSYMB];
 EXTERN	char	litbuf[NSYMB];
@@ -950,6 +952,7 @@ EXTERN	Node*	curfn;
 
 EXTERN	int	widthptr;
 EXTERN	int	widthint;
+EXTERN	int	widthreg;
 
 EXTERN	Node*	typesw;
 EXTERN	Node*	nblank;
@@ -981,6 +984,8 @@ EXTERN	int	precisestack_enabled;
 EXTERN	int	writearchive;
 
 EXTERN	Biobuf	bstdout;
+
+EXTERN	int	nacl;
 
 /*
  *	y.tab.c
@@ -1250,6 +1255,7 @@ void	mpmovecflt(Mpflt *a, double c);
 void	mpmulfltflt(Mpflt *a, Mpflt *b);
 void	mpnegflt(Mpflt *a);
 void	mpnorm(Mpflt *a);
+void	mpsetexp(Mpflt *a, int exp);
 int	mptestflt(Mpflt *a);
 int	sigfig(Mpflt *a);
 
@@ -1452,6 +1458,7 @@ void	walkstmt(Node **np);
 void	walkstmtlist(NodeList *l);
 Node*	conv(Node*, Type*);
 int	candiscard(Node*);
+Node*	outervalue(Node*);
 
 /*
  *	arch-specific ggen.c/gsubr.c/gobj.c/pgen.c/plive.c
@@ -1494,11 +1501,12 @@ void	gdatacomplex(Node*, Mpcplx*);
 void	gdatastring(Node*, Strlit*);
 void	ggloblnod(Node *nam);
 void	ggloblsym(Sym *s, int32 width, int dupok, int rodata);
-void	gfatvardef(Node*);
+void	gvardef(Node*);
 Prog*	gjmp(Prog*);
 void	gused(Node*);
 void	movelarge(NodeList*);
 int	isfat(Type*);
+void	linkarchinit(void);
 void	liveness(Node*, Prog*, Sym*, Sym*, Sym*);
 void	markautoused(Prog*);
 Plist*	newplist(void);
@@ -1507,31 +1515,24 @@ void	nopout(Prog*);
 void	patch(Prog*, Prog*);
 Prog*	unpatch(Prog*);
 
-#pragma	varargck	type	"A"	int
 #pragma	varargck	type	"B"	Mpint*
-#pragma	varargck	type	"D"	Addr*
-#pragma	varargck	type	"lD"	Addr*
 #pragma	varargck	type	"E"	int
 #pragma	varargck	type	"E"	uint
 #pragma	varargck	type	"F"	Mpflt*
 #pragma	varargck	type	"H"	NodeList*
 #pragma	varargck	type	"J"	Node*
-#pragma	varargck	type	"lL"	int
-#pragma	varargck	type	"lL"	uint
-#pragma	varargck	type	"L"	int
-#pragma	varargck	type	"L"	uint
+#pragma	varargck	type	"lL"	int32
+#pragma	varargck	type	"L"	int32
 #pragma	varargck	type	"N"	Node*
 #pragma	varargck	type	"lN"	Node*
+#pragma	varargck	type	"O"	int
 #pragma	varargck	type	"O"	uint
-#pragma	varargck	type	"P"	Prog*
 #pragma	varargck	type	"Q"	Bits
-#pragma	varargck	type	"R"	int
 #pragma	varargck	type	"S"	Sym*
-#pragma	varargck	type	"lS"	Sym*
+#pragma	varargck	type	"lS"	LSym*
 #pragma	varargck	type	"T"	Type*
 #pragma	varargck	type	"lT"	Type*
 #pragma	varargck	type	"V"	Val*
-#pragma	varargck	type	"Y"	char*
 #pragma	varargck	type	"Z"	Strlit*
 
 /*

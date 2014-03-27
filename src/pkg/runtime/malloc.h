@@ -20,7 +20,7 @@
 //	MHeap: the malloc heap, managed at page (4096-byte) granularity.
 //	MSpan: a run of pages managed by the MHeap.
 //	MCentral: a shared free list for a given size class.
-//	MCache: a per-thread (in Go, per-M) cache for small objects.
+//	MCache: a per-thread (in Go, per-P) cache for small objects.
 //	MStats: allocation statistics.
 //
 // Allocating a small object proceeds up a hierarchy of caches:
@@ -66,14 +66,14 @@
 //
 // The small objects on the MCache and MCentral free lists
 // may or may not be zeroed.  They are zeroed if and only if
-// the second word of the object is zero.  The spans in the
-// page heap are always zeroed.  When a span full of objects
-// is returned to the page heap, the objects that need to be
-// are zeroed first.  There are two main benefits to delaying the
+// the second word of the object is zero.  A span in the
+// page heap is zeroed unless s->needzero is set. When a span
+// is allocated to break into small objects, it is zeroed if needed
+// and s->needzero is set. There are two main benefits to delaying the
 // zeroing this way:
 //
 //	1. stack frames allocated from the small object lists
-//	   can avoid zeroing altogether.
+//	   or the page heap can avoid zeroing altogether.
 //	2. the cost of zeroing when reusing a small object is
 //	   charged to the mutator, not the garbage collector.
 //
@@ -90,7 +90,7 @@ typedef struct GCStats	GCStats;
 
 enum
 {
-	PageShift	= 12,
+	PageShift	= 13,
 	PageSize	= 1<<PageShift,
 	PageMask	= PageSize - 1,
 };
@@ -103,10 +103,14 @@ enum
 	// size classes.  NumSizeClasses is that number.  It's needed here
 	// because there are static arrays of this length; when msize runs its
 	// size choosing algorithm it double-checks that NumSizeClasses agrees.
-	NumSizeClasses = 61,
+	NumSizeClasses = 67,
 
 	// Tunable constants.
 	MaxSmallSize = 32<<10,
+
+	// Tiny allocator parameters, see "Tiny allocator" comment in malloc.goc.
+	TinySize = 16,
+	TinySizeClass = 2,
 
 	FixAllocChunk = 16<<10,		// Chunk size for FixAlloc
 	MaxMHeapList = 1<<(20 - PageShift),	// Maximum page length for fixed-size list in MHeap.
@@ -154,6 +158,9 @@ struct MLink
 // SysAlloc obtains a large chunk of zeroed memory from the
 // operating system, typically on the order of a hundred kilobytes
 // or a megabyte.
+// NOTE: SysAlloc returns OS-aligned memory, but the heap allocator
+// may use larger alignment, so the caller must be careful to realign the
+// memory obtained by SysAlloc.
 //
 // SysUnused notifies the operating system that the contents
 // of the memory region are no longer needed and can be reused
@@ -168,16 +175,29 @@ struct MLink
 // SysReserve reserves address space without allocating memory.
 // If the pointer passed to it is non-nil, the caller wants the
 // reservation there, but SysReserve can still choose another
-// location if that one is unavailable.
+// location if that one is unavailable.  On some systems and in some
+// cases SysReserve will simply check that the address space is
+// available and not actually reserve it.  If SysReserve returns
+// non-nil, it sets *reserved to true if the address space is
+// reserved, false if it has merely been checked.
+// NOTE: SysReserve returns OS-aligned memory, but the heap allocator
+// may use larger alignment, so the caller must be careful to realign the
+// memory obtained by SysAlloc.
 //
 // SysMap maps previously reserved address space for use.
+// The reserved argument is true if the address space was really
+// reserved, not merely checked.
+//
+// SysFault marks a (already SysAlloc'd) region to fault
+// if accessed.  Used only for debugging the runtime.
 
 void*	runtime·SysAlloc(uintptr nbytes, uint64 *stat);
 void	runtime·SysFree(void *v, uintptr nbytes, uint64 *stat);
 void	runtime·SysUnused(void *v, uintptr nbytes);
 void	runtime·SysUsed(void *v, uintptr nbytes);
-void	runtime·SysMap(void *v, uintptr nbytes, uint64 *stat);
-void*	runtime·SysReserve(void *v, uintptr nbytes);
+void	runtime·SysMap(void *v, uintptr nbytes, bool reserved, uint64 *stat);
+void*	runtime·SysReserve(void *v, uintptr nbytes, bool *reserved);
+void	runtime·SysFault(void *v, uintptr nbytes);
 
 // FixAlloc is a simple free-list allocator for fixed size objects.
 // Malloc uses a FixAlloc wrapped around SysAlloc to manages its
@@ -255,8 +275,9 @@ struct MStats
 	} by_size[NumSizeClasses];
 };
 
-#define mstats runtime·memStats	/* name shared with Go */
+#define mstats runtime·memStats
 extern MStats mstats;
+void	runtime·updatememstats(GCStats *stats);
 
 // Size classes.  Computed and initialized by InitSizes.
 //
@@ -269,6 +290,7 @@ extern MStats mstats;
 //	making new objects in class i
 
 int32	runtime·SizeToClass(int32);
+uintptr	runtime·roundupsize(uintptr);
 extern	int32	runtime·class_to_size[NumSizeClasses];
 extern	int32	runtime·class_to_allocnpages[NumSizeClasses];
 extern	int8	runtime·size_to_class8[1024/8 + 1];
@@ -276,8 +298,6 @@ extern	int8	runtime·size_to_class128[(MaxSmallSize-1024)/128 + 1];
 extern	void	runtime·InitSizes(void);
 
 
-// Per-thread (in Go, per-M) cache for small objects.
-// No locking needed because it is per-thread (per-M).
 typedef struct MCacheList MCacheList;
 struct MCacheList
 {
@@ -285,14 +305,21 @@ struct MCacheList
 	uint32 nlist;
 };
 
+// Per-thread (in Go, per-P) cache for small objects.
+// No locking needed because it is per-thread (per-P).
 struct MCache
 {
 	// The following members are accessed on every malloc,
 	// so they are grouped here for better caching.
 	int32 next_sample;		// trigger heap sample after allocating this many bytes
 	intptr local_cachealloc;	// bytes allocated (or freed) from cache since last lock of heap
+	// Allocator cache for tiny objects w/o pointers.
+	// See "Tiny allocator" comment in malloc.goc.
+	byte*	tiny;
+	uintptr	tinysize;
 	// The rest is not accessed on every malloc.
-	MCacheList list[NumSizeClasses];
+	MSpan*	alloc[NumSizeClasses];	// spans to allocate from
+	MCacheList free[NumSizeClasses];// lists of explicitly freed objects
 	// Local allocator stats, flushed during GC.
 	uintptr local_nlookup;		// number of pointer lookups
 	uintptr local_largefree;	// bytes freed for large objects (>MaxSmallSize)
@@ -300,8 +327,8 @@ struct MCache
 	uintptr local_nsmallfree[NumSizeClasses];	// number of frees for small objects (<=MaxSmallSize)
 };
 
-void	runtime·MCache_Refill(MCache *c, int32 sizeclass);
-void	runtime·MCache_Free(MCache *c, void *p, int32 sizeclass, uintptr size);
+MSpan*	runtime·MCache_Refill(MCache *c, int32 sizeclass);
+void	runtime·MCache_Free(MCache *c, MLink *p, int32 sizeclass, uintptr size);
 void	runtime·MCache_ReleaseAll(MCache *c);
 
 // MTypes describes the types of blocks allocated within a span.
@@ -394,19 +421,30 @@ struct MSpan
 	PageID	start;		// starting page number
 	uintptr	npages;		// number of pages in span
 	MLink	*freelist;	// list of free objects
-	uint16	ref;		// number of allocated objects in this span
+	// sweep generation:
+	// if sweepgen == h->sweepgen - 2, the span needs sweeping
+	// if sweepgen == h->sweepgen - 1, the span is currently being swept
+	// if sweepgen == h->sweepgen, the span is swept and ready to use
+	// h->sweepgen is incremented by 2 after every GC
+	uint32	sweepgen;
+	uint16	ref;		// capacity - number of objects in freelist
 	uint8	sizeclass;	// size class
+	bool	incache;	// being used by an MCache
 	uint8	state;		// MSpanInUse etc
+	uint8	needzero;	// needs to be zeroed before allocation
 	uintptr	elemsize;	// computed from sizeclass or from npages
 	int64   unusedsince;	// First time spotted by GC in MSpanFree state
 	uintptr npreleased;	// number of pages released to the OS
 	byte	*limit;		// end of data in span
 	MTypes	types;		// types of allocated objects in this span
-	Lock	specialLock;	// TODO: use to protect types also (instead of settype_lock)
+	Lock	specialLock;	// guards specials list
 	Special	*specials;	// linked list of special records sorted by offset.
+	MLink	*freebuf;	// objects freed explicitly, not incorporated into freelist yet
 };
 
 void	runtime·MSpan_Init(MSpan *span, PageID start, uintptr npages);
+void	runtime·MSpan_EnsureSwept(MSpan *span);
+bool	runtime·MSpan_Sweep(MSpan *span);
 
 // Every MSpan is in one doubly-linked list,
 // either one of the MHeap's free lists or one of the
@@ -414,6 +452,7 @@ void	runtime·MSpan_Init(MSpan *span, PageID start, uintptr npages);
 void	runtime·MSpanList_Init(MSpan *list);
 bool	runtime·MSpanList_IsEmpty(MSpan *list);
 void	runtime·MSpanList_Insert(MSpan *list, MSpan *span);
+void	runtime·MSpanList_InsertBack(MSpan *list, MSpan *span);
 void	runtime·MSpanList_Remove(MSpan *span);	// from whatever list it is in
 
 
@@ -422,15 +461,16 @@ struct MCentral
 {
 	Lock;
 	int32 sizeclass;
-	MSpan nonempty;
-	MSpan empty;
-	int32 nfree;
+	MSpan nonempty;	// list of spans with a free object
+	MSpan empty;	// list of spans with no free objects (or cached in an MCache)
+	int32 nfree;	// # of objects available in nonempty spans
 };
 
 void	runtime·MCentral_Init(MCentral *c, int32 sizeclass);
-int32	runtime·MCentral_AllocList(MCentral *c, MLink **first);
-void	runtime·MCentral_FreeList(MCentral *c, MLink *first);
-void	runtime·MCentral_FreeSpan(MCentral *c, MSpan *s, int32 n, MLink *start, MLink *end);
+MSpan*	runtime·MCentral_CacheSpan(MCentral *c);
+void	runtime·MCentral_UncacheSpan(MCentral *c, MSpan *s);
+bool	runtime·MCentral_FreeSpan(MCentral *c, MSpan *s, int32 n, MLink *start, MLink *end);
+void	runtime·MCentral_FreeList(MCentral *c, MLink *start); // TODO: need this?
 
 // Main malloc heap.
 // The heap itself is the "free[]" and "large" arrays,
@@ -439,10 +479,15 @@ struct MHeap
 {
 	Lock;
 	MSpan free[MaxMHeapList];	// free lists of given length
-	MSpan large;			// free lists length >= MaxMHeapList
-	MSpan **allspans;
+	MSpan freelarge;		// free lists length >= MaxMHeapList
+	MSpan busy[MaxMHeapList];	// busy lists of large objects of given length
+	MSpan busylarge;		// busy lists of large objects length >= MaxMHeapList
+	MSpan **allspans;		// all spans out there
+	MSpan **sweepspans;		// copy of allspans referenced by sweeper
 	uint32	nspan;
 	uint32	nspancap;
+	uint32	sweepgen;		// sweep generation, see comment in MSpan
+	uint32	sweepdone;		// all spans are swept
 
 	// span lookup
 	MSpan**	spans;
@@ -454,6 +499,7 @@ struct MHeap
 	byte *arena_start;
 	byte *arena_used;
 	byte *arena_end;
+	bool arena_reserved;
 
 	// central free lists for small size classes.
 	// the padding makes sure that the MCentrals are
@@ -478,7 +524,7 @@ struct MHeap
 extern MHeap runtime·mheap;
 
 void	runtime·MHeap_Init(MHeap *h);
-MSpan*	runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, int32 acct, int32 zeroed);
+MSpan*	runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, bool large, bool needzero);
 void	runtime·MHeap_Free(MHeap *h, MSpan *s, int32 acct);
 MSpan*	runtime·MHeap_Lookup(MHeap *h, void *v);
 MSpan*	runtime·MHeap_LookupMaybe(MHeap *h, void *v);
@@ -487,15 +533,17 @@ void*	runtime·MHeap_SysAlloc(MHeap *h, uintptr n);
 void	runtime·MHeap_MapBits(MHeap *h);
 void	runtime·MHeap_MapSpans(MHeap *h);
 void	runtime·MHeap_Scavenger(void);
+void	runtime·MHeap_SplitSpan(MHeap *h, MSpan *s);
 
 void*	runtime·mallocgc(uintptr size, uintptr typ, uint32 flag);
 void*	runtime·persistentalloc(uintptr size, uintptr align, uint64 *stat);
 int32	runtime·mlookup(void *v, byte **base, uintptr *size, MSpan **s);
 void	runtime·gc(int32 force);
+uintptr	runtime·sweepone(void);
 void	runtime·markscan(void *v);
 void	runtime·marknogc(void *v);
 void	runtime·checkallocated(void *v, uintptr n);
-void	runtime·markfreed(void *v, uintptr n);
+void	runtime·markfreed(void *v);
 void	runtime·checkfreed(void *v, uintptr n);
 extern	int32	runtime·checking;
 void	runtime·markspan(void *v, uintptr size, uintptr n, bool leftover);
@@ -504,8 +552,6 @@ void	runtime·purgecachedstats(MCache*);
 void*	runtime·cnew(Type*);
 void*	runtime·cnewarray(Type*, intgo);
 
-void	runtime·settype_flush(M*);
-void	runtime·settype_sysfree(MSpan*);
 uintptr	runtime·gettype(void*);
 
 enum
@@ -519,12 +565,16 @@ enum
 };
 
 void	runtime·MProf_Malloc(void*, uintptr, uintptr);
-void	runtime·MProf_Free(Bucket*, void*, uintptr);
+void	runtime·MProf_Free(Bucket*, void*, uintptr, bool);
 void	runtime·MProf_GC(void);
 void	runtime·MProf_TraceGC(void);
 int32	runtime·gcprocs(void);
 void	runtime·helpgc(int32 nproc);
 void	runtime·gchelper(void);
+void	runtime·createfing(void);
+G*	runtime·wakefing(void);
+extern bool	runtime·fingwait;
+extern bool	runtime·fingwake;
 
 void	runtime·setprofilebucket(void *p, Bucket *b);
 
@@ -533,7 +583,7 @@ void	runtime·removefinalizer(void*);
 void	runtime·queuefinalizer(byte *p, FuncVal *fn, uintptr nret, Type *fint, PtrType *ot);
 
 void	runtime·freeallspecials(MSpan *span, void *p, uintptr size);
-bool	runtime·freespecial(Special *s, void *p, uintptr size);
+bool	runtime·freespecial(Special *s, void *p, uintptr size, bool freed);
 
 enum
 {
@@ -545,8 +595,40 @@ enum
 	DebugTypeAtBlockEnd = 0,
 };
 
+// Information from the compiler about the layout of stack frames.
+typedef struct BitVector BitVector;
+struct BitVector
+{
+	int32 n; // # of bits
+	uint32 data[];
+};
+typedef struct StackMap StackMap;
+struct StackMap
+{
+	int32 n;
+	uint32 data[];
+};
+enum {
+	// Pointer map
+	BitsPerPointer = 2,
+	BitsDead = 0,
+	BitsScalar = 1,
+	BitsPointer = 2,
+	BitsMultiWord = 3,
+	// BitsMultiWord will be set for the first word of a multi-word item.
+	// When it is set, one of the following will be set for the second word.
+	BitsString = 0,
+	BitsSlice = 1,
+	BitsIface = 2,
+	BitsEface = 3,
+};
+// Returns pointer map data for the given stackmap index
+// (the index is encoded in PCDATA_StackMapIndex).
+BitVector*	runtime·stackmapdata(StackMap *stackmap, int32 n);
+
 // defined in mgc0.go
 void	runtime·gc_m_ptr(Eface*);
 void	runtime·gc_itab_ptr(Eface*);
 
 void	runtime·memorydump(void);
+int32	runtime·setgcpercent(int32);

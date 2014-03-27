@@ -143,6 +143,11 @@ mapbucket(Type *t)
 	overflowfield->sym = mal(sizeof(Sym)); // not important but needs to be set to give this type a name
 	overflowfield->sym->name = "overflow";
 	offset += widthptr;
+	
+	// The keys are padded to the native integer alignment.
+	// This is usually the same as widthptr; the exception (as usual) is nacl/amd64.
+	if(widthreg > widthptr)
+		offset += widthreg - widthptr;
 
 	keysfield = typ(TFIELD);
 	keysfield->type = typ(TARRAY);
@@ -1127,7 +1132,8 @@ ok:
 					ot = dgopkgpath(s, ot, t1->sym->pkg);
 			} else {
 				ot = dgostringptr(s, ot, nil);
-				if(t1->type->sym != S && t1->type->sym->pkg == builtinpkg)
+				if(t1->type->sym != S &&
+				   (t1->type->sym->pkg == builtinpkg || !exportname(t1->type->sym->name)))
 					ot = dgopkgpath(s, ot, localpkg);
 				else
 					ot = dgostringptr(s, ot, nil);

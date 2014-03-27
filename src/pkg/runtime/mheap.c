@@ -41,7 +41,10 @@ RecordSpan(void *vh, byte *p)
 			runtime·throw("runtime: cannot allocate memory");
 		if(h->allspans) {
 			runtime·memmove(all, h->allspans, h->nspancap*sizeof(all[0]));
-			runtime·SysFree(h->allspans, h->nspancap*sizeof(all[0]), &mstats.other_sys);
+			// Don't free the old array if it's referenced by sweep.
+			// See the comment in mgc0.c.
+			if(h->allspans != runtime·mheap.sweepspans)
+				runtime·SysFree(h->allspans, h->nspancap*sizeof(all[0]), &mstats.other_sys);
 		}
 		h->allspans = all;
 		h->nspancap = cap;
@@ -60,9 +63,12 @@ runtime·MHeap_Init(MHeap *h)
 	runtime·FixAlloc_Init(&h->specialfinalizeralloc, sizeof(SpecialFinalizer), nil, nil, &mstats.other_sys);
 	runtime·FixAlloc_Init(&h->specialprofilealloc, sizeof(SpecialProfile), nil, nil, &mstats.other_sys);
 	// h->mapcache needs no init
-	for(i=0; i<nelem(h->free); i++)
+	for(i=0; i<nelem(h->free); i++) {
 		runtime·MSpanList_Init(&h->free[i]);
-	runtime·MSpanList_Init(&h->large);
+		runtime·MSpanList_Init(&h->busy[i]);
+	}
+	runtime·MSpanList_Init(&h->freelarge);
+	runtime·MSpanList_Init(&h->busylarge);
 	for(i=0; i<nelem(h->central); i++)
 		runtime·MCentral_Init(&h->central[i], i);
 }
@@ -76,17 +82,93 @@ runtime·MHeap_MapSpans(MHeap *h)
 	n = (uintptr)h->arena_used;
 	n -= (uintptr)h->arena_start;
 	n = n / PageSize * sizeof(h->spans[0]);
-	n = ROUND(n, PageSize);
+	n = ROUND(n, PhysPageSize);
 	if(h->spans_mapped >= n)
 		return;
-	runtime·SysMap((byte*)h->spans + h->spans_mapped, n - h->spans_mapped, &mstats.other_sys);
+	runtime·SysMap((byte*)h->spans + h->spans_mapped, n - h->spans_mapped, h->arena_reserved, &mstats.other_sys);
 	h->spans_mapped = n;
+}
+
+// Sweeps spans in list until reclaims at least npages into heap.
+// Returns the actual number of pages reclaimed.
+static uintptr
+MHeap_ReclaimList(MHeap *h, MSpan *list, uintptr npages)
+{
+	MSpan *s;
+	uintptr n;
+	uint32 sg;
+
+	n = 0;
+	sg = runtime·mheap.sweepgen;
+retry:
+	for(s = list->next; s != list; s = s->next) {
+		if(s->sweepgen == sg-2 && runtime·cas(&s->sweepgen, sg-2, sg-1)) {
+			runtime·MSpanList_Remove(s);
+			// swept spans are at the end of the list
+			runtime·MSpanList_InsertBack(list, s);
+			runtime·unlock(h);
+			n += runtime·MSpan_Sweep(s);
+			runtime·lock(h);
+			if(n >= npages)
+				return n;
+			// the span could have been moved elsewhere
+			goto retry;
+		}
+		if(s->sweepgen == sg-1) {
+			// the span is being sweept by background sweeper, skip
+			continue;
+		}
+		// already swept empty span,
+		// all subsequent ones must also be either swept or in process of sweeping
+		break;
+	}
+	return n;
+}
+
+// Sweeps and reclaims at least npage pages into heap.
+// Called before allocating npage pages.
+static void
+MHeap_Reclaim(MHeap *h, uintptr npage)
+{
+	uintptr reclaimed, n;
+
+	// First try to sweep busy spans with large objects of size >= npage,
+	// this has good chances of reclaiming the necessary space.
+	for(n=npage; n < nelem(h->busy); n++) {
+		if(MHeap_ReclaimList(h, &h->busy[n], npage))
+			return;  // Bingo!
+	}
+
+	// Then -- even larger objects.
+	if(MHeap_ReclaimList(h, &h->busylarge, npage))
+		return;  // Bingo!
+
+	// Now try smaller objects.
+	// One such object is not enough, so we need to reclaim several of them.
+	reclaimed = 0;
+	for(n=0; n < npage && n < nelem(h->busy); n++) {
+		reclaimed += MHeap_ReclaimList(h, &h->busy[n], npage-reclaimed);
+		if(reclaimed >= npage)
+			return;
+	}
+
+	// Now sweep everything that is not yet swept.
+	runtime·unlock(h);
+	for(;;) {
+		n = runtime·sweepone();
+		if(n == -1)  // all spans are swept
+			break;
+		reclaimed += n;
+		if(reclaimed >= npage)
+			break;
+	}
+	runtime·lock(h);
 }
 
 // Allocate a new span of npage pages from the heap
 // and record its size class in the HeapMap and HeapMapCache.
 MSpan*
-runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, int32 acct, int32 zeroed)
+runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, bool large, bool needzero)
 {
 	MSpan *s;
 
@@ -96,14 +178,22 @@ runtime·MHeap_Alloc(MHeap *h, uintptr npage, int32 sizeclass, int32 acct, int32
 	s = MHeap_AllocLocked(h, npage, sizeclass);
 	if(s != nil) {
 		mstats.heap_inuse += npage<<PageShift;
-		if(acct) {
+		if(large) {
 			mstats.heap_objects++;
 			mstats.heap_alloc += npage<<PageShift;
+			// Swept spans are at the end of lists.
+			if(s->npages < nelem(h->free))
+				runtime·MSpanList_InsertBack(&h->busy[s->npages], s);
+			else
+				runtime·MSpanList_InsertBack(&h->busylarge, s);
 		}
 	}
 	runtime·unlock(h);
-	if(s != nil && *(uintptr*)(s->start<<PageShift) != 0 && zeroed)
-		runtime·memclr((byte*)(s->start<<PageShift), s->npages<<PageShift);
+	if(s != nil) {
+		if(needzero && s->needzero)
+			runtime·memclr((byte*)(s->start<<PageShift), s->npages<<PageShift);
+		s->needzero = 0;
+	}
 	return s;
 }
 
@@ -113,6 +203,11 @@ MHeap_AllocLocked(MHeap *h, uintptr npage, int32 sizeclass)
 	uintptr n;
 	MSpan *s, *t;
 	PageID p;
+
+	// To prevent excessive heap growth, before allocating n pages
+	// we need to sweep and reclaim at least n pages.
+	if(!h->sweepdone)
+		MHeap_Reclaim(h, npage);
 
 	// Try in fixed-size lists up to max.
 	for(n=npage; n < nelem(h->free); n++) {
@@ -137,29 +232,12 @@ HaveSpan:
 	if(s->npages < npage)
 		runtime·throw("MHeap_AllocLocked - bad npages");
 	runtime·MSpanList_Remove(s);
+	runtime·atomicstore(&s->sweepgen, h->sweepgen);
 	s->state = MSpanInUse;
 	mstats.heap_idle -= s->npages<<PageShift;
 	mstats.heap_released -= s->npreleased<<PageShift;
-	if(s->npreleased > 0) {
-		// We have called runtime·SysUnused with these pages, and on
-		// Unix systems it called madvise.  At this point at least
-		// some BSD-based kernels will return these pages either as
-		// zeros or with the old data.  For our caller, the first word
-		// in the page indicates whether the span contains zeros or
-		// not (this word was set when the span was freed by
-		// MCentral_Free or runtime·MCentral_FreeSpan).  If the first
-		// page in the span is returned as zeros, and some subsequent
-		// page is returned with the old data, then we will be
-		// returning a span that is assumed to be all zeros, but the
-		// actual data will not be all zeros.  Avoid that problem by
-		// explicitly marking the span as not being zeroed, just in
-		// case.  The beadbead constant we use here means nothing, it
-		// is just a unique constant not seen elsewhere in the
-		// runtime, as a clue in case it turns up unexpectedly in
-		// memory or in a stack trace.
+	if(s->npreleased > 0)
 		runtime·SysUsed((void*)(s->start<<PageShift), s->npages<<PageShift);
-		*(uintptr*)(s->start<<PageShift) = (uintptr)0xbeadbeadbeadbeadULL;
-	}
 	s->npreleased = 0;
 
 	if(s->npages > npage) {
@@ -173,7 +251,8 @@ HaveSpan:
 			h->spans[p-1] = s;
 		h->spans[p] = t;
 		h->spans[p+t->npages-1] = t;
-		*(uintptr*)(t->start<<PageShift) = *(uintptr*)(s->start<<PageShift);  // copy "needs zeroing" mark
+		t->needzero = s->needzero;
+		runtime·atomicstore(&t->sweepgen, h->sweepgen);
 		t->state = MSpanInUse;
 		MHeap_FreeLocked(h, t);
 		t->unusedsince = s->unusedsince; // preserve age
@@ -196,7 +275,7 @@ HaveSpan:
 static MSpan*
 MHeap_AllocLarge(MHeap *h, uintptr npage)
 {
-	return BestFit(&h->large, npage, nil);
+	return BestFit(&h->freelarge, npage, nil);
 }
 
 // Search list for smallest span with >= npage pages.
@@ -257,6 +336,7 @@ MHeap_Grow(MHeap *h, uintptr npage)
 	p -= ((uintptr)h->arena_start>>PageShift);
 	h->spans[p] = s;
 	h->spans[p + s->npages - 1] = s;
+	runtime·atomicstore(&s->sweepgen, h->sweepgen);
 	s->state = MSpanInUse;
 	MHeap_FreeLocked(h, s);
 	return true;
@@ -318,20 +398,19 @@ runtime·MHeap_Free(MHeap *h, MSpan *s, int32 acct)
 static void
 MHeap_FreeLocked(MHeap *h, MSpan *s)
 {
-	uintptr *sp, *tp;
 	MSpan *t;
 	PageID p;
 
 	s->types.compression = MTypes_Empty;
 
-	if(s->state != MSpanInUse || s->ref != 0) {
-		runtime·printf("MHeap_FreeLocked - span %p ptr %p state %d ref %d\n", s, s->start<<PageShift, s->state, s->ref);
+	if(s->state != MSpanInUse || s->ref != 0 || s->sweepgen != h->sweepgen) {
+		runtime·printf("MHeap_FreeLocked - span %p ptr %p state %d ref %d sweepgen %d/%d\n",
+			s, s->start<<PageShift, s->state, s->ref, s->sweepgen, h->sweepgen);
 		runtime·throw("MHeap_FreeLocked - invalid free");
 	}
 	mstats.heap_idle += s->npages<<PageShift;
 	s->state = MSpanFree;
 	runtime·MSpanList_Remove(s);
-	sp = (uintptr*)(s->start<<PageShift);
 	// Stamp newly unused spans. The scavenger will use that
 	// info to potentially give back some pages to the OS.
 	s->unusedsince = runtime·nanotime();
@@ -341,13 +420,10 @@ MHeap_FreeLocked(MHeap *h, MSpan *s)
 	p = s->start;
 	p -= (uintptr)h->arena_start >> PageShift;
 	if(p > 0 && (t = h->spans[p-1]) != nil && t->state != MSpanInUse) {
-		if(t->npreleased == 0) {  // cant't touch this otherwise
-			tp = (uintptr*)(t->start<<PageShift);
-			*tp |= *sp;	// propagate "needs zeroing" mark
-		}
 		s->start = t->start;
 		s->npages += t->npages;
 		s->npreleased = t->npreleased; // absorb released pages
+		s->needzero |= t->needzero;
 		p -= t->npages;
 		h->spans[p] = s;
 		runtime·MSpanList_Remove(t);
@@ -355,12 +431,9 @@ MHeap_FreeLocked(MHeap *h, MSpan *s)
 		runtime·FixAlloc_Free(&h->spanalloc, t);
 	}
 	if((p+s->npages)*sizeof(h->spans[0]) < h->spans_mapped && (t = h->spans[p+s->npages]) != nil && t->state != MSpanInUse) {
-		if(t->npreleased == 0) {  // cant't touch this otherwise
-			tp = (uintptr*)(t->start<<PageShift);
-			*sp |= *tp;	// propagate "needs zeroing" mark
-		}
 		s->npages += t->npages;
 		s->npreleased += t->npreleased;
+		s->needzero |= t->needzero;
 		h->spans[p + s->npages - 1] = s;
 		runtime·MSpanList_Remove(t);
 		t->state = MSpanDead;
@@ -371,7 +444,7 @@ MHeap_FreeLocked(MHeap *h, MSpan *s)
 	if(s->npages < nelem(h->free))
 		runtime·MSpanList_Insert(&h->free[s->npages], s);
 	else
-		runtime·MSpanList_Insert(&h->large, s);
+		runtime·MSpanList_Insert(&h->freelarge, s);
 }
 
 static void
@@ -414,7 +487,7 @@ scavenge(int32 k, uint64 now, uint64 limit)
 	sumreleased = 0;
 	for(i=0; i < nelem(h->free); i++)
 		sumreleased += scavengelist(&h->free[i], now, limit);
-	sumreleased += scavengelist(&h->large, now, limit);
+	sumreleased += scavengelist(&h->freelarge, now, limit);
 
 	if(runtime·debug.gctrace > 0) {
 		if(sumreleased > 0)
@@ -498,13 +571,16 @@ runtime·MSpan_Init(MSpan *span, PageID start, uintptr npages)
 	span->freelist = nil;
 	span->ref = 0;
 	span->sizeclass = 0;
+	span->incache = false;
 	span->elemsize = 0;
-	span->state = 0;
+	span->state = MSpanDead;
 	span->unusedsince = 0;
 	span->npreleased = 0;
 	span->types.compression = MTypes_Empty;
 	span->specialLock.key = 0;
 	span->specials = nil;
+	span->needzero = 0;
+	span->freebuf = nil;
 }
 
 // Initialize an empty doubly-linked list.
@@ -546,6 +622,19 @@ runtime·MSpanList_Insert(MSpan *list, MSpan *span)
 	span->prev->next = span;
 }
 
+void
+runtime·MSpanList_InsertBack(MSpan *list, MSpan *span)
+{
+	if(span->next != nil || span->prev != nil) {
+		runtime·printf("failed MSpanList_Insert %p %p %p\n", span, span->next, span->prev);
+		runtime·throw("MSpanList_Insert");
+	}
+	span->next = list;
+	span->prev = list->prev;
+	span->next->prev = span;
+	span->prev->next = span;
+}
+
 // Adds the special record s to the list of special records for
 // the object p.  All fields of s should be filled in except for
 // offset & next, which this routine will fill in.
@@ -563,6 +652,12 @@ addspecial(void *p, Special *s)
 	span = runtime·MHeap_LookupMaybe(&runtime·mheap, p);
 	if(span == nil)
 		runtime·throw("addspecial on invalid pointer");
+
+	// Ensure that the span is swept.
+	// GC accesses specials list w/o locks. And it's just much safer.
+	m->locks++;
+	runtime·MSpan_EnsureSwept(span);
+
 	offset = (uintptr)p - (span->start << PageShift);
 	kind = s->kind;
 
@@ -573,6 +668,7 @@ addspecial(void *p, Special *s)
 	while((x = *t) != nil) {
 		if(offset == x->offset && kind == x->kind) {
 			runtime·unlock(&span->specialLock);
+			m->locks--;
 			return false; // already exists
 		}
 		if(offset < x->offset || (offset == x->offset && kind < x->kind))
@@ -584,6 +680,7 @@ addspecial(void *p, Special *s)
 	s->next = x;
 	*t = s;
 	runtime·unlock(&span->specialLock);
+	m->locks--;
 	return true;
 }
 
@@ -600,19 +697,29 @@ removespecial(void *p, byte kind)
 	span = runtime·MHeap_LookupMaybe(&runtime·mheap, p);
 	if(span == nil)
 		runtime·throw("removespecial on invalid pointer");
+
+	// Ensure that the span is swept.
+	// GC accesses specials list w/o locks. And it's just much safer.
+	m->locks++;
+	runtime·MSpan_EnsureSwept(span);
+
 	offset = (uintptr)p - (span->start << PageShift);
 
 	runtime·lock(&span->specialLock);
 	t = &span->specials;
 	while((s = *t) != nil) {
+		// This function is used for finalizers only, so we don't check for
+		// "interior" specials (p must be exactly equal to s->offset).
 		if(offset == s->offset && kind == s->kind) {
 			*t = s->next;
 			runtime·unlock(&span->specialLock);
+			m->locks--;
 			return s;
 		}
 		t = &s->next;
 	}
 	runtime·unlock(&span->specialLock);
+	m->locks--;
 	return nil;
 }
 
@@ -673,7 +780,7 @@ runtime·setprofilebucket(void *p, Bucket *b)
 // already been unlinked from the MSpan specials list.
 // Returns true if we should keep working on deallocating p.
 bool
-runtime·freespecial(Special *s, void *p, uintptr size)
+runtime·freespecial(Special *s, void *p, uintptr size, bool freed)
 {
 	SpecialFinalizer *sf;
 	SpecialProfile *sp;
@@ -688,7 +795,7 @@ runtime·freespecial(Special *s, void *p, uintptr size)
 		return false; // don't free p until finalizer is done
 	case KindSpecialProfile:
 		sp = (SpecialProfile*)s;
-		runtime·MProf_Free(sp->b, p, size);
+		runtime·MProf_Free(sp->b, p, size, freed);
 		runtime·lock(&runtime·mheap.speciallock);
 		runtime·FixAlloc_Free(&runtime·mheap.specialprofilealloc, sp);
 		runtime·unlock(&runtime·mheap.speciallock);
@@ -706,6 +813,8 @@ runtime·freeallspecials(MSpan *span, void *p, uintptr size)
 	Special *s, **t, *list;
 	uintptr offset;
 
+	if(span->sweepgen != runtime·mheap.sweepgen)
+		runtime·throw("runtime: freeallspecials: unswept span");
 	// first, collect all specials into the list; then, free them
 	// this is required to not cause deadlock between span->specialLock and proflock
 	list = nil;
@@ -713,9 +822,9 @@ runtime·freeallspecials(MSpan *span, void *p, uintptr size)
 	runtime·lock(&span->specialLock);
 	t = &span->specials;
 	while((s = *t) != nil) {
-		if(offset < s->offset)
+		if(offset + size <= s->offset)
 			break;
-		if(offset == s->offset) {
+		if(offset <= s->offset) {
 			*t = s->next;
 			s->next = list;
 			list = s;
@@ -727,7 +836,96 @@ runtime·freeallspecials(MSpan *span, void *p, uintptr size)
 	while(list != nil) {
 		s = list;
 		list = s->next;
-		if(!runtime·freespecial(s, p, size))
+		if(!runtime·freespecial(s, p, size, true))
 			runtime·throw("can't explicitly free an object with a finalizer");
+	}
+}
+
+// Split an allocated span into two equal parts.
+void
+runtime·MHeap_SplitSpan(MHeap *h, MSpan *s)
+{
+	MSpan *t;
+	MCentral *c;
+	uintptr i;
+	uintptr npages;
+	PageID p;
+
+	if(s->state != MSpanInUse)
+		runtime·throw("MHeap_SplitSpan on a free span");
+	if(s->sizeclass != 0 && s->ref != 1)
+		runtime·throw("MHeap_SplitSpan doesn't have an allocated object");
+	npages = s->npages;
+
+	// remove the span from whatever list it is in now
+	if(s->sizeclass > 0) {
+		// must be in h->central[x].empty
+		c = &h->central[s->sizeclass];
+		runtime·lock(c);
+		runtime·MSpanList_Remove(s);
+		runtime·unlock(c);
+		runtime·lock(h);
+	} else {
+		// must be in h->busy/busylarge
+		runtime·lock(h);
+		runtime·MSpanList_Remove(s);
+	}
+	// heap is locked now
+
+	if(npages == 1) {
+		// convert span of 1 PageSize object to a span of 2 PageSize/2 objects.
+		s->ref = 2;
+		s->sizeclass = runtime·SizeToClass(PageSize/2);
+		s->elemsize = PageSize/2;
+	} else {
+		// convert span of n>1 pages into two spans of n/2 pages each.
+		if((s->npages & 1) != 0)
+			runtime·throw("MHeap_SplitSpan on an odd size span");
+
+		// compute position in h->spans
+		p = s->start;
+		p -= (uintptr)h->arena_start >> PageShift;
+
+		// Allocate a new span for the first half.
+		t = runtime·FixAlloc_Alloc(&h->spanalloc);
+		runtime·MSpan_Init(t, s->start, npages/2);
+		t->limit = (byte*)((t->start + npages/2) << PageShift);
+		t->state = MSpanInUse;
+		t->elemsize = npages << (PageShift - 1);
+		t->sweepgen = s->sweepgen;
+		if(t->elemsize <= MaxSmallSize) {
+			t->sizeclass = runtime·SizeToClass(t->elemsize);
+			t->ref = 1;
+		}
+
+		// the old span holds the second half.
+		s->start += npages/2;
+		s->npages = npages/2;
+		s->elemsize = npages << (PageShift - 1);
+		if(s->elemsize <= MaxSmallSize) {
+			s->sizeclass = runtime·SizeToClass(s->elemsize);
+			s->ref = 1;
+		}
+
+		// update span lookup table
+		for(i = p; i < p + npages/2; i++)
+			h->spans[i] = t;
+	}
+
+	// place the span into a new list
+	if(s->sizeclass > 0) {
+		runtime·unlock(h);
+		c = &h->central[s->sizeclass];
+		runtime·lock(c);
+		// swept spans are at the end of the list
+		runtime·MSpanList_InsertBack(&c->empty, s);
+		runtime·unlock(c);
+	} else {
+		// Swept spans are at the end of lists.
+		if(s->npages < nelem(h->free))
+			runtime·MSpanList_InsertBack(&h->busy[s->npages], s);
+		else
+			runtime·MSpanList_InsertBack(&h->busylarge, s);
+		runtime·unlock(h);
 	}
 }

@@ -368,7 +368,7 @@ reswitch:
 		goto ret;
 
 	case OPACK:
-		yyerror("use of package %S not in selector", n->sym);
+		yyerror("use of package %S without selector", n->sym);
 		goto error;
 
 	case ODDD:
@@ -721,7 +721,8 @@ reswitch:
 		if(n->left->type == T)
 			goto error;
 		checklvalue(n->left, "take the address of");
-		for(l=n->left; l->op == ODOT; l=l->left)
+		r = outervalue(n->left);
+		for(l = n->left; l != r; l = l->left)
 			l->addrtaken = 1;
 		if(l->orig != l && l->op == ONAME)
 			fatal("found non-orig name node %N", l);
@@ -866,7 +867,7 @@ reswitch:
 			goto error;
 		switch(t->etype) {
 		default:
-			yyerror("invalid operation: %N (index of type %T)", n, t);
+			yyerror("invalid operation: %N (type %T does not support indexing)", n, t);
 			goto error;
 
 
@@ -1064,6 +1065,7 @@ reswitch:
 			goto reswitch;
 		}
 		typecheck(&n->left, Erv | Etype | Ecall |(top&Eproc));
+		n->diag |= n->left->diag;
 		l = n->left;
 		if(l->op == ONAME && l->etype != 0) {
 			if(n->isddd && l->etype != OAPPEND)
@@ -1211,17 +1213,29 @@ reswitch:
 
 	case OCOMPLEX:
 		ok |= Erv;
-		if(twoarg(n) < 0)
-			goto error;
-		l = typecheck(&n->left, Erv | (top & Eiota));
-		r = typecheck(&n->right, Erv | (top & Eiota));
-		if(l->type == T || r->type == T)
-			goto error;
-		defaultlit2(&l, &r, 0);
-		if(l->type == T || r->type == T)
-			goto error;
-		n->left = l;
-		n->right = r;
+		if(count(n->list) == 1) {
+			typechecklist(n->list, Efnstruct);
+			t = n->list->n->left->type;
+			if(t->outtuple != 2) {
+				yyerror("invalid operation: complex expects two arguments, %N returns %d results", n->list->n, t->outtuple);
+				goto error;
+			}
+			t = n->list->n->type->type;
+			l = t->nname;
+			r = t->down->nname;
+		} else {
+			if(twoarg(n) < 0)
+				goto error;
+			l = typecheck(&n->left, Erv | (top & Eiota));
+			r = typecheck(&n->right, Erv | (top & Eiota));
+			if(l->type == T || r->type == T)
+				goto error;
+			defaultlit2(&l, &r, 0);
+			if(l->type == T || r->type == T)
+				goto error;
+			n->left = l;
+			n->right = r;
+		}
 		if(!eqtype(l->type, r->type)) {
 			yyerror("invalid operation: %N (mismatched types %T and %T)", n, l->type, r->type);
 			goto error;
@@ -1300,9 +1314,22 @@ reswitch:
 			yyerror("missing arguments to append");
 			goto error;
 		}
-		typechecklist(args, Erv);
+
+		if(count(args) == 1 && !n->isddd)
+			typecheck(&args->n, Erv | Efnstruct);
+		else
+			typechecklist(args, Erv);
+
 		if((t = args->n->type) == T)
 			goto error;
+
+		// Unpack multiple-return result before type-checking.
+		if(istype(t, TSTRUCT)) {
+			t = t->type;
+			if(istype(t, TFIELD))
+				t = t->type;
+		}
+
 		n->type = t;
 		if(!isslice(t)) {
 			if(isconst(args->n, CTNIL)) {
@@ -1357,6 +1384,8 @@ reswitch:
 			goto error;
 		defaultlit(&n->left, T);
 		defaultlit(&n->right, T);
+		if(n->left->type == T || n->right->type == T)
+			goto error;
 
 		// copy([]byte, string)
 		if(isslice(n->left->type) && n->right->type->etype == TSTRING) {
@@ -2137,6 +2166,7 @@ typecheckaste(int op, Node *call, int isddd, Type *tstruct, NodeList *nl, char *
 	if(tstruct->broke)
 		goto out;
 
+	n = N;
 	if(nl != nil && nl->next == nil && (n = nl->n)->type != T)
 	if(n->type->etype == TSTRUCT && n->type->funarg) {
 		tn = n->type->type;
@@ -2211,10 +2241,14 @@ out:
 	return;
 
 notenough:
-	if(call != N)
-		yyerror("not enough arguments in call to %N", call);
-	else
-		yyerror("not enough arguments to %O", op);
+	if(n == N || !n->diag) {
+		if(call != N)
+			yyerror("not enough arguments in call to %N", call);
+		else
+			yyerror("not enough arguments to %O", op);
+		if(n != N)
+			n->diag = 1;
+	}
 	goto out;
 
 toomany:
@@ -2502,7 +2536,7 @@ typecheckcomplit(Node **np)
 				len = i;
 				if(t->bound >= 0 && len > t->bound) {
 					setlineno(l);
-					yyerror("array index %d out of bounds [0:%d]", len, t->bound);
+					yyerror("array index %lld out of bounds [0:%lld]", len-1, t->bound);
 					t->bound = -1;	// no more errors
 				}
 			}
@@ -3140,7 +3174,10 @@ typecheckdef(Node *n)
 			goto ret;
 		}
 		if(e->type != T && e->op != OLITERAL || !isgoconst(e)) {
-			yyerror("const initializer %N is not a constant", e);
+			if(!e->diag) {
+				yyerror("const initializer %N is not a constant", e);
+				e->diag = 1;
+			}
 			goto ret;
 		}
 		t = n->type;
@@ -3230,29 +3267,38 @@ static int
 checkmake(Type *t, char *arg, Node *n)
 {
 	if(n->op == OLITERAL) {
-		n->val = toint(n->val);
-		if(mpcmpfixc(n->val.u.xval, 0) < 0) {
-			yyerror("negative %s argument in make(%T)", arg, t);
-			return -1;
+		switch(n->val.ctype) {
+		case CTINT:
+		case CTRUNE:
+		case CTFLT:
+		case CTCPLX:
+			n->val = toint(n->val);
+			if(mpcmpfixc(n->val.u.xval, 0) < 0) {
+				yyerror("negative %s argument in make(%T)", arg, t);
+				return -1;
+			}
+			if(mpcmpfixfix(n->val.u.xval, maxintval[TINT]) > 0) {
+				yyerror("%s argument too large in make(%T)", arg, t);
+				return -1;
+			}
+			
+			// Delay defaultlit until after we've checked range, to avoid
+			// a redundant "constant NNN overflows int" error.
+			defaultlit(&n, types[TINT]);
+			return 0;
+		default:
+		       	break;
 		}
-		if(mpcmpfixfix(n->val.u.xval, maxintval[TINT]) > 0) {
-			yyerror("%s argument too large in make(%T)", arg, t);
-			return -1;
-		}
-		
-		// Delay defaultlit until after we've checked range, to avoid
-		// a redundant "constant NNN overflows int" error.
-		defaultlit(&n, types[TINT]);
-		return 0;
 	}
-	
-	// Defaultlit still necessary for non-constant: n might be 1<<k.
-	defaultlit(&n, types[TINT]);
 
-	if(!isint[n->type->etype]) {
+	if(!isint[n->type->etype] && n->type->etype != TIDEAL) {
 		yyerror("non-integer %s argument in make(%T) - %T", arg, t, n->type);
 		return -1;
 	}
+
+	// Defaultlit still necessary for non-constant: n might be 1<<k.
+	defaultlit(&n, types[TINT]);
+
 	return 0;
 }
 

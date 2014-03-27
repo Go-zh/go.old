@@ -42,6 +42,7 @@ type Package struct {
 	IgnoredGoFiles []string `json:",omitempty"` // .go sources ignored due to build constraints
 	CFiles         []string `json:",omitempty"` // .c source files
 	CXXFiles       []string `json:",omitempty"` // .cc, .cpp and .cxx source files
+	MFiles         []string `json:",omitempty"` // .m source files
 	HFiles         []string `json:",omitempty"` // .h, .hh, .hpp and .hxx source files
 	SFiles         []string `json:",omitempty"` // .s source files
 	SwigFiles      []string `json:",omitempty"` // .swig files
@@ -88,6 +89,7 @@ type Package struct {
 	exeName      string               // desired name for temporary executable
 	coverMode    string               // preprocess Go source files with the coverage tool in this mode
 	coverVars    map[string]*CoverVar // variables created by coverage analysis
+	omitDWARF    bool                 // tell linker not to write DWARF information
 }
 
 // CoverVar holds the name of the generated coverage variables targeting the named file.
@@ -113,6 +115,7 @@ func (p *Package) copyBuild(pp *build.Package) {
 	p.IgnoredGoFiles = pp.IgnoredGoFiles
 	p.CFiles = pp.CFiles
 	p.CXXFiles = pp.CXXFiles
+	p.MFiles = pp.MFiles
 	p.HFiles = pp.HFiles
 	p.SFiles = pp.SFiles
 	p.SwigFiles = pp.SwigFiles
@@ -304,6 +307,7 @@ const (
 
 // goTools is a map of Go program import path to install target directory.
 var goTools = map[string]targetDir{
+	"cmd/addr2line":                        toTool,
 	"cmd/api":                              toTool,
 	"cmd/cgo":                              toTool,
 	"cmd/fix":                              toTool,
@@ -457,6 +461,7 @@ func (p *Package) load(stk *importStack, bp *build.Package, err error) *Package 
 		p.IgnoredGoFiles,
 		p.CFiles,
 		p.CXXFiles,
+		p.MFiles,
 		p.HFiles,
 		p.SFiles,
 		p.SysoFiles,
@@ -684,7 +689,7 @@ func isStale(p *Package, topRoot map[string]bool) bool {
 		return false
 	}
 
-	srcs := stringList(p.GoFiles, p.CFiles, p.CXXFiles, p.HFiles, p.SFiles, p.CgoFiles, p.SysoFiles, p.SwigFiles, p.SwigCXXFiles)
+	srcs := stringList(p.GoFiles, p.CFiles, p.CXXFiles, p.MFiles, p.HFiles, p.SFiles, p.CgoFiles, p.SysoFiles, p.SwigFiles, p.SwigCXXFiles)
 	for _, src := range srcs {
 		if olderThan(filepath.Join(p.Dir, src)) {
 			return true

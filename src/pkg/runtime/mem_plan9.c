@@ -62,14 +62,21 @@ runtime·SysUsed(void *v, uintptr nbytes)
 }
 
 void
-runtime·SysMap(void *v, uintptr nbytes, uint64 *stat)
+runtime·SysMap(void *v, uintptr nbytes, bool reserved, uint64 *stat)
 {
-	USED(v, nbytes, stat);
+	USED(v, nbytes, reserved, stat);
+}
+
+void
+runtime·SysFault(void *v, uintptr nbytes)
+{
+	USED(v, nbytes);
 }
 
 void*
-runtime·SysReserve(void *v, uintptr nbytes)
+runtime·SysReserve(void *v, uintptr nbytes, bool *reserved)
 {
 	USED(v);
+	*reserved = true;
 	return runtime·SysAlloc(nbytes, &mstats.heap_sys);
 }

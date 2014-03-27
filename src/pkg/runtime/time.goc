@@ -21,10 +21,18 @@ static Timers timers;
 static void addtimer(Timer*);
 static void dumptimers(int8*);
 
+// nacl fake time support. 
+int64 runtime·timens;
+
 // Package time APIs.
 // Godoc uses the comments in package time, not these.
 
 // time.now is implemented in assembly.
+
+// runtimeNano returns the current value of the runtime clock in nanoseconds.
+func runtimeNano() (ns int64) {
+	ns = runtime·nanotime();
+}
 
 // Sleep puts the current goroutine to sleep for at least ns nanoseconds.
 func Sleep(ns int64) {
@@ -217,6 +225,14 @@ timerproc(void)
 			if(raceenabled)
 				runtime·raceacquire(t);
 			f(now, arg);
+
+			// clear f and arg to avoid leak while sleeping for next timer
+			f = nil;
+			USED(f);
+			arg.type = nil;
+			arg.data = nil;
+			USED(&arg);
+
 			runtime·lock(&timers);
 		}
 		if(delta < 0) {

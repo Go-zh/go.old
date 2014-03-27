@@ -1585,10 +1585,10 @@ func Compare(a, b []byte) int {
 </pre>
 
 <div class="english">
-<h2 id="type_switch">Type switch</h2>
+<h3 id="type_switch">Type switch</h3>
 </div>
 
-<h2 id="类型选择">类型选择</h2>
+<h3 id="类型选择">类型选择</h3>
 
 <div class="english">
 <p>
@@ -2538,8 +2538,9 @@ func (file *File) Read(buf []byte) (n int, err error)
 <div class="english">
 <p>
 The method returns the number of bytes read and an error value, if
-any.  To read into the first 32 bytes of a larger buffer
-<code>b</code>, <i>slice</i> (here used as a verb) the buffer.
+any.
+To read into the first 32 bytes of a larger buffer
+<code>buf</code>, <i>slice</i> (here used as a verb) the buffer.
 </p>
 </div>
 
@@ -2744,7 +2745,7 @@ If the slices might grow or shrink, they should be allocated independently
 to avoid overwriting the next line; if not, it can be more efficient to construct
 the object with a single allocation.
 For reference, here are sketches of the two methods.
-First, a line a time:
+First, a line at a time:
 </p>
 </div>
 
@@ -5810,12 +5811,11 @@ means waiting until some receiver has retrieved a value.
 <p>
 A buffered channel can be used like a semaphore, for instance to
 limit throughput.  In this example, incoming requests are passed
-to <code>handle</code>, which receives a value from the channel, processes
-the request, and then sends a value back to the channel
-to ready the "semaphore" for the next consumer.
+to <code>handle</code>, which sends a value into the channel, processes
+the request, and then receives a value from the channel
+to ready the &ldquo;semaphore&rdquo; for the next consumer.
 The capacity of the channel buffer limits the number of
-simultaneous calls to <code>process</code>,
-so during initialization we prime the channel by filling it to capacity.
+simultaneous calls to <code>process</code>.
 </p>
 </div>
 
@@ -5831,15 +5831,9 @@ so during initialization we prime the channel by filling it to capacity.
 var sem = make(chan int, MaxOutstanding)
 
 func handle(r *Request) {
-	&lt;-sem          // Wait for active queue to drain.
-	process(r)     // May take a long time.
-	sem &lt;- 1       // Done; enable next request to run.
-}
-
-func init() {
-	for i := 0; i &lt; MaxOutstanding; i++ {
-		sem &lt;- 1
-	}
+	sem &lt;- 1    // Wait for active queue to drain.
+	process(r)  // May take a long time.
+	&lt;-sem       // Done; enable next request to run.
 }
 
 func Serve(queue chan *Request) {
@@ -5855,15 +5849,9 @@ func Serve(queue chan *Request) {
 var sem = make(chan int, MaxOutstanding)
 
 func handle(r *Request) {
-	&lt;-sem    // 等待活动队列清空。
+	sem &lt;- 1 // 等待活动队列清空。
 	process(r)  // 可能需要很长时间。
-	sem &lt;- 1 // 完成；使下一个请求可以运行。
-}
-
-func init() {
-	for i := 0; i &lt; MaxOutstanding; i++ {
-		sem &lt;- 1
-	}
+	&lt;-sem    // 完成；使下一个请求可以运行。
 }
 
 func Serve(queue chan *Request) {
@@ -5876,10 +5864,9 @@ func Serve(queue chan *Request) {
 
 <div class="english">
 <p>
-Because data synchronization occurs on a receive from a channel
-(that is, the send "happens before" the receive; see
-<a href="/ref/mem">The Go Memory Model</a>),
-acquisition of the semaphore must be on a channel receive, not a send.
+Once <code>MaxOutstanding</code> handlers are executing <code>process</code>,
+any more will block trying to send into the filled channel buffer,
+until one of the existing handlers finishes and receives from the buffer.
 </p>
 </div>
 
@@ -5912,10 +5899,10 @@ Here's an obvious solution, but beware it has a bug we'll fix subsequently:
 <pre>
 func Serve(queue chan *Request) {
 	for req := range queue {
-		&lt;-sem
+		sem &lt;- 1
 		go func() {
 			process(req) // Buggy; see explanation below.
-			sem &lt;- 1
+			&lt;-sem
 		}()
 	}
 }</pre>
@@ -5924,10 +5911,10 @@ func Serve(queue chan *Request) {
 <pre>
 func Serve(queue chan *Request) {
 	for req := range queue {
-		&lt;-sem
+		sem &lt;- 1
 		go func() {
 			process(req) // 这儿有Bug，解释见下。
-			sem &lt;- 1
+			&lt;-sem
 		}()
 	}
 }</pre>
@@ -5954,10 +5941,10 @@ Bug出现在Go的 <code>for</code> 循环中，该循环变量在每次迭代时
 <pre>
 func Serve(queue chan *Request) {
 	for req := range queue {
-		&lt;-sem
+		sem &lt;- 1
 		go func(req *Request) {
 			process(req)
-			sem &lt;- 1
+			&lt;-sem
 		}(req)
 	}
 }</pre>
@@ -5980,11 +5967,11 @@ name, as in this example:
 <pre>
 func Serve(queue chan *Request) {
 	for req := range queue {
-		&lt;-sem
 		req := req // Create new instance of req for the goroutine.
+		sem &lt;- 1
 		go func() {
 			process(req)
-			sem &lt;- 1
+			&lt;-sem
 		}()
 	}
 }</pre>
@@ -5993,11 +5980,11 @@ func Serve(queue chan *Request) {
 <pre>
 func Serve(queue chan *Request) {
 	for req := range queue {
-		&lt;-sem
 		req := req // 为该Go程创建 req 的新实例。
+		sem &lt;- 1
 		go func() {
 			process(req)
-			sem &lt;- 1
+			&lt;-sem
 		}()
 	}
 }

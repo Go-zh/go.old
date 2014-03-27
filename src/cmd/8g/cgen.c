@@ -522,6 +522,7 @@ agen(Node *n, Node *res)
 		// The generated code is just going to panic, so it need not
 		// be terribly efficient. See issue 3670.
 		tempname(&n1, n->type);
+		gvardef(&n1);
 		clearfat(&n1);
 		regalloc(&n2, types[tptr], res);
 		gins(ALEAL, &n1, &n2);
@@ -934,6 +935,13 @@ bgen(Node *n, int true, int likely, Prog *to)
 		patch(gins(AEND, N, N), to);
 		return;
 	}
+
+	while(n->op == OCONVNOP) {
+		n = n->left;
+		if(n->ninit != nil)
+			genlist(n->ninit);
+	}
+
 	nl = n->left;
 	nr = N;
 
@@ -1203,6 +1211,7 @@ sgen(Node *n, Node *res, int64 w)
 {
 	Node dst, src, tdst, tsrc;
 	int32 c, q, odst, osrc;
+	NodeList *l;
 
 	if(debug['g']) {
 		print("\nsgen w=%lld\n", w);
@@ -1222,6 +1231,13 @@ sgen(Node *n, Node *res, int64 w)
 		agen(n, &tdst);
 		return;
 	}
+
+	// If copying .args, that's all the results, so record definition sites
+	// for them for the liveness analysis.
+	if(res->op == ONAME && strcmp(res->sym->name, ".args") == 0)
+		for(l = curfn->dcl; l != nil; l = l->next)
+			if(l->n->class == PPARAMOUT)
+				gvardef(l->n);
 
 	// Avoid taking the address for simple enough types.
 	if(componentgen(n, res))
@@ -1255,6 +1271,10 @@ sgen(Node *n, Node *res, int64 w)
 		agen(n, &src);
 	else
 		gmove(&tsrc, &src);
+
+	if(res->op == ONAME)
+		gvardef(res);
+
 	if(res->addable)
 		agen(res, &dst);
 	else
@@ -1371,6 +1391,8 @@ componentgen(Node *nr, Node *nl)
 
 	switch(nl->type->etype) {
 	case TARRAY:
+		if(nl->op == ONAME)
+			gvardef(nl);
 		nodl.xoffset += Array_array;
 		nodl.type = ptrto(nl->type->type);
 
@@ -1404,6 +1426,8 @@ componentgen(Node *nr, Node *nl)
 		goto yes;
 
 	case TSTRING:
+		if(nl->op == ONAME)
+			gvardef(nl);
 		nodl.xoffset += Array_array;
 		nodl.type = ptrto(types[TUINT8]);
 
@@ -1427,6 +1451,8 @@ componentgen(Node *nr, Node *nl)
 		goto yes;
 
 	case TINTER:
+		if(nl->op == ONAME)
+			gvardef(nl);
 		nodl.xoffset += Array_array;
 		nodl.type = ptrto(types[TUINT8]);
 

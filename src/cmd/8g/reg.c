@@ -165,6 +165,8 @@ regopt(Prog *firstp)
 
 	for(r = firstr; r != R; r = (Reg*)r->f.link) {
 		p = r->f.prog;
+		if(p->as == AVARDEF)
+			continue;
 		proginfo(&info, p);
 
 		// Avoid making variables for direct-called functions.
@@ -435,7 +437,7 @@ addmove(Reg *r, int bn, int rn, int f)
 
 	p1 = mal(sizeof(*p1));
 	clearp(p1);
-	p1->loc = 9999;
+	p1->pc = 9999;
 
 	p = r->f.prog;
 	p1->link = p->link;
@@ -1138,15 +1140,15 @@ dumpit(char *str, Flow *r0, int isreg)
 		r1 = r->p2;
 		if(r1 != nil) {
 			print("	pred:");
-			for(; r1 != nil; r1 = r->p2link)
-				print(" %.4ud", r1->prog->loc);
+			for(; r1 != nil; r1 = r1->p2link)
+				print(" %.4ud", (int)r1->prog->pc);
 			print("\n");
 		}
 //		r1 = r->s1;
 //		if(r1 != nil) {
 //			print("	succ:");
 //			for(; r1 != R; r1 = r1->s1)
-//				print(" %.4ud", r1->prog->loc);
+//				print(" %.4ud", (int)r1->prog->pc);
 //			print("\n");
 //		}
 	}

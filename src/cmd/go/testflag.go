@@ -77,6 +77,7 @@ var testFlagDefn = []*testFlagSpec{
 	{name: "x", boolVar: &buildX},
 	{name: "work", boolVar: &buildWork},
 	{name: "gcflags"},
+	{name: "exec"},
 	{name: "ldflags"},
 	{name: "gccgoflags"},
 	{name: "tags"},
@@ -116,7 +117,6 @@ var testFlagDefn = []*testFlagSpec{
 func testFlags(args []string) (packageNames, passToTest []string) {
 	inPkg := false
 	outputDir := ""
-	testCoverMode = "set"
 	for i := 0; i < len(args); i++ {
 		if !strings.HasPrefix(args[i], "-") {
 			if !inPkg && packageNames == nil {
@@ -154,6 +154,11 @@ func testFlags(args []string) (packageNames, passToTest []string) {
 			setBoolFlag(f.boolVar, value)
 		case "p":
 			setIntFlag(&buildP, value)
+		case "exec":
+			execCmd, err = splitQuotedFields(value)
+			if err != nil {
+				fatalf("invalid flag argument for -%s: %v", f.name, err)
+			}
 		case "gcflags":
 			buildGcflags, err = splitQuotedFields(value)
 			if err != nil {
@@ -209,6 +214,14 @@ func testFlags(args []string) (packageNames, passToTest []string) {
 		}
 		if f.passToTest {
 			passToTest = append(passToTest, "-test."+f.name+"="+value)
+		}
+	}
+
+	if testCoverMode == "" {
+		testCoverMode = "set"
+		if buildRace {
+			// Default coverage mode is atomic when -race is set.
+			testCoverMode = "atomic"
 		}
 	}
 

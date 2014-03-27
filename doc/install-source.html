@@ -139,16 +139,16 @@ goroutines, such as stacks that grow and shrink on demand.
 
 <div class="english">
 <p>
-The compilers can target the FreeBSD, Linux, NetBSD, OpenBSD, OS X (Darwin), Plan 9,
-and Windows operating systems.
+The compilers can target the DragonFly BSD, FreeBSD, Linux, NetBSD, OpenBSD,
+OS X (Darwin), Plan 9, Solaris and Windows operating systems.
 The full set of supported combinations is listed in the discussion of
 <a href="#environment">environment variables</a> below.
 </p>
 </div>
 
 <p>
-该编译器可将FreeBSD、Linux、NetBSD、OpenBSD、OS X (Darwin)、Plan 9以及Windows作为目标。
-它所支持组合的完整集将在下文的<a href="#环境">环境变量</a>讨论中列出。
+该编译器可将DragonFly BSD、FreeBSD、Linux、NetBSD、OpenBSD、OS X (Darwin)、Plan 9、
+Solaris以及Windows作为目标。它所支持组合的完整集将在下文的<a href="#环境">环境变量</a>讨论中列出。
 </p>
 </div>
 
@@ -698,9 +698,9 @@ These default to the values of <code>$GOHOSTOS</code> and
 <div class="english">
 <p>
 Choices for <code>$GOOS</code> are
-<code>darwin</code> (Mac OS X 10.6 and above), <code>freebsd</code>,
+<code>darwin</code> (Mac OS X 10.6 and above), <code>dragonfly</code>, <code>freebsd</code>,
 <code>linux</code>, <code>netbsd</code>, <code>openbsd</code>,
-<code>plan9</code>, and <code>windows</code>.
+<code>plan9</code>, <code>solaris</code> and <code>windows</code>.
 Choices for <code>$GOARCH</code> are
 <code>amd64</code> (64-bit x86, the most mature port),
 <code>386</code> (32-bit x86), and <code>arm</code> (32-bit ARM).
@@ -710,9 +710,9 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 
 <p>
 <code>$GOOS</code> 的选项为
-<code>darwin</code>（Mac OS X 10.6及以上）、<code>freebsd</code>、
+<code>darwin</code>（Mac OS X 10.6及以上）、<code>dragonfly</code>、<code>freebsd</code>、
 <code>linux</code>、<code>netbsd</code>、<code>openbsd</code>、
-<code>plan9</code> 以及 <code>windows</code>。
+<code>plan9</code>、<code>solaris</code> 以及 <code>windows</code>。
 <code>$GOARCH</code> 的选项为
 <code>amd64</code>（64位x86，最成熟的端口）、
 <code>386</code>（32位x86）以及 <code>arm</code>（32位ARM）。
@@ -728,6 +728,12 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 </tr>
 <tr>
 <td></td><td><code>darwin</code></td> <td><code>amd64</code></td>
+</tr>
+<tr>
+<td></td><td><code>dragonfly</code></td> <td><code>386</code></td>
+</tr>
+<tr>
+<td></td><td><code>dragonfly</code></td> <td><code>amd64</code></td>
 </tr>
 <tr>
 <td></td><td><code>freebsd</code></td> <td><code>386</code></td>
@@ -767,6 +773,9 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 </tr>
 <tr>
 <td></td><td><code>plan9</code></td> <td><code>amd64</code></td>
+</tr>
+<tr>
+<td></td><td><code>solaris</code></td> <td><code>amd64</code></td>
 </tr>
 <tr>
 <td></td><td><code>windows</code></td> <td><code>386</code></td>

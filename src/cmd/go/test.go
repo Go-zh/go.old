@@ -72,6 +72,10 @@ In addition to the build flags, the flags handled by 'go test' itself are:
 	    Install packages that are dependencies of the test.
 	    Do not run the test.
 
+	-exec xprog
+	    Run the test binary using xprog. The behavior is the same as
+	    in 'go run'. See 'go help run' for details.
+
 The test binary also accepts flags that control execution of the test; these
 flags are also accessible by 'go test'.  See 'go help testflag' for details.
 
@@ -133,7 +137,8 @@ control the execution of any test:
 
 	-covermode set,count,atomic
 	    Set the mode for coverage analysis for the package[s]
-	    being tested. The default is "set".
+	    being tested. The default is "set" unless -race is enabled,
+	    in which case it is "atomic".
 	    The values:
 		set: bool: does this statement run?
 		count: int: how many times does this statement run?
@@ -168,9 +173,7 @@ control the execution of any test:
 	    Enable more precise (and expensive) memory profiles by setting
 	    runtime.MemProfileRate.  See 'godoc runtime MemProfileRate'.
 	    To profile all memory allocations, use -test.memprofilerate=1
-	    and set the environment variable GOGC=off to disable the
-	    garbage collector, provided the test can run in the available
-	    memory without garbage collection.
+	    and pass --alloc_space flag to the pprof tool.
 
 	-outputdir directory
 	    Place output files from profiling in the specified directory,
@@ -295,6 +298,8 @@ func runTest(cmd *Command, args []string) {
 	var pkgArgs []string
 	pkgArgs, testArgs = testFlags(args)
 
+	findExecCmd() // initialize cached result
+
 	raceInit()
 	pkgs := packagesForBuild(pkgArgs)
 	if len(pkgs) == 0 {
@@ -411,7 +416,10 @@ func runTest(cmd *Command, args []string) {
 			p.Stale = true // rebuild
 			p.fake = true  // do not warn about rebuild
 			p.coverMode = testCoverMode
-			p.coverVars = declareCoverVars(p.ImportPath, p.GoFiles...)
+			var coverFiles []string
+			coverFiles = append(coverFiles, p.GoFiles...)
+			coverFiles = append(coverFiles, p.CgoFiles...)
+			p.coverVars = declareCoverVars(p.ImportPath, coverFiles...)
 		}
 	}
 
@@ -618,7 +626,10 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 
 		if localCover {
 			ptest.coverMode = testCoverMode
-			ptest.coverVars = declareCoverVars(ptest.ImportPath, ptest.GoFiles...)
+			var coverFiles []string
+			coverFiles = append(coverFiles, ptest.GoFiles...)
+			coverFiles = append(coverFiles, ptest.CgoFiles...)
+			ptest.coverVars = declareCoverVars(ptest.ImportPath, coverFiles...)
 		}
 	} else {
 		ptest = p
@@ -656,6 +667,7 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 		pkgdir:     testDir,
 		fake:       true,
 		Stale:      true,
+		omitDWARF:  !testC && !testNeedBinary,
 	}
 	if pxtest != nil {
 		pmain.imports = append(pmain.imports, pxtest)
@@ -836,7 +848,7 @@ func declareCoverVars(importPath string, files ...string) map[string]*CoverVar {
 
 // runTest is the action for running a test binary.
 func (b *builder) runTest(a *action) error {
-	args := stringList(a.deps[0].target, testArgs)
+	args := stringList(findExecCmd(), a.deps[0].target, testArgs)
 	a.testOutput = new(bytes.Buffer)
 
 	if buildN || buildX {

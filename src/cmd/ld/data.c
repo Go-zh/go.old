@@ -154,9 +154,9 @@ relocsym(LSym *s)
 		if(r->type >= 256)
 			continue;
 
-		if(r->sym != S && r->sym->type == SDYNIMPORT)
+		// Solaris needs the ability to reference dynimport symbols.
+		if(HEADTYPE != Hsolaris && r->sym != S && r->sym->type == SDYNIMPORT)
 			diag("unhandled relocation for %s (type %d rtype %d)", r->sym->name, r->sym->type, r->type);
-
 		if(r->sym != S && r->sym->type != STLSBSS && !r->sym->reachable)
 			diag("unreachable sym in relocation: %s %s", s->name, r->sym->name);
 
@@ -167,6 +167,17 @@ relocsym(LSym *s)
 				diag("unknown reloc %d", r->type);
 			break;
 		case D_TLS:
+			if(linkmode == LinkInternal && iself && thechar == '5') {
+				// On ELF ARM, the thread pointer is 8 bytes before
+				// the start of the thread-local data block, so add 8
+				// to the actual TLS offset (r->sym->value).
+				// This 8 seems to be a fundamental constant of
+				// ELF on ARM (or maybe Glibc on ARM); it is not
+				// related to the fact that our own TLS storage happens
+				// to take up 8 bytes.
+				o = 8 + r->sym->value;
+				break;
+			}
 			r->done = 0;
 			o = 0;
 			if(thechar != '6')
@@ -183,7 +194,7 @@ relocsym(LSym *s)
 					r->xadd += symaddr(rs) - symaddr(rs->outer);
 					rs = rs->outer;
 				}
-				if(rs->type != SHOSTOBJ && rs->sect == nil)
+				if(rs->type != SHOSTOBJ && rs->type != SDYNIMPORT && rs->sect == nil)
 					diag("missing section for %s", rs->name);
 				r->xsym = rs;
 
@@ -214,7 +225,7 @@ relocsym(LSym *s)
 					rs = rs->outer;
 				}
 				r->xadd -= r->siz; // relative to address after the relocated chunk
-				if(rs->type != SHOSTOBJ && rs->sect == nil)
+				if(rs->type != SHOSTOBJ && rs->type != SDYNIMPORT && rs->sect == nil)
 					diag("missing section for %s", rs->name);
 				r->xsym = rs;
 
@@ -292,7 +303,7 @@ void
 dynrelocsym(LSym *s)
 {
 	Reloc *r;
-	
+
 	if(HEADTYPE == Hwindows) {
 		LSym *rel, *targ;
 
@@ -301,6 +312,8 @@ dynrelocsym(LSym *s)
 			return;
 		for(r=s->r; r<s->r+s->nr; r++) {
 			targ = r->sym;
+			if(!targ->reachable)
+				diag("internal inconsistency: dynamic symbol %s is not reachable.", targ->name);
 			if(r->sym->plt == -2 && r->sym->got != -2) { // make dynimport JMP table for PE object files.
 				targ->plt = rel->size;
 				r->sym = rel;
@@ -329,8 +342,11 @@ dynrelocsym(LSym *s)
 	}
 
 	for(r=s->r; r<s->r+s->nr; r++) {
-		if(r->sym != S && r->sym->type == SDYNIMPORT || r->type >= 256)
+		if(r->sym != S && r->sym->type == SDYNIMPORT || r->type >= 256) {
+			if(r->sym != S && !r->sym->reachable)
+				diag("internal inconsistency: dynamic symbol %s is not reachable.", r->sym->name);
 			adddynrel(s, r);
+		}
 	}
 }
 
@@ -879,13 +895,13 @@ dodata(void)
 		}
 		sect->len = datsize;
 	} else {
-		// References to STLSBSS symbols may be in the binary
-		// but should not be used. Give them an invalid address
-		// so that any uses will fault. Using 1 instead of 0 so that
-		// if used as an offset on ARM it will result in an unaligned
-		// address and still cause a fault.
-		for(; s != nil && s->type == STLSBSS; s = s->next)
-			s->value = 1;
+		// Might be internal linking but still using cgo.
+		// In that case, the only possible STLSBSS symbol is tlsgm.
+		// Give it offset 0, because it's the only thing here.
+		if(s != nil && s->type == STLSBSS && strcmp(s->name, "runtime.tlsgm") == 0) {
+			s->value = 0;
+			s = s->next;
+		}
 	}
 	
 	if(s != nil) {
@@ -1031,7 +1047,7 @@ textaddress(void)
 	// Could parallelize, by assigning to text
 	// and then letting threads copy down, but probably not worth it.
 	sect = segtext.sect;
-	sect->align = FuncAlign;
+	sect->align = funcalign;
 	linklookup(ctxt, "text", 0)->sect = sect;
 	linklookup(ctxt, "etext", 0)->sect = sect;
 	va = INITTEXT;
@@ -1042,6 +1058,8 @@ textaddress(void)
 			continue;
 		if(sym->align != 0)
 			va = rnd(va, sym->align);
+		else
+			va = rnd(va, funcalign);
 		sym->value = 0;
 		for(sub = sym; sub != S; sub = sub->sub)
 			sub->value += va;
@@ -1067,13 +1085,14 @@ address(void)
 	segtext.vaddr = va;
 	segtext.fileoff = HEADR;
 	for(s=segtext.sect; s != nil; s=s->next) {
-//print("%s at %#llux + %#llux\n", s->name, va, (vlong)s->len);
 		va = rnd(va, s->align);
 		s->vaddr = va;
 		va += s->len;
 	}
 	segtext.len = va - INITTEXT;
 	segtext.filelen = segtext.len;
+	if(HEADTYPE == Hnacl)
+		va += 32; // room for the "halt sled"
 
 	if(segrodata.sect != nil) {
 		// align to page boundary so as not to mix

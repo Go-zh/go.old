@@ -185,7 +185,8 @@ func benchmarkTCPConcurrentReadWrite(b *testing.B, laddr string) {
 		for p := 0; p < P; p++ {
 			s, err := ln.Accept()
 			if err != nil {
-				b.Fatalf("Accept failed: %v", err)
+				b.Errorf("Accept failed: %v", err)
+				return
 			}
 			servers[p] = s
 		}
@@ -217,7 +218,8 @@ func benchmarkTCPConcurrentReadWrite(b *testing.B, laddr string) {
 				buf[0] = v
 				_, err := c.Write(buf[:])
 				if err != nil {
-					b.Fatalf("Write failed: %v", err)
+					b.Errorf("Write failed: %v", err)
+					return
 				}
 			}
 		}(clients[p])
@@ -232,7 +234,8 @@ func benchmarkTCPConcurrentReadWrite(b *testing.B, laddr string) {
 			for i := 0; i < N; i++ {
 				_, err := s.Read(buf[:])
 				if err != nil {
-					b.Fatalf("Read failed: %v", err)
+					b.Errorf("Read failed: %v", err)
+					return
 				}
 				pipe <- buf[0]
 			}
@@ -250,7 +253,8 @@ func benchmarkTCPConcurrentReadWrite(b *testing.B, laddr string) {
 				buf[0] = v
 				_, err := s.Write(buf[:])
 				if err != nil {
-					b.Fatalf("Write failed: %v", err)
+					b.Errorf("Write failed: %v", err)
+					return
 				}
 			}
 			s.Close()
@@ -263,7 +267,8 @@ func benchmarkTCPConcurrentReadWrite(b *testing.B, laddr string) {
 			for i := 0; i < N; i++ {
 				_, err := c.Read(buf[:])
 				if err != nil {
-					b.Fatalf("Read failed: %v", err)
+					b.Errorf("Read failed: %v", err)
+					return
 				}
 			}
 			c.Close()
@@ -460,15 +465,25 @@ func TestTCPConcurrentAccept(t *testing.T) {
 			wg.Done()
 		}()
 	}
-	for i := 0; i < 10*N; i++ {
-		c, err := Dial("tcp", ln.Addr().String())
+	attempts := 10 * N
+	fails := 0
+	d := &Dialer{Timeout: 200 * time.Millisecond}
+	for i := 0; i < attempts; i++ {
+		c, err := d.Dial("tcp", ln.Addr().String())
 		if err != nil {
-			t.Fatalf("Dial failed: %v", err)
+			fails++
+		} else {
+			c.Close()
 		}
-		c.Close()
 	}
 	ln.Close()
 	wg.Wait()
+	if fails > attempts/9 { // see issues 7400 and 7541
+		t.Fatalf("too many Dial failed: %v", fails)
+	}
+	if fails > 0 {
+		t.Logf("# of failed Dials: %v", fails)
+	}
 }
 
 func TestTCPReadWriteMallocs(t *testing.T) {

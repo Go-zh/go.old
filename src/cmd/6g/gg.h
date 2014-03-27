@@ -21,8 +21,13 @@ EXTERN	Node*	deferproc;
 EXTERN	Node*	deferreturn;
 EXTERN	Node*	panicindex;
 EXTERN	Node*	panicslice;
+EXTERN	Node*	panicdiv;
 EXTERN	Node*	throwreturn;
 extern	vlong	unmappedzero;
+extern	int	addptr;
+extern	int	cmpptr;
+extern	int	movptr;
+extern	int	leaptr;
 
 /*
  * ggen.c
@@ -114,14 +119,6 @@ void	datagostring(Strlit*, Addr*);
 /*
  * list.c
  */
-int	Aconv(Fmt*);
-int	Dconv(Fmt*);
-int	Pconv(Fmt*);
-int	Rconv(Fmt*);
-int	Yconv(Fmt*);
 void	listinit(void);
 
 void	zaddr(Biobuf*, Addr*, int, int);
-
-#pragma	varargck	type	"D"	Addr*
-#pragma	varargck	type	"lD"	Addr*

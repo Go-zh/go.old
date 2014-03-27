@@ -27,6 +27,7 @@
 
 // declared here to avoid include of runtime.h
 void	runtime·panicstring(char*);
+void	runtime·panicdivide(void);
 
 typedef unsigned long   ulong;
 typedef unsigned int    uint;
@@ -35,12 +36,6 @@ typedef unsigned char   uchar;
 typedef signed char     schar;
 
 #define SIGN(n) (1UL<<(n-1))
-
-void
-runtime·panicdivide(void)
-{
-	runtime·panicstring("integer divide by zero");
-}
 
 typedef struct  Vlong   Vlong;
 struct  Vlong

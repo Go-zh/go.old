@@ -590,8 +590,6 @@ algtype1(Type *t, Type **bad)
 				*bad = t;
 			return ANOEQ;
 		}
-		if(t->bound == 0)
-			return AMEM;
 		a = algtype1(t->type, bad);
 		if(a == ANOEQ || a == AMEM) {
 			if(a == ANOEQ && bad)
@@ -1225,8 +1223,10 @@ assignop(Type *src, Type *dst, char **why)
 	
 	// 2. src and dst have identical underlying types
 	// and either src or dst is not a named type or
-	// both are interface types.
-	if(eqtype(src->orig, dst->orig) && (src->sym == S || dst->sym == S || src->etype == TINTER))
+	// both are empty interface types.
+	// For assignable but different non-empty interface types,
+	// we want to recompute the itab.
+	if(eqtype(src->orig, dst->orig) && (src->sym == S || dst->sym == S || isnilinter(src)))
 		return OCONVNOP;
 
 	// 3. dst is an interface type and src implements dst.
@@ -1241,6 +1241,9 @@ assignop(Type *src, Type *dst, char **why)
 		if(why != nil) {
 			if(isptrto(src, TINTER))
 				*why = smprint(":\n\t%T is pointer to interface, not interface", src);
+			else if(have && have->sym == missing->sym && have->nointerface)
+				*why = smprint(":\n\t%T does not implement %T (%S method is marked 'nointerface')",
+					src, dst, missing->sym);
 			else if(have && have->sym == missing->sym)
 				*why = smprint(":\n\t%T does not implement %T (wrong type for %S method)\n"
 					"\t\thave %S%hhT\n\t\twant %S%hhT", src, dst, missing->sym,
@@ -2240,6 +2243,7 @@ adddot(Node *n)
 	int c, d;
 
 	typecheck(&n->left, Etype|Erv);
+	n->diag |= n->left->diag;
 	t = n->left->type;
 	if(t == T)
 		goto ret;

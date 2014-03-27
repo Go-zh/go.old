@@ -574,6 +574,55 @@ crash, or do something else.)
 </p>
 
 <div class="english">
+<p class="rule">
+The <i>k</i>th send on a channel with capacity <i>C</i> happens before the <i>k</i>+<i>C</i>th receive from that channel completes.
+</p>
+</div>
+
+<div class="english">
+<p class="rule">
+The <i>k</i>th send on a channel with capacity <i>C</i> happens before the <i>k</i>+<i>C</i>th receive from that channel completes.
+</p>
+</div>
+
+<p class="rule">
+TODO: 优化语句
+在某信道上进行的的第 <i>k</i> 次容量为 <i>C</i> 的发送发生在第 <i>k</i>+<i>C</i>
+次从该信道进行的接收完成之前。
+</p>
+
+<p>
+This rule generalizes the previous rule to buffered channels.
+It allows a counting semaphore to be modeled by a buffered channel:
+the number of items in the channel corresponds to the semaphore count,
+the capacity of the channel corresponds to the semaphore maximum,
+sending an item acquires the semaphore, and receiving an item releases
+the semaphore.
+This is a common idiom for rate-limiting work.
+</p>
+
+<p>
+This program starts a goroutine for every entry in the work list, but the
+goroutines coordinate using the <code>limit</code> channel to ensure
+that at most three are running work functions at a time.
+</p>
+
+<pre>
+var limit = make(chan int, 3)
+
+func main() {
+	for _, w := range work {
+		go func() {
+			limit <- 1
+			w()
+			<-limit
+		}()
+	}
+	select{}
+}
+</pre>
+
+<div class="english">
 <h3>Locks</h3>
 </div>
 

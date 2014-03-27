@@ -6,7 +6,7 @@
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of Jan 14, 2014",
+	"Subtitle": "Version of March 7, 2014",
 	"Path": "/ref/spec"
 }-->
 
@@ -222,7 +222,7 @@ unicode_digit  = /* a Unicode code point classified as "Decimal Digit" */ .
 </pre>
 
 <p>
-In <a href="http://www.unicode.org/versions/Unicode6.2.0/">The Unicode Standard 6.2</a>,
+In <a href="http://www.unicode.org/versions/Unicode6.3.0/">The Unicode Standard 6.3</a>,
 Section 4.5 "General Category"
 defines a set of character categories.  Go treats
 those characters in category Lu, Ll, Lt, Lm, or Lo as Unicode letters,
@@ -776,7 +776,8 @@ types, the dynamic type is always the static type.
 
 <p>
 Each type <code>T</code> has an <i>underlying type</i>: If <code>T</code>
-is a predeclared type or a type literal, the corresponding underlying
+is one of the predeclared boolean, numeric, or string types, or a type literal,
+the corresponding underlying
 type is <code>T</code> itself. Otherwise, <code>T</code>'s underlying type
 is the underlying type of the type to which <code>T</code> refers in its
 <a href="#Type_declarations">type declaration</a>.
@@ -2369,8 +2370,6 @@ Similarly, elements that are addresses of composite literals may elide
 the <code>&amp;T</code> when the element type is <code>*T</code>.
 </p>
 
-
-
 <pre>
 [...]Point{{1.5, -3.5}, {0, 0}}   // same as [...]Point{Point{1.5, -3.5}, Point{0, 0}}
 [][]int{{1, 2, 3}, {4, 5}}        // same as [][]int{[]int{1, 2, 3}, []int{4, 5}}
@@ -2380,13 +2379,13 @@ the <code>&amp;T</code> when the element type is <code>*T</code>.
 
 <p>
 A parsing ambiguity arises when a composite literal using the
-TypeName form of the LiteralType appears between the
-<a href="#Keywords">keyword</a> and the opening brace of the block of an
-"if", "for", or "switch" statement, because the braces surrounding
-the expressions in the literal are confused with those introducing
-the block of statements. To resolve the ambiguity in this rare case,
-the composite literal must appear within
-parentheses.
+TypeName form of the LiteralType appears as an operand between the
+<a href="#Keywords">keyword</a> and the opening brace of the block
+of an "if", "for", or "switch" statement, and the composite literal
+is not enclosed in parentheses, square brackets, or curly braces.
+In this rare case, the opening brace of the literal is erroneously parsed
+as the one introducing the block of statements. To resolve the ambiguity,
+the composite literal must appear within parentheses.
 </p>
 
 <pre>
@@ -2794,7 +2793,7 @@ For arrays or strings, the indices are <i>in range</i> if
 otherwise they are <i>out of range</i>.
 For slices, the upper index bound is the slice capacity <code>cap(a)</code> rather than the length.
 A <a href="#Constants">constant</a> index must be non-negative and representable by a value of type
-<code>int</code>.
+<code>int</code>; for arrays or constant strings, constant indices must also be in range.
 If both indices are constant, they must satisfy <code>low &lt;= high</code>.
 If the indices are out of range at run time, a <a href="#Run_time_panics">run-time panic</a> occurs.
 </p>
@@ -2854,7 +2853,7 @@ If the sliced operand is an array, it must be <a href="#Address_operators">addre
 The indices are <i>in range</i> if <code>0 &lt;= low &lt;= high &lt;= max &lt;= cap(a)</code>,
 otherwise they are <i>out of range</i>.
 A <a href="#Constants">constant</a> index must be non-negative and representable by a value of type
-<code>int</code>.
+<code>int</code>; for arrays, constant indices must also be in range.
 If multiple indices are constant, the constants that are present must be in range relative to each
 other.
 If the indices are out of range at run time, a <a href="#Run_time_panics">run-time panic</a> occurs.
@@ -3018,27 +3017,32 @@ There is no distinct method type and there are no method literals.
 <h3 id="Passing_arguments_to_..._parameters">Passing arguments to <code>...</code> parameters</h3>
 
 <p>
-If <code>f</code> is variadic with final parameter type <code>...T</code>,
-then within the function the argument is equivalent to a parameter of type
-<code>[]T</code>.  At each call of <code>f</code>, the argument
-passed to the final parameter is
-a new slice of type <code>[]T</code> whose successive elements are
-the actual arguments, which all must be <a href="#Assignability">assignable</a>
-to the type <code>T</code>. The length of the slice is therefore the number of
-arguments bound to the final parameter and may differ for each call site.
+If <code>f</code> is <a href="#Function_types">variadic</a> with a final
+parameter <code>p</code> of type <code>...T</code>, then within <code>f</code>
+the type of <code>p</code> is equivalent to type <code>[]T</code>.
+If <code>f</code> is invoked with no actual arguments for <code>p</code>,
+the value passed to <code>p</code> is <code>nil</code>.
+Otherwise, the value passed is a new slice
+of type <code>[]T</code> with a new underlying array whose successive elements
+are the actual arguments, which all must be <a href="#Assignability">assignable</a>
+to <code>T</code>. The length and capacity of the slice is therefore
+the number of arguments bound to <code>p</code> and may differ for each
+call site.
 </p>
 
 <p>
-Given the function and call
+Given the function and calls
 </p>
 <pre>
 func Greeting(prefix string, who ...string)
+Greeting("nobody")
 Greeting("hello:", "Joe", "Anna", "Eileen")
 </pre>
 
 <p>
 within <code>Greeting</code>, <code>who</code> will have the value
-<code>[]string{"Joe", "Anna", "Eileen"}</code>
+<code>nil</code> in the first call, and
+<code>[]string{"Joe", "Anna", "Eileen"}</code> in the second.
 </p>
 
 <p>
@@ -4561,8 +4565,8 @@ If no case matches and there is a "default" case,
 its statements are executed.
 There can be at most one default case and it may appear anywhere in the
 "switch" statement.
-A missing switch expression is equivalent to
-the expression <code>true</code>.
+A missing switch expression is equivalent to the boolean value
+<code>true</code>.
 </p>
 
 <pre class="ebnf">
@@ -4727,7 +4731,8 @@ Condition = Expression .
 In its simplest form, a "for" statement specifies the repeated execution of
 a block as long as a boolean condition evaluates to true.
 The condition is evaluated before each iteration.
-If the condition is absent, it is equivalent to <code>true</code>.
+If the condition is absent, it is equivalent to the boolean value
+<code>true</code>.
 </p>
 
 <pre>
@@ -4764,7 +4769,8 @@ only if the block was executed).
 Any element of the ForClause may be empty but the
 <a href="#Semicolons">semicolons</a> are
 required unless there is only a condition.
-If the condition is absent, it is equivalent to <code>true</code>.
+If the condition is absent, it is equivalent to the boolean value
+<code>true</code>.
 </p>
 
 <pre>
@@ -5104,6 +5110,21 @@ function. A "return" statement that specifies results sets the result parameters
 any deferred functions are executed.
 </p>
 
+<p>
+Implementation restriction: A compiler may disallow an empty expression list
+in a "return" statement if a different entity (constant, type, or variable)
+with the same name as a result parameter is in
+<a href="#Declarations_and_scope">scope</a> at the place of the return.
+</p>
+
+<pre>
+func f(n int) (res int, err error) {
+	if _, err := f(n-1); err != nil {
+		return  // invalid return statement: err is shadowed
+	}
+	return
+}
+</pre>
 
 <h3 id="Break_statements">Break statements</h3>
 
@@ -5373,12 +5394,22 @@ The expression <code>len(s)</code> is <a href="#Constants">constant</a> if
 <code>s</code> is a string constant. The expressions <code>len(s)</code> and
 <code>cap(s)</code> are constants if the type of <code>s</code> is an array
 or pointer to an array and the expression <code>s</code> does not contain
-<a href="#Receive_operator">channel receives</a> or
+<a href="#Receive_operator">channel receives</a> or (non-constant)
 <a href="#Calls">function calls</a>; in this case <code>s</code> is not evaluated.
 Otherwise, invocations of <code>len</code> and <code>cap</code> are not
 constant and <code>s</code> is evaluated.
 </p>
 
+<pre>
+const (
+	c1 = imag(2i)                    // imag(2i) = 2.0 is a constant
+	c2 = len([10]float64{2})         // [10]float64{2} contains no function calls
+	c3 = len([10]float64{c1})        // [10]float64{c1} contains no function calls
+	c4 = len([10]float64{imag(2i)})  // imag(2i) is a constant and no function call is issued
+	c5 = len([10]float64{imag(z)})   // invalid: imag(x) is a (non-constant) function call
+)
+var z complex128
+</pre>
 
 <h3 id="Allocation">Allocation</h3>
 
@@ -5783,7 +5814,7 @@ package and may be relative to a repository of installed packages.
 <p>
 Implementation restriction: A compiler may restrict ImportPaths to
 non-empty strings using only characters belonging to
-<a href="http://www.unicode.org/versions/Unicode6.2.0/">Unicode's</a>
+<a href="http://www.unicode.org/versions/Unicode6.3.0/">Unicode's</a>
 L, M, N, P, and S general categories (the Graphic characters without
 spaces) and may also exclude the characters
 <code>!"#$%&amp;'()*,:;&lt;=&gt;?[\]^`{|}</code>

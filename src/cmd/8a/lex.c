@@ -57,6 +57,12 @@ pathchar(void)
 	return '/';
 }
 
+int
+Lconv(Fmt *fp)
+{
+	return linklinefmt(ctxt, fp);
+}
+
 void
 main(int argc, char *argv[])
 {
@@ -71,6 +77,13 @@ main(int argc, char *argv[])
 	ctxt->bso = &bstdout;
 	Binit(&bstdout, 1, OWRITE);
 	listinit8();
+	fmtinstall('L', Lconv);
+
+	// Allow GOARCH=thestring or GOARCH=thestringsuffix,
+	// but not other values.	
+	p = getgoarch();
+	if(strncmp(p, thestring, strlen(thestring)) != 0)
+		sysfatal("cannot use %cc with GOARCH=%s", thechar, p);
 
 	ensuresymb(NSYMB);
 	memset(debug, 0, sizeof(debug));
@@ -156,7 +169,7 @@ assemble(char *file)
 		errorexit();
 	}
 	Binit(&obuf, of, OWRITE);
-	Bprint(&obuf, "go object %s %s %s\n", getgoos(), thestring, getgoversion());
+	Bprint(&obuf, "go object %s %s %s\n", getgoos(), getgoarch(), getgoversion());
 	Bprint(&obuf, "!\n");
 
 	for(pass = 1; pass <= 2; pass++) {
@@ -781,6 +794,7 @@ struct
 	"PSUBW",	LTYPE3,	APSUBW,
 	"PUNPCKHQDQ",	LTYPE3,	APUNPCKHQDQ,
 	"PUNPCKLQDQ",	LTYPE3,	APUNPCKLQDQ,
+	"PXOR",		LTYPE3, APXOR,
 	"RCPPS",	LTYPE3,	ARCPPS,
 	"RCPSS",	LTYPE3,	ARCPSS,
 	"RSQRTPS",	LTYPE3,	ARSQRTPS,

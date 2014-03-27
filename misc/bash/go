@@ -20,10 +20,9 @@ _go()
 
   local cmd="${COMP_WORDS[1]}"
 
-  local cmds="build clean doc fix fmt get
+  local cmds="build clean env fix fmt get
     install list run test tool version vet"
-  local addhelp="gopath importpath remote
-    testflag testfunc"
+  local addhelp="c gopath importpath packages testflag testfunc"
   local other="help"
 
   if [ "$COMP_CWORD" == 1 ]; then
@@ -87,9 +86,6 @@ _go()
       else
         COMPREPLY=(`_go_importpath "$cur"`)
       fi
-      ;;
-    'doc')
-      COMPREPLY=(`_go_importpath "$cur"`)
       ;;
     'fix')
       COMPREPLY=(`_go_importpath "$cur"`)
@@ -188,14 +184,8 @@ _go()
           'dist') # TODO: Implement something.
             #_go_tool_dist
             ;;
-          'ebnflint') # TODO: Implement something.
-            #_go_tool_ebnflint
-            ;;
           'fix') # TODO: Implement something.
             #_go_tool_fix
-            ;;
-          'gotype') # TODO: Implement something.
-            #_go_tool_gotype
             ;;
           'nm') # TODO: Implement something.
             #_go_tool_nm
@@ -205,9 +195,6 @@ _go()
             ;;
           'pprof') # TODO: Implement something.
             #_go_tool_pprof
-            ;;
-          'prof') # TODO: Implement something.
-            #_go_tool_prof
             ;;
           'vet') # TODO: Implement something.
             #_go_tool_vet

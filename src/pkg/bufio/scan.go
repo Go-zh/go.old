@@ -172,7 +172,7 @@ func (s *Scanner) Scan() bool {
 				break
 			}
 			loop++
-			if loop > 100 {
+			if loop > maxConsecutiveEmptyReads {
 				s.setErr(io.ErrNoProgress)
 				break
 			}
@@ -306,7 +306,7 @@ func isSpace(r rune) bool {
 		return true
 	}
 	switch r {
-	case '\u1680', '\u180e', '\u2028', '\u2029', '\u202f', '\u205f', '\u3000':
+	case '\u1680', '\u2028', '\u2029', '\u202f', '\u205f', '\u3000':
 		return true
 	}
 	return false

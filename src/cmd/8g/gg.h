@@ -29,8 +29,8 @@ EXTERN	Node*	deferproc;
 EXTERN	Node*	deferreturn;
 EXTERN	Node*	panicindex;
 EXTERN	Node*	panicslice;
+EXTERN	Node*	panicdiv;
 EXTERN	Node*	throwreturn;
-EXTERN	int	maxstksize;
 extern	uint32	unmappedzero;
 
 
@@ -131,14 +131,6 @@ void	datagostring(Strlit*, Addr*);
 /*
  * list.c
  */
-int	Aconv(Fmt*);
-int	Dconv(Fmt*);
-int	Pconv(Fmt*);
-int	Rconv(Fmt*);
-int	Yconv(Fmt*);
 void	listinit(void);
 
 void	zaddr(Biobuf*, Addr*, int, int);
-
-#pragma	varargck	type	"D"	Addr*
-#pragma	varargck	type	"lD"	Addr*

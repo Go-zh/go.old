@@ -213,6 +213,10 @@ TEXT runtime·morestack(SB),NOSPLIT,$-4-0
 	// is still in this function, and not the beginning of the next.
 	RET
 
+TEXT runtime·morestack_noctxt(SB),NOSPLIT,$-4-0
+	MOVW	$0, R7
+	B runtime·morestack(SB)
+
 // Called from panic.  Mimics morestack,
 // reuses stack growth code to create a frame
 // with the desired args running the desired function.
@@ -627,22 +631,33 @@ _next:
 // Note: all three functions will clobber R0, and the last
 // two can be called from 5c ABI code.
 
+// save_gm saves the g and m registers into pthread-provided
+// thread-local memory, so that we can call externally compiled
+// ARM code that will overwrite those registers.
+// NOTE: runtime.gogo assumes that R1 is preserved by this function.
 TEXT runtime·save_gm(SB),NOSPLIT,$0
-	// NOTE: Liblink adds some instructions following the MRC
-	// to adjust R0 so that 8(R0) and 12(R0) are the TLS copies of
-	// the g and m registers. It's a bit too magical for its own good.
-	MRC		15, 0, R0, C13, C0, 3 // Fetch TLS register
-	MOVW	g, 8(R0)
-	MOVW	m, 12(R0)
+	MRC		15, 0, R0, C13, C0, 3 // fetch TLS base pointer
+	// $runtime.tlsgm(SB) is a special linker symbol.
+	// It is the offset from the TLS base pointer to our
+	// thread-local storage for g and m.
+	MOVW	$runtime·tlsgm(SB), R11
+	ADD	R11, R0
+	MOVW	g, 0(R0)
+	MOVW	m, 4(R0)
 	RET
 
+// load_gm loads the g and m registers from pthread-provided
+// thread-local memory, for use after calling externally compiled
+// ARM code that overwrote those registers.
 TEXT runtime·load_gm(SB),NOSPLIT,$0
-	// NOTE: Liblink adds some instructions following the MRC
-	// to adjust R0 so that 8(R0) and 12(R0) are the TLS copies of
-	// the g and m registers. It's a bit too magical for its own good.
-	MRC		15, 0, R0, C13, C0, 3 // Fetch TLS register
-	MOVW	8(R0), g
-	MOVW	12(R0), m
+	MRC		15, 0, R0, C13, C0, 3 // fetch TLS base pointer
+	// $runtime.tlsgm(SB) is a special linker symbol.
+	// It is the offset from the TLS base pointer to our
+	// thread-local storage for g and m.
+	MOVW	$runtime·tlsgm(SB), R11
+	ADD	R11, R0
+	MOVW	0(R0), g
+	MOVW	4(R0), m
 	RET
 
 // void setmg_gcc(M*, G*); set m and g called from gcc.

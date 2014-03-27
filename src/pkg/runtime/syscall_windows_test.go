@@ -177,6 +177,29 @@ func TestCallbackGC(t *testing.T) {
 	nestedCall(t, runtime.GC)
 }
 
+func TestCallbackPanicLocked(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	if !runtime.LockedOSThread() {
+		t.Fatal("runtime.LockOSThread didn't")
+	}
+	defer func() {
+		s := recover()
+		if s == nil {
+			t.Fatal("did not panic")
+		}
+		if s.(string) != "callback panic" {
+			t.Fatal("wrong panic:", s)
+		}
+		if !runtime.LockedOSThread() {
+			t.Fatal("lost lock on OS thread after panic")
+		}
+	}()
+	nestedCall(t, func() { panic("callback panic") })
+	panic("nestedCall returned")
+}
+
 func TestCallbackPanic(t *testing.T) {
 	// Make sure panic during callback unwinds properly.
 	if runtime.LockedOSThread() {
@@ -203,29 +226,6 @@ func TestCallbackPanicLoop(t *testing.T) {
 	for i := 0; i < 100000; i++ {
 		TestCallbackPanic(t)
 	}
-}
-
-func TestCallbackPanicLocked(t *testing.T) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
-	if !runtime.LockedOSThread() {
-		t.Fatal("runtime.LockOSThread didn't")
-	}
-	defer func() {
-		s := recover()
-		if s == nil {
-			t.Fatal("did not panic")
-		}
-		if s.(string) != "callback panic" {
-			t.Fatal("wrong panic:", s)
-		}
-		if !runtime.LockedOSThread() {
-			t.Fatal("lost lock on OS thread after panic")
-		}
-	}()
-	nestedCall(t, func() { panic("callback panic") })
-	panic("nestedCall returned")
 }
 
 func TestBlockingCallback(t *testing.T) {

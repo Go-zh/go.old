@@ -45,6 +45,7 @@ type Reader struct {
 }
 
 const minReadBufferSize = 16
+const maxConsecutiveEmptyReads = 100
 
 // NewReaderSize returns a new Reader whose buffer has at least the specified
 // size. If the argument io.Reader is already a Reader with large enough
@@ -475,6 +476,12 @@ func (b *Reader) WriteTo(w io.Writer) (n int64, err error) {
 		return n, err
 	}
 
+	if w, ok := w.(io.ReaderFrom); ok {
+		m, err := w.ReadFrom(b.rd)
+		n += m
+		return n, err
+	}
+
 	for b.fill(); b.r < b.w; b.fill() {
 		m, err := b.writeBuf(w)
 		n += m
@@ -718,9 +725,16 @@ func (b *Writer) ReadFrom(r io.Reader) (n int64, err error) {
 				return n, err1
 			}
 		}
-		m, err = r.Read(b.buf[b.n:])
-		if m == 0 {
-			break
+		nr := 0
+		for nr < maxConsecutiveEmptyReads {
+			m, err = r.Read(b.buf[b.n:])
+			if m != 0 || err != nil {
+				break
+			}
+			nr++
+		}
+		if nr == maxConsecutiveEmptyReads {
+			return n, io.ErrNoProgress
 		}
 		b.n += m
 		n += int64(m)

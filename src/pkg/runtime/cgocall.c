@@ -99,11 +99,6 @@ runtime·cgocall(void (*fn)(void*), void *arg)
 {
 	Defer d;
 
-	if(m->racecall) {
-		runtime·asmcgocall(fn, arg);
-		return;
-	}
-
 	if(!runtime·iscgo && !Solaris && !Windows)
 		runtime·throw("cgocall unavailable");
 
@@ -130,7 +125,7 @@ runtime·cgocall(void (*fn)(void*), void *arg)
 	d.argp = (void*)-1;  // unused because unlockm never recovers
 	d.special = true;
 	g->defer = &d;
-
+	
 	m->ncgo++;
 
 	/*
@@ -168,17 +163,6 @@ endcgo(void)
 
 	if(raceenabled)
 		runtime·raceacquire(&cgosync);
-}
-
-void
-runtime·NumCgoCall(int64 ret)
-{
-	M *mp;
-
-	ret = 0;
-	for(mp=runtime·atomicloadp(&runtime·allm); mp; mp=mp->alllink)
-		ret += mp->ncgocall;
-	FLUSH(&ret);
 }
 
 // Helper functions for cgo code.
@@ -234,6 +218,11 @@ struct CallbackArgs
 #define CBARGS (CallbackArgs*)((byte*)m->g0->sched.sp+2*sizeof(void*))
 #endif
 
+// Unimplemented on amd64p32
+#ifdef GOARCH_amd64p32
+#define CBARGS (CallbackArgs*)(nil)
+#endif
+
 // On 386, stack frame is three words, plus caller PC.
 #ifdef GOARCH_386
 #define CBARGS (CallbackArgs*)((byte*)m->g0->sched.sp+4*sizeof(void*))
@@ -250,21 +239,9 @@ runtime·cgocallbackg(void)
 		runtime·exit(2);
 	}
 
-	if(m->racecall) {
-		// We were not in syscall, so no need to call runtime·exitsyscall.
-		// However we must set m->locks for the following reason.
-		// Race detector runtime makes __tsan_symbolize cgo callback
-		// holding internal mutexes. The mutexes are not cooperative with Go scheduler.
-		// So if we deschedule a goroutine that holds race detector internal mutex
-		// (e.g. preempt it), another goroutine will deadlock trying to acquire the same mutex.
-		m->locks++;
-		runtime·cgocallbackg1();
-		m->locks--;
-	} else {
-		runtime·exitsyscall();	// coming out of cgo call
-		runtime·cgocallbackg1();
-		runtime·entersyscall();	// going back to cgo call
-	}
+	runtime·exitsyscall();	// coming out of cgo call
+	runtime·cgocallbackg1();
+	runtime·entersyscall();	// going back to cgo call
 }
 
 void
@@ -286,14 +263,14 @@ runtime·cgocallbackg1(void)
 	d.special = true;
 	g->defer = &d;
 
-	if(raceenabled && !m->racecall)
+	if(raceenabled)
 		runtime·raceacquire(&cgosync);
 
 	// Invoke callback.
 	cb = CBARGS;
 	runtime·newstackcall(cb->fn, cb->arg, cb->argsize);
 
-	if(raceenabled && !m->racecall)
+	if(raceenabled)
 		runtime·racereleasemerge(&cgosync);
 
 	// Pop defer.

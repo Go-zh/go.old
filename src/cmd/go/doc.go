@@ -303,6 +303,7 @@ which calls strings.Join. The struct being passed to the template is:
         IgnoredGoFiles []string // .go sources ignored due to build constraints
         CFiles   []string       // .c source files
         CXXFiles []string       // .cc, .cxx and .cpp source files
+        MFiles   []string       // .m source files
         HFiles   []string       // .h, .hh, .hpp and .hxx source files
         SFiles   []string       // .s source files
         SwigFiles []string      // .swig files
@@ -357,10 +358,19 @@ Compile and run Go program
 
 Usage:
 
-	go run [build flags] gofiles... [arguments...]
+	go run [build flags] [-exec xprog] gofiles... [arguments...]
 
 Run compiles and runs the main package comprising the named Go source files.
 A Go source file is defined to be a file ending in a literal ".go" suffix.
+
+By default, 'go run' runs the compiled binary directly: 'a.out arguments...'.
+If the -exec flag is given, 'go run' invokes the binary using xprog: 'xprog a.out arguments...'.
+If the -exec flag is not given, GOOS or GOARCH is different from the system
+default, and a program named go_$GOOS_$GOARCH_exec can be found
+on the current search path, 'go run' invokes the binary using that program,
+for example 'go_nacl_386_exec a.out arguments...'. This allows execution of
+cross-compiled programs when a simulator or other execution method is
+available.
 
 For more about build flags, see 'go help build'.
 
@@ -407,6 +417,10 @@ In addition to the build flags, the flags handled by 'go test' itself are:
 	-i
 	    Install packages that are dependencies of the test.
 	    Do not run the test.
+
+	-exec xprog
+	    Run the test binary using xprog. The behavior is the same as
+	    in 'go run'. See 'go help run' for details.
 
 The test binary also accepts flags that control execution of the test; these
 flags are also accessible by 'go test'.  See 'go help testflag' for details.
@@ -638,7 +652,7 @@ example.org/user/foo or foo.hg, and
 	import "example.org/repo.git/foo/bar"
 
 denotes the foo/bar directory of the Git repository at
-example.com/repo or repo.git.
+example.org/repo or repo.git.
 
 When a version control system supports multiple protocols,
 each is tried in turn when downloading.  For example, a Git
@@ -788,7 +802,8 @@ control the execution of any test:
 
 	-covermode set,count,atomic
 	    Set the mode for coverage analysis for the package[s]
-	    being tested. The default is "set".
+	    being tested. The default is "set" unless -race is enabled,
+	    in which case it is "atomic".
 	    The values:
 		set: bool: does this statement run?
 		count: int: how many times does this statement run?
@@ -823,9 +838,7 @@ control the execution of any test:
 	    Enable more precise (and expensive) memory profiles by setting
 	    runtime.MemProfileRate.  See 'godoc runtime MemProfileRate'.
 	    To profile all memory allocations, use -test.memprofilerate=1
-	    and set the environment variable GOGC=off to disable the
-	    garbage collector, provided the test can run in the available
-	    memory without garbage collection.
+	    and pass --alloc_space flag to the pprof tool.
 
 	-outputdir directory
 	    Place output files from profiling in the specified directory,
