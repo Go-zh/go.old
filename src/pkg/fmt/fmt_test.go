@@ -423,6 +423,8 @@ var fmtTests = []struct {
 	{"%#v", "foo", `"foo"`},
 	{"%#v", barray, `[5]fmt_test.renamedUint8{0x1, 0x2, 0x3, 0x4, 0x5}`},
 	{"%#v", bslice, `[]fmt_test.renamedUint8{0x1, 0x2, 0x3, 0x4, 0x5}`},
+	{"%#v", []byte(nil), "[]byte(nil)"},
+	{"%#v", []int32(nil), "[]int32(nil)"},
 
 	// slices with other formats
 	// 切片的其它格式

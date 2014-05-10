@@ -124,6 +124,8 @@ struct	LSym
 	short	type;
 	short	version;
 	uchar	dupok;
+	uchar	external;
+	uchar	nosplit;
 	uchar	reachable;
 	uchar	cgoexport;
 	uchar	special;
@@ -132,6 +134,7 @@ struct	LSym
 	uchar	leaf;	// arm only
 	uchar	fnptr;	// arm only
 	uchar	seenglobl;
+	uchar	onlist;	// on the textp or datap lists
 	int16	symid;	// for writing .5/.6/.8 files
 	int32	dynid;
 	int32	sig;
@@ -223,6 +226,32 @@ enum
 	SHIDDEN = 1<<9, // hidden or local symbol
 };
 
+// Reloc.type
+enum
+{
+	R_ADDR = 1,
+	R_SIZE,
+	R_CALL, // relocation for direct PC-relative call
+	R_CALLARM, // relocation for ARM direct call
+	R_CALLIND, // marker for indirect call (no actual relocating necessary)
+	R_CONST,
+	R_PCREL,
+	R_TLS,
+	R_TLS_LE, // TLS local exec offset from TLS segment register
+	R_TLS_IE, // TLS initial exec offset from TLS base pointer
+	R_GOTOFF,
+	R_PLT0,
+	R_PLT1,
+	R_PLT2,
+};
+
+// Auto.type
+enum
+{
+	A_AUTO = 1,
+	A_PARAM,
+};
+
 struct	Auto
 {
 	LSym*	asym;
@@ -288,19 +317,20 @@ struct Pcln
 };
 
 // Pcdata iterator.
-//	for(pciterinit(&it, &pcd); !it.done; pciternext(&it)) { it.value holds in [it.pc, it.nextpc) }
+//	for(pciterinit(ctxt, &it, &pcd); !it.done; pciternext(&it)) { it.value holds in [it.pc, it.nextpc) }
 struct Pciter
 {
 	Pcdata d;
 	uchar *p;
 	uint32 pc;
 	uint32 nextpc;
+	uint32 pcscale;
 	int32 value;
 	int start;
 	int done;
 };
 
-void	pciterinit(Pciter*, Pcdata*);
+void	pciterinit(Link*, Pciter*, Pcdata*);
 void	pciternext(Pciter*);
 
 // symbol version, incremented each time a file is loaded.
@@ -318,7 +348,6 @@ struct	Link
 	char*	thestring; // full name of architecture ("arm", "amd64", ..)
 	int32	goarm; // for arm only, GOARM setting
 	int	headtype;
-	int	linkmode;
 
 	LinkArch*	arch;
 	int32	(*ignore)(char*);	// do not emit names satisfying this function
@@ -337,6 +366,9 @@ struct	Link
 	Biobuf*	bso;	// for -v flag
 	char*	pathname;
 	int32	windows;
+	char*	trimpath;
+	char*	goroot;
+	char*	goroot_final;
 
 	// hash table of all symbols
 	LSym*	hash[LINKHASH];
@@ -420,14 +452,14 @@ struct LinkArch
 	
 	// TODO: Give these the same values on all systems.
 	int	D_ADDR;
+	int	D_AUTO;
 	int	D_BRANCH;
 	int	D_CONST;
 	int	D_EXTERN;
 	int	D_FCONST;
 	int	D_NONE;
-	int	D_PCREL;
+	int	D_PARAM;
 	int	D_SCONST;
-	int	D_SIZE;
 	int	D_STATIC;
 
 	int	ACALL;
@@ -544,7 +576,7 @@ void	linkprfile(Link *ctxt, int32 l);
 
 // objfile.c
 void	ldobjfile(Link *ctxt, Biobuf *b, char *pkg, int64 len, char *path);
-void	linkwriteobj(Link *ctxt, Biobuf *b);
+void	writeobj(Link *ctxt, Biobuf *b);
 
 // pass.c
 Prog*	brchain(Link *ctxt, Prog *p);

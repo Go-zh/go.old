@@ -118,9 +118,17 @@ func Gosched()
 
 // Goexit terminates the goroutine that calls it.  No other goroutine is affected.
 // Goexit runs all deferred calls before terminating the goroutine.
+//
+// Calling Goexit from the main goroutine terminates that goroutine
+// without func main returning. Since func main has not returned,
+// the program continues execution of other goroutines.
+// If all other goroutines exit, the program crashes.
 
 // Goexit 终止调用它的Go程。
 // 其它Go程则不受影响。Goexit 会在终止该Go程前调用所有已推迟的调用。
+//
+// main Go程在调用 Goexit 后会直接终止而不等待 func main 返回。由于 func main 并未返回，
+// 该程序会继续执行其它Go程。若所有其它的Go程都已退出，该程序就会崩溃。
 func Goexit()
 
 // Caller reports file and line number information about function invocations on

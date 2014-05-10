@@ -262,7 +262,7 @@ For mode=set, all covered lines will have this weight."
   ;; doesn't understand that
   (append
    `((,(go--regexp-enclose-in-symbol (regexp-opt go-mode-keywords t)) . font-lock-keyword-face)
-     (,(go--regexp-enclose-in-symbol (regexp-opt go-builtins t)) . font-lock-builtin-face)
+     (,(concat "\\(" (go--regexp-enclose-in-symbol (regexp-opt go-builtins t)) "\\)[[:space:]]*(") 1 font-lock-builtin-face)
      (,(go--regexp-enclose-in-symbol (regexp-opt go-constants t)) . font-lock-constant-face)
      (,go-func-regexp 1 font-lock-function-name-face)) ;; function (not method) name
 
@@ -272,6 +272,7 @@ For mode=set, all covered lines will have this weight."
      `((,go-func-meth-regexp 2 font-lock-function-name-face))) ;; method name
 
    `(
+     ("\\(`[^`]*`\\)" 1 font-lock-multiline) ;; raw string literal, needed for font-lock-syntactic-keywords
      (,(concat (go--regexp-enclose-in-symbol "type") "[[:space:]]+\\([^[:space:]]+\\)") 1 font-lock-type-face) ;; types
      (,(concat (go--regexp-enclose-in-symbol "type") "[[:space:]]+" go-identifier-regexp "[[:space:]]*" go-type-name-regexp) 1 font-lock-type-face) ;; types
      (,(concat "[^[:word:][:multibyte:]]\\[\\([[:digit:]]+\\|\\.\\.\\.\\)?\\]" go-type-name-regexp) 2 font-lock-type-face) ;; Arrays/slices
@@ -289,6 +290,14 @@ For mode=set, all covered lines will have this weight."
      ;; accustomed to it, so it'll stay for now.
      (,(concat "^[[:space:]]*\\(" go-label-regexp "\\)[[:space:]]*:\\(\\S.\\|$\\)") 1 font-lock-constant-face) ;; Labels and compound literal fields
      (,(concat (go--regexp-enclose-in-symbol "\\(goto\\|break\\|continue\\)") "[[:space:]]*\\(" go-label-regexp "\\)") 2 font-lock-constant-face)))) ;; labels in goto/break/continue
+
+(defconst go--font-lock-syntactic-keywords
+  ;; Override syntax property of raw string literal contents, so that
+  ;; backslashes have no special meaning in ``. Used in Emacs 23 or older.
+  '((go--match-raw-string-literal
+     (1 (7 . ?`))
+     (2 (15 . nil))  ;; 15 = "generic string"
+     (3 (7 . ?`)))))
 
 (defvar go-mode-map
   (let ((m (make-sparse-keymap)))
@@ -357,6 +366,18 @@ STOP-AT-STRING is not true, over strings."
   (/= (buffer-size)
       (- (point-max)
          (point-min))))
+
+(defun go--match-raw-string-literal (end)
+  "Search for a raw string literal. Set point to the end of the
+occurence found on success. Returns nil on failure."
+  (when (search-forward "`" end t)
+    (goto-char (match-beginning 0))
+    (if (go-in-string-or-comment-p)
+        (progn (goto-char (match-end 0))
+               (go--match-raw-string-literal end))
+      (when (looking-at "\\(`\\)\\([^`]*\\)\\(`\\)")
+        (goto-char (match-end 0))
+        t))))
 
 (defun go-previous-line-has-dangling-op-p ()
   "Returns non-nil if the current line is a continuation line."
@@ -564,7 +585,10 @@ recommended that you look at goflymake
 
   (set (make-local-variable 'parse-sexp-lookup-properties) t)
   (if (boundp 'syntax-propertize-function)
-      (set (make-local-variable 'syntax-propertize-function) #'go-propertize-syntax))
+      (set (make-local-variable 'syntax-propertize-function) #'go-propertize-syntax)
+    (set (make-local-variable 'font-lock-syntactic-keywords)
+         go--font-lock-syntactic-keywords)
+    (set (make-local-variable 'font-lock-multiline) t))
 
   (set (make-local-variable 'go-dangling-cache) (make-hash-table :test 'eql))
   (add-hook 'before-change-functions (lambda (x y) (setq go-dangling-cache (make-hash-table :test 'eql))) t t)

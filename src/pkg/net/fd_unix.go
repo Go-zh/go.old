@@ -208,11 +208,11 @@ func (fd *netFD) shutdown(how int) error {
 	return nil
 }
 
-func (fd *netFD) CloseRead() error {
+func (fd *netFD) closeRead() error {
 	return fd.shutdown(syscall.SHUT_RD)
 }
 
-func (fd *netFD) CloseWrite() error {
+func (fd *netFD) closeWrite() error {
 	return fd.shutdown(syscall.SHUT_WR)
 }
 
@@ -243,7 +243,7 @@ func (fd *netFD) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (fd *netFD) ReadFrom(p []byte) (n int, sa syscall.Sockaddr, err error) {
+func (fd *netFD) readFrom(p []byte) (n int, sa syscall.Sockaddr, err error) {
 	if err := fd.readLock(); err != nil {
 		return 0, nil, err
 	}
@@ -270,7 +270,7 @@ func (fd *netFD) ReadFrom(p []byte) (n int, sa syscall.Sockaddr, err error) {
 	return
 }
 
-func (fd *netFD) ReadMsg(p []byte, oob []byte) (n, oobn, flags int, sa syscall.Sockaddr, err error) {
+func (fd *netFD) readMsg(p []byte, oob []byte) (n, oobn, flags int, sa syscall.Sockaddr, err error) {
 	if err := fd.readLock(); err != nil {
 		return 0, 0, 0, nil, err
 	}
@@ -341,7 +341,7 @@ func (fd *netFD) Write(p []byte) (nn int, err error) {
 	return nn, err
 }
 
-func (fd *netFD) WriteTo(p []byte, sa syscall.Sockaddr) (n int, err error) {
+func (fd *netFD) writeTo(p []byte, sa syscall.Sockaddr) (n int, err error) {
 	if err := fd.writeLock(); err != nil {
 		return 0, err
 	}
@@ -366,7 +366,7 @@ func (fd *netFD) WriteTo(p []byte, sa syscall.Sockaddr) (n int, err error) {
 	return
 }
 
-func (fd *netFD) WriteMsg(p []byte, oob []byte, sa syscall.Sockaddr) (n int, oobn int, err error) {
+func (fd *netFD) writeMsg(p []byte, oob []byte, sa syscall.Sockaddr) (n int, oobn int, err error) {
 	if err := fd.writeLock(); err != nil {
 		return 0, 0, err
 	}
@@ -375,7 +375,7 @@ func (fd *netFD) WriteMsg(p []byte, oob []byte, sa syscall.Sockaddr) (n int, oob
 		return 0, 0, &OpError{"write", fd.net, fd.raddr, err}
 	}
 	for {
-		err = syscall.Sendmsg(fd.sysfd, p, oob, sa, 0)
+		n, err = syscall.SendmsgN(fd.sysfd, p, oob, sa, 0)
 		if err == syscall.EAGAIN {
 			if err = fd.pd.WaitWrite(); err == nil {
 				continue
@@ -384,7 +384,6 @@ func (fd *netFD) WriteMsg(p []byte, oob []byte, sa syscall.Sockaddr) (n int, oob
 		break
 	}
 	if err == nil {
-		n = len(p)
 		oobn = len(oob)
 	} else {
 		err = &OpError{"write", fd.net, fd.raddr, err}
@@ -483,7 +482,6 @@ func dupCloseOnExecOld(fd int) (newfd int, err error) {
 func (fd *netFD) dup() (f *os.File, err error) {
 	ns, err := dupCloseOnExec(fd.sysfd)
 	if err != nil {
-		syscall.ForkLock.RUnlock()
 		return nil, &OpError{"dup", fd.net, fd.laddr, err}
 	}
 

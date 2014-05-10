@@ -8,6 +8,7 @@
 
 #include	<u.h>
 #include	<libc.h>
+#include	"md5.h"
 #include	"gg.h"
 #include	"opt.h"
 #include	"../../pkg/runtime/funcdata.h"
@@ -79,10 +80,16 @@ makefuncdatasym(char *namefmt, int64 funcdatakind)
 // wants to work on individual variables, which might be multi-word
 // aggregates. It might make sense at some point to look into letting
 // the liveness analysis work on single-word values as well, although
-// there are complications around interface values, which cannot be
-// treated as individual words.
-void
-gvardef(Node *n)
+// there are complications around interface values, slices, and strings,
+// all of which cannot be treated as individual words.
+//
+// VARKILL is the opposite of VARDEF: it marks a value as no longer needed,
+// even if its address has been taken. That is, a VARKILL annotation asserts
+// that its argument is certainly dead, for use when the liveness analysis
+// would not otherwise be able to deduce that fact.
+
+static void
+gvardefx(Node *n, int as)
 {
 	if(n == N)
 		fatal("gvardef nil");
@@ -94,8 +101,20 @@ gvardef(Node *n)
 	case PAUTO:
 	case PPARAM:
 	case PPARAMOUT:
-		gins(AVARDEF, N, n);
+		gins(as, N, n);
 	}
+}
+
+void
+gvardef(Node *n)
+{
+	gvardefx(n, AVARDEF);
+}
+
+void
+gvarkill(Node *n)
+{
+	gvardefx(n, AVARKILL);
 }
 
 static void
@@ -104,12 +123,29 @@ removevardef(Prog *firstp)
 	Prog *p;
 
 	for(p = firstp; p != P; p = p->link) {
-		while(p->link != P && p->link->as == AVARDEF)
+		while(p->link != P && (p->link->as == AVARDEF || p->link->as == AVARKILL))
 			p->link = p->link->link;
 		if(p->to.type == D_BRANCH)
-			while(p->to.u.branch != P && p->to.u.branch->as == AVARDEF)
+			while(p->to.u.branch != P && (p->to.u.branch->as == AVARDEF || p->to.u.branch->as == AVARKILL))
 				p->to.u.branch = p->to.u.branch->link;
 	}
+}
+
+static void
+gcsymdup(Sym *s)
+{
+	LSym *ls;
+	uint64 lo, hi;
+	
+	ls = linksym(s);
+	if(ls->nr > 0)
+		fatal("cannot rosymdup %s with relocations", ls->name);
+	MD5 d;
+	md5reset(&d);
+	md5write(&d, ls->p, ls->np);
+	lo = md5sum(&d, &hi);
+	ls->name = smprint("gclocals·%016llux%016llux", lo, hi);
+	ls->dupok = 1;
 }
 
 void
@@ -117,7 +153,7 @@ compile(Node *fn)
 {
 	Plist *pl;
 	Node nod1, *n;
-	Prog *ptxt, *p, *p1;
+	Prog *ptxt, *p;
 	int32 lno;
 	Type *t;
 	Iter save;
@@ -125,7 +161,6 @@ compile(Node *fn)
 	NodeList *l;
 	Sym *gcargs;
 	Sym *gclocals;
-	Sym *gcdead;
 
 	if(newproc == N) {
 		newproc = sysfunc("newproc");
@@ -209,15 +244,6 @@ compile(Node *fn)
 
 	gcargs = makefuncdatasym("gcargs·%d", FUNCDATA_ArgsPointerMaps);
 	gclocals = makefuncdatasym("gclocals·%d", FUNCDATA_LocalsPointerMaps);
-	// TODO(cshapiro): emit the dead value map when the garbage collector
-	// pre-verification pass is checked in.  It is otherwise harmless to
-	// emit this information if it is not used but it does cost RSS at
-	// compile time.  At present, the amount of additional RSS is
-	// substantial enough to affect our smallest build machines.
-	if(0)
-		gcdead = makefuncdatasym("gcdead·%d", FUNCDATA_DeadValueMaps);
-	else
-		gcdead = nil;
 
 	for(t=curfn->paramfld; t; t=t->down)
 		gtrack(tracksym(t->type));
@@ -238,14 +264,6 @@ compile(Node *fn)
 	}
 
 	genlist(curfn->enter);
-
-	retpc = nil;
-	if(hasdefer || curfn->exit) {
-		p1 = gjmp(nil);
-		retpc = gjmp(nil);
-		patch(p1, pc);
-	}
-
 	genlist(curfn->nbody);
 	gclean();
 	checklabels();
@@ -257,18 +275,15 @@ compile(Node *fn)
 	if(curfn->type->outtuple != 0)
 		ginscall(throwreturn, 0);
 
-	if(retpc)
-		patch(retpc, pc);
 	ginit();
+	// TODO: Determine when the final cgen_ret can be omitted. Perhaps always?
+	cgen_ret(nil);
 	if(hasdefer) {
-		ginscall(deferreturn, 0);
 		// deferreturn pretends to have one uintptr argument.
 		// Reserve space for it so stack scanner is happy.
 		if(maxarg < widthptr)
 			maxarg = widthptr;
 	}
-	if(curfn->exit)
-		genlist(curfn->exit);
 	gclean();
 	if(nerrors != 0)
 		goto ret;
@@ -297,7 +312,9 @@ compile(Node *fn)
 	}
 
 	// Emit garbage collection symbols.
-	liveness(curfn, ptxt, gcargs, gclocals, gcdead);
+	liveness(curfn, ptxt, gcargs, gclocals);
+	gcsymdup(gcargs);
+	gcsymdup(gclocals);
 
 	defframe(ptxt);
 
@@ -363,7 +380,6 @@ allocauto(Prog* ptxt)
 
 	stksize = 0;
 	stkptrsize = 0;
-	stkzerosize = 0;
 
 	if(curfn->dcl == nil)
 		return;
@@ -374,13 +390,6 @@ allocauto(Prog* ptxt)
 			ll->n->used = 0;
 
 	markautoused(ptxt);
-
-	if(precisestack_enabled) {
-		// TODO: Remove when liveness analysis sets needzero instead.
-		for(ll=curfn->dcl; ll != nil; ll=ll->next)
-			if(ll->n->class == PAUTO)
-				ll->n->needzero = 1; // ll->n->addrtaken;
-	}
 
 	listsort(&curfn->dcl, cmpstackvar);
 
@@ -415,11 +424,8 @@ allocauto(Prog* ptxt)
 			fatal("bad width");
 		stksize += w;
 		stksize = rnd(stksize, n->type->align);
-		if(haspointers(n->type)) {
+		if(haspointers(n->type))
 			stkptrsize = stksize;
-			if(n->needzero)
-				stkzerosize = stksize;
-		}
 		if(thechar == '5')
 			stksize = rnd(stksize, widthptr);
 		if(stksize >= (1ULL<<31)) {
@@ -430,7 +436,6 @@ allocauto(Prog* ptxt)
 	}
 	stksize = rnd(stksize, widthreg);
 	stkptrsize = rnd(stkptrsize, widthreg);
-	stkzerosize = rnd(stkzerosize, widthreg);
 
 	fixautoused(ptxt);
 

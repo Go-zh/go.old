@@ -46,7 +46,7 @@ Compile packages and dependencies
 
 Usage:
 
-	go build [-o output] [build flags] [packages]
+	go build [-o output] [-i] [build flags] [packages]
 
 Build compiles the packages named by the import paths,
 along with their dependencies, but it does not install the results.
@@ -66,6 +66,8 @@ the package is main and file names are provided, the file name
 derives from the first file name mentioned, such as f1 for 'go build
 f1.go f2.go'; with no files provided ('go build'), the output file
 name is the base name of the containing directory.
+
+The -i flag installs the packages that are dependencies of the target.
 
 The build flags are shared by the build, install, run, and test commands:
 
@@ -122,7 +124,7 @@ Remove object files
 
 Usage:
 
-	go clean [-i] [-r] [-n] [-x] [packages]
+	go clean [-i] [-r] [-n] [-x] [build flags] [packages]
 
 Clean removes object files from package source directories.
 The go command builds most objects in a temporary directory,
@@ -159,6 +161,8 @@ The -r flag causes clean to be applied recursively to all the
 dependencies of the packages named by the import paths.
 
 The -x flag causes clean to print remove commands as it executes them.
+
+For more about build flags, see 'go help build'.
 
 For more about specifying packages, see 'go help packages'.
 
@@ -271,7 +275,7 @@ List packages
 
 Usage:
 
-	go list [-e] [-race] [-f format] [-json] [-tags 'tag list'] [packages]
+	go list [-e] [-f format] [-json] [build flags] [packages]
 
 List lists the packages named by the import paths, one per line.
 
@@ -283,8 +287,7 @@ The default output shows the package import path:
 
 The -f flag specifies an alternate format for the list, using the
 syntax of package template.  The default output is equivalent to -f
-'{{.ImportPath}}'.  One extra template function is available, "join",
-which calls strings.Join. The struct being passed to the template is:
+'{{.ImportPath}}'. The struct being passed to the template is:
 
     type Package struct {
         Dir        string // directory containing package sources
@@ -332,6 +335,26 @@ which calls strings.Join. The struct being passed to the template is:
         XTestImports []string // imports from XTestGoFiles
     }
 
+The template function "join" calls strings.Join.
+
+The template function "context" returns the build context, defined as:
+
+	type Context struct {
+		GOARCH        string   // target architecture
+		GOOS          string   // target operating system
+		GOROOT        string   // Go root
+		GOPATH        string   // Go path
+		CgoEnabled    bool     // whether cgo can be used
+		UseAllFiles   bool     // use files regardless of +build lines, file names
+		Compiler      string   // compiler to assume when computing target paths
+		BuildTags     []string // build constraints to match in +build lines
+		ReleaseTags   []string // releases the current release is compatible with
+		InstallSuffix string   // suffix to use in the name of the install dir
+	}
+
+For more information about the meaning of these fields see the documentation
+for the go/build package's Context type.
+
 The -json flag causes the package data to be printed in JSON format
 instead of using the template format.
 
@@ -345,11 +368,7 @@ printing.  Erroneous packages will have a non-empty ImportPath and
 a non-nil Error field; other information may or may not be missing
 (zeroed).
 
-The -tags flag specifies a list of build tags, like in the 'go build'
-command.
-
-The -race flag causes the package data to include the dependencies
-required by the race detector.
+For more about build flags, see 'go help build'.
 
 For more about specifying packages, see 'go help packages'.
 
@@ -492,8 +511,8 @@ http://swig.org/.  When running go build, any file with a .swig
 extension will be passed to SWIG.  Any file with a .swigcxx extension
 will be passed to SWIG with the -c++ option.
 
-When either cgo or SWIG is used, go build will pass any .c, .s, or .S
-files to the C compiler, and any .cc, .cpp, .cxx files to the C++
+When either cgo or SWIG is used, go build will pass any .c, .m, .s,
+or .S files to the C compiler, and any .cc, .cpp, .cxx files to the C++
 compiler.  The CC or CXX environment variables may be set to determine
 the C or C++ compiler, respectively, to use.
 

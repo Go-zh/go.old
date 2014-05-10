@@ -1152,41 +1152,21 @@ local repository out of date; must sync before submit
 </pre>
 
 <div class="english">
-<p>
-If you are not a committer, you cannot submit the change directly.
-Instead, a committer, usually the reviewer who said <code>LGTM</code>,
-will run:
-</p>
+<h3>More information</h3>
 </div>
 
-<p>
-若你不是提交者，你将无法直接递交此更改。某个提交者，通常为说 <code>LGTM</code> 的审核者会运行：
-</p>
-
-<pre>
-$ hg clpatch 99999
-$ hg submit 99999
-</pre>
+<h3>更多信息</h3>
 
 <div class="english">
-<p>The <code>clpatch</code> command imports your change 99999 into
-the committer's local Mercurial client, at which point the committer
-can check or test the code more.
-(Anyone can run <code>clpatch</code> to try a change that
-has been uploaded to the code review server.)
-The <code>submit</code> command submits the code.  You will be listed as the
-author, but the change message will also indicate who the committer was.
-Your local client will notice that the change has been submitted
-when you next run <code>hg sync</code>.
+<p>
+In addition to the information here, the Go community maintains a <a href="https://code.google.com/p/go-wiki/wiki/CodeReview">CodeReview</a> wiki page.
+Feel free to contribute to this page as you learn the review process.
 </p>
 </div>
 
 <p>
-<code>clpatch</code> 命令会将你的更改99999导入提交者的本地Mercurial客户端，
-此时该提交者可更深入地检查并测试此代码。（任何人都可运行 <code>clpatch</code>
-以尝试已上传至代码审核服务的更改。）<code>submit</code> 命令递交该代码。
-你将会作为作者列出，但该更改信息也将指明谁是提交者。当你下一次运行 <code>hg sync</code>
-时你的本地客户端将提示该更改已被提交。
+除本文中的信息外，Go社区还维护了一份<a href="https://code.google.com/p/go-wiki/wiki/CodeReview">代码审核</a>维基页面。
+欢迎你根据自己所了解的审核过程编辑此页。
 </p>
 
 <div class="english">

@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -213,7 +214,7 @@ func TestStdinClose(t *testing.T) {
 
 // Issue 5071
 func TestPipeLookPathLeak(t *testing.T) {
-	fd0 := numOpenFDS(t)
+	fd0, lsof0 := numOpenFDS(t)
 	for i := 0; i < 4; i++ {
 		cmd := exec.Command("something-that-does-not-exist-binary")
 		cmd.StdoutPipe()
@@ -223,19 +224,30 @@ func TestPipeLookPathLeak(t *testing.T) {
 			t.Fatal("unexpected success")
 		}
 	}
-	fdGrowth := numOpenFDS(t) - fd0
-	if fdGrowth > 2 {
-		t.Errorf("leaked %d fds; want ~0", fdGrowth)
+	for triesLeft := 3; triesLeft >= 0; triesLeft-- {
+		open, lsof := numOpenFDS(t)
+		fdGrowth := open - fd0
+		if fdGrowth > 2 {
+			if triesLeft > 0 {
+				// Work around what appears to be a race with Linux's
+				// proc filesystem (as used by lsof). It seems to only
+				// be eventually consistent. Give it awhile to settle.
+				// See golang.org/issue/7808
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			t.Errorf("leaked %d fds; want ~0; have:\n%s\noriginally:\n%s", fdGrowth, lsof, lsof0)
+		}
+		break
 	}
 }
 
-func numOpenFDS(t *testing.T) int {
+func numOpenFDS(t *testing.T) (n int, lsof []byte) {
 	lsof, err := exec.Command("lsof", "-n", "-p", strconv.Itoa(os.Getpid())).Output()
 	if err != nil {
 		t.Skip("skipping test; error finding or running lsof")
-		return 0
 	}
-	return bytes.Count(lsof, []byte("\n"))
+	return bytes.Count(lsof, []byte("\n")), lsof
 }
 
 var testedAlreadyLeaked = false
@@ -401,11 +413,15 @@ func TestExtraFiles(t *testing.T) {
 
 	// Force TLS root certs to be loaded (which might involve
 	// cgo), to make sure none of that potential C code leaks fds.
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello"))
-	}))
+	ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	// quiet expected TLS handshake error "remote error: bad certificate"
+	ts.Config.ErrorLog = log.New(ioutil.Discard, "", 0)
+	ts.StartTLS()
 	defer ts.Close()
-	http.Get(ts.URL) // ignore result; just calling to force root cert loading
+	_, err = http.Get(ts.URL)
+	if err == nil {
+		t.Errorf("success trying to fetch %s; want an error", ts.URL)
+	}
 
 	tf, err := ioutil.TempFile("", "")
 	if err != nil {
@@ -681,6 +697,24 @@ func TestHelperProcess(*testing.T) {
 			}
 		}
 		fmt.Fprintf(os.Stderr, "child: %s", response)
+		os.Exit(0)
+	case "exec":
+		cmd := exec.Command(args[1])
+		cmd.Dir = args[0]
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Child: %s %s", err, string(output))
+			os.Exit(1)
+		}
+		fmt.Printf("%s", string(output))
+		os.Exit(0)
+	case "lookpath":
+		p, err := exec.LookPath(args[0])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "LookPath failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Print(p)
 		os.Exit(0)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command %q\n", cmd)

@@ -57,21 +57,21 @@ func (c *testCloseConn) Close() error {
 // been closed.
 type testConnSet struct {
 	t      *testing.T
+	mu     sync.Mutex // guards closed and list
 	closed map[net.Conn]bool
 	list   []net.Conn // in order created
-	mutex  sync.Mutex
 }
 
 func (tcs *testConnSet) insert(c net.Conn) {
-	tcs.mutex.Lock()
-	defer tcs.mutex.Unlock()
+	tcs.mu.Lock()
+	defer tcs.mu.Unlock()
 	tcs.closed[c] = false
 	tcs.list = append(tcs.list, c)
 }
 
 func (tcs *testConnSet) remove(c net.Conn) {
-	tcs.mutex.Lock()
-	defer tcs.mutex.Unlock()
+	tcs.mu.Lock()
+	defer tcs.mu.Unlock()
 	tcs.closed[c] = true
 }
 
@@ -94,11 +94,19 @@ func makeTestDial(t *testing.T) (*testConnSet, func(n, addr string) (net.Conn, e
 }
 
 func (tcs *testConnSet) check(t *testing.T) {
-	tcs.mutex.Lock()
-	defer tcs.mutex.Unlock()
-
-	for i, c := range tcs.list {
-		if !tcs.closed[c] {
+	tcs.mu.Lock()
+	defer tcs.mu.Unlock()
+	for i := 4; i >= 0; i-- {
+		for i, c := range tcs.list {
+			if tcs.closed[c] {
+				continue
+			}
+			if i != 0 {
+				tcs.mu.Unlock()
+				time.Sleep(50 * time.Millisecond)
+				tcs.mu.Lock()
+				continue
+			}
 			t.Errorf("TCP connection #%d, %p (of %d total) was not closed", i+1, c, len(tcs.list))
 		}
 	}
@@ -795,6 +803,33 @@ func TestTransportGzipRecursive(t *testing.T) {
 	}
 }
 
+// golang.org/issue/7750: request fails when server replies with
+// a short gzip body
+func TestTransportGzipShort(t *testing.T) {
+	defer afterTest(t)
+	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Write([]byte{0x1f, 0x8b})
+	}))
+	defer ts.Close()
+
+	tr := &Transport{}
+	defer tr.CloseIdleConnections()
+	c := &Client{Transport: tr}
+	res, err := c.Get(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	_, err = ioutil.ReadAll(res.Body)
+	if err == nil {
+		t.Fatal("Expect an error from reading a body.")
+	}
+	if err != io.ErrUnexpectedEOF {
+		t.Errorf("ReadAll error = %v; want io.ErrUnexpectedEOF", err)
+	}
+}
+
 // tests that persistent goroutine connections shut down when no longer desired.
 func TestTransportPersistConnLeak(t *testing.T) {
 	if runtime.GOOS == "plan9" {
@@ -1215,9 +1250,13 @@ func TestTransportResponseHeaderTimeout(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping timeout test in -short mode")
 	}
+	inHandler := make(chan bool, 1)
 	mux := NewServeMux()
-	mux.HandleFunc("/fast", func(w ResponseWriter, r *Request) {})
+	mux.HandleFunc("/fast", func(w ResponseWriter, r *Request) {
+		inHandler <- true
+	})
 	mux.HandleFunc("/slow", func(w ResponseWriter, r *Request) {
+		inHandler <- true
 		time.Sleep(2 * time.Second)
 	})
 	ts := httptest.NewServer(mux)
@@ -1240,6 +1279,12 @@ func TestTransportResponseHeaderTimeout(t *testing.T) {
 	}
 	for i, tt := range tests {
 		res, err := c.Get(ts.URL + tt.path)
+		select {
+		case <-inHandler:
+		case <-time.After(5 * time.Second):
+			t.Errorf("never entered handler for test index %d, %s", i, tt.path)
+			continue
+		}
 		if err != nil {
 			uerr, ok := err.(*url.Error)
 			if !ok {
@@ -1367,7 +1412,6 @@ func TestTransportCancelRequestInDial(t *testing.T) {
 	case <-gotres:
 	case <-time.After(5 * time.Second):
 		panic("hang. events are: " + logbuf.String())
-		t.Fatal("timeout; cancel didn't work?")
 	}
 
 	got := logbuf.String()
@@ -1824,10 +1868,10 @@ func TestTransportTLSHandshakeTimeout(t *testing.T) {
 			return
 		}
 		if !ne.Timeout() {
-			t.Error("expected timeout error; got %v", err)
+			t.Errorf("expected timeout error; got %v", err)
 		}
 		if !strings.Contains(err.Error(), "handshake timeout") {
-			t.Error("expected 'handshake timeout' in error; got %v", err)
+			t.Errorf("expected 'handshake timeout' in error; got %v", err)
 		}
 	}()
 	select {
@@ -1903,6 +1947,170 @@ func TestTLSServerClosesConnection(t *testing.T) {
 	for _, err := range errs {
 		t.Logf("  err: %v", err)
 	}
+}
+
+// byteFromChanReader is an io.Reader that reads a single byte at a
+// time from the channel.  When the channel is closed, the reader
+// returns io.EOF.
+type byteFromChanReader chan byte
+
+func (c byteFromChanReader) Read(p []byte) (n int, err error) {
+	if len(p) == 0 {
+		return
+	}
+	b, ok := <-c
+	if !ok {
+		return 0, io.EOF
+	}
+	p[0] = b
+	return 1, nil
+}
+
+// Verifies that the Transport doesn't reuse a connection in the case
+// where the server replies before the request has been fully
+// written. We still honor that reply (see TestIssue3595), but don't
+// send future requests on the connection because it's then in a
+// questionable state.
+// golang.org/issue/7569
+func TestTransportNoReuseAfterEarlyResponse(t *testing.T) {
+	defer afterTest(t)
+	var sconn struct {
+		sync.Mutex
+		c net.Conn
+	}
+	var getOkay bool
+	closeConn := func() {
+		sconn.Lock()
+		defer sconn.Unlock()
+		if sconn.c != nil {
+			sconn.c.Close()
+			sconn.c = nil
+			if !getOkay {
+				t.Logf("Closed server connection")
+			}
+		}
+	}
+	defer closeConn()
+
+	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+		if r.Method == "GET" {
+			io.WriteString(w, "bar")
+			return
+		}
+		conn, _, _ := w.(Hijacker).Hijack()
+		sconn.Lock()
+		sconn.c = conn
+		sconn.Unlock()
+		conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nfoo")) // keep-alive
+		go io.Copy(ioutil.Discard, conn)
+	}))
+	defer ts.Close()
+	tr := &Transport{}
+	defer tr.CloseIdleConnections()
+	client := &Client{Transport: tr}
+
+	const bodySize = 256 << 10
+	finalBit := make(byteFromChanReader, 1)
+	req, _ := NewRequest("POST", ts.URL, io.MultiReader(io.LimitReader(neverEnding('x'), bodySize-1), finalBit))
+	req.ContentLength = bodySize
+	res, err := client.Do(req)
+	if err := wantBody(res, err, "foo"); err != nil {
+		t.Errorf("POST response: %v", err)
+	}
+	donec := make(chan bool)
+	go func() {
+		defer close(donec)
+		res, err = client.Get(ts.URL)
+		if err := wantBody(res, err, "bar"); err != nil {
+			t.Errorf("GET response: %v", err)
+			return
+		}
+		getOkay = true // suppress test noise
+	}()
+	time.AfterFunc(5*time.Second, closeConn)
+	select {
+	case <-donec:
+		finalBit <- 'x' // unblock the writeloop of the first Post
+		close(finalBit)
+	case <-time.After(7 * time.Second):
+		t.Fatal("timeout waiting for GET request to finish")
+	}
+}
+
+type errorReader struct {
+	err error
+}
+
+func (e errorReader) Read(p []byte) (int, error) { return 0, e.err }
+
+type closerFunc func() error
+
+func (f closerFunc) Close() error { return f() }
+
+// Issue 6981
+func TestTransportClosesBodyOnError(t *testing.T) {
+	if runtime.GOOS == "plan9" {
+		t.Skip("skipping test; see http://golang.org/issue/7782")
+	}
+	defer afterTest(t)
+	readBody := make(chan error, 1)
+	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+		_, err := ioutil.ReadAll(r.Body)
+		readBody <- err
+	}))
+	defer ts.Close()
+	fakeErr := errors.New("fake error")
+	didClose := make(chan bool, 1)
+	req, _ := NewRequest("POST", ts.URL, struct {
+		io.Reader
+		io.Closer
+	}{
+		io.MultiReader(io.LimitReader(neverEnding('x'), 1<<20), errorReader{fakeErr}),
+		closerFunc(func() error {
+			select {
+			case didClose <- true:
+			default:
+			}
+			return nil
+		}),
+	})
+	res, err := DefaultClient.Do(req)
+	if res != nil {
+		defer res.Body.Close()
+	}
+	if err == nil || !strings.Contains(err.Error(), fakeErr.Error()) {
+		t.Fatalf("Do error = %v; want something containing %q", fakeErr.Error())
+	}
+	select {
+	case err := <-readBody:
+		if err == nil {
+			t.Errorf("Unexpected success reading request body from handler; want 'unexpected EOF reading trailer'")
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("timeout waiting for server handler to complete")
+	}
+	select {
+	case <-didClose:
+	default:
+		t.Errorf("didn't see Body.Close")
+	}
+}
+
+func wantBody(res *http.Response, err error, want string) error {
+	if err != nil {
+		return err
+	}
+	slurp, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return fmt.Errorf("error reading body: %v", err)
+	}
+	if string(slurp) != want {
+		return fmt.Errorf("body = %q; want %q", slurp, want)
+	}
+	if err := res.Body.Close(); err != nil {
+		return fmt.Errorf("body Close = %v", err)
+	}
+	return nil
 }
 
 func newLocalListener(t *testing.T) net.Listener {

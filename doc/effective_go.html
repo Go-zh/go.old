@@ -410,7 +410,7 @@ not be used.
 One adjustment <code>godoc</code> does do is to display indented
 text in a fixed-width font, suitable for program snippets.
 The package comment for the
-<a href="http://golang.org/pkg/fmt/"><code>fmt</code> package</a> uses this to good effect.
+<a href="/pkg/fmt/"><code>fmt</code> package</a> uses this to good effect.
 </p>
 </div>
 
@@ -1343,7 +1343,7 @@ Erroneous encodings consume one byte and produce the
 replacement rune U+FFFD.
 (The name (with associated builtin type) <code>rune</code> is Go terminology for a
 single Unicode code point.
-See <a href="http://golang.org/ref/spec#Rune_literals">the language specification</a>
+See <a href="/ref/spec#Rune_literals">the language specification</a>
 for details.)
 The loop
 </p>
@@ -3961,17 +3961,37 @@ We pass the address of a <code>ByteSlice</code>
 because only <code>*ByteSlice</code> satisfies <code>io.Writer</code>.
 The rule about pointers vs. values for receivers is that value methods
 can be invoked on pointers and values, but pointer methods can only be
-invoked on pointers.  This is because pointer methods can modify the
-receiver; invoking them on a copy of the value would cause those
-modifications to be discarded.
+invoked on pointers.
 </p>
 </div>
 
 <p>
 我们将 <code>ByteSlice</code> 的地址传入，因为只有 <code>*ByteSlice</code>
 才满足 <code>io.Writer</code>。以指针或值为接收者的区别在于：值方法可通过指针和值调用，
-而指针方法只能通过指针来调用。这是由于指针方法可修改接收者，
-而在值的副本上所做的修改将被丢弃。
+而指针方法只能通过指针来调用。
+</p>
+
+<div class="english">
+<p>
+This rule arises because pointer methods can modify the receiver; invoking
+them on a value would cause the method to receive a copy of the value, so
+any modifications would be discarded.
+The language therefore disallows this mistake.
+There is a handy exception, though. When the value is addressable, the
+language takes care of the common case of invoking a pointer method on a
+value by inserting the address operator automatically.
+In our example, the variable <code>b</code> is addressable, so we can call
+its <code>Write</code> method with just <code>b.Write</code>. The compiler
+will rewrite that to <code>(&amp;b).Write</code> for us.
+</p>
+</div>
+
+<p>
+之所以会有这条规则是因为指针方法可以修改接收者；通过值调用它们会导致方法接收到该值的副本，
+因此任何修改都将被丢弃，因此该语言不允许这种错误。不过有个方便的例外：若该值是可寻址的，
+那么该语言就会自动插入取址操作符来对付一般的通过值调用的指针方法。在我们的例子中，变量
+<code>b</code> 是可寻址的，因此我们只需通过 <code>b.Write</code> 来调用它的
+<code>Write</code> 方法，编译器会将它重写为 <code>(&amp;b).Write</code>。
 </p>
 
 <div class="english">

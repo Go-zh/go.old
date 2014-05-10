@@ -301,6 +301,9 @@ gen(Node *n)
 		break;
 
 	case OLABEL:
+		if(isblanksym(n->left->sym))
+			break;
+		
 		lab = newlab(n);
 
 		// if there are pending gotos, resolve them all to the current pc.
@@ -465,8 +468,6 @@ gen(Node *n)
 	case OAS:
 		if(gen_as_init(n))
 			break;
-		if(n->colas && isfat(n->left->type) && n->left->op == ONAME)
-			gvardef(n->left);
 		cgen_as(n->left, n->right);
 		break;
 
@@ -497,6 +498,11 @@ gen(Node *n)
 	
 	case OCHECKNIL:
 		cgen_checknil(n->left);
+		break;
+	
+	case OVARKILL:
+		gvarkill(n->left);
+		break;
 	}
 
 ret:
@@ -566,7 +572,6 @@ cgen_proc(Node *n, int proc)
  * generate declaration.
  * have to allocate heap copy
  * for escaped variables.
- * also leave VARDEF annotations for liveness analysis.
  */
 static void
 cgen_dcl(Node *n)
@@ -577,8 +582,6 @@ cgen_dcl(Node *n)
 		dump("cgen_dcl", n);
 		fatal("cgen_dcl");
 	}
-	if(isfat(n->type))
-		gvardef(n);
 	if(!(n->class & PHEAP))
 		return;
 	if(n->alloc == nil)
@@ -641,7 +644,6 @@ cgen_discard(Node *nr)
 	// special enough to just evaluate
 	default:
 		tempname(&tmp, nr->type);
-		gvardef(&tmp);
 		cgen_as(&tmp, nr);
 		gused(&tmp);
 	}

@@ -603,7 +603,7 @@ adddwarfrel(LSym* sec, LSym* sym, vlong offsetbase, int siz, vlong addend)
 	r->xsym = sym;
 	r->off = cpos() - offsetbase;
 	r->siz = siz;
-	r->type = D_ADDR;
+	r->type = R_ADDR;
 	r->add = addend;
 	r->xadd = addend;
 	if(iself && thechar == '6')
@@ -1099,20 +1099,28 @@ defptrto(DWDie *dwtype)
 }
 
 // Copies src's children into dst. Copies attributes by value.
-// DWAttr.data is copied as pointer only.
+// DWAttr.data is copied as pointer only.  If except is one of
+// the top-level children, it will not be copied.
 static void
-copychildren(DWDie *dst, DWDie *src)
+copychildrenexcept(DWDie *dst, DWDie *src, DWDie *except)
 {
 	DWDie *c;
 	DWAttr *a;
 
 	for (src = src->child; src != nil; src = src->link) {
+		if(src == except)
+			continue;
 		c = newdie(dst, src->abbrev, getattr(src, DW_AT_name)->data);
 		for (a = src->attr; a != nil; a = a->link)
 			newattr(c, a->atr, a->cls, a->value, a->data);
-		copychildren(c, src);
+		copychildrenexcept(c, src, nil);
 	}
 	reverselist(&dst->child);
+}
+static void
+copychildren(DWDie *dst, DWDie *src)
+{
+	copychildrenexcept(dst, src, nil);
 }
 
 // Search children (assumed to have DW_TAG_member) for the one named
@@ -1253,7 +1261,10 @@ synthesizemaptypes(DWDie *die)
 			      mkinternaltypename("bucket",
 						 getattr(keytype, DW_AT_name)->data,
 						 getattr(valtype, DW_AT_name)->data));
-		copychildren(dwhb, bucket);
+		// Copy over all fields except the field "data" from the generic bucket.
+		// "data" will be replaced with keys/values below.
+		copychildrenexcept(dwhb, bucket, find(bucket, "data"));
+		
 		fld = newdie(dwhb, DW_ABRV_STRUCTFIELD, "keys");
 		newrefattr(fld, DW_AT_type, dwhk);
 		newmemberoffsetattr(fld, BucketSize + PtrSize);
@@ -1382,26 +1393,26 @@ movetomodule(DWDie *parent)
 	die->link = parent->child;
 }
 
-// if the histfile stack contains ..../runtime/runtime_defs.go
-// use that to set gdbscript
+// If the pcln table contains runtime/string.goc, use that to set gdbscript path.
 static void
 finddebugruntimepath(LSym *s)
 {
-	USED(s);
+	int i;
+	char *p;
+	LSym *f;
+	
+	if(gdbscript[0] != '\0')
+		return;
 
-/* TODO
-	int i, l;
-	char *c;
-
-	for (i = 1; i < histfilesize; i++) {
-		if ((c = strstr(histfile[i], "runtime/zruntime_defs")) != nil) {
-			l = c - histfile[i];
-			memmove(gdbscript, histfile[i], l);
-			memmove(gdbscript + l, "runtime/runtime-gdb.py", strlen("runtime/runtime-gdb.py") + 1);
+	for(i=0; i<s->pcln->nfile; i++) {
+		f = s->pcln->file[i];
+		if((p = strstr(f->name, "runtime/string.goc")) != nil) {
+			*p = '\0';
+			snprint(gdbscript, sizeof gdbscript, "%sruntime/runtime-gdb.py", f->name);
+			*p = 'r';
 			break;
 		}
 	}
-*/
 }
 
 /*
@@ -1593,8 +1604,8 @@ writelines(void)
 
 		finddebugruntimepath(s);
 
-		pciterinit(&pcfile, &s->pcln->pcfile);
-		pciterinit(&pcline, &s->pcln->pcline);
+		pciterinit(ctxt, &pcfile, &s->pcln->pcfile);
+		pciterinit(ctxt, &pcline, &s->pcln->pcline);
 		epc = pc;
 		while(!pcfile.done && !pcline.done) {
 			if(epc - s->value >= pcfile.nextpc) {
@@ -1627,11 +1638,11 @@ writelines(void)
 		memset(varhash, 0, sizeof varhash);
 		for(a = s->autom; a; a = a->link) {
 			switch (a->type) {
-			case D_AUTO:
+			case A_AUTO:
 				dt = DW_ABRV_AUTO;
 				offs = a->aoffset - PtrSize;
 				break;
-			case D_PARAM:
+			case A_PARAM:
 				dt = DW_ABRV_PARAM;
 				offs = a->aoffset;
 				break;
@@ -1750,7 +1761,7 @@ writeframes(void)
 		addrput(0);	// initial location
 		addrput(0);	// address range
 
-		for(pciterinit(&pcsp, &s->pcln->pcsp); !pcsp.done; pciternext(&pcsp))
+		for(pciterinit(ctxt, &pcsp, &s->pcln->pcsp); !pcsp.done; pciternext(&pcsp))
 			putpccfadelta(pcsp.nextpc - pcsp.pc, PtrSize + pcsp.value);
 
 		fdesize = cpos() - fdeo - 4;	// exclude the length field.

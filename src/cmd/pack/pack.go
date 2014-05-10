@@ -52,6 +52,8 @@ func main() {
 	log.SetPrefix("pack: ")
 	// need "pack op archive" at least.
 	if len(os.Args) < 3 {
+		log.Print("not enough arguments")
+		fmt.Fprintln(os.Stderr)
 		usage()
 	}
 	setOp(os.Args[1])
@@ -75,6 +77,8 @@ func main() {
 		ar = archive(os.Args[2], os.O_RDONLY, os.Args[3:])
 		ar.scan(ar.extractContents)
 	default:
+		log.Printf("invalid operation %q", os.Args[1])
+		fmt.Fprintln(os.Stderr)
 		usage()
 	}
 	if len(ar.files) > 0 {
@@ -344,7 +348,7 @@ func (ar *Archive) addFile(fd FileLike) {
 		log.Fatal("writing file: ", err)
 	}
 	if n64 != info.Size() {
-		log.Fatal("writing file: wrote %d bytes; file is size %d", n64, info.Size())
+		log.Fatalf("writing file: wrote %d bytes; file is size %d", n64, info.Size())
 	}
 	ar.endFile()
 }
@@ -402,20 +406,22 @@ func readPkgdef(file string) (data []byte, err error) {
 	// Read from file, collecting header for __.PKGDEF.
 	// The header is from the beginning of the file until a line
 	// containing just "!". The first line must begin with "go object ".
-	var buf bytes.Buffer
-	scan := bufio.NewScanner(f)
-	for scan.Scan() {
-		line := scan.Text()
-		if buf.Len() == 0 && !strings.HasPrefix(line, "go object ") {
+	rbuf := bufio.NewReader(f)
+	var wbuf bytes.Buffer
+	for {
+		line, err := rbuf.ReadBytes('\n')
+		if err != nil {
+			return nil, err
+		}
+		if wbuf.Len() == 0 && !bytes.HasPrefix(line, []byte("go object ")) {
 			return nil, errors.New("not a Go object file")
 		}
-		if line == "!" {
+		if bytes.Equal(line, []byte("!\n")) {
 			break
 		}
-		buf.WriteString(line)
-		buf.WriteString("\n")
+		wbuf.Write(line)
 	}
-	return buf.Bytes(), nil
+	return wbuf.Bytes(), nil
 }
 
 // exactly16Bytes truncates the string if necessary so it is at most 16 bytes long,

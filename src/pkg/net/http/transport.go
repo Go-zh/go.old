@@ -160,9 +160,11 @@ func (tr *transportRequest) extraHeaders() Header {
 // and redirects), see Get, Post, and the Client type.
 func (t *Transport) RoundTrip(req *Request) (resp *Response, err error) {
 	if req.URL == nil {
+		req.closeBody()
 		return nil, errors.New("http: nil Request.URL")
 	}
 	if req.Header == nil {
+		req.closeBody()
 		return nil, errors.New("http: nil Request.Header")
 	}
 	if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
@@ -173,16 +175,19 @@ func (t *Transport) RoundTrip(req *Request) (resp *Response, err error) {
 		}
 		t.altMu.RUnlock()
 		if rt == nil {
+			req.closeBody()
 			return nil, &badStringError{"unsupported protocol scheme", req.URL.Scheme}
 		}
 		return rt.RoundTrip(req)
 	}
 	if req.URL.Host == "" {
+		req.closeBody()
 		return nil, errors.New("http: no Host in request URL")
 	}
 	treq := &transportRequest{Request: req}
 	cm, err := t.connectMethodForRequest(treq)
 	if err != nil {
+		req.closeBody()
 		return nil, err
 	}
 
@@ -193,6 +198,7 @@ func (t *Transport) RoundTrip(req *Request) (resp *Response, err error) {
 	pconn, err := t.getConn(req, cm)
 	if err != nil {
 		t.setReqCanceler(req, nil)
+		req.closeBody()
 		return nil, err
 	}
 
@@ -230,9 +236,6 @@ func (t *Transport) CloseIdleConnections() {
 	t.idleConn = nil
 	t.idleConnCh = nil
 	t.idleMu.Unlock()
-	if m == nil {
-		return
-	}
 	for _, conns := range m {
 		for _, pconn := range conns {
 			pconn.close()
@@ -498,12 +501,13 @@ func (t *Transport) dialConn(cm connectMethod) (*persistConn, error) {
 	pa := cm.proxyAuth()
 
 	pconn := &persistConn{
-		t:        t,
-		cacheKey: cm.key(),
-		conn:     conn,
-		reqch:    make(chan requestAndChan, 50),
-		writech:  make(chan writeRequest, 50),
-		closech:  make(chan struct{}),
+		t:          t,
+		cacheKey:   cm.key(),
+		conn:       conn,
+		reqch:      make(chan requestAndChan, 1),
+		writech:    make(chan writeRequest, 1),
+		closech:    make(chan struct{}),
+		writeErrCh: make(chan error, 1),
 	}
 
 	switch {
@@ -721,17 +725,22 @@ type persistConn struct {
 	cacheKey connectMethodKey
 	conn     net.Conn
 	tlsState *tls.ConnectionState
-	closed   bool                // whether conn has been closed
 	br       *bufio.Reader       // from conn
 	sawEOF   bool                // whether we've seen EOF from conn; owned by readLoop
 	bw       *bufio.Writer       // to conn
 	reqch    chan requestAndChan // written by roundTrip; read by readLoop
 	writech  chan writeRequest   // written by roundTrip; read by writeLoop
-	closech  chan struct{}       // broadcast close when readLoop (TCP connection) closes
+	closech  chan struct{}       // closed when conn closed
 	isProxy  bool
+	// writeErrCh passes the request write error (usually nil)
+	// from the writeLoop goroutine to the readLoop which passes
+	// it off to the res.Body reader, which then uses it to decide
+	// whether or not a connection can be reused. Issue 7569.
+	writeErrCh chan error
 
-	lk                   sync.Mutex // guards following 3 fields
+	lk                   sync.Mutex // guards following fields
 	numExpectedResponses int
+	closed               bool // whether conn has been closed
 	broken               bool // an error has happened on this connection; marked broken so it's not reused.
 	// mutateHeaderFunc is an optional func to modify extra
 	// headers on each outbound request before it's written. (the
@@ -739,6 +748,7 @@ type persistConn struct {
 	mutateHeaderFunc func(Header)
 }
 
+// isBroken reports whether this connection is in a known broken state.
 func (pc *persistConn) isBroken() bool {
 	pc.lk.Lock()
 	b := pc.broken
@@ -763,7 +773,6 @@ func remoteSideClosed(err error) bool {
 }
 
 func (pc *persistConn) readLoop() {
-	defer close(pc.closech)
 	alive := true
 
 	for alive {
@@ -771,12 +780,14 @@ func (pc *persistConn) readLoop() {
 
 		pc.lk.Lock()
 		if pc.numExpectedResponses == 0 {
-			pc.closeLocked()
-			pc.lk.Unlock()
-			if len(pb) > 0 {
-				log.Printf("Unsolicited response received on idle HTTP channel starting with %q; err=%v",
-					string(pb), err)
+			if !pc.closed {
+				pc.closeLocked()
+				if len(pb) > 0 {
+					log.Printf("Unsolicited response received on idle HTTP channel starting with %q; err=%v",
+						string(pb), err)
+				}
 			}
+			pc.lk.Unlock()
 			return
 		}
 		pc.lk.Unlock()
@@ -809,13 +820,7 @@ func (pc *persistConn) readLoop() {
 				resp.Header.Del("Content-Encoding")
 				resp.Header.Del("Content-Length")
 				resp.ContentLength = -1
-				gzReader, zerr := gzip.NewReader(resp.Body)
-				if zerr != nil {
-					pc.close()
-					err = zerr
-				} else {
-					resp.Body = &readerAndCloser{gzReader, resp.Body}
-				}
+				resp.Body = &gzipReader{body: resp.Body}
 			}
 			resp.Body = &bodyEOFSignal{body: resp.Body}
 		}
@@ -838,27 +843,18 @@ func (pc *persistConn) readLoop() {
 				return nil
 			}
 			resp.Body.(*bodyEOFSignal).fn = func(err error) {
-				alive1 := alive
-				if err != nil {
-					alive1 = false
-				}
-				if alive1 && pc.sawEOF {
-					alive1 = false
-				}
-				if alive1 && !pc.t.putIdleConn(pc) {
-					alive1 = false
-				}
-				if !alive1 || pc.isBroken() {
-					pc.close()
-				}
-				waitForBodyRead <- alive1
+				waitForBodyRead <- alive &&
+					err == nil &&
+					!pc.sawEOF &&
+					pc.wroteRequest() &&
+					pc.t.putIdleConn(pc)
 			}
 		}
 
 		if alive && !hasBody {
-			if !pc.t.putIdleConn(pc) {
-				alive = false
-			}
+			alive = !pc.sawEOF &&
+				pc.wroteRequest() &&
+				pc.t.putIdleConn(pc)
 		}
 
 		rc.ch <- responseAndError{resp, err}
@@ -866,7 +862,11 @@ func (pc *persistConn) readLoop() {
 		// Wait for the just-returned response body to be fully consumed
 		// before we race and peek on the underlying bufio reader.
 		if waitForBodyRead != nil {
-			alive = <-waitForBodyRead
+			select {
+			case alive = <-waitForBodyRead:
+			case <-pc.closech:
+				alive = false
+			}
 		}
 
 		pc.t.setReqCanceler(rc.req, nil)
@@ -891,10 +891,40 @@ func (pc *persistConn) writeLoop() {
 			}
 			if err != nil {
 				pc.markBroken()
+				wr.req.Request.closeBody()
 			}
-			wr.ch <- err
+			pc.writeErrCh <- err // to the body reader, which might recycle us
+			wr.ch <- err         // to the roundTrip function
 		case <-pc.closech:
 			return
+		}
+	}
+}
+
+// wroteRequest is a check before recycling a connection that the previous write
+// (from writeLoop above) happened and was successful.
+func (pc *persistConn) wroteRequest() bool {
+	select {
+	case err := <-pc.writeErrCh:
+		// Common case: the write happened well before the response, so
+		// avoid creating a timer.
+		return err == nil
+	default:
+		// Rare case: the request was written in writeLoop above but
+		// before it could send to pc.writeErrCh, the reader read it
+		// all, processed it, and called us here. In this case, give the
+		// write goroutine a bit of time to finish its send.
+		//
+		// Less rare case: We also get here in the legitimate case of
+		// Issue 7569, where the writer is still writing (or stalled),
+		// but the server has already replied. In this case, we don't
+		// want to wait too long, and we want to return false so this
+		// connection isn't re-used.
+		select {
+		case err := <-pc.writeErrCh:
+			return err == nil
+		case <-time.After(50 * time.Millisecond):
+			return false
 		}
 	}
 }
@@ -1046,6 +1076,7 @@ func (pc *persistConn) closeLocked() {
 	if !pc.closed {
 		pc.conn.Close()
 		pc.closed = true
+		close(pc.closech)
 	}
 	pc.mutateHeaderFunc = nil
 }
@@ -1126,6 +1157,27 @@ func (es *bodyEOFSignal) condfn(err error) {
 	}
 	es.fn(err)
 	es.fn = nil
+}
+
+// gzipReader wraps a response body so it can lazily
+// call gzip.NewReader on the first call to Read
+type gzipReader struct {
+	body io.ReadCloser // underlying Response.Body
+	zr   io.Reader     // lazily-initialized gzip reader
+}
+
+func (gz *gzipReader) Read(p []byte) (n int, err error) {
+	if gz.zr == nil {
+		gz.zr, err = gzip.NewReader(gz.body)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return gz.zr.Read(p)
+}
+
+func (gz *gzipReader) Close() error {
+	return gz.body.Close()
 }
 
 type readerAndCloser struct {

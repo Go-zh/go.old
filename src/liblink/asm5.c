@@ -356,6 +356,9 @@ static Optab	optab[] =
 	{ APCDATA,	C_LCON,	C_NONE,	C_LCON,		0, 0, 0 },
 	{ AFUNCDATA,	C_LCON,	C_NONE,	C_ADDR,	0, 0, 0 },
 
+	{ ADUFFZERO,	C_NONE,	C_NONE,	C_SBRA,		 5, 4, 0 },  // same as ABL
+	{ ADUFFCOPY,	C_NONE,	C_NONE,	C_SBRA,		 5, 4, 0 },  // same as ABL
+
 	{ AXXX,		C_NONE,	C_NONE,	C_NONE,		 0, 4, 0 },
 };
 
@@ -1138,6 +1141,8 @@ buildop(Link *ctxt)
 		case ABL:
 		case ABX:
 		case ABXRET:
+		case ADUFFZERO:
+		case ADUFFCOPY:
 		case ASWI:
 		case AWORD:
 		case AMOVM:
@@ -1301,8 +1306,9 @@ if(0 /*debug['G']*/) print("%ux: %s: arm %d\n", (uint32)(p->pc), p->from.sym->na
 			rel->off = ctxt->pc;
 			rel->siz = 4;
 			rel->sym = p->to.sym;
+			v += p->to.offset;
 			rel->add = o1 | ((v >> 2) & 0xffffff);
-			rel->type = D_CALL;
+			rel->type = R_CALLARM;
 			break;
 		}
 		if(p->pcond != nil)
@@ -1324,6 +1330,10 @@ if(0 /*debug['G']*/) print("%ux: %s: arm %d\n", (uint32)(p->pc), p->from.sym->na
 			ctxt->diag("%P: doesn't support BL offset(REG) where offset != 0", p);
 		o1 = oprrr(ctxt, ABL, p->scond);
 		o1 |= p->to.reg;
+		rel = addrel(ctxt->cursym);
+		rel->off = ctxt->pc;
+		rel->siz = 0;
+		rel->type = R_CALLIND;
 		break;
 
 	case 8:		/* sll $c,[R],R -> mov (R<<$c),R */
@@ -1372,16 +1382,16 @@ if(0 /*debug['G']*/) print("%ux: %s: arm %d\n", (uint32)(p->pc), p->from.sym->na
 			// to the thread-local g and m pointers.
 			// Emit a TLS relocation instead of a standard one.
 			if(rel->sym == ctxt->gmsym) {
-				rel->type = D_TLS;
+				rel->type = R_TLS;
 				if(ctxt->flag_shared)
 					rel->add += ctxt->pc - p->pcrel->pc - 8 - rel->siz;
 				rel->xadd = rel->add;
 				rel->xsym = rel->sym;
 			} else if(ctxt->flag_shared) {
-				rel->type = D_PCREL;
+				rel->type = R_PCREL;
 				rel->add += ctxt->pc - p->pcrel->pc - 8;
 			} else
-				rel->type = D_ADDR;
+				rel->type = R_ADDR;
 			o1 = 0;
 		}
 		break;
@@ -1720,10 +1730,10 @@ if(0 /*debug['G']*/) print("%ux: %s: arm %d\n", (uint32)(p->pc), p->from.sym->na
 				rel->add = p->pcond->pc;
 			}
 			if(o->flag & LPCREL) {
-				rel->type = D_PCREL;
+				rel->type = R_PCREL;
 				rel->add += ctxt->pc - p->pcrel->pc - 16 + rel->siz;
 			} else
-				rel->type = D_ADDR;
+				rel->type = R_ADDR;
 			o1 = 0;
 		}
 		break;
@@ -2209,7 +2219,7 @@ opbra(Link *ctxt, int a, int sc)
 	if(sc & (C_SBIT|C_PBIT|C_WBIT))
 		ctxt->diag(".nil/.nil/.W on bra instruction");
 	sc &= C_SCOND;
-	if(a == ABL)
+	if(a == ABL || a == ADUFFZERO || a == ADUFFCOPY)
 		return (sc<<28)|(0x5<<25)|(0x1<<24);
 	if(sc != 0xe)
 		ctxt->diag(".COND on bcond instruction");

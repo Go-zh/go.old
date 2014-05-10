@@ -310,7 +310,7 @@ typecheck1(Node **np, int top)
 	int ok, ntop;
 	Type *t, *tp, *missing, *have, *badtype;
 	Val v;
-	char *why;
+	char *why, *desc, descbuf[64];
 	
 	n = *np;
 
@@ -654,8 +654,20 @@ reswitch:
 			if(iscmp[n->op]) {
 				n->etype = n->op;
 				n->op = OCMPSTR;
-			} else if(n->op == OADD)
+			} else if(n->op == OADD) {
+				// create OADDSTR node with list of strings in x + y + z + (w + v) + ...
 				n->op = OADDSTR;
+				if(l->op == OADDSTR)
+					n->list = l->list;
+				else
+					n->list = list1(l);
+				if(r->op == OADDSTR)
+					n->list = concat(n->list, r->list);
+				else
+					n->list = list(n->list, r);
+				n->left = N;
+				n->right = N;
+			}
 		}
 		if(et == TINTER) {
 			if(l->op == OLITERAL && l->val.ctype == CTNIL) {
@@ -950,7 +962,7 @@ reswitch:
 		r = n->right;
 		if(r->type == T)
 			goto error;
-		r = assignconv(r, l->type->type, "send");
+		n->right = assignconv(r, l->type->type, "send");
 		// TODO: more aggressive
 		n->etype = 0;
 		n->type = T;
@@ -1127,7 +1139,11 @@ reswitch:
 			}
 			break;
 		}
-		typecheckaste(OCALL, n->left, n->isddd, getinargx(t), n->list, "function argument");
+		if(snprint(descbuf, sizeof descbuf, "argument to %N", n->left) < sizeof descbuf)
+			desc = descbuf;
+		else
+			desc = "function argument";
+		typecheckaste(OCALL, n->left, n->isddd, getinargx(t), n->list, desc);
 		ok |= Etop;
 		if(t->outtuple == 0)
 			goto ret;
@@ -1655,6 +1671,7 @@ reswitch:
 	case OGOTO:
 	case OLABEL:
 	case OXFALL:
+	case OVARKILL:
 		ok |= Etop;
 		goto ret;
 
@@ -2150,6 +2167,31 @@ nokeys(NodeList *l)
 	return 1;
 }
 
+static int
+hasddd(Type *t)
+{
+	Type *tl;
+
+	for(tl=t->type; tl; tl=tl->down) {
+		if(tl->isddd)
+			return 1;
+	}
+	return 0;
+}
+
+static int
+downcount(Type *t)
+{
+	Type *tl;
+	int n;
+
+	n = 0;
+	for(tl=t->type; tl; tl=tl->down) {
+		n++;
+	}
+	return n;
+}
+
 /*
  * typecheck assignment: type list = expression list
  */
@@ -2160,6 +2202,7 @@ typecheckaste(int op, Node *call, int isddd, Type *tstruct, NodeList *nl, char *
 	Node *n;
 	int lno;
 	char *why;
+	int n1, n2;
 
 	lno = lineno;
 
@@ -2169,6 +2212,15 @@ typecheckaste(int op, Node *call, int isddd, Type *tstruct, NodeList *nl, char *
 	n = N;
 	if(nl != nil && nl->next == nil && (n = nl->n)->type != T)
 	if(n->type->etype == TSTRUCT && n->type->funarg) {
+		if(!hasddd(tstruct)) {
+			n1 = downcount(tstruct);
+			n2 = downcount(n->type);
+			if(n2 > n1)
+				goto toomany;
+			if(n2 < n1)
+				goto notenough;
+		}
+		
 		tn = n->type->type;
 		for(tl=tstruct->type; tl; tl=tl->down) {
 			if(tl->isddd) {
@@ -2195,6 +2247,26 @@ typecheckaste(int op, Node *call, int isddd, Type *tstruct, NodeList *nl, char *
 		if(tn != T)
 			goto toomany;
 		goto out;
+	}
+
+	n1 = downcount(tstruct);
+	n2 = count(nl);
+	if(!hasddd(tstruct)) {
+		if(n2 > n1)
+			goto toomany;
+		if(n2 < n1)
+			goto notenough;
+	}
+	else {
+		if(!isddd) {
+			if(n2 < n1-1)
+				goto notenough;
+		} else {
+			if(n2 > n1)
+				goto toomany;
+			if(n2 < n1)
+				goto notenough;
+		}
 	}
 
 	for(tl=tstruct->type; tl; tl=tl->down) {
@@ -2291,10 +2363,13 @@ keydup(Node *n, Node *hash[], ulong nhash)
 	ulong b;
 	double d;
 	int i;
-	Node *a;
+	Node *a, *orign;
 	Node cmp;
 	char *s;
 
+	orign = n;
+	if(n->op == OCONVIFACE)
+		n = n->left;
 	evconst(n);
 	if(n->op != OLITERAL)
 		return;	// we dont check variables
@@ -2327,17 +2402,29 @@ keydup(Node *n, Node *hash[], ulong nhash)
 	for(a=hash[h]; a!=N; a=a->ntest) {
 		cmp.op = OEQ;
 		cmp.left = n;
-		cmp.right = a;
-		evconst(&cmp);
-		b = cmp.val.u.bval;
+		if(a->op == OCONVIFACE && orign->op == OCONVIFACE) {
+			if(a->left->type == n->type) {
+				cmp.right = a->left;
+				evconst(&cmp);
+				b = cmp.val.u.bval;
+			}
+			else {
+				b = 0;
+			}
+		}
+		else {
+			cmp.right = a;
+			evconst(&cmp);
+			b = cmp.val.u.bval;
+		}
 		if(b) {
 			// too lazy to print the literal
 			yyerror("duplicate key %N in map literal", n);
 			return;
 		}
 	}
-	n->ntest = hash[h];
-	hash[h] = n;
+	orign->ntest = hash[h];
+	hash[h] = orign;
 }
 
 static void
@@ -2525,8 +2612,9 @@ typecheckcomplit(Node **np)
 			typecheck(&l->left, Erv);
 			evconst(l->left);
 			i = nonnegconst(l->left);
-			if(i < 0) {
+			if(i < 0 && !l->left->diag) {
 				yyerror("array index must be non-negative integer constant");
+				l->left->diag = 1;
 				i = -(1<<30);	// stay negative for a while
 			}
 			if(i >= 0)

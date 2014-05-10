@@ -424,6 +424,8 @@ func (v Value) CallSlice(in []Value) []Value {
 	return v.call("CallSlice", in)
 }
 
+var callGC bool // for testing; see TestCallMethodJump
+
 var makeFuncStubFn = makeFuncStub
 var makeFuncStubCode = **(**uintptr)(unsafe.Pointer(&makeFuncStubFn))
 var methodValueCallFn = methodValueCall
@@ -438,9 +440,8 @@ func (v Value) call(op string, in []Value) []Value {
 		rcvrtype *rtype
 	)
 	if v.flag&flagMethod != 0 {
-		rcvrtype = t
 		rcvr = v
-		t, fn = methodReceiver(op, v, int(v.flag)>>flagMethodShift)
+		rcvrtype, t, fn = methodReceiver(op, v, int(v.flag)>>flagMethodShift)
 	} else if v.flag&flagIndir != 0 {
 		fn = *(*unsafe.Pointer)(v.ptr)
 	} else {
@@ -449,17 +450,6 @@ func (v Value) call(op string, in []Value) []Value {
 
 	if fn == nil {
 		panic("reflect.Value.Call: call of nil function")
-	}
-
-	// If target is makeFuncStub, short circuit the unpack onto stack /
-	// pack back into []Value for the args and return values.  Just do the
-	// call directly.
-	// We need to do this here because otherwise we have a situation where
-	// reflect.callXX calls makeFuncStub, neither of which knows the
-	// layout of the args.  That's bad for precise gc & stack copying.
-	x := (*makeFuncImpl)(fn)
-	if x.code == makeFuncStubCode {
-		return x.fn(in)
 	}
 
 	isSlice := op == "CallSlice"
@@ -519,6 +509,17 @@ func (v Value) call(op string, in []Value) []Value {
 	}
 	nout := t.NumOut()
 
+	// If target is makeFuncStub, short circuit the unpack onto stack /
+	// pack back into []Value for the args and return values.  Just do the
+	// call directly.
+	// We need to do this here because otherwise we have a situation where
+	// reflect.callXX calls makeFuncStub, neither of which knows the
+	// layout of the args.  That's bad for precise gc & stack copying.
+	x := (*makeFuncImpl)(fn)
+	if x.code == makeFuncStubCode {
+		return x.fn(in)
+	}
+
 	// If the target is methodValueCall, do its work here: add the receiver
 	// argument and call the real target directly.
 	// We need to do this here because otherwise we have a situation where
@@ -527,8 +528,7 @@ func (v Value) call(op string, in []Value) []Value {
 	y := (*methodValue)(fn)
 	if y.fn == methodValueCallCode {
 		rcvr = y.rcvr
-		rcvrtype = rcvr.typ
-		t, fn = methodReceiver("call", rcvr, y.method)
+		rcvrtype, t, fn = methodReceiver("call", rcvr, y.method)
 	}
 
 	// Compute frame type, allocate a chunk of memory for frame
@@ -560,7 +560,12 @@ func (v Value) call(op string, in []Value) []Value {
 	}
 
 	// Call.
-	call(fn, args, uint32(frametype.size))
+	call(fn, args, uint32(frametype.size), uint32(retOffset))
+
+	// For testing; see TestCallMethodJump.
+	if callGC {
+		runtime.GC()
+	}
 
 	// Copy return values out of args.
 	ret := make([]Value, nout)
@@ -661,9 +666,10 @@ func callReflect(ctxt *makeFuncImpl, frame unsafe.Pointer) {
 // described by v. The Value v may or may not have the
 // flagMethod bit set, so the kind cached in v.flag should
 // not be used.
+// The return value rcvrtype gives the method's actual receiver type.
 // The return value t gives the method type signature (without the receiver).
 // The return value fn is a pointer to the method code.
-func methodReceiver(op string, v Value, methodIndex int) (t *rtype, fn unsafe.Pointer) {
+func methodReceiver(op string, v Value, methodIndex int) (rcvrtype, t *rtype, fn unsafe.Pointer) {
 	i := methodIndex
 	if v.typ.Kind() == Interface {
 		tt := (*interfaceType)(unsafe.Pointer(v.typ))
@@ -678,9 +684,11 @@ func methodReceiver(op string, v Value, methodIndex int) (t *rtype, fn unsafe.Po
 		if iface.itab == nil {
 			panic("reflect: " + op + " of method on nil interface value")
 		}
+		rcvrtype = iface.itab.typ
 		fn = unsafe.Pointer(&iface.itab.fun[i])
 		t = m.typ
 	} else {
+		rcvrtype = v.typ
 		ut := v.typ.uncommon()
 		if ut == nil || i < 0 || i >= len(ut.methods) {
 			panic("reflect: internal error: invalid method index")
@@ -739,8 +747,7 @@ func align(x, n uintptr) uintptr {
 // The gc compilers know to do that for the name "reflect.callMethod".
 func callMethod(ctxt *methodValue, frame unsafe.Pointer) {
 	rcvr := ctxt.rcvr
-	rcvrtype := rcvr.typ
-	t, fn := methodReceiver("call", rcvr, ctxt.method)
+	rcvrtype, t, fn := methodReceiver("call", rcvr, ctxt.method)
 	frametype, argSize, retOffset := funcLayout(t, rcvrtype)
 
 	// Make a new frame that is one word bigger so we can store the receiver.
@@ -751,7 +758,7 @@ func callMethod(ctxt *methodValue, frame unsafe.Pointer) {
 	memmove(unsafe.Pointer(uintptr(args)+ptrSize), frame, argSize-ptrSize)
 
 	// Call.
-	call(fn, args, uint32(frametype.size))
+	call(fn, args, uint32(frametype.size), uint32(retOffset))
 
 	// Copy return values. On amd64p32, the beginning of return values
 	// is 64-bit aligned, so the caller's frame layout (which doesn't have
@@ -2290,7 +2297,7 @@ func Zero(typ Type) Value {
 }
 
 // New returns a Value representing a pointer to a new zero value
-// for the specified type.  That is, the returned Value's Type is PtrTo(t).
+// for the specified type.  That is, the returned Value's Type is PtrTo(typ).
 func New(typ Type) Value {
 	if typ == nil {
 		panic("reflect: New(nil)")
@@ -2658,7 +2665,7 @@ func mapiterkey(it unsafe.Pointer) (key unsafe.Pointer)
 func mapiternext(it unsafe.Pointer)
 func maplen(m unsafe.Pointer) int
 
-func call(fn, arg unsafe.Pointer, n uint32)
+func call(fn, arg unsafe.Pointer, n uint32, retoffset uint32)
 func ifaceE2I(t *rtype, src interface{}, dst unsafe.Pointer)
 
 // Dummy annotation marking that the value x escapes,

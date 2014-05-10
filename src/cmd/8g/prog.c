@@ -42,6 +42,7 @@ static ProgInfo progtable[ALAST] = {
 	[AUSEFIELD]=	{OK},
 	[ACHECKNIL]=	{LeftRead},
 	[AVARDEF]=	{Pseudo | RightWrite},
+	[AVARKILL]=	{Pseudo | RightWrite},
 
 	// NOP is an internal no-op that also stands
 	// for USED and SET annotations, not the Intel opcode.
@@ -137,11 +138,16 @@ static ProgInfo progtable[ALAST] = {
 	[AFMOVW]=	{SizeW | LeftAddr | RightWrite},
 	[AFMOVV]=	{SizeQ | LeftAddr | RightWrite},
 
-	[AFMOVDP]=	{SizeD | LeftRead | RightAddr},
-	[AFMOVFP]=	{SizeF | LeftRead | RightAddr},
-	[AFMOVLP]=	{SizeL | LeftRead | RightAddr},
-	[AFMOVWP]=	{SizeW | LeftRead | RightAddr},
-	[AFMOVVP]=	{SizeQ | LeftRead | RightAddr},
+	// These instructions are marked as RightAddr
+	// so that the register optimizer does not try to replace the
+	// memory references with integer register references.
+	// But they do not use the previous value at the address, so
+	// we also mark them RightWrite.
+	[AFMOVDP]=	{SizeD | LeftRead | RightWrite | RightAddr},
+	[AFMOVFP]=	{SizeF | LeftRead | RightWrite | RightAddr},
+	[AFMOVLP]=	{SizeL | LeftRead | RightWrite | RightAddr},
+	[AFMOVWP]=	{SizeW | LeftRead | RightWrite | RightAddr},
+	[AFMOVVP]=	{SizeQ | LeftRead | RightWrite | RightAddr},
 
 	[AFMULD]=	{SizeD | LeftAddr | RightRdwr},
 	[AFMULDP]=	{SizeD | LeftAddr | RightRdwr},
@@ -194,6 +200,7 @@ static ProgInfo progtable[ALAST] = {
 	[AMOVSB]=	{OK, DI|SI, DI|SI},
 	[AMOVSL]=	{OK, DI|SI, DI|SI},
 	[AMOVSW]=	{OK, DI|SI, DI|SI},
+	[ADUFFCOPY]=	{OK, DI|SI, DI|SI|CX},
 
 	[AMOVSD]=	{SizeD | LeftRead | RightWrite | Move},
 	[AMOVSS]=	{SizeF | LeftRead | RightWrite | Move},
@@ -286,6 +293,7 @@ static ProgInfo progtable[ALAST] = {
 	[ASTOSB]=	{OK, AX|DI, DI},
 	[ASTOSL]=	{OK, AX|DI, DI},
 	[ASTOSW]=	{OK, AX|DI, DI},
+	[ADUFFZERO]=	{OK, AX|DI, DI},
 
 	[ASUBB]=	{SizeB | LeftRead | RightRdwr | SetCarry},
 	[ASUBL]=	{SizeL | LeftRead | RightRdwr | SetCarry},

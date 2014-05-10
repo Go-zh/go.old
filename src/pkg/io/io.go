@@ -108,12 +108,13 @@ type Reader interface {
 // It returns the number of bytes written from p (0 <= n <= len(p))
 // and any error encountered that caused the write to stop early.
 // Write must return a non-nil error if it returns n < len(p).
+// Write must not modify the slice data, even temporarily.
 
 // Writer 接口包装了基本的 Write 方法。
 //
 // Write 将 len(p) 个字节从 p 中写入到基本数据流中。它返回从 p 中被写入的字节数
 // n（0 <= n <= len(p)）以及任何遇到的引起写入提前停止的错误。若 Write 返回的
-// n < len(p)，它就必须返回一个非nil的错误。
+// n < len(p)，它就必须返回一个非nil的错误。Write 不能修改此切片的数据，即便它是临时的。
 type Writer interface {
 	Write(p []byte) (n int, err error)
 }

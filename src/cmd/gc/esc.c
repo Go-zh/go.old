@@ -185,12 +185,12 @@ visitcode(Node *n, uint32 min)
 typedef struct EscState EscState;
 
 static void escfunc(EscState*, Node *func);
-static void esclist(EscState*, NodeList *l);
-static void esc(EscState*, Node *n);
+static void esclist(EscState*, NodeList *l, Node *up);
+static void esc(EscState*, Node *n, Node *up);
 static void escloopdepthlist(EscState*, NodeList *l);
 static void escloopdepth(EscState*, Node *n);
 static void escassign(EscState*, Node *dst, Node *src);
-static void esccall(EscState*, Node*);
+static void esccall(EscState*, Node*, Node *up);
 static void escflows(EscState*, Node *dst, Node *src);
 static void escflood(EscState*, Node *dst);
 static void escwalk(EscState*, int level, Node *dst, Node *src);
@@ -347,7 +347,7 @@ escfunc(EscState *e, Node *func)
 				escflows(e, &e->theSink, ll->n);
 
 	escloopdepthlist(e, curfn->nbody);
-	esclist(e, curfn->nbody);
+	esclist(e, curfn->nbody, curfn);
 	curfn = savefn;
 	e->loopdepth = saveld;
 }
@@ -405,14 +405,14 @@ escloopdepth(EscState *e, Node *n)
 }
 
 static void
-esclist(EscState *e, NodeList *l)
+esclist(EscState *e, NodeList *l, Node *up)
 {
 	for(; l; l=l->next)
-		esc(e, l->n);
+		esc(e, l->n, up);
 }
 
 static void
-esc(EscState *e, Node *n)
+esc(EscState *e, Node *n, Node *up)
 {
 	int lno;
 	NodeList *ll, *lr;
@@ -424,19 +424,19 @@ esc(EscState *e, Node *n)
 	lno = setlineno(n);
 
 	// ninit logically runs at a different loopdepth than the rest of the for loop.
-	esclist(e, n->ninit);
+	esclist(e, n->ninit, n);
 
 	if(n->op == OFOR || n->op == ORANGE)
 		e->loopdepth++;
 
-	esc(e, n->left);
-	esc(e, n->right);
-	esc(e, n->ntest);
-	esc(e, n->nincr);
-	esclist(e, n->nbody);
-	esclist(e, n->nelse);
-	esclist(e, n->list);
-	esclist(e, n->rlist);
+	esc(e, n->left, n);
+	esc(e, n->right, n);
+	esc(e, n->ntest, n);
+	esc(e, n->nincr, n);
+	esclist(e, n->nbody, n);
+	esclist(e, n->nelse, n);
+	esclist(e, n->list, n);
+	esclist(e, n->rlist, n);
 
 	if(n->op == OFOR || n->op == ORANGE)
 		e->loopdepth--;
@@ -522,7 +522,7 @@ esc(EscState *e, Node *n)
 	case OCALLMETH:
 	case OCALLFUNC:
 	case OCALLINTER:
-		esccall(e, n);
+		esccall(e, n, up);
 		break;
 
 	case OAS2FUNC:	// x,y = f()
@@ -811,24 +811,29 @@ escassign(EscState *e, Node *dst, Node *src)
 	lineno = lno;
 }
 
-static void
+static int
 escassignfromtag(EscState *e, Strlit *note, NodeList *dsts, Node *src)
 {
-	int em;
+	int em, em0;
 	
 	em = parsetag(note);
-	
+
 	if(em == EscUnknown) {
 		escassign(e, &e->theSink, src);
-		return;
+		return em;
 	}
-		
+	
+	if(em == EscNone)
+		return em;
+
+	em0 = em;
 	for(em >>= EscBits; em && dsts; em >>= 1, dsts=dsts->next)
 		if(em & 1)
 			escassign(e, dsts->n, src);
 
 	if (em != 0 && dsts == nil)
 		fatal("corrupt esc tag %Z or messed up escretval list\n", note);
+	return em0;
 }
 
 // This is a bit messier than fortunate, pulled out of esc's big
@@ -838,7 +843,7 @@ escassignfromtag(EscState *e, Strlit *note, NodeList *dsts, Node *src)
 // different for methods vs plain functions and for imported vs
 // this-package
 static void
-esccall(EscState *e, Node *n)
+esccall(EscState *e, Node *n, Node *up)
 {
 	NodeList *ll, *lr;
 	Node *a, *fn, *src;
@@ -875,7 +880,7 @@ esccall(EscState *e, Node *n)
 		if(a->type->etype == TSTRUCT && a->type->funarg) // f(g()).
 			ll = a->escretval;
 	}
-			
+
 	if(fn && fn->op == ONAME && fn->class == PFUNC && fn->defn && fn->defn->nbody && fn->ntype && fn->defn->esc < EscFuncTagged) {
 		// function in same mutually recursive group.  Incorporate into flow graph.
 //		print("esc local fn: %N\n", fn->ntype);
@@ -895,6 +900,10 @@ esccall(EscState *e, Node *n)
 			if(lr->n->isddd && !n->isddd) {
 				// Introduce ODDDARG node to represent ... allocation.
 				src = nod(ODDDARG, N, N);
+				src->type = typ(TARRAY);
+				src->type->type = lr->n->type->type;
+				src->type->bound = count(ll);
+				src->type = ptrto(src->type); // make pointer so it will be tracked
 				src->escloopdepth = e->loopdepth;
 				src->lineno = n->lineno;
 				src->esc = EscNone;  // until we find otherwise
@@ -949,12 +958,40 @@ esccall(EscState *e, Node *n)
 			src = nod(ODDDARG, N, N);
 			src->escloopdepth = e->loopdepth;
 			src->lineno = n->lineno;
+			src->type = typ(TARRAY);
+			src->type->type = t->type->type;
+			src->type->bound = count(ll);
+			src->type = ptrto(src->type); // make pointer so it will be tracked
 			src->esc = EscNone;  // until we find otherwise
 			e->noesc = list(e->noesc, src);
 			n->right = src;
 		}
-		if(haspointers(t->type))
-			escassignfromtag(e, t->note, n->escretval, src);
+		if(haspointers(t->type)) {
+			if(escassignfromtag(e, t->note, n->escretval, src) == EscNone && up->op != ODEFER && up->op != OPROC) {
+				a = src;
+				while(a->op == OCONVNOP)
+					a = a->left;
+				switch(a->op) {
+				case OCALLPART:
+				case OCLOSURE:
+				case ODDDARG:
+				case OARRAYLIT:
+				case OPTRLIT:
+				case OSTRUCTLIT:
+					// The callee has already been analyzed, so its arguments have esc tags.
+					// The argument is marked as not escaping at all.
+					// Record that fact so that any temporary used for
+					// synthesizing this expression can be reclaimed when
+					// the function returns.
+					// This 'noescape' is even stronger than the usual esc == EscNone.
+					// src->esc == EscNone means that src does not escape the current function.
+					// src->noescape = 1 here means that src does not escape this statement
+					// in the current function.
+					a->noescape = 1;
+					break;
+				}
+			}
+		}
 		if(src != ll->n)
 			break;
 		t = t->down;

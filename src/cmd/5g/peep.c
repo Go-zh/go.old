@@ -287,7 +287,7 @@ subprop(Flow *r0)
 		if(uniqs(r) == nil)
 			break;
 		p = r->prog;
-		if(p->as == AVARDEF)
+		if(p->as == AVARDEF || p->as == AVARKILL)
 			continue;
 		proginfo(&info, p);
 		if(info.flags & Call)
@@ -1157,7 +1157,27 @@ copyu(Prog *p, Adr *v, Adr *s)
 		if(copyau(&p->to, v))
 			return 4;
 		return 3;
-
+	case ADUFFZERO:
+		// R0 is zero, used by DUFFZERO, cannot be substituted.
+		// R1 is ptr to memory, used and set, cannot be substituted.
+		if(v->type == D_REG) {
+			if(v->reg == REGALLOC_R0)
+				return 1;
+			if(v->reg == REGALLOC_R0+1)
+				return 2;
+		}
+		return 0;
+	case ADUFFCOPY:
+		// R0 is scratch, set by DUFFCOPY, cannot be substituted.
+		// R1, R2 areptr to src, dst, used and set, cannot be substituted.
+		if(v->type == D_REG) {
+			if(v->reg == REGALLOC_R0)
+				return 3;
+			if(v->reg == REGALLOC_R0+1 || v->reg == REGALLOC_R0+2)
+				return 2;
+		}
+		return 0;
+			
 	case ATEXT:	/* funny */
 		if(v->type == D_REG)
 			if(v->reg == REGARG)
@@ -1167,6 +1187,7 @@ copyu(Prog *p, Adr *v, Adr *s)
 	case APCDATA:
 	case AFUNCDATA:
 	case AVARDEF:
+	case AVARKILL:
 		return 0;
 	}
 }

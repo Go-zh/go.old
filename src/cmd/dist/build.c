@@ -242,12 +242,13 @@ findgoversion(void)
 {
 	char *tag, *rev, *p;
 	int i, nrev;
-	Buf b, path, bmore, branch;
+	Buf b, path, bmore, bplus, branch;
 	Vec tags;
 
 	binit(&b);
 	binit(&path);
 	binit(&bmore);
+	binit(&bplus);
 	binit(&branch);
 	vinit(&tags);
 
@@ -314,11 +315,16 @@ findgoversion(void)
 		// Add extra information.
 		run(&bmore, goroot, CheckExit, "hg", "log", "--template", " +{node|short} {date|date}", "-r", rev, nil);
 		chomp(&bmore);
+		// Generate a list of local modifications, if any.
+		run(&bplus, goroot, CheckExit, "hg", "status", "-m", "-a", "-r", "-d", nil);
+		chomp(&bplus);
 	}
 
 	bprintf(&b, "%s", tag);
 	if(bmore.len > 0)
 		bwriteb(&b, &bmore);
+	if(bplus.len > 0)
+		bwritestr(&b, " +");
 
 	// Cache version.
 	writefile(&b, bstr(&path), 0);
@@ -330,6 +336,7 @@ done:
 	bfree(&b);
 	bfree(&path);
 	bfree(&bmore);
+	bfree(&bplus);
 	bfree(&branch);
 	vfree(&tags);
 
@@ -366,7 +373,8 @@ static char *oldtool[] = {
 // Unreleased directories (relative to $GOROOT) that should
 // not be in release branches.
 static char *unreleased[] = {
-	"src/cmd/prof",
+	"src/cmd/link",
+	"src/pkg/debug/goobj",
 	"src/pkg/old",
 };
 
@@ -436,7 +444,7 @@ setup(void)
 	}
 
 	// For release, make sure excluded things are excluded.
-	if(hasprefix(goversion, "release.") || hasprefix(goversion, "go")) {
+	if(hasprefix(goversion, "release.") || (hasprefix(goversion, "go") && !contains(goversion, "beta"))) {
 		for(i=0; i<nelem(unreleased); i++)
 			if(isdir(bpathf(&b, "%s/%s", goroot, unreleased[i])))
 				fatal("%s should not exist in release build", bstr(&b));
@@ -510,19 +518,6 @@ static struct {
 		"$GOROOT/include/libc.h",
 		"$GOROOT/include/bio.h",
 	}},
-	{"libmach", {
-		"$GOROOT/include/u.h",
-		"$GOROOT/include/utf.h",
-		"$GOROOT/include/fmt.h",
-		"$GOROOT/include/libc.h",
-		"$GOROOT/include/bio.h",
-		"$GOROOT/include/ar.h",
-		"$GOROOT/include/bootexec.h",
-		"$GOROOT/include/mach.h",
-		"$GOROOT/include/ureg_amd64.h",
-		"$GOROOT/include/ureg_arm.h",
-		"$GOROOT/include/ureg_x86.h",
-	}},
 	{"liblink", {
 		"$GOROOT/include/u.h",
 		"$GOROOT/include/utf.h",
@@ -550,17 +545,17 @@ static struct {
 	{"cmd/5c", {
 		"../cc/pgen.c",
 		"../cc/pswt.c",
-		"$GOROOT/pkg/obj/$GOOS_$GOARCH/libcc.a",
+		"$GOROOT/pkg/obj/$GOHOSTOS_$GOHOSTARCH/libcc.a",
 	}},
 	{"cmd/6c", {
 		"../cc/pgen.c",
 		"../cc/pswt.c",
-		"$GOROOT/pkg/obj/$GOOS_$GOARCH/libcc.a",
+		"$GOROOT/pkg/obj/$GOHOSTOS_$GOHOSTARCH/libcc.a",
 	}},
 	{"cmd/8c", {
 		"../cc/pgen.c",
 		"../cc/pswt.c",
-		"$GOROOT/pkg/obj/$GOOS_$GOARCH/libcc.a",
+		"$GOROOT/pkg/obj/$GOHOSTOS_$GOHOSTARCH/libcc.a",
 	}},
 	{"cmd/5g", {
 		"../gc/cplx.c",
@@ -568,7 +563,7 @@ static struct {
 		"../gc/plive.c",
 		"../gc/popt.c",
 		"../gc/popt.h",
-		"$GOROOT/pkg/obj/$GOOS_$GOARCH/libgc.a",
+		"$GOROOT/pkg/obj/$GOHOSTOS_$GOHOSTARCH/libgc.a",
 	}},
 	{"cmd/6g", {
 		"../gc/cplx.c",
@@ -576,7 +571,7 @@ static struct {
 		"../gc/plive.c",
 		"../gc/popt.c",
 		"../gc/popt.h",
-		"$GOROOT/pkg/obj/$GOOS_$GOARCH/libgc.a",
+		"$GOROOT/pkg/obj/$GOHOSTOS_$GOHOSTARCH/libgc.a",
 	}},
 	{"cmd/8g", {
 		"../gc/cplx.c",
@@ -584,7 +579,7 @@ static struct {
 		"../gc/plive.c",
 		"../gc/popt.c",
 		"../gc/popt.h",
-		"$GOROOT/pkg/obj/$GOOS_$GOARCH/libgc.a",
+		"$GOROOT/pkg/obj/$GOHOSTOS_$GOHOSTARCH/libgc.a",
 	}},
 	{"cmd/5l", {
 		"../ld/*",
@@ -599,10 +594,9 @@ static struct {
 		"zdefaultcc.go",
 	}},
 	{"cmd/", {
-		"$GOROOT/pkg/obj/$GOOS_$GOARCH/liblink.a",
-		"$GOROOT/pkg/obj/$GOOS_$GOARCH/libmach.a",
-		"$GOROOT/pkg/obj/$GOOS_$GOARCH/libbio.a",
-		"$GOROOT/pkg/obj/$GOOS_$GOARCH/lib9.a",
+		"$GOROOT/pkg/obj/$GOHOSTOS_$GOHOSTARCH/liblink.a",
+		"$GOROOT/pkg/obj/$GOHOSTOS_$GOHOSTARCH/libbio.a",
+		"$GOROOT/pkg/obj/$GOHOSTOS_$GOHOSTARCH/lib9.a",
 	}},
 	{"pkg/runtime", {
 		"zaexperiment.h", // must sort above zasm
@@ -686,13 +680,6 @@ install(char *dir)
 	if(hasprefix(dir, "misc/")) {
 		copy(bpathf(&b, "%s/%s", tooldir, name),
 			bpathf(&b1, "%s/misc/%s", goroot, name), 1);
-		goto out;
-	}
-
-	// For release, cmd/prof is not included.
-	if((streq(dir, "cmd/prof")) && !isdir(bstr(&path))) {
-		if(vflag > 1)
-			errprintf("skipping %s - does not exist\n", dir);
 		goto out;
 	}
 
@@ -817,6 +804,8 @@ install(char *dir)
 				bsubst(&b1, "$GOROOT", goroot);
 				bsubst(&b1, "$GOOS", goos);
 				bsubst(&b1, "$GOARCH", goarch);
+				bsubst(&b1, "$GOHOSTOS", gohostos);
+				bsubst(&b1, "$GOHOSTARCH", gohostarch);
 				p = bstr(&b1);
 				if(hassuffix(p, ".a")) {
 					vadd(&lib, bpathf(&b, "%s", p));
@@ -1320,13 +1309,9 @@ dopack(char *dst, char *src, char **extra, int nextra)
 static char *buildorder[] = {
 	"lib9",
 	"libbio",
-	"libmach",
 	"liblink",
 
 	"misc/pprof",
-
-	"cmd/objdump",
-	"cmd/prof",
 
 	"cmd/cc",  // must be before c
 	"cmd/gc",  // must be before g
@@ -1402,11 +1387,8 @@ static char *cleantab[] = {
 	"cmd/cc",
 	"cmd/gc",
 	"cmd/go",	
-	"cmd/objdump",
-	"cmd/prof",
 	"lib9",
 	"libbio",
-	"libmach",
 	"liblink",
 	"pkg/bufio",
 	"pkg/bytes",
@@ -1462,8 +1444,6 @@ clean(void)
 	vinit(&dir);
 
 	for(i=0; i<nelem(cleantab); i++) {
-		if((streq(cleantab[i], "cmd/prof")) && !isdir(cleantab[i]))
-			continue;
 		bpathf(&path, "%s/src/%s", goroot, cleantab[i]);
 		xreaddir(&dir, bstr(&path));
 		// Remove generated files.

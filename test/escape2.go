@@ -1399,3 +1399,15 @@ func foo149(l List) { // ERROR " l does not escape"
 		}
 	}
 }
+
+// issue 7934: missed ... if element type had no pointers
+
+var save150 []byte
+
+func foo150(x ...byte) { // ERROR "leaking param: x"
+	save150 = x
+}
+
+func bar150() {
+	foo150(1, 2, 3) // ERROR "[.][.][.] argument escapes to heap"
+}

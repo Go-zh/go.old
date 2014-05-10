@@ -78,6 +78,7 @@ enum
 	Ym,
 	Ybr,
 	Ycol,
+	Ytls,
 
 	Ycs,	Yss,	Yds,	Yes,	Yfs,	Ygs,
 	Ygdtr,	Yidtr,	Yldtr,	Ymsw,	Ytask,
@@ -97,6 +98,7 @@ enum
 	Zcall,
 	Zcallcon,
 	Zcallind,
+	Zcallindreg,
 	Zib_,
 	Zib_rp,
 	Zibo_m,
@@ -413,11 +415,16 @@ static uchar	yloop[] =
 };
 static uchar	ycall[] =
 {
-	Ynone,	Yml,	Zo_m,	0,
-	Yrx,	Yrx,	Zo_m,	2,
+	Ynone,	Yml,	Zcallindreg,	0,
+	Yrx,	Yrx,	Zcallindreg,	2,
 	Ynone,	Ycol,	Zcallind,	2,
 	Ynone,	Ybr,	Zcall,	0,
 	Ynone,	Yi32,	Zcallcon,	1,
+	0
+};
+static uchar	yduff[] =
+{
+	Ynone,	Yi32,	Zcall,	1,
 	0
 };
 static uchar	yjmp[] =
@@ -1147,6 +1154,9 @@ static Optab optab[] =
 	{ APCDATA,	ypcdata,	Px, 0,0 },
 	{ ACHECKNIL },
 	{ AVARDEF },
+	{ AVARKILL },
+	{ ADUFFCOPY,	yduff,	Px, 0xe8 },
+	{ ADUFFZERO,	yduff,	Px, 0xe8 },
 
 	0
 };
@@ -1433,7 +1443,7 @@ instinit(void)
 }
 
 static int
-prefixof(Addr *a)
+prefixof(Link *ctxt, Addr *a)
 {
 	switch(a->type) {
 	case D_INDIR+D_CS:
@@ -1446,6 +1456,23 @@ prefixof(Addr *a)
 		return 0x64;
 	case D_INDIR+D_GS:
 		return 0x65;
+	case D_INDIR+D_TLS:
+		// NOTE: Systems listed here should be only systems that
+		// support direct TLS references like 8(TLS) implemented as
+		// direct references from FS or GS. Systems that require
+		// the initial-exec model, where you load the TLS base into
+		// a register and then index from that register, do not reach
+		// this code and should not be listed.
+		switch(ctxt->headtype) {
+		default:
+			sysfatal("unknown TLS base register for %s", headstr(ctxt->headtype));
+		case Hdarwin:
+		case Hdragonfly:
+		case Hfreebsd:
+		case Hnetbsd:
+		case Hopenbsd:
+			return 0x65; // GS
+		}
 	}
 	return 0;
 }
@@ -1535,6 +1562,7 @@ oclass(Addr *a)
 	case D_ES:	return	Yes;
 	case D_FS:	return	Yfs;
 	case D_GS:	return	Ygs;
+	case D_TLS:	return	Ytls;
 
 	case D_GDTR:	return	Ygdtr;
 	case D_IDTR:	return	Yidtr;
@@ -1709,23 +1737,28 @@ vaddr(Link *ctxt, Addr *a, Reloc *r)
 				ctxt->diag("need reloc for %D", a);
 				sysfatal("bad code");
 			}
-			r->type = D_ADDR;
+			r->type = R_ADDR;
 			r->siz = 4;
 			r->off = -1;
 			r->sym = s;
 			r->add = v;
 			v = 0;
 		}
+		break;
+	
+	case D_INDIR+D_TLS:
+		if(r == nil) {
+			ctxt->diag("need reloc for %D", a);
+			sysfatal("bad code");
+		}
+		r->type = R_TLS_LE;
+		r->siz = 4;
+		r->off = -1; // caller must fill in
+		r->add = v;
+		v = 0;
+		break;
 	}
 	return v;
-}
-
-static int
-istls(Link *ctxt, Addr *a)
-{
-	if(ctxt->headtype == Hlinux || ctxt->headtype == Hnacl)
-		return a->index == D_GS;
-	return a->type == D_INDIR+D_GS;
 }
 
 static void
@@ -1738,7 +1771,7 @@ asmand(Link *ctxt, Addr *a, int r)
 	v = a->offset;
 	t = a->type;
 	rel.siz = 0;
-	if(a->index != D_NONE && a->index != D_FS && a->index != D_GS) {
+	if(a->index != D_NONE && a->index != D_TLS) {
 		if(t < D_INDIR || t >= 2*D_INDIR) {
 			switch(t) {
 			default:
@@ -1801,8 +1834,10 @@ asmand(Link *ctxt, Addr *a, int r)
 		scale = 1;
 	} else
 		t -= D_INDIR;
+	if(t == D_TLS)
+		v = vaddr(ctxt, a, &rel);
 
-	if(t == D_NONE || (D_CS <= t && t <= D_GS)) {
+	if(t == D_NONE || (D_CS <= t && t <= D_GS) || t == D_TLS) {
 		*ctxt->andptr++ = (0 << 6) | (5 << 0) | (r << 3);
 		goto putrelv;
 	}
@@ -1823,11 +1858,19 @@ asmand(Link *ctxt, Addr *a, int r)
 		goto putrelv;
 	}
 	if(t >= D_AX && t <= D_DI) {
+		if(a->index == D_TLS) {
+			memset(&rel, 0, sizeof rel);
+			rel.type = R_TLS_IE;
+			rel.siz = 4;
+			rel.sym = nil;
+			rel.add = v;
+			v = 0;
+		}
 		if(v == 0 && rel.siz == 0 && t != D_BP) {
 			*ctxt->andptr++ = (0 << 6) | (reg[t] << 0) | (r << 3);
 			return;
 		}
-		if(v >= -128 && v < 128 && rel.siz == 0 && a->index != D_FS && a->index != D_GS) {
+		if(v >= -128 && v < 128 && rel.siz == 0)  {
 			ctxt->andptr[0] = (1 << 6) | (reg[t] << 0) | (r << 3);
 			ctxt->andptr[1] = v;
 			ctxt->andptr += 2;
@@ -1849,20 +1892,6 @@ putrelv:
 		r = addrel(ctxt->cursym);
 		*r = rel;
 		r->off = ctxt->curp->pc + ctxt->andptr - ctxt->and;
-	} else if(ctxt->iself && ctxt->linkmode == LinkExternal && istls(ctxt, a) && ctxt->headtype != Hopenbsd) {
-		Reloc *r;
-		LSym *s;
-
-		r = addrel(ctxt->cursym);
-		r->off = ctxt->curp->pc + ctxt->andptr - ctxt->and;
-		r->add = a->offset - ctxt->tlsoffset;
-		r->xadd = r->add;
-		r->siz = 4;
-		r->type = D_TLS;
-		s = linklookup(ctxt, "runtime.tlsgm", 0);
-		r->sym = s;
-		r->xsym = s;
-		v = 0;
 	}
 
 	put4(ctxt, v);
@@ -1975,6 +2004,10 @@ static uchar	ymovtab[] =
 /* extra imul */
 	AIMULW,	Yml,	Yrl,	7,	Pq,0xaf,0,0,
 	AIMULL,	Yml,	Yrl,	7,	Pm,0xaf,0,0,
+
+/* load TLS base pointer */
+	AMOVL,	Ytls,	Yrl,	8,	0,0,0,0,
+
 	0
 };
 
@@ -2122,10 +2155,10 @@ doasm(Link *ctxt, Prog *p)
 	
 	ctxt->curp = p;	// TODO
 
-	pre = prefixof(&p->from);
+	pre = prefixof(ctxt, &p->from);
 	if(pre)
 		*ctxt->andptr++ = pre;
-	pre = prefixof(&p->to);
+	pre = prefixof(ctxt, &p->to);
 	if(pre)
 		*ctxt->andptr++ = pre;
 
@@ -2257,6 +2290,7 @@ found:
 		break;
 
 	case Zo_m:
+	case_Zo_m:
 		*ctxt->andptr++ = op;
 		asmand(ctxt, &p->to, o->op[z+1]);
 		break;
@@ -2374,9 +2408,10 @@ found:
 		*ctxt->andptr++ = op;
 		r = addrel(ctxt->cursym);
 		r->off = p->pc + ctxt->andptr - ctxt->and;
-		r->type = D_PCREL;
+		r->type = R_CALL;
 		r->siz = 4;
 		r->sym = p->to.sym;
+		r->add = p->to.offset;
 		put4(ctxt, 0);
 		break;
 
@@ -2392,7 +2427,7 @@ found:
 			r = addrel(ctxt->cursym);
 			r->off = p->pc + ctxt->andptr - ctxt->and;
 			r->sym = p->to.sym;
-			r->type = D_PCREL;
+			r->type = R_PCREL;
 			r->siz = 4;
 			put4(ctxt, 0);
 			break;
@@ -2458,7 +2493,7 @@ found:
 			*ctxt->andptr++ = o->op[z+1];
 		r = addrel(ctxt->cursym);
 		r->off = p->pc + ctxt->andptr - ctxt->and;
-		r->type = D_PCREL;
+		r->type = R_PCREL;
 		r->siz = 4;
 		r->add = p->to.offset;
 		put4(ctxt, 0);
@@ -2469,12 +2504,19 @@ found:
 		*ctxt->andptr++ = o->op[z+1];
 		r = addrel(ctxt->cursym);
 		r->off = p->pc + ctxt->andptr - ctxt->and;
-		r->type = D_ADDR;
+		r->type = R_ADDR;
 		r->siz = 4;
 		r->add = p->to.offset;
 		r->sym = p->to.sym;
 		put4(ctxt, 0);
 		break;
+
+	case Zcallindreg:
+		r = addrel(ctxt->cursym);
+		r->off = p->pc;
+		r->type = R_CALLIND;
+		r->siz = 0;
+		goto case_Zo_m;
 
 	case Zbyte:
 		v = vaddr(ctxt, &p->from, &rel);
@@ -2640,6 +2682,54 @@ mfound:
 			*ctxt->andptr++ = t[4];
 		*ctxt->andptr++ = t[5];
 		asmand(ctxt, &p->from, reg[p->to.type]);
+		break;
+	
+	case 8: /* mov tls, r */
+		// NOTE: The systems listed here are the ones that use the "TLS initial exec" model,
+		// where you load the TLS base register into a register and then index off that
+		// register to access the actual TLS variables. Systems that allow direct TLS access
+		// are handled in prefixof above and should not be listed here.
+		switch(ctxt->headtype) {
+		default:
+			sysfatal("unknown TLS base location for %s", headstr(ctxt->headtype));
+
+		case Hlinux:
+		case Hnacl:
+			// ELF TLS base is 0(GS).
+			pp.from = p->from;
+			pp.from.type = D_INDIR+D_GS;
+			pp.from.offset = 0;
+			pp.from.index = D_NONE;
+			pp.from.scale = 0;
+			*ctxt->andptr++ = 0x65; // GS
+			*ctxt->andptr++ = 0x8B;
+			asmand(ctxt, &pp.from, reg[p->to.type]);
+			break;
+		
+		case Hplan9:
+			if(ctxt->plan9tos == nil)
+				ctxt->plan9tos = linklookup(ctxt, "_tos", 0);
+			memset(&pp.from, 0, sizeof pp.from);
+			pp.from.type = D_EXTERN;
+			pp.from.sym = ctxt->plan9tos;
+			pp.from.offset = 0;
+			pp.from.index = D_NONE;
+			*ctxt->andptr++ = 0x8B;
+			asmand(ctxt, &pp.from, reg[p->to.type]);
+			break;
+
+		case Hwindows:
+			// Windows TLS base is always 0x14(FS).
+			pp.from = p->from;
+			pp.from.type = D_INDIR+D_FS;
+			pp.from.offset = 0x14;
+			pp.from.index = D_NONE;
+			pp.from.scale = 0;
+			*ctxt->andptr++ = 0x64; // FS
+			*ctxt->andptr++ = 0x8B;
+			asmand(ctxt, &pp.from, reg[p->to.type]);
+			break;
+		}
 		break;
 	}
 }

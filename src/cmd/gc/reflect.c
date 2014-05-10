@@ -125,6 +125,8 @@ mapbucket(Type *t)
 
 	keytype = t->down;
 	valtype = t->type;
+	dowidth(keytype);
+	dowidth(valtype);
 	if(keytype->width > MAXKEYSIZE)
 		keytype = ptrto(keytype);
 	if(valtype->width > MAXVALSIZE)
@@ -704,6 +706,10 @@ haspointers(Type *t)
 			ret = 1;
 			break;
 		}
+		if(t->bound == 0) {	// empty array
+			ret = 0;
+			break;
+		}
 		ret = haspointers(t->type);
 		break;
 	case TSTRUCT:
@@ -1132,8 +1138,7 @@ ok:
 					ot = dgopkgpath(s, ot, t1->sym->pkg);
 			} else {
 				ot = dgostringptr(s, ot, nil);
-				if(t1->type->sym != S &&
-				   (t1->type->sym->pkg == builtinpkg || !exportname(t1->type->sym->name)))
+				if(t1->type->sym != S && t1->type->sym->pkg == builtinpkg)
 					ot = dgopkgpath(s, ot, localpkg);
 				else
 					ot = dgostringptr(s, ot, nil);

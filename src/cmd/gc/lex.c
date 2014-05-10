@@ -214,7 +214,7 @@ main(int argc, char *argv[])
 	// but not other values.	
 	p = getgoarch();
 	if(strncmp(p, thestring, strlen(thestring)) != 0)
-		fatal("cannot use %cg with GOARCH=%s", thechar, p);
+		sysfatal("cannot use %cg with GOARCH=%s", thechar, p);
 	goarch = p;
 
 	linkarchinit();
@@ -306,6 +306,7 @@ main(int argc, char *argv[])
 	flagcount("r", "debug generated wrappers", &debug['r']);
 	flagcount("race", "enable race detector", &flag_race);
 	flagcount("s", "warn about composite literals that can be simplified", &debug['s']);
+	flagstr("trimpath", "prefix: remove prefix from recorded source file paths", &ctxt->trimpath);
 	flagcount("u", "reject unsafe code", &safemode);
 	flagcount("v", "increase debug verbosity", &debug['v']);
 	flagcount("w", "debug type checking", &debug['w']);

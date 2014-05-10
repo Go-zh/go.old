@@ -18,7 +18,11 @@
 <p>
 This document is a quick outline of the unusual form of assembly language used by the <code>gc</code>
 suite of Go compilers (<code>6g</code>, <code>8g</code>, etc.).
-It is based on the input to the Plan 9 assemblers, which is documented in detail
+The document is not comprehensive.
+</p>
+
+<p>
+The assembler is based on the input to the Plan 9 assemblers, which is documented in detail
 <a href="http://plan9.bell-labs.com/sys/doc/asm.html">on the Plan 9 site</a>.
 If you plan to write assembly language, you should read that document although much of it is Plan 9-specific.
 This document provides a summary of the syntax and
@@ -115,6 +119,8 @@ for use by the garbage collector; they are introduced by the compiler.
 </p>
 </div>
 
+<!-- Commenting out because the feature is gone but it's popular and may come back.
+
 <p>
 <code>FUNCDATA</code> 和 <code>PCDATA</code> 命令包含了垃圾回收器所要用到的信息，
 它们由编译器引入。
@@ -154,6 +160,7 @@ codeblk [0x2000,0x1d059) at offset 0x1000
 ...
 </pre>
 
+-->
 
 <div class="english">
 <h3 id="symbols">Symbols</h3>
@@ -322,7 +329,7 @@ TEXT runtime·profileloop(SB),NOSPLIT,$8
 
 <p>
 In the general case, the frame size is followed by an argument size, separated by a minus sign.
-(It's not an subtraction, just idiosyncratic syntax.)
+(It's not a subtraction, just idiosyncratic syntax.)
 The frame size <code>$24-8</code> states that the function has a 24-byte frame
 and is called with 8 bytes of argument, which live on the caller's frame.
 If <code>NOSPLIT</code> is not specified for the <code>TEXT</code>,

@@ -49,6 +49,8 @@ enum {
 	TagBss = 13,
 	TagDefer = 14,
 	TagPanic = 15,
+	TagMemProf = 16,
+	TagAllocSample = 17,
 
 	TypeInfo_Conservative = 127,
 };
@@ -186,7 +188,14 @@ dumptype(Type *t)
 	dumpint(TagType);
 	dumpint((uintptr)t);
 	dumpint(t->size);
-	dumpstr(*t->string);
+	if(t->x == nil || t->x->pkgPath == nil || t->x->name == nil) {
+		dumpstr(*t->string);
+	} else {
+		dumpint(t->x->pkgPath->len + 1 + t->x->name->len);
+		write(t->x->pkgPath->str, t->x->pkgPath->len);
+		write((byte*)".", 1);
+		write(t->x->name->str, t->x->name->len);
+	}
 	dumpbool(t->size > PtrSize || (t->kind & KindNoPointers) == 0);
 	dumpfields((uintptr*)t->gc + 1);
 }
@@ -244,7 +253,7 @@ struct ChildInfo {
 	// the layout of the outargs region.
 	uintptr argoff;     // where the arguments start in the frame
 	uintptr arglen;     // size of args region
-	BitVector *args;    // if not nil, pointer map of args region
+	BitVector args;    // if args.n >= 0, pointer map of args region
 
 	byte *sp;           // callee sp
 	uintptr depth;      // depth in call stack (0 == most recent)
@@ -301,7 +310,7 @@ dumpframe(Stkframe *s, void *arg)
 	int32 pcdata;
 	StackMap *stackmap;
 	int8 *name;
-	BitVector *bv;
+	BitVector bv;
 
 	child = (ChildInfo*)arg;
 	f = s->fn;
@@ -320,13 +329,13 @@ dumpframe(Stkframe *s, void *arg)
 	stackmap = runtime·funcdata(f, FUNCDATA_LocalsPointerMaps);
 
 	// Dump any types we will need to resolve Efaces.
-	if(child->args != nil)
-		dumpbvtypes(child->args, (byte*)s->sp + child->argoff);
+	if(child->args.n >= 0)
+		dumpbvtypes(&child->args, (byte*)s->sp + child->argoff);
 	if(stackmap != nil && stackmap->n > 0) {
 		bv = runtime·stackmapdata(stackmap, pcdata);
-		dumpbvtypes(bv, s->varp - bv->n / BitsPerPointer * PtrSize);
+		dumpbvtypes(&bv, s->varp - bv.n / BitsPerPointer * PtrSize);
 	} else {
-		bv = nil;
+		bv.n = -1;
 	}
 
 	// Dump main body of stack frame.
@@ -343,8 +352,8 @@ dumpframe(Stkframe *s, void *arg)
 	dumpcstr(name);
 
 	// Dump fields in the outargs section
-	if(child->args != nil) {
-		dumpbv(child->args, child->argoff);
+	if(child->args.n >= 0) {
+		dumpbv(&child->args, child->argoff);
 	} else {
 		// conservative - everything might be a pointer
 		for(off = child->argoff; off < child->argoff + child->arglen; off += PtrSize) {
@@ -370,12 +379,12 @@ dumpframe(Stkframe *s, void *arg)
 	} else if(stackmap->n > 0) {
 		// Locals bitmap information, scan just the pointers in
 		// locals.
-		dumpbv(bv, s->varp - bv->n / BitsPerPointer * PtrSize - (byte*)s->sp);
+		dumpbv(&bv, s->varp - bv.n / BitsPerPointer * PtrSize - (byte*)s->sp);
 	}
 	dumpint(FieldKindEol);
 
 	// Record arg info for parent.
-	child->argoff = s->argp - (byte*)s->sp;
+	child->argoff = s->argp - (byte*)s->fp;
 	child->arglen = s->arglen;
 	child->sp = (byte*)s->sp;
 	child->depth++;
@@ -383,7 +392,7 @@ dumpframe(Stkframe *s, void *arg)
 	if(stackmap != nil)
 		child->args = runtime·stackmapdata(stackmap, pcdata);
 	else
-		child->args = nil;
+		child->args.n = -1;
 	return true;
 }
 
@@ -421,7 +430,7 @@ dumpgoroutine(G *gp)
 	dumpint((uintptr)gp->panic);
 
 	// dump stack
-	child.args = nil;
+	child.args.n = -1;
 	child.arglen = 0;
 	child.sp = nil;
 	child.depth = 0;
@@ -560,7 +569,6 @@ dumpobjs(void)
 		s = runtime·mheap.allspans[i];
 		if(s->state != MSpanInUse)
 			continue;
-		runtime·MSpan_EnsureSwept(s);
 		p = (byte*)(s->start << PageShift);
 		size = s->elemsize;
 		n = (s->npages << PageShift) / size;
@@ -684,9 +692,86 @@ dumpmemstats(void)
 }
 
 static void
+dumpmemprof_callback(Bucket *b, uintptr nstk, uintptr *stk, uintptr size, uintptr allocs, uintptr frees)
+{
+	uintptr i, pc;
+	Func *f;
+	byte buf[20];
+	String file;
+	int32 line;
+
+	dumpint(TagMemProf);
+	dumpint((uintptr)b);
+	dumpint(size);
+	dumpint(nstk);
+	for(i = 0; i < nstk; i++) {
+		pc = stk[i];
+		f = runtime·findfunc(pc);
+		if(f == nil) {
+			runtime·snprintf(buf, sizeof(buf), "%X", (uint64)pc);
+			dumpcstr((int8*)buf);
+			dumpcstr("?");
+			dumpint(0);
+		} else {
+			dumpcstr(runtime·funcname(f));
+			// TODO: Why do we need to back up to a call instruction here?
+			// Maybe profiler should do this.
+			if(i > 0 && pc > f->entry) {
+				if(thechar == '6' || thechar == '8')
+					pc--;
+				else
+					pc -= 4; // arm, etc
+			}
+			line = runtime·funcline(f, pc, &file);
+			dumpstr(file);
+			dumpint(line);
+		}
+	}
+	dumpint(allocs);
+	dumpint(frees);
+}
+
+static void
+dumpmemprof(void)
+{
+	MSpan *s, **allspans;
+	uint32 spanidx;
+	Special *sp;
+	SpecialProfile *spp;
+	byte *p;
+
+	runtime·iterate_memprof(dumpmemprof_callback);
+
+	allspans = runtime·mheap.allspans;
+	for(spanidx=0; spanidx<runtime·mheap.nspan; spanidx++) {
+		s = allspans[spanidx];
+		if(s->state != MSpanInUse)
+			continue;
+		for(sp = s->specials; sp != nil; sp = sp->next) {
+			if(sp->kind != KindSpecialProfile)
+				continue;
+			spp = (SpecialProfile*)sp;
+			p = (byte*)((s->start << PageShift) + spp->offset);
+			dumpint(TagAllocSample);
+			dumpint((uintptr)p);
+			dumpint((uintptr)spp->b);
+		}
+	}
+}
+
+static void
 mdump(G *gp)
 {
 	byte *hdr;
+	uintptr i;
+	MSpan *s;
+
+	// make sure we're done sweeping
+	for(i = 0; i < runtime·mheap.nspan; i++) {
+		s = runtime·mheap.allspans[i];
+		if(s->state == MSpanInUse)
+			runtime·MSpan_EnsureSwept(s);
+	}
 
 	runtime·memclr((byte*)&typecache[0], sizeof(typecache));
 	hdr = (byte*)"go1.3 heap dump\n";
@@ -698,6 +783,7 @@ mdump(G *gp)
 	dumpms();
 	dumproots();
 	dumpmemstats();
+	dumpmemprof();
 	dumpint(TagEOF);
 	flush();
 
@@ -853,11 +939,13 @@ dumpefacetypes(void *obj, uintptr size, Type *type, uintptr kind)
 		playgcprog(0, (uintptr*)type->gc + 1, dumpeface_callback, obj);
 		break;
 	case TypeInfo_Array:
-		for(i = 0; i < size; i += type->size)
+		for(i = 0; i <= size - type->size; i += type->size)
 			playgcprog(i, (uintptr*)type->gc + 1, dumpeface_callback, obj);
 		break;
 	case TypeInfo_Chan:
-		for(i = runtime·Hchansize; i < size; i += type->size)
+		if(type->size == 0) // channels may have zero-sized objects in them
+			break;
+		for(i = runtime·Hchansize; i <= size - type->size; i += type->size)
 			playgcprog(i, (uintptr*)type->gc + 1, dumpeface_callback, obj);
 		break;
 	}

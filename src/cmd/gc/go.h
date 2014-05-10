@@ -450,6 +450,7 @@ enum
 	OANDAND,	// b0 && b1
 	OAPPEND,	// append
 	OARRAYBYTESTR,	// string(bytes)
+	OARRAYBYTESTRTMP, // string(bytes) ephemeral
 	OARRAYRUNESTR,	// string(runes)
 	OSTRARRAYBYTE,	// []byte(s)
 	OSTRARRAYRUNE,	// []rune(s)
@@ -581,6 +582,7 @@ enum
 	OCLOSUREVAR, // variable reference at beginning of closure function
 	OCFUNC,	// reference to c function pointer (not go func value)
 	OCHECKNIL, // emit code to ensure pointer/interface not nil
+	OVARKILL, // variable is dead
 
 	// arch-specific registers
 	OREGISTER,	// a register, such as AX.
@@ -722,6 +724,7 @@ struct	Var
 {
 	vlong	offset;
 	Node*	node;
+	Var*	nextinnode;
 	int	width;
 	char	name;
 	char	etype;
@@ -943,7 +946,6 @@ EXTERN	Node*	lasttype;
 EXTERN	vlong	maxarg;
 EXTERN	vlong	stksize;		// stack size for current frame
 EXTERN	vlong	stkptrsize;		// prefix of stack containing pointers
-EXTERN	vlong	stkzerosize;		// prefix of stack that must be zeroed on entry
 EXTERN	int32	blockgen;		// max block number
 EXTERN	int32	block;			// current block number
 EXTERN	int	hasdefer;		// flag that curfn has defer statetment
@@ -1469,7 +1471,6 @@ EXTERN	Prog*	continpc;
 EXTERN	Prog*	breakpc;
 EXTERN	Prog*	pc;
 EXTERN	Prog*	firstpc;
-EXTERN	Prog*	retpc;
 
 EXTERN	Node*	nodfp;
 EXTERN	int	disable_checknil;
@@ -1502,12 +1503,13 @@ void	gdatastring(Node*, Strlit*);
 void	ggloblnod(Node *nam);
 void	ggloblsym(Sym *s, int32 width, int dupok, int rodata);
 void	gvardef(Node*);
+void	gvarkill(Node*);
 Prog*	gjmp(Prog*);
 void	gused(Node*);
 void	movelarge(NodeList*);
 int	isfat(Type*);
 void	linkarchinit(void);
-void	liveness(Node*, Prog*, Sym*, Sym*, Sym*);
+void	liveness(Node*, Prog*, Sym*, Sym*);
 void	markautoused(Prog*);
 Plist*	newplist(void);
 Node*	nodarg(Type*, int);

@@ -11,6 +11,13 @@ enum {
 	maxround = sizeof(uintptr),
 };
 
+// Keep a cached value to make gotraceback fast,
+// since we call it on every call to gentraceback.
+// The cached value is a uint32 in which the low bit
+// is the "crash" setting and the top 31 bits are the
+// gotraceback value.
+static uint32 traceback_cache = ~(uint32)0;
+
 // The GOTRACEBACK environment variable controls the
 // behavior of a Go program that is crashing and exiting.
 //	GOTRACEBACK=0   suppress all tracebacks
@@ -21,18 +28,28 @@ int32
 runtime·gotraceback(bool *crash)
 {
 	byte *p;
+	uint32 x;
 
 	if(crash != nil)
 		*crash = false;
-	p = runtime·getenv("GOTRACEBACK");
-	if(p == nil || p[0] == '\0')
-		return 1;	// default is on
-	if(runtime·strcmp(p, (byte*)"crash") == 0) {
-		if(crash != nil)
-			*crash = true;
-		return 2;	// extra information
+	if(m->traceback != 0)
+		return m->traceback;
+	x = runtime·atomicload(&traceback_cache);
+	if(x == ~(uint32)0) {
+		p = runtime·getenv("GOTRACEBACK");
+		if(p == nil)
+			p = (byte*)"";
+		if(p[0] == '\0')
+			x = 1<<1;
+		else if(runtime·strcmp(p, (byte*)"crash") == 0)
+			x = (2<<1) | 1;
+		else
+			x = runtime·atoi(p)<<1;	
+		runtime·atomicstore(&traceback_cache, x);
 	}
-	return runtime·atoi(p);
+	if(crash != nil)
+		*crash = x&1;
+	return x>>1;
 }
 
 int32
@@ -121,6 +138,8 @@ runtime·goenvs_unix(void)
 	syscall·envs.array = (byte*)s;
 	syscall·envs.len = n;
 	syscall·envs.cap = n;
+
+	traceback_cache = ~(uint32)0;
 }
 
 int32

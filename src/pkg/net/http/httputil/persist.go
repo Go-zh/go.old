@@ -34,14 +34,14 @@ var errClosed = errors.New("i/o operation on closed connection")
 // i.e. requests can be read out of sync (but in the same order) while the
 // respective responses are sent.
 //
-// ServerConn is low-level and should not be needed by most applications.
-// See Server.
+// ServerConn is low-level and old. Applications should instead use Server
+// in the net/http package.
 
-// ServerConn在底层连接之上读取请求，发送回复，直到HTTP keepalive出现了结束命令。
-// ServerConn允许靠调用Hijack来对底层连接进行劫持，从而得到连接的控制权。
-// ServerConn支持管道连接，例如，当回复发送的时候，请求可以不需要进行同步（但是是在相同的顺序）。
+// ServerConn 在底层连接之上读取请求，发送回复，直到HTTP keepalive出现了结束命令。
+// ServerConn 允许靠调用Hijack来对底层连接进行劫持，从而得到连接的控制权。
+// ServerConn 支持管道连接，例如，当回复发送的时候，请求可以不需要进行同步（但是是在相同的顺序）。
 //
-// ServerConn是底层级别的结构，很多应用需要使用到它。具体请看Server。
+// ServerConn 是低级而老旧的，大部分应用都不需要它。具体参见 Server。
 type ServerConn struct {
 	lk              sync.Mutex // read-write protects the following fields
 	c               net.Conn
@@ -54,10 +54,15 @@ type ServerConn struct {
 	pipe textproto.Pipeline
 }
 
-// NewServerConn returns a new ServerConn reading and writing c.  If r is not
+// NewServerConn returns a new ServerConn reading and writing c. If r is not
 // nil, it is the buffer to use when reading c.
+//
+// ServerConn is low-level and old. Applications should instead use Server
+// in the net/http package.
 
 // NewServerConn返回一个新的ServerConn来读取和写c。如果r非空，则使用缓存对c进行读取。
+//
+// ServerConn 是低级而老旧的，大部分应用都不需要它。具体参见 Server。
 func NewServerConn(c net.Conn, r *bufio.Reader) *ServerConn {
 	if r == nil {
 		r = bufio.NewReader(c)
@@ -245,13 +250,13 @@ func (sc *ServerConn) Write(req *http.Request, resp *http.Response) error {
 // supports hijacking the connection calling Hijack to
 // regain control of the underlying net.Conn and deal with it as desired.
 //
-// ClientConn is low-level and should not be needed by most applications.
-// See Client.
+// ClientConn is low-level and old. Applications should instead use
+// Client or Transport in the net/http package.
 
 // ClientConn从还保持着HTTP keepalive的底层连接发送请求，并且接收header。
 // ClientConn支持调用Hijack来劫持连接用于获取底层网络连接的控制来处理net.Conn。
 //
-// ClientConn是底层的结构，一般应用并不会需要使用到。具体参考Client。
+// ServerConn 是低级而老旧的，应用应当采用 net/http 中的 Client 或 Transport 来代替。
 type ClientConn struct {
 	lk              sync.Mutex // read-write protects the following fields
 	c               net.Conn
@@ -267,8 +272,13 @@ type ClientConn struct {
 
 // NewClientConn returns a new ClientConn reading and writing c.  If r is not
 // nil, it is the buffer to use when reading c.
+//
+// ClientConn is low-level and old. Applications should use Client or
+// Transport in the net/http package.
 
 // NewClientConn返回一个新的ClientConnd对c进行读取和写入。如果r非空，则使用缓存对c进行读取。
+//
+// ServerConn 是低级而老旧的，应用应当采用 net/http 中的 Client 或 Transport 来代替。
 func NewClientConn(c net.Conn, r *bufio.Reader) *ClientConn {
 	if r == nil {
 		r = bufio.NewReader(c)
@@ -283,8 +293,13 @@ func NewClientConn(c net.Conn, r *bufio.Reader) *ClientConn {
 
 // NewProxyClientConn works like NewClientConn but writes Requests
 // using Request's WriteProxy method.
+//
+// New code should not use NewProxyClientConn. See Client or
+// Transport in the net/http package instead.
 
 // NewProxyClientConn像NewClientConn一样，不同的是使用Request的WriteProxy方法对请求进行写操作。
+//
+// 新代码不应使用 NewProxyClientConn。见 net/http 中的 Client 或 Transport。
 func NewProxyClientConn(c net.Conn, r *bufio.Reader) *ClientConn {
 	cc := NewClientConn(c, r)
 	cc.writeReq = (*http.Request).WriteProxy

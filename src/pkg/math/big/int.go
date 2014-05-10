@@ -732,17 +732,18 @@ func (x *Int) BitLen() int {
 }
 
 // Exp sets z = x**y mod |m| (i.e. the sign of m is ignored), and returns z.
-// If y <= 0, the result is 1; if m == nil or m == 0, z = x**y.
+// If y <= 0, the result is 1 mod |m|; if m == nil or m == 0, z = x**y.
 // See Knuth, volume 2, section 4.6.3.
 
 // Exp 置 z = x**y mod |m|（换言之，m 的符号被忽略），并返回 z。
 // 若 y <=0，则其结果为 1，若 m == nil 或 m == 0，则 z = x**y。
 // 见 Knuth《计算机程序设计艺术》，卷 2，章节 4.6.3。
 func (z *Int) Exp(x, y, m *Int) *Int {
-	if y.neg || len(y.abs) == 0 {
-		return z.SetInt64(1)
+	var yWords nat
+	if !y.neg {
+		yWords = y.abs
 	}
-	// y > 0
+	// y >= 0
 
 	var mWords nat
 	if m != nil {
@@ -750,8 +751,8 @@ func (z *Int) Exp(x, y, m *Int) *Int {
 		mWords = m.abs // m.abs may be nil for m == 0
 	}
 
-	z.abs = z.abs.expNN(x.abs, y.abs, mWords)
-	z.neg = len(z.abs) > 0 && x.neg && y.abs[0]&1 == 1 // 0 has no sign // 0 没有符号
+	z.abs = z.abs.expNN(x.abs, yWords, mWords)
+	z.neg = len(z.abs) > 0 && x.neg && len(yWords) > 0 && yWords[0]&1 == 1 // 0 has no sign // 0 没有符号
 	return z
 }
 

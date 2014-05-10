@@ -159,13 +159,17 @@ regopt(Prog *firstp)
 	 * find use and set of variables
 	 */
 	g = flowstart(firstp, sizeof(Reg));
-	if(g == nil)
+	if(g == nil) {
+		for(i=0; i<nvar; i++)
+			var[i].node->opt = nil;
 		return;
+	}
+
 	firstr = (Reg*)g->start;
 
 	for(r = firstr; r != R; r = (Reg*)r->f.link) {
 		p = r->f.prog;
-		if(p->as == AVARDEF)
+		if(p->as == AVARDEF || p->as == AVARKILL)
 			continue;
 		proginfo(&info, p);
 
@@ -368,6 +372,8 @@ brk:
 	/*
 	 * free aux structures. peep allocates new ones.
 	 */
+	for(i=0; i<nvar; i++)
+		var[i].node->opt = nil;
 	flowend(g);
 	firstr = R;
 
@@ -619,6 +625,16 @@ mkvar(Reg *r, Adr *a)
 	if(nvar >= NVAR) {
 		if(debug['w'] > 1 && node != N)
 			fatal("variable not optimized: %D", a);
+		
+		// If we're not tracking a word in a variable, mark the rest as
+		// having its address taken, so that we keep the whole thing
+		// live at all calls. otherwise we might optimize away part of
+		// a variable but not all of it.
+		for(i=0; i<nvar; i++) {
+			v = var+i;
+			if(v->node == node)
+				v->addr = 1;
+		}
 		goto none;
 	}
 
@@ -631,6 +647,13 @@ mkvar(Reg *r, Adr *a)
 	v->width = w;
 	v->addr = flag;		// funny punning
 	v->node = node;
+	
+	// node->opt is the head of a linked list
+	// of Vars within the given Node, so that
+	// we can start at a Var and find all the other
+	// Vars in the same Go variable.
+	v->nextinnode = node->opt;
+	node->opt = v;
 
 	if(debug['R'])
 		print("bit=%2d et=%2E w=%d+%d %#N %D flag=%d\n", i, et, o, w, node, a, v->addr);
@@ -644,6 +667,24 @@ mkvar(Reg *r, Adr *a)
 		for(z=0; z<BITS; z++)
 			params.b[z] |= bit.b[z];
 
+	// Treat values with their address taken as live at calls,
+	// because the garbage collector's liveness analysis in ../gc/plive.c does.
+	// These must be consistent or else we will elide stores and the garbage
+	// collector will see uninitialized data.
+	// The typical case where our own analysis is out of sync is when the
+	// node appears to have its address taken but that code doesn't actually
+	// get generated and therefore doesn't show up as an address being
+	// taken when we analyze the instruction stream.
+	// One instance of this case is when a closure uses the same name as
+	// an outer variable for one of its own variables declared with :=.
+	// The parser flags the outer variable as possibly shared, and therefore
+	// sets addrtaken, even though it ends up not being actually shared.
+	// If we were better about _ elision, _ = &x would suffice too.
+	// The broader := in a closure problem is mentioned in a comment in
+	// closure.c:/^typecheckclosure and dcl.c:/^oldname.
+	if(node->addrtaken)
+		setaddrs(bit);
+
 	return bit;
 
 none:
@@ -654,7 +695,8 @@ void
 prop(Reg *r, Bits ref, Bits cal)
 {
 	Reg *r1, *r2;
-	int z;
+	int z, i, j;
+	Var *v, *v1;
 
 	for(r1 = r; r1 != R; r1 = (Reg*)r1->f.p1) {
 		for(z=0; z<BITS; z++) {
@@ -676,6 +718,48 @@ prop(Reg *r, Bits ref, Bits cal)
 			for(z=0; z<BITS; z++) {
 				cal.b[z] |= ref.b[z] | externs.b[z];
 				ref.b[z] = 0;
+			}
+			
+			// cal.b is the current approximation of what's live across the call.
+			// Every bit in cal.b is a single stack word. For each such word,
+			// find all the other tracked stack words in the same Go variable
+			// (struct/slice/string/interface) and mark them live too.
+			// This is necessary because the liveness analysis for the garbage
+			// collector works at variable granularity, not at word granularity.
+			// It is fundamental for slice/string/interface: the garbage collector
+			// needs the whole value, not just some of the words, in order to
+			// interpret the other bits correctly. Specifically, slice needs a consistent
+			// ptr and cap, string needs a consistent ptr and len, and interface
+			// needs a consistent type word and data word.
+			for(z=0; z<BITS; z++) {
+				if(cal.b[z] == 0)
+					continue;
+				for(i=0; i<32; i++) {
+					if(z*32+i >= nvar || ((cal.b[z]>>i)&1) == 0)
+						continue;
+					v = var+z*32+i;
+					if(v->node->opt == nil) // v represents fixed register, not Go variable
+						continue;
+
+					// v->node->opt is the head of a linked list of Vars
+					// corresponding to tracked words from the Go variable v->node.
+					// Walk the list and set all the bits.
+					// For a large struct this could end up being quadratic:
+					// after the first setting, the outer loop (for z, i) would see a 1 bit
+					// for all of the remaining words in the struct, and for each such
+					// word would go through and turn on all the bits again.
+					// To avoid the quadratic behavior, we only turn on the bits if
+					// v is the head of the list or if the head's bit is not yet turned on.
+					// This will set the bits at most twice, keeping the overall loop linear.
+					v1 = v->node->opt;
+					j = v1 - var;
+					if(v == v1 || ((cal.b[j/32]>>(j&31))&1) == 0) {
+						for(; v1 != nil; v1 = v1->nextinnode) {
+							j = v1 - var;
+							cal.b[j/32] |= 1<<(j&31);
+						}
+					}
+				}
 			}
 			break;
 
@@ -825,18 +909,19 @@ paint1(Reg *r, int bn)
 		r->act.b[z] |= bb;
 		p = r->f.prog;
 
-		if(r->use1.b[z] & bb) {
-			change += CREF * r->f.loop;
-			if(p->as == AFMOVL || p->as == AFMOVW)
-				if(BtoR(bb) != D_F0)
-					change = -CINF;
-		}
-
-		if((r->use2.b[z]|r->set.b[z]) & bb) {
-			change += CREF * r->f.loop;
-			if(p->as == AFMOVL || p->as == AFMOVW)
-				if(BtoR(bb) != D_F0)
-					change = -CINF;
+		if(r->f.prog->as != ANOP) { // don't give credit for NOPs
+			if(r->use1.b[z] & bb) {
+				change += CREF * r->f.loop;
+				if(p->as == AFMOVL || p->as == AFMOVW)
+					if(BtoR(bb) != D_F0)
+						change = -CINF;
+			}
+			if((r->use2.b[z]|r->set.b[z]) & bb) {
+				change += CREF * r->f.loop;
+				if(p->as == AFMOVL || p->as == AFMOVW)
+					if(BtoR(bb) != D_F0)
+						change = -CINF;
+			}
 		}
 
 		if(STORE(r) & r->regdiff.b[z] & bb) {

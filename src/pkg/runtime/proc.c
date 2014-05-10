@@ -155,6 +155,10 @@ runtime·schedinit(void)
 	// in a fault during a garbage collection, it will not
 	// need to allocated memory.
 	runtime·newErrorCString(0, &i);
+	
+	// Initialize the cached gotraceback value, since
+	// gotraceback calls getenv, which mallocs on Plan 9.
+	runtime·gotraceback(nil);
 
 	runtime·goargs();
 	runtime·goenvs();
@@ -681,6 +685,21 @@ runtime·allocm(P *p)
 		g->stackguard0 = StackPreempt;
 
 	return mp;
+}
+
+static G*
+allocg(void)
+{
+	G *gp;
+	static Type *gtype;
+	
+	if(gtype == nil) {
+		Eface e;
+		runtime·gc_g_ptr(&e);
+		gtype = ((PtrType*)e.type)->elem;
+	}
+	gp = runtime·cnew(gtype);
+	return gp;
 }
 
 static M* lockextra(bool nilokay);
@@ -1742,7 +1761,7 @@ runtime·malg(int32 stacksize)
 		runtime·throw("runtime: bad stack.h");
 	}
 
-	newg = runtime·malloc(sizeof(G));
+	newg = allocg();
 	if(stacksize >= 0) {
 		stacksize = runtime·round2(StackSystem + stacksize);
 		if(g == m->g0) {
@@ -2497,7 +2516,7 @@ checkdead(void)
 	}
 	runtime·unlock(&allglock);
 	if(grunning == 0)  // possible if main goroutine calls runtime·Goexit()
-		runtime·exit(0);
+		runtime·throw("no goroutines (main called runtime.Goexit) - deadlock!");
 	m->throwing = -1;  // do not dump full stacks
 	runtime·throw("all goroutines are asleep - deadlock!");
 }

@@ -10,13 +10,16 @@
 #include "opt.h"
 
 static Prog *appendpp(Prog*, int, int, vlong, int, vlong);
+static Prog *zerorange(Prog *p, vlong frame, vlong lo, vlong hi, uint32 *ax);
 
 void
 defframe(Prog *ptxt)
 {
-	uint32 frame;
+	uint32 frame, ax;
 	Prog *p;
-	vlong i;
+	vlong hi, lo;
+	NodeList *l;
+	Node *n;
 
 	// fill in argument size
 	ptxt->to.offset = rnd(curfn->type->argwid, widthptr);
@@ -26,30 +29,73 @@ defframe(Prog *ptxt)
 	frame = rnd(stksize+maxarg, widthreg);
 	ptxt->to.offset |= frame;
 	
-	// insert code to contain ambiguously live variables
-	// so that garbage collector only sees initialized values
+	// insert code to zero ambiguously live variables
+	// so that the garbage collector only sees initialized values
 	// when it looks for pointers.
 	p = ptxt;
-	if(stkzerosize % widthreg != 0)
-		fatal("zero size not a multiple of reg size");
-	if(stkzerosize == 0) {
-		// nothing
-	} else if(stkzerosize <= 2*widthreg) {
-		for(i = 0; i < stkzerosize; i += widthreg) {
-			p = appendpp(p, AMOVQ, D_CONST, 0, D_SP+D_INDIR, frame-stkzerosize+i);
+	lo = hi = 0;
+	ax = 0;
+	// iterate through declarations - they are sorted in decreasing xoffset order.
+	for(l=curfn->dcl; l != nil; l = l->next) {
+		n = l->n;
+		if(!n->needzero)
+			continue;
+		if(n->class != PAUTO)
+			fatal("needzero class %d", n->class);
+		if(n->type->width % widthptr != 0 || n->xoffset % widthptr != 0 || n->type->width == 0)
+			fatal("var %lN has size %d offset %d", n, (int)n->type->width, (int)n->xoffset);
+
+		if(lo != hi && n->xoffset + n->type->width >= lo - 2*widthreg) {
+			// merge with range we already have
+			lo = rnd(n->xoffset, widthreg);
+			continue;
 		}
-	} else if(stkzerosize <= 16*widthreg) {
-		p = appendpp(p, AMOVQ, D_CONST, 0, D_AX, 0);
-		for(i = 0; i < stkzerosize; i += widthreg) {
-			p = appendpp(p, AMOVQ, D_AX, 0, D_SP+D_INDIR, frame-stkzerosize+i);
-		}
-	} else {
-		p = appendpp(p, AMOVQ, D_CONST, 0, D_AX, 0);
-		p = appendpp(p, AMOVQ, D_CONST, stkzerosize/widthreg, D_CX, 0);
-		p = appendpp(p, leaptr, D_SP+D_INDIR, frame-stkzerosize, D_DI, 0);
-		p = appendpp(p, AREP, D_NONE, 0, D_NONE, 0);
-		appendpp(p, ASTOSQ, D_NONE, 0, D_NONE, 0);
+		// zero old range
+		p = zerorange(p, frame, lo, hi, &ax);
+
+		// set new range
+		hi = n->xoffset + n->type->width;
+		lo = n->xoffset;
 	}
+	// zero final range
+	zerorange(p, frame, lo, hi, &ax);
+}
+
+static Prog*
+zerorange(Prog *p, vlong frame, vlong lo, vlong hi, uint32 *ax)
+{
+	vlong cnt, i;
+
+	cnt = hi - lo;
+	if(cnt == 0)
+		return p;
+	if(*ax == 0) {
+		p = appendpp(p, AMOVQ, D_CONST, 0, D_AX, 0);
+		*ax = 1;
+	}
+	if(cnt % widthreg != 0) {
+		// should only happen with nacl
+		if(cnt % widthptr != 0)
+			fatal("zerorange count not a multiple of widthptr %d", cnt);
+		p = appendpp(p, AMOVL, D_AX, 0, D_SP+D_INDIR, frame+lo);
+		lo += widthptr;
+		cnt -= widthptr;
+	}
+	if(cnt <= 4*widthreg) {
+		for(i = 0; i < cnt; i += widthreg) {
+			p = appendpp(p, AMOVQ, D_AX, 0, D_SP+D_INDIR, frame+lo+i);
+		}
+	} else if(!nacl && (cnt <= 128*widthreg)) {
+		p = appendpp(p, leaptr, D_SP+D_INDIR, frame+lo, D_DI, 0);
+		p = appendpp(p, ADUFFZERO, D_NONE, 0, D_ADDR, 2*(128-cnt/widthreg));
+		p->to.sym = linksym(pkglookup("duffzero", runtimepkg));
+	} else {
+		p = appendpp(p, AMOVQ, D_CONST, cnt/widthreg, D_CX, 0);
+		p = appendpp(p, leaptr, D_SP+D_INDIR, frame+lo, D_DI, 0);
+		p = appendpp(p, AREP, D_NONE, 0, D_NONE, 0);
+		p = appendpp(p, ASTOSQ, D_NONE, 0, D_NONE, 0);
+	}
+	return p;
 }
 
 static Prog*	
@@ -74,7 +120,7 @@ void
 markautoused(Prog* p)
 {
 	for (; p; p = p->link) {
-		if (p->as == ATYPE || p->as == AVARDEF)
+		if (p->as == ATYPE || p->as == AVARDEF || p->as == AVARKILL)
 			continue;
 
 		if (p->from.node)
@@ -96,7 +142,7 @@ fixautoused(Prog *p)
 			*lp = p->link;
 			continue;
 		}
-		if (p->as == AVARDEF && p->to.node && !p->to.node->used) {
+		if ((p->as == AVARDEF || p->as == AVARKILL) && p->to.node && !p->to.node->used) {
 			// Cannot remove VARDEF instruction, because - unlike TYPE handled above -
 			// VARDEFs are interspersed with other code, and a jump might be using the
 			// VARDEF as a target. Replace with a no-op instead. A later pass will remove
@@ -223,7 +269,9 @@ ginscall(Node *f, int proc)
 		if(proc == 2) {
 			nodreg(&reg, types[TINT64], D_AX);
 			gins(ATESTQ, &reg, &reg);
-			patch(gbranch(AJNE, T, -1), retpc);
+			p = gbranch(AJEQ, T, +1);
+			cgen_ret(N);
+			patch(p, pc);
 		}
 		break;
 	}
@@ -423,13 +471,13 @@ cgen_ret(Node *n)
 {
 	Prog *p;
 
-	genlist(n->list);		// copy out args
-	if(hasdefer || curfn->exit) {
-		gjmp(retpc);
-		return;
-	}
+	if(n != N)
+		genlist(n->list);		// copy out args
+	if(hasdefer)
+		ginscall(deferreturn, 0);
+	genlist(curfn->exit);
 	p = gins(ARET, N, N);
-	if(n->op == ORETJMP) {
+	if(n != N && n->op == ORETJMP) {
 		p->to.type = D_EXTERN;
 		p->to.sym = linksym(n->left->sym);
 	}
@@ -1079,10 +1127,16 @@ clearfat(Node *nl)
 	savex(D_AX, &ax, &oldax, N, types[tptr]);
 	gconreg(AMOVL, 0, D_AX);
 
-	if(q >= 4) {
+	if(q > 128 || (q >= 4 && nacl)) {
 		gconreg(movptr, q, D_CX);
 		gins(AREP, N, N);	// repeat
 		gins(ASTOSQ, N, N);	// STOQ AL,*(DI)+
+	} else if(q >= 4) {
+		p = gins(ADUFFZERO, N, N);
+		p->to.type = D_ADDR;
+		p->to.sym = linksym(pkglookup("duffzero", runtimepkg));
+		// 2 and 128 = magic constants: see ../../pkg/runtime/asm_amd64.s
+		p->to.offset = 2*(128-q);
 	} else
 	while(q > 0) {
 		gins(ASTOSQ, N, N);	// STOQ AL,*(DI)+

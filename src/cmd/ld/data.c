@@ -132,13 +132,11 @@ relocsym(LSym *s)
 {
 	Reloc *r;
 	LSym *rs;
-	Prog p;
 	int32 i, off, siz, fl;
 	vlong o;
 	uchar *cast;
 
 	ctxt->cursym = s;
-	memset(&p, 0, sizeof p);
 	for(r=s->r; r<s->r+s->nr; r++) {
 		r->done = 1;
 		off = r->off;
@@ -153,6 +151,8 @@ relocsym(LSym *s)
 		}
 		if(r->type >= 256)
 			continue;
+		if(r->siz == 0) // informational relocation - no work to do
+			continue;
 
 		// Solaris needs the ability to reference dynimport symbols.
 		if(HEADTYPE != Hsolaris && r->sym != S && r->sym->type == SDYNIMPORT)
@@ -166,7 +166,7 @@ relocsym(LSym *s)
 			if(archreloc(r, s, &o) < 0)
 				diag("unknown reloc %d", r->type);
 			break;
-		case D_TLS:
+		case R_TLS:
 			if(linkmode == LinkInternal && iself && thechar == '5') {
 				// On ELF ARM, the thread pointer is 8 bytes before
 				// the start of the thread-local data block, so add 8
@@ -183,7 +183,39 @@ relocsym(LSym *s)
 			if(thechar != '6')
 				o = r->add;
 			break;
-		case D_ADDR:
+		case R_TLS_LE:
+			if(linkmode == LinkExternal && iself && HEADTYPE != Hopenbsd) {
+				r->done = 0;
+				r->sym = ctxt->gmsym;
+				r->xsym = ctxt->gmsym;
+				r->xadd = r->add;
+				o = 0;
+				if(thechar != '6')
+					o = r->add;
+				break;
+			}
+			o = ctxt->tlsoffset + r->add;
+			break;
+
+		case R_TLS_IE:
+			if(linkmode == LinkExternal && iself && HEADTYPE != Hopenbsd) {
+				r->done = 0;
+				r->sym = ctxt->gmsym;
+				r->xsym = ctxt->gmsym;
+				r->xadd = r->add;
+				o = 0;
+				if(thechar != '6')
+					o = r->add;
+				break;
+			}
+			if(iself || ctxt->headtype == Hplan9)
+				o = ctxt->tlsoffset + r->add;
+			else if(ctxt->headtype == Hwindows)
+				o = r->add;
+			else
+				sysfatal("unexpected R_TLS_IE relocation for %s", headstr(ctxt->headtype));
+			break;
+		case R_ADDR:
 			if(linkmode == LinkExternal && r->sym->type != SCONST) {
 				r->done = 0;
 
@@ -212,7 +244,8 @@ relocsym(LSym *s)
 			}
 			o = symaddr(r->sym) + r->add;
 			break;
-		case D_PCREL:
+		case R_CALL:
+		case R_PCREL:
 			// r->sym can be null when CALL $(constant) is transformed from absolute PC to relative PC call.
 			if(linkmode == LinkExternal && r->sym && r->sym->type != SCONST && r->sym->sect != ctxt->cursym->sect) {
 				r->done = 0;
@@ -253,7 +286,7 @@ relocsym(LSym *s)
 			// the standard host compiler (gcc on most other systems).
 			o += r->add - (s->value + r->off + (int32)r->siz);
 			break;
-		case D_SIZE:
+		case R_SIZE:
 			o = r->sym->size + r->add;
 			break;
 		}
@@ -262,8 +295,12 @@ relocsym(LSym *s)
 		default:
 			ctxt->cursym = s;
 			diag("bad reloc size %#ux for %s", siz, r->sym->name);
+		case 1:
+			// TODO(rsc): Remove.
+			s->p[off] = (int8)o;
+			break;
 		case 4:
-			if(r->type == D_PCREL) {
+			if(r->type == R_PCREL || r->type == R_CALL) {
 				if(o != (int32)o)
 					diag("pc-relative relocation address is too big: %#llx", o);
 			} else {
@@ -312,6 +349,8 @@ dynrelocsym(LSym *s)
 			return;
 		for(r=s->r; r<s->r+s->nr; r++) {
 			targ = r->sym;
+			if(targ == nil)
+				continue;
 			if(!targ->reachable)
 				diag("internal inconsistency: dynamic symbol %s is not reachable.", targ->name);
 			if(r->sym->plt == -2 && r->sym->got != -2) { // make dynimport JMP table for PE object files.
@@ -524,11 +563,14 @@ datblk(int32 addr, int32 size)
 					rsname = r->sym->name;
 				typ = "?";
 				switch(r->type) {
-				case D_ADDR:
+				case R_ADDR:
 					typ = "addr";
 					break;
-				case D_PCREL:
+				case R_PCREL:
 					typ = "pcrel";
+					break;
+				case R_CALL:
+					typ = "call";
 					break;
 				}
 				Bprint(&bso, "\treloc %.8ux/%d %s %s+%#llx [%#llx]\n",
@@ -719,6 +761,9 @@ dodata(void)
 		if(!s->reachable || s->special)
 			continue;
 		if(STEXT < s->type && s->type < SXREF) {
+			if(s->onlist)
+				sysfatal("symbol %s listed multiple times", s->name);
+			s->onlist = 1;
 			if(last == nil)
 				datap = s;
 			else

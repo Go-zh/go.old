@@ -122,34 +122,23 @@ walkrange(Node *n)
 
 	a = n->right;
 	lno = setlineno(a);
-	if(t->etype == TSTRING && !eqtype(t, types[TSTRING])) {
-		a = nod(OCONV, n->right, N);
-		a->type = types[TSTRING];
-	}
 
 	v1 = n->list->n;
 	v2 = N;
-	if(n->list->next)
+	if(n->list->next && !isblank(n->list->next->n))
 		v2 = n->list->next->n;
 	// n->list has no meaning anymore, clear it
 	// to avoid erroneous processing by racewalk.
 	n->list = nil;
 	hv2 = N;
 
-	if(v2 == N && t->etype == TARRAY) {
-		// will have just one reference to argument.
-		// no need to make a potentially expensive copy.
-		ha = a;
-	} else {
-		ha = temp(a->type);
-		init = list(init, nod(OAS, ha, a));
-	}
-
 	switch(t->etype) {
 	default:
 		fatal("walkrange");
 
 	case TARRAY:
+		// orderstmt arranged for a copy of the array/slice variable if needed.
+		ha = a;
 		hv1 = temp(types[TINT]);
 		hn = temp(types[TINT]);
 		hp = nil;
@@ -164,8 +153,7 @@ walkrange(Node *n)
 		}
 
 		n->ntest = nod(OLT, hv1, hn);
-		n->nincr = nod(OASOP, hv1, nodintconst(1));
-		n->nincr->etype = OADD;
+		n->nincr = nod(OAS, hv1, nod(OADD, hv1, nodintconst(1)));
 		if(v2 == N)
 			body = list1(nod(OAS, v1, hv1));
 		else {
@@ -194,9 +182,13 @@ walkrange(Node *n)
 		break;
 
 	case TMAP:
-		// allocate an iterator state structure on the stack
+		// orderstmt allocated the iterator for us.
+		// we only use a once, so no copy needed.
+		ha = a;
 		th = hiter(t);
-		hit = temp(th);
+		hit = n->alloc;
+		hit->type = th;
+		n->left = N;
 		keyname = newname(th->type->sym);  // depends on layout of iterator struct.  See reflect.c:hiter
 		valname = newname(th->type->down->sym); // ditto
 
@@ -226,7 +218,13 @@ walkrange(Node *n)
 		break;
 
 	case TCHAN:
+		// orderstmt arranged for a copy of the channel variable.
+		ha = a;
+		n->ntest = N;
+		
 		hv1 = temp(t->type);
+		if(haspointers(t->type))
+			init = list(init, nod(OAS, hv1, N));
 		hb = temp(types[TBOOL]);
 
 		n->ntest = nod(ONE, hb, nodbool(0));
@@ -239,6 +237,9 @@ walkrange(Node *n)
 		break;
 
 	case TSTRING:
+		// orderstmt arranged for a copy of the string variable.
+		ha = a;
+
 		ohv1 = temp(types[TINT]);
 
 		hv1 = temp(types[TINT]);

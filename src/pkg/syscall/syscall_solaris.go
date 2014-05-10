@@ -333,6 +333,7 @@ func anyToSockaddr(rsa *RawSockaddrAny) (Sockaddr, error) {
 }
 
 //sys	accept(s int, rsa *RawSockaddrAny, addrlen *_Socklen) (fd int, err error) = libsocket.accept
+
 func Accept(fd int) (nfd int, sa Sockaddr, err error) {
 	var rsa RawSockaddrAny
 	var len _Socklen = SizeofSockaddrAny
@@ -380,14 +381,20 @@ func Recvmsg(fd int, p, oob []byte, flags int) (n, oobn int, recvflags int, from
 	return
 }
 
-//sys	sendmsg(s int, msg *Msghdr, flags int) (err error) = libsocket.sendmsg
 func Sendmsg(fd int, p, oob []byte, to Sockaddr, flags int) (err error) {
+	_, err = SendmsgN(fd, p, oob, to, flags)
+	return
+}
+
+//sys	sendmsg(s int, msg *Msghdr, flags int) (n int, err error) = libsocket.sendmsg
+
+func SendmsgN(fd int, p, oob []byte, to Sockaddr, flags int) (n int, err error) {
 	var ptr unsafe.Pointer
 	var salen _Socklen
 	if to != nil {
 		ptr, salen, err = to.sockaddr()
 		if err != nil {
-			return err
+			return 0, err
 		}
 	}
 	var msg Msghdr
@@ -409,7 +416,13 @@ func Sendmsg(fd int, p, oob []byte, to Sockaddr, flags int) (err error) {
 	}
 	msg.Iov = &iov
 	msg.Iovlen = 1
-	return sendmsg(fd, &msg, flags)
+	if n, err = sendmsg(fd, &msg, flags); err != nil {
+		return 0, err
+	}
+	if len(oob) > 0 && len(p) == 0 {
+		n = 0
+	}
+	return n, nil
 }
 
 /*

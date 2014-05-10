@@ -99,10 +99,10 @@ typedef	struct	DebugVars	DebugVars;
  *
  * "extern register" is a special storage class implemented by 6c, 8c, etc.
  * On the ARM, it is an actual register; elsewhere it is a slot in thread-
- * local storage indexed by a segment register. See zasmhdr in
+ * local storage indexed by a pseudo-register TLS. See zasmhdr in
  * src/cmd/dist/buildruntime.c for details, and be aware that the linker may
  * make further OS-specific changes to the compiler's output. For example,
- * 6l/linux rewrites 0(GS) as -16(FS).
+ * 6l/linux rewrites 0(TLS) as -16(FS).
  *
  * Every C file linked into a Go program must include runtime.h so that the
  * C compiler (6c, 8c, etc.) knows to avoid other uses of these dedicated
@@ -312,6 +312,7 @@ struct	M
 	int32	throwing;
 	int32	gcing;
 	int32	locks;
+	int32	softfloat;
 	int32	dying;
 	int32	profilehz;
 	int32	helpgc;
@@ -342,6 +343,7 @@ struct	M
 	uint32	waitsemalock;
 	GCStats	gcstats;
 	bool	needextram;
+	uint8	traceback;
 	bool	(*waitunlockf)(G*, void*);
 	void*	waitlock;
 	uintptr	forkstackguard;
@@ -1072,7 +1074,7 @@ void	runtime·printhex(uint64);
 void	runtime·printslice(Slice);
 void	runtime·printcomplex(Complex128);
 void	runtime·newstackcall(FuncVal*, byte*, uint32);
-void	reflect·call(FuncVal*, byte*, uint32);
+void	reflect·call(FuncVal*, byte*, uint32, uint32);
 void	runtime·panic(Eface);
 void	runtime·panicindex(void);
 void	runtime·panicslice(void);

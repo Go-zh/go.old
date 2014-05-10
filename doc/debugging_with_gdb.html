@@ -22,6 +22,39 @@ Besides this overview you might want to consult the
 </i></p>
 
 <div class="english">
+<p>
+GDB does not understand Go programs well.
+The stack management, threading, and runtime contain aspects that differ
+enough from the execution model GDB expects that they can confuse
+the debugger, even when the program is compiled with gccgo.
+As a consequence, although GDB can be useful in some situations, it is
+not a reliable debugger for Go programs, particularly heavily concurrent ones.
+Moreover, it is not a priority for the Go project to address these issues, which
+are difficult.
+In short, the instructions below should be taken only as a guide to how
+to use GDB when it works, not as a guarantee of success.
+</p>
+</div>
+
+<p>
+GDB 无法很好地理解Go程序。堆栈管理、线程和运行时包含的方面与 GDB 预期的执行模型非常不同，
+即便程序是由 gccgo 编译的，它们也会把调试器搞乱。作为一个推论，即便 GDB 在某些情况下很有用，
+但对于 Go 程序来说它并不是个可靠的调试器，对大的并发来说更是如此。此外，它并不是 Go
+项目需要优先解决的问题，这是很难的。简言之，就是以下指令仅在 GDB 能用时才可作为指导被采纳，
+而并不保证成功。
+</p>
+
+<div class="english">
+<p>
+In time, a more Go-centric debugging architecture may be required.
+</p>
+</div>
+
+<p>
+到时候，我们会需要一个更加以 Go 为中心的调试架构。
+</p>
+
+<div class="english">
 <h2 id="Introduction">Introduction</h2>
 </div>
 
@@ -44,14 +77,14 @@ GDB调试器可用于检查实时进程或核心转储。
 
 <div class="english">
 <p>
-Pass the <code>'-s'</code> flag to the linker to omit the debug information
-(for example, <code>go build -ldflags "-s" prog.go</code>).
+Pass the <code>'-w'</code> flag to the linker to omit the debug information
+(for example, <code>go build -ldflags "-w" prog.go</code>).
 </p>
 </div>
 
 <p>
-可通过向连接器传递 <code>'-s'</code> 标记来省略调试信息
-（例如，<code>go build -ldflags "-s" prog.go</code>）。
+可通过向连接器传递 <code>'-w'</code> 标记来省略调试信息
+（例如，<code>go build -ldflags "-w" prog.go</code>）。
 </p>
 
 <div class="english">

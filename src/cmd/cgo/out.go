@@ -485,7 +485,7 @@ func (p *Package) writeOutput(f *File, srcfile string) {
 	fgcc.Close()
 }
 
-// fixGo convers the internal Name.Go field into the name we should show
+// fixGo converts the internal Name.Go field into the name we should show
 // to users in error messages. There's only one for now: on input we rewrite
 // C.malloc into C._CMalloc, so change it back here.
 func fixGo(name string) string {
@@ -880,9 +880,23 @@ func (p *Package) writeGccgoExports(fgo2, fc, fm *os.File) {
 		fmt.Fprintf(cdeclBuf, ")")
 		cParams := cdeclBuf.String()
 
+		// We need to use a name that will be exported by the
+		// Go code; otherwise gccgo will make it static and we
+		// will not be able to link against it from the C
+		// code.
 		goName := "Cgoexp_" + exp.ExpName
 		fmt.Fprintf(fgcch, `extern %s %s %s __asm__("%s.%s");`, cRet, goName, cParams, gccgoSymbolPrefix, goName)
 		fmt.Fprint(fgcch, "\n")
+
+		// Use a #define so that the C code that includes
+		// cgo_export.h will be able to refer to the Go
+		// function using the expected name.
+		fmt.Fprintf(fgcch, "#define %s %s\n", exp.ExpName, goName)
+
+		// Use a #undef in _cgo_export.c so that we ignore the
+		// #define from cgo_export.h, since here we are
+		// defining the real function.
+		fmt.Fprintf(fgcc, "#undef %s\n", exp.ExpName)
 
 		fmt.Fprint(fgcc, "\n")
 		fmt.Fprintf(fgcc, "%s %s %s {\n", cRet, exp.ExpName, cParams)
@@ -1225,7 +1239,10 @@ struct __go_string __go_byte_array_to_string(const void* p, intgo len);
 struct __go_open_array __go_string_to_byte_array (struct __go_string str);
 
 const char *_cgoPREFIX_Cfunc_CString(struct __go_string s) {
-	return strndup((const char*)s.__data, s.__length);
+	char *p = malloc(s.__length+1);
+	memmove(p, s.__data, s.__length);
+	p[s.__length] = 0;
+	return p;
 }
 
 struct __go_string _cgoPREFIX_Cfunc_GoString(char *p) {

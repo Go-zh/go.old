@@ -290,18 +290,18 @@ ldpe(Biobuf *f, char *pkg, int64 len, char *pn)
 				case IMAGE_REL_AMD64_REL32:
 				case IMAGE_REL_AMD64_ADDR32: // R_X86_64_PC32
 				case IMAGE_REL_AMD64_ADDR32NB:
-					rp->type = D_PCREL;
+					rp->type = R_PCREL;
 					rp->add = (int32)le32(rsect->base+rp->off);
 					break;
 				case IMAGE_REL_I386_DIR32NB:
 				case IMAGE_REL_I386_DIR32:
-					rp->type = D_ADDR;
+					rp->type = R_ADDR;
 					// load addend from image
-					rp->add = le32(rsect->base+rp->off);
+					rp->add = (int32)le32(rsect->base+rp->off);
 					break;
 				case IMAGE_REL_AMD64_ADDR64: // R_X86_64_64
 					rp->siz = 8;
-					rp->type = D_ADDR;
+					rp->type = R_ADDR;
 					// load addend from image
 					rp->add = le64(rsect->base+rp->off);
 					break;
@@ -366,21 +366,9 @@ ldpe(Biobuf *f, char *pkg, int64 len, char *pn)
 		s->size = 4;
 		s->outer = sect->sym;
 		if(sect->sym->type == STEXT) {
-			Prog *p;
-	
-			if(s->text != P)
+			if(s->external && !s->dupok)
 				diag("%s: duplicate definition of %s", pn, s->name);
-			// build a TEXT instruction with a unique pc
-			// just to make the rest of the linker happy.
-			p = ctxt->arch->prg();
-			p->as = ATEXT;
-			p->from.type = D_EXTERN;
-			p->from.sym = s;
-			ctxt->arch->settextflag(p, 7);
-			p->to.type = D_CONST;
-			p->link = nil;
-			p->pc = ctxt->pc++;
-			s->text = p;
+			s->external = 1;
 		}
 	}
 
@@ -393,12 +381,18 @@ ldpe(Biobuf *f, char *pkg, int64 len, char *pn)
 		if(s->sub)
 			s->sub = listsort(s->sub, valuecmp, offsetof(LSym, sub));
 		if(s->type == STEXT) {
+			if(s->onlist)
+				sysfatal("symbol %s listed multiple times", s->name);
+			s->onlist = 1;
 			if(ctxt->etextp)
 				ctxt->etextp->next = s;
 			else
 				ctxt->textp = s;
 			ctxt->etextp = s;
 			for(s = s->sub; s != S; s = s->sub) {
+				if(s->onlist)
+					sysfatal("symbol %s listed multiple times", s->name);
+				s->onlist = 1;
 				ctxt->etextp->next = s;
 				ctxt->etextp = s;
 			}

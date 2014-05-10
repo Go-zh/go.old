@@ -79,9 +79,6 @@ runtime·sighandler(void *v, int8 *note, G *gp)
 		runtime·exits(note+9); // Strip "go: exit " prefix.
 
 	if(flags & SigPanic) {
-		if(!runtime·canpanic(gp))
-			goto Throw;
-
 		// Copy the error string from sigtramp's stack into m->notesig so
 		// we can reliably access it from the panic routines.
 		runtime·memmove(m->notesig, note, len+1);
@@ -98,7 +95,7 @@ runtime·sighandler(void *v, int8 *note, G *gp)
 		if(ureg->ip != 0) {
 			sp = (uintptr*)ureg->sp;
 			*--sp = ureg->ip;
-			ureg->sp = (uint32)sp;
+			ureg->sp = (uint64)sp;
 		}
 		ureg->ip = (uintptr)runtime·sigpanic;
 		return NCONT;

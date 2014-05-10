@@ -16,6 +16,7 @@
 // The file format is:
 //
 //	- magic header: "\x00\x00go13ld"
+//	- byte 1 - version number
 //	- sequence of strings giving dependencies (imported packages)
 //	- empty string (marks end of sequence)
 //	- sequence of defined symbols
@@ -42,12 +43,14 @@
 //	- gotype [symbol reference]
 //	- p [data block]
 //	- nr [int]
-//	- r [nr relocations]
+//	- r [nr relocations, sorted by off]
 //
 // If type == STEXT, there are a few more fields:
 //
 //	- args [int]
 //	- locals [int]
+//	- nosplit [int]
+//	- leaf [int]
 //	- nlocal [int]
 //	- local [nlocal automatics]
 //	- pcln [pcln table]
@@ -82,10 +85,7 @@
 //	- nfile [int]
 //	- file [nfile symbol references]
 //
-// The file layout is architecture-independent.
-// The meaning is almost architecture-independent:
-// the only field with architecture-dependent meaning is the
-// relocation's type field.
+// The file layout and meaning of type integers are architecture-independent.
 //
 // TODO(rsc): The file format is good for a first pass but needs work.
 //	- There are SymID in the object file that should really just be strings.
@@ -115,8 +115,11 @@ static char *rdstring(Biobuf*);
 static void rddata(Biobuf*, uchar**, int*);
 static LSym *rdsym(Link*, Biobuf*, char*);
 
+// The Go and C compilers, and the assembler, call writeobj to write
+// out a Go object file.  The linker does not call this; the linker
+// does not write out object files.
 void
-linkwriteobj(Link *ctxt, Biobuf *b)
+writeobj(Link *ctxt, Biobuf *b)
 {
 	int flag;
 	Hist *h;
@@ -169,6 +172,9 @@ linkwriteobj(Link *ctxt, Biobuf *b)
 				s = p->from.sym;
 				if(s->seenglobl++)
 					print("duplicate %P\n", p);
+				if(s->onlist)
+					sysfatal("symbol %s listed multiple times", s->name);
+				s->onlist = 1;
 				if(data == nil)
 					data = s;
 				else
@@ -207,6 +213,9 @@ linkwriteobj(Link *ctxt, Biobuf *b)
 				}
 				if(s->text != nil)
 					sysfatal("duplicate TEXT for %s", s->name);
+				if(s->onlist)
+					sysfatal("symbol %s listed multiple times", s->name);
+				s->onlist = 1;
 				if(text == nil)
 					text = s;
 				else
@@ -218,6 +227,8 @@ linkwriteobj(Link *ctxt, Biobuf *b)
 					flag = p->from.scale;
 				if(flag & DUPOK)
 					s->dupok = 1;
+				if(flag & NOSPLIT)
+					s->nosplit = 1;
 				s->next = nil;
 				s->type = STEXT;
 				s->text = p;
@@ -248,7 +259,8 @@ linkwriteobj(Link *ctxt, Biobuf *b)
 	Bputc(b, 0);
 	Bputc(b, 0);
 	Bprint(b, "go13ld");
-	
+	Bputc(b, 1); // version
+
 	// Emit autolib.
 	for(h = ctxt->hist; h != nil; h = h->link)
 		if(h->offset < 0)
@@ -275,6 +287,7 @@ writesym(Link *ctxt, Biobuf *b, LSym *s)
 	Pcln *pc;
 	Prog *p;
 	Auto *a;
+	char *name;
 
 	if(ctxt->debugasm) {
 		Bprint(ctxt->bso, "%s ", s->name);
@@ -284,9 +297,14 @@ writesym(Link *ctxt, Biobuf *b, LSym *s)
 			Bprint(ctxt->bso, "t=%d ", s->type);
 		if(s->dupok)
 			Bprint(ctxt->bso, "dupok ");
+		if(s->nosplit)
+			Bprint(ctxt->bso, "nosplit ");
 		Bprint(ctxt->bso, "size=%lld value=%lld", (vlong)s->size, (vlong)s->value);
-		if(s->type == STEXT)
+		if(s->type == STEXT) {
 			Bprint(ctxt->bso, " args=%#llux locals=%#llux", (uvlong)s->args, (uvlong)s->locals);
+			if(s->leaf)
+				Bprint(ctxt->bso, " leaf");
+		}
 		Bprint(ctxt->bso, "\n");
 		for(p=s->text; p != nil; p = p->link)
 			Bprint(ctxt->bso, "\t%#06ux %P\n", (int)p->pc, p);
@@ -309,7 +327,10 @@ writesym(Link *ctxt, Biobuf *b, LSym *s)
 		}
 		for(i=0; i<s->nr; i++) {
 			r = &s->r[i];
-			Bprint(ctxt->bso, "\trel %d+%d t=%d %s+%lld\n", (int)r->off, r->siz, r->type, r->sym->name, (vlong)r->add);
+			name = "";
+			if(r->sym != nil)
+				name = r->sym->name;
+			Bprint(ctxt->bso, "\trel %d+%d t=%d %s+%lld\n", (int)r->off, r->siz, r->type, name, (vlong)r->add);
 		}
 	}
 
@@ -337,6 +358,8 @@ writesym(Link *ctxt, Biobuf *b, LSym *s)
 	if(s->type == STEXT) {
 		wrint(b, s->args);
 		wrint(b, s->locals);
+		wrint(b, s->nosplit);
+		wrint(b, s->leaf);
 		n = 0;
 		for(a = s->autom; a != nil; a = a->link)
 			n++;
@@ -344,7 +367,12 @@ writesym(Link *ctxt, Biobuf *b, LSym *s)
 		for(a = s->autom; a != nil; a = a->link) {
 			wrsym(b, a->asym);
 			wrint(b, a->aoffset);
-			wrint(b, a->type);
+			if(a->type == ctxt->arch->D_AUTO)
+				wrint(b, A_AUTO);
+			else if(a->type == ctxt->arch->D_PARAM)
+				wrint(b, A_PARAM);
+			else
+				sysfatal("%s: invalid local variable type %d", s->name, a->type);
 			wrsym(b, a->gotype);
 		}
 
@@ -453,6 +481,8 @@ ldobjfile(Link *ctxt, Biobuf *f, char *pkg, int64 len, char *pn)
 	Bread(f, buf, sizeof buf);
 	if(memcmp(buf, startmagic, sizeof buf) != 0)
 		sysfatal("%s: invalid file start %x %x %x %x %x %x %x %x", pn, buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
+	if((c = Bgetc(f)) != 1)
+		sysfatal("%s: invalid file version number %d", pn, c);
 
 	for(;;) {
 		lib = rdstring(f);
@@ -485,7 +515,7 @@ readsym(Link *ctxt, Biobuf *f, char *pkg, char *pn)
 	static int ndup;
 	char *name;
 	Reloc *r;
-	LSym *s;
+	LSym *s, *dup;
 	Pcln *pc;
 	Auto *a;
 	
@@ -502,11 +532,14 @@ readsym(Link *ctxt, Biobuf *f, char *pkg, char *pn)
 	if(v != 0)
 		v = ctxt->version;
 	s = linklookup(ctxt, name, v);
+	dup = nil;
 	if(s->type != 0 && s->type != SXREF) {
 		if(s->type != SBSS && s->type != SNOPTRBSS && !dupok && !s->dupok)
 			sysfatal("duplicate symbol %s (types %d and %d) in %s and %s", s->name, s->type, t, s->file, pn);
-		if(s->np > 0)
-			s = linklookup(ctxt, ".dup", ndup++); // scratch
+		if(s->np > 0) {
+			dup = s;
+			s = linknewsym(ctxt, ".dup", ndup++); // scratch
+		}
 	}
 	s->file = pkg;
 	s->dupok = dupok;
@@ -537,9 +570,18 @@ readsym(Link *ctxt, Biobuf *f, char *pkg, char *pn)
 		}
 	}
 	
+	if(s->np > 0 && dup != nil && dup->np > 0 && strncmp(s->name, "gclocals·", 10) == 0) {
+		// content-addressed garbage collection liveness bitmap symbol.
+		// double check for hash collisions.
+		if(s->np != dup->np || memcmp(s->p, dup->p, s->np) != 0)
+			sysfatal("dupok hash collision for %s in %s and %s", s->name, s->file, pn);
+	}
+	
 	if(s->type == STEXT) {
 		s->args = rdint(f);
 		s->locals = rdint(f);
+		s->nosplit = rdint(f);
+		s->leaf = rdint(f);
 		n = rdint(f);
 		for(i=0; i<n; i++) {
 			a = emallocz(sizeof *a);
@@ -575,11 +617,16 @@ readsym(Link *ctxt, Biobuf *f, char *pkg, char *pn)
 		for(i=0; i<n; i++)
 			pc->file[i] = rdsym(ctxt, f, pkg);
 
-		if(ctxt->etextp)
-			ctxt->etextp->next = s;
-		else
-			ctxt->textp = s;
-		ctxt->etextp = s;
+		if(dup == nil) {
+			if(s->onlist)
+				sysfatal("symbol %s listed multiple times", s->name);
+			s->onlist = 1;
+			if(ctxt->etextp)
+				ctxt->etextp->next = s;
+			else
+				ctxt->textp = s;
+			ctxt->etextp = s;
+		}
 	}
 
 	if(ctxt->debugasm) {
@@ -590,6 +637,8 @@ readsym(Link *ctxt, Biobuf *f, char *pkg, char *pn)
 			Bprint(ctxt->bso, "t=%d ", s->type);
 		if(s->dupok)
 			Bprint(ctxt->bso, "dupok ");
+		if(s->nosplit)
+			Bprint(ctxt->bso, "nosplit ");
 		Bprint(ctxt->bso, "size=%lld value=%lld", (vlong)s->size, (vlong)s->value);
 		if(s->type == STEXT)
 			Bprint(ctxt->bso, " args=%#llux locals=%#llux", (uvlong)s->args, (uvlong)s->locals);

@@ -102,15 +102,26 @@ func (b *Reader) fill() {
 		b.r = 0
 	}
 
-	// Read new data.
-	n, err := b.rd.Read(b.buf[b.w:])
-	if n < 0 {
-		panic(errNegativeRead)
+	if b.w >= len(b.buf) {
+		panic("bufio: tried to fill full buffer")
 	}
-	b.w += n
-	if err != nil {
-		b.err = err
+
+	// Read new data: try a limited number of times.
+	for i := maxConsecutiveEmptyReads; i > 0; i-- {
+		n, err := b.rd.Read(b.buf[b.w:])
+		if n < 0 {
+			panic(errNegativeRead)
+		}
+		b.w += n
+		if err != nil {
+			b.err = err
+			return
+		}
+		if n > 0 {
+			return
+		}
 	}
+	b.err = io.ErrNoProgress
 }
 
 func (b *Reader) readErr() error {
@@ -133,8 +144,9 @@ func (b *Reader) Peek(n int) ([]byte, error) {
 	if n > len(b.buf) {
 		return nil, ErrBufferFull
 	}
+	// 0 <= n <= len(b.buf)
 	for b.w-b.r < n && b.err == nil {
-		b.fill()
+		b.fill() // b.w-b.r < len(b.buf) => buffer is not full
 	}
 	m := b.w - b.r
 	if m > n {
@@ -165,7 +177,7 @@ func (b *Reader) Read(p []byte) (n int, err error) {
 	if n == 0 {
 		return 0, b.readErr()
 	}
-	if b.w == b.r {
+	if b.r == b.w {
 		if b.err != nil {
 			return 0, b.readErr()
 		}
@@ -173,13 +185,16 @@ func (b *Reader) Read(p []byte) (n int, err error) {
 			// Large read, empty buffer.
 			// Read directly into p to avoid copy.
 			n, b.err = b.rd.Read(p)
+			if n < 0 {
+				panic(errNegativeRead)
+			}
 			if n > 0 {
 				b.lastByte = int(p[n-1])
 				b.lastRuneSize = -1
 			}
 			return n, b.readErr()
 		}
-		b.fill()
+		b.fill() // buffer is empty
 		if b.w == b.r {
 			return 0, b.readErr()
 		}
@@ -202,11 +217,11 @@ func (b *Reader) Read(p []byte) (n int, err error) {
 // 如果没有字节可以读取，返回一个error。
 func (b *Reader) ReadByte() (c byte, err error) {
 	b.lastRuneSize = -1
-	for b.w == b.r {
+	for b.r == b.w {
 		if b.err != nil {
 			return 0, b.readErr()
 		}
-		b.fill()
+		b.fill() // buffer is empty
 	}
 	c = b.buf[b.r]
 	b.r++
@@ -218,19 +233,19 @@ func (b *Reader) ReadByte() (c byte, err error) {
 
 // UnreadByte将最后的字节标志为未读。只有最后的字节才可以被标志为未读。
 func (b *Reader) UnreadByte() error {
-	b.lastRuneSize = -1
-	if b.r == b.w && b.lastByte >= 0 {
-		b.w = 1
-		b.r = 0
-		b.buf[0] = byte(b.lastByte)
-		b.lastByte = -1
-		return nil
-	}
-	if b.r <= 0 {
+	if b.lastByte < 0 || b.r == 0 && b.w > 0 {
 		return ErrInvalidUnreadByte
 	}
-	b.r--
+	// b.r > 0 || b.w == 0
+	if b.r > 0 {
+		b.r--
+	} else {
+		// b.r == 0 && b.w == 0
+		b.w = 1
+	}
+	b.buf[b.r] = byte(b.lastByte)
 	b.lastByte = -1
+	b.lastRuneSize = -1
 	return nil
 }
 
@@ -241,8 +256,8 @@ func (b *Reader) UnreadByte() error {
 // ReadRune读取单个的UTF-8编码的Unicode字节，并且返回rune和它的字节大小。
 // 如果编码的rune是可见的，它消耗一个字节并且返回1字节的unicode.ReplacementChar (U+FFFD)。
 func (b *Reader) ReadRune() (r rune, size int, err error) {
-	for b.r+utf8.UTFMax > b.w && !utf8.FullRune(b.buf[b.r:b.w]) && b.err == nil {
-		b.fill()
+	for b.r+utf8.UTFMax > b.w && !utf8.FullRune(b.buf[b.r:b.w]) && b.err == nil && b.w-b.r < len(b.buf) {
+		b.fill() // b.w-b.r < len(buf) => buffer is not full
 	}
 	b.lastRuneSize = -1
 	if b.r == b.w {
@@ -267,7 +282,7 @@ func (b *Reader) ReadRune() (r rune, size int, err error) {
 // 就返回一个error。（在这个角度上看，这个函数比UnreadByte更严格，UnreadByte会将最后一个读取
 // 的byte设置为未读。）
 func (b *Reader) UnreadRune() error {
-	if b.lastRuneSize < 0 || b.r == 0 {
+	if b.lastRuneSize < 0 || b.r < b.lastRuneSize {
 		return ErrInvalidUnreadRune
 	}
 	b.r -= b.lastRuneSize
@@ -299,37 +314,39 @@ func (b *Reader) Buffered() int { return b.w - b.r }
 // 由于ReadSlice返回的数据会被下次的I/O操作重写，因此许多的客户端会选择使用ReadBytes或者ReadString代替。
 // 当且仅当数据没有以终止符结束的时候，ReadSlice返回err != nil
 func (b *Reader) ReadSlice(delim byte) (line []byte, err error) {
-	// Look in buffer.
-	if i := bytes.IndexByte(b.buf[b.r:b.w], delim); i >= 0 {
-		line1 := b.buf[b.r : b.r+i+1]
-		b.r += i + 1
-		return line1, nil
-	}
-
-	// Read more into buffer, until buffer fills or we find delim.
 	for {
+		// Search buffer.
+		if i := bytes.IndexByte(b.buf[b.r:b.w], delim); i >= 0 {
+			line = b.buf[b.r : b.r+i+1]
+			b.r += i + 1
+			break
+		}
+
+		// Pending error?
 		if b.err != nil {
-			line := b.buf[b.r:b.w]
+			line = b.buf[b.r:b.w]
 			b.r = b.w
-			return line, b.readErr()
+			err = b.readErr()
+			break
 		}
 
-		n := b.Buffered()
-		b.fill()
-
-		// Search new part of buffer
-		if i := bytes.IndexByte(b.buf[n:b.w], delim); i >= 0 {
-			line := b.buf[0 : n+i+1]
-			b.r = n + i + 1
-			return line, nil
-		}
-
-		// Buffer is full?
-		if b.Buffered() >= len(b.buf) {
+		// Buffer full?
+		if n := b.Buffered(); n >= len(b.buf) {
 			b.r = b.w
-			return b.buf, ErrBufferFull
+			line = b.buf
+			err = ErrBufferFull
+			break
 		}
+
+		b.fill() // buffer is not full
 	}
+
+	// Handle last byte, if any.
+	if i := len(line) - 1; i >= 0 {
+		b.lastByte = int(line[i])
+	}
+
+	return
 }
 
 // ReadLine is a low-level line-reading primitive. Most callers should use
@@ -345,6 +362,9 @@ func (b *Reader) ReadSlice(delim byte) (line []byte, err error) {
 //
 // The text returned from ReadLine does not include the line end ("\r\n" or "\n").
 // No indication or error is given if the input ends without a final line end.
+// Calling UnreadByte after ReadLine will always unread the last byte read
+// (possibly a character belonging to the line end) even if that byte is not
+// part of the line returned by ReadLine.
 
 // ReadLine是一个底层的原始读取命令。许多调用者或许会使用ReadBytes('\n')或者ReadString('\n')来代替这个方法。
 //
@@ -354,7 +374,8 @@ func (b *Reader) ReadSlice(delim byte) (line []byte, err error) {
 // 但是不会两者都返回。
 //
 // ReadLine返回的文本不会包含行结尾（"\r\n"或者"\n"）。如果输入没有最终的行结尾的时候，不会返回
-// 任何迹象或者错误。
+// 任何迹象或者错误。在 ReadLine 之后调用 UnreadByte 将总是放回读取的最后一个字节
+// （可能是属于该行末的字符），即便该字节并非 ReadLine 返回的行的一部分。
 func (b *Reader) ReadLine() (line []byte, isPrefix bool, err error) {
 	line, err = b.ReadSlice('\n')
 	if err == ErrBufferFull {
@@ -482,12 +503,18 @@ func (b *Reader) WriteTo(w io.Writer) (n int64, err error) {
 		return n, err
 	}
 
-	for b.fill(); b.r < b.w; b.fill() {
+	if b.w-b.r < len(b.buf) {
+		b.fill() // buffer not full
+	}
+
+	for b.r < b.w {
+		// b.r < b.w => buffer is not empty
 		m, err := b.writeBuf(w)
 		n += m
 		if err != nil {
 			return n, err
 		}
+		b.fill() // buffer is empty
 	}
 
 	if b.err == io.EOF {
@@ -502,6 +529,9 @@ func (b *Reader) WriteTo(w io.Writer) (n int64, err error) {
 // writeBuf将Reader的缓存写到writer中。
 func (b *Reader) writeBuf(w io.Writer) (int64, error) {
 	n, err := w.Write(b.buf[b.r:b.w])
+	if n < b.r-b.w {
+		panic(errors.New("bufio: writer did not write all data"))
+	}
 	b.r += n
 	return int64(n), err
 }

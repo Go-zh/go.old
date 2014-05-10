@@ -601,24 +601,9 @@ ldelf(Biobuf *f, char *pkg, int64 len, char *pn)
 		s->size = sym.size;
 		s->outer = sect->sym;
 		if(sect->sym->type == STEXT) {
-			Prog *p;
-
-			if(s->text != P) {
-				if(!s->dupok)
+			if(s->external && !s->dupok)
 					diag("%s: duplicate definition of %s", pn, s->name);
-			} else {
-				// build a TEXT instruction with a unique pc
-				// just to make the rest of the linker happy.
-				p = ctxt->arch->prg();
-				p->as = ATEXT;
-				p->from.type = D_EXTERN;
-				p->from.sym = s;
-				ctxt->arch->settextflag(p, 7);
-				p->to.type = D_CONST;
-				p->link = nil;
-				p->pc = ctxt->pc++;
-				s->text = p;
-			}
+			s->external = 1;
 		}
 	}
 	
@@ -631,12 +616,18 @@ ldelf(Biobuf *f, char *pkg, int64 len, char *pn)
 		if(s->sub)
 			s->sub = listsort(s->sub, valuecmp, offsetof(LSym, sub));
 		if(s->type == STEXT) {
+			if(s->onlist)
+				sysfatal("symbol %s listed multiple times", s->name);
+			s->onlist = 1;
 			if(ctxt->etextp)
 				ctxt->etextp->next = s;
 			else
 				ctxt->textp = s;
 			ctxt->etextp = s;
 			for(s = s->sub; s != S; s = s->sub) {
+				if(s->onlist)
+					sysfatal("symbol %s listed multiple times", s->name);
+				s->onlist = 1;
 				ctxt->etextp->next = s;
 				ctxt->etextp = s;
 			}

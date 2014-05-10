@@ -123,9 +123,6 @@ func TestStackMem(t *testing.T) {
 
 // Test stack growing in different contexts.
 func TestStackGrowth(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode")
-	}
 	t.Parallel()
 	var wg sync.WaitGroup
 
@@ -135,6 +132,7 @@ func TestStackGrowth(t *testing.T) {
 		defer wg.Done()
 		growStack()
 	}()
+	wg.Wait()
 
 	// in locked goroutine
 	wg.Add(1)
@@ -144,6 +142,7 @@ func TestStackGrowth(t *testing.T) {
 		growStack()
 		UnlockOSThread()
 	}()
+	wg.Wait()
 
 	// in finalizer
 	wg.Add(1)
@@ -153,6 +152,7 @@ func TestStackGrowth(t *testing.T) {
 		go func() {
 			s := new(string)
 			SetFinalizer(s, func(ss *string) {
+				growStack()
 				done <- true
 			})
 			s = nil
@@ -162,21 +162,24 @@ func TestStackGrowth(t *testing.T) {
 		GC()
 		select {
 		case <-done:
-		case <-time.After(4 * time.Second):
+		case <-time.After(20 * time.Second):
 			t.Fatal("finalizer did not run")
 		}
 	}()
-
 	wg.Wait()
 }
 
 // ... and in init
-func init() {
-	growStack()
-}
+//func init() {
+//	growStack()
+//}
 
 func growStack() {
-	for i := 0; i < 1<<10; i++ {
+	n := 1 << 10
+	if testing.Short() {
+		n = 1 << 8
+	}
+	for i := 0; i < n; i++ {
 		x := 0
 		growStackIter(&x, i)
 		if x != i+1 {
@@ -256,4 +259,21 @@ func growStackWithCallback(cb func()) {
 	for i := 0; i < 1<<10; i++ {
 		f(i)
 	}
+}
+
+// TestDeferPtrs tests the adjustment of Defer's argument pointers (p aka &y)
+// during a stack copy.
+func set(p *int, x int) {
+	*p = x
+}
+func TestDeferPtrs(t *testing.T) {
+	var y int
+
+	defer func() {
+		if y != 42 {
+			t.Errorf("defer's stack references were not adjusted appropriately")
+		}
+	}()
+	defer set(&y, 42)
+	growStack()
 }

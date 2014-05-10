@@ -95,6 +95,10 @@ linknew(LinkArch *arch)
 	ctxt = emallocz(sizeof *ctxt);
 	ctxt->arch = arch;
 	ctxt->version = HistVersion;
+	ctxt->goroot = getgoroot();
+	ctxt->goroot_final = getenv("GOROOT_FINAL");
+	if(ctxt->goroot_final != nil && ctxt->goroot_final[0] == '\0')
+		ctxt->goroot_final = nil;
 
 	p = getgoarch();
 	if(strcmp(p, arch->name) != 0)
@@ -118,6 +122,7 @@ linknew(LinkArch *arch)
 		sysfatal("unknown goos %s", getgoos());
 	
 	// Record thread-local storage offset.
+	// TODO(rsc): Move tlsoffset back into the linker.
 	switch(ctxt->headtype) {
 	default:
 		sysfatal("unknown thread-local storage offset for %s", headstr(ctxt->headtype));
@@ -227,7 +232,7 @@ _lookup(Link *ctxt, char *symb, int v, int creat)
 	h &= 0xffffff;
 	h %= LINKHASH;
 	for(s = ctxt->hash[h]; s != nil; s = s->hash)
-		if(strcmp(s->name, symb) == 0)
+		if(s->version == v && strcmp(s->name, symb) == 0)
 			return s;
 	if(!creat)
 		return nil;

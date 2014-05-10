@@ -37,6 +37,9 @@
 #include	"../../pkg/runtime/funcdata.h"
 
 #include	<ar.h>
+#if !(defined(_WIN32) || defined(PLAN9))
+#include	<sys/stat.h>
+#endif
 
 enum
 {
@@ -80,6 +83,23 @@ Lflag(char *arg)
 	ctxt->libdir[ctxt->nlibdir++] = arg;
 }
 
+/*
+ * Unix doesn't like it when we write to a running (or, sometimes,
+ * recently run) binary, so remove the output file before writing it.
+ * On Windows 7, remove() can force a subsequent create() to fail.
+ * S_ISREG() does not exist on Plan 9.
+ */
+static void
+mayberemoveoutfile(void) 
+{
+#if !(defined(_WIN32) || defined(PLAN9))
+	struct stat st;
+	if(lstat(outfile, &st) == 0 && !S_ISREG(st.st_mode))
+		return;
+#endif
+	remove(outfile);
+}
+
 void
 libinit(void)
 {
@@ -103,12 +123,7 @@ libinit(void)
 	}
 	Lflag(smprint("%s/pkg/%s_%s%s%s", goroot, goos, goarch, suffixsep, suffix));
 
-	// Unix doesn't like it when we write to a running (or, sometimes,
-	// recently run) binary, so remove the output file before writing it.
-	// On Windows 7, remove() can force the following create() to fail.
-#ifndef _WIN32
-	remove(outfile);
-#endif
+	mayberemoveoutfile();
 	cout = create(outfile, 1, 0775);
 	if(cout < 0) {
 		diag("cannot create %s: %r", outfile);
@@ -131,7 +146,7 @@ errorexit(void)
 {
 	if(nerrors) {
 		if(cout >= 0)
-			remove(outfile);
+			mayberemoveoutfile();
 		exits("error");
 	}
 	exits(0);
@@ -232,6 +247,7 @@ loadlib(void)
 	gmsym->size = 2*PtrSize;
 	gmsym->hide = 1;
 	gmsym->reachable = 1;
+	ctxt->gmsym = gmsym;
 
 	// Now that we know the link mode, trim the dynexp list.
 	x = CgoExportDynamic;
@@ -554,7 +570,7 @@ hostlink(void)
 		p = strchr(p + 1, ' ');
 	}
 
-	argv = malloc((13+nhostobj+nldflag+c)*sizeof argv[0]);
+	argv = malloc((14+nhostobj+nldflag+c)*sizeof argv[0]);
 	argc = 0;
 	if(extld == nil)
 		extld = "gcc";
@@ -596,6 +612,9 @@ hostlink(void)
 	// Force global symbols to be exported for dlopen, etc.
 	if(iself)
 		argv[argc++] = "-rdynamic";
+
+	if(strstr(argv[0], "clang") != nil)
+		argv[argc++] = "-Qunused-arguments";
 
 	// already wrote main object file
 	// copy host objects to temporary directory
@@ -642,6 +661,20 @@ hostlink(void)
 		if(*p == '\0')
 			break;
 		argv[argc++] = p;
+
+		// clang, unlike GCC, passes -rdynamic to the linker
+		// even when linking with -static, causing a linker
+		// error when using GNU ld.  So take out -rdynamic if
+		// we added it.  We do it in this order, rather than
+		// only adding -rdynamic later, so that -extldflags
+		// can override -rdynamic without using -static.
+		if(iself && strncmp(p, "-static", 7) == 0 && (p[7]==' ' || p[7]=='\0')) {
+			for(i=0; i<argc; i++) {
+				if(strcmp(argv[i], "-rdynamic") == 0)
+					argv[i] = "-static";
+			}
+		}
+
 		p = strchr(p + 1, ' ');
 	}
 
@@ -1009,50 +1042,59 @@ dostkcheck(void)
 	morestack = linklookup(ctxt, "runtime.morestack", 0);
 	newstack = linklookup(ctxt, "runtime.newstack", 0);
 
-	// TODO
-	// First the nosplits on their own.
+	// Every splitting function ensures that there are at least StackLimit
+	// bytes available below SP when the splitting prologue finishes.
+	// If the splitting function calls F, then F begins execution with
+	// at least StackLimit - callsize() bytes available.
+	// Check that every function behaves correctly with this amount
+	// of stack, following direct calls in order to piece together chains
+	// of non-splitting functions.
+	ch.up = nil;
+	ch.limit = StackLimit - callsize();
+
+	// Check every function, but do the nosplit functions in a first pass,
+	// to make the printed failure chains as short as possible.
 	for(s = ctxt->textp; s != nil; s = s->next) {
-		if(s->text == nil || s->text->link == nil || (ctxt->arch->textflag(s->text) & NOSPLIT) == 0)
+		// runtime.racesymbolizethunk is called from gcc-compiled C
+		// code running on the operating system thread stack.
+		// It uses more than the usual amount of stack but that's okay.
+		if(strcmp(s->name, "runtime.racesymbolizethunk") == 0)
 			continue;
+
+		if(s->nosplit) {
 		ctxt->cursym = s;
-		ch.up = nil;
 		ch.sym = s;
-		ch.limit = StackLimit - callsize();
-		stkcheck(&ch, 0);
-		s->stkcheck = 1;
-	}
-	
-	// Check calling contexts.
-	// Some nosplits get called a little further down,
-	// like newproc and deferproc.	We could hard-code
-	// that knowledge but it's more robust to look at
-	// the actual call sites.
-	for(s = ctxt->textp; s != nil; s = s->next) {
-		if(s->text == nil || s->text->link == nil || (ctxt->arch->textflag(s->text) & NOSPLIT) != 0)
-			continue;
-		ctxt->cursym = s;
-		ch.up = nil;
-		ch.sym = s;
-		ch.limit = StackLimit - callsize();
 		stkcheck(&ch, 0);
 	}
+	}
+	for(s = ctxt->textp; s != nil; s = s->next) {
+		if(!s->nosplit) {
+		ctxt->cursym = s;
+		ch.sym = s;
+		stkcheck(&ch, 0);
+	}
+}
 }
 
 static int
 stkcheck(Chain *up, int depth)
 {
 	Chain ch, ch1;
-	Prog *p;
 	LSym *s;
-	int limit, prolog;
+	int limit;
+	Reloc *r, *endr;
+	Pciter pcsp;
 	
 	limit = up->limit;
 	s = up->sym;
-	p = s->text;
 	
-	// Small optimization: don't repeat work at top.
-	if(s->stkcheck && limit == StackLimit-callsize())
+	// Don't duplicate work: only need to consider each
+	// function at top of safe zone once.
+	if(limit == StackLimit-callsize()) {
+		if(s->stkcheck)
 		return 0;
+		s->stkcheck = 1;
+	}
 	
 	if(depth > 100) {
 		diag("nosplit stack check too deep");
@@ -1060,7 +1102,7 @@ stkcheck(Chain *up, int depth)
 		return -1;
 	}
 
-	if(p == nil || p->link == nil) {
+	if(s->external || s->pcln == nil) {
 		// external function.
 		// should never be called directly.
 		// only diagnose the direct caller.
@@ -1080,50 +1122,56 @@ stkcheck(Chain *up, int depth)
 		return 0;
 
 	ch.up = up;
-	prolog = (ctxt->arch->textflag(s->text) & NOSPLIT) == 0;
-	for(p = s->text; p != P; p = p->link) {
-		limit -= p->spadj;
-		if(prolog && p->spadj != 0) {
-			// The first stack adjustment in a function with a
-			// split-checking prologue marks the end of the
-			// prologue.  Assuming the split check is correct,
-			// after the adjustment there should still be at least
-			// StackLimit bytes available below the stack pointer.
-			// If this is not the top call in the chain, no need
-			// to duplicate effort, so just stop.
-			if(depth > 0)
-				return 0;
-			prolog = 0;
-			limit = StackLimit;
-		}
-		if(limit < 0) {
-			stkbroke(up, limit);
+	
+	// Walk through sp adjustments in function, consuming relocs.
+	r = s->r;
+	endr = r + s->nr;
+	for(pciterinit(ctxt, &pcsp, &s->pcln->pcsp); !pcsp.done; pciternext(&pcsp)) {
+		// pcsp.value is in effect for [pcsp.pc, pcsp.nextpc).
+
+		// Check stack size in effect for this span.
+		if(limit - pcsp.value < 0) {
+			stkbroke(up, limit - pcsp.value);
 			return -1;
 		}
-		if(ctxt->arch->iscall(p)) {
-			limit -= callsize();
-			ch.limit = limit;
-			if(p->to.type == D_BRANCH) {
+
+		// Process calls in this span.
+		for(; r < endr && r->off < pcsp.nextpc; r++) {
+			switch(r->type) {
+			case R_CALL:
+			case R_CALLARM:
 				// Direct call.
-				ch.sym = p->to.sym;
+				ch.limit = limit - pcsp.value - callsize();
+				ch.sym = r->sym;
 				if(stkcheck(&ch, depth+1) < 0)
 					return -1;
-			} else {
-				// Indirect call.  Assume it is a splitting function,
+
+				// If this is a call to morestack, we've just raised our limit back
+				// to StackLimit beyond the frame size.
+				if(strncmp(r->sym->name, "runtime.morestack", 17) == 0) {
+					limit = StackLimit + s->locals;
+					if(thechar == '5')
+						limit += 4; // saved LR
+				}
+				break;
+
+			case R_CALLIND:
+				// Indirect call.  Assume it is a call to a splitting function,
 				// so we have to make sure it can call morestack.
-				limit -= callsize();
+				// Arrange the data structures to report both calls, so that
+				// if there is an error, stkprint shows all the steps involved.
+				ch.limit = limit - pcsp.value - callsize();
 				ch.sym = nil;
-				ch1.limit = limit;
+				ch1.limit = ch.limit - callsize(); // for morestack in called prologue
 				ch1.up = &ch;
 				ch1.sym = morestack;
 				if(stkcheck(&ch1, depth+2) < 0)
 					return -1;
-				limit += callsize();
+				break;
 			}
-			limit += callsize();
+		}
 		}
 		
-	}
 	return 0;
 }
 
@@ -1146,7 +1194,7 @@ stkprint(Chain *ch, int limit)
 
 	if(ch->up == nil) {
 		// top of chain.  ch->sym != nil.
-		if(ctxt->arch->textflag(ch->sym->text) & NOSPLIT)
+		if(ch->sym->nosplit)
 			print("\t%d\tassumed on entry to %s\n", ch->limit, name);
 		else
 			print("\t%d\tguaranteed after split check in %s\n", ch->limit, name);
@@ -1347,11 +1395,11 @@ genasmsym(void (*put)(LSym*, char*, int, vlong, vlong, int, LSym*))
 		for(a=s->autom; a; a=a->link) {
 			// Emit a or p according to actual offset, even if label is wrong.
 			// This avoids negative offsets, which cannot be encoded.
-			if(a->type != D_AUTO && a->type != D_PARAM)
+			if(a->type != A_AUTO && a->type != A_PARAM)
 				continue;
 			
 			// compute offset relative to FP
-			if(a->type == D_PARAM)
+			if(a->type == A_PARAM)
 				off = a->aoffset;
 			else
 				off = a->aoffset - PtrSize;
@@ -1454,6 +1502,27 @@ undef(void)
 		undefsym(s);
 	if(nerrors > 0)
 		errorexit();
+}
+
+void
+callgraph(void)
+{
+	LSym *s;
+	Reloc *r;
+	int i;
+
+	if(!debug['c'])
+		return;
+
+	for(s = ctxt->textp; s != nil; s = s->next) {
+		for(i=0; i<s->nr; i++) {
+			r = &s->r[i];
+			if(r->sym == nil)
+				continue;
+			if((r->type == R_CALL || r->type == R_CALLARM) && r->sym->type == STEXT)
+				Bprint(&bso, "%s calls %s\n", s->name, r->sym->name);
+		}
+	}
 }
 
 void

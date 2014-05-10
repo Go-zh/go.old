@@ -135,7 +135,7 @@ type SymID struct {
 
 	// Version is zero for symbols with global visibility.
 	// Symbols with only file visibility (such as file-level static
-	// declarations in C) have a non-zero version distinguising
+	// declarations in C) have a non-zero version distinguishing
 	// a symbol in one file from a symbol of the same name
 	// in another file
 	Version int
@@ -188,8 +188,10 @@ type Var struct {
 
 // Func contains additional per-symbol information specific to functions.
 type Func struct {
-	Args     int        // size in bytes of of argument frame: inputs and outputs
+	Args     int        // size in bytes of argument frame: inputs and outputs
 	Frame    int        // size in bytes of local variable frame
+	Leaf     bool       // function omits save of link register (ARM)
+	NoSplit  bool       // function omits stack split prologue
 	Var      []Var      // detail about local variables
 	PCSP     Data       // PC → SP offset map
 	PCFile   Data       // PC → file number map (index into File)
@@ -573,6 +575,11 @@ func (r *objReader) parseObject(prefix []byte) error {
 		return r.error(errCorruptObject)
 	}
 
+	b := r.readByte()
+	if b != 1 {
+		return r.error(errCorruptObject)
+	}
+
 	// Direct package dependencies.
 	for {
 		s := r.readString()
@@ -616,6 +623,8 @@ func (r *objReader) parseObject(prefix []byte) error {
 			s.Func = f
 			f.Args = r.readInt()
 			f.Frame = r.readInt()
+			f.Leaf = r.readInt() != 0
+			f.NoSplit = r.readInt() != 0
 			f.Var = make([]Var, r.readInt())
 			for i := range f.Var {
 				v := &f.Var[i]

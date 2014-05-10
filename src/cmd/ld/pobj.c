@@ -143,7 +143,6 @@ main(int argc, char *argv[])
 		headstring = headstr(HEADTYPE);
 
 	archinit();
-	ctxt->linkmode = linkmode;
 	ctxt->debugfloat = debug['F'];
 
 	if(debug['v'])
@@ -165,6 +164,7 @@ main(int argc, char *argv[])
 	}
 
 	deadcode();
+	callgraph();
 	paramspace = "SP";	/* (FP) now (SP) on output */
 
 	doelf();
@@ -189,6 +189,7 @@ main(int argc, char *argv[])
 		Bprint(&bso, "%d symbols\n", ctxt->nsymbol);
 		Bprint(&bso, "%d sizeof adr\n", sizeof(Addr));
 		Bprint(&bso, "%d sizeof prog\n", sizeof(Prog));
+		Bprint(&bso, "%lld liveness data\n", liveness);
 	}
 	Bflush(&bso);
 

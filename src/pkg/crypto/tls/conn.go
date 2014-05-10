@@ -82,7 +82,7 @@ func (c *Conn) SetReadDeadline(t time.Time) error {
 	return c.conn.SetReadDeadline(t)
 }
 
-// SetWriteDeadline sets the write deadline on the underlying conneciton.
+// SetWriteDeadline sets the write deadline on the underlying connection.
 // A zero value for t means Write will not time out.
 // After a Write has timed out, the TLS state is corrupt and all future writes will return the same error.
 func (c *Conn) SetWriteDeadline(t time.Time) error {
@@ -882,6 +882,11 @@ func (c *Conn) Write(b []byte) (int, error) {
 // after a fixed time limit; see SetDeadline and SetReadDeadline.
 func (c *Conn) Read(b []byte) (n int, err error) {
 	if err = c.Handshake(); err != nil {
+		return
+	}
+	if len(b) == 0 {
+		// Put this after Handshake, in case people were calling
+		// Read(nil) for the side effect of the Handshake.
 		return
 	}
 

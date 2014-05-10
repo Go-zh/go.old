@@ -276,7 +276,6 @@ var (
 	testCoverPkgs    []*Package // -coverpkg flag
 	testProfile      bool       // some profiling flag
 	testNeedBinary   bool       // profile needs to keep binary around
-	testI            bool       // -i flag
 	testV            bool       // -v flag
 	testFiles        []string   // -file flag(s)  TODO: not respected
 	testTimeout      string     // -timeout flag
@@ -339,7 +338,7 @@ func runTest(cmd *Command, args []string) {
 	var b builder
 	b.init()
 
-	if testI {
+	if buildI {
 		buildV = testV
 
 		deps := make(map[string]bool)
@@ -419,6 +418,7 @@ func runTest(cmd *Command, args []string) {
 			var coverFiles []string
 			coverFiles = append(coverFiles, p.GoFiles...)
 			coverFiles = append(coverFiles, p.CgoFiles...)
+			coverFiles = append(coverFiles, p.TestGoFiles...)
 			p.coverVars = declareCoverVars(p.ImportPath, coverFiles...)
 		}
 	}
@@ -524,7 +524,7 @@ func contains(x []string, s string) bool {
 
 func (b *builder) test(p *Package) (buildAction, runAction, printAction *action, err error) {
 	if len(p.TestGoFiles)+len(p.XTestGoFiles) == 0 {
-		build := &action{p: p}
+		build := b.action(modeBuild, modeBuild, p)
 		run := &action{p: p, deps: []*action{build}}
 		print := &action{f: (*builder).notest, p: p, deps: []*action{run}}
 		return build, run, print, nil
@@ -677,7 +677,7 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 	stk.push("testmain")
 	for dep := range testMainDeps {
 		if ptest.ImportPath != dep {
-			p1 := loadImport("testing", "", &stk, nil)
+			p1 := loadImport(dep, "", &stk, nil)
 			if p1.Error != nil {
 				return nil, nil, nil, p1.Error
 			}

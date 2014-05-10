@@ -8,6 +8,13 @@ package main
 
 var x int
 
+<<<<<<< local
 var a = []int{x: 1}    // ERROR "constant"
 var b = [...]int{x: 1} // ERROR "constant"
 var c = map[int]int{x: 1}
+=======
+var a = []int{ x: 1}	// ERROR "constant"
+var b = [...]int{x: 1}
+var c = map[int]int{ x: 1}
+
+>>>>>>> other

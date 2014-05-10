@@ -269,7 +269,7 @@ TEXT runtime·newstackcall(SB), NOSPLIT, $-4-12
 	MOVW	$runtime·NAME(SB), R1;	\
 	B	(R1)
 
-TEXT reflect·call(SB), NOSPLIT, $-4-12
+TEXT reflect·call(SB), NOSPLIT, $-4-16
 	MOVW	argsize+8(FP), R0
 	DISPATCH(call16, 16)
 	DISPATCH(call32, 32)
@@ -302,7 +302,7 @@ TEXT reflect·call(SB), NOSPLIT, $-4-12
 	B	(R1)
 
 #define CALLFN(NAME,MAXSIZE)			\
-TEXT runtime·NAME(SB), WRAPPER, $MAXSIZE-12;		\
+TEXT runtime·NAME(SB), WRAPPER, $MAXSIZE-16;	\
 	/* copy arguments to stack */		\
 	MOVW	argptr+4(FP), R0;		\
 	MOVW	argsize+8(FP), R2;		\
@@ -320,7 +320,11 @@ TEXT runtime·NAME(SB), WRAPPER, $MAXSIZE-12;		\
 	/* copy return values back */		\
 	MOVW	argptr+4(FP), R0;		\
 	MOVW	argsize+8(FP), R2;		\
+	MOVW	retoffset+12(FP), R3;		\
 	ADD	$4, SP, R1;			\
+	ADD	R3, R1;				\
+	ADD	R3, R0;				\
+	SUB	R3, R2;				\
 	CMP	$0, R2;				\
 	RET.EQ	;				\
 	MOVBU.P	1(R1), R5;			\
@@ -742,4 +746,415 @@ _sib_loop:
 _sib_notfound:
 	MOVW	$-1, R0
 	MOVW	R0, ret+12(FP)
+	RET
+
+TEXT runtime·timenow(SB), NOSPLIT, $0-0
+	B	time·now(SB)
+
+// A Duff's device for zeroing memory.
+// The compiler jumps to computed addresses within
+// this routine to zero chunks of memory.  Do not
+// change this code without also changing the code
+// in ../../cmd/5g/ggen.c:clearfat.
+// R0: zero
+// R1: ptr to memory to be zeroed
+// R1 is updated as a side effect.
+TEXT runtime·duffzero(SB), NOSPLIT, $0-0
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	MOVW.P	R0, 4(R1)
+	RET
+
+// A Duff's device for copying memory.
+// The compiler jumps to computed addresses within
+// this routine to copy chunks of memory.  Source
+// and destination must not overlap.  Do not
+// change this code without also changing the code
+// in ../../cmd/5g/cgen.c:sgen.
+// R0: scratch space
+// R1: ptr to source memory
+// R2: ptr to destination memory
+// R1 and R2 are updated as a side effect
+TEXT runtime·duffcopy(SB), NOSPLIT, $0-0
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
+	MOVW.P	4(R1), R0
+	MOVW.P	R0, 4(R2)
 	RET

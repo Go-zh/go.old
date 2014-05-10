@@ -283,6 +283,8 @@ runtime·semasleep(int64 ns)
 
 	if(ns >= 0) {
 		ms = runtime·timediv(ns, 1000000, nil);
+		if(ms == 0)
+			ms = 1;
 		ret = runtime·plan9_tsemacquire(&m->waitsemacount, ms);
 		if(ret == 1)
 			return 0;  // success
@@ -351,6 +353,9 @@ void
 runtime·sigpanic(void)
 {
 	byte *p;
+
+	if(!runtime·canpanic(g))
+		runtime·throw("unexpected signal during runtime execution");
 
 	switch(g->sig) {
 	case SIGRFAULT:

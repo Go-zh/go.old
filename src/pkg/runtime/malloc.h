@@ -551,6 +551,9 @@ void	runtime·unmarkspan(void *v, uintptr size);
 void	runtime·purgecachedstats(MCache*);
 void*	runtime·cnew(Type*);
 void*	runtime·cnewarray(Type*, intgo);
+void	runtime·tracealloc(void*, uintptr, uintptr);
+void	runtime·tracefree(void*, uintptr);
+void	runtime·tracegc(void);
 
 uintptr	runtime·gettype(void*);
 
@@ -564,10 +567,10 @@ enum
 	FlagNoInvokeGC	= 1<<4, // don't invoke GC
 };
 
-void	runtime·MProf_Malloc(void*, uintptr, uintptr);
-void	runtime·MProf_Free(Bucket*, void*, uintptr, bool);
+void	runtime·MProf_Malloc(void*, uintptr);
+void	runtime·MProf_Free(Bucket*, uintptr, bool);
 void	runtime·MProf_GC(void);
-void	runtime·MProf_TraceGC(void);
+void	runtime·iterate_memprof(void (*callback)(Bucket*, uintptr, uintptr*, uintptr, uintptr, uintptr));
 int32	runtime·gcprocs(void);
 void	runtime·helpgc(int32 nproc);
 void	runtime·gchelper(void);
@@ -600,12 +603,13 @@ typedef struct BitVector BitVector;
 struct BitVector
 {
 	int32 n; // # of bits
-	uint32 data[];
+	uint32 *data;
 };
 typedef struct StackMap StackMap;
 struct StackMap
 {
-	int32 n;
+	int32 n; // number of bitmaps
+	int32 nbit; // number of bits in each bitmap
 	uint32 data[];
 };
 enum {
@@ -624,11 +628,16 @@ enum {
 };
 // Returns pointer map data for the given stackmap index
 // (the index is encoded in PCDATA_StackMapIndex).
-BitVector*	runtime·stackmapdata(StackMap *stackmap, int32 n);
+BitVector	runtime·stackmapdata(StackMap *stackmap, int32 n);
 
 // defined in mgc0.go
 void	runtime·gc_m_ptr(Eface*);
+void	runtime·gc_g_ptr(Eface*);
 void	runtime·gc_itab_ptr(Eface*);
 
 void	runtime·memorydump(void);
 int32	runtime·setgcpercent(int32);
+
+// Value we use to mark dead pointers when GODEBUG=gcdead=1.
+#define PoisonGC ((uintptr)0xf969696969696969ULL)
+#define PoisonStack ((uintptr)0x6868686868686868ULL)

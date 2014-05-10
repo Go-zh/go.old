@@ -28,7 +28,7 @@ import (
 )
 
 var cmdBuild = &Command{
-	UsageLine: "build [-o output] [build flags] [packages]",
+	UsageLine: "build [-o output] [-i] [build flags] [packages]",
 	Short:     "compile packages and dependencies",
 	Long: `
 Build compiles the packages named by the import paths,
@@ -50,7 +50,10 @@ derives from the first file name mentioned, such as f1 for 'go build
 f1.go f2.go'; with no files provided ('go build'), the output file
 name is the base name of the containing directory.
 
-The build flags are shared by the build, install, run, and test commands:
+The -i flag installs the packages that are dependencies of the target.
+
+The build flags are shared by the build, clean, get, install, list, run,
+and test commands:
 
 	-a
 		force rebuilding of packages that are already up-to-date.
@@ -107,45 +110,26 @@ func init() {
 	cmdBuild.Run = runBuild
 	cmdInstall.Run = runInstall
 
+	cmdBuild.Flag.BoolVar(&buildI, "i", false, "")
+
 	addBuildFlags(cmdBuild)
 	addBuildFlags(cmdInstall)
 }
 
 // Flags set by multiple commands.
-var buildA bool
-
-// -a flag
-var buildN bool
-
-// -n flag
-var buildP = runtime.NumCPU()
-
-// -p flag
-var buildV bool
-
-// -v flag
-var buildX bool
-
-// -x flag
+var buildA bool               // -a flag
+var buildN bool               // -n flag
+var buildP = runtime.NumCPU() // -p flag
+var buildV bool               // -v flag
+var buildX bool               // -x flag
+var buildI bool               // -i flag
 var buildO = cmdBuild.Flag.String("o", "", "output file")
-var buildWork bool
-
-// -work flag
-var buildGcflags []string
-
-// -gcflags flag
-var buildCcflags []string
-
-// -ccflags flag
-var buildLdflags []string
-
-// -ldflags flag
-var buildGccgoflags []string
-
-// -gccgoflags flag
-var buildRace bool
-
-// -race flag
+var buildWork bool           // -work flag
+var buildGcflags []string    // -gcflags flag
+var buildCcflags []string    // -ccflags flag
+var buildLdflags []string    // -ldflags flag
+var buildGccgoflags []string // -gccgoflags flag
+var buildRace bool           // -race flag
 
 var buildContext = build.Default
 var buildToolchain toolchain = noToolchain{}
@@ -181,7 +165,8 @@ func init() {
 	}
 }
 
-// addBuildFlags adds the flags common to the build and install commands.
+// addBuildFlags adds the flags common to the build, clean, get,
+// install, list, run, and test commands.
 func addBuildFlags(cmd *Command) {
 	// NOTE: If you add flags here, also add them to testflag.go.
 	cmd.Flag.BoolVar(&buildA, "a", false, "")
@@ -312,8 +297,12 @@ func runBuild(cmd *Command, args []string) {
 	}
 
 	a := &action{}
+	depMode := modeBuild
+	if buildI {
+		depMode = modeInstall
+	}
 	for _, p := range packages(args) {
-		a.deps = append(a.deps, b.action(modeBuild, modeBuild, p))
+		a.deps = append(a.deps, b.action(modeBuild, depMode, p))
 	}
 	b.do(a)
 }
@@ -469,7 +458,8 @@ func (b *builder) init() {
 			fmt.Fprintf(os.Stderr, "WORK=%s\n", b.work)
 		}
 		if !buildWork {
-			atexit(func() { os.RemoveAll(b.work) })
+			workdir := b.work
+			atexit(func() { os.RemoveAll(workdir) })
 		}
 	}
 }
@@ -1621,7 +1611,7 @@ func (gcToolchain) gc(b *builder, p *Package, archive, obj string, importArgs []
 		gcargs = append(gcargs, "-installsuffix", buildContext.InstallSuffix)
 	}
 
-	args := stringList(tool(archChar+"g"), "-o", ofile, buildGcflags, gcargs, "-D", p.localPrefix, importArgs)
+	args := stringList(tool(archChar+"g"), "-o", ofile, "-trimpath", b.work, buildGcflags, gcargs, "-D", p.localPrefix, importArgs)
 	if ofile == archive {
 		args = append(args, "-pack")
 	}
@@ -1635,7 +1625,7 @@ func (gcToolchain) gc(b *builder, p *Package, archive, obj string, importArgs []
 
 func (gcToolchain) asm(b *builder, p *Package, obj, ofile, sfile string) error {
 	sfile = mkAbs(p.Dir, sfile)
-	return b.run(p.Dir, p.ImportPath, nil, tool(archChar+"a"), "-I", obj, "-o", ofile, "-D", "GOOS_"+goos, "-D", "GOARCH_"+goarch, sfile)
+	return b.run(p.Dir, p.ImportPath, nil, tool(archChar+"a"), "-trimpath", b.work, "-I", obj, "-o", ofile, "-D", "GOOS_"+goos, "-D", "GOARCH_"+goarch, sfile)
 }
 
 func (gcToolchain) pkgpath(basedir string, p *Package) string {
@@ -1648,7 +1638,7 @@ func (gcToolchain) pack(b *builder, p *Package, objDir, afile string, ofiles []s
 	for _, f := range ofiles {
 		absOfiles = append(absOfiles, mkAbs(objDir, f))
 	}
-	cmd := "grcP"
+	cmd := "c"
 	absAfile := mkAbs(objDir, afile)
 	appending := false
 	if _, err := os.Stat(absAfile); err == nil {
@@ -1806,7 +1796,7 @@ func (gcToolchain) ld(b *builder, p *Package, out string, allactions []*action, 
 func (gcToolchain) cc(b *builder, p *Package, objdir, ofile, cfile string) error {
 	inc := filepath.Join(goroot, "pkg", fmt.Sprintf("%s_%s", goos, goarch))
 	cfile = mkAbs(p.Dir, cfile)
-	args := stringList(tool(archChar+"c"), "-F", "-V", "-w", "-I", objdir, "-I", inc, "-o", ofile, buildCcflags, "-D", "GOOS_"+goos, "-D", "GOARCH_"+goarch, cfile)
+	args := stringList(tool(archChar+"c"), "-F", "-V", "-w", "-trimpath", b.work, "-I", objdir, "-I", inc, "-o", ofile, buildCcflags, "-D", "GOOS_"+goos, "-D", "GOARCH_"+goarch, cfile)
 	return b.run(p.Dir, p.ImportPath, nil, args)
 }
 
@@ -2544,7 +2534,9 @@ func (b *builder) swigOne(p *Package, file, obj string, cxx bool, intgosize stri
 	}
 	ldflags := stringList(osldflags[goos], cflags, cgoLDFLAGS, cxxlib)
 	target := filepath.Join(obj, soname)
-	b.run(p.Dir, p.ImportPath, nil, b.gccCmd(p.Dir), "-o", target, gccObj, extraObj, ldflags)
+	if err := b.run(p.Dir, p.ImportPath, nil, b.gccCmd(p.Dir), "-o", target, gccObj, extraObj, ldflags); err != nil {
+		return "", "", err
+	}
 
 	return obj + goFile, cObj, nil
 }

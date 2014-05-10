@@ -641,22 +641,9 @@ ldmacho(Biobuf *f, char *pkg, int64 len, char *pn)
 		if(!(s->cgoexport & CgoExportDynamic))
 			s->dynimplib = nil;	// satisfy dynimport
 		if(outer->type == STEXT) {
-			Prog *p;
-
-			if(s->text != P)
-				diag("%s sym#%d: duplicate definition of %s", pn, i, s->name);
-			// build a TEXT instruction with a unique pc
-			// just to make the rest of the linker happy.
-			// TODO: this is too 6l-specific ?
-			p = ctxt->arch->prg();
-			p->as = ATEXT;
-			p->from.type = D_EXTERN;
-			p->from.sym = s;
-			ctxt->arch->settextflag(p, 7);
-			p->to.type = D_CONST;
-			p->link = nil;
-			p->pc = ctxt->pc++;
-			s->text = p;
+			if(s->external && !s->dupok)
+				diag("%s: duplicate definition of %s", pn, s->name);
+			s->external = 1;
 		}
 		sym->sym = s;
 	}
@@ -679,12 +666,18 @@ ldmacho(Biobuf *f, char *pkg, int64 len, char *pn)
 			}
 		}
 		if(s->type == STEXT) {
+			if(s->onlist)
+				sysfatal("symbol %s listed multiple times", s->name);
+			s->onlist = 1;
 			if(ctxt->etextp)
 				ctxt->etextp->next = s;
 			else
 				ctxt->textp = s;
 			ctxt->etextp = s;
 			for(s1 = s->sub; s1 != S; s1 = s1->sub) {
+				if(s1->onlist)
+					sysfatal("symbol %s listed multiple times", s1->name);
+				s1->onlist = 1;
 				ctxt->etextp->next = s1;
 				ctxt->etextp = s1;
 			}
@@ -744,7 +737,7 @@ ldmacho(Biobuf *f, char *pkg, int64 len, char *pn)
 				// want to make it pc-relative aka relative to rp->off+4
 				// but the scatter asks for relative to off = (rel+1)->value - sect->addr.
 				// adjust rp->add accordingly.
-				rp->type = D_PCREL;
+				rp->type = R_PCREL;
 				rp->add += (rp->off+4) - ((rel+1)->value - sect->addr);
 				
 				// now consider the desired symbol.
