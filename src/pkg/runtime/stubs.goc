@@ -1,0 +1,92 @@
+// Copyright 2014 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package runtime
+#include "runtime.h"
+#include "arch_GOARCH.h"
+#include "malloc.h"
+#include "../../cmd/ld/textflag.h"
+
+// This file contains functions called by Go but written
+// in C.  These functions are problematic for the garbage
+// collector and stack copier because we don't have
+// stack maps for them.  So we must ensure that the
+// garbage collector and stack copier cannot see these
+// frames.  So we impose the following invariants:
+
+// 1) Functions should be marked NOSPLIT and call
+//    out to only NOSPLIT functions (recursively).
+// 2) Functions should not block.
+
+// These invariants do not hold yet but will be established once we have
+// finished converting runtime support code from C to Go.
+
+#pragma textflag NOSPLIT
+func rawstring(size intgo) (s String, b Slice) {
+	uintptr ms;
+	byte *p;
+
+	p = runtime·mallocgc(size, 0, FlagNoScan|FlagNoZero);
+	s.str = p;
+	s.len = size;
+	b.array = p;
+	b.len = size;
+	b.cap = size;
+	for(;;) {
+		ms = runtime·maxstring;
+		if((uintptr)size <= ms || runtime·casp((void**)&runtime·maxstring, (void*)ms, (void*)size))
+			break;
+	}
+}
+
+#pragma textflag NOSPLIT
+func rawbyteslice(size intgo) (b Slice) {
+	uintptr cap;
+	byte *p;
+
+	cap = runtime·roundupsize(size);
+	p = runtime·mallocgc(cap, 0, FlagNoScan|FlagNoZero);
+	if(cap != size)
+		runtime·memclr(p + size, cap - size);
+	b.array = p;
+	b.len = size;
+	b.cap = cap;
+}
+
+#pragma textflag NOSPLIT
+func rawruneslice(size intgo) (b Slice) {
+	uintptr mem;
+	byte *p;
+
+	if(size > MaxMem/sizeof(int32))
+		runtime·throw("out of memory");
+	mem = runtime·roundupsize(size*sizeof(int32));
+	p = runtime·mallocgc(mem, 0, FlagNoScan|FlagNoZero);
+	if(mem != size*sizeof(int32))
+		runtime·memclr(p + size*sizeof(int32), mem - size*sizeof(int32));
+	b.array = p;
+	b.len = size;
+	b.cap = mem/sizeof(int32);
+}
+
+// entry point for testing
+// TODO: mcall and run on M stack
+func gostringW(str Slice) (s String) {
+	s = runtime·gostringw((uint16*)str.array);
+}
+
+#pragma textflag NOSPLIT
+func runtime·unsafe_New(t *Type) (ret *byte) {
+	ret = runtime·cnew(t);
+}
+
+#pragma textflag NOSPLIT
+func runtime·unsafe_NewArray(t *Type, n int) (ret *byte) {
+	ret = runtime·cnewarray(t, n);
+}
+
+#pragma textflag NOSPLIT
+func runtime·gocas(p *uint32, x uint32, y uint32) (ret bool) {
+	ret = runtime·cas(p, x, y);
+}

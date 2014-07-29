@@ -167,11 +167,15 @@ var globSymlinkTests = []struct {
 
 func TestGlobSymlink(t *testing.T) {
 	switch runtime.GOOS {
-	case "windows", "plan9":
-		// The tests below are Unix specific so we skip plan9, which does not
-		// support symlinks, and windows.
-		t.Skipf("skipping test on %v", runtime.GOOS)
+	case "nacl", "plan9":
+		t.Skipf("skipping on %s", runtime.GOOS)
+	case "windows":
+		if !supportsSymlinks {
+			t.Skipf("skipping on %s", runtime.GOOS)
+		}
+
 	}
+
 	tmpDir, err := ioutil.TempDir("", "globsymlink")
 	if err != nil {
 		t.Fatal("creating temp dir:", err)

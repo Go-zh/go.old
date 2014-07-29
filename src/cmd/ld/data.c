@@ -160,6 +160,10 @@ relocsym(LSym *s)
 		if(r->sym != S && r->sym->type != STLSBSS && !r->sym->reachable)
 			diag("unreachable sym in relocation: %s %s", s->name, r->sym->name);
 
+		// Android emulates runtime.tlsg as a regular variable.
+		if (r->type == R_TLS && strcmp(goos, "android") == 0)
+			r->type = R_ADDR;
+
 		switch(r->type) {
 		default:
 			o = 0;
@@ -186,8 +190,8 @@ relocsym(LSym *s)
 		case R_TLS_LE:
 			if(linkmode == LinkExternal && iself && HEADTYPE != Hopenbsd) {
 				r->done = 0;
-				r->sym = ctxt->gmsym;
-				r->xsym = ctxt->gmsym;
+				r->sym = ctxt->tlsg;
+				r->xsym = ctxt->tlsg;
 				r->xadd = r->add;
 				o = 0;
 				if(thechar != '6')
@@ -200,8 +204,8 @@ relocsym(LSym *s)
 		case R_TLS_IE:
 			if(linkmode == LinkExternal && iself && HEADTYPE != Hopenbsd) {
 				r->done = 0;
-				r->sym = ctxt->gmsym;
-				r->xsym = ctxt->gmsym;
+				r->sym = ctxt->tlsg;
+				r->xsym = ctxt->tlsg;
 				r->xadd = r->add;
 				o = 0;
 				if(thechar != '6')
@@ -243,6 +247,16 @@ relocsym(LSym *s)
 				break;
 			}
 			o = symaddr(r->sym) + r->add;
+
+			// On amd64, 4-byte offsets will be sign-extended, so it is impossible to
+			// access more than 2GB of static data; fail at link time is better than
+			// fail at runtime. See http://golang.org/issue/7980.
+			// Instead of special casing only amd64, we treat this as an error on all
+			// 64-bit architectures so as to be future-proof.
+			if((int32)o < 0 && PtrSize > 4 && siz == 4) {
+				diag("non-pc-relative relocation address is too big: %#llux", o);
+				errorexit();
+			}
 			break;
 		case R_CALL:
 		case R_PCREL:
@@ -941,9 +955,9 @@ dodata(void)
 		sect->len = datsize;
 	} else {
 		// Might be internal linking but still using cgo.
-		// In that case, the only possible STLSBSS symbol is tlsgm.
+		// In that case, the only possible STLSBSS symbol is runtime.tlsg.
 		// Give it offset 0, because it's the only thing here.
-		if(s != nil && s->type == STLSBSS && strcmp(s->name, "runtime.tlsgm") == 0) {
+		if(s != nil && s->type == STLSBSS && strcmp(s->name, "runtime.tlsg") == 0) {
 			s->value = 0;
 			s = s->next;
 		}

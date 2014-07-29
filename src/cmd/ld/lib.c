@@ -177,7 +177,7 @@ void
 loadlib(void)
 {
 	int i, w, x;
-	LSym *s, *gmsym;
+	LSym *s, *tlsg;
 	char* cgostrsym;
 
 	if(flag_shared) {
@@ -205,6 +205,8 @@ loadlib(void)
 		// whether to initialize the TLS.  So give it one.  This could
 		// be handled differently but it's an unusual case.
 		loadinternal("runtime/cgo");
+		if(i < ctxt->libraryp)
+			objfile(ctxt->library[i].file, ctxt->library[i].pkg);
 
 		// Pretend that we really imported the package.
 		s = linklookup(ctxt, "go.importpath.runtime/cgo.", 0);
@@ -224,6 +226,10 @@ loadlib(void)
 			linkmode = LinkExternal;
 		else
 			linkmode = LinkInternal;
+
+		// Force external linking for android.
+		if(strcmp(goos, "android") == 0)
+			linkmode = LinkExternal;
 	}
 
 	if(linkmode == LinkInternal) {
@@ -242,12 +248,12 @@ loadlib(void)
 			}
 	}
 	
-	gmsym = linklookup(ctxt, "runtime.tlsgm", 0);
-	gmsym->type = STLSBSS;
-	gmsym->size = 2*PtrSize;
-	gmsym->hide = 1;
-	gmsym->reachable = 1;
-	ctxt->gmsym = gmsym;
+	tlsg = linklookup(ctxt, "runtime.tlsg", 0);
+	tlsg->type = STLSBSS;
+	tlsg->size = PtrSize;
+	tlsg->hide = 1;
+	tlsg->reachable = 1;
+	ctxt->tlsg = tlsg;
 
 	// Now that we know the link mode, trim the dynexp list.
 	x = CgoExportDynamic;

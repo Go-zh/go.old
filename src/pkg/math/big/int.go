@@ -646,13 +646,33 @@ func (z *Int) Scan(s fmt.ScanState, ch rune) error {
 	return err
 }
 
+// low32 returns the least significant 32 bits of z.
+func low32(z nat) uint32 {
+	if len(z) == 0 {
+		return 0
+	}
+	return uint32(z[0])
+}
+
+// low64 returns the least significant 64 bits of z.
+func low64(z nat) uint64 {
+	if len(z) == 0 {
+		return 0
+	}
+	v := uint64(z[0])
+	if _W == 32 && len(z) > 1 {
+		v |= uint64(z[1]) << 32
+	}
+	return v
+}
+
 // Int64 returns the int64 representation of x.
 // If x cannot be represented in an int64, the result is undefined.
 
 // Int64 返回 x 的 int64 表示。
 // 若 x 不能被表示为 int64，则其结果是未定义的。
 func (x *Int) Int64() int64 {
-	v := int64(x.Uint64())
+	v := int64(low64(x.abs))
 	if x.neg {
 		v = -v
 	}
@@ -665,14 +685,7 @@ func (x *Int) Int64() int64 {
 // Uint64 返回 x 的 uint64 表示。
 // 若 x 不能被表示为 uint64，则其结果是未定义的。
 func (x *Int) Uint64() uint64 {
-	if len(x.abs) == 0 {
-		return 0
-	}
-	v := uint64(x.abs[0])
-	if _W == 32 && len(x.abs) > 1 {
-		v |= uint64(x.abs[1]) << 32
-	}
-	return v
+	return low64(x.abs)
 }
 
 // SetString sets z to the value of s, interpreted in the given base,

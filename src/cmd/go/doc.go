@@ -33,6 +33,7 @@ Use "go help [command]" for more information about a command.
 Additional help topics:
 
     c           calling between Go and C
+    filetype    file types
     gopath      GOPATH environment variable
     importpath  import path syntax
     packages    description of package lists
@@ -69,7 +70,8 @@ name is the base name of the containing directory.
 
 The -i flag installs the packages that are dependencies of the target.
 
-The build flags are shared by the build, install, run, and test commands:
+The build flags are shared by the build, clean, get, install, list, run,
+and test commands:
 
 	-a
 		force rebuilding of packages that are already up-to-date.
@@ -80,7 +82,7 @@ The build flags are shared by the build, install, run, and test commands:
 		The default is the number of CPUs available.
 	-race
 		enable data race detection.
-		Supported only on linux/amd64, darwin/amd64 and windows/amd64.
+		Supported only on linux/amd64, freebsd/amd64, darwin/amd64 and windows/amd64.
 	-v
 		print the names of packages as they are compiled.
 	-work
@@ -239,8 +241,7 @@ The -u flag instructs get to use the network to update the named packages
 and their dependencies.  By default, get uses the network to check out
 missing packages but does not use it to look for updates to existing packages.
 
-Get also accepts all the flags in the 'go build' and 'go install' commands,
-to control the installation. See 'go help build'.
+Get also accepts build flags to control the installation. See 'go help build'.
 
 When checking out or updating a package, get looks for a branch or tag
 that matches the locally installed version of Go. The most important
@@ -517,6 +518,43 @@ compiler.  The CC or CXX environment variables may be set to determine
 the C or C++ compiler, respectively, to use.
 
 
+File types
+
+The go command examines the contents of a restricted set of files
+in each directory. It identifies which files to examine based on
+the extension of the file name. These extensions are:
+
+	.go
+		Go source files.
+	.c, .h
+		C source files.
+		If the package uses cgo, these will be compiled with the
+		OS-native compiler (typically gcc); otherwise they will be
+		compiled with the Go-specific support compiler,
+		5c, 6c, or 8c, etc. as appropriate.
+	.cc, .cpp, .cxx, .hh, .hpp, .hxx
+		C++ source files. Only useful with cgo or SWIG, and always
+		compiled with the OS-native compiler.
+	.m
+		Objective-C source files. Only useful with cgo, and always
+		compiled with the OS-native compiler.
+	.s, .S
+		Assembler source files.
+		If the package uses cgo, these will be assembled with the
+		OS-native assembler (typically gcc (sic)); otherwise they
+		will be assembled with the Go-specific support assembler,
+		5a, 6a, or 8a, etc., as appropriate.
+	.swig, .swigcxx
+		SWIG definition files.
+	.syso
+		System object files.
+
+Files of each of these types except .syso may contain build
+constraints, but the go command stops scanning for build constraints
+at the first item in the file that is not a blank line or //-style
+line comment.
+
+
 GOPATH environment variable
 
 The Go path is used to resolve import statements.
@@ -643,6 +681,11 @@ A few common code hosting sites have special syntax:
 		import "launchpad.net/~user/project/branch"
 		import "launchpad.net/~user/project/branch/sub/directory"
 
+	IBM DevOps Services (Git)
+
+		import "hub.jazz.net/git/user/project"
+		import "hub.jazz.net/git/user/project/sub/directory"
+
 For code hosted on other servers, import paths may either be qualified
 with the version control type, or the go tool can dynamically fetch
 the import path over https/http and discover where the code resides
@@ -707,10 +750,10 @@ will result in the following request(s):
 
 If that page contains the meta tag
 
-	<meta name="go-import" content="example.org git https://code.org/r/p/exproj">
+	<meta name="go-import" content="example.org git https://code.example/r/p/exproj">
 
 the go tool will verify that https://example.org/?go-get=1 contains the
-same meta tag and then git clone https://code.org/r/p/exproj into
+same meta tag and then git clone https://code.example/r/p/exproj into
 GOPATH/src/example.org.
 
 New downloaded packages are written to the first directory

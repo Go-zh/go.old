@@ -250,7 +250,8 @@ type Scanner interface {
 // 在这种情况下，QueryRow会返回一个*Row的标示符，直到调用Scan的时候才返回这个error。
 var ErrNoRows = errors.New("sql: no rows in result set")
 
-// DB is a database handle. It's safe for concurrent use by multiple
+// DB is a database handle representing a pool of zero or more
+// underlying connections. It's safe for concurrent use by multiple
 // goroutines.
 //
 // The sql package creates and frees connections automatically; it
@@ -496,6 +497,11 @@ var connectionRequestQueueSize = 1000000
 // Open may just validate its arguments without creating a connection
 // to the database. To verify that the data source name is valid, call
 // Ping.
+//
+// The returned DB is safe for concurrent use by multiple goroutines
+// and maintains its own pool of idle connections. Thus, the Open
+// function should be called just once. It is rarely necessary to
+// close a DB.
 
 // Open打开一个数据库，这个数据库是由其驱动名称和驱动制定的数据源信息打开的，这个数据源信息通常
 // 是由至少一个数据库名字和连接信息组成的。
@@ -536,8 +542,12 @@ func (db *DB) Ping() error {
 }
 
 // Close closes the database, releasing any open resources.
+//
+// It is rare to Close a DB, as the DB handle is meant to be
+// long-lived and shared between many goroutines.
 
 // Close关闭数据库，释放一些使用中的资源。
+// TODO: 待译
 func (db *DB) Close() error {
 	db.mu.Lock()
 	if db.closed { // Make DB.Close idempotent
@@ -658,7 +668,7 @@ func (db *DB) maybeOpenNewConnections() {
 
 // Runs in a separate goroutine, opens new connections when requested.
 func (db *DB) connectionOpener() {
-	for _ = range db.openerCh {
+	for range db.openerCh {
 		db.openNewConnection()
 	}
 }

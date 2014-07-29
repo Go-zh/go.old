@@ -69,19 +69,19 @@ libraries.
 <img class="gopher" src="/doc/gopher/doc.png"/>
 
 <div class="english">
-<h3 id="go_tour"><a href="http://tour.golang.org/">A Tour of Go</a></h3>
+<h3 id="go_tour"><a href="//tour.golang.org/">A Tour of Go</a></h3>
 <p>
 An interactive introduction to Go in three sections.
 The first section covers basic syntax and data structures; the second discusses
 methods and interfaces; and the third introduces Go's concurrency primitives.
 Each section concludes with a few exercises so you can practice what you've
-learned. You can <a href="http://tour.golang.org/">take the tour online</a> or
-<a href="http://code.google.com/p/go-tour/">install it locally</a>.
+learned. You can <a href="//tour.golang.org/">take the tour online</a> or
+<a href="//code.google.com/p/go-tour/">install it locally</a>.
 </p>
 </div>
 
 
-<h3 id="go_tour"><a href="http://tour.golanger.com/">Go语言之旅</a></h3>
+<h3 id="go_tour"><a href="//tour.golanger.com/">Go语言之旅</a></h3>
 <p>
 Go语言的交互式简介，它分为三节。第一节覆盖了基本语法及数据结构，第二节讨论了方法与接口，
 第三节则简单介绍了Go的并发原语。每节都结束于几个练习，你可以对自己的所学进行实践。
@@ -93,7 +93,7 @@ Go语言的交互式简介，它分为三节。第一节覆盖了基本语法及
 <h3 id="code"><a href="code.html">How to write Go code</a></h3>
 <p>
 Also available as a
-<a href="http://www.youtube.com/watch?v=XCsL89YtqCs">screencast</a>, this doc
+<a href="//www.youtube.com/watch?v=XCsL89YtqCs">screencast</a>, this doc
 explains how to use the <a href="/cmd/go/">go command</a> to fetch, build, and
 install packages, commands, and run tests.
 </p>
@@ -211,6 +211,14 @@ same variable in a different goroutine.
 此文档指定了在一个Go程中，写入一个变量所产生的值，能够保证被另一个Go程所读取的条件。
 </p>
 
+<div class="english">
+<h3 id="release"><a href="/doc/devel/release.html">Release History</a></h3>
+<p>A summary of the changes between Go releases.</p>
+</div>
+
+<h3 id="release"><a href="/doc/devel/release.html">发行历史</a></h3>
+<p>Go 发行版之间更改的概述。</p>
+
 
 <div class="english">
 <h2 id="articles">Articles</h2>
@@ -219,12 +227,12 @@ same variable in a different goroutine.
 <h2 id="文章">文章</h2>
 
 <div class="english">
-<h3 id="blog"><a href="http://blog.golang.org/">The Go Blog</a></h3>
+<h3 id="blog"><a href="//blog.golang.org/">The Go Blog</a></h3>
 <p>The official blog of the Go project, featuring news and in-depth articles by
 the Go team and guests.</p>
 </div>
 
-<h3 id="blog"><a href="http://blog.golang.org/">Go 博客</a></h3>
+<h3 id="blog"><a href="//blog.golang.org/">Go 博客</a></h3>
 <p>Go项目的官方博客，由Go团队与嘉宾撰写的特色新闻与深入性的文章。</p>
 
 <div class="english">
@@ -306,7 +314,8 @@ Go程序的旅行指南。
 <li><a href="/blog/godoc-documenting-go-code">Godoc: documenting Go code</a> - writing good documentation for <a href="/cmd/godoc/">godoc</a>.</li>
 <li><a href="/blog/profiling-go-programs">Profiling Go Programs</a></li>
 <li><a href="/doc/articles/race_detector.html">Data Race Detector</a> - a manual for the data race detector.</li>
-<li><a href="/blog/race-detector">Introducing the Go Race Detector</a> - an introduction to the race detector.
+<li><a href="/blog/race-detector">Introducing the Go Race Detector</a> - an introduction to the race detector.</li>
+<li><a href="/doc/asm">A Quick Guide to Go's Assembler</a> - an introduction to the assembler used by Go.</li>
 </ul>
 </div>
 
@@ -357,13 +366,13 @@ demonstrate these.
 </p>
 
 <div class="english">
-<h3 id="go_code_that_grows"><a href="http://vimeo.com/53221560">Code that grows with grace</a></h3>
+<h3 id="go_code_that_grows"><a href="//vimeo.com/53221560">Code that grows with grace</a></h3>
 <p>
 One of Go's key design goals is code adaptability; that it should be easy to take a simple design and build upon it in a clean and natural way. In this talk Andrew Gerrand describes a simple "chat roulette" server that matches pairs of incoming TCP connections, and then use Go's concurrency mechanisms, interfaces, and standard library to extend it with a web interface and other features. While the function of the program changes dramatically, Go's flexibility preserves the original design as it grows.
 </p>
 </div>
 
-<h3 id="Go代码增长"><a href="http://vimeo.com/53221560">代码的优雅增长</a></h3>
+<h3 id="Go代码增长"><a href="//vimeo.com/53221560">代码的优雅增长</a></h3>
 <p>
 Go 的关键设计目标之一就是代码的适应性，它应当易于得到简单的设计，并以干净而自然的方式构建。
 在此演讲中，Andrew Gerrand 描述了一种简单的“轮流聊天”服务，它匹配一对TCP接入的连接，
@@ -372,26 +381,26 @@ Go 的灵活性在它增长时保留了其原始的设计。
 </p>
 
 <div class="english">
-<h3 id="go_concurrency_patterns"><a href="http://www.youtube.com/watch?v=f6kdp27TYZs">Go Concurrency Patterns</a></h3>
+<h3 id="go_concurrency_patterns"><a href="//www.youtube.com/watch?v=f6kdp27TYZs">Go Concurrency Patterns</a></h3>
 <p>
 Concurrency is the key to designing high performance network services. Go's concurrency primitives (goroutines and channels) provide a simple and efficient means of expressing concurrent execution. In this talk we see how tricky concurrency problems can be solved gracefully with simple Go code.
 </p>
 </div>
 
-<h3 id="Go并发模式"><a href="http://www.youtube.com/watch?v=f6kdp27TYZs">Go 的并发模式</a></h3>
+<h3 id="Go并发模式"><a href="//www.youtube.com/watch?v=f6kdp27TYZs">Go 的并发模式</a></h3>
 <p>
 并发是设计高性能网络服务的关键。Go的并发原语（Go程与信道）提供了一个表达并发实行的简单而高效的手段。
 在此演讲中，我们将看见如何用简单的Go代码优雅地解决棘手的并发问题。
 </p>
 
 <div class="english">
-<h3 id="advanced_go_concurrency_patterns"><a href="http://www.youtube.com/watch?v=QDDwwePbDtw">Advanced Go Concurrency Patterns</a></h3>
+<h3 id="advanced_go_concurrency_patterns"><a href="//www.youtube.com/watch?v=QDDwwePbDtw">Advanced Go Concurrency Patterns</a></h3>
 <p>
 This talk expands on the <i>Go Concurrency Patterns</i> talk to dive deeper into Go's concurrency primitives.
 </p>
 </div>
 
-<h3 id="Go高级并发模式"><a href="http://www.youtube.com/watch?v=QDDwwePbDtw">Go 的高级并发模式</a></h3>
+<h3 id="Go高级并发模式"><a href="//www.youtube.com/watch?v=QDDwwePbDtw">Go 的高级并发模式</a></h3>
 <p>
 此演讲是对<b>Go 的并发模式</b>的进一步扩充，它对Go的并发原语进行了更深一步的探讨。
 </p>

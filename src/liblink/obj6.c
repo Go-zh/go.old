@@ -103,7 +103,7 @@ static int
 canuselocaltls(Link *ctxt)
 {
 	switch(ctxt->headtype) {
-//	case Hlinux:
+	case Hplan9:
 	case Hwindows:
 		return 0;
 	}
@@ -394,14 +394,18 @@ addstacksplit(Link *ctxt, LSym *cursym)
 	uint32 i;
 	vlong textstksiz, textarg;
 
-	if(ctxt->gmsym == nil)
-		ctxt->gmsym = linklookup(ctxt, "runtime.tlsgm", 0);
+	if(ctxt->tlsg == nil)
+		ctxt->tlsg = linklookup(ctxt, "runtime.tlsg", 0);
 	if(ctxt->symmorestack[0] == nil) {
 		if(nelem(morename) > nelem(ctxt->symmorestack))
 			sysfatal("Link.symmorestack needs at least %d elements", nelem(morename));
 		for(i=0; i<nelem(morename); i++)
 			ctxt->symmorestack[i] = linklookup(ctxt, morename[i], 0);
 	}
+
+	if(ctxt->headtype == Hplan9 && ctxt->plan9privates == nil)
+		ctxt->plan9privates = linklookup(ctxt, "_privates", 0);
+
 	ctxt->cursym = cursym;
 
 	if(cursym->text == nil || cursym->text->link == nil)
@@ -954,7 +958,7 @@ xfol(Link *ctxt, Prog *p, Prog **last)
 {
 	Prog *q;
 	int i;
-	enum as a;
+	int a;
 
 loop:
 	if(p == nil)

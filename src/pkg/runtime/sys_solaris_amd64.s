@@ -22,7 +22,8 @@ TEXT runtime·miniterrno(SB),NOSPLIT,$0
 	// asmcgocall will put first argument into DI.
 	CALL	DI	// SysV ABI so returns in AX
 	get_tls(CX)
-	MOVQ	m(CX), BX
+	MOVQ	g(CX), BX
+	MOVQ	g_m(BX), BX
 	MOVQ	AX,	m_perrno(BX)
 	RET
 
@@ -73,7 +74,8 @@ TEXT runtime·asmsysvicall6(SB),NOSPLIT,$0
 	MOVQ	libcall_n(DI), R10
 
 	get_tls(CX)
-	MOVQ	m(CX), BX
+	MOVQ	g(CX), BX
+	MOVQ	g_m(BX), BX
 	MOVQ	m_perrno(BX), DX
 	CMPQ	DX, $0
 	JEQ	skiperrno1
@@ -100,7 +102,8 @@ skipargs:
 	MOVQ	DX, libcall_r2(DI)
 
 	get_tls(CX)
-	MOVQ	m(CX), BX
+	MOVQ	g(CX), BX
+	MOVQ	g_m(BX), BX
 	MOVQ	m_perrno(BX), AX
 	CMPQ	AX, $0
 	JEQ	skiperrno2
@@ -118,7 +121,7 @@ TEXT runtime·tstart_sysvicall(SB),NOSPLIT,$0
 	// Make TLS entries point at g and m.
 	get_tls(BX)
 	MOVQ	DX, g(BX)
-	MOVQ	DI, m(BX)
+	MOVQ	DI, g_m(DX)
 
 	// Layout new m scheduler stack on os stack.
 	MOVQ	SP, AX
@@ -154,24 +157,24 @@ TEXT runtime·sigtramp(SB),NOSPLIT,$0
 	MOVQ	R15, 72(SP)
 
 	get_tls(BX)
-	// check that m exists
-	MOVQ	m(BX), BP
-	CMPQ	BP, $0
+	// check that g exists
+	MOVQ	g(BX), R10
+	CMPQ	R10, $0
 	JNE	allgood
 	MOVQ	DI, 0(SP)
 	MOVQ	$runtime·badsignal(SB), AX
 	CALL	AX
-	RET
+	JMP	exit
 
 allgood:
 	// save g
-	MOVQ	g(BX), R10
 	MOVQ	R10, 80(SP)
 
 	// Save m->libcall and m->scratch. We need to do this because we
 	// might get interrupted by a signal in runtime·asmcgocall.
 
 	// save m->libcall 
+	MOVQ	g_m(R10), BP
 	LEAQ	m_libcall(BP), R11
 	MOVQ	libcall_fn(R11), R10
 	MOVQ	R10, 88(SP)
@@ -217,7 +220,8 @@ allgood:
 	CALL	runtime·sighandler(SB)
 
 	get_tls(BX)
-	MOVQ	m(BX), BP
+	MOVQ	g(BX), BP
+	MOVQ	g_m(BP), BP
 	// restore libcall
 	LEAQ	m_libcall(BP), R11
 	MOVQ	88(SP), R10
@@ -255,6 +259,7 @@ allgood:
 	MOVQ	80(SP), R10
 	MOVQ	R10, g(BX)
 
+exit:
 	// restore registers
 	MOVQ	32(SP), BX
 	MOVQ	40(SP), BP
@@ -264,4 +269,56 @@ allgood:
 	MOVQ	72(SP), R15
 
 	ADDQ    $184, SP
+	RET
+
+// Called from runtime·usleep (Go). Can be called on Go stack, on OS stack,
+// can also be called in cgo callback path without a g->m.
+TEXT runtime·usleep1(SB),NOSPLIT,$0
+	MOVL	us+0(FP), DI
+	MOVQ	$runtime·usleep2(SB), AX // to hide from 6l
+
+	// Execute call on m->g0.
+	get_tls(R15)
+	CMPQ	R15, $0
+	JE	usleep1_noswitch
+
+	MOVQ	g(R15), R13
+	CMPQ	R13, $0
+	JE	usleep1_noswitch
+	MOVQ	g_m(R13), R13
+	CMPQ	R13, $0
+	JE	usleep1_noswitch
+	// TODO(aram): do something about the cpu profiler here.
+
+	MOVQ	m_g0(R13), R14
+	CMPQ	g(R15), R14
+	JNE	usleep1_switch
+	// executing on m->g0 already
+	CALL	AX
+	RET
+
+usleep1_switch:
+	// Switch to m->g0 stack and back.
+	MOVQ	(g_sched+gobuf_sp)(R14), R14
+	MOVQ	SP, -8(R14)
+	LEAQ	-8(R14), SP
+	CALL	AX
+	MOVQ	0(SP), SP
+	RET
+
+usleep1_noswitch:
+	// Not a Go-managed thread. Do not switch stack.
+	CALL	AX
+	RET
+
+// Runs on OS stack. duration (in µs units) is in DI.
+TEXT runtime·usleep2(SB),NOSPLIT,$0
+	MOVQ	libc·usleep(SB), AX
+	CALL	AX
+	RET
+
+// Runs on OS stack, called from runtime·osyield.
+TEXT runtime·osyield1(SB),NOSPLIT,$0
+	MOVQ	libc·sched_yield(SB), AX
+	CALL	AX
 	RET

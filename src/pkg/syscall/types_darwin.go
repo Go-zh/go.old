@@ -64,7 +64,6 @@ struct sockaddr_any {
 	struct sockaddr addr;
 	char pad[sizeof(union sockaddr_all) - sizeof(struct sockaddr)];
 };
-
 */
 import "C"
 
@@ -117,7 +116,13 @@ type Radvisory_t C.struct_radvisory
 
 type Fbootstraptransfer_t C.struct_fbootstraptransfer
 
-type Log2phys_t C.struct_log2phys
+// See golang.org/issue/8267.
+//type Log2phys_t C.struct_packed_log2phys
+type Log2phys_t struct {
+	Flags       uint32
+	Contigbytes int64
+	Devoffset   int64
+}
 
 type Fsid C.struct_fsid
 
@@ -137,6 +142,8 @@ type RawSockaddr C.struct_sockaddr
 
 type RawSockaddrAny C.struct_sockaddr_any
 
+type RawSockaddrStorage C.struct_sockaddr_storage
+
 type _Socklen C.socklen_t
 
 type Linger C.struct_linger
@@ -146,6 +153,10 @@ type Iovec C.struct_iovec
 type IPMreq C.struct_ip_mreq
 
 type IPv6Mreq C.struct_ipv6_mreq
+
+type GroupReq C.struct_group_req
+
+type GroupSourceReq C.struct_group_source_req
 
 type Msghdr C.struct_msghdr
 
@@ -163,11 +174,14 @@ const (
 	SizeofSockaddrInet4    = C.sizeof_struct_sockaddr_in
 	SizeofSockaddrInet6    = C.sizeof_struct_sockaddr_in6
 	SizeofSockaddrAny      = C.sizeof_struct_sockaddr_any
+	SizeofSockaddrStorage  = C.sizeof_struct_sockaddr_storage
 	SizeofSockaddrUnix     = C.sizeof_struct_sockaddr_un
 	SizeofSockaddrDatalink = C.sizeof_struct_sockaddr_dl
 	SizeofLinger           = C.sizeof_struct_linger
 	SizeofIPMreq           = C.sizeof_struct_ip_mreq
 	SizeofIPv6Mreq         = C.sizeof_struct_ipv6_mreq
+	SizeofGroupReq         = C.sizeof_struct_group_req
+	SizeofGroupSourceReq   = C.sizeof_struct_group_source_req
 	SizeofMsghdr           = C.sizeof_struct_msghdr
 	SizeofCmsghdr          = C.sizeof_struct_cmsghdr
 	SizeofInet4Pktinfo     = C.sizeof_struct_in_pktinfo

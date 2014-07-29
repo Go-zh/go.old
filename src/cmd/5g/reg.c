@@ -36,6 +36,11 @@
 
 #define	NREGVAR	32
 #define	REGBITS	((uint32)0xffffffff)
+/*c2go enum {
+	NREGVAR = 32,
+	REGBITS = 0xffffffff,
+};
+*/
 
 	void	addsplits(void);
 static	Reg*	firstr;
@@ -54,30 +59,6 @@ rcmp(const void *a1, const void *a2)
 	if(c1 -= c2)
 		return c1;
 	return p2->varno - p1->varno;
-}
-
-static void
-setoutvar(void)
-{
-	Type *t;
-	Node *n;
-	Addr a;
-	Iter save;
-	Bits bit;
-	int z;
-
-	t = structfirst(&save, getoutarg(curfn->type));
-	while(t != T) {
-		n = nodarg(t, 1);
-		a = zprog.from;
-		naddr(n, &a, 0);
-		bit = mkvar(R, &a);
-		for(z=0; z<BITS; z++)
-			ovar.b[z] |= bit.b[z];
-		t = structnext(&save);
-	}
-//if(bany(&ovar))
-//print("ovar = %Q\n", ovar);
 }
 
 void
@@ -153,13 +134,15 @@ static char* regname[] = {
 
 static Node* regnodes[NREGVAR];
 
+static void walkvardef(Node *n, Reg *r, int active);
+
 void
 regopt(Prog *firstp)
 {
 	Reg *r, *r1;
 	Prog *p;
 	Graph *g;
-	int i, z;
+	int i, z, active;
 	uint32 vreg;
 	Bits bit;
 	ProgInfo info;
@@ -190,11 +173,9 @@ regopt(Prog *firstp)
 		params.b[z] = 0;
 		consts.b[z] = 0;
 		addrs.b[z] = 0;
+		ivar.b[z] = 0;
 		ovar.b[z] = 0;
 	}
-
-	// build list of return variables
-	setoutvar();
 
 	/*
 	 * pass 1
@@ -246,6 +227,10 @@ regopt(Prog *firstp)
 				for(z=0; z<BITS; z++)
 					r->set.b[z] |= bit.b[z];
 		}
+
+		/* the mod/div runtime routines smash R12 */
+		if(p->as == ADIV || p->as == ADIVU || p->as == AMOD || p->as == AMODU)
+			r->set.b[z] |= RtoB(12);
 	}
 	if(firstr == R)
 		return;
@@ -274,6 +259,26 @@ regopt(Prog *firstp)
 
 	if(debug['R'] && debug['v'])
 		dumpit("pass2", &firstr->f, 1);
+
+	/*
+	 * pass 2.5
+	 * iterate propagating fat vardef covering forward
+	 * r->act records vars with a VARDEF since the last CALL.
+	 * (r->act will be reused in pass 5 for something else,
+	 * but we'll be done with it by then.)
+	 */
+	active = 0;
+	for(r = firstr; r != R; r = (Reg*)r->f.link) {
+		r->f.active = 0;
+		r->act = zbits;
+	}
+	for(r = firstr; r != R; r = (Reg*)r->f.link) {
+		p = r->f.prog;
+		if(p->as == AVARDEF && isfat(p->to.node->type) && p->to.node->opt != nil) {
+			active++;
+			walkvardef(p->to.node, r, active);
+		}
+	}
 
 	/*
 	 * pass 3
@@ -548,6 +553,32 @@ brk:
 			}
 		}
 	}
+}
+
+static void
+walkvardef(Node *n, Reg *r, int active)
+{
+	Reg *r1, *r2;
+	int bn;
+	Var *v;
+	
+	for(r1=r; r1!=R; r1=(Reg*)r1->f.s1) {
+		if(r1->f.active == active)
+			break;
+		r1->f.active = active;
+		if(r1->f.prog->as == AVARKILL && r1->f.prog->to.node == n)
+			break;
+		for(v=n->opt; v!=nil; v=v->nextinnode) {
+			bn = v - var;
+			r1->act.b[bn/32] |= 1L << (bn%32);
+		}
+		if(r1->f.prog->as == ABL)
+			break;
+	}
+
+	for(r2=r; r2!=r1; r2=(Reg*)r2->f.s1)
+		if(r2->f.s2 != nil)
+			walkvardef(n, (Reg*)r2->f.s2, active);
 }
 
 void
@@ -836,9 +867,6 @@ mkvar(Reg *r, Adr *a)
 	v->nextinnode = node->opt;
 	node->opt = v;
 	
-	if(debug['R'])
-		print("bit=%2d et=%2E w=%d+%d %#N %D flag=%d\n", i, et, o, w, node, a, v->addr);
-
 	bit = blsh(i);
 	if(n == D_EXTERN || n == D_STATIC)
 		for(z=0; z<BITS; z++)
@@ -846,6 +874,13 @@ mkvar(Reg *r, Adr *a)
 	if(n == D_PARAM)
 		for(z=0; z<BITS; z++)
 			params.b[z] |= bit.b[z];
+
+	if(node->class == PPARAM)
+		for(z=0; z<BITS; z++)
+			ivar.b[z] |= bit.b[z];
+	if(node->class == PPARAMOUT)
+		for(z=0; z<BITS; z++)
+			ovar.b[z] |= bit.b[z];
 
 	// Treat values with their address taken as live at calls,
 	// because the garbage collector's liveness analysis in ../gc/plive.c does.
@@ -863,7 +898,21 @@ mkvar(Reg *r, Adr *a)
 	// The broader := in a closure problem is mentioned in a comment in
 	// closure.c:/^typecheckclosure and dcl.c:/^oldname.
 	if(node->addrtaken)
-		setaddrs(bit);
+		v->addr = 1;
+
+	// Disable registerization for globals, because:
+	// (1) we might panic at any time and we want the recovery code
+	// to see the latest values (issue 1304).
+	// (2) we don't know what pointers might point at them and we want
+	// loads via those pointers to see updated values and vice versa (issue 7995).
+	//
+	// Disable registerization for results if using defer, because the deferred func
+	// might recover and return, causing the current values to be used.
+	if(node->class == PEXTERN || (hasdefer && node->class == PPARAMOUT))
+		v->addr = 1;
+
+	if(debug['R'])
+		print("bit=%2d et=%2E w=%d+%d %#N %D flag=%d\n", i, et, o, w, node, a, v->addr);
 
 	return bit;
 
@@ -895,8 +944,17 @@ prop(Reg *r, Bits ref, Bits cal)
 		case ABL:
 			if(noreturn(r1->f.prog))
 				break;
+
+			// Mark all input variables (ivar) as used, because that's what the
+			// liveness bitmaps say. The liveness bitmaps say that so that a
+			// panic will not show stale values in the parameter dump.
+			// Mark variables with a recent VARDEF (r1->act) as used,
+			// so that the optimizer flushes initializations to memory,
+			// so that if a garbage collection happens during this CALL,
+			// the collector will see initialized memory. Again this is to
+			// match what the liveness bitmaps say.
 			for(z=0; z<BITS; z++) {
-				cal.b[z] |= ref.b[z] | externs.b[z];
+				cal.b[z] |= ref.b[z] | externs.b[z] | ivar.b[z] | r1->act.b[z];
 				ref.b[z] = 0;
 			}
 			
@@ -954,17 +1012,6 @@ prop(Reg *r, Bits ref, Bits cal)
 			for(z=0; z<BITS; z++) {
 				cal.b[z] = externs.b[z] | ovar.b[z];
 				ref.b[z] = 0;
-			}
-			break;
-
-		default:
-			// Work around for issue 1304:
-			// flush modified globals before each instruction.
-			for(z=0; z<BITS; z++) {
-				cal.b[z] |= externs.b[z];
-				// issue 4066: flush modified return variables in case of panic
-				if(hasdefer)
-					cal.b[z] |= ovar.b[z];
 			}
 			break;
 		}

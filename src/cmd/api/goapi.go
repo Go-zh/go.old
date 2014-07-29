@@ -107,6 +107,8 @@ func setContexts() {
 	}
 }
 
+var internalPkg = regexp.MustCompile(`(^|/)internal($|/)`)
+
 func main() {
 	flag.Parse()
 
@@ -132,7 +134,11 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		pkgNames = strings.Fields(string(stds))
+		for _, pkg := range strings.Fields(string(stds)) {
+			if !internalPkg.MatchString(pkg) {
+				pkgNames = append(pkgNames, pkg)
+			}
+		}
 	}
 
 	var featureCtx = make(map[string]map[string]bool) // feature -> context name -> true
@@ -370,6 +376,14 @@ func (w *Walker) parseFile(dir, file string) (*ast.File, error) {
 			log.Fatalf("incorrect generated file: %s", err)
 		}
 	}
+	if w.context != nil && file == fmt.Sprintf("zruntime_defs_%s_%s.go", w.context.GOOS, w.context.GOARCH) {
+		// Just enough to keep the api checker happy.
+		src := "package runtime; type maptype struct{}; type _type struct{}; type alg struct{}"
+		f, err = parser.ParseFile(fset, filename, src, 0)
+		if err != nil {
+			log.Fatalf("incorrect generated file: %s", err)
+		}
+	}
 
 	if f == nil {
 		f, err = parser.ParseFile(fset, filename, nil, 0)
@@ -485,6 +499,11 @@ func (w *Walker) Import(name string) (pkg *types.Package) {
 		}
 
 		n = fmt.Sprintf("zgoarch_%s.go", w.context.GOARCH)
+		if !contains(filenames, n) {
+			filenames = append(filenames, n)
+		}
+
+		n = fmt.Sprintf("zruntime_defs_%s_%s.go", w.context.GOOS, w.context.GOARCH)
 		if !contains(filenames, n) {
 			filenames = append(filenames, n)
 		}

@@ -154,6 +154,11 @@ A few common code hosting sites have special syntax:
 		import "launchpad.net/~user/project/branch"
 		import "launchpad.net/~user/project/branch/sub/directory"
 
+	IBM DevOps Services (Git)
+
+		import "hub.jazz.net/git/user/project"
+		import "hub.jazz.net/git/user/project/sub/directory"
+
 For code hosted on other servers, import paths may either be qualified
 with the version control type, or the go tool can dynamically fetch
 the import path over https/http and discover where the code resides
@@ -293,5 +298,45 @@ Here's an example directory layout:
 Go searches each directory listed in GOPATH to find source code,
 but new packages are always downloaded into the first directory
 in the list.
+	`,
+}
+
+var helpFileType = &Command{
+	UsageLine: "filetype",
+	Short:     "file types",
+	Long: `
+The go command examines the contents of a restricted set of files
+in each directory. It identifies which files to examine based on
+the extension of the file name. These extensions are:
+
+	.go
+		Go source files.
+	.c, .h
+		C source files.
+		If the package uses cgo, these will be compiled with the
+		OS-native compiler (typically gcc); otherwise they will be
+		compiled with the Go-specific support compiler,
+		5c, 6c, or 8c, etc. as appropriate.
+	.cc, .cpp, .cxx, .hh, .hpp, .hxx
+		C++ source files. Only useful with cgo or SWIG, and always
+		compiled with the OS-native compiler.
+	.m
+		Objective-C source files. Only useful with cgo, and always
+		compiled with the OS-native compiler.
+	.s, .S
+		Assembler source files.
+		If the package uses cgo, these will be assembled with the
+		OS-native assembler (typically gcc (sic)); otherwise they
+		will be assembled with the Go-specific support assembler,
+		5a, 6a, or 8a, etc., as appropriate.
+	.swig, .swigcxx
+		SWIG definition files.
+	.syso
+		System object files.
+
+Files of each of these types except .syso may contain build
+constraints, but the go command stops scanning for build constraints
+at the first item in the file that is not a blank line or //-style
+line comment.
 	`,
 }

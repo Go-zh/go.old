@@ -46,14 +46,16 @@ type Call struct {
 // Client代表一个RPC客户端。
 // 一个客户端可以有多个调用，并且一个客户端可以被多个goroutine同时使用
 type Client struct {
-	mutex    sync.Mutex // protects pending, seq, request  // 保护pending,seq,request
-	sending  sync.Mutex
+	codec ClientCodec
+
+	sending sync.Mutex
+
+	mutex    sync.Mutex // protects following  // 保护下列状态
 	request  Request
 	seq      uint64
-	codec    ClientCodec
 	pending  map[uint64]*Call
-	closing  bool
-	shutdown bool
+	closing  bool // user has called Close
+	shutdown bool // server has told us to stop
 }
 
 // A ClientCodec implements writing of RPC requests and
@@ -291,7 +293,7 @@ func Dial(network, address string) (*Client, error) {
 
 func (client *Client) Close() error {
 	client.mutex.Lock()
-	if client.shutdown || client.closing {
+	if client.closing {
 		client.mutex.Unlock()
 		return ErrShutdown
 	}

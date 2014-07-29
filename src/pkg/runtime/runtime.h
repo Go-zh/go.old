@@ -102,14 +102,13 @@ typedef	struct	DebugVars	DebugVars;
  * local storage indexed by a pseudo-register TLS. See zasmhdr in
  * src/cmd/dist/buildruntime.c for details, and be aware that the linker may
  * make further OS-specific changes to the compiler's output. For example,
- * 6l/linux rewrites 0(TLS) as -16(FS).
+ * 6l/linux rewrites 0(TLS) as -8(FS).
  *
  * Every C file linked into a Go program must include runtime.h so that the
  * C compiler (6c, 8c, etc.) knows to avoid other uses of these dedicated
  * registers. The Go compiler (6g, 8g, etc.) knows to avoid them.
  */
 extern	register	G*	g;
-extern	register	M*	m;
 
 /*
  * defined constants
@@ -146,13 +145,6 @@ enum
 enum
 {
 	PtrSize = sizeof(void*),
-};
-enum
-{
-	// Per-M stack segment cache size.
-	StackCacheSize = 32,
-	// Global <-> per-M stack segment cache transfer batch size.
-	StackCacheBatch = 16,
 };
 /*
  * structures
@@ -214,7 +206,7 @@ struct	Gobuf
 	uintptr	sp;
 	uintptr	pc;
 	G*	g;
-	void*	ctxt;
+	void*	ctxt; // this has to be a pointer so that GC scans it
 	uintreg	ret;
 	uintptr	lr;
 };
@@ -327,10 +319,6 @@ struct	M
 	M*	schedlink;
 	uint32	machport;	// Return address for Mach IPC (OS X)
 	MCache*	mcache;
-	int32	stackinuse;
-	uint32	stackcachepos;
-	uint32	stackcachecnt;
-	void*	stackcache[StackCacheSize];
 	G*	lockedg;
 	uintptr	createstack[32];// Stack that created this thread.
 	uint32	freglo[16];	// D[i] lsb and F[i]
@@ -347,6 +335,8 @@ struct	M
 	bool	(*waitunlockf)(G*, void*);
 	void*	waitlock;
 	uintptr	forkstackguard;
+	uintptr scalararg[4];	// scalar argument/return for mcall
+	void*   ptrarg[4];	// pointer argument/return for mcall
 #ifdef GOOS_windows
 	void*	thread;		// thread handle
 	// these are here because they are too large to be on the stack
@@ -429,7 +419,6 @@ struct	Stktop
 
 	uint8*	argp;	// pointer to arguments in old frame
 	bool	panic;	// is this frame the top of a panic?
-	bool	malloced;
 };
 struct	SigTab
 {
@@ -703,6 +692,11 @@ struct Defer
 	void*	args[1];	// padded to actual size
 };
 
+// argp used in Defer structs when there is no argp.
+// TODO(rsc): Maybe we could use nil instead, but we've always used -1
+// and I don't want to change this days before the Go 1.3 release.
+#define NoArgs ((byte*)-1)
+
 /*
  * panics
  */
@@ -724,6 +718,7 @@ struct Stkframe
 {
 	Func*	fn;	// function being run
 	uintptr	pc;	// program counter within fn
+	uintptr	continpc;	// program counter where execution can continue, or 0 if not
 	uintptr	lr;	// program counter at caller aka link register
 	uintptr	sp;	// stack pointer at pc
 	uintptr	fp;	// stack pointer at caller aka frame pointer
@@ -838,7 +833,7 @@ int32	runtime·gotraceback(bool *crash);
 void	runtime·goroutineheader(G*);
 int32	runtime·open(int8*, int32, int32);
 int32	runtime·read(int32, void*, int32);
-int32	runtime·write(int32, void*, int32);
+int32	runtime·write(uintptr, void*, int32); // use uintptr to accommodate windows.
 int32	runtime·close(int32);
 int32	runtime·mincore(void*, uintptr, byte*);
 void	runtime·jmpdefer(FuncVal*, void*);
@@ -861,6 +856,7 @@ int32	runtime·funcarglen(Func*, uintptr);
 int32	runtime·funcspdelta(Func*, uintptr);
 int8*	runtime·funcname(Func*);
 int32	runtime·pcdatavalue(Func*, int32, uintptr);
+void	runtime·stackinit(void);
 void*	runtime·stackalloc(G*, uint32);
 void	runtime·stackfree(G*, void*, Stktop*);
 void	runtime·shrinkstack(G*);
@@ -901,7 +897,7 @@ uint64	runtime·atomicload64(uint64 volatile*);
 void*	runtime·atomicloadp(void* volatile*);
 void	runtime·atomicstorep(void* volatile*, void*);
 
-void	runtime·setmg(M*, G*);
+void	runtime·setg(G*);
 void	runtime·newextram(void);
 void	runtime·exit(int32);
 void	runtime·breakpoint(void);
@@ -920,7 +916,8 @@ void	runtime·exitsyscall(void);
 G*	runtime·newproc1(FuncVal*, byte*, int32, int32, void*);
 bool	runtime·sigsend(int32 sig);
 int32	runtime·callers(int32, uintptr*, int32);
-int64	runtime·nanotime(void);
+int64	runtime·nanotime(void);	// monotonic time
+int64	runtime·unixnanotime(void); // real time, can skip
 void	runtime·dopanic(int32);
 void	runtime·startpanic(void);
 void	runtime·freezetheworld(void);

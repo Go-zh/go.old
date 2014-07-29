@@ -76,7 +76,7 @@ enum {
 	// The minimum stack segment size to allocate.
 	// If the amount needed for the splitting frame + StackExtra
 	// is less than this number, the stack will have this size instead.
-	StackMin = 4096,
+	StackMin = 8192,
 	StackSystemRounded = StackSystem + (-StackSystem & (StackMin-1)),
 	FixedStack = StackMin + StackSystemRounded,
 
@@ -111,3 +111,9 @@ enum {
 // Must be greater than any real sp.
 // 0xfffffade in hex.
 #define StackPreempt ((uint64)-1314)
+/*c2go
+enum
+{
+	StackPreempt = -1314,
+};
+*/

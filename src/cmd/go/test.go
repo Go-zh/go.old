@@ -538,16 +538,31 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 
 	var imports, ximports []*Package
 	var stk importStack
-	stk.push(p.ImportPath + "_test")
+	stk.push(p.ImportPath + " (test)")
 	for _, path := range p.TestImports {
 		p1 := loadImport(path, p.Dir, &stk, p.build.TestImportPos[path])
 		if p1.Error != nil {
 			return nil, nil, nil, p1.Error
 		}
+		if contains(p1.Deps, p.ImportPath) {
+			// Same error that loadPackage returns (via reusePackage) in pkg.go.
+			// Can't change that code, because that code is only for loading the
+			// non-test copy of a package.
+			err := &PackageError{
+				ImportStack:   testImportStack(stk[0], p1, p.ImportPath),
+				Err:           "import cycle not allowed in test",
+				isImportCycle: true,
+			}
+			return nil, nil, nil, err
+		}
 		imports = append(imports, p1)
 	}
+	stk.pop()
+	stk.push(p.ImportPath + "_test")
+	pxtestNeedsPtest := false
 	for _, path := range p.XTestImports {
 		if path == p.ImportPath {
+			pxtestNeedsPtest = true
 			continue
 		}
 		p1 := loadImport(path, p.Dir, &stk, p.build.XTestImportPos[path])
@@ -648,10 +663,13 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 			build: &build.Package{
 				ImportPos: p.build.XTestImportPos,
 			},
-			imports: append(ximports, ptest),
+			imports: ximports,
 			pkgdir:  testDir,
 			fake:    true,
 			Stale:   true,
+		}
+		if pxtestNeedsPtest {
+			pxtest.imports = append(pxtest.imports, ptest)
 		}
 	}
 
@@ -662,21 +680,19 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 		GoFiles:    []string{"_testmain.go"},
 		ImportPath: "testmain",
 		Root:       p.Root,
-		imports:    []*Package{ptest},
 		build:      &build.Package{Name: "main"},
 		pkgdir:     testDir,
 		fake:       true,
 		Stale:      true,
 		omitDWARF:  !testC && !testNeedBinary,
 	}
-	if pxtest != nil {
-		pmain.imports = append(pmain.imports, pxtest)
-	}
 
 	// The generated main also imports testing and regexp.
 	stk.push("testmain")
 	for dep := range testMainDeps {
-		if ptest.ImportPath != dep {
+		if dep == ptest.ImportPath {
+			pmain.imports = append(pmain.imports, ptest)
+		} else {
 			p1 := loadImport(dep, "", &stk, nil)
 			if p1.Error != nil {
 				return nil, nil, nil, p1.Error
@@ -699,6 +715,21 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 		}
 	}
 
+	// Do initial scan for metadata needed for writing _testmain.go
+	// Use that metadata to update the list of imports for package main.
+	// The list of imports is used by recompileForTest and by the loop
+	// afterward that gathers t.Cover information.
+	t, err := loadTestFuncs(ptest)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if t.ImportTest || ptest.coverMode != "" {
+		pmain.imports = append(pmain.imports, ptest)
+	}
+	if t.ImportXtest {
+		pmain.imports = append(pmain.imports, pxtest)
+	}
+
 	if ptest != p && localCover {
 		// We have made modifications to the package p being tested
 		// and are rebuilding p (as ptest), writing it to the testDir tree.
@@ -715,7 +746,15 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 		recompileForTest(pmain, p, ptest, testDir)
 	}
 
-	if err := writeTestmain(filepath.Join(testDir, "_testmain.go"), pmain, ptest); err != nil {
+	for _, cp := range pmain.imports {
+		if len(cp.coverVars) > 0 {
+			t.Cover = append(t.Cover, coverInfo{cp, cp.coverVars})
+		}
+	}
+
+	// writeTestmain writes _testmain.go. This must happen after recompileForTest,
+	// because recompileForTest modifies XXX.
+	if err := writeTestmain(filepath.Join(testDir, "_testmain.go"), t); err != nil {
 		return nil, nil, nil, err
 	}
 
@@ -775,6 +814,24 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 	}
 
 	return pmainAction, runAction, printAction, nil
+}
+
+func testImportStack(top string, p *Package, target string) []string {
+	stk := []string{top, p.ImportPath}
+Search:
+	for p.ImportPath != target {
+		for _, p1 := range p.imports {
+			if p1.ImportPath == target || contains(p1.Deps, target) {
+				stk = append(stk, p1.ImportPath)
+				p = p1
+				continue Search
+			}
+		}
+		// Can't happen, but in case it does...
+		stk = append(stk, "<lost path to cycle>")
+		break
+	}
+	return stk
 }
 
 func recompileForTest(pmain, preal, ptest *Package, testDir string) {
@@ -1019,31 +1076,26 @@ type coverInfo struct {
 	Vars    map[string]*CoverVar
 }
 
-// writeTestmain writes the _testmain.go file for package p to
-// the file named out.
-func writeTestmain(out string, pmain, p *Package) error {
-	var cover []coverInfo
-	for _, cp := range pmain.imports {
-		if len(cp.coverVars) > 0 {
-			cover = append(cover, coverInfo{cp, cp.coverVars})
-		}
-	}
-
+// loadTestFuncs returns the testFuncs describing the tests that will be run.
+func loadTestFuncs(ptest *Package) (*testFuncs, error) {
 	t := &testFuncs{
-		Package: p,
-		Cover:   cover,
+		Package: ptest,
 	}
-	for _, file := range p.TestGoFiles {
-		if err := t.load(filepath.Join(p.Dir, file), "_test", &t.NeedTest); err != nil {
-			return err
+	for _, file := range ptest.TestGoFiles {
+		if err := t.load(filepath.Join(ptest.Dir, file), "_test", &t.ImportTest, &t.NeedTest); err != nil {
+			return nil, err
 		}
 	}
-	for _, file := range p.XTestGoFiles {
-		if err := t.load(filepath.Join(p.Dir, file), "_xtest", &t.NeedXtest); err != nil {
-			return err
+	for _, file := range ptest.XTestGoFiles {
+		if err := t.load(filepath.Join(ptest.Dir, file), "_xtest", &t.ImportXtest, &t.NeedXtest); err != nil {
+			return nil, err
 		}
 	}
+	return t, nil
+}
 
+// writeTestmain writes the _testmain.go file for t to the file named out.
+func writeTestmain(out string, t *testFuncs) error {
 	f, err := os.Create(out)
 	if err != nil {
 		return err
@@ -1058,13 +1110,15 @@ func writeTestmain(out string, pmain, p *Package) error {
 }
 
 type testFuncs struct {
-	Tests      []testFunc
-	Benchmarks []testFunc
-	Examples   []testFunc
-	Package    *Package
-	NeedTest   bool
-	NeedXtest  bool
-	Cover      []coverInfo
+	Tests       []testFunc
+	Benchmarks  []testFunc
+	Examples    []testFunc
+	Package     *Package
+	ImportTest  bool
+	NeedTest    bool
+	ImportXtest bool
+	NeedXtest   bool
+	Cover       []coverInfo
 }
 
 func (t *testFuncs) CoverMode() string {
@@ -1099,7 +1153,7 @@ type testFunc struct {
 
 var testFileSet = token.NewFileSet()
 
-func (t *testFuncs) load(filename, pkg string, seen *bool) error {
+func (t *testFuncs) load(filename, pkg string, doImport, seen *bool) error {
 	f, err := parser.ParseFile(testFileSet, filename, nil, parser.ParseComments)
 	if err != nil {
 		return expandScanner(err)
@@ -1116,15 +1170,16 @@ func (t *testFuncs) load(filename, pkg string, seen *bool) error {
 		switch {
 		case isTest(name, "Test"):
 			t.Tests = append(t.Tests, testFunc{pkg, name, ""})
-			*seen = true
+			*doImport, *seen = true, true
 		case isTest(name, "Benchmark"):
 			t.Benchmarks = append(t.Benchmarks, testFunc{pkg, name, ""})
-			*seen = true
+			*doImport, *seen = true, true
 		}
 	}
 	ex := doc.Examples(f)
 	sort.Sort(byOrder(ex))
 	for _, e := range ex {
+		*doImport = true // import test file whether executed or not
 		if e.Output == "" && !e.EmptyOutput {
 			// Don't run examples with no output.
 			continue
@@ -1148,11 +1203,11 @@ import (
 	"regexp"
 	"testing"
 
-{{if .NeedTest}}
-	_test {{.Package.ImportPath | printf "%q"}}
+{{if .ImportTest}}
+	{{if .NeedTest}}_test{{else}}_{{end}} {{.Package.ImportPath | printf "%q"}}
 {{end}}
-{{if .NeedXtest}}
-	_xtest {{.Package.ImportPath | printf "%s_test" | printf "%q"}}
+{{if .ImportXtest}}
+	{{if .NeedXtest}}_xtest{{else}}_{{end}} {{.Package.ImportPath | printf "%s_test" | printf "%q"}}
 {{end}}
 {{range $i, $p := .Cover}}
 	_cover{{$i}} {{$p.Package.ImportPath | printf "%q"}}

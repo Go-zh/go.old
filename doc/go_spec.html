@@ -6,7 +6,7 @@
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of May 7, 2014",
+	"Subtitle": "Version of July 14, 2014",
 	"Path": "/ref/spec"
 }-->
 
@@ -32,7 +32,7 @@ TODO
 [ ] 阐明什么是结构体声明中的字段名（struct{T} 之于 struct {T T} 之于 struct {t T}）
 [ ] 关于操作符的结果类型需要详尽的语言描述
 [ ] 或许该写一些关于语句求值顺序的东西，尽管它很明显
-[ ] 在“选择者”一节中，阐明在方法调用中传递的是接收者的什么值
+[ ] 在“选择器”一节中，阐明在方法调用中传递的是接收者的什么值
 -->
 
 <div class="english">
@@ -44,7 +44,7 @@ TODO
 <div class="english">
 <p>
 This is a reference manual for the Go programming language. For
-more information and other documents, see <a href="/">http://golang.org</a>.
+more information and other documents, see <a href="/">golang.org</a>.
 </p>
 </div>
 
@@ -573,7 +573,7 @@ string composed of the uninterpreted (implicitly UTF-8-encoded) characters
 between the quotes;
 in particular, backslashes have no special meaning and the string may
 contain newlines.
-Carriage returns inside raw string literals
+Carriage return characters ('\r') inside raw string literals
 are discarded from the raw string value.
 </p>
 <p>
@@ -798,19 +798,19 @@ and <code>T4</code> is <code>[]T1</code>.
 
 <h3 id="Method_sets">Method sets</h3>
 <p>
-A type may have a <i>method set</i> associated with it
-(§<a href="#Interface_types">Interface types</a>, §<a href="#Method_declarations">Method declarations</a>).
+A type may have a <i>method set</i> associated with it.
 The method set of an <a href="#Interface_types">interface type</a> is its interface.
-The method set of any other type <code>T</code>
-consists of all methods with receiver type <code>T</code>.
-The method set of the corresponding pointer type <code>*T</code>
-is the set of all methods with receiver <code>*T</code> or <code>T</code>
+The method set of any other type <code>T</code> consists of all
+<a href="#Method_declarations">methods</a> declared with receiver type <code>T</code>.
+The method set of the corresponding <a href="#Pointer_types">pointer type</a> <code>*T</code>
+is the set of all methods declared with receiver <code>*T</code> or <code>T</code>
 (that is, it also contains the method set of <code>T</code>).
 Further rules apply to structs containing anonymous fields, as described
 in the section on <a href="#Struct_types">struct types</a>.
 Any other type has an empty method set.
 In a method set, each method must have a
-<a href="#Uniqueness_of_identifiers">unique</a> <a href="#MethodName">method name</a>.
+<a href="#Uniqueness_of_identifiers">unique</a>
+non-<a href="#Blank_identifier">blank</a> <a href="#MethodName">method name</a>.
 </p>
 
 <p>
@@ -920,8 +920,8 @@ ElementType = Type .
 </pre>
 
 <p>
-The length is part of the array's type; it must evaluate to a non-
-negative <a href="#Constants">constant</a> representable by a value
+The length is part of the array's type; it must evaluate to a
+non-negative <a href="#Constants">constant</a> representable by a value
 of type <code>int</code>.
 The length of array <code>a</code> can be discovered
 using the built-in function <a href="#Length_and_capacity"><code>len</code></a>.
@@ -1211,7 +1211,8 @@ InterfaceTypeName  = TypeName .
 
 <p>
 As with all method sets, in an interface type, each method must have a
-<a href="#Uniqueness_of_identifiers">unique</a> name.
+<a href="#Uniqueness_of_identifiers">unique</a>
+non-<a href="#Blank_identifier">blank</a> name.
 </p>
 
 <pre>
@@ -1433,8 +1434,8 @@ make(chan int, 100)
 <p>
 The capacity, in number of elements, sets the size of the buffer in the channel.
 If the capacity is zero or absent, the channel is unbuffered and communication
-succeeds only when both a sender and receiver are ready. Otherwise, the channel is
-buffered and communication operations succeed without blocking if the buffer
+succeeds only when both a sender and receiver are ready. Otherwise, the channel
+is buffered and communication succeeds without blocking if the buffer
 is not full (sends) or not empty (receives).
 A <code>nil</code> channel is never ready for communication.
 </p>
@@ -1635,6 +1636,9 @@ no identifier may be declared in both the file and package block.
 <p>
 The <a href="#Blank_identifier">blank identifier</a> may be used like any other identifier
 in a declaration, but it does not introduce a binding and thus is not declared.
+In the package block, the identifier <code>init</code> may only be used for
+<a href="#Package_initialization"><code>init</code> function</a> declarations,
+and like the blank identifier it does not introduce a new binding.
 </p>
 
 <pre class="ebnf">
@@ -2127,13 +2131,14 @@ and associates the method with the receiver's <i>base type</i>.
 
 <pre class="ebnf">
 MethodDecl   = "func" Receiver MethodName ( Function | Signature ) .
-Receiver     = "(" [ identifier ] [ "*" ] BaseTypeName ")" .
-BaseTypeName = identifier .
+Receiver     = Parameters .
 </pre>
 
 <p>
-The receiver type must be of the form <code>T</code> or <code>*T</code> where
-<code>T</code> is a type name. The type denoted by <code>T</code> is called
+The receiver is specified via an extra parameter section preceeding the method
+name. That parameter section must declare a single parameter, the receiver.
+Its type must be of the form <code>T</code> or <code>*T</code> (possibly using
+parentheses) where <code>T</code> is a type name. The type denoted by <code>T</code> is called
 the receiver <i>base type</i>; it must not be a pointer or interface type and
 it must be declared in the same package as the method.
 The method is said to be <i>bound</i> to the base type and the method name
@@ -3473,7 +3478,7 @@ or an array indexing operation of an addressable array.
 As an exception to the addressability requirement, <code>x</code> may also be a
 (possibly parenthesized)
 <a href="#Composite_literals">composite literal</a>.
-If the evaluation of <code>x</code> would cause a <a href="#Run_time_panics">run-time panic</a>, 
+If the evaluation of <code>x</code> would cause a <a href="#Run_time_panics">run-time panic</a>,
 then the evaluation of <code>&amp;x</code> does too.
 </p>
 
@@ -4116,7 +4121,7 @@ precision.
 <h3 id="Order_of_evaluation">Order of evaluation</h3>
 
 <p>
-At package level, <a href="#Program_execution"</a>initialization dependencies</a>
+At package level, <a href="#Package_initialization">initialization dependencies</a>
 determine the evaluation order of individual initialization expressions in
 <a href="#Variable_declarations">variable declarations</a>.
 Otherwise, when evaluating the <a href="#Operands">operands</a> of an
@@ -4153,7 +4158,7 @@ n := map[int]int{a: f()}      // n may be {2: 3} or {3: 3}: evaluation order bet
 <p>
 At package level, initialization dependencies override the left-to-right rule
 for individual initialization expressions, but not for operands within each
-expression: 
+expression:
 </p>
 
 <pre>
@@ -4811,41 +4816,42 @@ for      { S() }    is the same as    for true     { S() }
 A "for" statement with a "range" clause
 iterates through all entries of an array, slice, string or map,
 or values received on a channel. For each entry it assigns <i>iteration values</i>
-to corresponding <i>iteration variables</i> and then executes the block.
+to corresponding <i>iteration variables</i> if present and then executes the block.
 </p>
 
 <pre class="ebnf">
-RangeClause = ( ExpressionList "=" | IdentifierList ":=" ) "range" Expression .
+RangeClause = [ ExpressionList "=" | IdentifierList ":=" ] "range" Expression .
 </pre>
 
 <p>
 The expression on the right in the "range" clause is called the <i>range expression</i>,
 which may be an array, pointer to an array, slice, string, map, or channel permitting
 <a href="#Receive_operator">receive operations</a>.
-As with an assignment, the operands on the left must be
+As with an assignment, if present the operands on the left must be
 <a href="#Address_operators">addressable</a> or map index expressions; they
-denote the iteration variables. If the range expression is a channel, only
-one iteration variable is permitted, otherwise there may be one or two. In the latter case,
-if the second iteration variable is the <a href="#Blank_identifier">blank identifier</a>,
-the range clause is equivalent to the same clause with only the first variable present.
+denote the iteration variables. If the range expression is a channel, at most
+one iteration variable is permitted, otherwise there may be up to two.
+If the last iteration variable is the <a href="#Blank_identifier">blank identifier</a>,
+the range clause is equivalent to the same clause without that identifier.
 </p>
 
 <p>
 The range expression is evaluated once before beginning the loop,
-with one exception. If the range expression is an array or a pointer to an array
-and only the first iteration value is present, only the range expression's
-length is evaluated; if that length is constant
-<a href="#Length_and_capacity">by definition</a>,
+with one exception: if the range expression is an array or a pointer to an array
+and at most one iteration variable is present, only the range expression's
+length is evaluated; if that length is constant,
+<a href="#Length_and_capacity">by definition</a>
 the range expression itself will not be evaluated.
 </p>
 
 <p>
 Function calls on the left are evaluated once per iteration.
-For each iteration, iteration values are produced as follows:
+For each iteration, iteration values are produced as follows
+if the respective iteration variables are present:
 </p>
 
 <pre class="grammar">
-Range expression                          1st value          2nd value (if 2nd variable is present)
+Range expression                          1st value          2nd value
 
 array or slice  a  [n]E, *[n]E, or []E    index    i  int    a[i]       E
 string          s  string type            index    i  int    see below  rune
@@ -4857,7 +4863,7 @@ channel         c  chan E, &lt;-chan E       element  e  E
 <li>
 For an array, pointer to array, or slice value <code>a</code>, the index iteration
 values are produced in increasing order, starting at element index 0.
-If only the first iteration variable is present, the range loop produces
+If at most one iteration variable is present, the range loop produces
 iteration values from 0 up to <code>len(a)-1</code> and does not index into the array
 or slice itself. For a <code>nil</code> slice, the number of iterations is 0.
 </li>
@@ -4938,6 +4944,9 @@ var ch chan Work = producer()
 for w := range ch {
 	doWork(w)
 }
+
+// empty a channel
+for range ch {}
 </pre>
 
 
@@ -4981,8 +4990,12 @@ go func(ch chan&lt;- bool) { for { sleep(10); ch &lt;- true; }} (c)
 <h3 id="Select_statements">Select statements</h3>
 
 <p>
-A "select" statement chooses which of a set of possible communications
-will proceed.  It looks similar to a "switch" statement but with the
+A "select" statement chooses which of a set of possible
+<a href="#Send_statements">send</a> or
+<a href="#Receive_operator">receive</a>
+operations will proceed.
+It looks similar to a
+<a href="#Switch_statements">"switch"</a> statement but with the
 cases all referring to communication operations.
 </p>
 
@@ -4995,41 +5008,63 @@ RecvExpr   = Expression .
 </pre>
 
 <p>
-RecvExpr must be a <a href="#Receive_operator">receive operation</a>.
-For all the cases in the "select"
-statement, the channel expressions are evaluated in top-to-bottom order, along with
-any expressions that appear on the right hand side of send statements.
-A channel may be <code>nil</code>,
-which is equivalent to that case not
-being present in the select statement
-except, if a send, its expression is still evaluated.
-If any of the resulting operations can proceed, one of those is
-chosen and the corresponding communication and statements are
-evaluated.  Otherwise, if there is a default case, that executes;
-if there is no default case, the statement blocks until one of the communications can
-complete. There can be at most one default case and it may appear anywhere in the
-"select" statement.
-If there are no cases with non-<code>nil</code> channels,
-the statement blocks forever.
-Even if the statement blocks,
-the channel and send expressions are evaluated only once,
-upon entering the select statement.
-</p>
-<p>
-Since all the channels and send expressions are evaluated, any side
-effects in that evaluation will occur for all the communications
-in the "select" statement.
-</p>
-<p>
-If multiple cases can proceed, a uniform pseudo-random choice is made to decide
-which single communication will execute.
-<p>
-The receive case may declare one or two new variables using a
+A case with a RecvStmt may assign the result of a RecvExpr to one or
+two variables, which may be declared using a
 <a href="#Short_variable_declarations">short variable declaration</a>.
+The RecvExpr must be a (possibly parenthesized) receive operation.
+There can be at most one default case and it may appear anywhere
+in the list of cases.
+</p>
+
+<p>
+Execution of a "select" statement proceeds in several steps:
+</p>
+
+<ol>
+<li>
+For all the cases in the statement, the channel operands of receive operations
+and the channel and right-hand-side expressions of send statements are
+evaluated exactly once, in source order, upon entering the "select" statement.
+The result is a set of channels to receive from or send to,
+and the corresponding values to send.
+Any side effects in that evaluation will occur irrespective of which (if any)
+communication operation is selected to proceed.
+Expressions on the left-hand side of a RecvStmt with a short variable declaration
+or assignment are not yet evaluated.
+</li>
+
+<li>
+If one or more of the communications can proceed,
+a single one that can proceed is chosen via a uniform pseudo-random selection.
+Otherwise, if there is a default case, that case is chosen.
+If there is no default case, the "select" statement blocks until
+at least one of the communications can proceed.
+</li>
+
+<li>
+Unless the selected case is the default case, the respective communication
+operation is executed.
+</li>
+
+<li>
+If the selected case is a RecvStmt with a short variable declaration or
+an assignment, the left-hand side expressions are evaluated and the
+received value (or values) are assigned.
+</li>
+
+<li>
+The statement list of the selected case is executed.
+</li>
+</ol>
+
+<p>
+Since communication on <code>nil</code> channels can never proceed,
+a select with only <code>nil</code> channels and no default case blocks forever.
 </p>
 
 <pre>
-var c, c1, c2, c3 chan int
+var a []int
+var c, c1, c2, c3, c4 chan int
 var i1, i2 int
 select {
 case i1 = &lt;-c1:
@@ -5042,6 +5077,10 @@ case i3, ok := (&lt;-c3):  // same as: i3, ok := &lt;-c3
 	} else {
 		print("c3 is closed\n")
 	}
+case a[f()] = &lt;-c4:
+	// same as:
+	// case t := &lt;-c4
+	//	a[f()] = t
 default:
 	print("no communication\n")
 }
@@ -5161,7 +5200,8 @@ func f(n int) (res int, err error) {
 A "break" statement terminates execution of the innermost
 <a href="#For_statements">"for"</a>,
 <a href="#Switch_statements">"switch"</a>, or
-<a href="#Select_statements">"select"</a> statement.
+<a href="#Select_statements">"select"</a> statement
+within the same function.
 </p>
 
 <pre class="ebnf">
@@ -5195,6 +5235,7 @@ OuterLoop:
 <p>
 A "continue" statement begins the next iteration of the
 innermost <a href="#For_statements">"for" loop</a> at its post statement.
+The "for" loop must be within the same function.
 </p>
 
 <pre class="ebnf">
@@ -5222,7 +5263,8 @@ RowLoop:
 <h3 id="Goto_statements">Goto statements</h3>
 
 <p>
-A "goto" statement transfers control to the statement with the corresponding label.
+A "goto" statement transfers control to the statement with the corresponding label
+within the same function.
 </p>
 
 <pre class="ebnf">
@@ -5979,62 +6021,126 @@ The same would also be true after
 var t T
 </pre>
 
-<h3 id="Program_execution">Program execution</h3>
+<h3 id="Package_initialization">Package initialization</h3>
 <p>
-A package with no imports is initialized by assigning initial values to
-all its package-level variables
-and then calling any
-package-level function with the name and signature of
+Within a package, package-level variables are initialized according
+to their <i>dependencies</i>: if a variable <code>x</code> depends on
+a variable <code>y</code>, <code>x</code> will be initialized after
+<code>y</code>.
 </p>
+
+<p>
+Dependency analysis does not rely on the actual values of the
+variables, only on lexical <i>references</i> to them in the source,
+analyzed transitively. For instance, a variable <code>x</code>'s
+<a href="#Variable_declarations">initialization expression</a>
+may refer to a function whose body refers to variable <code>y</code>;
+if so, <code>x</code> depends on <code>y</code>.
+Specifically:
+</p>
+
+<ul>
+<li>
+A reference to a variable or function is an identifier denoting that
+variable or function.
+</li>
+
+<li>
+A reference to a method <code>m</code> is a
+<a href="#Method_values">method value</a> or
+<a href="#Method_expressions">method expression</a> of the form
+<code>t.m</code>, where the (static) type of <code>t</code> is
+not an interface type, and the method <code>m</code> is in the
+<a href="#Method_sets">method set</a> of <code>t</code>.
+It is immaterial whether the resulting function value
+<code>t.m</code> is invoked.
+</li>
+
+<li>
+A variable, function, or method <code>x</code> depends on a variable
+<code>y</code> if <code>x</code>'s initialization expression or body
+(for functions and methods) contains a reference to <code>y</code>
+or to a function or method that depends on <code>y</code>.
+</li>
+</ul>
+
+<p>
+Dependency analysis is performed per package; only references referring
+to variables, functions, and methods declared in the current package
+are considered.
+It is an error if variable dependencies form a cycle
+(but dependency cycles containing no variables are permitted).
+If two variables are independent of each other,
+they are initialized in the order they are declared
+in the source, possibly in multiple files, as presented to the compiler.
+</p>
+
+<p>
+For example, given the declarations
+</p>
+
 <pre>
-func init()
+var (
+	a = c + b
+	b = f()
+	c = f()
+	d = 3
+)
+
+func f() int {
+	d++
+	return d
+}
 </pre>
+
 <p>
-defined in its source.
-A package-scope or file-scope identifier
-with name <code>init</code> may only be
-declared to be a function with this signature.
-Multiple such functions may be defined, even
-within a single source file; they execute
-in unspecified order.
+the initialization order is <code>d</code>, <code>b</code>, <code>c</code>, <code>a</code>.
+Since <code>b</code> and <code>c</code> are independent of each other, they are
+initialized in declaration order (<code>b</code> before <code>c</code>).
 </p>
+
 <p>
-Within a package, package-level variables are initialized,
-and constant values are determined, according to
-order of reference: if the initializer of <code>A</code>
-depends on <code>B</code>, <code>A</code>
-will be set after <code>B</code>.
-Dependency analysis does not depend on the actual values
-of the items being initialized, only on their appearance
-in the source.
-<code>A</code>
-depends on <code>B</code> if the value of <code>A</code>
-contains a mention of <code>B</code>, contains a value
-whose initializer
-mentions <code>B</code>, or mentions a function that
-mentions <code>B</code>, recursively.
-It is an error if such dependencies form a cycle.
-If two items are not interdependent, they will be initialized
-in the order they appear in the source, possibly in multiple files,
+Variables may also be initialized using functions named <code>init</code>
+declared in the package block, with no arguments and no result parameters.
+</p>
+
+<pre>
+func init() { … }
+</pre>
+
+<p>
+Multiple such functions may be defined, even within a single
+source file. The <code>init</code> identifier is not
+<a href="#Declarations_and_scope">declared</a> and thus
+<code>init</code> functions cannot be referred to from anywhere
+in a program.
+</p>
+
+<p>
+A package with no imports is initialized by assigning initial values
+to all its package-level variables followed by calling all <code>init</code>
+functions in the order they appear in the source, possibly in multiple files,
 as presented to the compiler.
-Since the dependency analysis is done per package, it can produce
-unspecified results  if <code>A</code>'s initializer calls a function defined
-in another package that refers to <code>B</code>.
-</p>
-<p>
-An <code>init</code> function cannot be referred to from anywhere
-in a program. In particular, <code>init</code> cannot be called explicitly,
-nor can a pointer to <code>init</code> be assigned to a function variable.
-</p>
-<p>
 If a package has imports, the imported packages are initialized
 before initializing the package itself. If multiple packages import
-a package <code>P</code>, <code>P</code> will be initialized only once.
+a package, the imported package will be initialized only once.
+The importing of packages, by construction, guarantees that there
+can be no cyclic initialization dependencies.
 </p>
+
 <p>
-The importing of packages, by construction, guarantees that there can
-be no cyclic dependencies in initialization.
+Package initialization&mdash;variable initialization and the invocation of
+<code>init</code> functions&mdash;happens in a single goroutine,
+sequentially, one package at a time.
+An <code>init</code> function may launch other goroutines, which can run
+concurrently with the initialization code. However, initialization
+always sequences
+the <code>init</code> functions: it will not invoke the next one
+until the previous one has returned.
 </p>
+
+
+<h3 id="Program_execution">Program execution</h3>
 <p>
 A complete program is created by linking a single, unimported package
 called the <i>main package</i> with all the packages it imports, transitively.
@@ -6051,20 +6157,8 @@ func main() { … }
 <p>
 Program execution begins by initializing the main package and then
 invoking the function <code>main</code>.
-When the function <code>main</code> returns, the program exits.
+When that function invocation returns, the program exits.
 It does not wait for other (non-<code>main</code>) goroutines to complete.
-</p>
-
-<p>
-Package initialization&mdash;variable initialization and the invocation of
-<code>init</code> functions&mdash;happens in a single goroutine,
-sequentially, one package at a time.
-An <code>init</code> function may launch other goroutines, which can run
-concurrently with the initialization code. However, initialization
-always sequences
-the <code>init</code> functions: it will not start the next
-<code>init</code> until
-the previous one has returned.
 </p>
 
 <h2 id="Errors">Errors</h2>

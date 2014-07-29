@@ -4,6 +4,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// liveness tests with inlining disabled.
+// see also live2.go.
+
 package main
 
 func f1() {
@@ -135,7 +138,7 @@ var b bool
 
 // this used to have a spurious "live at entry to f11a: ~r0"
 func f11a() *int {
-	select { // ERROR "live at call to selectgo: autotmp"
+	select { // ERROR "live at call to newselect: autotmp" "live at call to selectgo: autotmp"
 	case <-c: // ERROR "live at call to selectrecv: autotmp"
 		return nil
 	case <-c: // ERROR "live at call to selectrecv: autotmp"
@@ -150,7 +153,7 @@ func f11b() *int {
 		// get to the bottom of the function.
 		// This used to have a spurious "live at call to printint: p".
 		print(1) // nothing live here!
-		select { // ERROR "live at call to selectgo: autotmp"
+		select { // ERROR "live at call to newselect: autotmp" "live at call to selectgo: autotmp"
 		case <-c: // ERROR "live at call to selectrecv: autotmp"
 			return nil
 		case <-c: // ERROR "live at call to selectrecv: autotmp"
@@ -167,7 +170,7 @@ func f11c() *int {
 		// Unlike previous, the cases in this select fall through,
 		// so we can get to the println, so p is not dead.
 		print(1) // ERROR "live at call to printint: p"
-		select { // ERROR "live at call to newselect: p" "live at call to selectgo: autotmp.* p"
+		select { // ERROR "live at call to newselect: autotmp.* p" "live at call to selectgo: autotmp.* p"
 		case <-c: // ERROR "live at call to selectrecv: autotmp.* p"
 		case <-c: // ERROR "live at call to selectrecv: autotmp.* p"
 		}
@@ -563,4 +566,59 @@ func f38(b bool) {
 		println()
 	}
 	println()
+}
+
+// issue 8097: mishandling of x = x during return.
+
+func f39() (x []int) {
+	x = []int{1}
+	println() // ERROR "live at call to printnl: x"
+	return x
+}
+
+func f39a() (x []int) {
+	x = []int{1}
+	println() // ERROR "live at call to printnl: x"
+	return
+}
+
+func f39b() (x [10]*int) {
+	x = [10]*int{new(int)} // ERROR "live at call to new: x"
+	println() // ERROR "live at call to printnl: x"
+	return x
+}
+
+func f39c() (x [10]*int) {
+	x = [10]*int{new(int)} // ERROR "live at call to new: x"
+	println() // ERROR "live at call to printnl: x"
+	return
+}
+
+// issue 8142: lost 'addrtaken' bit on inlined variables.
+// no inlining in this test, so just checking that non-inlined works.
+
+type T40 struct {
+	m map[int]int
+}
+
+func newT40() *T40 {
+	ret := T40{ // ERROR "live at call to makemap: &ret"
+		make(map[int]int), 
+	}
+	return &ret
+}
+
+func bad40() {
+	t := newT40()
+	println()
+	_ = t
+}
+
+func good40() {
+	ret := T40{ // ERROR "live at call to makemap: ret"
+		make(map[int]int),
+	}
+	t := &ret
+	println() // ERROR "live at call to printnl: ret"
+	_ = t
 }

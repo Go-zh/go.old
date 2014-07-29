@@ -1197,12 +1197,12 @@ func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
 		return t
 
 	case *dwarf.StructType:
-		if dt.ByteSize < 0 { // opaque struct
-			break
-		}
 		// Convert to Go struct, being careful about alignment.
 		// Have to give it a name to simulate C "struct foo" references.
 		tag := dt.StructName
+		if dt.ByteSize < 0 && tag == "" { // opaque unnamed struct - should not be possible
+			break
+		}
 		if tag == "" {
 			tag = "__" + strconv.Itoa(tagGen)
 			tagGen++
@@ -1212,6 +1212,16 @@ func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
 		name := c.Ident("_Ctype_" + dt.Kind + "_" + tag)
 		t.Go = name // publish before recursive calls
 		goIdent[name.Name] = name
+		if dt.ByteSize < 0 {
+			// Size calculation in c.Struct/c.Opaque will die with size=-1 (unknown),
+			// so execute the basic things that the struct case would do
+			// other than try to determine a Go representation.
+			tt := *t
+			tt.C = &TypeRepr{"%s %s", []interface{}{dt.Kind, tag}}
+			tt.Go = c.Ident("struct{}")
+			typedef[name.Name] = &tt
+			break
+		}
 		switch dt.Kind {
 		case "class", "union":
 			t.Go = c.Opaque(t.Size)
@@ -1259,13 +1269,33 @@ func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
 		sub := c.Type(dt.Type, pos)
 		t.Size = sub.Size
 		t.Align = sub.Align
-		if _, ok := typedef[name.Name]; !ok {
+		oldType := typedef[name.Name]
+		if oldType == nil {
 			tt := *t
 			tt.Go = sub.Go
 			typedef[name.Name] = &tt
 		}
-		if *godefs || *cdefs {
+
+		// If sub.Go.Name is "_Ctype_struct_foo" or "_Ctype_union_foo" or "_Ctype_class_foo",
+		// use that as the Go form for this typedef too, so that the typedef will be interchangeable
+		// with the base type.
+		// In -godefs and -cdefs mode, do this for all typedefs.
+		if isStructUnionClass(sub.Go) || *godefs || *cdefs {
 			t.Go = sub.Go
+
+			if isStructUnionClass(sub.Go) {
+				// Use the typedef name for C code.
+				typedef[sub.Go.(*ast.Ident).Name].C = t.C
+			}
+
+			// If we've seen this typedef before, and it
+			// was an anonymous struct/union/class before
+			// too, use the old definition.
+			// TODO: it would be safer to only do this if
+			// we verify that the types are the same.
+			if oldType != nil && isStructUnionClass(oldType.Go) {
+				t.Go = oldType.Go
+			}
 		}
 
 	case *dwarf.UcharType:
@@ -1327,10 +1357,19 @@ func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
 		// be correct, so calling dtype.Size again will produce the correct value.
 		t.Size = dtype.Size()
 		if t.Size < 0 {
-			// Unsized types are [0]byte, unless they're typedefs of other types.
-			// if so, use the name of the typedef for the go name.
+			// Unsized types are [0]byte, unless they're typedefs of other types
+			// or structs with tags.
+			// if so, use the name we've already defined.
 			t.Size = 0
-			if _, ok := dtype.(*dwarf.TypedefType); !ok {
+			switch dt := dtype.(type) {
+			case *dwarf.TypedefType:
+				// ok
+			case *dwarf.StructType:
+				if dt.StructName != "" {
+					break
+				}
+				t.Go = c.Opaque(0)
+			default:
 				t.Go = c.Opaque(0)
 			}
 			if t.C.Empty() {
@@ -1345,6 +1384,19 @@ func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
 	}
 
 	return t
+}
+
+// isStructUnionClass reports whether the type described by the Go syntax x
+// is a struct, union, or class with a tag.
+func isStructUnionClass(x ast.Expr) bool {
+	id, ok := x.(*ast.Ident)
+	if !ok {
+		return false
+	}
+	name := id.Name
+	return strings.HasPrefix(name, "_Ctype_struct_") ||
+		strings.HasPrefix(name, "_Ctype_union_") ||
+		strings.HasPrefix(name, "_Ctype_class_")
 }
 
 // FuncArg returns a Go type with the same memory layout as
@@ -1499,7 +1551,7 @@ func (c *typeConv) Struct(dt *dwarf.StructType, pos token.Pos) (expr *ast.Struct
 		t := c.Type(f.Type, pos)
 		tgo := t.Go
 		size := t.Size
-
+		talign := t.Align
 		if f.BitSize > 0 {
 			if f.BitSize%8 != 0 {
 				continue
@@ -1512,8 +1564,17 @@ func (c *typeConv) Struct(dt *dwarf.StructType, pos token.Pos) (expr *ast.Struct
 				name = "uint"
 			}
 			tgo = ast.NewIdent(name + fmt.Sprint(f.BitSize))
+			talign = size
 		}
 
+		if talign > 0 && f.ByteOffset%talign != 0 {
+			// Drop misaligned fields, the same way we drop integer bit fields.
+			// The goal is to make available what can be made available.
+			// Otherwise one bad and unneeded field in an otherwise okay struct
+			// makes the whole program not compile. Much of the time these
+			// structs are in system headers that cannot be corrected.
+			continue
+		}
 		n := len(fld)
 		fld = fld[0 : n+1]
 		name := f.Name
@@ -1528,8 +1589,8 @@ func (c *typeConv) Struct(dt *dwarf.StructType, pos token.Pos) (expr *ast.Struct
 		buf.WriteString(" ")
 		buf.WriteString(name)
 		buf.WriteString("; ")
-		if t.Align > align {
-			align = t.Align
+		if talign > align {
+			align = talign
 		}
 	}
 	if off < dt.ByteSize {

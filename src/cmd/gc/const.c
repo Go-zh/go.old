@@ -6,6 +6,7 @@
 #include	<libc.h>
 #include	"go.h"
 #define	TUP(x,y)	(((x)<<16)|(y))
+/*c2go int TUP(int, int); */
 
 static	Val	tocplx(Val);
 static	Val	toflt(Val);
@@ -22,19 +23,22 @@ Mpflt*
 truncfltlit(Mpflt *oldv, Type *t)
 {
 	double d;
-	float f;
 	Mpflt *fv;
+	Val v;
 
 	if(t == T)
 		return oldv;
+
+	memset(&v, 0, sizeof v);
+	v.ctype = CTFLT;
+	v.u.fval = oldv;
+	overflow(v, t);
 
 	fv = mal(sizeof *fv);
 	*fv = *oldv;
 
 	// convert large precision literal floating
 	// into limited precision (float64 or float32)
-	// botch -- this assumes that compiler fp
-	//    has same precision as runtime fp
 	switch(t->etype) {
 	case TFLOAT64:
 		d = mpgetflt(fv);
@@ -42,10 +46,9 @@ truncfltlit(Mpflt *oldv, Type *t)
 		break;
 
 	case TFLOAT32:
-		d = mpgetflt(fv);
-		f = d;
-		d = f;
+		d = mpgetflt32(fv);
 		mpmovecflt(fv, d);
+
 		break;
 	}
 	return fv;
@@ -235,7 +238,6 @@ convlit1(Node **np, Type *t, int explicit)
 				n->val = toflt(n->val);
 				// flowthrough
 			case CTFLT:
-				overflow(n->val, t);
 				n->val.u.fval = truncfltlit(n->val.u.fval, t);
 				break;
 			}
@@ -950,6 +952,7 @@ unary:
 	case TUP(OCONV, CTFLT):
 	case TUP(OCONV, CTSTR):
 		convlit1(&nl, n->type, 1);
+		v = nl->val;
 		break;
 
 	case TUP(OPLUS, CTINT):

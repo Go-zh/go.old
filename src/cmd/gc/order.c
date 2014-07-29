@@ -409,14 +409,13 @@ ordercallargs(NodeList **l, Order *order)
 }
 
 // Ordercall orders the call expression n.
-// n->op is  OCALLMETH/OCALLFUNC/OCALLINTER.
+// n->op is OCALLMETH/OCALLFUNC/OCALLINTER or a builtin like OCOPY.
 static void
-ordercall(Node *n, Order *order, int special)
+ordercall(Node *n, Order *order)
 {
 	orderexpr(&n->left, order);
+	orderexpr(&n->right, order); // ODDDARG temp
 	ordercallargs(&n->list, order);
-	if(!special)
-		orderexpr(&n->right, order); // ODDDARG temp
 }
 
 // Ordermapassign appends n to order->out, introducing temporaries
@@ -580,7 +579,7 @@ orderstmt(Node *n, Order *order)
 		// Special: avoid copy of func call n->rlist->n.
 		t = marktemp(order);
 		orderexprlist(n->list, order);
-		ordercall(n->rlist->n, order, 0);
+		ordercall(n->rlist->n, order);
 		ordermapassign(n, order);
 		cleantemp(t, order);
 		break;
@@ -631,7 +630,7 @@ orderstmt(Node *n, Order *order)
 	case OCALLMETH:
 		// Special: handle call arguments.
 		t = marktemp(order);
-		ordercall(n, order, 0);
+		ordercall(n, order);
 		order->out = list(order->out, n);
 		cleantemp(t, order);
 		break;
@@ -652,7 +651,7 @@ orderstmt(Node *n, Order *order)
 			poptemp(t1, order);
 			break;
 		default:
-			ordercall(n->left, order, 1);
+			ordercall(n->left, order);
 			break;
 		}
 		order->out = list(order->out, n);
@@ -781,8 +780,30 @@ orderstmt(Node *n, Order *order)
 				fatal("order select ninit");
 			if(r != nil) {
 				switch(r->op) {
+				default:
+					yyerror("unknown op in select %O", r->op);
+					dump("select case", r);
+					break;
+
 				case OSELRECV:
 				case OSELRECV2:
+					// If this is case x := <-ch or case x, y := <-ch, the case has
+					// the ODCL nodes to declare x and y. We want to delay that
+					// declaration (and possible allocation) until inside the case body.
+					// Delete the ODCL nodes here and recreate them inside the body below.
+					if(r->colas) {
+						t = r->ninit;
+						if(t != nil && t->n->op == ODCL && t->n->left == r->left)
+							t = t->next;
+						if(t != nil && t->n->op == ODCL && t->n->left == r->ntest)
+							t = t->next;
+						if(t == nil)
+							r->ninit = nil;
+					}
+					if(r->ninit != nil) {
+						yyerror("ninit on select recv");
+						dumplist("ninit", r->ninit);
+					}
 					// case x = <-c
 					// case x, ok = <-c
 					// r->left is x, r->ntest is ok, r->right is ORECV, r->right->left is c.
@@ -803,6 +824,11 @@ orderstmt(Node *n, Order *order)
 						// such as in case interfacevalue = <-intchan.
 						// the conversion happens in the OAS instead.
 						tmp1 = r->left;
+						if(r->colas) {
+							tmp2 = nod(ODCL, tmp1, N);
+							typecheck(&tmp2, Etop);
+							l->n->ninit = list(l->n->ninit, tmp2);
+						}
 						r->left = ordertemp(r->right->left->type->type, order, haspointers(r->right->left->type->type));
 						tmp2 = nod(OAS, tmp1, r->left);
 						typecheck(&tmp2, Etop);
@@ -812,6 +838,11 @@ orderstmt(Node *n, Order *order)
 						r->ntest = N;
 					if(r->ntest != N) {
 						tmp1 = r->ntest;
+						if(r->colas) {
+							tmp2 = nod(ODCL, tmp1, N);
+							typecheck(&tmp2, Etop);
+							l->n->ninit = list(l->n->ninit, tmp2);
+						}
 						r->ntest = ordertemp(tmp1->type, order, 0);
 						tmp2 = nod(OAS, tmp1, r->ntest);
 						typecheck(&tmp2, Etop);
@@ -821,6 +852,10 @@ orderstmt(Node *n, Order *order)
 					break;
 
 				case OSEND:
+					if(r->ninit != nil) {
+						yyerror("ninit on select send");
+						dumplist("ninit", r->ninit);
+					}
 					// case c <- x
 					// r->left is c, r->right is x, both are always evaluated.
 					orderexpr(&r->left, order);
@@ -987,7 +1022,7 @@ orderexpr(Node **np, Order *order)
 	case OCALLINTER:
 	case OAPPEND:
 	case OCOMPLEX:
-		ordercall(n, order, 0);
+		ordercall(n, order);
 		n = ordercopyexpr(n, n->type, order, 0);
 		break;
 
@@ -1017,6 +1052,7 @@ orderexpr(Node **np, Order *order)
 		break;
 
 	case ORECV:
+		orderexpr(&n->left, order);
 		n = ordercopyexpr(n, n->type, order, 1);
 		break;
 	}

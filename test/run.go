@@ -71,14 +71,15 @@ const maxTests = 5000
 func main() {
 	flag.Parse()
 
-	// Disable parallelism if printing
-	if *verbose {
+	goos = getenv("GOOS", runtime.GOOS)
+	goarch = getenv("GOARCH", runtime.GOARCH)
+
+	findExecCmd()
+
+	// Disable parallelism if printing or if using a simulator.
+	if *verbose || len(findExecCmd()) > 0 {
 		*numParallel = 1
 	}
-
-	goos = os.Getenv("GOOS")
-	goarch = os.Getenv("GOARCH")
-	findExecCmd()
 
 	ratec = make(chan bool, *numParallel)
 	rungatec = make(chan bool, *runoutputLimit)
@@ -971,4 +972,12 @@ func envForDir(dir string) []string {
 	}
 	env = append(env, "PWD="+dir)
 	return env
+}
+
+func getenv(key, def string) string {
+	value := os.Getenv(key)
+	if value != "" {
+		return value
+	}
+	return def
 }

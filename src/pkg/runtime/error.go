@@ -94,8 +94,6 @@ type errorCString struct{ cstr uintptr }
 
 func (e errorCString) RuntimeError() {}
 
-func cstringToGo(uintptr) string
-
 func (e errorCString) Error() string {
 	return "runtime error: " + cstringToGo(e.cstr)
 }

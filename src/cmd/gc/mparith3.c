@@ -199,11 +199,11 @@ mpdivfltflt(Mpflt *a, Mpflt *b)
 		print(" = %F\n\n", a);
 }
 
-double
-mpgetflt(Mpflt *a)
+static double
+mpgetfltN(Mpflt *a, int prec, int bias)
 {
-	int s, i, e;
-	uvlong v, vm;
+	int s, i, e, minexp;
+	uvlong v;
 	double f;
 
 	if(a->val.ovf && nsavederrors+nerrors == 0)
@@ -226,54 +226,61 @@ mpgetflt(Mpflt *a)
 			return 0;
 	}
 
-	// the magic numbers (64, 63, 53, 10, -1074) are
-	// IEEE specific. this should be done machine
-	// independently or in the 6g half of the compiler
-
-	// pick up the mantissa and a rounding bit in a uvlong
-	s = 53+1;
+	// pick up the mantissa, a rounding bit, and a tie-breaking bit in a uvlong
+	s = prec+2;
 	v = 0;
 	for(i=Mpnorm-1; s>=Mpscale; i--) {
 		v = (v<<Mpscale) | a->val.a[i];
 		s -= Mpscale;
 	}
-	vm = v;
-	if(s > 0)
-		vm = (vm<<s) | (a->val.a[i]>>(Mpscale-s));
-
-	// continue with 64 more bits
-	s += 64;
-	for(; s>=Mpscale; i--) {
-		v = (v<<Mpscale) | a->val.a[i];
-		s -= Mpscale;
-	}
-	if(s > 0)
+	if(s > 0) {
 		v = (v<<s) | (a->val.a[i]>>(Mpscale-s));
+		if((a->val.a[i]&((1<<(Mpscale-s))-1)) != 0)
+			v |= 1;
+		i--;
+	}
+	for(; i >= 0; i--) {
+		if(a->val.a[i] != 0)
+			v |= 1;
+	}
 
 	// gradual underflow
-	e = Mpnorm*Mpscale + a->exp - 53;
-	if(e < -1074) {
-		s = -e - 1074;
-		if(s > 54)
-			s = 54;
-		v |= vm & ((1ULL<<s) - 1);
-		vm >>= s;
-		e = -1074;
+	e = Mpnorm*Mpscale + a->exp - prec;
+	minexp = bias+1-prec+1;
+	if(e < minexp) {
+		s = minexp - e;
+		if(s > prec+1)
+			s = prec+1;
+		if((v & ((1<<s)-1)) != 0)
+			v |= 1<<s;
+		v >>= s;
+		e = minexp;
 	}
+	
+	// round to even
+	v |= (v&4)>>2;
+	v += v&1;
+	v >>= 2;
 
-//print("vm=%.16llux v=%.16llux\n", vm, v);
-	// round toward even
-	if(v != 0 || (vm&2ULL) != 0)
-		vm = (vm>>1) + (vm&1ULL);
-	else
-		vm >>= 1;
-
-	f = (double)(vm);
+	f = (double)(v);
 	f = ldexp(f, e);
 
 	if(a->val.neg)
 		f = -f;
+
 	return f;
+}
+
+double
+mpgetflt(Mpflt *a)
+{
+	return mpgetfltN(a, 53, -1023);
+}
+
+double
+mpgetflt32(Mpflt *a)
+{
+	return mpgetfltN(a, 24, -127);
 }
 
 void

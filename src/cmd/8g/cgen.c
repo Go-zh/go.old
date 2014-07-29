@@ -242,6 +242,7 @@ cgen(Node *n, Node *res)
 	case OOR:
 	case OXOR:
 	case OADD:
+	case OADDPTR:
 	case OMUL:
 		a = optoas(n->op, nl->type);
 		if(a == AIMULB) {
@@ -346,8 +347,11 @@ cgen(Node *n, Node *res)
 		if(istype(nl->type, TCHAN)) {
 			// chan has cap in the second 32-bit word.
 			// a zero pointer means zero length
-			regalloc(&n1, types[tptr], res);
+			tempname(&n1, types[tptr]);
 			cgen(nl, &n1);
+			regalloc(&n2, types[tptr], N);
+			gmove(&n1, &n2);
+			n1 = n2;
 
 			nodconst(&n2, types[tptr], 0);
 			gins(optoas(OCMP, types[tptr]), &n1, &n2);
@@ -1395,6 +1399,13 @@ componentgen(Node *nr, Node *nl)
 			freer = 1;
 		}
 	}
+
+	// nl and nr are 'cadable' which basically means they are names (variables) now.
+	// If they are the same variable, don't generate any code, because the
+	// VARDEF we generate will mark the old value as dead incorrectly.
+	// (And also the assignments are useless.)
+	if(nr != N && nl->op == ONAME && nr->op == ONAME && nl == nr)
+		goto yes;
 
 	switch(nl->type->etype) {
 	case TARRAY:

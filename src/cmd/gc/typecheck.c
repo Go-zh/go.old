@@ -382,16 +382,6 @@ reswitch:
 		if(n->type == T)
 			goto error;
 		break;
-
-	case OTPAREN:
-		ok |= Etype;
-		l = typecheck(&n->left, Etype);
-		if(l->type == T)
-			goto error;
-		n->op = OTYPE;
-		n->type = l->type;
-		n->left = N;
-		break;
 	
 	case OTARRAY:
 		ok |= Etype;
@@ -534,6 +524,19 @@ reswitch:
 			goto error;
 		op = n->etype;
 		goto arith;
+
+	case OADDPTR:
+		ok |= Erv;
+		l = typecheck(&n->left, Erv);
+		r = typecheck(&n->right, Erv);
+		if(l->type == T || r->type == T)
+			goto error;
+		if(l->type->etype != tptr)
+			fatal("bad OADDPTR left type %E for %N", l->type->etype, n->left);
+		if(r->type->etype != TUINTPTR)
+			fatal("bad OADDPTR right type %E for %N", r->type->etype, n->right);
+		n->type = types[tptr];
+		goto ret;
 
 	case OADD:
 	case OAND:
@@ -2402,23 +2405,19 @@ keydup(Node *n, Node *hash[], ulong nhash)
 	for(a=hash[h]; a!=N; a=a->ntest) {
 		cmp.op = OEQ;
 		cmp.left = n;
+		b = 0;
 		if(a->op == OCONVIFACE && orign->op == OCONVIFACE) {
-			if(a->left->type == n->type) {
+			if(eqtype(a->left->type, n->type)) {
 				cmp.right = a->left;
 				evconst(&cmp);
 				b = cmp.val.u.bval;
 			}
-			else {
-				b = 0;
-			}
-		}
-		else {
+		} else if(eqtype(a->type, n->type)) {
 			cmp.right = a;
 			evconst(&cmp);
 			b = cmp.val.u.bval;
 		}
 		if(b) {
-			// too lazy to print the literal
 			yyerror("duplicate key %N in map literal", n);
 			return;
 		}

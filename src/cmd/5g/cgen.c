@@ -254,6 +254,7 @@ cgen(Node *n, Node *res)
 	case OOR:
 	case OXOR:
 	case OADD:
+	case OADDPTR:
 	case OMUL:
 		a = optoas(n->op, nl->type);
 		goto sbop;
@@ -1106,11 +1107,10 @@ bgen(Node *n, int true, int likely, Prog *to)
 {
 	int et, a;
 	Node *nl, *nr, *r;
-	Node n1, n2, n3, n4, tmp;
+	Node n1, n2, n3, tmp;
 	NodeList *ll;
 	Prog *p1, *p2;
 
-	USED(n4);			// in unreachable code below
 	if(debug['g']) {
 		dump("\nbgen", n);
 	}
@@ -1489,13 +1489,14 @@ sgen(Node *n, Node *res, int64 w)
 	}
 	if(osrc%align != 0 || odst%align != 0)
 		fatal("sgen: unaligned offset src %d or dst %d (align %d)", osrc, odst, align);
+
 	// if we are copying forward on the stack and
 	// the src and dst overlap, then reverse direction
 	dir = align;
 	if(osrc < odst && odst < osrc+w)
 		dir = -dir;
 
-	if(op == AMOVW && dir > 0 && c >= 4 && c <= 128) {
+	if(op == AMOVW && !nacl && dir > 0 && c >= 4 && c <= 128) {
 		r0.op = OREGISTER;
 		r0.val.u.reg = REGALLOC_R0;
 		r1.op = OREGISTER;
@@ -1672,6 +1673,13 @@ componentgen(Node *nr, Node *nl)
 		gmove(&tmp, &nodr);
 		freer = 1;
 	}
+
+	// nl and nr are 'cadable' which basically means they are names (variables) now.
+	// If they are the same variable, don't generate any code, because the
+	// VARDEF we generate will mark the old value as dead incorrectly.
+	// (And also the assignments are useless.)
+	if(nr != N && nl->op == ONAME && nr->op == ONAME && nl == nr)
+		goto yes;
 
 	switch(nl->type->etype) {
 	case TARRAY:

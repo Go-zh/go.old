@@ -593,13 +593,181 @@ CL created: https://codereview.appspot.com/99999
 </pre>
 
 <div class="english">
+<h3>Mail the change for review</h3>
+
+<p>
+Creating or uploading the change uploads a copy of the diff to the code review server,
+but it does not notify anyone about it. To do that, you need to run <code>hg mail</code>
+(see below).
+</p>
+
+<p>To send out a change for review, run <code>hg mail</code> using the change list number
+assigned during <code>hg change</code>:</p>
+</div>
+
+<h3>为审校邮寄更改</h3>
+
+<p>
+创建或更新更改后，会向代码审核服务器上传一份该代码diff的副本，但它不会通知任何人。
+若要通知他人，你需要运行 <code>hg mail</code>（见下）。
+</p>
+
+<p>
+要为审核发出更改，需运行 <code>hg mail</code>，后跟在 <code>hg change</code> 时分配的更改列表编号：
+</p>
+
+<pre>
+$ hg mail 99999
+</pre>
+
+<div class="english">
+<p>You can add to the <code>Reviewer:</code> and <code>CC:</code> lines
+using the <code>-r</code> or <code>--cc</code> options.
+In the above example, we could have left the <code>Reviewer</code> and <code>CC</code>
+lines blank and then run:
+</p>
+</div>
+
+<p>
+你可以通过使用 <code>-r</code> 或 <code>--cc</code> 选项来添加 <code>Reviewer:</code>
+与 <code>CC:</code> 行。在下面的例子中，我们应将 <code>Reviewer</code> 与 <code>CC</code>
+行保持空白，接着运行
+</p>
+
+<pre>
+$ hg mail -r golang-codereviews@googlegroups.com --cc math-nuts@swtch.com 99999
+</pre>
+
+<div class="english">
+<p>to achieve the same effect.</p>
+</div>
+
+<p>来达到相同的效果</p>
+
+<div class="english">
+<p>Note that <code>-r</code> and <code>--cc</code> cannot be spelled <code>--r</code> or <code>-cc</code>.</p>
+</div>
+
+请注意， <code>-r</code> 与 <code>--cc</code> 不可拼写为 <code>--r</code> 或 <code>-cc</code>。
+
+<div class="english">
+<p>
+If your change relates to an open issue, please add a comment to the issue
+announcing your proposed fix, including a link to your CL.
+</p>
+</div>
+
+<p>
+若你的更改涉及一个开放的问题，请向该问题添加评论来发表你的修复提议，其中包括你的CL链接。
+</p>
+
+<div class="english">
+<h3>Reviewing code</h3>
+</div>
+
+<h3>审核代码</h3>
+
+<div class="english">
+<p>
+Running <code>hg mail</code> will send an email to you and the reviewers
+asking them to visit the issue's URL and make comments on the change.
+When done, the reviewer clicks &ldquo;Publish and Mail comments&rdquo;
+to send comments back.
+</p>
+</div>
+
+<p>
+运行 <code>hg mail</code> 会将一封邮件发送至审核者以请求他们访问问题URL，并对该更改进行评论。
+在结束后，审核者会单击&ldquo;Publish and Mail comments&rdquo;返回评论。
+</p>
+
+
+<div class="english">
+<h3>Revise and upload</h3>
+</div>
+
+<h3>修订并上传</h3>
+
+<div class="english">
+<p>
+When you have revised the code and are ready for another round of review,
+you can upload your change and send mail asking the reviewers to
+please take another look (<code>PTAL</code>). Use the change list number
+assigned during <code>hg change</code>
+</p>
+</div>
+
+<p>
+When you have revised the code and are ready for another round of review,
+当你修订完代码，准备好下一轮审校后，可以上传你的更改并发送邮件请求审校者再看一下
+（<code>PTAL</code>，即 please take another look）。使用在 <code>hg change</code>
+时赋予的更改列表编号
+</p>
+
+<pre>
+$ hg mail 99999
+</pre>
+
+<div class="english">
+<p>
+Or to upload your change without sending a notification, run
+</p>
+</div>
+
+<p>
+若你不想在上传更改时发送提醒，请运行
+</p>
+
+<pre>
+$ hg upload 99999
+</pre>
+
+<div class="english">
+<p>
+You will probably revise your code in response to the reviewer comments.
+You might also visit the code review web page and reply to the comments,
+letting the reviewer know that you've addressed them or explain why you
+haven't.  When you're done replying, click &ldquo;Publish and Mail comments&rdquo;
+to send the line-by-line replies and any other comments.
+</p>
+</div>
+
+<p>
+你可能会修改你的代码来回应审核者的评论。你也可浏览代码审核的Web页面并回复评论，
+让审核者知道你的处理方式，或解释为什么不作处理。当你回复完成后，请点击
+&ldquo;Publish and Mail comments&rdquo; 来发送行-行对比的回复或其它评论。
+</p>
+
+<div class="english">
+<p>
+The reviewer can comment on the new copy, and the process repeats.
+The reviewer approves the change by replying with a mail that says
+<code>LGTM</code>: looks good to me.
+</p>
+</div>
+
+<p>
+审核者可对新的副本进行评论，此过程会继续重复。当审核者赞同此更改时，会回复一封邮件说：
+<code>LGTM</code>：在我看来不错（looks good to me）。
+</p>
+
+<div class="english">
+<p>
+You can see a list of your pending changes by running <code>hg pending</code> (<code>hg p</code> for short).
+</p>
+</div>
+
+<p>
+你可以通过运行 <code>hg pending</code>（简写为 <code>hg p</code>）来查看你待定的更改列表。
+</p>
+
+
 <h3>Adding or removing files from an existing change</h3>
 
 <p>
 If you need to re-edit the change description, or change the files included in the CL,
 run <code>hg change 99999</code>.
 </p>
-</div>
 
 <h3>为既有的更改添加或移除文件</h3>
 
@@ -738,7 +906,7 @@ Mercurial failed to merge your changes with the independent change.
 When this happens, Mercurial leaves both edits in the file,
 marked by <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> and
 <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code>.
-it is now your job to edit the file to combine them.
+It is now your job to edit the file to combine them.
 Continuing the example, searching for those strings in <code>flag_test.go</code>
 might turn up:
 </p>
@@ -805,178 +973,6 @@ changes, but you may still need to run
 <code>hg resolve -m</code> to mark the conflict resolved.
 </p>
 </div>
-
-<p>
-若你为请求调试必须编辑该文件，但并不关心上一次更改，你可以运行
-<code>hg revert flag_test.go</code> 来放弃你的更改，但你仍需要运行
-<code>hg resolve -m</code> 来将冲突标记为已解决。
-</p>
-
-<div class="english">
-<h3>Mail the change for review</h3>
-</div>
-
-<h3>为审核邮寄更改</h3>
-
-<div class="english">
-<p>
-Creating or uploading the change uploads a copy of the diff to the code review server,
-but it does not notify anyone about it. To do that, you need to run <code>hg mail</code>
-(see below).
-</p>
-</div>
-
-<p>
-创建或更新更改后，会向代码审核服务器上传一份该代码diff的副本，但它不会通知任何人。
-若要通知他人，你需要运行 <code>hg mail</code>（见下）。
-</p>
-
-<div class="english">
-<p>To send out a change for review, run <code>hg mail</code> using the change list number
-assigned during <code>hg change</code>:</p>
-</div>
-
-<p>
-要为审核发出更改，需运行 <code>hg mail</code> 使用更改列表编号在 <code>hg change</code> 时分配：
-</p>
-
-<pre>
-$ hg mail 99999
-</pre>
-
-<div class="english">
-<p>You can add to the <code>Reviewer:</code> and <code>CC:</code> lines
-using the <code>-r</code> or <code>--cc</code> options.
-In the above example, we could have left the <code>Reviewer</code> and <code>CC</code>
-lines blank and then run:
-</p>
-</div>
-
-<p>
-你可以通过使用 <code>-r</code> 或 <code>--cc</code> 选项来添加 <code>Reviewer:</code>
-与 <code>CC:</code> 行。在下面的例子中，我们应将 <code>Reviewer</code> 与 <code>CC</code>
-行保持空白，接着运行
-</p>
-
-<pre>
-$ hg mail -r golang-codereviews@googlegroups.com --cc math-nuts@swtch.com 99999
-</pre>
-
-<div class="english">
-<p>to achieve the same effect.</p>
-</div>
-
-<p>来达到相同的效果</p>
-
-<div class="english">
-<p>Note that <code>-r</code> and <code>--cc</code> cannot be spelled <code>--r</code> or <code>-cc</code>.</p>
-</div>
-
-<div class="english">
-请注意， <code>-r</code> 与 <code>--cc</code> 不可拼写为 <code>--r</code> 或 <code>-cc</code>。
-</div>
-
-<div class="english">
-<p>
-If your change relates to an open issue, please add a comment to the issue
-announcing your proposed fix, including a link to your CL.
-</p>
-</div>
-
-<p>
-若你的更改涉及一个开放的问题，请向该问题添加评论来发表你的修复提议，其中包括你的CL链接。
-</p>
-
-<div class="english">
-<h3>Reviewing code</h3>
-</div>
-
-<h3>审核代码</h3>
-
-<div class="english">
-<p>
-Running <code>hg mail</code> will send an email to you and the reviewers
-asking them to visit the issue's URL and make comments on the change.
-When done, the reviewer clicks &ldquo;Publish and Mail comments&rdquo;
-to send comments back.
-</p>
-</div>
-
-<p>
-运行 <code>hg mail</code> 会将一封邮件发送至审核者以请求他们访问问题URL，并对该更改进行评论。
-在结束后，审核者会单击&ldquo;Publish and Mail comments&rdquo;返回评论。
-</p>
-
-
-<div class="english">
-<h3>Revise and upload</h3>
-</div>
-
-<h3>修订并上传</h3>
-
-<div class="english">
-<p>
-When you have revised the code and are ready for another round of review,
-you can upload your change and send mail asking the reviewers to
-please take another look (<code>PTAL</code>). Use the change list number
-assigned during <code>hg change</code>
-</p>
-
-<pre>
-$ hg mail 99999
-</pre>
-
-
-<p>
-Or to upload your change without sending a notification, run
-</p>
-</div>
-
-<p>
-你或许会根据审核者评论的反馈来修订你的代码。当你完成后，就可以运行
-<code>hg upload</code> 使用 <code>hg change</code> 时分配的更改列表号，
-向代码审核服务器上传你的更改了。它并不会再次发出通知。
-</p>
-
-<pre>
-$ hg upload 99999
-</pre>
-
-<div class="english">
-You will probably revise your code in response to the reviewer comments.
-You might also visit the code review web page and reply to the comments,
-letting the reviewer know that you've addressed them or explain why you
-haven't.  When you're done replying, click &ldquo;Publish and Mail comments&rdquo;
-to send the line-by-line replies and any other comments.
-</p>
-</div>
-
-<p>
-你可能会修改你的代码来回应审核者的评论。你也可浏览代码审核的Web页面并回复评论，
-让审核者知道你的处理方式，或解释为什么不作处理。当你回复完成后，请点击
-&ldquo;Publish and Mail comments&rdquo; 来发送行-行对比的回复或其它评论。
-</p>
-
-<div class="english">
-<p>
-The reviewer can comment on the new copy, and the process repeats.
-The reviewer approves the change by replying with a mail that says
-<code>LGTM</code>: looks good to me.
-</p>
-
-<p>
-You can see a list of your pending changes by running <code>hg pending</code> (<code>hg p</code> for short).
-</p>
-</div>
-
-<p>
-审核者可对新的副本进行评论，此过程会继续重复。当审核者赞同此更改时，会回复一封邮件说：
-<code>LGTM</code>：在我看来不错（looks good to me）。
-</p>
-
-<p>
-你可以通过运行 <code>hg pending</code>（简写为 <code>hg p</code>）来查看你待定的更改列表。
-</p>
 
 <div class="english">
 <h3>Reviewing code by others</h3>

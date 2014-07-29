@@ -5,6 +5,7 @@
 #include	<u.h>
 #include	<libc.h>
 #include	"go.h"
+#include	"../ld/textflag.h"
 
 static	Node*	walkprint(Node*, NodeList**, int);
 static	Node*	mapfn(char*, Type*);
@@ -666,7 +667,10 @@ walkexpr(Node **np, NodeList **init)
 		r = n->rlist->n;
 		walkexprlistsafe(n->list, init);
 		walkexpr(&r->left, init);
-		n1 = nod(OADDR, n->list->n, N);
+		if(isblank(n->list->n))
+			n1 = nodnil();
+		else
+			n1 = nod(OADDR, n->list->n, N);
 		n1->etype = 1; // addr does not escape
 		fn = chanfn("chanrecv2", 2, r->left->type);
 		r = mkcall1(fn, types[TBOOL], init, typename(r->left->type), r->left, n1);
@@ -862,7 +866,7 @@ walkexpr(Node **np, NodeList **init)
 				l->class = PEXTERN;
 				l->xoffset = 0;
 				sym->def = l;
-				ggloblsym(sym, widthptr, 1, 0);
+				ggloblsym(sym, widthptr, DUPOK|NOPTR);
 			}
 			l = nod(OADDR, sym->def, N);
 			l->addable = 1;
@@ -1649,7 +1653,8 @@ ascompatte(int op, Node *call, int isddd, Type **nl, NodeList *lr, int fp, NodeL
 		// optimization - can do block copy
 		if(eqtypenoname(r->type, *nl)) {
 			a = nodarg(*nl, fp);
-			a->type = r->type;
+			r = nod(OCONVNOP, r, N);
+			r->type = a->type;
 			nn = list1(convas(nod(OAS, a, r), init));
 			goto ret;
 		}

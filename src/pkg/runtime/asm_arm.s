@@ -19,13 +19,15 @@ TEXT _rt0_go(SB),NOSPLIT,$-4
 	MOVW	R0, 60(R13)		// save argc, argv away
 	MOVW	R1, 64(R13)
 
-	// set up m and g registers
-	// g is R10, m is R9
+	// set up g register
+	// g is R10
 	MOVW	$runtime·g0(SB), g
-	MOVW	$runtime·m0(SB), m
+	MOVW	$runtime·m0(SB), R8
 
 	// save m->g0 = g0
-	MOVW	g, m_g0(m)
+	MOVW	g, m_g0(R8)
+	// save g->m = m0
+	MOVW	R8, g_m(g)
 
 	// create istack out of the OS stack
 	MOVW	$(-8192+104)(R13), R0
@@ -34,14 +36,18 @@ TEXT _rt0_go(SB),NOSPLIT,$-4
 	MOVW	R13, g_stackbase(g)
 	BL	runtime·emptyfunc(SB)	// fault if stack check is wrong
 
+#ifndef GOOS_nacl
 	// if there is an _cgo_init, call it.
 	MOVW	_cgo_init(SB), R4
 	CMP	$0, R4
 	B.EQ	nocgo
-	BL		runtime·save_gm(SB);
-	MOVW	g, R0 // first argument of _cgo_init is g
-	MOVW	$setmg_gcc<>(SB), R1 // second argument is address of save_gm
-	BL		(R4) // will clobber R0-R3
+	MRC     15, 0, R0, C13, C0, 3 	// load TLS base pointer
+	MOVW 	R0, R3 			// arg 3: TLS base pointer
+	MOVW 	$runtime·tlsg(SB), R2 	// arg 2: tlsg
+	MOVW	$setg_gcc<>(SB), R1 	// arg 1: setg
+	MOVW	g, R0 			// arg 0: G
+	BL	(R4) // will clobber R0-R3
+#endif
 
 nocgo:
 	// update stackguard after _cgo_init
@@ -86,7 +92,11 @@ GLOBL	runtime·main·f(SB),RODATA,$4
 TEXT runtime·breakpoint(SB),NOSPLIT,$0-0
 	// gdb won't skip this breakpoint instruction automatically,
 	// so you must manually "set $pc+=4" to skip it and continue.
+#ifdef GOOS_nacl
+	WORD	$0xe125be7f	// BKPT 0x5bef, NACL_INSTR_ARM_BREAKPOINT
+#else
 	WORD	$0xe1200071	// BKPT 0x0001
+#endif
 	RET
 
 TEXT runtime·asminit(SB),NOSPLIT,$0-0
@@ -123,8 +133,8 @@ TEXT runtime·gogo(SB), NOSPLIT, $-4-4
 	MOVW	gobuf_g(R1), g
 	MOVW	0(g), R2		// make sure g != nil
 	MOVB	runtime·iscgo(SB), R2
-	CMP 	$0, R2 // if in Cgo, we have to save g and m
-	BL.NE	runtime·save_gm(SB) // this call will clobber R0
+	CMP 	$0, R2 // if in Cgo, we have to save g
+	BL.NE	runtime·save_g(SB) // this call will clobber R0
 	MOVW	gobuf_sp(R1), SP	// restore SP
 	MOVW	gobuf_lr(R1), LR
 	MOVW	gobuf_ret(R1), R0
@@ -135,15 +145,14 @@ TEXT runtime·gogo(SB), NOSPLIT, $-4-4
 	MOVW	R11, gobuf_lr(R1)
 	MOVW	R11, gobuf_ctxt(R1)
 	CMP	R11, R11 // set condition codes for == test, needed by stack split
-	MOVW	gobuf_pc(R1), PC
+	MOVW	gobuf_pc(R1), R11
+	B	(R11)
 
 // void mcall(void (*fn)(G*))
 // Switch to m->g0's stack, call fn(g).
 // Fn must never return.  It should gogo(&g->sched)
 // to keep running g.
 TEXT runtime·mcall(SB), NOSPLIT, $-4-4
-	MOVW	fn+0(FP), R0
-
 	// Save caller state in g->sched.
 	MOVW	SP, (g_sched+gobuf_sp)(g)
 	MOVW	LR, (g_sched+gobuf_pc)(g)
@@ -153,10 +162,15 @@ TEXT runtime·mcall(SB), NOSPLIT, $-4-4
 
 	// Switch to m->g0 & its stack, call fn.
 	MOVW	g, R1
-	MOVW	m_g0(m), g
+	MOVW	g_m(g), R8
+	MOVW	m_g0(R8), g
 	CMP	g, R1
 	B.NE	2(PC)
 	B	runtime·badmcall(SB)
+	MOVB	runtime·iscgo(SB), R11
+	CMP	$0, R11
+	BL.NE	runtime·save_g(SB)
+	MOVW	fn+0(FP), R0
 	MOVW	(g_sched+gobuf_sp)(g), SP
 	SUB	$8, SP
 	MOVW	R1, 4(SP)
@@ -182,12 +196,13 @@ TEXT runtime·mcall(SB), NOSPLIT, $-4-4
 // record an argument size. For that purpose, it has no arguments.
 TEXT runtime·morestack(SB),NOSPLIT,$-4-0
 	// Cannot grow scheduler stack (m->g0).
-	MOVW	m_g0(m), R4
+	MOVW	g_m(g), R8
+	MOVW	m_g0(R8), R4
 	CMP	g, R4
 	BL.EQ	runtime·abort(SB)
 
-	MOVW	R1, m_moreframesize(m)
-	MOVW	R2, m_moreargsize(m)
+	MOVW	R1, m_moreframesize(R8)
+	MOVW	R2, m_moreargsize(R8)
 
 	// Called from f.
 	// Set g->sched to context in f.
@@ -198,14 +213,14 @@ TEXT runtime·morestack(SB),NOSPLIT,$-4-0
 
 	// Called from f.
 	// Set m->morebuf to f's caller.
-	MOVW	R3, (m_morebuf+gobuf_pc)(m)	// f's caller's PC
-	MOVW	SP, (m_morebuf+gobuf_sp)(m)	// f's caller's SP
+	MOVW	R3, (m_morebuf+gobuf_pc)(R8)	// f's caller's PC
+	MOVW	SP, (m_morebuf+gobuf_sp)(R8)	// f's caller's SP
 	MOVW	$4(SP), R3			// f's argument pointer
-	MOVW	R3, m_moreargp(m)	
-	MOVW	g, (m_morebuf+gobuf_g)(m)
+	MOVW	R3, m_moreargp(R8)	
+	MOVW	g, (m_morebuf+gobuf_g)(R8)
 
 	// Call newstack on m->g0's stack.
-	MOVW	m_g0(m), g
+	MOVW	m_g0(R8), g
 	MOVW	(g_sched+gobuf_sp)(g), SP
 	BL	runtime·newstack(SB)
 
@@ -225,9 +240,10 @@ TEXT runtime·morestack_noctxt(SB),NOSPLIT,$-4-0
 TEXT runtime·newstackcall(SB), NOSPLIT, $-4-12
 	// Save our caller's state as the PC and SP to
 	// restore when returning from f.
-	MOVW	LR, (m_morebuf+gobuf_pc)(m)	// our caller's PC
-	MOVW	SP, (m_morebuf+gobuf_sp)(m)	// our caller's SP
-	MOVW	g,  (m_morebuf+gobuf_g)(m)
+	MOVW	g_m(g), R8
+	MOVW	LR, (m_morebuf+gobuf_pc)(R8)	// our caller's PC
+	MOVW	SP, (m_morebuf+gobuf_sp)(R8)	// our caller's SP
+	MOVW	g,  (m_morebuf+gobuf_g)(R8)
 
 	// Save our own state as the PC and SP to restore
 	// if this goroutine needs to be restarted.
@@ -246,14 +262,14 @@ TEXT runtime·newstackcall(SB), NOSPLIT, $-4-12
 	MOVW	8(SP), R1			// arg frame
 	MOVW	12(SP), R2			// arg size
 
-	MOVW	R0, m_cret(m)			// f's PC
-	MOVW	R1, m_moreargp(m)		// f's argument pointer
-	MOVW	R2, m_moreargsize(m)		// f's argument size
+	MOVW	R0, m_cret(R8)			// f's PC
+	MOVW	R1, m_moreargp(R8)		// f's argument pointer
+	MOVW	R2, m_moreargsize(R8)		// f's argument size
 	MOVW	$1, R3
-	MOVW	R3, m_moreframesize(m)		// f's frame size
+	MOVW	R3, m_moreframesize(R8)		// f's frame size
 
 	// Call newstack on m->g0's stack.
-	MOVW	m_g0(m), g
+	MOVW	m_g0(R8), g
 	MOVW	(g_sched+gobuf_sp)(g), SP
 	B	runtime·newstack(SB)
 
@@ -301,8 +317,22 @@ TEXT reflect·call(SB), NOSPLIT, $-4-16
 	MOVW	$runtime·badreflectcall(SB), R1
 	B	(R1)
 
+// Argument map for the callXX frames.  Each has one
+// stack map (for the single call) with 3 arguments.
+DATA gcargs_reflectcall<>+0x00(SB)/4, $1  // 1 stackmap
+DATA gcargs_reflectcall<>+0x04(SB)/4, $6  // 3 args
+DATA gcargs_reflectcall<>+0x08(SB)/4, $(const_BitsPointer+(const_BitsPointer<<2)+(const_BitsScalar<<4))
+GLOBL gcargs_reflectcall<>(SB),RODATA,$12
+
+// callXX frames have no locals
+DATA gclocals_reflectcall<>+0x00(SB)/4, $1  // 1 stackmap
+DATA gclocals_reflectcall<>+0x04(SB)/4, $0  // 0 locals
+GLOBL gclocals_reflectcall<>(SB),RODATA,$8
+
 #define CALLFN(NAME,MAXSIZE)			\
 TEXT runtime·NAME(SB), WRAPPER, $MAXSIZE-16;	\
+	FUNCDATA $FUNCDATA_ArgsPointerMaps,gcargs_reflectcall<>(SB);	\
+	FUNCDATA $FUNCDATA_LocalsPointerMaps,gclocals_reflectcall<>(SB);\
 	/* copy arguments to stack */		\
 	MOVW	argptr+4(FP), R0;		\
 	MOVW	argsize+8(FP), R2;		\
@@ -316,6 +346,7 @@ TEXT runtime·NAME(SB), WRAPPER, $MAXSIZE-16;	\
 	/* call function */			\
 	MOVW	f+0(FP), R7;			\
 	MOVW	(R7), R0;			\
+	PCDATA  $PCDATA_StackMapIndex, $0;	\
 	BL	(R0);				\
 	/* copy return values back */		\
 	MOVW	argptr+4(FP), R0;		\
@@ -367,10 +398,11 @@ CALLFN(call1073741824, 1073741824)
 // as morestack; in that context, it has 0 arguments.
 TEXT runtime·lessstack(SB), NOSPLIT, $-4-0
 	// Save return value in m->cret
-	MOVW	R0, m_cret(m)
+	MOVW	g_m(g), R8
+	MOVW	R0, m_cret(R8)
 
 	// Call oldstack on m->g0's stack.
-	MOVW	m_g0(m), g
+	MOVW	m_g0(R8), g
 	MOVW	(g_sched+gobuf_sp)(g), SP
 	BL	runtime·oldstack(SB)
 
@@ -379,6 +411,10 @@ TEXT runtime·lessstack(SB), NOSPLIT, $-4-0
 // 1. grab stored LR for caller
 // 2. sub 4 bytes to get back to BL deferreturn
 // 3. B to fn
+// TODO(rsc): Push things on stack and then use pop
+// to load all registers simultaneously, so that a profiling
+// interrupt can never see mismatched SP/LR/PC.
+// (And double-check that pop is atomic in that way.)
 TEXT runtime·jmpdefer(SB), NOSPLIT, $0-8
 	MOVW	0(SP), LR
 	MOVW	$-4(LR), LR	// BL deferreturn
@@ -411,7 +447,8 @@ TEXT	runtime·asmcgocall(SB),NOSPLIT,$0-8
 	// Figure out if we need to switch to m->g0 stack.
 	// We get called to create new OS threads too, and those
 	// come in on the m->g0 stack already.
-	MOVW	m_g0(m), R3
+	MOVW	g_m(g), R8
+	MOVW	m_g0(R8), R3
 	CMP	R3, g
 	BEQ	4(PC)
 	BL	gosave<>(SB)
@@ -451,26 +488,28 @@ TEXT	runtime·cgocallback_gofunc(SB),NOSPLIT,$8-12
 	// Load m and g from thread-local storage.
 	MOVB	runtime·iscgo(SB), R0
 	CMP	$0, R0
-	BL.NE	runtime·load_gm(SB)
+	BL.NE	runtime·load_g(SB)
 
-	// If m is nil, Go did not create the current thread.
+	// If g is nil, Go did not create the current thread.
 	// Call needm to obtain one for temporary use.
 	// In this case, we're running on the thread stack, so there's
 	// lots of space, but the linker doesn't know. Hide the call from
 	// the linker analysis by using an indirect call.
-	MOVW	m, savedm-4(SP)
-	CMP	$0, m
+	CMP	$0, g
 	B.NE	havem
+	MOVW	g, savedm-4(SP) // g is zero, so is m.
 	MOVW	$runtime·needm(SB), R0
 	BL	(R0)
 
 havem:
+	MOVW	g_m(g), R8
+	MOVW	R8, savedm-4(SP)
 	// Now there's a valid m, and we're running on its m->g0.
 	// Save current m->g0->sched.sp on stack and then set it to SP.
 	// Save current sp in m->g0->sched.sp in preparation for
 	// switch back to m->curg stack.
 	// NOTE: unwindm knows that the saved g->sched.sp is at 4(R13) aka savedsp-8(SP).
-	MOVW	m_g0(m), R3
+	MOVW	m_g0(R8), R3
 	MOVW	(g_sched+gobuf_sp)(R3), R4
 	MOVW	R4, savedsp-8(SP)
 	MOVW	R13, (g_sched+gobuf_sp)(R3)
@@ -493,7 +532,7 @@ havem:
 	MOVW	fn+4(FP), R0
 	MOVW	frame+8(FP), R1
 	MOVW	framesize+12(FP), R2
-	MOVW	m_curg(m), g
+	MOVW	m_curg(R8), g
 	MOVW	(g_sched+gobuf_sp)(g), R4 // prepare stack as R4
 	MOVW	(g_sched+gobuf_pc)(g), R5
 	MOVW	R5, -12(R4)
@@ -509,7 +548,8 @@ havem:
 	// Switch back to m->g0's stack and restore m->g0->sched.sp.
 	// (Unlike m->curg, the g0 goroutine never uses sched.pc,
 	// so we do not have to restore it.)
-	MOVW	m_g0(m), g
+	MOVW	g_m(g), R8
+	MOVW	m_g0(R8), g
 	MOVW	(g_sched+gobuf_sp)(g), R13
 	MOVW	savedsp-8(SP), R4
 	MOVW	R4, (g_sched+gobuf_sp)(g)
@@ -525,20 +565,23 @@ havem:
 	// Done!
 	RET
 
-// void setmg(M*, G*); set m and g. for use by needm.
-TEXT runtime·setmg(SB), NOSPLIT, $0-8
-	MOVW	mm+0(FP), m
-	MOVW	gg+4(FP), g
+// void setg(G*); set g. for use by needm.
+TEXT runtime·setg(SB), NOSPLIT, $0-8
+	MOVW	gg+0(FP), g
 
-	// Save m and g to thread-local storage.
+	// Save g to thread-local storage.
 	MOVB	runtime·iscgo(SB), R0
 	CMP	$0, R0
-	BL.NE	runtime·save_gm(SB)
+	BL.NE	runtime·save_g(SB)
 
 	RET
 
 TEXT runtime·getcallerpc(SB),NOSPLIT,$-4-4
 	MOVW	0(SP), R0
+	RET
+
+TEXT runtime·gogetcallerpc(SB),NOSPLIT,$-4-8
+	MOVW	R14, ret+4(FP)
 	RET
 
 TEXT runtime·setcallerpc(SB),NOSPLIT,$-4-8
@@ -627,48 +670,56 @@ _next:
 	MOVW	$0, R0
 	RET
 
-// We have to resort to TLS variable to save g(R10) and
-// m(R9). One reason is that external code might trigger
-// SIGSEGV, and our runtime.sigtramp don't even know we
-// are in external code, and will continue to use R10/R9,
-// this might as well result in another SIGSEGV.
-// Note: all three functions will clobber R0, and the last
-// two can be called from 5c ABI code.
+TEXT runtime·gomemeq(SB),NOSPLIT,$-4-13
+	MOVW	a+0(FP), R1
+	MOVW	b+4(FP), R2
+	MOVW	size+8(FP), R3
+	ADD	R1, R3, R6
+	MOVW	$1, R0
+	MOVB	R0, ret+12(FP)
+_next2:
+	CMP	R1, R6
+	RET.EQ
+	MOVBU.P	1(R1), R4
+	MOVBU.P	1(R2), R5
+	CMP	R4, R5
+	BEQ	_next2
 
-// save_gm saves the g and m registers into pthread-provided
-// thread-local memory, so that we can call externally compiled
-// ARM code that will overwrite those registers.
-// NOTE: runtime.gogo assumes that R1 is preserved by this function.
-TEXT runtime·save_gm(SB),NOSPLIT,$0
-	MRC		15, 0, R0, C13, C0, 3 // fetch TLS base pointer
-	// $runtime.tlsgm(SB) is a special linker symbol.
-	// It is the offset from the TLS base pointer to our
-	// thread-local storage for g and m.
-	MOVW	$runtime·tlsgm(SB), R11
-	ADD	R11, R0
-	MOVW	g, 0(R0)
-	MOVW	m, 4(R0)
+	MOVW	$0, R0
+	MOVB	R0, ret+12(FP)
 	RET
 
-// load_gm loads the g and m registers from pthread-provided
-// thread-local memory, for use after calling externally compiled
-// ARM code that overwrote those registers.
-TEXT runtime·load_gm(SB),NOSPLIT,$0
-	MRC		15, 0, R0, C13, C0, 3 // fetch TLS base pointer
-	// $runtime.tlsgm(SB) is a special linker symbol.
-	// It is the offset from the TLS base pointer to our
-	// thread-local storage for g and m.
-	MOVW	$runtime·tlsgm(SB), R11
-	ADD	R11, R0
-	MOVW	0(R0), g
-	MOVW	4(R0), m
+// eqstring tests whether two strings are equal.
+// See runtime_test.go:eqstring_generic for
+// equivlaent Go code.
+TEXT runtime·eqstring(SB),NOSPLIT,$-4-17
+	MOVW	s1len+4(FP), R0
+	MOVW	s2len+12(FP), R1
+	MOVW	$0, R7
+	CMP	R0, R1
+	MOVB.NE R7, v+16(FP)
+	RET.NE
+	MOVW	s1str+0(FP), R2
+	MOVW	s2str+8(FP), R3
+	MOVW	$1, R8
+	MOVB	R8, v+16(FP)
+	CMP	R2, R3
+	RET.EQ
+	ADD	R2, R0, R6
+_eqnext:
+	CMP	R2, R6
+	RET.EQ
+	MOVBU.P	1(R2), R4
+	MOVBU.P	1(R3), R5
+	CMP	R4, R5
+	BEQ	_eqnext
+	MOVB	R7, v+16(FP)
 	RET
 
-// void setmg_gcc(M*, G*); set m and g called from gcc.
-TEXT setmg_gcc<>(SB),NOSPLIT,$0
-	MOVW	R0, m
-	MOVW	R1, g
-	B		runtime·save_gm(SB)
+// void setg_gcc(G*); set g called from gcc.
+TEXT setg_gcc<>(SB),NOSPLIT,$0
+	MOVW	R0, g
+	B		runtime·save_g(SB)
 
 // TODO: share code with memeq?
 TEXT bytes·Equal(SB),NOSPLIT,$0
@@ -1158,3 +1209,77 @@ TEXT runtime·duffcopy(SB), NOSPLIT, $0-0
 	MOVW.P	4(R1), R0
 	MOVW.P	R0, 4(R2)
 	RET
+
+TEXT runtime·fastrand2(SB), NOSPLIT, $-4-4
+	MOVW	g_m(g), R1
+	MOVW	m_fastrand(R1), R0
+	ADD.S	R0, R0
+	EOR.MI	$0x88888eef, R0
+	MOVW	R0, m_fastrand(R1)
+	MOVW	R0, ret+0(FP)
+	RET
+
+// The gohash and goeq trampolines are necessary while we have
+// both Go and C calls to alg functions.  Once we move all call
+// sites to Go, we can redo the hash/eq functions to use the
+// Go calling convention and remove these.
+
+// convert call to:
+//   func (alg unsafe.Pointer, p unsafe.Pointer, size uintpr, seed uintptr) uintptr
+// to:
+//   func (hash *uintptr, size uintptr, p unsafe.Pointer)
+TEXT runtime·gohash(SB), NOSPLIT, $12-20
+	FUNCDATA $FUNCDATA_ArgsPointerMaps,gcargs_gohash<>(SB)
+	FUNCDATA $FUNCDATA_LocalsPointerMaps,gclocals_gohash<>(SB)
+	MOVW	a+0(FP), R0
+	MOVW	alg_hash(R0), R0
+	MOVW	p+4(FP), R1
+	MOVW	size+8(FP), R2
+	MOVW	seed+12(FP), R3
+	MOVW	R3, ret+16(FP)
+	ADD	$36, R13, R4
+	MOVW	R4, 4(R13)
+	MOVW	R2, 8(R13)
+	MOVW	R1, 12(R13)
+	PCDATA  $PCDATA_StackMapIndex, $0
+	BL	(R0)
+	RET
+
+DATA gcargs_gohash<>+0x00(SB)/4, $1  // 1 stackmap
+DATA gcargs_gohash<>+0x04(SB)/4, $10  // 5 args
+DATA gcargs_gohash<>+0x08(SB)/4, $(const_BitsPointer+(const_BitsPointer<<2))
+GLOBL gcargs_gohash<>(SB),RODATA,$12
+
+DATA gclocals_gohash<>+0x00(SB)/4, $1  // 1 stackmap
+DATA gclocals_gohash<>+0x04(SB)/4, $0  // 0 locals
+GLOBL gclocals_gohash<>(SB),RODATA,$8
+
+// convert call to:
+//   func (alg unsafe.Pointer, p, q unsafe.Pointer, size uintptr) bool
+// to:
+//   func (eq *bool, size uintptr, p, q unsafe.Pointer)
+TEXT runtime·goeq(SB), NOSPLIT, $16-17
+	FUNCDATA $FUNCDATA_ArgsPointerMaps,gcargs_goeq<>(SB)
+	FUNCDATA $FUNCDATA_LocalsPointerMaps,gclocals_goeq<>(SB)
+	MOVW	alg+0(FP), R0
+	MOVW	alg_equal(R0), R0
+	MOVW	p+4(FP), R1
+	MOVW	q+8(FP), R2
+	MOVW	size+12(FP), R3
+	ADD	$40, R13, R4
+	MOVW	R4, 4(R13)
+	MOVW	R3, 8(R13)
+	MOVW	R2, 12(R13)
+	MOVW	R1, 16(R13)
+	PCDATA  $PCDATA_StackMapIndex, $0
+	BL	(R0)
+	RET
+
+DATA gcargs_goeq<>+0x00(SB)/4, $1  // 1 stackmap
+DATA gcargs_goeq<>+0x04(SB)/4, $10  // 5 args
+DATA gcargs_goeq<>+0x08(SB)/4, $(const_BitsPointer+(const_BitsPointer<<2)+(const_BitsPointer<<4))
+GLOBL gcargs_goeq<>(SB),RODATA,$12
+
+DATA gclocals_goeq<>+0x00(SB)/4, $1  // 1 stackmap
+DATA gclocals_goeq<>+0x04(SB)/4, $0  // 0 locals
+GLOBL gclocals_goeq<>(SB),RODATA,$8

@@ -344,7 +344,7 @@ select 语句会阻塞，直到其中一个通信就绪。
 <div class="english">
 <step title="Conclusion" src="doc/codewalk/urlpoll.go">
 In this codewalk we have explored a simple example of using Go's concurrency
-primitives to share memory through commmunication.
+primitives to share memory through communication.
 <br/><br/>
 This should provide a starting point from which to explore the ways in which
 goroutines and channels can be used to write expressive and concise concurrent

@@ -19,4 +19,6 @@ func main() {
 	}
 	for _ = range t {
 	}
+	for range t {
+	}
 }

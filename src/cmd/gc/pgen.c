@@ -174,7 +174,7 @@ compile(Node *fn)
 	lno = setlineno(fn);
 
 	if(fn->nbody == nil) {
-		if(pure_go || memcmp(fn->nname->sym->name, "init·", 6) == 0)
+		if(pure_go || strncmp(fn->nname->sym->name, "init·", 6) == 0)
 			yyerror("missing function body", fn);
 		goto ret;
 	}
@@ -229,6 +229,8 @@ compile(Node *fn)
 		ptxt->TEXTFLAG |= WRAPPER;
 	if(fn->needctxt)
 		ptxt->TEXTFLAG |= NEEDCTXT;
+	if(fn->nosplit)
+		ptxt->TEXTFLAG |= NOSPLIT;
 
 	// Clumsy but important.
 	// See test/recover.go for test cases and src/pkg/reflect/value.go

@@ -34,7 +34,9 @@ func (mr *multiReader) Read(p []byte) (n int, err error) {
 // 它们按顺序读取。一旦所有的输入返回 EOF，Read 就会返回 EOF。
 // 若任何 readers 返回了非 nil 或非 EOF 错误，Read 就会返回该错误。
 func MultiReader(readers ...Reader) Reader {
-	return &multiReader{readers}
+	r := make([]Reader, len(readers))
+	copy(r, readers)
+	return &multiReader{r}
 }
 
 type multiWriter struct {
@@ -60,5 +62,7 @@ func (t *multiWriter) Write(p []byte) (n int, err error) {
 
 // MultiWriter 创建一个 Writer，它将其写入复制到所有提供的 writers 中，类似于Unix的tee(1)命令。
 func MultiWriter(writers ...Writer) Writer {
-	return &multiWriter{writers}
+	w := make([]Writer, len(writers))
+	copy(w, writers)
+	return &multiWriter{w}
 }

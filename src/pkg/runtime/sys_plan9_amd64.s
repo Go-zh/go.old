@@ -10,26 +10,22 @@ TEXT runtime·setldt(SB),NOSPLIT,$0
 	RET
 
 TEXT runtime·open(SB),NOSPLIT,$0
-	MOVQ	$0x8000, AX
 	MOVQ	$14, BP
 	SYSCALL
 	RET
 
 TEXT runtime·pread(SB),NOSPLIT,$0
-	MOVQ	$0x8000, AX
 	MOVQ	$50, BP
 	SYSCALL
 	RET
 
 TEXT runtime·pwrite(SB),NOSPLIT,$0
-	MOVQ	$0x8000, AX
 	MOVQ	$51, BP
 	SYSCALL
 	RET
 
 // int32 _seek(int64*, int32, int64, int32)
 TEXT _seek<>(SB),NOSPLIT,$0
-	MOVQ	$0x8000, AX
 	MOVQ	$39, BP
 	SYSCALL
 	RET
@@ -52,67 +48,56 @@ TEXT runtime·seek(SB),NOSPLIT,$56
 	RET
 
 TEXT runtime·close(SB),NOSPLIT,$0
-	MOVQ	$0x8000, AX
 	MOVQ	$4, BP
 	SYSCALL
 	RET
 
 TEXT runtime·exits(SB),NOSPLIT,$0
-	MOVQ	$0x8000, AX
 	MOVQ	$8, BP
 	SYSCALL
 	RET
 
 TEXT runtime·brk_(SB),NOSPLIT,$0
-	MOVQ	$0x8000, AX
 	MOVQ	$24, BP
 	SYSCALL
 	RET
 
 TEXT runtime·sleep(SB),NOSPLIT,$0
-	MOVQ	$0x8000, AX
 	MOVQ	$17, BP
 	SYSCALL
 	RET
 
 TEXT runtime·plan9_semacquire(SB),NOSPLIT,$0
-	MOVQ	$0x8000, AX
 	MOVQ	$37, BP
 	SYSCALL
 	RET
 
 TEXT runtime·plan9_tsemacquire(SB),NOSPLIT,$0
-	MOVQ	$0x8000, AX
 	MOVQ	$52, BP
 	SYSCALL
 	RET
 
+TEXT runtime·nsec(SB),NOSPLIT,$0
+	MOVQ	$53, BP
+	SYSCALL
+	RET
+
 TEXT runtime·notify(SB),NOSPLIT,$0
-	MOVQ	$0x8000, AX
 	MOVQ	$28, BP
 	SYSCALL
 	RET
 
 TEXT runtime·noted(SB),NOSPLIT,$0
-	MOVQ	$0x8000, AX
 	MOVQ	$29, BP
 	SYSCALL
 	RET
 	
 TEXT runtime·plan9_semrelease(SB),NOSPLIT,$0
-	MOVQ	$0x8000, AX
 	MOVQ	$38, BP
 	SYSCALL
 	RET
 
-TEXT runtime·nanotime(SB),NOSPLIT,$0
-	MOVQ	$0x8000, AX
-	MOVQ	$60, BP
-	SYSCALL
-	RET
-
 TEXT runtime·rfork(SB),NOSPLIT,$0
-	MOVQ	$0x8000, AX
 	MOVQ	$19, BP // rfork
 	SYSCALL
 
@@ -133,10 +118,11 @@ TEXT runtime·rfork(SB),NOSPLIT,$0
 	// Initialize m, g.
 	get_tls(AX)
 	MOVQ	DX, g(AX)
-	MOVQ	BX, m(AX)
+	MOVQ	BX, g_m(DX)
 
-	// Initialize AX from pid in TLS.
-	MOVQ	0(FS), AX
+	// Initialize procid from TOS struct.
+	MOVQ	_tos(SB), AX
+	MOVQ	64(AX), AX
 	MOVQ	AX, m_procid(BX)	// save pid as m->procid
 	
 	CALL	runtime·stackcheck(SB)	// smashes AX, CX
@@ -156,8 +142,8 @@ TEXT runtime·settls(SB),NOSPLIT,$0
 TEXT runtime·sigtramp(SB),NOSPLIT,$0
 	get_tls(AX)
 
-	// check that m exists
-	MOVQ	m(AX), BX
+	// check that g exists
+	MOVQ	g(AX), BX
 	CMPQ	BX, $0
 	JNE	3(PC)
 	CALL	runtime·badsignal2(SB) // will exit
@@ -168,6 +154,7 @@ TEXT runtime·sigtramp(SB),NOSPLIT,$0
 	MOVQ	note+16(SP), DX
 
 	// change stack
+	MOVQ	g_m(BX), BX
 	MOVQ	m_gsignal(BX), R10
 	MOVQ	g_stackbase(R10), BP
 	MOVQ	BP, SP
@@ -218,11 +205,11 @@ TEXT runtime·setfpmasks(SB),NOSPLIT,$8
 // See ../syscall/asm_plan9_386.s:/·Syscall/
 TEXT runtime·errstr(SB),NOSPLIT,$0
 	get_tls(AX)
-	MOVQ	m(AX), BX
+	MOVQ	g(AX), BX
+	MOVQ	g_m(BX), BX
 	MOVQ	m_errstr(BX), CX
 	MOVQ	CX, 8(SP)
 	MOVQ	$ERRMAX, 16(SP)
-	MOVQ	$0x8000, AX
 	MOVQ	$41, BP
 	SYSCALL
 

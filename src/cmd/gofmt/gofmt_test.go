@@ -75,6 +75,7 @@ var tests = []struct {
 	{"testdata/composites.input", "-s"},
 	{"testdata/slices1.input", "-s"},
 	{"testdata/slices2.input", "-s"},
+	{"testdata/ranges.input", "-s"},
 	{"testdata/old.input", ""},
 	{"testdata/rewrite1.input", "-r=Foo->Bar"},
 	{"testdata/rewrite2.input", "-r=int->bool"},
@@ -87,8 +88,9 @@ var tests = []struct {
 	{"testdata/stdin*.input", "-stdin"},
 	{"testdata/comments.input", ""},
 	{"testdata/import.input", ""},
-	{"testdata/crlf.input", ""},       // test case for issue 3961; see also TestCRLF
-	{"testdata/typeswitch.input", ""}, // test case for issue 4470
+	{"testdata/crlf.input", ""},        // test case for issue 3961; see also TestCRLF
+	{"testdata/typeswitch.input", ""},  // test case for issue 4470
+	{"testdata/emptydecl.input", "-s"}, // test case for issue 7631
 }
 
 func TestRewrite(t *testing.T) {

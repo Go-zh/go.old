@@ -848,27 +848,33 @@ func Float64(name string, value float64, usage string) *float64 {
 
 // DurationVar defines a time.Duration flag with specified name, default value, and usage string.
 // The argument p points to a time.Duration variable in which to store the value of the flag.
+// The flag accepts a value acceptable to time.ParseDuration.
 
 // DurationVar定义了一个有指定名字，默认值，和用法说明的time.Duration标签。
 // 参数p指向一个存储标签解析值的time.Duration变量。
+// 此标记接受一个 time.ParseDuration 可接受的值。
 func (f *FlagSet) DurationVar(p *time.Duration, name string, value time.Duration, usage string) {
 	f.Var(newDurationValue(value, p), name, usage)
 }
 
 // DurationVar defines a time.Duration flag with specified name, default value, and usage string.
 // The argument p points to a time.Duration variable in which to store the value of the flag.
+// The flag accepts a value acceptable to time.ParseDuration.
 
 // DurationVar定义了一个有指定名字，默认值，和用法说明的time.Duration标签。
 // 参数p指向一个存储标签解析值的time.Duration变量。
+// 此标记接受一个 time.ParseDuration 可接受的值。
 func DurationVar(p *time.Duration, name string, value time.Duration, usage string) {
 	CommandLine.Var(newDurationValue(value, p), name, usage)
 }
 
 // Duration defines a time.Duration flag with specified name, default value, and usage string.
 // The return value is the address of a time.Duration variable that stores the value of the flag.
+// The flag accepts a value acceptable to time.ParseDuration.
 
 // Duration定义了一个有指定名字，默认值，和用法说明的time.Duration标签。
 // 返回值是一个存储标签解析值的time.Duration变量地址。
+// 此标记接受一个 time.ParseDuration 可接受的值。
 func (f *FlagSet) Duration(name string, value time.Duration, usage string) *time.Duration {
 	p := new(time.Duration)
 	f.DurationVar(p, name, value, usage)
@@ -877,9 +883,11 @@ func (f *FlagSet) Duration(name string, value time.Duration, usage string) *time
 
 // Duration defines a time.Duration flag with specified name, default value, and usage string.
 // The return value is the address of a time.Duration variable that stores the value of the flag.
+// The flag accepts a value acceptable to time.ParseDuration.
 
 // Duration定义了一个有指定名字，默认值，和用法说明的time.Duration标签。
 // 返回值是一个存储标签解析值的time.Duration变量地址。
+// 此标记接受一个 time.ParseDuration 可接受的值。
 func Duration(name string, value time.Duration, usage string) *time.Duration {
 	return CommandLine.Duration(name, value, usage)
 }
@@ -1086,7 +1094,7 @@ func Parsed() bool {
 }
 
 // CommandLine is the default set of command-line flags, parsed from os.Args.
-// The top-level functions such as BoolVar, Arg, and on are wrappers for the
+// The top-level functions such as BoolVar, Arg, and so on are wrappers for the
 // methods of CommandLine.
 
 // CommandLine 是命令行标记的默认集合，从 os.Args 解析而来。像 BoolVar、Arg

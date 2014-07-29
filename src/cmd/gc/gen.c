@@ -584,6 +584,8 @@ cgen_dcl(Node *n)
 	}
 	if(!(n->class & PHEAP))
 		return;
+	if(compiling_runtime)
+		fatal("%N escapes to heap, not allowed in runtime.", n);
 	if(n->alloc == nil)
 		n->alloc = callnew(n->type);
 	cgen_as(n->heapaddr, n->alloc);
@@ -829,7 +831,6 @@ cgen_slice(Node *n, Node *res)
 		src = *n->left;
 	if(n->op == OSLICE || n->op == OSLICE3 || n->op == OSLICESTR)
 		src.xoffset += Array_array;
-	src.type = types[TUINTPTR];
 
 	if(n->op == OSLICEARR || n->op == OSLICE3ARR) {
 		if(!isptr[n->left->type->etype])
@@ -842,9 +843,11 @@ cgen_slice(Node *n, Node *res)
 			cgen(add, base);
 		}
 	} else if(offs == N) {
+		src.type = types[tptr];
 		cgen(&src, base);
 	} else {
-		add = nod(OADD, &src, offs);
+		src.type = types[tptr];
+		add = nod(OADDPTR, &src, offs);
 		typecheck(&add, Erv);
 		cgen(add, base);
 	}
@@ -855,7 +858,7 @@ cgen_slice(Node *n, Node *res)
 	// dst.array = src.array  [ + lo *width ]
 	dst = *res;
 	dst.xoffset += Array_array;
-	dst.type = types[TUINTPTR];
+	dst.type = types[tptr];
 	
 	cgen(base, &dst);
 

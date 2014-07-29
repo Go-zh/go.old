@@ -5,6 +5,8 @@
 package runtime_test
 
 import (
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -75,3 +77,71 @@ func BenchmarkCompareStringBig(b *testing.B) {
 	}
 	b.SetBytes(int64(len(s1)))
 }
+
+func BenchmarkRuneIterate(b *testing.B) {
+	bytes := make([]byte, 100)
+	for i := range bytes {
+		bytes[i] = byte('A')
+	}
+	s := string(bytes)
+	for i := 0; i < b.N; i++ {
+		for range s {
+		}
+	}
+}
+
+func BenchmarkRuneIterate2(b *testing.B) {
+	bytes := make([]byte, 100)
+	for i := range bytes {
+		bytes[i] = byte('A')
+	}
+	s := string(bytes)
+	for i := 0; i < b.N; i++ {
+		for range s {
+		}
+	}
+}
+
+func TestStringW(t *testing.T) {
+	strings := []string{
+		"hello",
+		"a\u5566\u7788b",
+	}
+
+	for _, s := range strings {
+		var b []uint16
+		for _, c := range s {
+			b = append(b, uint16(c))
+			if c != rune(uint16(c)) {
+				t.Errorf("bad test: stringW can't handle >16 bit runes")
+			}
+		}
+		b = append(b, 0)
+		r := runtime.GostringW(b)
+		if r != s {
+			t.Errorf("gostringW(%v) = %s, want %s", b, r, s)
+		}
+	}
+}
+
+func TestLargeStringConcat(t *testing.T) {
+	output := executeTest(t, largeStringConcatSource, nil)
+	want := "panic: " + strings.Repeat("0", 1<<10) + strings.Repeat("1", 1<<10) +
+		strings.Repeat("2", 1<<10) + strings.Repeat("3", 1<<10)
+	if !strings.HasPrefix(output, want) {
+		t.Fatalf("output does not start with %q:\n%s", want, output)
+	}
+}
+
+var largeStringConcatSource = `
+package main
+import "strings"
+func main() {
+	s0 := strings.Repeat("0", 1<<10)
+	s1 := strings.Repeat("1", 1<<10)
+	s2 := strings.Repeat("2", 1<<10)
+	s3 := strings.Repeat("3", 1<<10)
+	s := s0 + s1 + s2 + s3
+	panic(s)
+}
+`

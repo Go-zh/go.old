@@ -39,6 +39,7 @@
 uint32 unmappedzero = 4096;
 
 #define	CASE(a,b)	(((a)<<16)|((b)<<0))
+/*c2go int CASE(int, int);*/
 
 void
 clearp(Prog *p)
@@ -215,7 +216,7 @@ gargsize(int32 size)
 }
 
 void
-ggloblsym(Sym *s, int32 width, int dupok, int rodata)
+ggloblsym(Sym *s, int32 width, int8 flags)
 {
 	Prog *p;
 
@@ -226,10 +227,7 @@ ggloblsym(Sym *s, int32 width, int dupok, int rodata)
 	p->to.type = D_CONST;
 	p->to.index = D_NONE;
 	p->to.offset = width;
-	if(dupok)
-		p->from.scale |= DUPOK;
-	if(rodata)
-		p->from.scale |= RODATA;
+	p->from.scale = flags;
 }
 
 void
@@ -432,6 +430,7 @@ optoas(int op, Type *t)
 	case CASE(OADD, TINT32):
 	case CASE(OADD, TUINT32):
 	case CASE(OADD, TPTR32):
+	case CASE(OADDPTR, TPTR32):
 		a = AADDL;
 		break;
 
@@ -696,6 +695,7 @@ optoas(int op, Type *t)
 }
 
 #define FCASE(a, b, c)  (((a)<<16)|((b)<<8)|(c))
+/*c2go int FCASE(int, int, int); */
 int
 foptoas(int op, Type *t, int flg)
 {
@@ -1043,6 +1043,7 @@ Node*
 nodarg(Type *t, int fp)
 {
 	Node *n;
+	NodeList *l;
 	Type *first;
 	Iter savet;
 
@@ -1067,6 +1068,14 @@ nodarg(Type *t, int fp)
 		break;
 
 	case TFIELD:
+		if(fp == 1 && t->sym != S && !isblanksym(t->sym)) {
+			for(l=curfn->dcl; l; l=l->next) {
+				n = l->n;
+				if((n->class == PPARAM || n->class == PPARAMOUT) && n->sym == t->sym)
+					return n;
+			}
+		}
+
 		n = nod(ONAME, N, N);
 		n->type = t->type;
 		n->sym = t->sym;
@@ -1687,7 +1696,6 @@ floatmove(Node *f, Node *t)
 		gins(ACMPL, &thi, ncon(0));
 		p1 = gbranch(AJLT, T, 0);
 		// native
-		t1.type = types[TINT64];
 		nodreg(&r1, types[tt], D_F0);
 		gins(AFMOVV, &t1, &r1);
 		if(tt == TFLOAT32)
@@ -2327,7 +2335,7 @@ naddr(Node *n, Addr *a, int canemitcode)
 		naddr(n->left, a, canemitcode);
 		if(a->type == D_CONST && a->offset == 0)
 			break;	// ptr(nil)
-		a->etype = simtype[TUINTPTR];
+		a->etype = simtype[tptr];
 		a->offset += Array_array;
 		a->width = widthptr;
 		break;

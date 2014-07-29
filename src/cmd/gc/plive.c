@@ -17,6 +17,7 @@
 #include <libc.h>
 #include "gg.h"
 #include "opt.h"
+#include "../ld/textflag.h"
 #include "../../pkg/runtime/funcdata.h"
 
 enum { BitsPerPointer = 2 };
@@ -657,8 +658,8 @@ static void
 progeffects(Prog *prog, Array *vars, Bvec *uevar, Bvec *varkill, Bvec *avarinit)
 {
 	ProgInfo info;
-	Adr *from;
-	Adr *to;
+	Addr *from;
+	Addr *to;
 	Node *node;
 	int32 i;
 	int32 pos;
@@ -1663,6 +1664,13 @@ livenessepilogue(Liveness *lv)
 // FNV-1 hash function constants.
 #define H0 2166136261UL
 #define Hp 16777619UL
+/*c2go
+enum
+{
+	H0 = 2166136261,
+	Hp = 16777619,
+};
+*/
 
 static uint32
 hashbitmap(uint32 h, Bvec *bv)
@@ -1916,7 +1924,7 @@ twobitwritesymbol(Array *arr, Sym *sym)
 		}
 	}
 	duint32(sym, 0, i); // number of bitmaps
-	ggloblsym(sym, off, 0, 1);
+	ggloblsym(sym, off, RODATA);
 }
 
 static void

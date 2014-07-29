@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"text/template"
@@ -31,6 +32,11 @@ func testEnv(cmd *exec.Cmd) *exec.Cmd {
 }
 
 func executeTest(t *testing.T, templ string, data interface{}) string {
+	switch runtime.GOOS {
+	case "android", "nacl":
+		t.Skipf("skipping on %s", runtime.GOOS)
+	}
+
 	checkStaleRuntime(t)
 
 	st := template.Must(template.New("crashSource").Parse(templ))
@@ -150,6 +156,22 @@ func TestGoexitCrash(t *testing.T) {
 	want := "no goroutines (main called runtime.Goexit) - deadlock!"
 	if !strings.Contains(output, want) {
 		t.Fatalf("output:\n%s\n\nwant output containing: %s", output, want)
+	}
+}
+
+func TestGoNil(t *testing.T) {
+	output := executeTest(t, goNilSource, nil)
+	want := "go of nil func value"
+	if !strings.Contains(output, want) {
+		t.Fatalf("output:\n%s\n\nwant output containing: %s", output, want)
+	}
+}
+
+func TestMainGoroutineId(t *testing.T) {
+	output := executeTest(t, mainGoroutineIdSource, nil)
+	want := "panic: test\n\ngoroutine 1 [running]:\n"
+	if !strings.HasPrefix(output, want) {
+		t.Fatalf("output does not start with %q:\n%s", want, output)
 	}
 }
 
@@ -336,5 +358,25 @@ func main() {
 	runtime.SetFinalizer(&i, func(p *int) {})
 	runtime.GC()
 	runtime.Goexit()
+}
+`
+
+const goNilSource = `
+package main
+
+func main() {
+	defer func() {
+		recover()
+	}()
+	var f func()
+	go f()
+	select{}
+}
+`
+
+const mainGoroutineIdSource = `
+package main
+func main() {
+	panic("test")
 }
 `

@@ -289,8 +289,7 @@ type decoder struct {
 	err     error
 	readErr error
 	r       io.Reader
-	end     bool       // saw end of message   // 消息结束。
-	buf     [1024]byte // leftover input       // 剩余输入。
+	buf     [1024]byte // leftover input        // 剩余输入。
 	nbuf    int
 	out     []byte // leftover decoded output   // 剩余解码输出。
 	outbuf  [1024]byte

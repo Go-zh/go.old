@@ -405,10 +405,14 @@ func (f *File) getSymbols(typ SectionType) ([]Symbol, []byte, error) {
 	return nil, nil, errors.New("not implemented")
 }
 
+// ErrNoSymbols is returned by File.Symbols and File.DynamicSymbols
+// if there is no such section in the File.
+var ErrNoSymbols = errors.New("no symbol section")
+
 func (f *File) getSymbols32(typ SectionType) ([]Symbol, []byte, error) {
 	symtabSection := f.SectionByType(typ)
 	if symtabSection == nil {
-		return nil, nil, errors.New("no symbol section")
+		return nil, nil, ErrNoSymbols
 	}
 
 	data, err := symtabSection.Data()
@@ -451,7 +455,7 @@ func (f *File) getSymbols32(typ SectionType) ([]Symbol, []byte, error) {
 func (f *File) getSymbols64(typ SectionType) ([]Symbol, []byte, error) {
 	symtabSection := f.SectionByType(typ)
 	if symtabSection == nil {
-		return nil, nil, errors.New("no symbol section")
+		return nil, nil, ErrNoSymbols
 	}
 
 	data, err := symtabSection.Data()
@@ -522,13 +526,17 @@ func (f *File) applyRelocations(dst []byte, rels []byte) error {
 	if f.Class == ELFCLASS64 && f.Machine == EM_X86_64 {
 		return f.applyRelocationsAMD64(dst, rels)
 	}
+	if f.Class == ELFCLASS32 && f.Machine == EM_386 {
+		return f.applyRelocations386(dst, rels)
+	}
 
 	return errors.New("not implemented")
 }
 
 func (f *File) applyRelocationsAMD64(dst []byte, rels []byte) error {
-	if len(rels)%Sym64Size != 0 {
-		return errors.New("length of relocation section is not a multiple of Sym64Size")
+	// 24 is the size of Rela64.
+	if len(rels)%24 != 0 {
+		return errors.New("length of relocation section is not a multiple of 24")
 	}
 
 	symbols, _, err := f.getSymbols(SHT_SYMTAB)
@@ -570,6 +578,43 @@ func (f *File) applyRelocationsAMD64(dst []byte, rels []byte) error {
 	return nil
 }
 
+func (f *File) applyRelocations386(dst []byte, rels []byte) error {
+	// 8 is the size of Rel32.
+	if len(rels)%8 != 0 {
+		return errors.New("length of relocation section is not a multiple of 8")
+	}
+
+	symbols, _, err := f.getSymbols(SHT_SYMTAB)
+	if err != nil {
+		return err
+	}
+
+	b := bytes.NewReader(rels)
+	var rel Rel32
+
+	for b.Len() > 0 {
+		binary.Read(b, f.ByteOrder, &rel)
+		symNo := rel.Info >> 8
+		t := R_386(rel.Info & 0xff)
+
+		if symNo == 0 || symNo > uint32(len(symbols)) {
+			continue
+		}
+		sym := &symbols[symNo-1]
+
+		if t == R_386_32 {
+			if rel.Off+4 >= uint32(len(dst)) {
+				continue
+			}
+			val := f.ByteOrder.Uint32(dst[rel.Off : rel.Off+4])
+			val += uint32(sym.Value)
+			f.ByteOrder.PutUint32(dst[rel.Off:rel.Off+4], val)
+		}
+	}
+
+	return nil
+}
+
 func (f *File) DWARF() (*dwarf.Data, error) {
 	// There are many other DWARF sections, but these
 	// are the required ones, and the debug/dwarf package
@@ -594,6 +639,19 @@ func (f *File) DWARF() (*dwarf.Data, error) {
 	rela := f.Section(".rela.debug_info")
 	if rela != nil && rela.Type == SHT_RELA && f.Machine == EM_X86_64 {
 		data, err := rela.Data()
+		if err != nil {
+			return nil, err
+		}
+		err = f.applyRelocations(dat[1], data)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// When using clang we need to process relocations even for 386.
+	rel := f.Section(".rel.debug_info")
+	if rel != nil && rel.Type == SHT_REL && f.Machine == EM_386 {
+		data, err := rel.Data()
 		if err != nil {
 			return nil, err
 		}
@@ -644,13 +702,25 @@ func (f *File) DWARF() (*dwarf.Data, error) {
 	return d, nil
 }
 
-// Symbols returns the symbol table for f.
+// Symbols returns the symbol table for f. The symbols will be listed in the order
+// they appear in f.
 //
 // For compatibility with Go 1.0, Symbols omits the null symbol at index 0.
 // After retrieving the symbols as symtab, an externally supplied index x
 // corresponds to symtab[x-1], not symtab[x].
 func (f *File) Symbols() ([]Symbol, error) {
 	sym, _, err := f.getSymbols(SHT_SYMTAB)
+	return sym, err
+}
+
+// DynamicSymbols returns the dynamic symbol table for f. The symbols
+// will be listed in the order they appear in f.
+//
+// For compatibility with Symbols, DynamicSymbols omits the null symbol at index 0.
+// After retrieving the symbols as symtab, an externally supplied index x
+// corresponds to symtab[x-1], not symtab[x].
+func (f *File) DynamicSymbols() ([]Symbol, error) {
+	sym, _, err := f.getSymbols(SHT_DYNSYM)
 	return sym, err
 }
 

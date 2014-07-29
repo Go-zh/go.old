@@ -8,15 +8,15 @@
 #include "libcgo.h"
 
 static void* threadentry(void*);
-static void (*setmg_gcc)(void*, void*);
+static void (*setg_gcc)(void*);
 
 void
-x_cgo_init(G* g, void (*setmg)(void*, void*))
+x_cgo_init(G* g, void (*setg)(void*))
 {
 	pthread_attr_t attr;
 	size_t size;
 
-	setmg_gcc = setmg;
+	setg_gcc = setg;
 	pthread_attr_init(&attr);
 	pthread_attr_getstacksize(&attr, &size);
 	g->stackguard = (uintptr)&attr - size + 4096;
@@ -44,8 +44,7 @@ _cgo_sys_thread_start(ThreadStart *ts)
 	pthread_sigmask(SIG_SETMASK, &oset, nil);
 
 	if (err != 0) {
-		fprintf(stderr, "runtime/cgo: pthread_create failed: %s\n", strerror(err));
-		abort();
+		fatalf("pthread_create failed: %s", strerror(err));
 	}
 }
 
@@ -68,7 +67,7 @@ threadentry(void *v)
 	/*
 	 * Set specific keys.
 	 */
-	setmg_gcc((void*)ts.m, (void*)ts.g);
+	setg_gcc((void*)ts.g);
 
 	crosscall_amd64(ts.fn);
 	return nil;

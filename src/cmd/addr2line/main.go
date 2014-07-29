@@ -8,7 +8,7 @@
 // Usage:
 //	go tool addr2line binary
 //
-// Addr2line reads hexadecimal addresses, one per line and without a 0x prefix,
+// Addr2line reads hexadecimal addresses, one per line and with optional 0x prefix,
 // from standard input. For each input address, addr2line prints two output lines,
 // first the name of the function containing the address and second the file:line
 // of the source code corresponding to that address.
@@ -23,6 +23,7 @@ import (
 	"debug/gosym"
 	"debug/macho"
 	"debug/pe"
+	"debug/plan9obj"
 	"flag"
 	"fmt"
 	"log"
@@ -88,7 +89,7 @@ func main() {
 			fmt.Fprintf(stdout, "!reverse translation not implemented\n")
 			continue
 		}
-		pc, _ := strconv.ParseUint(p, 16, 64)
+		pc, _ := strconv.ParseUint(strings.TrimPrefix(p, "0x"), 16, 64)
 		file, line, fn := tab.PCToLine(pc)
 		name := "?"
 		if fn != nil {
@@ -138,13 +139,33 @@ func loadTables(f *os.File) (textStart uint64, symtab, pclntab []byte, err error
 	}
 
 	if obj, err := pe.NewFile(f); err == nil {
+		var imageBase uint64
+		switch oh := obj.OptionalHeader.(type) {
+		case *pe.OptionalHeader32:
+			imageBase = uint64(oh.ImageBase)
+		case *pe.OptionalHeader64:
+			imageBase = oh.ImageBase
+		default:
+			return 0, nil, nil, fmt.Errorf("pe file format not recognized")
+		}
 		if sect := obj.Section(".text"); sect != nil {
-			textStart = uint64(sect.VirtualAddress)
+			textStart = imageBase + uint64(sect.VirtualAddress)
 		}
 		if pclntab, err = loadPETable(obj, "pclntab", "epclntab"); err != nil {
 			return 0, nil, nil, err
 		}
 		if symtab, err = loadPETable(obj, "symtab", "esymtab"); err != nil {
+			return 0, nil, nil, err
+		}
+		return textStart, symtab, pclntab, nil
+	}
+
+	if obj, err := plan9obj.NewFile(f); err == nil {
+		textStart = obj.LoadAddress + obj.HdrSize
+		if pclntab, err = loadPlan9Table(obj, "pclntab", "epclntab"); err != nil {
+			return 0, nil, nil, err
+		}
+		if symtab, err = loadPlan9Table(obj, "symtab", "esymtab"); err != nil {
 			return 0, nil, nil, err
 		}
 		return textStart, symtab, pclntab, nil
@@ -187,4 +208,39 @@ func loadPETable(f *pe.File, sname, ename string) ([]byte, error) {
 		return nil, err
 	}
 	return data[ssym.Value:esym.Value], nil
+}
+
+func findPlan9Symbol(f *plan9obj.File, name string) (*plan9obj.Sym, error) {
+	syms, err := f.Symbols()
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range syms {
+		if s.Name != name {
+			continue
+		}
+		return &s, nil
+	}
+	return nil, fmt.Errorf("no %s symbol found", name)
+}
+
+func loadPlan9Table(f *plan9obj.File, sname, ename string) ([]byte, error) {
+	ssym, err := findPlan9Symbol(f, sname)
+	if err != nil {
+		return nil, err
+	}
+	esym, err := findPlan9Symbol(f, ename)
+	if err != nil {
+		return nil, err
+	}
+	sect := f.Section("text")
+	if sect == nil {
+		return nil, err
+	}
+	data, err := sect.Data()
+	if err != nil {
+		return nil, err
+	}
+	textStart := f.LoadAddress + f.HdrSize
+	return data[ssym.Value-textStart : esym.Value-textStart], nil
 }

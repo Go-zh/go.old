@@ -80,7 +80,6 @@ var BytesHash = bytesHash
 var Int32Hash = int32Hash
 var Int64Hash = int64Hash
 
-var hashLoad float64 // declared in hashmap.c
 var HashLoad = &hashLoad
 
 func memclrBytes(b []byte)
@@ -90,3 +89,7 @@ var MemclrBytes = memclrBytes
 func gogoBytes() int32
 
 var GogoBytes = gogoBytes
+
+func gostringW([]uint16) string
+
+var GostringW = gostringW

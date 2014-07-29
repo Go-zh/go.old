@@ -473,6 +473,14 @@ func TestSplit(t *testing.T) {
 	}
 }
 
+// This ran out of stack before issue 7608 was fixed.
+func TestOnePassCutoff(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping in short mode")
+	}
+	MustCompile(`^(?:x{1,1000}){1,1000}$`)
+}
+
 func BenchmarkLiteral(b *testing.B) {
 	x := strings.Repeat("x", 50) + "y"
 	b.StopTimer()
@@ -588,6 +596,7 @@ func BenchmarkOnePassShortA(b *testing.B) {
 		re.Match(x)
 	}
 }
+
 func BenchmarkNotOnePassShortA(b *testing.B) {
 	b.StopTimer()
 	x := []byte("abcddddddeeeededd")
@@ -597,6 +606,7 @@ func BenchmarkNotOnePassShortA(b *testing.B) {
 		re.Match(x)
 	}
 }
+
 func BenchmarkOnePassShortB(b *testing.B) {
 	b.StopTimer()
 	x := []byte("abcddddddeeeededd")
@@ -606,6 +616,7 @@ func BenchmarkOnePassShortB(b *testing.B) {
 		re.Match(x)
 	}
 }
+
 func BenchmarkNotOnePassShortB(b *testing.B) {
 	b.StopTimer()
 	x := []byte("abcddddddeeeededd")
@@ -615,6 +626,7 @@ func BenchmarkNotOnePassShortB(b *testing.B) {
 		re.Match(x)
 	}
 }
+
 func BenchmarkOnePassLongPrefix(b *testing.B) {
 	b.StopTimer()
 	x := []byte("abcdefghijklmnopqrstuvwxyz")
@@ -624,6 +636,7 @@ func BenchmarkOnePassLongPrefix(b *testing.B) {
 		re.Match(x)
 	}
 }
+
 func BenchmarkOnePassLongNotPrefix(b *testing.B) {
 	b.StopTimer()
 	x := []byte("abcdefghijklmnopqrstuvwxyz")

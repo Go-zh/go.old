@@ -22,6 +22,7 @@ import (
 	"net"
 	"os/exec"
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -727,6 +728,11 @@ func TestParsePEMCRL(t *testing.T) {
 }
 
 func TestImports(t *testing.T) {
+	switch runtime.GOOS {
+	case "android", "nacl":
+		t.Skipf("skipping on %s", runtime.GOOS)
+	}
+
 	if err := exec.Command("go", "run", "x509_test_import.go").Run(); err != nil {
 		t.Errorf("failed to run x509_test_import.go: %s", err)
 	}
@@ -845,7 +851,7 @@ func TestCertificateRequestOverrides(t *testing.T) {
 		// An explicit extension should override the DNSNames from the
 		// template.
 		ExtraExtensions: []pkix.Extension{
-			pkix.Extension{
+			{
 				Id:    oidExtensionSubjectAltName,
 				Value: sanContents,
 			},
@@ -863,11 +869,11 @@ func TestCertificateRequestOverrides(t *testing.T) {
 	// with two extension attributes.
 
 	template.Attributes = []pkix.AttributeTypeAndValueSET{
-		pkix.AttributeTypeAndValueSET{
+		{
 			Type: oidExtensionRequest,
 			Value: [][]pkix.AttributeTypeAndValue{
-				[]pkix.AttributeTypeAndValue{
-					pkix.AttributeTypeAndValue{
+				{
+					{
 						Type:  oidExtensionAuthorityInfoAccess,
 						Value: []byte("foo"),
 					},

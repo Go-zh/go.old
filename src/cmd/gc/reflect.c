@@ -5,6 +5,7 @@
 #include <u.h>
 #include <libc.h>
 #include "go.h"
+#include "../ld/textflag.h"
 #include "../../pkg/runtime/mgc0.h"
 
 /*
@@ -524,7 +525,7 @@ dimportpath(Pkg *p)
 	p->pathsym = n->sym;
 
 	gdatastring(n, p->path);
-	ggloblsym(n->sym, types[TSTRING]->width, 1, 1);
+	ggloblsym(n->sym, types[TSTRING]->width, DUPOK|RODATA);
 }
 
 static int
@@ -975,7 +976,9 @@ dtypesym(Type *t)
 	tbase = t;
 	if(isptr[t->etype] && t->sym == S && t->type->sym != S)
 		tbase = t->type;
-	dupok = tbase->sym == S;
+	dupok = 0;
+	if(tbase->sym == S)
+		dupok = DUPOK;
 
 	if(compiling_runtime &&
 			(tbase == types[tbase->etype] ||
@@ -1150,7 +1153,7 @@ ok:
 		break;
 	}
 	ot = dextratype(s, ot, t, xt);
-	ggloblsym(s, ot, dupok, 1);
+	ggloblsym(s, ot, dupok|RODATA);
 
 	// generate typelink.foo pointing at s = type.foo.
 	// The linker will leave a table of all the typelinks for
@@ -1164,7 +1167,7 @@ ok:
 		case TMAP:
 			slink = typelinksym(t);
 			dsymptr(slink, 0, s, 0);
-			ggloblsym(slink, widthptr, dupok, 1);
+			ggloblsym(slink, widthptr, dupok|RODATA);
 		}
 	}
 
@@ -1267,7 +1270,7 @@ dalgsym(Type *t)
 		break;
 	}
 
-	ggloblsym(s, ot, 1, 1);
+	ggloblsym(s, ot, DUPOK|RODATA);
 	return s;
 }
 
@@ -1322,7 +1325,22 @@ dgcsym1(Sym *s, int ot, Type *t, vlong *off, int stack_size)
 		// NOTE: Any changes here need to be made to reflect.PtrTo as well.
 		if(*off % widthptr != 0)
 			fatal("dgcsym1: invalid alignment, %T", t);
-		if(!haspointers(t->type) || t->type->etype == TUINT8) {
+
+		// NOTE(rsc): Emitting GC_APTR here for *nonptrtype
+		// (pointer to non-pointer-containing type) means that
+		// we do not record 'nonptrtype' and instead tell the 
+		// garbage collector to look up the type of the memory in
+		// type information stored in the heap. In effect we are telling
+		// the collector "we don't trust our information - use yours".
+		// It's not completely clear why we want to do this.
+		// It does have the effect that if you have a *SliceHeader and a *[]int
+		// pointing at the same actual slice header, *SliceHeader will not be
+		// used as an authoritative type for the memory, which is good:
+		// if the collector scanned the memory as type *SliceHeader, it would
+		// see no pointers inside but mark the block as scanned, preventing
+		// the seeing of pointers when we followed the *[]int pointer.
+		// Perhaps that kind of situation is the rationale.
+		if(!haspointers(t->type)) {
 			ot = duintptr(s, ot, GC_APTR);
 			ot = duintptr(s, ot, *off);
 		} else {
@@ -1474,7 +1492,7 @@ dgcsym(Type *t)
 	ot = duintptr(s, ot, t->width);
 	ot = dgcsym1(s, ot, t, &off, 0);
 	ot = duintptr(s, ot, GC_END);
-	ggloblsym(s, ot, 1, 1);
+	ggloblsym(s, ot, DUPOK|RODATA);
 
 	if(t->align > 0)
 		off = rnd(off, t->align);

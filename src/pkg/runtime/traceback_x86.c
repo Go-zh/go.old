@@ -13,6 +13,8 @@
 #endif
 
 void runtime·sigpanic(void);
+void runtime·newproc(void);
+void runtime·deferproc(void);
 
 #ifdef GOOS_windows
 void runtime·sigtramp(void);
@@ -29,12 +31,14 @@ int32
 runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, uintptr *pcbuf, int32 max, bool (*callback)(Stkframe*, void*), void *v, bool printall)
 {
 	int32 i, n, nprint, line, gotraceback;
-	uintptr tracepc;
-	bool waspanic, printing;
+	uintptr tracepc, sparg;
+	bool waspanic, wasnewproc, printing;
 	Func *f, *flr;
 	Stkframe frame;
 	Stktop *stk;
 	String file;
+	Panic *panic;
+	Defer *defer;
 
 	USED(lr0);
 	
@@ -55,8 +59,16 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 	frame.pc = pc0;
 	frame.sp = sp0;
 	waspanic = false;
+	wasnewproc = false;
 	printing = pcbuf==nil && callback==nil;
-	
+	panic = gp->panic;
+	defer = gp->defer;
+
+	while(defer != nil && defer->argp == NoArgs)
+		defer = defer->link;	
+	while(panic != nil && panic->defer == nil)
+		panic = panic->link;
+
 	// If the PC is zero, it's likely a nil function call.
 	// Start in the caller's frame.
 	if(frame.pc == 0) {
@@ -119,6 +131,7 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 			
 			// Invoke callback so that stack copier sees an uncopyable frame.
 			if(callback != nil) {
+				frame.continpc = frame.pc;
 				frame.argp = nil;
 				frame.arglen = 0;
 				if(!callback(&frame, v))
@@ -194,6 +207,40 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 				frame.arglen = 0;
 			}
 		}
+		
+		// Determine function SP where deferproc would find its arguments.
+		// On x86 that's just the standard bottom-of-stack, so SP exactly.
+		// If the previous frame was a direct call to newproc/deferproc, however,
+		// the SP is two words lower than normal.
+		sparg = frame.sp;
+		if(wasnewproc)
+			sparg += 2*sizeof(uintptr);
+
+		// Determine frame's 'continuation PC', where it can continue.
+		// Normally this is the return address on the stack, but if sigpanic
+		// is immediately below this function on the stack, then the frame
+		// stopped executing due to a trap, and frame.pc is probably not
+		// a safe point for looking up liveness information. In this panicking case,
+		// the function either doesn't return at all (if it has no defers or if the
+		// defers do not recover) or it returns from one of the calls to 
+		// deferproc a second time (if the corresponding deferred func recovers).
+		// It suffices to assume that the most recent deferproc is the one that
+		// returns; everything live at earlier deferprocs is still live at that one.
+		frame.continpc = frame.pc;
+		if(waspanic) {
+			if(panic != nil && panic->defer->argp == (byte*)sparg)
+				frame.continpc = (uintptr)panic->defer->pc;
+			else if(defer != nil && defer->argp == (byte*)sparg)
+				frame.continpc = (uintptr)defer->pc;
+			else
+				frame.continpc = 0;
+		}
+
+		// Unwind our local panic & defer stacks past this frame.
+		while(panic != nil && (panic->defer == nil || panic->defer->argp == (byte*)sparg || panic->defer->argp == NoArgs))
+			panic = panic->link;
+		while(defer != nil && (defer->argp == (byte*)sparg || defer->argp == NoArgs))
+			defer = defer->link;	
 
 		if(skip > 0) {
 			skip--;
@@ -230,8 +277,8 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 				runtime·printf("\t%S:%d", file, line);
 				if(frame.pc > f->entry)
 					runtime·printf(" +%p", (uintptr)(frame.pc - f->entry));
-				if(m->throwing > 0 && gp == m->curg || gotraceback >= 2)
-					runtime·printf(" fp=%p", frame.fp);
+				if(g->m->throwing > 0 && gp == g->m->curg || gotraceback >= 2)
+					runtime·printf(" fp=%p sp=%p", frame.fp, frame.sp);
 				runtime·printf("\n");
 				nprint++;
 			}
@@ -240,6 +287,7 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 	
 	skipped:
 		waspanic = f->entry == (uintptr)runtime·sigpanic;
+		wasnewproc = f->entry == (uintptr)runtime·newproc || f->entry == (uintptr)runtime·deferproc;
 
 		// Do not unwind past the bottom of the stack.
 		if(flr == nil)
@@ -255,7 +303,72 @@ runtime·gentraceback(uintptr pc0, uintptr sp0, uintptr lr0, G *gp, int32 skip, 
 	
 	if(pcbuf == nil && callback == nil)
 		n = nprint;
-	
+
+	// If callback != nil, we're being called to gather stack information during
+	// garbage collection or stack growth. In that context, require that we used
+	// up the entire defer stack. If not, then there is a bug somewhere and the
+	// garbage collection or stack growth may not have seen the correct picture
+	// of the stack. Crash now instead of silently executing the garbage collection
+	// or stack copy incorrectly and setting up for a mysterious crash later.
+	//
+	// Note that panic != nil is okay here: there can be leftover panics,
+	// because the defers on the panic stack do not nest in frame order as
+	// they do on the defer stack. If you have:
+	//
+	//	frame 1 defers d1
+	//	frame 2 defers d2
+	//	frame 3 defers d3
+	//	frame 4 panics
+	//	frame 4's panic starts running defers
+	//	frame 5, running d3, defers d4
+	//	frame 5 panics
+	//	frame 5's panic starts running defers
+	//	frame 6, running d4, garbage collects
+	//	frame 6, running d2, garbage collects
+	//
+	// During the execution of d4, the panic stack is d4 -> d3, which
+	// is nested properly, and we'll treat frame 3 as resumable, because we
+	// can find d3. (And in fact frame 3 is resumable. If d4 recovers
+	// and frame 5 continues running, d3, d3 can recover and we'll
+	// resume execution in (returning from) frame 3.)
+	//
+	// During the execution of d2, however, the panic stack is d2 -> d3,
+	// which is inverted. The scan will match d2 to frame 2 but having
+	// d2 on the stack until then means it will not match d3 to frame 3.
+	// This is okay: if we're running d2, then all the defers after d2 have
+	// completed and their corresponding frames are dead. Not finding d3
+	// for frame 3 means we'll set frame 3's continpc == 0, which is correct
+	// (frame 3 is dead). At the end of the walk the panic stack can thus
+	// contain defers (d3 in this case) for dead frames. The inversion here
+	// always indicates a dead frame, and the effect of the inversion on the
+	// scan is to hide those dead frames, so the scan is still okay:
+	// what's left on the panic stack are exactly (and only) the dead frames.
+	//
+	// We require callback != nil here because only when callback != nil
+	// do we know that gentraceback is being called in a "must be correct"
+	// context as opposed to a "best effort" context. The tracebacks with
+	// callbacks only happen when everything is stopped nicely.
+	// At other times, such as when gathering a stack for a profiling signal
+	// or when printing a traceback during a crash, everything may not be
+	// stopped nicely, and the stack walk may not be able to complete.
+	// It's okay in those situations not to use up the entire defer stack:
+	// incomplete information then is still better than nothing.
+	if(callback != nil && n < max && defer != nil) {
+		if(defer != nil)
+			runtime·printf("runtime: g%D: leftover defer argp=%p pc=%p\n", gp->goid, defer->argp, defer->pc);
+		if(panic != nil)
+			runtime·printf("runtime: g%D: leftover panic argp=%p pc=%p\n", gp->goid, panic->defer->argp, panic->defer->pc);
+		for(defer = gp->defer; defer != nil; defer = defer->link)
+			runtime·printf("\tdefer %p argp=%p pc=%p\n", defer, defer->argp, defer->pc);
+		for(panic = gp->panic; panic != nil; panic = panic->link) {
+			runtime·printf("\tpanic %p defer %p", panic, panic->defer);
+			if(panic->defer != nil)
+				runtime·printf(" argp=%p pc=%p", panic->defer->argp, panic->defer->pc);
+			runtime·printf("\n");
+		}
+		runtime·throw("traceback has leftover defers or panics");
+	}
+
 	return n;
 }
 

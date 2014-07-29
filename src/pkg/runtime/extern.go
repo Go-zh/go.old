@@ -73,6 +73,7 @@ of the run-time system.
 */
 
 /*
+TODO(osc): 需更新
 runtime 包含与Go的运行时系统进行交互的操作，例如用于控制Go程的函数.
 它也包括用于 reflect 包的底层类型信息；运行时类型系统的可编程接口见 reflect 文档。
 
@@ -283,14 +284,11 @@ func GOROOT() string {
 }
 
 // Version returns the Go tree's version string.
-// It is either a sequence number or, when possible,
-// a release tag like "release.2010-03-04".
-// A trailing + indicates that the tree had local modifications
-// at the time of the build.
+// It is either the commit hash and date at the time of the build or,
+// when possible, a release tag like "".
 
 // Version 返回Go目录树的版本字符串。
-// 它一般是一个序列数字，也可能是一个类似于 "release.2010-03-04" 的发行标注。
-// 随后的 + 号表示该源码树在构建时进行了本地的修改。
+// 它一般是一个提交散列值及其构建时间，也可能是一个类似于 "go1.3" 的发行标注。
 func Version() string {
 	return theVersion
 }

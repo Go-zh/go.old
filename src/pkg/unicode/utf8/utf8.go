@@ -441,7 +441,7 @@ func RuneCount(p []byte) int {
 
 // RuneCountInString 类似于 RuneCount，但其输入为字符串。
 func RuneCountInString(s string) (n int) {
-	for _ = range s {
+	for range s {
 		n++
 	}
 	return

@@ -130,6 +130,7 @@ runtime·osinit(void)
 void
 runtime·get_random_data(byte **rnd, int32 *rnd_len)
 {
+	#pragma dataflag NOPTR
 	static byte urandom_data[HashRandomBytes];
 	int32 fd;
 	fd = runtime·open("/dev/urandom", 0 /* O_RDONLY */, 0);
@@ -155,6 +156,7 @@ void
 runtime·mpreinit(M *mp)
 {
 	mp->gsignal = runtime·malg(32*1024);
+	mp->gsignal->m = mp;
 }
 
 // Called to initialize a new m (including the bootstrap m).
@@ -163,7 +165,7 @@ void
 runtime·minit(void)
 {
 	// Initialize signal handling
-	runtime·signalstack((byte*)m->gsignal->stackguard - StackGuard, 32*1024);
+	runtime·signalstack((byte*)g->m->gsignal->stackguard - StackGuard, 32*1024);
 	runtime·sigprocmask(&sigset_none, nil);
 }
 

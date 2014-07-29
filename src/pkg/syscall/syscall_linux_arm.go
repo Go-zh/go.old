@@ -23,9 +23,17 @@ func NsecToTimeval(nsec int64) (tv Timeval) {
 	return
 }
 
-// Seek is defined in assembly.
+// Underlying system call writes to newoffset via pointer.
+// Implemented in assembly to avoid allocation.
+func seek(fd int, offset int64, whence int) (newoffset int64, err Errno)
 
-func Seek(fd int, offset int64, whence int) (newoffset int64, err error)
+func Seek(fd int, offset int64, whence int) (newoffset int64, err error) {
+	newoffset, errno := seek(fd, offset, whence)
+	if errno != 0 {
+		return 0, errno
+	}
+	return newoffset, nil
+}
 
 //sys	accept(s int, rsa *RawSockaddrAny, addrlen *_Socklen) (fd int, err error)
 //sys	accept4(s int, rsa *RawSockaddrAny, addrlen *_Socklen, flags int) (fd int, err error)
@@ -60,7 +68,6 @@ func Seek(fd int, offset int64, whence int) (newoffset int64, err error)
 //sys	Select(nfd int, r *FdSet, w *FdSet, e *FdSet, timeout *Timeval) (n int, err error) = SYS__NEWSELECT
 //sys	Setfsgid(gid int) (err error) = SYS_SETFSGID32
 //sys	Setfsuid(uid int) (err error) = SYS_SETFSUID32
-//sysnb	Setgid(gid int) (err error) = SYS_SETGID32
 //sysnb	Setregid(rgid int, egid int) (err error) = SYS_SETREGID32
 //sysnb	Setresgid(rgid int, egid int, sgid int) (err error) = SYS_SETRESGID32
 //sysnb	Setresuid(ruid int, euid int, suid int) (err error) = SYS_SETRESUID32

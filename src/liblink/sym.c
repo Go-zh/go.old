@@ -44,19 +44,20 @@ static struct {
 	char *name;
 	int val;
 } headers[] = {
-	"darwin",	Hdarwin,
-	"dragonfly",	Hdragonfly,
-	"elf",		Helf,
-	"freebsd",	Hfreebsd,
-	"linux",	Hlinux,
-	"nacl",		Hnacl,
-	"netbsd",	Hnetbsd,
-	"openbsd",	Hopenbsd,
-	"plan9",	Hplan9,
-	"solaris",	Hsolaris,
-	"windows",	Hwindows,
-	"windowsgui",	Hwindows,
-	0, 0
+	{"android",	Hlinux},
+	{"darwin",	Hdarwin},
+	{"dragonfly",	Hdragonfly},
+	{"elf",		Helf},
+	{"freebsd",	Hfreebsd},
+	{"linux",	Hlinux},
+	{"nacl",		Hnacl},
+	{"netbsd",	Hnetbsd},
+	{"openbsd",	Hopenbsd},
+	{"plan9",	Hplan9},
+	{"solaris",	Hsolaris},
+	{"windows",	Hwindows},
+	{"windowsgui",	Hwindows},
+	{0, 0},
 };
 
 int
@@ -127,8 +128,6 @@ linknew(LinkArch *arch)
 	default:
 		sysfatal("unknown thread-local storage offset for %s", headstr(ctxt->headtype));
 	case Hplan9:
-		ctxt->tlsoffset = -2*ctxt->arch->ptrsize;
-		break;
 	case Hwindows:
 		break;
 	case Hlinux:
@@ -154,6 +153,9 @@ linknew(LinkArch *arch)
 			break;
 		case '8':
 			ctxt->tlsoffset = -8;
+			break;
+		case '5':
+			ctxt->tlsoffset = 0;
 			break;
 		}
 		break;
@@ -192,19 +194,14 @@ LSym*
 linknewsym(Link *ctxt, char *symb, int v)
 {
 	LSym *s;
-	int l;
 
-	l = strlen(symb) + 1;
 	s = malloc(sizeof(*s));
 	memset(s, 0, sizeof(*s));
 
 	s->dynid = -1;
 	s->plt = -1;
 	s->got = -1;
-	s->name = malloc(l + 1);
-	memmove(s->name, symb, l);
-	s->name[l] = '\0';
-
+	s->name = estrdup(symb);
 	s->type = 0;
 	s->version = v;
 	s->value = 0;

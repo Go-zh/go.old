@@ -52,6 +52,14 @@ these directives.  Package-specific flags should be set using the
 directives, not the environment variables, so that builds work in
 unmodified environments.
 
+All the cgo CPPFLAGS and CFLAGS directives in a package are concatenated and
+used to compile C files in that package.  All the CPPFLAGS and CXXFLAGS
+directives in a package are concatenated and used to compile C++ files in that
+package.  All the LDFLAGS directives in any package in the program are
+concatenated and used at link time.  All the pkg-config directives are
+concatenated and sent to pkg-config simultaneously to add to each appropriate
+set of command-line flags.
+
 When the Go tool sees that one or more Go files use the special import
 "C", it will look for other non-Go files in the directory and compile
 them as part of the Go package.  Any .c, .s, or .S files will be
@@ -63,11 +71,26 @@ compilers may be changed by the CC and CXX environment variables,
 respectively; those environment variables may include command line
 options.
 
+To enable cgo during cross compiling builds, set the CGO_ENABLED
+environment variable to 1 when building the Go tools with make.bash.
+Also, set CC_FOR_TARGET to the C cross compiler for the target.  CC will
+be used for compiling for the host.
+
+After the Go tools are built, when running the go command, CC_FOR_TARGET is
+ignored.  The value of CC_FOR_TARGET when running make.bash is the default
+compiler.  However, you can set the environment variable CC, not CC_FOR_TARGET,
+to control the compiler when running the go tool.
+
+CXX_FOR_TARGET works in a similar way for C++ code.
+
 Go references to C
 
 Within the Go file, C's struct field names that are keywords in Go
 can be accessed by prefixing them with an underscore: if x points at a C
 struct with a field named "type", x._type accesses the field.
+C struct fields that cannot be expressed in Go, such as bit fields
+or misaligned data, are omitted in the Go struct, replaced by
+appropriate padding to reach the next field or the end of the struct.
 
 The standard C numeric types are available under the names
 C.char, C.schar (signed char), C.uchar (unsigned char),
@@ -83,6 +106,11 @@ As Go doesn't have support for C's union type in the general case,
 C's union types are represented as a Go byte array with the same length.
 
 Go structs cannot embed fields with C types.
+
+Cgo translates C types into equivalent unexported Go types.
+Because the translations are unexported, a Go package should not
+expose C types in its exported API: a C type used in one Go package
+is different from the same C type used in another.
 
 Any C function (even void functions) may be called in a multiple
 assignment context to retrieve both the return value (if any) and the

@@ -2144,13 +2144,28 @@ func TestCodesPreventingContentTypeAndBody(t *testing.T) {
 			got := ht.rawResponse(req)
 			wantStatus := fmt.Sprintf("%d %s", code, StatusText(code))
 			if !strings.Contains(got, wantStatus) {
-				t.Errorf("Code %d: Wanted %q Modified for %q: %s", code, req, got)
+				t.Errorf("Code %d: Wanted %q Modified for %q: %s", code, wantStatus, req, got)
 			} else if strings.Contains(got, "Content-Length") {
 				t.Errorf("Code %d: Got a Content-Length from %q: %s", code, req, got)
 			} else if strings.Contains(got, "stuff") {
 				t.Errorf("Code %d: Response contains a body from %q: %s", code, req, got)
 			}
 		}
+	}
+}
+
+func TestContentTypeOkayOn204(t *testing.T) {
+	ht := newHandlerTest(HandlerFunc(func(w ResponseWriter, r *Request) {
+		w.Header().Set("Content-Length", "123") // suppressed
+		w.Header().Set("Content-Type", "foo/bar")
+		w.WriteHeader(204)
+	}))
+	got := ht.rawResponse("GET / HTTP/1.1")
+	if !strings.Contains(got, "Content-Type: foo/bar") {
+		t.Errorf("Response = %q; want Content-Type: foo/bar", got)
+	}
+	if strings.Contains(got, "Content-Length: 123") {
+		t.Errorf("Response = %q; don't want a Content-Length", got)
 	}
 }
 
@@ -2389,13 +2404,13 @@ func TestServerConnState(t *testing.T) {
 	}
 
 	want := map[int][]ConnState{
-		1: []ConnState{StateNew, StateActive, StateIdle, StateActive, StateClosed},
-		2: []ConnState{StateNew, StateActive, StateIdle, StateActive, StateClosed},
-		3: []ConnState{StateNew, StateActive, StateHijacked},
-		4: []ConnState{StateNew, StateActive, StateHijacked},
-		5: []ConnState{StateNew, StateClosed},
-		6: []ConnState{StateNew, StateActive, StateClosed},
-		7: []ConnState{StateNew, StateActive, StateIdle, StateClosed},
+		1: {StateNew, StateActive, StateIdle, StateActive, StateClosed},
+		2: {StateNew, StateActive, StateIdle, StateActive, StateClosed},
+		3: {StateNew, StateActive, StateHijacked},
+		4: {StateNew, StateActive, StateHijacked},
+		5: {StateNew, StateClosed},
+		6: {StateNew, StateActive, StateClosed},
+		7: {StateNew, StateActive, StateIdle, StateClosed},
 	}
 	logString := func(m map[int][]ConnState) string {
 		var b bytes.Buffer
@@ -2544,24 +2559,43 @@ func BenchmarkClientServer(b *testing.B) {
 }
 
 func BenchmarkClientServerParallel4(b *testing.B) {
-	benchmarkClientServerParallel(b, 4)
+	benchmarkClientServerParallel(b, 4, false)
 }
 
 func BenchmarkClientServerParallel64(b *testing.B) {
-	benchmarkClientServerParallel(b, 64)
+	benchmarkClientServerParallel(b, 64, false)
 }
 
-func benchmarkClientServerParallel(b *testing.B, parallelism int) {
+func BenchmarkClientServerParallelTLS4(b *testing.B) {
+	benchmarkClientServerParallel(b, 4, true)
+}
+
+func BenchmarkClientServerParallelTLS64(b *testing.B) {
+	benchmarkClientServerParallel(b, 64, true)
+}
+
+func benchmarkClientServerParallel(b *testing.B, parallelism int, useTLS bool) {
 	b.ReportAllocs()
-	ts := httptest.NewServer(HandlerFunc(func(rw ResponseWriter, r *Request) {
+	ts := httptest.NewUnstartedServer(HandlerFunc(func(rw ResponseWriter, r *Request) {
 		fmt.Fprintf(rw, "Hello world.\n")
 	}))
+	if useTLS {
+		ts.StartTLS()
+	} else {
+		ts.Start()
+	}
 	defer ts.Close()
 	b.ResetTimer()
 	b.SetParallelism(parallelism)
 	b.RunParallel(func(pb *testing.PB) {
+		noVerifyTransport := &Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+		client := &Client{Transport: noVerifyTransport}
 		for pb.Next() {
-			res, err := Get(ts.URL)
+			res, err := client.Get(ts.URL)
 			if err != nil {
 				b.Logf("Get: %v", err)
 				continue

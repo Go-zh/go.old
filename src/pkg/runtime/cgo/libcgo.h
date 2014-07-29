@@ -32,7 +32,6 @@ struct G
 typedef struct ThreadStart ThreadStart;
 struct ThreadStart
 {
-	uintptr m;
 	G *g;
 	uintptr *tls;
 	void (*fn)(void);
@@ -59,3 +58,8 @@ void crosscall_amd64(void (*fn)(void));
  * Call fn in the 8c world.
  */
 void crosscall_386(void (*fn)(void));
+
+/*
+ * Prints error then calls abort. For linux and android.
+ */
+void fatalf(const char* format, ...);

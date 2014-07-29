@@ -679,7 +679,7 @@ var deepEqualTests = []DeepEqualTest{
 	{1, nil, false},
 	{fn1, fn3, false},
 	{fn3, fn3, false},
-	{[][]int{[]int{1}}, [][]int{[]int{2}}, false},
+	{[][]int{{1}}, [][]int{{2}}, false},
 
 	// Nil vs empty: not the same.
 	{[]int{}, []int(nil), false},
@@ -971,6 +971,31 @@ func TestMap(t *testing.T) {
 	if m != nil {
 		t.Errorf("mv.Set(nil) failed")
 	}
+}
+
+func TestNilMap(t *testing.T) {
+	var m map[string]int
+	mv := ValueOf(m)
+	keys := mv.MapKeys()
+	if len(keys) != 0 {
+		t.Errorf(">0 keys for nil map: %v", keys)
+	}
+
+	// Check that value for missing key is zero.
+	x := mv.MapIndex(ValueOf("hello"))
+	if x.Kind() != Invalid {
+		t.Errorf("m.MapIndex(\"hello\") for nil map = %v, want Invalid Value", x)
+	}
+
+	// Check big value too.
+	var mbig map[string][10 << 20]byte
+	x = ValueOf(mbig).MapIndex(ValueOf("hello"))
+	if x.Kind() != Invalid {
+		t.Errorf("mbig.MapIndex(\"hello\") for nil map = %v, want Invalid Value", x)
+	}
+
+	// Test that deletes from a nil map succeed.
+	mv.SetMapIndex(ValueOf("hi"), Value{})
 }
 
 func TestChan(t *testing.T) {

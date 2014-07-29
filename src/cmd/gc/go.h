@@ -236,8 +236,10 @@ enum
 	EscNone,
 	EscReturn,
 	EscNever,
-	EscBits = 4,
+	EscBits = 3,
 	EscMask = (1<<EscBits) - 1,
+	EscContentEscapes = 1<<EscBits, // value obtained by indirect of parameter escapes to some returned result
+	EscReturnBits = EscBits+1,
 };
 
 struct	Node
@@ -267,6 +269,7 @@ struct	Node
 	uchar	colas;		// OAS resulting from :=
 	uchar	diag;		// already printed error about this
 	uchar	noescape;	// func arguments do not escape
+	uchar	nosplit;	// func should not execute on separate stack
 	uchar	builtin;	// built-in name, like len or close
 	uchar	walkdef;
 	uchar	typecheck;
@@ -445,6 +448,7 @@ enum
 	OSUB,	// x - y
 	OOR,	// x | y
 	OXOR,	// x ^ y
+	OADDPTR,	// ptr + uintptr, inserted by compiler only, used to avoid unsafe type changes during codegen
 	OADDSTR,	// s + "foo"
 	OADDR,	// &x
 	OANDAND,	// b0 && b1
@@ -570,7 +574,6 @@ enum
 	OTINTER,	// interface{}
 	OTFUNC,	// func()
 	OTARRAY,	// []int, [8]int, [N]int or [...]int
-	OTPAREN,	// (T)
 
 	// misc
 	ODDD,	// func f(args ...int) or f(l...) or var a = [...]int{0, 1, 2}.
@@ -977,6 +980,7 @@ EXTERN	char*	flag_installsuffix;
 EXTERN	int	flag_race;
 EXTERN	int	flag_largemodel;
 EXTERN	int	noescape;
+EXTERN	int	nosplit;
 EXTERN	int	debuglive;
 EXTERN	Link*	ctxt;
 
@@ -1253,6 +1257,7 @@ void	mpxorfixfix(Mpint *a, Mpint *b);
 void	mpaddfltflt(Mpflt *a, Mpflt *b);
 void	mpdivfltflt(Mpflt *a, Mpflt *b);
 double	mpgetflt(Mpflt *a);
+double	mpgetflt32(Mpflt *a);
 void	mpmovecflt(Mpflt *a, double c);
 void	mpmulfltflt(Mpflt *a, Mpflt *b);
 void	mpnegflt(Mpflt *a);
@@ -1298,7 +1303,6 @@ Sym*	typenamesym(Type *t);
 Sym*	tracksym(Type *t);
 Sym*	typesymprefix(char *prefix, Type *t);
 int	haspointers(Type *t);
-void	usefield(Node*);
 Type*	hiter(Type* t);
 
 /*
@@ -1461,6 +1465,7 @@ void	walkstmtlist(NodeList *l);
 Node*	conv(Node*, Type*);
 int	candiscard(Node*);
 Node*	outervalue(Node*);
+void	usefield(Node*);
 
 /*
  *	arch-specific ggen.c/gsubr.c/gobj.c/pgen.c/plive.c
@@ -1501,7 +1506,7 @@ void	gdata(Node*, Node*, int);
 void	gdatacomplex(Node*, Mpcplx*);
 void	gdatastring(Node*, Strlit*);
 void	ggloblnod(Node *nam);
-void	ggloblsym(Sym *s, int32 width, int dupok, int rodata);
+void	ggloblsym(Sym *s, int32 width, int8 flags);
 void	gvardef(Node*);
 void	gvarkill(Node*);
 Prog*	gjmp(Prog*);

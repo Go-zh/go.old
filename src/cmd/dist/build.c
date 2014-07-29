@@ -56,6 +56,7 @@ static char *okgoos[] = {
 	"darwin",
 	"dragonfly",
 	"linux",
+	"android",
 	"solaris",
 	"freebsd",
 	"nacl",
@@ -242,13 +243,12 @@ findgoversion(void)
 {
 	char *tag, *rev, *p;
 	int i, nrev;
-	Buf b, path, bmore, bplus, branch;
+	Buf b, path, bmore, branch;
 	Vec tags;
 
 	binit(&b);
 	binit(&path);
 	binit(&bmore);
-	binit(&bplus);
 	binit(&branch);
 	vinit(&tags);
 
@@ -291,9 +291,8 @@ findgoversion(void)
 		p = tags.p[i];
 		if(streq(p, "+"))
 			nrev++;
-		// NOTE: Can reenable the /* */ code when we want to
-		// start reporting versions named 'weekly' again.
-		if(/*hasprefix(p, "weekly.") ||*/ hasprefix(p, "go")) {
+		// Only show the beta tag for the exact revision.
+		if(hasprefix(p, "go") && (!contains(p, "beta") || nrev == 0)) {
 			tag = xstrdup(p);
 			// If this tag matches the current checkout
 			// exactly (no "+" yet), don't show extra
@@ -315,16 +314,11 @@ findgoversion(void)
 		// Add extra information.
 		run(&bmore, goroot, CheckExit, "hg", "log", "--template", " +{node|short} {date|date}", "-r", rev, nil);
 		chomp(&bmore);
-		// Generate a list of local modifications, if any.
-		run(&bplus, goroot, CheckExit, "hg", "status", "-m", "-a", "-r", "-d", nil);
-		chomp(&bplus);
 	}
 
 	bprintf(&b, "%s", tag);
 	if(bmore.len > 0)
 		bwriteb(&b, &bmore);
-	if(bplus.len > 0)
-		bwritestr(&b, " +");
 
 	// Cache version.
 	writefile(&b, bstr(&path), 0);
@@ -336,7 +330,6 @@ done:
 	bfree(&b);
 	bfree(&path);
 	bfree(&bmore);
-	bfree(&bplus);
 	bfree(&branch);
 	vfree(&tags);
 
@@ -1157,7 +1150,7 @@ matchfield(char *f)
 
 	p = xstrrchr(f, ',');
 	if(p == nil)
-		return streq(f, goos) || streq(f, goarch) || streq(f, "cmd_go_bootstrap") || streq(f, "go1.1");
+		return streq(f, goos) || streq(f, goarch) || streq(f, "cmd_go_bootstrap") || streq(f, "go1.1") || (streq(goos, "android") && streq(f, "linux"));
 	*p = 0;
 	res = matchfield(f) && matchfield(p+1);
 	*p = ',';

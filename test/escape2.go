@@ -135,7 +135,7 @@ func (b *Bar) Leak() *int { // ERROR "leaking param: b"
 	return &b.i // ERROR "&b.i escapes to heap"
 }
 
-func (b *Bar) AlsoNoLeak() *int { // ERROR "b does not escape"
+func (b *Bar) AlsoNoLeak() *int { // ERROR "leaking param b content to result ~r0"
 	return b.ii
 }
 
@@ -149,7 +149,7 @@ func (b Bar) LeaksToo() *int { // ERROR "leaking param: b"
 	return b.ii
 }
 
-func (b *Bar) LeaksABit() *int { // ERROR "b does not escape"
+func (b *Bar) LeaksABit() *int { // ERROR "leaking param b content to result ~r0"
 	v := 0    // ERROR "moved to heap: v"
 	b.ii = &v // ERROR "&v escapes"
 	return b.ii
@@ -182,7 +182,7 @@ func (b *Bar2) Leak() []int { // ERROR "leaking param: b"
 	return b.i[:] // ERROR "b.i escapes to heap"
 }
 
-func (b *Bar2) AlsoNoLeak() []int { // ERROR "b does not escape"
+func (b *Bar2) AlsoNoLeak() []int { // ERROR "leaking param b content to result ~r0"
 	return b.ii[0:1]
 }
 
@@ -1410,4 +1410,83 @@ func foo150(x ...byte) { // ERROR "leaking param: x"
 
 func bar150() {
 	foo150(1, 2, 3) // ERROR "[.][.][.] argument escapes to heap"
+}
+
+// issue 7931: bad handling of slice of array
+
+var save151 *int
+
+func foo151(x *int) { // ERROR "leaking param: x"
+	save151 = x
+}
+
+func bar151() {
+	var a [64]int // ERROR "moved to heap: a"
+	a[4] = 101
+	foo151(&(&a)[4:8][0]) // ERROR "&\(&a\)\[4:8\]\[0\] escapes to heap" "&a escapes to heap"
+}
+
+func bar151b() {
+	var a [10]int      // ERROR "moved to heap: a"
+	b := a[:]          // ERROR "a escapes to heap"
+	foo151(&b[4:8][0]) // ERROR "&b\[4:8\]\[0\] escapes to heap"
+}
+
+func bar151c() {
+	var a [64]int // ERROR "moved to heap: a"
+	a[4] = 101
+	foo151(&(&a)[4:8:8][0]) // ERROR "&\(&a\)\[4:8:8\]\[0\] escapes to heap" "&a escapes to heap"
+}
+
+func bar151d() {
+	var a [10]int        // ERROR "moved to heap: a"
+	b := a[:]            // ERROR "a escapes to heap"
+	foo151(&b[4:8:8][0]) // ERROR "&b\[4:8:8\]\[0\] escapes to heap"
+}
+
+// issue 8120
+
+type U struct {
+	s *string
+}
+
+func (u *U) String() *string { // ERROR "leaking param u content to result ~r0"
+	return u.s
+}
+
+type V struct {
+	s *string
+}
+
+func NewV(u U) *V { // ERROR "leaking param: u"
+	return &V{u.String()} // ERROR "&V literal escapes to heap" "u does not escape"
+}
+
+func foo152() {
+	a := "a"   // ERROR "moved to heap: a"
+	u := U{&a} // ERROR "&a escapes to heap"
+	v := NewV(u)
+	println(v)
+}
+
+// issue 8176 - &x in type switch body not marked as escaping
+
+func foo153(v interface{}) *int { // ERROR "leaking param: v"
+	switch x := v.(type) {
+	case int: // ERROR "moved to heap: x"
+		return &x // ERROR "&x escapes to heap"
+	}
+	panic(0)
+}
+
+// issue 8185 - &result escaping into result
+
+func f() (x int, y *int) { // ERROR "moved to heap: x"
+	y = &x // ERROR "&x escapes to heap"
+	return
+}
+
+func g() (x interface{}) { // ERROR "moved to heap: x"
+	x = &x // ERROR "&x escapes to heap"
+	return
 }

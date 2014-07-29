@@ -1553,8 +1553,10 @@ func TestTransportSocketLateBinding(t *testing.T) {
 	dialGate := make(chan bool, 1)
 	tr := &Transport{
 		Dial: func(n, addr string) (net.Conn, error) {
-			<-dialGate
-			return net.Dial(n, addr)
+			if <-dialGate {
+				return net.Dial(n, addr)
+			}
+			return nil, errors.New("manually closed")
 		},
 		DisableKeepAlives: false,
 	}
@@ -1589,7 +1591,7 @@ func TestTransportSocketLateBinding(t *testing.T) {
 		t.Fatalf("/foo came from conn %q; /bar came from %q instead", fooAddr, barAddr)
 	}
 	barRes.Body.Close()
-	dialGate <- true
+	dialGate <- false
 }
 
 // Issue 2184
@@ -2079,7 +2081,7 @@ func TestTransportClosesBodyOnError(t *testing.T) {
 		defer res.Body.Close()
 	}
 	if err == nil || !strings.Contains(err.Error(), fakeErr.Error()) {
-		t.Fatalf("Do error = %v; want something containing %q", fakeErr.Error())
+		t.Fatalf("Do error = %v; want something containing %q", err, fakeErr.Error())
 	}
 	select {
 	case err := <-readBody:

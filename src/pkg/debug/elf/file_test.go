@@ -166,11 +166,11 @@ func TestOpen(t *testing.T) {
 		} else {
 			f, err = Open(tt.file)
 		}
-		defer f.Close()
 		if err != nil {
 			t.Errorf("cannot open file %s: %v", tt.file, err)
 			continue
 		}
+		defer f.Close()
 		if !reflect.DeepEqual(f.FileHeader, tt.hdr) {
 			t.Errorf("open %s:\n\thave %#v\n\twant %#v\n", tt.file, f.FileHeader, tt.hdr)
 			continue
@@ -258,6 +258,12 @@ var relocationTests = []relocationTest{
 		"testdata/go-relocation-test-gcc424-x86-64.obj",
 		[]relocationTestEntry{
 			{0, &dwarf.Entry{Offset: 0xb, Tag: dwarf.TagCompileUnit, Children: true, Field: []dwarf.Field{{Attr: dwarf.AttrProducer, Val: "GNU C 4.2.4 (Ubuntu 4.2.4-1ubuntu4)"}, {Attr: dwarf.AttrLanguage, Val: int64(1)}, {Attr: dwarf.AttrName, Val: "go-relocation-test-gcc424.c"}, {Attr: dwarf.AttrCompDir, Val: "/tmp"}, {Attr: dwarf.AttrLowpc, Val: uint64(0x0)}, {Attr: dwarf.AttrHighpc, Val: uint64(0x6)}, {Attr: dwarf.AttrStmtList, Val: int64(0)}}}},
+		},
+	},
+	{
+		"testdata/go-relocation-test-clang-x86.obj",
+		[]relocationTestEntry{
+			{0, &dwarf.Entry{Offset: 0xb, Tag: dwarf.TagCompileUnit, Children: true, Field: []dwarf.Field{{Attr: dwarf.AttrProducer, Val: "clang version google3-trunk (trunk r209387)"}, {Attr: dwarf.AttrLanguage, Val: int64(12)}, {Attr: dwarf.AttrName, Val: "go-relocation-test-clang.c"}, {Attr: dwarf.AttrStmtList, Val: int64(0)}, {Attr: dwarf.AttrCompDir, Val: "/tmp"}}}},
 		},
 	},
 	{

@@ -649,7 +649,7 @@ typefmt(Fmt *fp, Type *t)
 
 		if(t->funarg) {
 			fmtstrcpy(fp, "(");
-			if(fmtmode == FTypeId || fmtmode == FErr) {	// no argument names on function signature, and no "noescape" tags
+			if(fmtmode == FTypeId || fmtmode == FErr) {	// no argument names on function signature, and no "noescape"/"nosplit" tags
 				for(t1=t->type; t1!=T; t1=t1->down)
 					if(t1->down)
 						fmtprint(fp, "%hT, ", t1);
@@ -880,7 +880,11 @@ stmtfmt(Fmt *f, Node *n)
 			fmtstrcpy(f, "for loop");
 			break;
 		}
-
+		
+		if(n->list == nil) {
+			fmtprint(f, "for range %N { %H }", n->right, n->nbody);
+			break;
+		}
 		fmtprint(f, "for %,H = range %N { %H }", n->list, n->right, n->nbody);
 		break;
 
@@ -974,7 +978,6 @@ static int opprec[] = {
 	[OTFUNC] = 8,
 	[OTINTER] = 8,
 	[OTMAP] = 8,
-	[OTPAREN] = 8,
 	[OTSTRUCT] = 8,
 
 	[OINDEXMAP] = 8,
@@ -1139,9 +1142,6 @@ exprfmt(Fmt *f, Node *n, int prec)
 		if(n->left)
 			return fmtprint(f, "[]%N", n->left);
 		return fmtprint(f, "[]%N", n->right);  // happens before typecheck
-
-	case OTPAREN:
-		return fmtprint(f, "(%N)", n->left);
 
 	case OTMAP:
 		return fmtprint(f, "map[%N]%N", n->left, n->right);

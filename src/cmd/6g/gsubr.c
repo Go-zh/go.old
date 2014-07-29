@@ -225,7 +225,7 @@ gargsize(vlong size)
 }
 
 void
-ggloblsym(Sym *s, int32 width, int dupok, int rodata)
+ggloblsym(Sym *s, int32 width, int8 flags)
 {
 	Prog *p;
 
@@ -236,10 +236,7 @@ ggloblsym(Sym *s, int32 width, int dupok, int rodata)
 	p->to.type = D_CONST;
 	p->to.index = D_NONE;
 	p->to.offset = width;
-	if(dupok)
-		p->from.scale |= DUPOK;
-	if(rodata)
-		p->from.scale |= RODATA;
+	p->from.scale = flags;
 }
 
 int
@@ -462,6 +459,7 @@ Node*
 nodarg(Type *t, int fp)
 {
 	Node *n;
+	NodeList *l;
 	Type *first;
 	Iter savet;
 
@@ -482,6 +480,14 @@ nodarg(Type *t, int fp)
 
 	if(t->etype != TFIELD)
 		fatal("nodarg: not field %T", t);
+	
+	if(fp == 1) {
+		for(l=curfn->dcl; l; l=l->next) {
+			n = l->n;
+			if((n->class == PPARAM || n->class == PPARAMOUT) && !isblanksym(t->sym) && n->sym == t->sym)
+				return n;
+		}
+	}
 
 	n = nod(ONAME, N, N);
 	n->type = t->type;
@@ -575,6 +581,7 @@ ginscon(int as, vlong c, Node *n2)
 }
 
 #define	CASE(a,b)	(((a)<<16)|((b)<<0))
+/*c2go int CASE(int, int); */
 
 /*
  * Is this node a memory operand?
@@ -1300,7 +1307,7 @@ naddr(Node *n, Addr *a, int canemitcode)
 		naddr(n->left, a, canemitcode);
 		if(a->type == D_CONST && a->offset == 0)
 			break;	// ptr(nil)
-		a->etype = simtype[TUINTPTR];
+		a->etype = simtype[tptr];
 		a->offset += Array_array;
 		a->width = widthptr;
 		break;
@@ -1533,12 +1540,14 @@ optoas(int op, Type *t)
 	case CASE(OADD, TINT32):
 	case CASE(OADD, TUINT32):
 	case CASE(OADD, TPTR32):
+	case CASE(OADDPTR, TPTR32):
 		a = AADDL;
 		break;
 
 	case CASE(OADD, TINT64):
 	case CASE(OADD, TUINT64):
 	case CASE(OADD, TPTR64):
+	case CASE(OADDPTR, TPTR64):
 		a = AADDQ;
 		break;
 

@@ -9,6 +9,8 @@
 #include "funcdata.h"
 #include "typekind.h"
 #include "type.h"
+#include "race.h"
+#include "../../cmd/ld/textflag.h"
 
 enum
 {
@@ -20,81 +22,181 @@ enum
 	StackDebug = 0,
 	StackFromSystem = 0,	// allocate stacks from system memory instead of the heap
 	StackFaultOnFree = 0,	// old stacks are mapped noaccess to detect use after free
+
+	StackCache = 1,
 };
 
-typedef struct StackCacheNode StackCacheNode;
-struct StackCacheNode
+// Global pool of spans that have free stacks.
+// Stacks are assigned an order according to size.
+//     order = log_2(size/FixedStack)
+// There is a free list for each order.
+static MSpan stackpool[NumStackOrders];
+static Lock stackpoolmu;
+// TODO: one lock per order?
+
+void
+runtime·stackinit(void)
 {
-	StackCacheNode *next;
-	void*	batch[StackCacheBatch-1];
-};
+	int32 i;
 
-static StackCacheNode *stackcache;
-static Lock stackcachemu;
+	if((StackCacheSize & PageMask) != 0)
+		runtime·throw("cache size must be a multiple of page size");
 
-// stackcacherefill/stackcacherelease implement a global cache of stack segments.
-// The cache is required to prevent unlimited growth of per-thread caches.
+	for(i = 0; i < NumStackOrders; i++)
+		runtime·MSpanList_Init(&stackpool[i]);
+}
+
+// Allocates a stack from the free pool.  Must be called with
+// stackpoolmu held.
+static MLink*
+poolalloc(uint8 order)
+{
+	MSpan *list;
+	MSpan *s;
+	MLink *x;
+	uintptr i;
+
+	list = &stackpool[order];
+	s = list->next;
+	if(s == list) {
+		// no free stacks.  Allocate another span worth.
+		s = runtime·MHeap_AllocStack(&runtime·mheap, StackCacheSize >> PageShift);
+		if(s == nil)
+			runtime·throw("out of memory");
+		if(s->ref != 0)
+			runtime·throw("bad ref");
+		if(s->freelist != nil)
+			runtime·throw("bad freelist");
+		for(i = 0; i < StackCacheSize; i += FixedStack << order) {
+			x = (MLink*)((s->start << PageShift) + i);
+			x->next = s->freelist;
+			s->freelist = x;
+		}
+		runtime·MSpanList_Insert(list, s);
+	}
+	x = s->freelist;
+	if(x == nil)
+		runtime·throw("span has no free stacks");
+	s->freelist = x->next;
+	s->ref++;
+	if(s->freelist == nil) {
+		// all stacks in s are allocated.
+		runtime·MSpanList_Remove(s);
+	}
+	return x;
+}
+
+// Adds stack x to the free pool.  Must be called with stackpoolmu held.
 static void
-stackcacherefill(void)
+poolfree(MLink *x, uint8 order)
 {
-	StackCacheNode *n;
-	int32 i, pos;
+	MSpan *s;
 
-	runtime·lock(&stackcachemu);
-	n = stackcache;
-	if(n)
-		stackcache = n->next;
-	runtime·unlock(&stackcachemu);
-	if(n == nil) {
-		n = (StackCacheNode*)runtime·SysAlloc(FixedStack*StackCacheBatch, &mstats.stacks_sys);
-		if(n == nil)
-			runtime·throw("out of memory (stackcacherefill)");
-		for(i = 0; i < StackCacheBatch-1; i++)
-			n->batch[i] = (byte*)n + (i+1)*FixedStack;
+	s = runtime·MHeap_Lookup(&runtime·mheap, x);
+	if(s->state != MSpanStack)
+		runtime·throw("freeing stack not in a stack span");
+	if(s->freelist == nil) {
+		// s will now have a free stack
+		runtime·MSpanList_Insert(&stackpool[order], s);
 	}
-	pos = m->stackcachepos;
-	for(i = 0; i < StackCacheBatch-1; i++) {
-		m->stackcache[pos] = n->batch[i];
-		pos = (pos + 1) % StackCacheSize;
+	x->next = s->freelist;
+	s->freelist = x;
+	s->ref--;
+	if(s->ref == 0) {
+		// span is completely free - return to heap
+		runtime·MSpanList_Remove(s);
+		s->freelist = nil;
+		runtime·MHeap_FreeStack(&runtime·mheap, s);
 	}
-	m->stackcache[pos] = n;
-	pos = (pos + 1) % StackCacheSize;
-	m->stackcachepos = pos;
-	m->stackcachecnt += StackCacheBatch;
+}
+
+// stackcacherefill/stackcacherelease implement a global pool of stack segments.
+// The pool is required to prevent unlimited growth of per-thread caches.
+static void
+stackcacherefill(MCache *c, uint8 order)
+{
+	MLink *x, *list;
+	uintptr size;
+
+	if(StackDebug >= 1)
+		runtime·printf("stackcacherefill order=%d\n", order);
+
+	// Grab some stacks from the global cache.
+	// Grab half of the allowed capacity (to prevent thrashing).
+	list = nil;
+	size = 0;
+	runtime·lock(&stackpoolmu);
+	while(size < StackCacheSize/2) {
+		x = poolalloc(order);
+		x->next = list;
+		list = x;
+		size += FixedStack << order;
+	}
+	runtime·unlock(&stackpoolmu);
+
+	c->stackcache[order].list = list;
+	c->stackcache[order].size = size;
 }
 
 static void
-stackcacherelease(void)
+stackcacherelease(MCache *c, uint8 order)
 {
-	StackCacheNode *n;
-	uint32 i, pos;
+	MLink *x, *y;
+	uintptr size;
 
-	pos = (m->stackcachepos - m->stackcachecnt) % StackCacheSize;
-	n = (StackCacheNode*)m->stackcache[pos];
-	pos = (pos + 1) % StackCacheSize;
-	for(i = 0; i < StackCacheBatch-1; i++) {
-		n->batch[i] = m->stackcache[pos];
-		pos = (pos + 1) % StackCacheSize;
+	if(StackDebug >= 1)
+		runtime·printf("stackcacherelease order=%d\n", order);
+	x = c->stackcache[order].list;
+	size = c->stackcache[order].size;
+	runtime·lock(&stackpoolmu);
+	while(size > StackCacheSize/2) {
+		y = x->next;
+		poolfree(x, order);
+		x = y;
+		size -= FixedStack << order;
 	}
-	m->stackcachecnt -= StackCacheBatch;
-	runtime·lock(&stackcachemu);
-	n->next = stackcache;
-	stackcache = n;
-	runtime·unlock(&stackcachemu);
+	runtime·unlock(&stackpoolmu);
+	c->stackcache[order].list = x;
+	c->stackcache[order].size = size;
+}
+
+void
+runtime·stackcache_clear(MCache *c)
+{
+	uint8 order;
+	MLink *x, *y;
+
+	if(StackDebug >= 1)
+		runtime·printf("stackcache clear\n");
+	runtime·lock(&stackpoolmu);
+	for(order = 0; order < NumStackOrders; order++) {
+		x = c->stackcache[order].list;
+		while(x != nil) {
+			y = x->next;
+			poolfree(x, order);
+			x = y;
+		}
+		c->stackcache[order].list = nil;
+		c->stackcache[order].size = 0;
+	}
+	runtime·unlock(&stackpoolmu);
 }
 
 void*
 runtime·stackalloc(G *gp, uint32 n)
 {
-	uint32 pos;
+	uint8 order;
+	uint32 n2;
 	void *v;
-	bool malloced;
 	Stktop *top;
+	MLink *x;
+	MSpan *s;
+	MCache *c;
 
 	// Stackalloc must be called on scheduler stack, so that we
 	// never try to grow the stack during the code that stackalloc runs.
 	// Doing so would cause a deadlock (issue 1547).
-	if(g != m->g0)
+	if(g != g->m->g0)
 		runtime·throw("stackalloc not on scheduler stack");
 	if((n & (n-1)) != 0)
 		runtime·throw("stack size not a power of 2");
@@ -109,41 +211,60 @@ runtime·stackalloc(G *gp, uint32 n)
 		return v;
 	}
 
-	// Minimum-sized stacks are allocated with a fixed-size free-list allocator,
-	// but if we need a stack of a bigger size, we fall back on malloc
-	// (assuming that inside malloc all the stack frames are small,
-	// so that we do not deadlock).
-	malloced = true;
-	if(n == FixedStack || m->mallocing) {
-		if(n != FixedStack) {
-			runtime·printf("stackalloc: in malloc, size=%d want %d\n", FixedStack, n);
-			runtime·throw("stackalloc");
+	// Small stacks are allocated with a fixed-size free-list allocator.
+	// If we need a stack of a bigger size, we fall back on allocating
+	// a dedicated span.
+	if(StackCache && n < FixedStack << NumStackOrders && n < StackCacheSize) {
+		order = 0;
+		n2 = n;
+		while(n2 > FixedStack) {
+			order++;
+			n2 >>= 1;
 		}
-		if(m->stackcachecnt == 0)
-			stackcacherefill();
-		pos = m->stackcachepos;
-		pos = (pos - 1) % StackCacheSize;
-		v = m->stackcache[pos];
-		m->stackcachepos = pos;
-		m->stackcachecnt--;
-		m->stackinuse++;
-		malloced = false;
-	} else
-		v = runtime·mallocgc(n, 0, FlagNoProfiling|FlagNoGC|FlagNoZero|FlagNoInvokeGC);
-
+		c = g->m->mcache;
+		if(c == nil) {
+			// This can happen in the guts of exitsyscall or
+			// procresize. Just get a stack from the global pool.
+			runtime·lock(&stackpoolmu);
+			x = poolalloc(order);
+			runtime·unlock(&stackpoolmu);
+		} else {
+			x = c->stackcache[order].list;
+			if(x == nil) {
+				stackcacherefill(c, order);
+				x = c->stackcache[order].list;
+			}
+			c->stackcache[order].list = x->next;
+			c->stackcache[order].size -= n;
+		}
+		v = (byte*)x;
+	} else {
+		s = runtime·MHeap_AllocStack(&runtime·mheap, ROUND(n, PageSize) >> PageShift);
+		if(s == nil)
+			runtime·throw("out of memory");
+		v = (byte*)(s->start<<PageShift);
+	}
 	top = (Stktop*)((byte*)v+n-sizeof(Stktop));
 	runtime·memclr((byte*)top, sizeof(*top));
-	top->malloced = malloced;
+	if(raceenabled)
+		runtime·racemalloc(v, n);
+	if(StackDebug >= 1)
+		runtime·printf("  allocated %p\n", v);
 	return v;
 }
 
 void
 runtime·stackfree(G *gp, void *v, Stktop *top)
 {
-	uint32 pos;
-	uintptr n;
-
+	uint8 order;
+	uintptr n, n2;
+	MSpan *s;
+	MLink *x;
+	MCache *c;
+	
 	n = (uintptr)(top+1) - (uintptr)v;
+	if(n & (n-1))
+		runtime·throw("stack not a power of 2");
 	if(StackDebug >= 1)
 		runtime·printf("stackfree %p %d\n", v, (int32)n);
 	gp->stacksize -= n;
@@ -154,19 +275,34 @@ runtime·stackfree(G *gp, void *v, Stktop *top)
 			runtime·SysFree(v, n, &mstats.stacks_sys);
 		return;
 	}
-	if(top->malloced) {
-		runtime·free(v);
-		return;
+	if(StackCache && n < FixedStack << NumStackOrders && n < StackCacheSize) {
+		order = 0;
+		n2 = n;
+		while(n2 > FixedStack) {
+			order++;
+			n2 >>= 1;
+		}
+		x = (MLink*)v;
+		c = g->m->mcache;
+		if(c == nil) {
+			runtime·lock(&stackpoolmu);
+			poolfree(x, order);
+			runtime·unlock(&stackpoolmu);
+		} else {
+			if(c->stackcache[order].size >= StackCacheSize)
+				stackcacherelease(c, order);
+			x->next = c->stackcache[order].list;
+			c->stackcache[order].list = x;
+			c->stackcache[order].size += n;
+		}
+	} else {
+		s = runtime·MHeap_Lookup(&runtime·mheap, v);
+		if(s->state != MSpanStack) {
+			runtime·printf("%p %p\n", s->start<<PageShift, v);
+			runtime·throw("bad span state");
+		}
+		runtime·MHeap_FreeStack(&runtime·mheap, s);
 	}
-	if(n != FixedStack)
-		runtime·throw("stackfree: bad fixed size");
-	if(m->stackcachecnt == StackCacheSize)
-		stackcacherelease();
-	pos = m->stackcachepos;
-	m->stackcache[pos] = v;
-	m->stackcachepos = (pos + 1) % StackCacheSize;
-	m->stackcachecnt++;
-	m->stackinuse--;
 }
 
 // Called from runtime·lessstack when returning from a function which
@@ -183,15 +319,17 @@ runtime·oldstack(void)
 	int64 goid;
 	int32 oldstatus;
 
-	gp = m->curg;
+	gp = g->m->curg;
 	top = (Stktop*)gp->stackbase;
+	if(top == nil)
+		runtime·throw("nil stackbase");
 	old = (byte*)gp->stackguard - StackGuard;
 	sp = (byte*)top;
 	argsize = top->argsize;
 
 	if(StackDebug >= 1) {
 		runtime·printf("runtime: oldstack gobuf={pc:%p sp:%p lr:%p} cret=%p argsize=%p\n",
-			top->gobuf.pc, top->gobuf.sp, top->gobuf.lr, (uintptr)m->cret, (uintptr)argsize);
+			top->gobuf.pc, top->gobuf.sp, top->gobuf.lr, (uintptr)g->m->cret, (uintptr)argsize);
 	}
 
 	// gp->status is usually Grunning, but it could be Gsyscall if a stack overflow
@@ -199,8 +337,8 @@ runtime·oldstack(void)
 	oldstatus = gp->status;
 	
 	gp->sched = top->gobuf;
-	gp->sched.ret = m->cret;
-	m->cret = 0; // drop reference
+	gp->sched.ret = g->m->cret;
+	g->m->cret = 0; // drop reference
 	gp->status = Gwaiting;
 	gp->waitreason = "stack unsplit";
 
@@ -323,6 +461,8 @@ copyabletopsegment(G *gp)
 	FuncVal *fn;
 	StackMap *stackmap;
 
+	if(gp->stackbase == 0)
+		runtime·throw("stackbase == 0");
 	cinfo.stk = (byte*)gp->stackguard - StackGuard;
 	cinfo.base = (byte*)gp->stackbase + sizeof(Stktop);
 	cinfo.frames = 0;
@@ -344,6 +484,8 @@ copyabletopsegment(G *gp)
 		if(d->argp < cinfo.stk || cinfo.base <= d->argp)
 			break; // a defer for the next segment
 		fn = d->fn;
+		if(fn == nil) // See issue 8047
+			continue;
 		f = runtime·findfunc((uintptr)fn->fn);
 		if(f == nil)
 			return -1;
@@ -413,7 +555,7 @@ adjustpointers(byte **scanp, BitVector *bv, AdjustInfo *adjinfo, Func *f)
 			if(f != nil && (byte*)0 < p && (p < (byte*)PageSize || (uintptr)p == PoisonGC || (uintptr)p == PoisonStack)) {
 				// Looks like a junk value in a pointer slot.
 				// Live analysis wrong?
-				m->traceback = 2;
+				g->m->traceback = 2;
 				runtime·printf("runtime: bad pointer in frame %s at %p: %p\n", runtime·funcname(f), &scanp[i], p);
 				runtime·throw("bad pointer!");
 			}
@@ -490,10 +632,14 @@ adjustframe(Stkframe *frame, void *arg)
 	adjinfo = arg;
 	f = frame->fn;
 	if(StackDebug >= 2)
-		runtime·printf("    adjusting %s frame=[%p,%p] pc=%p\n", runtime·funcname(f), frame->sp, frame->fp, frame->pc);
+		runtime·printf("    adjusting %s frame=[%p,%p] pc=%p continpc=%p\n", runtime·funcname(f), frame->sp, frame->fp, frame->pc, frame->continpc);
 	if(f->entry == (uintptr)runtime·main)
 		return true;
-	targetpc = frame->pc;
+	targetpc = frame->continpc;
+	if(targetpc == 0) {
+		// Frame is dead.
+		return true;
+	}
 	if(targetpc != f->entry)
 		targetpc--;
 	pcdata = runtime·pcdatavalue(f, PCDATA_StackMapIndex, targetpc);
@@ -552,13 +698,19 @@ adjustdefers(G *gp, AdjustInfo *adjinfo)
 		}
 		if(d->argp < adjinfo->oldstk || adjinfo->oldbase <= d->argp)
 			break; // a defer for the next segment
-		f = runtime·findfunc((uintptr)d->fn->fn);
+		fn = d->fn;
+		if(fn == nil) {
+			// Defer of nil function.  It will panic when run, and there
+			// aren't any args to adjust.  See issue 8047.
+			d->argp += adjinfo->delta;
+			continue;
+		}
+		f = runtime·findfunc((uintptr)fn->fn);
 		if(f == nil)
 			runtime·throw("can't adjust unknown defer");
 		if(StackDebug >= 4)
 			runtime·printf("  checking defer %s\n", runtime·funcname(f));
 		// Defer's FuncVal might be on the stack
-		fn = d->fn;
 		if(adjinfo->oldstk <= (byte*)fn && (byte*)fn < adjinfo->oldbase) {
 			if(StackDebug >= 3)
 				runtime·printf("    adjust defer fn %s\n", runtime·funcname(f));
@@ -586,11 +738,12 @@ copystack(G *gp, uintptr nframes, uintptr newsize)
 	uintptr oldsize, used;
 	AdjustInfo adjinfo;
 	Stktop *oldtop, *newtop;
-	bool malloced;
 
 	if(gp->syscallstack != 0)
 		runtime·throw("can't handle stack copy in syscall yet");
 	oldstk = (byte*)gp->stackguard - StackGuard;
+	if(gp->stackbase == 0)
+		runtime·throw("nil stackbase");
 	oldbase = (byte*)gp->stackbase + sizeof(Stktop);
 	oldsize = oldbase - oldstk;
 	used = oldbase - (byte*)gp->sched.sp;
@@ -600,10 +753,9 @@ copystack(G *gp, uintptr nframes, uintptr newsize)
 	newstk = runtime·stackalloc(gp, newsize);
 	newbase = newstk + newsize;
 	newtop = (Stktop*)(newbase - sizeof(Stktop));
-	malloced = newtop->malloced;
 
 	if(StackDebug >= 1)
-		runtime·printf("copystack [%p %p]/%d -> [%p %p]/%d\n", oldstk, oldbase, (int32)oldsize, newstk, newbase, (int32)newsize);
+		runtime·printf("copystack gp=%p [%p %p]/%d -> [%p %p]/%d\n", gp, oldstk, oldbase, (int32)oldsize, newstk, newbase, (int32)newsize);
 	USED(oldsize);
 	
 	// adjust pointers in the to-be-copied frames
@@ -618,7 +770,6 @@ copystack(G *gp, uintptr nframes, uintptr newsize)
 	
 	// copy the stack (including Stktop) to the new location
 	runtime·memmove(newbase - used, oldbase - used, used);
-	newtop->malloced = malloced;
 	
 	// Swap out old stack for new one
 	gp->stackbase = (uintptr)newtop;
@@ -662,28 +813,28 @@ runtime·newstack(void)
 	void *moreargp;
 	bool newstackcall;
 
-	if(m->forkstackguard)
+	if(g->m->forkstackguard)
 		runtime·throw("split stack after fork");
-	if(m->morebuf.g != m->curg) {
+	if(g->m->morebuf.g != g->m->curg) {
 		runtime·printf("runtime: newstack called from g=%p\n"
 			"\tm=%p m->curg=%p m->g0=%p m->gsignal=%p\n",
-			m->morebuf.g, m, m->curg, m->g0, m->gsignal);
+			g->m->morebuf.g, g->m, g->m->curg, g->m->g0, g->m->gsignal);
 		runtime·throw("runtime: wrong goroutine in newstack");
 	}
 
 	// gp->status is usually Grunning, but it could be Gsyscall if a stack overflow
 	// happens during a function call inside entersyscall.
-	gp = m->curg;
+	gp = g->m->curg;
 	oldstatus = gp->status;
 
-	framesize = m->moreframesize;
-	argsize = m->moreargsize;
-	moreargp = m->moreargp;
-	m->moreargp = nil;
-	morebuf = m->morebuf;
-	m->morebuf.pc = (uintptr)nil;
-	m->morebuf.lr = (uintptr)nil;
-	m->morebuf.sp = (uintptr)nil;
+	framesize = g->m->moreframesize;
+	argsize = g->m->moreargsize;
+	moreargp = g->m->moreargp;
+	g->m->moreargp = nil;
+	morebuf = g->m->morebuf;
+	g->m->morebuf.pc = (uintptr)nil;
+	g->m->morebuf.lr = (uintptr)nil;
+	g->m->morebuf.sp = (uintptr)nil;
 	gp->status = Gwaiting;
 	gp->waitreason = "stack growth";
 	newstackcall = framesize==1;
@@ -694,6 +845,8 @@ runtime·newstack(void)
 	if(!newstackcall)
 		runtime·rewindmorestack(&gp->sched);
 
+	if(gp->stackbase == 0)
+		runtime·throw("nil stackbase");
 	sp = gp->sched.sp;
 	if(thechar == '6' || thechar == '8') {
 		// The call to morestack cost a word.
@@ -704,7 +857,7 @@ runtime·newstack(void)
 			"\tmorebuf={pc:%p sp:%p lr:%p}\n"
 			"\tsched={pc:%p sp:%p lr:%p ctxt:%p}\n",
 			(uintptr)framesize, (uintptr)argsize, sp, gp->stackguard - StackGuard, gp->stackbase,
-			m->morebuf.pc, m->morebuf.sp, m->morebuf.lr,
+			g->m->morebuf.pc, g->m->morebuf.sp, g->m->morebuf.lr,
 			gp->sched.pc, gp->sched.sp, gp->sched.lr, gp->sched.ctxt);
 	}
 	if(sp < gp->stackguard - StackGuard) {
@@ -718,15 +871,15 @@ runtime·newstack(void)
 	}
 
 	if(gp->stackguard0 == (uintptr)StackPreempt) {
-		if(gp == m->g0)
+		if(gp == g->m->g0)
 			runtime·throw("runtime: preempt g0");
-		if(oldstatus == Grunning && m->p == nil && m->locks == 0)
+		if(oldstatus == Grunning && g->m->p == nil && g->m->locks == 0)
 			runtime·throw("runtime: g is running but p is not");
-		if(oldstatus == Gsyscall && m->locks == 0)
+		if(oldstatus == Gsyscall && g->m->locks == 0)
 			runtime·throw("runtime: stack growth during syscall");
 		// Be conservative about where we preempt.
 		// We are interested in preempting user Go code, not runtime code.
-		if(oldstatus != Grunning || m->locks || m->mallocing || m->gcing || m->p->status != Prunning) {
+		if(oldstatus != Grunning || g->m->locks || g->m->mallocing || g->m->gcing || g->m->p->status != Prunning) {
 			// Let the goroutine keep running for now.
 			// gp->preempt is set, so it will be preempted next time.
 			gp->stackguard0 = gp->stackguard;
@@ -779,7 +932,7 @@ runtime·newstack(void)
 	top = (Stktop*)(stk+framesize-sizeof(*top));
 
 	if(StackDebug >= 1) {
-		runtime·printf("\t-> new stack [%p, %p]\n", stk, top);
+		runtime·printf("\t-> new stack gp=%p [%p, %p]\n", gp, stk, top);
 	}
 
 	top->stackbase = gp->stackbase;
@@ -826,9 +979,9 @@ runtime·newstack(void)
 	runtime·memclr((byte*)&label, sizeof label);
 	label.sp = sp;
 	label.pc = (uintptr)runtime·lessstack;
-	label.g = m->curg;
+	label.g = g->m->curg;
 	if(newstackcall)
-		runtime·gostartcallfn(&label, (FuncVal*)m->cret);
+		runtime·gostartcallfn(&label, (FuncVal*)g->m->cret);
 	else {
 		runtime·gostartcall(&label, (void(*)(void))gp->sched.pc, gp->sched.ctxt);
 		gp->sched.ctxt = nil;
@@ -839,12 +992,25 @@ runtime·newstack(void)
 	*(int32*)345 = 123;	// never return
 }
 
+#pragma textflag NOSPLIT
+void
+runtime·nilfunc(void)
+{
+	*(byte*)0 = 0;
+}
+
 // adjust Gobuf as if it executed a call to fn
 // and then did an immediate gosave.
 void
 runtime·gostartcallfn(Gobuf *gobuf, FuncVal *fv)
 {
-	runtime·gostartcall(gobuf, fv->fn, fv);
+	void *fn;
+
+	if(fv != nil)
+		fn = fv->fn;
+	else
+		fn = runtime·nilfunc;
+	runtime·gostartcall(gobuf, fn, fv);
 }
 
 // Maybe shrink the stack being used by gp.
@@ -855,10 +1021,14 @@ runtime·shrinkstack(G *gp)
 	int32 nframes;
 	byte *oldstk, *oldbase;
 	uintptr used, oldsize, newsize;
-	MSpan *span;
 
 	if(!runtime·copystack)
 		return;
+	if(gp->status == Gdead)
+		return;
+	if(gp->stackbase == 0)
+		runtime·throw("stackbase == 0");
+	//return; // TODO: why does this happen?
 	oldstk = (byte*)gp->stackguard - StackGuard;
 	oldbase = (byte*)gp->stackbase + sizeof(Stktop);
 	oldsize = oldbase - oldstk;
@@ -869,53 +1039,14 @@ runtime·shrinkstack(G *gp)
 	if(used >= oldsize / 4)
 		return; // still using at least 1/4 of the segment.
 
-	// To shrink to less than 1/2 a page, we need to copy.
-	if(newsize < PageSize/2) {
-		if(gp->syscallstack != (uintptr)nil) // TODO: can we handle this case?
-			return;
+	if(gp->syscallstack != (uintptr)nil) // TODO: can we handle this case?
+		return;
 #ifdef GOOS_windows
-		if(gp->m != nil && gp->m->libcallsp != 0)
-			return;
+	if(gp->m != nil && gp->m->libcallsp != 0)
+		return;
 #endif
-		nframes = copyabletopsegment(gp);
-		if(nframes == -1)
-			return;
-		copystack(gp, nframes, newsize);
+	nframes = copyabletopsegment(gp);
+	if(nframes == -1)
 		return;
-	}
-
-	// To shrink a stack of one page size or more, we can shrink it
-	// without copying.  Just deallocate the lower half.
-	span = runtime·MHeap_LookupMaybe(&runtime·mheap, oldstk);
-	if(span == nil)
-		return; // stack allocated outside heap.  Can't shrink it.  Can happen if stack is allocated while inside malloc.  TODO: shrink by copying?
-	if(span->elemsize != oldsize)
-		runtime·throw("span element size doesn't match stack size");
-	if((uintptr)oldstk != span->start << PageShift)
-		runtime·throw("stack not at start of span");
-
-	if(StackDebug)
-		runtime·printf("shrinking stack in place %p %X->%X\n", oldstk, oldsize, newsize);
-
-	// new stack guard for smaller stack
-	gp->stackguard = (uintptr)oldstk + newsize + StackGuard;
-	gp->stackguard0 = (uintptr)oldstk + newsize + StackGuard;
-	if(gp->stack0 == (uintptr)oldstk)
-		gp->stack0 = (uintptr)oldstk + newsize;
-	gp->stacksize -= oldsize - newsize;
-
-	// Free bottom half of the stack.
-	if(runtime·debug.efence || StackFromSystem) {
-		if(runtime·debug.efence || StackFaultOnFree)
-			runtime·SysFault(oldstk, newsize);
-		else
-			runtime·SysFree(oldstk, newsize, &mstats.stacks_sys);
-		return;
-	}
-	// First, we trick malloc into thinking
-	// we allocated the stack as two separate half-size allocs.  Then the
-	// free() call does the rest of the work for us.
-	runtime·MSpan_EnsureSwept(span);
-	runtime·MHeap_SplitSpan(&runtime·mheap, span);
-	runtime·free(oldstk);
+	copystack(gp, nframes, newsize);
 }

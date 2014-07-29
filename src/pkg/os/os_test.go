@@ -24,6 +24,8 @@ import (
 	"time"
 )
 
+var supportsSymlinks = true
+
 var dot = []string{
 	"dir_unix.go",
 	"env.go",
@@ -42,6 +44,14 @@ type sysDir struct {
 
 var sysdir = func() (sd *sysDir) {
 	switch runtime.GOOS {
+	case "android":
+		sd = &sysDir{
+			"/system/etc",
+			[]string{
+				"audio_policy.conf",
+				"system_fonts.xml",
+			},
+		}
 	case "windows":
 		sd = &sysDir{
 			Getenv("SystemRoot") + "\\system32\\drivers\\etc",
@@ -108,7 +118,7 @@ func newFile(testName string, t *testing.T) (f *File) {
 	// On Unix, override $TMPDIR in case the user
 	// has it set to an NFS-mounted directory.
 	dir := ""
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != "android" && runtime.GOOS != "windows" {
 		dir = "/tmp"
 	}
 	f, err := ioutil.TempFile(dir, "_Go_"+testName)
@@ -284,10 +294,12 @@ func TestReaddirnamesOneAtATime(t *testing.T) {
 	// big directory that doesn't change often.
 	dir := "/usr/bin"
 	switch runtime.GOOS {
-	case "windows":
-		dir = Getenv("SystemRoot") + "\\system32"
+	case "android":
+		dir = "/system/bin"
 	case "plan9":
 		dir = "/bin"
+	case "windows":
+		dir = Getenv("SystemRoot") + "\\system32"
 	}
 	file, err := Open(dir)
 	if err != nil {
@@ -465,7 +477,7 @@ func TestReaddirStatFailures(t *testing.T) {
 
 func TestHardLink(t *testing.T) {
 	// Hardlinks are not supported under windows or Plan 9.
-	if runtime.GOOS == "windows" || runtime.GOOS == "plan9" {
+	if runtime.GOOS == "plan9" {
 		return
 	}
 	from, to := "hardlinktestfrom", "hardlinktestto"
@@ -496,10 +508,14 @@ func TestHardLink(t *testing.T) {
 	}
 }
 
-func TestSymLink(t *testing.T) {
-	// Symlinks are not supported under windows or Plan 9.
-	if runtime.GOOS == "windows" || runtime.GOOS == "plan9" {
-		return
+func TestSymlink(t *testing.T) {
+	switch runtime.GOOS {
+	case "android", "nacl", "plan9":
+		t.Skipf("skipping on %s", runtime.GOOS)
+	case "windows":
+		if !supportsSymlinks {
+			t.Skipf("skipping on %s", runtime.GOOS)
+		}
 	}
 	from, to := "symlinktestfrom", "symlinktestto"
 	Remove(from) // Just in case.
@@ -559,9 +575,13 @@ func TestSymLink(t *testing.T) {
 }
 
 func TestLongSymlink(t *testing.T) {
-	// Symlinks are not supported under windows or Plan 9.
-	if runtime.GOOS == "windows" || runtime.GOOS == "plan9" {
-		return
+	switch runtime.GOOS {
+	case "plan9", "nacl":
+		t.Skipf("skipping on %s", runtime.GOOS)
+	case "windows":
+		if !supportsSymlinks {
+			t.Skipf("skipping on %s", runtime.GOOS)
+		}
 	}
 	s := "0123456789abcdef"
 	// Long, but not too long: a common limit is 255.
@@ -630,6 +650,11 @@ func exec(t *testing.T, dir, cmd string, args []string, expect string) {
 }
 
 func TestStartProcess(t *testing.T) {
+	switch runtime.GOOS {
+	case "android", "nacl":
+		t.Skipf("skipping on %s", runtime.GOOS)
+	}
+
 	var dir, cmd string
 	var args []string
 	if runtime.GOOS == "windows" {
@@ -703,8 +728,10 @@ func TestFTruncate(t *testing.T) {
 	checkSize(t, f, 1024)
 	f.Truncate(0)
 	checkSize(t, f, 0)
-	f.Write([]byte("surprise!"))
-	checkSize(t, f, 13+9) // wrote at offset past where hello, world was.
+	_, err := f.Write([]byte("surprise!"))
+	if err == nil {
+		checkSize(t, f, 13+9) // wrote at offset past where hello, world was.
+	}
 }
 
 func TestTruncate(t *testing.T) {
@@ -721,8 +748,10 @@ func TestTruncate(t *testing.T) {
 	checkSize(t, f, 1024)
 	Truncate(f.Name(), 0)
 	checkSize(t, f, 0)
-	f.Write([]byte("surprise!"))
-	checkSize(t, f, 13+9) // wrote at offset past where hello, world was.
+	_, err := f.Write([]byte("surprise!"))
+	if err == nil {
+		checkSize(t, f, 13+9) // wrote at offset past where hello, world was.
+	}
 }
 
 // Use TempDir() to make sure we're on a local file system,
@@ -757,13 +786,13 @@ func TestChtimes(t *testing.T) {
 	}
 	postStat := st
 
-	/* Plan 9:
+	/* Plan 9, NaCl:
 		Mtime is the time of the last change of content.  Similarly, atime is set whenever the
 	    contents are accessed; also, it is set whenever mtime is set.
 	*/
 	pat := Atime(postStat)
 	pmt := postStat.ModTime()
-	if !pat.Before(at) && runtime.GOOS != "plan9" {
+	if !pat.Before(at) && runtime.GOOS != "plan9" && runtime.GOOS != "nacl" {
 		t.Errorf("AccessTime didn't go backwards; was=%d, after=%d", at, pat)
 	}
 
@@ -784,8 +813,11 @@ func TestChdirAndGetwd(t *testing.T) {
 	// These are chosen carefully not to be symlinks on a Mac
 	// (unlike, say, /var, /etc, and /tmp).
 	dirs := []string{"/", "/usr/bin"}
-	// /usr/bin does not usually exist on Plan 9.
-	if runtime.GOOS == "plan9" {
+	// /usr/bin does not usually exist on Plan 9 or Android.
+	switch runtime.GOOS {
+	case "android":
+		dirs = []string{"/", "/system/bin"}
+	case "plan9":
 		dirs = []string{"/", "/usr"}
 	}
 	for mode := 0; mode < 2; mode++ {
@@ -904,6 +936,12 @@ func TestOpenError(t *testing.T) {
 				syscallErrStr := perr.Err.Error()
 				expectedErrStr := strings.Replace(tt.error.Error(), "file ", "", 1)
 				if !strings.HasSuffix(syscallErrStr, expectedErrStr) {
+					// Some Plan 9 file servers incorrectly return
+					// EACCES rather than EISDIR when a directory is
+					// opened for write.
+					if tt.error == syscall.EISDIR && strings.HasSuffix(syscallErrStr, syscall.EACCES.Error()) {
+						continue
+					}
 					t.Errorf("Open(%q, %d) = _, %q; want suffix %q", tt.path, tt.mode, syscallErrStr, expectedErrStr)
 				}
 				continue
@@ -964,9 +1002,10 @@ func run(t *testing.T, cmd []string) string {
 
 func TestHostname(t *testing.T) {
 	// There is no other way to fetch hostname on windows, but via winapi.
-	// On Plan 9 it is can be taken from #c/sysname as Hostname() does.
-	if runtime.GOOS == "windows" || runtime.GOOS == "plan9" {
-		return
+	// On Plan 9 it can be taken from #c/sysname as Hostname() does.
+	switch runtime.GOOS {
+	case "android", "nacl", "plan9", "windows":
+		t.Skipf("skipping on %s", runtime.GOOS)
 	}
 
 	// Check internal Hostname() against the output of /bin/hostname.
@@ -1225,6 +1264,11 @@ func TestReadAtEOF(t *testing.T) {
 }
 
 func testKillProcess(t *testing.T, processKiller func(p *Process)) {
+	switch runtime.GOOS {
+	case "android", "nacl":
+		t.Skipf("skipping on %s", runtime.GOOS)
+	}
+
 	dir, err := ioutil.TempDir("", "go-build")
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
@@ -1278,6 +1322,36 @@ func TestKillStartProcess(t *testing.T) {
 			t.Fatalf("Failed to kill test process: %v", err)
 		}
 	})
+}
+
+func TestGetppid(t *testing.T) {
+	switch runtime.GOOS {
+	case "nacl":
+		t.Skip("skipping on nacl")
+	case "plan9":
+		// TODO: golang.org/issue/8206
+		t.Skipf("skipping test on plan9; see issue 8206")
+	}
+
+	if Getenv("GO_WANT_HELPER_PROCESS") == "1" {
+		fmt.Print(Getppid())
+		Exit(0)
+	}
+
+	cmd := osexec.Command(Args[0], "-test.run=TestGetppid")
+	cmd.Env = append(Environ(), "GO_WANT_HELPER_PROCESS=1")
+
+	// verify that Getppid() from the forked process reports our process id
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to spawn child process: %v %q", err, string(output))
+	}
+
+	childPpid := string(output)
+	ourPid := fmt.Sprintf("%d", Getpid())
+	if childPpid != ourPid {
+		t.Fatalf("Child process reports parent process id '%v', expected '%v'", childPpid, ourPid)
+	}
 }
 
 func TestKillFindProcess(t *testing.T) {

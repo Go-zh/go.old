@@ -40,7 +40,7 @@ type MemStats struct {
 	// 底层固定大小的结构分配器统计。
 	//	Inuse 为正在使用的字节数。
 	//	Sys   为从系统获取的字节数。
-	StackInuse  uint64 // bootstrap stacks  // 引导栈
+	StackInuse  uint64 // bytes used by stack allocator // 栈分配器使用的字节
 	StackSys    uint64
 	MSpanInuse  uint64 // mspan structures  // mspan（内存区间）结构数
 	MSpanSys    uint64

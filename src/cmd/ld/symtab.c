@@ -198,13 +198,18 @@ asmelfsym(void)
 	genasmsym(putelfsym);
 	
 	if(linkmode == LinkExternal && HEADTYPE != Hopenbsd) {
-		s = linklookup(ctxt, "runtime.tlsgm", 0);
+		s = linklookup(ctxt, "runtime.tlsg", 0);
 		if(s->sect == nil) {
 			ctxt->cursym = nil;
 			diag("missing section for %s", s->name);
 			errorexit();
 		}
-		putelfsyment(putelfstr(s->name), 0, 2*PtrSize, (STB_LOCAL<<4)|STT_TLS, s->sect->elfsect->shnum, 0);
+		if (strcmp(goos, "android") == 0) {
+			// Android emulates runtime.tlsg as a regular variable.
+			putelfsyment(putelfstr(s->name), 0, s->size, (STB_LOCAL<<4)|STT_OBJECT, s->sect->elfsect->shnum, 0);
+		} else {
+			putelfsyment(putelfstr(s->name), 0, s->size, (STB_LOCAL<<4)|STT_TLS, s->sect->elfsect->shnum, 0);
+		}
 		s->elfsym = numelfsym++;
 	}
 

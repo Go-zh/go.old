@@ -92,7 +92,7 @@ progedit(Link *ctxt, Prog *p)
 {
 	char literal[64];
 	LSym *s;
-	LSym *tlsfallback;
+	static LSym *tlsfallback;
 
 	p->from.class = 0;
 	p->to.class = 0;
@@ -111,19 +111,27 @@ progedit(Link *ctxt, Prog *p)
 	// Replace TLS register fetches on older ARM procesors.
 	switch(p->as) {
 	case AMRC:
-		// If the instruction matches MRC 15, 0, <reg>, C13, C0, 3, replace it.
-		if(ctxt->goarm < 7 && (p->to.offset & 0xffff0fff) == 0xee1d0f70) {
-			tlsfallback = linklookup(ctxt, "runtime.read_tls_fallback", 0);
+		// Treat MRC 15, 0, <reg>, C13, C0, 3 specially.
+		if((p->to.offset & 0xffff0fff) == 0xee1d0f70) {
+			// Because the instruction might be rewriten to a BL which returns in R0
+			// the register must be zero.
+		       	if ((p->to.offset & 0xf000) != 0)
+				ctxt->diag("%L: TLS MRC instruction must write to R0 as it might get translated into a BL instruction", p->lineno);
 
-			// BL runtime.read_tls_fallback(SB)
-			p->as = ABL;
-			p->to.type = D_BRANCH;
-			p->to.sym = tlsfallback;
-			p->to.offset = 0;
-		} else {
-			// Otherwise, MRC/MCR instructions need no further treatment.
-			p->as = AWORD;
+			if(ctxt->goarm < 7) {
+				// Replace it with BL runtime.read_tls_fallback(SB).
+				if(tlsfallback == nil)
+					tlsfallback = linklookup(ctxt, "runtime.read_tls_fallback", 0);
+				// BL runtime.read_tls_fallback(SB)
+				p->as = ABL;
+				p->to.type = D_BRANCH;
+				p->to.sym = tlsfallback;
+				p->to.offset = 0;
+				break;
+			}
 		}
+		// Otherwise, MRC/MCR instructions need no further treatment.
+		p->as = AWORD;
 		break;
 	}
 
@@ -173,15 +181,15 @@ progedit(Link *ctxt, Prog *p)
 	if(ctxt->flag_shared) {
 		// Shared libraries use R_ARM_TLS_IE32 instead of 
 		// R_ARM_TLS_LE32, replacing the link time constant TLS offset in
-		// runtime.tlsgm with an address to a GOT entry containing the 
-		// offset. Rewrite $runtime.tlsgm(SB) to runtime.tlsgm(SB) to
+		// runtime.tlsg with an address to a GOT entry containing the 
+		// offset. Rewrite $runtime.tlsg(SB) to runtime.tlsg(SB) to
 		// compensate.
-		if(ctxt->gmsym == nil)
-			ctxt->gmsym = linklookup(ctxt, "runtime.tlsgm", 0);
+		if(ctxt->tlsg == nil)
+			ctxt->tlsg = linklookup(ctxt, "runtime.tlsg", 0);
 
-		if(p->from.type == D_CONST && p->from.name == D_EXTERN && p->from.sym == ctxt->gmsym)
+		if(p->from.type == D_CONST && p->from.name == D_EXTERN && p->from.sym == ctxt->tlsg)
 			p->from.type = D_OREG;
-		if(p->to.type == D_CONST && p->to.name == D_EXTERN && p->to.sym == ctxt->gmsym)
+		if(p->to.type == D_CONST && p->to.name == D_EXTERN && p->to.sym == ctxt->tlsg)
 			p->to.type = D_OREG;
 	}
 }
@@ -707,28 +715,28 @@ softfloat(Link *ctxt, LSym *cursym)
 
 		default:
 			goto notsoft;
-
-		soft:
-			if (!wasfloat || (p->mark&LABEL)) {
-				next = ctxt->arch->prg();
-				*next = *p;
-
-				// BL _sfloat(SB)
-				*p = zprg;
-				p->link = next;
-				p->as = ABL;
- 				p->to.type = D_BRANCH;
-				p->to.sym = symsfloat;
-				p->lineno = next->lineno;
-
-				p = next;
-				wasfloat = 1;
-			}
-			break;
-
-		notsoft:
-			wasfloat = 0;
 		}
+
+	soft:
+		if (!wasfloat || (p->mark&LABEL)) {
+			next = ctxt->arch->prg();
+			*next = *p;
+
+			// BL _sfloat(SB)
+			*p = zprg;
+			p->link = next;
+			p->as = ABL;
+ 				p->to.type = D_BRANCH;
+			p->to.sym = symsfloat;
+			p->lineno = next->lineno;
+
+			p = next;
+			wasfloat = 1;
+		}
+		continue;
+
+	notsoft:
+		wasfloat = 0;
 	}
 }
 

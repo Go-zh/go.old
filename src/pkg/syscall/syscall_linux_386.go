@@ -2,6 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// TODO(rsc): Rewrite all nn(SP) references into name+(nn-8)(FP)
+// so that go vet can check that they are correct.
+
 package syscall
 
 import "unsafe"
@@ -44,7 +47,6 @@ func NsecToTimeval(nsec int64) (tv Timeval) {
 //sys	sendfile(outfd int, infd int, offset *int64, count int) (written int, err error) = SYS_SENDFILE64
 //sys	Setfsgid(gid int) (err error) = SYS_SETFSGID32
 //sys	Setfsuid(uid int) (err error) = SYS_SETFSUID32
-//sysnb	Setgid(gid int) (err error) = SYS_SETGID32
 //sysnb	Setregid(rgid int, egid int) (err error) = SYS_SETREGID32
 //sysnb	Setresgid(rgid int, egid int, sgid int) (err error) = SYS_SETRESGID32
 //sysnb	Setresuid(ruid int, euid int, suid int) (err error) = SYS_SETRESUID32
@@ -132,7 +134,15 @@ func Setrlimit(resource int, rlim *Rlimit) (err error) {
 
 // Underlying system call writes to newoffset via pointer.
 // Implemented in assembly to avoid allocation.
-func Seek(fd int, offset int64, whence int) (newoffset int64, err error)
+func seek(fd int, offset int64, whence int) (newoffset int64, err Errno)
+
+func Seek(fd int, offset int64, whence int) (newoffset int64, err error) {
+	newoffset, errno := seek(fd, offset, whence)
+	if errno != 0 {
+		return 0, errno
+	}
+	return newoffset, nil
+}
 
 // Vsyscalls on amd64.
 //sysnb	Gettimeofday(tv *Timeval) (err error)

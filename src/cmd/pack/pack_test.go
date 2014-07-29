@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -184,6 +186,11 @@ func TestExtract(t *testing.T) {
 
 // Test that pack-created archives can be understood by the tools.
 func TestHello(t *testing.T) {
+	switch runtime.GOOS {
+	case "android", "nacl":
+		t.Skipf("skipping on %s", runtime.GOOS)
+	}
+
 	dir := tmpDir(t)
 	defer os.RemoveAll(dir)
 	hello := filepath.Join(dir, "hello.go")
@@ -216,6 +223,11 @@ func TestHello(t *testing.T) {
 
 // Test that pack works with very long lines in PKGDEF.
 func TestLargeDefs(t *testing.T) {
+	switch runtime.GOOS {
+	case "android", "nacl":
+		t.Skipf("skipping on %s", runtime.GOOS)
+	}
+
 	dir := tmpDir(t)
 	defer os.RemoveAll(dir)
 	large := filepath.Join(dir, "large.go")
@@ -223,9 +235,10 @@ func TestLargeDefs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	b := bufio.NewWriter(f)
 
 	printf := func(format string, args ...interface{}) {
-		_, err := fmt.Fprintf(f, format, args...)
+		_, err := fmt.Fprintf(b, format, args...)
 		if err != nil {
 			t.Fatalf("Writing to %s: %v", large, err)
 		}
@@ -240,6 +253,9 @@ func TestLargeDefs(t *testing.T) {
 		printf("\"`\n")
 	}
 	printf("}\n")
+	if err = b.Flush(); err != nil {
+		t.Fatal(err)
+	}
 	if err = f.Close(); err != nil {
 		t.Fatal(err)
 	}

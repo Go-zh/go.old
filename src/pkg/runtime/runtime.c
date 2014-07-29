@@ -32,8 +32,8 @@ runtime·gotraceback(bool *crash)
 
 	if(crash != nil)
 		*crash = false;
-	if(m->traceback != 0)
-		return m->traceback;
+	if(g->m->traceback != 0)
+		return g->m->traceback;
 	x = runtime·atomicload(&traceback_cache);
 	if(x == ~(uint32)0) {
 		p = runtime·getenv("GOTRACEBACK");
@@ -286,11 +286,11 @@ runtime·fastrand1(void)
 {
 	uint32 x;
 
-	x = m->fastrand;
+	x = g->m->fastrand;
 	x += x;
 	if(x & 0x80000000L)
 		x ^= 0x88888eefUL;
-	m->fastrand = x;
+	g->m->fastrand = x;
 	return x;
 }
 
@@ -370,17 +370,17 @@ runtime·timediv(int64 v, int32 div, int32 *rem)
 {
 	int32 res, bit;
 
-	if(v >= (int64)div*0x7fffffffLL) {
-		if(rem != nil)
-			*rem = 0;
-		return 0x7fffffff;
-	}
 	res = 0;
 	for(bit = 30; bit >= 0; bit--) {
 		if(v >= ((int64)div<<bit)) {
 			v = v - ((int64)div<<bit);
 			res += 1<<bit;
 		}
+	}
+	if(v >= (int64)div) {
+		if(rem != nil)
+			*rem = 0;
+		return 0x7fffffff;
 	}
 	if(rem != nil)
 		*rem = v;

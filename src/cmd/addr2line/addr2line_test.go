@@ -67,26 +67,10 @@ func runAddr2Line(t *testing.T, exepath, addr string) (funcname, path, lineno st
 	return funcname, f[0], f[1]
 }
 
-func TestAddr2Line(t *testing.T) {
-	if runtime.GOOS == "plan9" {
-		t.Skip("skipping test; see http://golang.org/issue/7947")
-	}
-	syms := loadSyms(t)
+const symName = "cmd/addr2line.TestAddr2Line"
 
-	tmpDir, err := ioutil.TempDir("", "TestAddr2Line")
-	if err != nil {
-		t.Fatal("TempDir failed: ", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	exepath := filepath.Join(tmpDir, "testaddr2line.exe")
-	out, err := exec.Command("go", "build", "-o", exepath, "cmd/addr2line").CombinedOutput()
-	if err != nil {
-		t.Fatalf("go build -o %v cmd/addr2line: %v\n%s", exepath, err, string(out))
-	}
-
-	const symName = "cmd/addr2line.TestAddr2Line"
-	funcName, srcPath, srcLineNo := runAddr2Line(t, exepath, syms[symName])
+func testAddr2Line(t *testing.T, exepath, addr string) {
+	funcName, srcPath, srcLineNo := runAddr2Line(t, exepath, addr)
 	if symName != funcName {
 		t.Fatalf("expected function name %v; got %v", symName, funcName)
 	}
@@ -101,7 +85,32 @@ func TestAddr2Line(t *testing.T) {
 	if !os.SameFile(fi1, fi2) {
 		t.Fatalf("addr2line_test.go and %s are not same file", srcPath)
 	}
-	if srcLineNo != "70" {
-		t.Fatalf("line number = %v; want 70", srcLineNo)
+	if srcLineNo != "94" {
+		t.Fatalf("line number = %v; want 94", srcLineNo)
 	}
+}
+
+// This is line 93. The test depends on that.
+func TestAddr2Line(t *testing.T) {
+	switch runtime.GOOS {
+	case "nacl", "android":
+		t.Skipf("skipping on %s", runtime.GOOS)
+	}
+
+	syms := loadSyms(t)
+
+	tmpDir, err := ioutil.TempDir("", "TestAddr2Line")
+	if err != nil {
+		t.Fatal("TempDir failed: ", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	exepath := filepath.Join(tmpDir, "testaddr2line.exe")
+	out, err := exec.Command("go", "build", "-o", exepath, "cmd/addr2line").CombinedOutput()
+	if err != nil {
+		t.Fatalf("go build -o %v cmd/addr2line: %v\n%s", exepath, err, string(out))
+	}
+
+	testAddr2Line(t, exepath, syms[symName])
+	testAddr2Line(t, exepath, "0x"+syms[symName])
 }

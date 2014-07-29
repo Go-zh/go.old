@@ -64,6 +64,16 @@ TEXT runtime·plan9_tsemacquire(SB),NOSPLIT,$0
 	INT	$64
 	RET
 
+TEXT runtime·nsec(SB),NOSPLIT,$0
+	MOVL	$53, AX
+	INT	$64
+	CMPL	AX, $-1
+	JNE	4(PC)
+	MOVL	a+0(FP), CX
+	MOVL	AX, 0(CX)
+	MOVL	AX, 4(CX)
+	RET
+
 TEXT runtime·notify(SB),NOSPLIT,$0
 	MOVL	$28, AX
 	INT	$64
@@ -98,10 +108,10 @@ TEXT runtime·rfork(SB),NOSPLIT,$0
 	// Initialize m, g.
 	get_tls(AX)
 	MOVL	DX, g(AX)
-	MOVL	BX, m(AX)
+	MOVL	BX, g_m(DX)
 
 	// Initialize procid from TOS struct.
-	// TODO: Be explicit and insert a new MOVL _tos(SB), AX here.
+	MOVL	_tos(SB), AX
 	MOVL	48(AX), AX // procid
 	MOVL	AX, m_procid(BX)	// save pid as m->procid
 	
@@ -123,8 +133,8 @@ TEXT runtime·rfork(SB),NOSPLIT,$0
 TEXT runtime·sigtramp(SB),NOSPLIT,$0
 	get_tls(AX)
 
-	// check that m exists
-	MOVL	m(AX), BX
+	// check that g exists
+	MOVL	g(AX), BX
 	CMPL	BX, $0
 	JNE	3(PC)
 	CALL	runtime·badsignal2(SB) // will exit
@@ -135,6 +145,7 @@ TEXT runtime·sigtramp(SB),NOSPLIT,$0
 	MOVL	note+8(SP), DX
 
 	// change stack
+	MOVL	g_m(BX), BX
 	MOVL	m_gsignal(BX), BP
 	MOVL	g_stackbase(BP), BP
 	MOVL	BP, SP
@@ -181,7 +192,8 @@ TEXT runtime·setfpmasks(SB),NOSPLIT,$0
 // See ../syscall/asm_plan9_386.s:/·Syscall/
 TEXT runtime·errstr(SB),NOSPLIT,$0
 	get_tls(AX)
-	MOVL	m(AX), BX
+	MOVL	g(AX), BX
+	MOVL	g_m(BX), BX
 	MOVL	m_errstr(BX), CX
 	MOVL	CX, 4(SP)
 	MOVL	$ERRMAX, 8(SP)

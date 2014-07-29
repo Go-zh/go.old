@@ -35,6 +35,36 @@ includes_Darwin='
 #include <netinet/ip.h>
 #include <netinet/ip_mroute.h>
 #include <termios.h>
+
+// We keep some constants not supported in OS X Mavericks and beyond
+// for the promise of compatibility.
+#ifndef F_MARKDEPENDENCY
+#define F_MARKDEPENDENCY	0x3c
+#endif
+#ifndef F_READBOOTSTRAP
+#define F_READBOOTSTRAP		0x2e
+#endif
+#ifndef F_WRITEBOOTSTRAP
+#define F_WRITEBOOTSTRAP	0x2f
+#endif
+#ifndef NOTE_RESOURCEEND
+#define NOTE_RESOURCEEND	0x2000000
+#endif
+#ifndef SO_RESTRICTIONS
+#define SO_RESTRICTIONS		0x1081
+#endif
+#ifndef SO_RESTRICT_DENYIN
+#define SO_RESTRICT_DENYIN	0x1
+#endif
+#ifndef SO_RESTRICT_DENYOUT
+#define SO_RESTRICT_DENYOUT	0x2
+#endif
+#ifndef SO_RESTRICT_DENYSET
+#define SO_RESTRICT_DENYSET	0x80000000
+#endif
+#ifndef TCP_MINMSSOVERLOAD
+#define TCP_MINMSSOVERLOAD	0x3e8
+#endif
 '
 
 includes_DragonFly='
@@ -162,6 +192,7 @@ includes_OpenBSD='
 #include <net/bpf.h>
 #include <net/if.h>
 #include <net/if_types.h>
+#include <net/if_var.h>
 #include <net/route.h>
 #include <netinet/in.h>
 #include <netinet/in_systm.h>
@@ -169,6 +200,18 @@ includes_OpenBSD='
 #include <netinet/ip_mroute.h>
 #include <netinet/if_ether.h>
 #include <net/if_bridge.h>
+
+// We keep some constants not supported in OpenBSD 5.5 and beyond for
+// the promise of compatibility.
+#define EMUL_ENABLED		0x1
+#define EMUL_NATIVE		0x2
+#define IPV6_FAITH		0x1d
+#define IPV6_OPTIONS		0x1
+#define IPV6_RTHDR_STRICT	0x1
+#define IPV6_SOCKOPT_RESERVED1	0x3
+#define SIOCGIFGENERIC		0xc020693a
+#define SIOCSIFGENERIC		0x80206939
+#define WALTSIG			0x4
 '
 
 includes_SunOS='
@@ -253,7 +296,7 @@ ccflags="$@"
 		$2 ~ /^O[CNPFP][A-Z]+[^_][A-Z]+$/ ||
 		$2 ~ /^IN_/ ||
 		$2 ~ /^LOCK_(SH|EX|NB|UN)$/ ||
-		$2 ~ /^(AF|SOCK|SO|SOL|IPPROTO|IP|IPV6|ICMP6|TCP|EVFILT|NOTE|EV|SHUT|PROT|MAP|PACKET|MSG|SCM|MCL|DT|MADV|PR)_/ ||
+		$2 ~ /^(AF|SOCK|SO|SOL|IPPROTO|IP|IPV6|ICMP6|TCP|EVFILT|NOTE|EV|SHUT|PROT|MAP|PACKET|MSG|SCM|MCL|DT|MADV|PR|MCAST)_/ ||
 		$2 == "ICMPV6_FILTER" ||
 		$2 == "SOMAXCONN" ||
 		$2 == "NAME_MAX" ||

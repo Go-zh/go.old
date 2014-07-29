@@ -26,7 +26,6 @@ package syscall
 //sys	sendfile(outfd int, infd int, offset *int64, count int) (written int, err error)
 //sys	Setfsgid(gid int) (err error)
 //sys	Setfsuid(uid int) (err error)
-//sysnb	Setgid(gid int) (err error)
 //sysnb	Setregid(rgid int, egid int) (err error)
 //sysnb	Setresgid(rgid int, egid int, sgid int) (err error)
 //sysnb	Setresuid(ruid int, euid int, suid int) (err error)
@@ -58,8 +57,28 @@ package syscall
 
 func Getpagesize() int { return 4096 }
 
-func Gettimeofday(tv *Timeval) (err error)
-func Time(t *Time_t) (tt Time_t, err error)
+//go:noescape
+func gettimeofday(tv *Timeval) (err Errno)
+
+func Gettimeofday(tv *Timeval) (err error) {
+	errno := gettimeofday(tv)
+	if errno != 0 {
+		return errno
+	}
+	return nil
+}
+
+func Time(t *Time_t) (tt Time_t, err error) {
+	var tv Timeval
+	errno := gettimeofday(&tv)
+	if errno != 0 {
+		return 0, errno
+	}
+	if t != nil {
+		*t = Time_t(tv.Sec)
+	}
+	return Time_t(tv.Sec), nil
+}
 
 func TimespecToNsec(ts Timespec) int64 { return int64(ts.Sec)*1e9 + int64(ts.Nsec) }
 
