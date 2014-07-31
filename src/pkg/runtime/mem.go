@@ -86,8 +86,3 @@ func init() {
 
 // ReadMemStats 将内存分配器的统计填充到 m 中。
 func ReadMemStats(m *MemStats)
-
-// GC runs a garbage collection.
-
-// GC 运行一次垃圾回收。
-func GC()

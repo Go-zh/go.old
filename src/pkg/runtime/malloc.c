@@ -6,7 +6,6 @@
 //
 // TODO(rsc): double-check stats.
 
-package runtime
 #include "runtime.h"
 #include "arch_GOARCH.h"
 #include "malloc.h"
@@ -20,248 +19,26 @@ package runtime
 #pragma dataflag NOPTR
 MHeap runtime·mheap;
 #pragma dataflag NOPTR
-MStats mstats;
+MStats runtime·memstats;
 
-int32	runtime·checking;
+void runtime·cmallocgc(uintptr size, Type *typ, uint32 flag, void **ret);
 
-extern MStats mstats;	// defined in zruntime_def_$GOOS_$GOARCH.go
-
-extern volatile intgo runtime·MemProfileRate;
-
-static MSpan* largealloc(uint32, uintptr*);
-static void profilealloc(void *v, uintptr size);
-static void settype(MSpan *s, void *v, uintptr typ);
-
-// Allocate an object of at least size bytes.
-// Small objects are allocated from the per-thread cache's free lists.
-// Large objects (> 32 kB) are allocated straight from the heap.
-// If the block will be freed with runtime·free(), typ must be 0.
 void*
-runtime·mallocgc(uintptr size, uintptr typ, uint32 flag)
+runtime·mallocgc(uintptr size, Type *typ, uint32 flag)
 {
-	int32 sizeclass;
-	uintptr tinysize, size1;
-	intgo rate;
-	MCache *c;
-	MSpan *s;
-	MLink *v, *next;
-	byte *tiny;
+	void *ret;
 
-	if(size == 0) {
-		// All 0-length allocations use this pointer.
-		// The language does not require the allocations to
-		// have distinct values.
-		return &runtime·zerobase;
-	}
-	if(g->m->mallocing)
-		runtime·throw("malloc/free - deadlock");
-	// Disable preemption during settype.
-	// We can not use m->mallocing for this, because settype calls mallocgc.
-	g->m->locks++;
-	g->m->mallocing = 1;
-
-	if(DebugTypeAtBlockEnd)
-		size += sizeof(uintptr);
-
-	c = g->m->mcache;
-	if(!runtime·debug.efence && size <= MaxSmallSize) {
-		if((flag&(FlagNoScan|FlagNoGC)) == FlagNoScan && size < TinySize) {
-			// Tiny allocator.
-			//
-			// Tiny allocator combines several tiny allocation requests
-			// into a single memory block. The resulting memory block
-			// is freed when all subobjects are unreachable. The subobjects
-			// must be FlagNoScan (don't have pointers), this ensures that
-			// the amount of potentially wasted memory is bounded.
-			//
-			// Size of the memory block used for combining (TinySize) is tunable.
-			// Current setting is 16 bytes, which relates to 2x worst case memory
-			// wastage (when all but one subobjects are unreachable).
-			// 8 bytes would result in no wastage at all, but provides less
-			// opportunities for combining.
-			// 32 bytes provides more opportunities for combining,
-			// but can lead to 4x worst case wastage.
-			// The best case winning is 8x regardless of block size.
-			//
-			// Objects obtained from tiny allocator must not be freed explicitly.
-			// So when an object will be freed explicitly, we ensure that
-			// its size >= TinySize.
-			//
-			// SetFinalizer has a special case for objects potentially coming
-			// from tiny allocator, it such case it allows to set finalizers
-			// for an inner byte of a memory block.
-			//
-			// The main targets of tiny allocator are small strings and
-			// standalone escaping variables. On a json benchmark
-			// the allocator reduces number of allocations by ~12% and
-			// reduces heap size by ~20%.
-
-			tinysize = c->tinysize;
-			if(size <= tinysize) {
-				tiny = c->tiny;
-				// Align tiny pointer for required (conservative) alignment.
-				if((size&7) == 0)
-					tiny = (byte*)ROUND((uintptr)tiny, 8);
-				else if((size&3) == 0)
-					tiny = (byte*)ROUND((uintptr)tiny, 4);
-				else if((size&1) == 0)
-					tiny = (byte*)ROUND((uintptr)tiny, 2);
-				size1 = size + (tiny - c->tiny);
-				if(size1 <= tinysize) {
-					// The object fits into existing tiny block.
-					v = (MLink*)tiny;
-					c->tiny += size1;
-					c->tinysize -= size1;
-					g->m->mallocing = 0;
-					g->m->locks--;
-					if(g->m->locks == 0 && g->preempt)  // restore the preemption request in case we've cleared it in newstack
-						g->stackguard0 = StackPreempt;
-					return v;
-				}
-			}
-			// Allocate a new TinySize block.
-			s = c->alloc[TinySizeClass];
-			if(s->freelist == nil)
-				s = runtime·MCache_Refill(c, TinySizeClass);
-			v = s->freelist;
-			next = v->next;
-			s->freelist = next;
-			s->ref++;
-			if(next != nil)  // prefetching nil leads to a DTLB miss
-				PREFETCH(next);
-			((uint64*)v)[0] = 0;
-			((uint64*)v)[1] = 0;
-			// See if we need to replace the existing tiny block with the new one
-			// based on amount of remaining free space.
-			if(TinySize-size > tinysize) {
-				c->tiny = (byte*)v + size;
-				c->tinysize = TinySize - size;
-			}
-			size = TinySize;
-			goto done;
-		}
-		// Allocate from mcache free lists.
-		// Inlined version of SizeToClass().
-		if(size <= 1024-8)
-			sizeclass = runtime·size_to_class8[(size+7)>>3];
-		else
-			sizeclass = runtime·size_to_class128[(size-1024+127) >> 7];
-		size = runtime·class_to_size[sizeclass];
-		s = c->alloc[sizeclass];
-		if(s->freelist == nil)
-			s = runtime·MCache_Refill(c, sizeclass);
-		v = s->freelist;
-		next = v->next;
-		s->freelist = next;
-		s->ref++;
-		if(next != nil)  // prefetching nil leads to a DTLB miss
-			PREFETCH(next);
-		if(!(flag & FlagNoZero)) {
-			v->next = nil;
-			// block is zeroed iff second word is zero ...
-			if(size > 2*sizeof(uintptr) && ((uintptr*)v)[1] != 0)
-				runtime·memclr((byte*)v, size);
-		}
-	done:
-		c->local_cachealloc += size;
-	} else {
-		// Allocate directly from heap.
-		s = largealloc(flag, &size);
-		v = (void*)(s->start << PageShift);
-	}
-
-	if(flag & FlagNoGC)
-		runtime·marknogc(v);
-	else if(!(flag & FlagNoScan))
-		runtime·markscan(v);
-
-	if(DebugTypeAtBlockEnd)
-		*(uintptr*)((uintptr)v+size-sizeof(uintptr)) = typ;
-
-	g->m->mallocing = 0;
-	// TODO: save type even if FlagNoScan?  Potentially expensive but might help
-	// heap profiling/tracing.
-	if(UseSpanType && !(flag & FlagNoScan) && typ != 0)
-		settype(s, v, typ);
-
-	if(raceenabled)
-		runtime·racemalloc(v, size);
-
-	if(runtime·debug.allocfreetrace)
-		runtime·tracealloc(v, size, typ);
-
-	if(!(flag & FlagNoProfiling) && (rate = runtime·MemProfileRate) > 0) {
-		if(size < rate && size < c->next_sample)
-			c->next_sample -= size;
-		else
-			profilealloc(v, size);
-	}
-
-	g->m->locks--;
-	if(g->m->locks == 0 && g->preempt)  // restore the preemption request in case we've cleared it in newstack
-		g->stackguard0 = StackPreempt;
-
-	if(!(flag & FlagNoInvokeGC) && mstats.heap_alloc >= mstats.next_gc)
-		runtime·gc(0);
-
-	return v;
-}
-
-static MSpan*
-largealloc(uint32 flag, uintptr *sizep)
-{
-	uintptr npages, size;
-	MSpan *s;
-	void *v;
-
-	// Allocate directly from heap.
-	size = *sizep;
-	if(size + PageSize < size)
-		runtime·throw("out of memory");
-	npages = size >> PageShift;
-	if((size & PageMask) != 0)
-		npages++;
-	s = runtime·MHeap_Alloc(&runtime·mheap, npages, 0, 1, !(flag & FlagNoZero));
-	if(s == nil)
-		runtime·throw("out of memory");
-	s->limit = (byte*)(s->start<<PageShift) + size;
-	*sizep = npages<<PageShift;
-	v = (void*)(s->start << PageShift);
-	// setup for mark sweep
-	runtime·markspan(v, 0, 0, true);
-	return s;
-}
-
-static void
-profilealloc(void *v, uintptr size)
-{
-	uintptr rate;
-	int32 next;
-	MCache *c;
-
-	c = g->m->mcache;
-	rate = runtime·MemProfileRate;
-	if(size < rate) {
-		// pick next profile time
-		// If you change this, also change allocmcache.
-		if(rate > 0x3fffffff)	// make 2*rate not overflow
-			rate = 0x3fffffff;
-		next = runtime·fastrand1() % (2*rate);
-		// Subtract the "remainder" of the current allocation.
-		// Otherwise objects that are close in size to sampling rate
-		// will be under-sampled, because we consistently discard this remainder.
-		next -= (size - c->next_sample);
-		if(next < 0)
-			next = 0;
-		c->next_sample = next;
-	}
-	runtime·MProf_Malloc(v, size);
+	// Call into the Go version of mallocgc.
+	// TODO: maybe someday we can get rid of this.  It is
+	// probably the only location where we run Go code on the M stack.
+	runtime·cmallocgc(size, typ, flag, &ret);
+	return ret;
 }
 
 void*
 runtime·malloc(uintptr size)
 {
-	return runtime·mallocgc(size, 0, FlagNoInvokeGC);
+	return runtime·mallocgc(size, nil, FlagNoInvokeGC);
 }
 
 // Free the object whose base pointer is v.
@@ -311,7 +88,7 @@ runtime·free(void *v)
 		// Must mark v freed before calling unmarkspan and MHeap_Free:
 		// they might coalesce v into other spans and change the bitmap further.
 		runtime·markfreed(v);
-		runtime·unmarkspan(v, 1<<PageShift);
+		runtime·unmarkspan(v, s->npages<<PageShift);
 		// NOTE(rsc,dvyukov): The original implementation of efence
 		// in CL 22060046 used SysFree instead of SysFault, so that
 		// the operating system would eventually give the memory
@@ -326,9 +103,10 @@ runtime·free(void *v)
 		// have mysterious crashes due to confused memory reuse.
 		// It should be possible to switch back to SysFree if we also 
 		// implement and then call some kind of MHeap_DeleteSpan.
-		if(runtime·debug.efence)
+		if(runtime·debug.efence) {
+			s->limit = nil;	// prevent mlookup from finding this span
 			runtime·SysFault((void*)(s->start<<PageShift), size);
-		else
+		} else
 			runtime·MHeap_Free(&runtime·mheap, s, 1);
 		c->local_nlargefree++;
 		c->local_largefree += size;
@@ -376,7 +154,6 @@ runtime·mlookup(void *v, byte **base, uintptr *size, MSpan **sp)
 	if(sp)
 		*sp = s;
 	if(s == nil) {
-		runtime·checkfreed(v, 1);
 		if(base)
 			*base = nil;
 		if(size)
@@ -433,6 +210,10 @@ runtime·purgecachedstats(MCache *c)
 uintptr runtime·sizeof_C_MStats = sizeof(MStats) - (NumSizeClasses - 61) * sizeof(mstats.by_size[0]);
 
 #define MaxArena32 (2U<<30)
+
+// For use by Go.  It can't be a constant in Go, unfortunately,
+// because it depends on the OS.
+uintptr runtime·maxMem = MaxMem;
 
 void
 runtime·mallocinit(void)
@@ -713,147 +494,38 @@ runtime·persistentalloc(uintptr size, uintptr align, uint64 *stat)
 	return p;
 }
 
-static void
-settype(MSpan *s, void *v, uintptr typ)
-{
-	uintptr size, ofs, j, t;
-	uintptr ntypes, nbytes2, nbytes3;
-	uintptr *data2;
-	byte *data3;
-
-	if(s->sizeclass == 0) {
-		s->types.compression = MTypes_Single;
-		s->types.data = typ;
-		return;
-	}
-	size = s->elemsize;
-	ofs = ((uintptr)v - (s->start<<PageShift)) / size;
-
-	switch(s->types.compression) {
-	case MTypes_Empty:
-		ntypes = (s->npages << PageShift) / size;
-		nbytes3 = 8*sizeof(uintptr) + 1*ntypes;
-		data3 = runtime·mallocgc(nbytes3, 0, FlagNoProfiling|FlagNoScan|FlagNoInvokeGC);
-		s->types.compression = MTypes_Bytes;
-		s->types.data = (uintptr)data3;
-		((uintptr*)data3)[1] = typ;
-		data3[8*sizeof(uintptr) + ofs] = 1;
-		break;
-		
-	case MTypes_Words:
-		((uintptr*)s->types.data)[ofs] = typ;
-		break;
-		
-	case MTypes_Bytes:
-		data3 = (byte*)s->types.data;
-		for(j=1; j<8; j++) {
-			if(((uintptr*)data3)[j] == typ) {
-				break;
-			}
-			if(((uintptr*)data3)[j] == 0) {
-				((uintptr*)data3)[j] = typ;
-				break;
-			}
-		}
-		if(j < 8) {
-			data3[8*sizeof(uintptr) + ofs] = j;
-		} else {
-			ntypes = (s->npages << PageShift) / size;
-			nbytes2 = ntypes * sizeof(uintptr);
-			data2 = runtime·mallocgc(nbytes2, 0, FlagNoProfiling|FlagNoScan|FlagNoInvokeGC);
-			s->types.compression = MTypes_Words;
-			s->types.data = (uintptr)data2;
-			
-			// Move the contents of data3 to data2. Then deallocate data3.
-			for(j=0; j<ntypes; j++) {
-				t = data3[8*sizeof(uintptr) + j];
-				t = ((uintptr*)data3)[t];
-				data2[j] = t;
-			}
-			data2[ofs] = typ;
-		}
-		break;
-	}
-}
-
-uintptr
-runtime·gettype(void *v)
-{
-	MSpan *s;
-	uintptr t, ofs;
-	byte *data;
-
-	s = runtime·MHeap_LookupMaybe(&runtime·mheap, v);
-	if(s != nil) {
-		t = 0;
-		switch(s->types.compression) {
-		case MTypes_Empty:
-			break;
-		case MTypes_Single:
-			t = s->types.data;
-			break;
-		case MTypes_Words:
-			ofs = (uintptr)v - (s->start<<PageShift);
-			t = ((uintptr*)s->types.data)[ofs/s->elemsize];
-			break;
-		case MTypes_Bytes:
-			ofs = (uintptr)v - (s->start<<PageShift);
-			data = (byte*)s->types.data;
-			t = data[8*sizeof(uintptr) + ofs/s->elemsize];
-			t = ((uintptr*)data)[t];
-			break;
-		default:
-			runtime·throw("runtime·gettype: invalid compression kind");
-		}
-		if(0) {
-			runtime·printf("%p -> %d,%X\n", v, (int32)s->types.compression, (int64)t);
-		}
-		return t;
-	}
-	return 0;
-}
-
 // Runtime stubs.
 
 void*
 runtime·mal(uintptr n)
 {
-	return runtime·mallocgc(n, 0, 0);
-}
-
-#pragma textflag NOSPLIT
-func new(typ *Type) (ret *uint8) {
-	ret = runtime·mallocgc(typ->size, (uintptr)typ | TypeInfo_SingleObject, typ->kind&KindNoPointers ? FlagNoScan : 0);
+	return runtime·mallocgc(n, nil, 0);
 }
 
 static void*
-cnew(Type *typ, intgo n, int32 objtyp)
+cnew(Type *typ, intgo n)
 {
-	if((objtyp&(PtrSize-1)) != objtyp)
-		runtime·throw("runtime: invalid objtyp");
 	if(n < 0 || (typ->size > 0 && n > MaxMem/typ->size))
 		runtime·panicstring("runtime: allocation size out of range");
-	return runtime·mallocgc(typ->size*n, (uintptr)typ | objtyp, typ->kind&KindNoPointers ? FlagNoScan : 0);
+	return runtime·mallocgc(typ->size*n, typ, typ->kind&KindNoPointers ? FlagNoScan : 0);
 }
 
 // same as runtime·new, but callable from C
 void*
 runtime·cnew(Type *typ)
 {
-	return cnew(typ, 1, TypeInfo_SingleObject);
+	return cnew(typ, 1);
 }
 
 void*
 runtime·cnewarray(Type *typ, intgo n)
 {
-	return cnew(typ, n, TypeInfo_Array);
+	return cnew(typ, n);
 }
 
-func GC() {
-	runtime·gc(2);  // force GC and do eager sweep
-}
-
-func SetFinalizer(obj Eface, finalizer Eface) {
+static void
+setFinalizer(Eface obj, Eface finalizer)
+{
 	byte *base;
 	uintptr size;
 	FuncType *ft;
@@ -868,7 +540,7 @@ func SetFinalizer(obj Eface, finalizer Eface) {
 		runtime·printf("runtime.SetFinalizer: first argument is nil interface\n");
 		goto throw;
 	}
-	if(obj.type->kind != KindPtr) {
+	if((obj.type->kind&KindMask) != KindPtr) {
 		runtime·printf("runtime.SetFinalizer: first argument is %S, not pointer\n", *obj.type->string);
 		goto throw;
 	}
@@ -936,4 +608,54 @@ badfunc:
 	runtime·printf("runtime.SetFinalizer: cannot pass %S to finalizer %S\n", *obj.type->string, *finalizer.type->string);
 throw:
 	runtime·throw("runtime.SetFinalizer");
+}
+
+void
+runtime·setFinalizer(void)
+{
+	Eface obj, finalizer;
+
+	obj.type = g->m->ptrarg[0];
+	obj.data = g->m->ptrarg[1];
+	finalizer.type = g->m->ptrarg[2];
+	finalizer.data = g->m->ptrarg[3];
+	g->m->ptrarg[0] = nil;
+	g->m->ptrarg[1] = nil;
+	g->m->ptrarg[2] = nil;
+	g->m->ptrarg[3] = nil;
+	setFinalizer(obj, finalizer);
+}
+
+// mcallable cache refill
+void 
+runtime·mcacheRefill(void)
+{
+	runtime·MCache_Refill(g->m->mcache, (int32)g->m->scalararg[0]);
+}
+
+void
+runtime·largeAlloc(void)
+{
+	uintptr npages, size;
+	MSpan *s;
+	void *v;
+	int32 flag;
+
+	//runtime·printf("largeAlloc size=%D\n", g->m->scalararg[0]);
+	// Allocate directly from heap.
+	size = g->m->scalararg[0];
+	flag = (int32)g->m->scalararg[1];
+	if(size + PageSize < size)
+		runtime·throw("out of memory");
+	npages = size >> PageShift;
+	if((size & PageMask) != 0)
+		npages++;
+	s = runtime·MHeap_Alloc(&runtime·mheap, npages, 0, 1, !(flag & FlagNoZero));
+	if(s == nil)
+		runtime·throw("out of memory");
+	s->limit = (byte*)(s->start<<PageShift) + size;
+	v = (void*)(s->start << PageShift);
+	// setup for mark sweep
+	runtime·markspan(v, 0, 0, true);
+	g->m->ptrarg[0] = s;
 }

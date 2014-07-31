@@ -9,6 +9,7 @@
 #include "stack.h"
 #include "race.h"
 #include "type.h"
+#include "mgc0.h"
 #include "../../cmd/ld/textflag.h"
 
 // Goroutine scheduler
@@ -157,6 +158,7 @@ runtime·schedinit(void)
 	runtime·symtabinit();
 	runtime·stackinit();
 	runtime·mallocinit();
+	runtime·chaninit();
 	mcommoninit(g->m);
 	
 	// Initialize the itable value for newErrorCString,
@@ -3134,6 +3136,7 @@ runtime·topofstack(Func *f)
 	return f->entry == (uintptr)runtime·goexit ||
 		f->entry == (uintptr)runtime·mstart ||
 		f->entry == (uintptr)runtime·mcall ||
+		f->entry == (uintptr)runtime·onM ||
 		f->entry == (uintptr)runtime·morestack ||
 		f->entry == (uintptr)runtime·lessstack ||
 		f->entry == (uintptr)_rt0_go ||

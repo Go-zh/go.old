@@ -1915,7 +1915,7 @@ callnew(Type *t)
 	Node *fn;
 
 	dowidth(t);
-	fn = syslook("new", 1);
+	fn = syslook("newobject", 1);
 	argtype(fn, t);
 	return mkcall1(fn, ptrto(t), nil, typename(t));
 }
@@ -2356,6 +2356,8 @@ paramstoheap(Type **argin, int out)
 			continue;
 
 		// generate allocation & copying code
+		if(compiling_runtime)
+			fatal("%N escapes to heap, not allowed in runtime.", v);
 		if(v->alloc == nil)
 			v->alloc = callnew(v->type);
 		nn = list(nn, nod(OAS, v->heapaddr, v->alloc));

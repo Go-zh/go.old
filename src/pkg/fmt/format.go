@@ -124,7 +124,7 @@ func (f *fmt) pad(b []byte) {
 		f.buf.Write(b)
 		return
 	}
-	padding, left, right := f.computePadding(len(b))
+	padding, left, right := f.computePadding(utf8.RuneCount(b))
 	if left > 0 {
 		f.writePadding(left, padding)
 	}
@@ -523,11 +523,15 @@ func (f *fmt) fmt_c64(v complex64, verb rune) {
 }
 
 // fmt_c128 formats a complex128 according to the verb.
+
+// fmt_c128 格式化 complex128，其形式取决于具体占位符。
 func (f *fmt) fmt_c128(v complex128, verb rune) {
 	f.fmt_complex(real(v), imag(v), 64, verb)
 }
 
 // fmt_complex formats a complex number as (r+ji).
+
+// fmt_complex 格式化复数，其形式为 (r+ji)。
 func (f *fmt) fmt_complex(r, j float64, size int, verb rune) {
 	f.buf.WriteByte('(')
 	oldPlus := f.plus

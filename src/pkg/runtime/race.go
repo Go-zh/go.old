@@ -13,13 +13,6 @@ import (
 	"unsafe"
 )
 
-const (
-	// TODO: where should these live?
-	kindNoPointers = 1 << 7
-	kindArray      = 17
-	kindStruct     = 25
-)
-
 // RaceDisable disables handling of race events in the current goroutine.
 
 // RaceDisable 关闭当前Go程中竞争事件的处理。
