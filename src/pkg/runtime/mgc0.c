@@ -505,12 +505,10 @@ markroot(ParFor *desc, uint32 i)
 	switch(i) {
 	case RootData:
 		scanblock(data, edata - data, work.gcdata);
-		//scanblock(data, edata - data, ScanConservatively);
 		break;
 
 	case RootBss:
 		scanblock(bss, ebss - bss, work.gcbss);
-		//scanblock(bss, ebss - bss, ScanConservatively);
 		break;
 
 	case RootFinalizers:
@@ -572,9 +570,18 @@ markroot(ParFor *desc, uint32 i)
 static Workbuf*
 getempty(Workbuf *b)
 {
+	MCache *c;
+
 	if(b != nil)
 		runtime·lfstackpush(&work.full, &b->node);
-	b = (Workbuf*)runtime·lfstackpop(&work.empty);
+	b = nil;
+	c = g->m->mcache;
+	if(c->gcworkbuf != nil) {
+		b = c->gcworkbuf;
+		c->gcworkbuf = nil;
+	}
+	if(b == nil)
+		b = (Workbuf*)runtime·lfstackpop(&work.empty);
 	if(b == nil)
 		b = runtime·persistentalloc(sizeof(*b), CacheLineSize, &mstats.gc_sys);
 	b->nobj = 0;
@@ -584,7 +591,21 @@ getempty(Workbuf *b)
 static void
 putempty(Workbuf *b)
 {
+	MCache *c;
+
+	c = g->m->mcache;
+	if(c->gcworkbuf == nil) {
+		c->gcworkbuf = b;
+		return;
+	}
 	runtime·lfstackpush(&work.empty, &b->node);
+}
+
+void
+runtime·gcworkbuffree(void *b)
+{
+	if(b != nil)
+		putempty(b);
 }
 
 // Get a full work buffer off the work.full list, or return nil.
@@ -964,7 +985,20 @@ runtime·MSpan_Sweep(MSpan *s)
 			// important to set sweepgen before returning it to heap
 			runtime·atomicstore(&s->sweepgen, sweepgen);
 			sweepgenset = true;
-			// See note about SysFault vs SysFree in malloc.goc.
+			// NOTE(rsc,dvyukov): The original implementation of efence
+			// in CL 22060046 used SysFree instead of SysFault, so that
+			// the operating system would eventually give the memory
+			// back to us again, so that an efence program could run
+			// longer without running out of memory. Unfortunately,
+			// calling SysFree here without any kind of adjustment of the
+			// heap data structures means that when the memory does
+			// come back to us, we have the wrong metadata for it, either in
+			// the MSpan structures or in the garbage collection bitmap.
+			// Using SysFault here means that the program will run out of
+			// memory fairly quickly in efence mode, but at least it won't
+			// have mysterious crashes due to confused memory reuse.
+			// It should be possible to switch back to SysFree if we also
+			// implement and then call some kind of MHeap_DeleteSpan.
 			if(runtime·debug.efence) {
 				s->limit = nil;	// prevent mlookup from finding this span
 				runtime·SysFault(p, size);
@@ -1079,8 +1113,6 @@ runtime·sweepone(void)
 		}
 		if(s->sweepgen != sg-2 || !runtime·cas(&s->sweepgen, sg-2, sg-1))
 			continue;
-		if(s->incache)
-			runtime·throw("sweep of incache span");
 		npages = s->npages;
 		if(!runtime·MSpan_Sweep(s))
 			npages = 0;
@@ -1364,14 +1396,6 @@ gc(struct gc_args *args)
 	if(runtime·debug.allocfreetrace)
 		runtime·tracegc();
 
-	// This is required while we explicitly free objects and have imprecise GC.
-	// If we don't do this, then scanblock can queue an object for scanning;
-	// then another thread frees this object during RootFlushCaches;
-	// then the first thread scans the object; then debug check in scanblock
-	// finds this object already freed and throws.
-	if(Debug)
-		flushallmcaches();
-
 	g->m->traceback = 2;
 	t0 = args->start_time;
 	work.tstart = args->start_time; 
@@ -1514,7 +1538,7 @@ runtime·ReadMemStats(MStats *stats)
 	runtime·updatememstats(nil);
 	// Size of the trailing by_size array differs between Go and C,
 	// NumSizeClasses was changed, but we can not change Go struct because of backward compatibility.
-	runtime·memcopy(runtime·sizeof_C_MStats, stats, &mstats);
+	runtime·memmove(stats, &mstats, runtime·sizeof_C_MStats);
 
 	// Stack numbers are part of the heap numbers, separate those out for user consumption
 	stats->stacks_sys = stats->stacks_inuse;
@@ -1635,7 +1659,6 @@ runfinq(void)
 				f = &fb->fin[i];
 				framesz = sizeof(Eface) + f->nret;
 				if(framecap < framesz) {
-					runtime·free(frame);
 					// The frame does not contain pointers interesting for GC,
 					// all not yet finalized objects are stored in finq.
 					// If we do not mark it as FlagNoScan,
@@ -1970,39 +1993,6 @@ runtime·markallocated_m(void)
 	runtime·markallocated(mp->ptrarg[0], mp->scalararg[0], mp->scalararg[1], mp->ptrarg[1], mp->scalararg[2] == 0);
 	mp->ptrarg[0] = nil;
 	mp->ptrarg[1] = nil;
-}
-
-// mark the block at v as freed.
-void
-runtime·markfreed(void *v)
-{
-	uintptr *b, off, shift, xbits, bits;
-
-	if((byte*)v > (byte*)runtime·mheap.arena_used || (byte*)v < runtime·mheap.arena_start)
-		runtime·throw("markfreed: bad pointer");
-
-	off = (uintptr*)v - (uintptr*)runtime·mheap.arena_start;  // word offset
-	b = (uintptr*)runtime·mheap.arena_start - off/wordsPerBitmapWord - 1;
-	shift = (off % wordsPerBitmapWord) * gcBits;
-	xbits = *b;
-	bits = (xbits>>shift) & bitMask;
-
-	if(bits == bitMiddle)
-		runtime·throw("bad bits in markfreed");
-	if(bits == bitBoundary)
-		return;  // FlagNoGC object
-	if(!g->m->gcing || work.nproc == 1) {
-		// During normal operation (not GC), the span bitmap is not updated concurrently,
-		// because either the span is cached or accesses are protected with MCentral lock.
-		*b = (xbits & ~(bitMask<<shift)) | (bitBoundary<<shift);
-	} else {
-		// During GC other threads concurrently mark heap.
-		for(;;) {
-			xbits = *b;
-			if(runtime·casp((void**)b, (void*)xbits, (void*)((xbits & ~(bitMask<<shift)) | (bitBoundary<<shift))))
-				break;
-		}
-	}
 }
 
 // mark the span of memory at v as having n blocks of the given size.

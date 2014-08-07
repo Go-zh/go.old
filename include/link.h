@@ -107,7 +107,7 @@ struct	Prog
 	uchar	back;	// 6l, 8l
 	uchar	ft;	/* 6l, 8l oclass cache */
 	uchar	tt;	// 6l, 8l
-	uchar	optab;	// 5l
+	uint16	optab;	// 5l
 	uchar	isize;	// 6l, 8l
 
 	char	width;	/* fake for DATA */
@@ -405,7 +405,7 @@ struct	Link
 	int	asmode;
 	uchar*	andptr;
 	uchar	and[100];
-	int32	instoffset;
+	int64	instoffset;
 	int32	autosize;
 	int32	armsize;
 
@@ -431,11 +431,17 @@ struct	Link
 	LSym*	filesyms;
 };
 
+enum {
+	LittleEndian = 0x04030201,
+	BigEndian = 0x01020304,
+};
+
 // LinkArch is the definition of a single architecture.
 struct LinkArch
 {
 	char*	name; // "arm", "amd64", and so on
 	int	thechar;	// '5', '6', and so on
+	int32	endian; // LittleEndian or BigEndian
 
 	void	(*addstacksplit)(Link*, LSym*);
 	void	(*assemble)(Link*, LSym*);
@@ -560,7 +566,7 @@ int	find1(int32 l, int c);
 void	linkgetline(Link *ctxt, int32 line, LSym **f, int32 *l);
 void	histtoauto(Link *ctxt);
 void	mkfwd(LSym*);
-void	nuxiinit(void);
+void	nuxiinit(LinkArch*);
 void	savehist(Link *ctxt, int32 line, int32 off);
 Prog*	copyp(Link*, Prog*);
 Prog*	appendp(Link*, Prog*);
@@ -602,6 +608,8 @@ extern	char*	anames5[];
 extern	char*	anames6[];
 extern	char*	anames8[];
 
+extern	char*	cnames5[];
+
 extern	LinkArch	link386;
 extern	LinkArch	linkamd64;
 extern	LinkArch	linkamd64p32;
@@ -612,6 +620,7 @@ extern	LinkArch	linkarm;
 #pragma	varargck	type	"lD"	Addr*
 #pragma	varargck	type	"P"	Prog*
 #pragma	varargck	type	"R"	int
+#pragma varargck	type	"^"	int
 
 // TODO(ality): remove this workaround.
 //   It's here because Pconv in liblink/list?.c references %L.

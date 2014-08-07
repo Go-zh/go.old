@@ -633,7 +633,7 @@ enum
 typedef	struct	Alg		Alg;
 struct	Alg
 {
-	void	(*hash)(uintptr*, uintptr, void*);
+	FuncVal* hash;
 	void	(*equal)(bool*, uintptr, void*, void*);
 	void	(*print)(uintptr, void*);
 	void	(*copy)(uintptr, void*, void*);
@@ -651,15 +651,19 @@ enum {
 };
 void	runtime·hashinit(void);
 
-void	runtime·memhash(uintptr*, uintptr, void*);
-void	runtime·nohash(uintptr*, uintptr, void*);
-void	runtime·strhash(uintptr*, uintptr, void*);
-void	runtime·interhash(uintptr*, uintptr, void*);
-void	runtime·nilinterhash(uintptr*, uintptr, void*);
-void	runtime·aeshash(uintptr*, uintptr, void*);
-void	runtime·aeshash32(uintptr*, uintptr, void*);
-void	runtime·aeshash64(uintptr*, uintptr, void*);
-void	runtime·aeshashstr(uintptr*, uintptr, void*);
+uintptr	runtime·memhash(void*, uintptr, uintptr);
+uintptr	runtime·nohash(void*, uintptr, uintptr);
+uintptr	runtime·strhash(void*, uintptr, uintptr);
+uintptr	runtime·interhash(void*, uintptr, uintptr);
+uintptr	runtime·nilinterhash(void*, uintptr, uintptr);
+uintptr	runtime·f32hash(void*, uintptr, uintptr);
+uintptr	runtime·f64hash(void*, uintptr, uintptr);
+uintptr	runtime·c64hash(void*, uintptr, uintptr);
+uintptr	runtime·c128hash(void*, uintptr, uintptr);
+uintptr	runtime·aeshash(void*, uintptr, uintptr);
+uintptr	runtime·aeshash32(void*, uintptr, uintptr);
+uintptr	runtime·aeshash64(void*, uintptr, uintptr);
+uintptr	runtime·aeshashstr(void*, uintptr, uintptr);
 
 void	runtime·memequal(bool*, uintptr, void*, void*);
 void	runtime·noequal(bool*, uintptr, void*, void*);
@@ -875,7 +879,6 @@ bool	runtime·efaceeq_c(Eface, Eface);
 uintptr	runtime·ifacehash(Iface, uintptr);
 uintptr	runtime·efacehash(Eface, uintptr);
 void*	runtime·malloc(uintptr size);
-void	runtime·free(void *v);
 void	runtime·runpanic(Panic*);
 uintptr	runtime·getcallersp(void*);
 int32	runtime·mcount(void);
@@ -1062,23 +1065,23 @@ void	runtime·madvise(byte*, uintptr, int32);
 void	runtime·memclr(byte*, uintptr);
 void	runtime·setcallerpc(void*, void*);
 void*	runtime·getcallerpc(void*);
+void	runtime·printbool_c(bool);
+void	runtime·printbyte_c(int8);
+void	runtime·printfloat_c(float64);
+void	runtime·printint_c(int64);
+void	runtime·printiface_c(Iface);
+void	runtime·printeface_c(Eface);
+void	runtime·printstring_c(String);
+void	runtime·printpc_c(void*);
+void	runtime·printpointer_c(void*);
+void	runtime·printuint_c(uint64);
+void	runtime·printhex_c(uint64);
+void	runtime·printslice_c(Slice);
+void	runtime·printcomplex_c(Complex128);
 
 /*
  * runtime go-called
  */
-void	runtime·printbool(bool);
-void	runtime·printbyte(int8);
-void	runtime·printfloat(float64);
-void	runtime·printint(int64);
-void	runtime·printiface(Iface);
-void	runtime·printeface(Eface);
-void	runtime·printstring(String);
-void	runtime·printpc(void*);
-void	runtime·printpointer(void*);
-void	runtime·printuint(uint64);
-void	runtime·printhex(uint64);
-void	runtime·printslice(Slice);
-void	runtime·printcomplex(Complex128);
 void	runtime·newstackcall(FuncVal*, byte*, uint32);
 void	reflect·call(FuncVal*, byte*, uint32, uint32);
 void	runtime·panic(Eface);

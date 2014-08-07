@@ -552,8 +552,8 @@ func (p *Package) loadDWARF(f *File, names []*Name) {
 				n.Const = fmt.Sprintf("%#x", enumVal[i])
 			}
 		}
+		conv.FinishType(pos)
 	}
-
 }
 
 // mangleName does name mangling to translate names
@@ -926,6 +926,12 @@ type typeConv struct {
 	m       map[dwarf.Type]*Type
 	typedef map[string]ast.Expr
 
+	// Map from types to incomplete pointers to those types.
+	ptrs map[dwarf.Type][]*Type
+
+	// Fields to be processed by godefsField after completing pointers.
+	todoFlds [][]*ast.Field
+
 	// Predeclared types.
 	bool                                   ast.Expr
 	byte                                   ast.Expr // denotes padding
@@ -950,6 +956,7 @@ func (c *typeConv) Init(ptrSize, intSize int64) {
 	c.ptrSize = ptrSize
 	c.intSize = intSize
 	c.m = make(map[dwarf.Type]*Type)
+	c.ptrs = make(map[dwarf.Type][]*Type)
 	c.bool = c.Ident("bool")
 	c.byte = c.Ident("byte")
 	c.int8 = c.Ident("int8")
@@ -1029,6 +1036,32 @@ func (tr *TypeRepr) Set(repr string, fargs ...interface{}) {
 	tr.FormatArgs = fargs
 }
 
+// FinishType completes any outstanding type mapping work.
+// In particular, it resolves incomplete pointer types and also runs
+// godefsFields on any new struct types.
+func (c *typeConv) FinishType(pos token.Pos) {
+	// Completing one pointer type might produce more to complete.
+	// Keep looping until they're all done.
+	for len(c.ptrs) > 0 {
+		for dtype := range c.ptrs {
+			// Note Type might invalidate c.ptrs[dtype].
+			t := c.Type(dtype, pos)
+			for _, ptr := range c.ptrs[dtype] {
+				ptr.Go.(*ast.StarExpr).X = t.Go
+				ptr.C.Set("%s*", t.C)
+			}
+			delete(c.ptrs, dtype)
+		}
+	}
+
+	// Now that pointer types are completed, we can invoke godefsFields
+	// to rewrite struct definitions.
+	for _, fld := range c.todoFlds {
+		godefsFields(fld)
+	}
+	c.todoFlds = nil
+}
+
 // Type returns a *Type with the same memory layout as
 // dtype when used as the type of a variable or a struct field.
 func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
@@ -1068,13 +1101,12 @@ func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
 			t.Go = c.Opaque(t.Size)
 			break
 		}
-		gt := &ast.ArrayType{
-			Len: c.intExpr(dt.Count),
-		}
-		t.Go = gt // publish before recursive call
 		sub := c.Type(dt.Type, pos)
 		t.Align = sub.Align
-		gt.Elt = sub.Go
+		t.Go = &ast.ArrayType{
+			Len: c.intExpr(dt.Count),
+			Elt: sub.Go,
+		}
 		t.C.Set("__typeof__(%s[%d])", sub.C, dt.Count)
 
 	case *dwarf.BoolType:
@@ -1184,11 +1216,10 @@ func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
 			break
 		}
 
-		gt := &ast.StarExpr{}
-		t.Go = gt // publish before recursive call
-		sub := c.Type(dt.Type, pos)
-		gt.X = sub.Go
-		t.C.Set("%s*", sub.C)
+		// Placeholder initialization; completed in FinishType.
+		t.Go = &ast.StarExpr{}
+		t.C.Set("<incomplete>*")
+		c.ptrs[dt.Type] = append(c.ptrs[dt.Type], t)
 
 	case *dwarf.QualType:
 		// Ignore qualifier.
@@ -1265,8 +1296,8 @@ func (c *typeConv) Type(dtype dwarf.Type, pos token.Pos) *Type {
 		}
 		name := c.Ident("_Ctype_" + dt.Name)
 		goIdent[name.Name] = name
-		t.Go = name // publish before recursive call
 		sub := c.Type(dt.Type, pos)
+		t.Go = name
 		t.Size = sub.Size
 		t.Align = sub.Align
 		oldType := typedef[name.Name]
@@ -1548,7 +1579,27 @@ func (c *typeConv) Struct(dt *dwarf.StructType, pos token.Pos) (expr *ast.Struct
 			fld = c.pad(fld, f.ByteOffset-off)
 			off = f.ByteOffset
 		}
-		t := c.Type(f.Type, pos)
+
+		name := f.Name
+		ft := f.Type
+
+		// In godefs or cdefs mode, if this field is a C11
+		// anonymous union then treat the first field in the
+		// union as the field in the struct.  This handles
+		// cases like the glibc <sys/resource.h> file; see
+		// issue 6677.
+		if *godefs || *cdefs {
+			if st, ok := f.Type.(*dwarf.StructType); ok && name == "" && st.Kind == "union" && len(st.Field) > 0 && !used[st.Field[0].Name] {
+				name = st.Field[0].Name
+				ident[name] = name
+				ft = st.Field[0].Type
+			}
+		}
+
+		// TODO: Handle fields that are anonymous structs by
+		// promoting the fields of the inner struct.
+
+		t := c.Type(ft, pos)
 		tgo := t.Go
 		size := t.Size
 		talign := t.Align
@@ -1567,17 +1618,18 @@ func (c *typeConv) Struct(dt *dwarf.StructType, pos token.Pos) (expr *ast.Struct
 			talign = size
 		}
 
-		if talign > 0 && f.ByteOffset%talign != 0 {
+		if talign > 0 && f.ByteOffset%talign != 0 && !*cdefs {
 			// Drop misaligned fields, the same way we drop integer bit fields.
 			// The goal is to make available what can be made available.
 			// Otherwise one bad and unneeded field in an otherwise okay struct
 			// makes the whole program not compile. Much of the time these
 			// structs are in system headers that cannot be corrected.
+			// Exception: In -cdefs mode, we use #pragma pack, so misaligned
+			// fields should still work.
 			continue
 		}
 		n := len(fld)
 		fld = fld[0 : n+1]
-		name := f.Name
 		if name == "" {
 			name = fmt.Sprintf("anon%d", anon)
 			anon++
@@ -1604,7 +1656,7 @@ func (c *typeConv) Struct(dt *dwarf.StructType, pos token.Pos) (expr *ast.Struct
 	csyntax = buf.String()
 
 	if *godefs || *cdefs {
-		godefsFields(fld)
+		c.todoFlds = append(c.todoFlds, fld)
 	}
 	expr = &ast.StructType{Fields: &ast.FieldList{List: fld}}
 	return
