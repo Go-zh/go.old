@@ -375,7 +375,7 @@ struct	M
 
 struct P
 {
-	Lock;
+	Lock	lock;
 
 	int32	id;
 	uint32	status;		// one of Pidle/Prunning/...
@@ -506,7 +506,7 @@ enum {
 
 struct	Timers
 {
-	Lock;
+	Lock	lock;
 	G	*timerproc;
 	bool		sleeping;
 	bool		rescheduling;
@@ -634,7 +634,7 @@ typedef	struct	Alg		Alg;
 struct	Alg
 {
 	FuncVal* hash;
-	void	(*equal)(bool*, uintptr, void*, void*);
+	FuncVal* equal;
 	void	(*print)(uintptr, void*);
 	void	(*copy)(uintptr, void*, void*);
 };
@@ -651,27 +651,35 @@ enum {
 };
 void	runtime·hashinit(void);
 
-uintptr	runtime·memhash(void*, uintptr, uintptr);
-uintptr	runtime·nohash(void*, uintptr, uintptr);
-uintptr	runtime·strhash(void*, uintptr, uintptr);
-uintptr	runtime·interhash(void*, uintptr, uintptr);
-uintptr	runtime·nilinterhash(void*, uintptr, uintptr);
-uintptr	runtime·f32hash(void*, uintptr, uintptr);
-uintptr	runtime·f64hash(void*, uintptr, uintptr);
-uintptr	runtime·c64hash(void*, uintptr, uintptr);
-uintptr	runtime·c128hash(void*, uintptr, uintptr);
-uintptr	runtime·aeshash(void*, uintptr, uintptr);
-uintptr	runtime·aeshash32(void*, uintptr, uintptr);
-uintptr	runtime·aeshash64(void*, uintptr, uintptr);
-uintptr	runtime·aeshashstr(void*, uintptr, uintptr);
+void	runtime·memhash(void*, uintptr, uintptr, uintptr);
+void	runtime·nohash(void*, uintptr, uintptr, uintptr);
+void	runtime·strhash(void*, uintptr, uintptr, uintptr);
+void	runtime·interhash(void*, uintptr, uintptr, uintptr);
+void	runtime·nilinterhash(void*, uintptr, uintptr, uintptr);
+void	runtime·f32hash(void*, uintptr, uintptr, uintptr);
+void	runtime·f64hash(void*, uintptr, uintptr, uintptr);
+void	runtime·c64hash(void*, uintptr, uintptr, uintptr);
+void	runtime·c128hash(void*, uintptr, uintptr, uintptr);
+void	runtime·aeshash(void*, uintptr, uintptr, uintptr);
+void	runtime·aeshash32(void*, uintptr, uintptr, uintptr);
+void	runtime·aeshash64(void*, uintptr, uintptr, uintptr);
+void	runtime·aeshashstr(void*, uintptr, uintptr, uintptr);
 
-void	runtime·memequal(bool*, uintptr, void*, void*);
-void	runtime·noequal(bool*, uintptr, void*, void*);
-void	runtime·strequal(bool*, uintptr, void*, void*);
-void	runtime·interequal(bool*, uintptr, void*, void*);
-void	runtime·nilinterequal(bool*, uintptr, void*, void*);
-
-bool	runtime·memeq(void*, void*, uintptr);
+void	runtime·memequal(void*, void*, uintptr, bool);
+void	runtime·noequal(void*, void*, uintptr, bool);
+void	runtime·strequal(void*, void*, uintptr, bool);
+void	runtime·interequal(void*, void*, uintptr, bool);
+void	runtime·nilinterequal(void*, void*, uintptr, bool);
+void	runtime·f32equal(void*, void*, uintptr, bool);
+void	runtime·f64equal(void*, void*, uintptr, bool);
+void	runtime·c64equal(void*, void*, uintptr, bool);
+void	runtime·c128equal(void*, void*, uintptr, bool);
+void	runtime·memequal0(void*, void*, uintptr, bool);
+void	runtime·memequal8(void*, void*, uintptr, bool);
+void	runtime·memequal16(void*, void*, uintptr, bool);
+void	runtime·memequal32(void*, void*, uintptr, bool);
+void	runtime·memequal64(void*, void*, uintptr, bool);
+void	runtime·memequal128(void*, void*, uintptr, bool);
 
 void	runtime·memprint(uintptr, void*);
 void	runtime·strprint(uintptr, void*);
@@ -829,7 +837,6 @@ int32	runtime·snprintf(byte*, int32, int8*, ...);
 byte*	runtime·mchr(byte*, byte, byte*);
 int32	runtime·mcmp(byte*, byte*, uintptr);
 void	runtime·memmove(void*, void*, uintptr);
-void*	runtime·mal(uintptr);
 String	runtime·catstring(String, String);
 String	runtime·gostring(byte*);
 String  runtime·gostringn(byte*, intgo);
@@ -874,11 +881,7 @@ MCache*	runtime·allocmcache(void);
 void	runtime·freemcache(MCache*);
 void	runtime·mallocinit(void);
 void	runtime·chaninit(void);
-bool	runtime·ifaceeq_c(Iface, Iface);
-bool	runtime·efaceeq_c(Eface, Eface);
-uintptr	runtime·ifacehash(Iface, uintptr);
-uintptr	runtime·efacehash(Eface, uintptr);
-void*	runtime·malloc(uintptr size);
+void*	runtime·mallocgc(uintptr size, Type* typ, uint32 flag);
 void	runtime·runpanic(Panic*);
 uintptr	runtime·getcallersp(void*);
 int32	runtime·mcount(void);

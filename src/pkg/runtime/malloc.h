@@ -141,8 +141,8 @@ enum
 	// Max number of threads to run garbage collection.
 	// 2, 3, and 4 are all plausible maximums depending
 	// on the hardware details of the machine.  The garbage
-	// collector scales well to 8 cpus.
-	MaxGcproc = 8,
+	// collector scales well to 32 cpus.
+	MaxGcproc = 32,
 };
 
 // Maximum memory allocation size, a hint for callers.
@@ -370,7 +370,7 @@ struct Special
 typedef struct SpecialFinalizer SpecialFinalizer;
 struct SpecialFinalizer
 {
-	Special;
+	Special		special;
 	FuncVal*	fn;
 	uintptr		nret;
 	Type*		fint;
@@ -382,7 +382,7 @@ typedef struct Bucket Bucket; // from mprof.h
 typedef struct SpecialProfile SpecialProfile;
 struct SpecialProfile
 {
-	Special;
+	Special	special;
 	Bucket*	b;
 };
 
@@ -438,7 +438,7 @@ void	runtime·MSpanList_Remove(MSpan *span);	// from whatever list it is in
 // Central list of free objects of a given size.
 struct MCentral
 {
-	Lock;
+	Lock  lock;
 	int32 sizeclass;
 	MSpan nonempty;	// list of spans with a free object
 	MSpan empty;	// list of spans with no free objects (or cached in an MCache)
@@ -454,7 +454,7 @@ bool	runtime·MCentral_FreeSpan(MCentral *c, MSpan *s, int32 n, MLink *start, ML
 // but all the other global data is here too.
 struct MHeap
 {
-	Lock;
+	Lock  lock;
 	MSpan free[MaxMHeapList];	// free lists of given length
 	MSpan freelarge;		// free lists length >= MaxMHeapList
 	MSpan busy[MaxMHeapList];	// busy lists of large objects of given length
@@ -483,7 +483,7 @@ struct MHeap
 	// spaced CacheLineSize bytes apart, so that each MCentral.Lock
 	// gets its own cache line.
 	struct {
-		MCentral;
+		MCentral mcentral;
 		byte pad[CacheLineSize];
 	} central[NumSizeClasses];
 
@@ -508,18 +508,15 @@ void	runtime·MHeap_Free(MHeap *h, MSpan *s, int32 acct);
 void	runtime·MHeap_FreeStack(MHeap *h, MSpan *s);
 MSpan*	runtime·MHeap_Lookup(MHeap *h, void *v);
 MSpan*	runtime·MHeap_LookupMaybe(MHeap *h, void *v);
-void	runtime·MGetSizeClassInfo(int32 sizeclass, uintptr *size, int32 *npages, int32 *nobj);
 void*	runtime·MHeap_SysAlloc(MHeap *h, uintptr n);
 void	runtime·MHeap_MapBits(MHeap *h);
 void	runtime·MHeap_MapSpans(MHeap *h);
 void	runtime·MHeap_Scavenger(void);
 
-void*	runtime·mallocgc(uintptr size, Type* typ, uint32 flag);
 void*	runtime·persistentalloc(uintptr size, uintptr align, uint64 *stat);
 int32	runtime·mlookup(void *v, byte **base, uintptr *size, MSpan **s);
 void	runtime·gc(int32 force);
 uintptr	runtime·sweepone(void);
-void	runtime·markallocated(void *v, uintptr size, uintptr size0, Type* typ, bool scan);
 void	runtime·markspan(void *v, uintptr size, uintptr n, bool leftover);
 void	runtime·unmarkspan(void *v, uintptr size);
 void	runtime·purgecachedstats(MCache*);
@@ -537,10 +534,7 @@ enum
 {
 	// flags to malloc
 	FlagNoScan	= 1<<0,	// GC doesn't have to scan object
-	FlagNoProfiling	= 1<<1,	// must not profile
-	FlagNoGC	= 1<<2,	// must not free or scan for pointers
-	FlagNoZero	= 1<<3, // don't zero memory
-	FlagNoInvokeGC	= 1<<4, // don't invoke GC
+	FlagNoZero	= 1<<1, // don't zero memory
 };
 
 void	runtime·MProf_Malloc(void*, uintptr);

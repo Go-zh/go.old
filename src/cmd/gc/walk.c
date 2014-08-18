@@ -673,7 +673,7 @@ walkexpr(Node **np, NodeList **init)
 			n1 = nod(OADDR, n->list->n, N);
 		n1->etype = 1; // addr does not escape
 		fn = chanfn("chanrecv2", 2, r->left->type);
-		r = mkcall1(fn, types[TBOOL], init, typename(r->left->type), r->left, n1);
+		r = mkcall1(fn, n->list->next->n->type, init, typename(r->left->type), r->left, n1);
 		n = nod(OAS, n->list->next->n, r);
 		typecheck(&n, Etop);
 		goto ret;
@@ -723,6 +723,12 @@ walkexpr(Node **np, NodeList **init)
 		var->typecheck = 1;
 		fn = mapfn(p, t);
 		r = mkcall1(fn, getoutargx(fn->type), init, typename(t), r->left, key);
+
+		// mapaccess2* returns a typed bool, but due to spec changes,
+		// the boolean result of i.(T) is now untyped so we make it the
+		// same type as the variable on the lhs.
+		if(!isblank(n->list->next->n))
+			r->type->type->down->type = n->list->next->n->type;
 		n->rlist = list1(r);
 		n->op = OAS2FUNC;
 		n->list->n = var;
@@ -770,6 +776,12 @@ walkexpr(Node **np, NodeList **init)
 			*p = '\0';
 			
 			fn = syslook(buf, 1);
+
+			// runtime.assert(E|I)2TOK returns a typed bool, but due
+			// to spec changes, the boolean result of i.(T) is now untyped
+			// so we make it the same type as the variable on the lhs.
+			if(!isblank(n->list->next->n))
+				fn->type->type->down->type->type = n->list->next->n->type;
 			ll = list1(typename(r->type));
 			ll = list(ll, r->left);
 			argtype(fn, r->left->type);
@@ -3013,10 +3025,10 @@ eqfor(Type *t)
 	n = newname(sym);
 	n->class = PFUNC;
 	ntype = nod(OTFUNC, N, N);
-	ntype->list = list(ntype->list, nod(ODCLFIELD, N, typenod(ptrto(types[TBOOL]))));
+	ntype->list = list(ntype->list, nod(ODCLFIELD, N, typenod(ptrto(t))));
+	ntype->list = list(ntype->list, nod(ODCLFIELD, N, typenod(ptrto(t))));
 	ntype->list = list(ntype->list, nod(ODCLFIELD, N, typenod(types[TUINTPTR])));
-	ntype->list = list(ntype->list, nod(ODCLFIELD, N, typenod(ptrto(t))));
-	ntype->list = list(ntype->list, nod(ODCLFIELD, N, typenod(ptrto(t))));
+	ntype->rlist = list(ntype->rlist, nod(ODCLFIELD, N, typenod(types[TBOOL])));
 	typecheck(&ntype, Etype);
 	n->type = ntype->type;
 	return n;
@@ -3037,10 +3049,9 @@ countfield(Type *t)
 static void
 walkcompare(Node **np, NodeList **init)
 {
-	Node *n, *l, *r, *fn, *call, *a, *li, *ri, *expr;
+	Node *n, *l, *r, *call, *a, *li, *ri, *expr;
 	int andor, i;
 	Type *t, *t1;
-	static Node *tempbool;
 	
 	n = *np;
 	
@@ -3058,8 +3069,9 @@ walkcompare(Node **np, NodeList **init)
 		break;
 	}
 	
-	if(!islvalue(n->left) || !islvalue(n->right))
-		goto hard;
+	if(!islvalue(n->left) || !islvalue(n->right)) {
+		fatal("arguments of comparison must be lvalues");
+	}
 
 	l = temp(ptrto(t));
 	a = nod(OAS, l, nod(OADDR, n->left, N));
@@ -3118,55 +3130,14 @@ walkcompare(Node **np, NodeList **init)
 		goto ret;
 	}
 
-	// Chose not to inline, but still have addresses.
-	// Call equality function directly.
-	// The equality function requires a bool pointer for
-	// storing its address, because it has to be callable
-	// from C, and C can't access an ordinary Go return value.
-	// To avoid creating many temporaries, cache one per function.
-	if(tempbool == N || tempbool->curfn != curfn)
-		tempbool = temp(types[TBOOL]);
-	
+	// Chose not to inline.  Call equality function directly.
 	call = nod(OCALL, eqfor(t), N);
-	a = nod(OADDR, tempbool, N);
-	a->etype = 1;  // does not escape
-	call->list = list(call->list, a);
-	call->list = list(call->list, nodintconst(t->width));
 	call->list = list(call->list, l);
 	call->list = list(call->list, r);
-	typecheck(&call, Etop);
-	walkstmt(&call);
-	*init = list(*init, call);
-
-	// tempbool cannot be used directly as multiple comparison
-	// expressions may exist in the same statement. Create another
-	// temporary to hold the value (its address is not taken so it can
-	// be optimized away).
-	r = temp(types[TBOOL]);
-	a = nod(OAS, r, tempbool);
-	typecheck(&a, Etop);
-	walkstmt(&a);
-	*init = list(*init, a);
-
+	call->list = list(call->list, nodintconst(t->width));
+	r = call;
 	if(n->op != OEQ)
 		r = nod(ONOT, r, N);
-	goto ret;
-
-hard:
-	// Cannot take address of one or both of the operands.
-	// Instead, pass directly to runtime helper function.
-	// Easier on the stack than passing the address
-	// of temporary variables, because we are better at reusing
-	// the argument space than temporary variable space.
-	fn = syslook("equal", 1);
-	l = n->left;
-	r = n->right;
-	argtype(fn, n->left->type);
-	argtype(fn, n->left->type);
-	r = mkcall1(fn, n->type, init, typename(n->left->type), l, r);
-	if(n->op == ONE) {
-		r = nod(ONOT, r, N);
-	}
 	goto ret;
 
 ret:

@@ -697,14 +697,6 @@ func StartCPUProfile(w io.Writer) error {
 	// 因此我们不会让每一个客户端都指定频率，而是将这一点作为硬性规定。
 	const hz = 100
 
-	// Avoid queueing behind StopCPUProfile.
-	// Could use TryLock instead if we had it.
-	// 避免在 StopCPUProfile 后面排队。
-	// 如果我们已经开始分析，也可以使用 TryLock 代替。
-	if cpu.profiling {
-		return fmt.Errorf("cpu profiling already in use")
-	}
-
 	cpu.Lock()
 	defer cpu.Unlock()
 	if cpu.done == nil {

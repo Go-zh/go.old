@@ -44,24 +44,35 @@ func roundup(p unsafe.Pointer, n uintptr) unsafe.Pointer {
 func acquirem() *m
 func releasem(mp *m)
 
-// in asm_*.s
-func mcall(fn *byte)
-func onM(fn *byte)
+// An mFunction represents a C function that runs on the M stack.  It
+// can be called from Go using mcall or onM.  Through the magic of
+// linking, an mFunction variable and the corresponding C code entry
+// point live at the same address.
+type mFunction byte
 
-// C routines that run on the M stack.  Call these like
-//   mcall(&mcacheRefill)
+// in asm_*.s
+func mcall(fn *mFunction)
+func onM(fn *mFunction)
+
+// C functions that run on the M stack.  Call these like
+//   mcall(&mcacheRefill_m)
 // Arguments should be passed in m->scalararg[x] and
 // m->ptrarg[x].  Return values can be passed in those
 // same slots.
-var mcacheRefill byte
-var largeAlloc byte
-var mprofMalloc byte
-var mgc2 byte
-var setFinalizer byte
-var markallocated_m byte
+var (
+	mcacheRefill_m,
+	largeAlloc_m,
+	mprofMalloc_m,
+	gc_m,
+	setFinalizer_m,
+	markallocated_m,
+	unrollgcprog_m,
+	unrollgcproginplace_m mFunction
+)
 
 // memclr clears n bytes starting at ptr.
 // in memclr_*.s
+//go:noescape
 func memclr(ptr unsafe.Pointer, n uintptr)
 
 func racemalloc(p unsafe.Pointer, size uintptr)
@@ -69,6 +80,7 @@ func tracealloc(p unsafe.Pointer, size uintptr, typ *_type)
 
 // memmove copies n bytes from "from" to "to".
 // in memmove_*.s
+//go:noescape
 func memmove(to unsafe.Pointer, from unsafe.Pointer, n uintptr)
 
 // in asm_*.s
@@ -79,7 +91,12 @@ const (
 	concurrentSweep  = true
 )
 
-// in asm_*.s
+// Atomic operations to read/write a pointer.
+// in stubs.goc
+func goatomicloadp(p unsafe.Pointer) unsafe.Pointer     // return *p
+func goatomicstorep(p unsafe.Pointer, v unsafe.Pointer) // *p = v
+
+// in stubs.goc
 // if *p == x { *p = y; return true } else { return false }, atomically
 //go:noescape
 func gocas(p *uint32, x uint32, y uint32) bool
@@ -94,23 +111,16 @@ func starttheworld()
 func stoptheworld()
 func clearpools()
 
-// in asm_*.s
-//go:noescape
-func gohash(a *alg, p unsafe.Pointer, size uintptr, seed uintptr) uintptr
-
-// in asm_*.s
-//go:noescape
-func goeq(alg *alg, p, q unsafe.Pointer, size uintptr) bool
-
 // exported value for testing
 var hashLoad = loadFactor
 
 // in asm_*.s
 //go:noescape
-func gomemeq(a, b unsafe.Pointer, size uintptr) bool
+func memeq(a, b unsafe.Pointer, size uintptr) bool
 
-// Code pointer for the nohash algorithm. Used for producing better error messages.
+// Code pointers for the nohash/noequal algorithms. Used for producing better error messages.
 var nohashcode uintptr
+var noequalcode uintptr
 
 // Go version of runtime.throw.
 // in panic.c
@@ -129,6 +139,9 @@ type goalgtype struct {
 	// function for hashing objects of this type
 	// (ptr to object, size, seed) -> hash
 	hash func(unsafe.Pointer, uintptr, uintptr) uintptr
+	// function for comparing objects of this type
+	// (ptr to object A, ptr to object B, size) -> ==?
+	equal func(unsafe.Pointer, unsafe.Pointer, uintptr) bool
 }
 
 func goalg(a *alg) *goalgtype {
@@ -144,3 +157,7 @@ func noescape(p unsafe.Pointer) unsafe.Pointer {
 	x := uintptr(p)
 	return unsafe.Pointer(x ^ 0)
 }
+
+// gopersistentalloc allocates a permanent (not garbage collected)
+// memory region of size n.  Use wisely!
+func gopersistentalloc(n uintptr) unsafe.Pointer

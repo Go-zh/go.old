@@ -9,10 +9,10 @@ import (
 )
 
 const (
-	flagNoScan      = 1 << 0 // GC doesn't have to scan object
-	flagNoProfiling = 1 << 1 // must not profile
-	flagNoZero      = 1 << 3 // don't zero memory
-	flagNoInvokeGC  = 1 << 4 // don't invoke GC
+	debugMalloc = false
+
+	flagNoScan = 1 << 0 // GC doesn't have to scan object
+	flagNoZero = 1 << 1 // don't zero memory
 
 	kindArray      = 17
 	kindFunc       = 19
@@ -30,6 +30,20 @@ const (
 	pageShift = 13
 	pageSize  = 1 << pageShift
 	pageMask  = pageSize - 1
+
+	wordsPerBitmapWord = ptrSize * 8 / 4
+	gcBits             = 4
+	bitsPerPointer     = 2
+	bitsMask           = 1<<bitsPerPointer - 1
+	pointersPerByte    = 8 / bitsPerPointer
+	bitPtrMask         = bitsMask << 2
+	maxGCMask          = 0 // disabled because wastes several bytes of memory
+	bitsDead           = 0
+	bitsPointer        = 2
+
+	bitBoundary = 1
+	bitMarked   = 2
+	bitMask     = bitBoundary | bitMarked
 )
 
 // All zero-sized allocations return a pointer to this byte.
@@ -114,7 +128,7 @@ func gomallocgc(size uintptr, typ *_type, flags int) unsafe.Pointer {
 			v := s.freelist
 			if v == nil {
 				mp.scalararg[0] = tinySizeClass
-				onM(&mcacheRefill)
+				onM(&mcacheRefill_m)
 				s = c.alloc[tinySizeClass]
 				v = s.freelist
 			}
@@ -143,7 +157,7 @@ func gomallocgc(size uintptr, typ *_type, flags int) unsafe.Pointer {
 			v := s.freelist
 			if v == nil {
 				mp.scalararg[0] = uint(sizeclass)
-				onM(&mcacheRefill)
+				onM(&mcacheRefill_m)
 				s = c.alloc[sizeclass]
 				v = s.freelist
 			}
@@ -162,21 +176,117 @@ func gomallocgc(size uintptr, typ *_type, flags int) unsafe.Pointer {
 	} else {
 		mp.scalararg[0] = uint(size)
 		mp.scalararg[1] = uint(flags)
-		onM(&largeAlloc)
+		onM(&largeAlloc_m)
 		s = (*mspan)(mp.ptrarg[0])
 		mp.ptrarg[0] = nil
 		x = unsafe.Pointer(uintptr(s.start << pageShift))
 		size = uintptr(s.elemsize)
 	}
 
-	// TODO: write markallocated in Go
-	mp.ptrarg[0] = x
-	mp.scalararg[0] = uint(size)
-	mp.scalararg[1] = uint(size0)
-	mp.ptrarg[1] = unsafe.Pointer(typ)
-	mp.scalararg[2] = uint(flags & flagNoScan)
-	onM(&markallocated_m)
+	if flags&flagNoScan != 0 {
+		// All objects are pre-marked as noscan.
+		goto marked
+	}
 
+	// From here till marked label marking the object as allocated
+	// and storing type info in the GC bitmap.
+	{
+		arena_start := uintptr(unsafe.Pointer(mheap_.arena_start))
+		off := (uintptr(x) - arena_start) / ptrSize
+		xbits := (*uintptr)(unsafe.Pointer(arena_start - off/wordsPerBitmapWord*ptrSize - ptrSize))
+		shift := (off % wordsPerBitmapWord) * gcBits
+		if debugMalloc && ((*xbits>>shift)&(bitMask|bitPtrMask)) != bitBoundary {
+			println("runtime: bits =", (*xbits>>shift)&(bitMask|bitPtrMask))
+			gothrow("bad bits in markallocated")
+		}
+
+		var ti, te uintptr
+		var ptrmask *uint8
+		if size == ptrSize {
+			// It's one word and it has pointers, it must be a pointer.
+			*xbits |= (bitsPointer << 2) << shift
+			goto marked
+		}
+		if typ != nil && (uintptr(typ.gc[0])|uintptr(typ.gc[1])) != 0 && uintptr(typ.size) > ptrSize {
+			if typ.kind&kindGCProg != 0 {
+				nptr := (uintptr(typ.size) + ptrSize - 1) / ptrSize
+				masksize := nptr
+				if masksize%2 != 0 {
+					masksize *= 2 // repeated
+				}
+				masksize = masksize * pointersPerByte / 8 // 4 bits per word
+				masksize++                                // unroll flag in the beginning
+				if masksize > maxGCMask && typ.gc[1] != 0 {
+					// If the mask is too large, unroll the program directly
+					// into the GC bitmap. It's 7 times slower than copying
+					// from the pre-unrolled mask, but saves 1/16 of type size
+					// memory for the mask.
+					mp.ptrarg[0] = x
+					mp.ptrarg[1] = unsafe.Pointer(typ)
+					mp.scalararg[0] = uint(size)
+					mp.scalararg[1] = uint(size0)
+					onM(&unrollgcproginplace_m)
+					goto marked
+				}
+				ptrmask = (*uint8)(unsafe.Pointer(uintptr(typ.gc[0])))
+				// Check whether the program is already unrolled.
+				if uintptr(goatomicloadp(unsafe.Pointer(ptrmask)))&0xff == 0 {
+					mp.ptrarg[0] = unsafe.Pointer(typ)
+					onM(&unrollgcprog_m)
+				}
+				ptrmask = (*uint8)(add(unsafe.Pointer(ptrmask), 1)) // skip the unroll flag byte
+			} else {
+				ptrmask = (*uint8)(unsafe.Pointer(&typ.gc[0])) // embed mask
+			}
+			if size == 2*ptrSize {
+				xbitsb := (*uint8)(add(unsafe.Pointer(xbits), shift/8))
+				*xbitsb = *ptrmask | bitBoundary
+				goto marked
+			}
+			te = uintptr(typ.size) / ptrSize
+			// If the type occupies odd number of words, its mask is repeated.
+			if te%2 == 0 {
+				te /= 2
+			}
+		}
+		if size == 2*ptrSize {
+			xbitsb := (*uint8)(add(unsafe.Pointer(xbits), shift/8))
+			*xbitsb = (bitsPointer << 2) | (bitsPointer << 6) | bitBoundary
+			goto marked
+		}
+		// Copy pointer bitmask into the bitmap.
+		for i := uintptr(0); i < size0; i += 2 * ptrSize {
+			v := uint8((bitsPointer << 2) | (bitsPointer << 6))
+			if ptrmask != nil {
+				v = *(*uint8)(add(unsafe.Pointer(ptrmask), ti))
+				ti++
+				if ti == te {
+					ti = 0
+				}
+			}
+			if i == 0 {
+				v |= bitBoundary
+			}
+			if i+ptrSize == size0 {
+				v &^= uint8(bitPtrMask << 4)
+			}
+
+			off := (uintptr(x) + i - arena_start) / ptrSize
+			xbits := (*uintptr)(unsafe.Pointer(arena_start - off/wordsPerBitmapWord*ptrSize - ptrSize))
+			shift := (off % wordsPerBitmapWord) * gcBits
+			xbitsb := (*uint8)(add(unsafe.Pointer(xbits), shift/8))
+			*xbitsb = v
+		}
+		if size0%(2*ptrSize) == 0 && size0 < size {
+			// Mark the word after last object's word as bitsDead.
+			off := (uintptr(x) + size0 - arena_start) / ptrSize
+			xbits := (*uintptr)(unsafe.Pointer(arena_start - off/wordsPerBitmapWord*ptrSize - ptrSize))
+			shift := (off % wordsPerBitmapWord) * gcBits
+			xbitsb := (*uint8)(add(unsafe.Pointer(xbits), shift/8))
+			*xbitsb = bitsDead << 2
+		}
+	}
+marked:
 	mp.mallocing = 0
 
 	if raceenabled {
@@ -185,20 +295,18 @@ func gomallocgc(size uintptr, typ *_type, flags int) unsafe.Pointer {
 	if debug.allocfreetrace != 0 {
 		tracealloc(x, size, typ)
 	}
-	if flags&flagNoProfiling == 0 {
-		rate := MemProfileRate
-		if rate > 0 {
-			if size < uintptr(rate) && int32(size) < c.next_sample {
-				c.next_sample -= int32(size)
-			} else {
-				profilealloc(mp, x, size)
-			}
+
+	if rate := MemProfileRate; rate > 0 {
+		if size < uintptr(rate) && int32(size) < c.next_sample {
+			c.next_sample -= int32(size)
+		} else {
+			profilealloc(mp, x, size)
 		}
 	}
 
 	releasem(mp)
 
-	if flags&flagNoInvokeGC == 0 && memstats.heap_alloc >= memstats.next_gc {
+	if memstats.heap_alloc >= memstats.next_gc {
 		gogc(0)
 	}
 
@@ -272,7 +380,7 @@ func profilealloc(mp *m, x unsafe.Pointer, size uintptr) {
 	}
 	mp.scalararg[0] = uint(size)
 	mp.ptrarg[0] = x
-	onM(&mprofMalloc)
+	onM(&mprofMalloc_m)
 }
 
 // force = 1 - do GC regardless of current heap usage
@@ -341,7 +449,7 @@ func gogc(force int32) {
 		} else {
 			mp.scalararg[1] = 0
 		}
-		onM(&mgc2)
+		onM(&gc_m)
 	}
 
 	// all done
@@ -453,6 +561,6 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 	mp.ptrarg[1] = e.data
 	mp.ptrarg[2] = unsafe.Pointer(ftyp)
 	mp.ptrarg[3] = f.data
-	onM(&setFinalizer)
+	onM(&setFinalizer_m)
 	releasem(mp)
 }

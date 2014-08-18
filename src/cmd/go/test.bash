@@ -105,6 +105,58 @@ cp -R testdata/local "testdata/$bad"
 testlocal "$bad" 'with bad characters in path'
 rm -rf "testdata/$bad"
 
+TEST 'internal packages in $GOROOT are respected'
+if ./testgo build -v ./testdata/testinternal >testdata/std.out 2>&1; then
+	echo "go build ./testdata/testinternal succeeded incorrectly"
+	ok=false
+elif ! grep 'use of internal package not allowed' testdata/std.out >/dev/null; then
+	echo "wrong error message for testdata/testinternal"
+	cat std.out
+	ok=false
+fi
+
+TEST 'internal packages outside $GOROOT are not respected'
+if ! ./testgo build -v ./testdata/testinternal2; then
+	echo "go build ./testdata/testinternal2 failed"
+	ok=false
+fi
+
+export GOPATH=$(pwd)/testdata/importcom
+TEST 'import comment - match'
+if ! ./testgo build ./testdata/importcom/works.go; then
+	echo 'go build ./testdata/importcom/works.go failed'
+	ok=false
+fi
+TEST 'import comment - mismatch'
+if ./testgo build ./testdata/importcom/wrongplace.go 2>testdata/err; then
+	echo 'go build ./testdata/importcom/wrongplace.go suceeded'
+	ok=false
+elif ! grep 'wrongplace expects import "my/x"' testdata/err >/dev/null; then
+	echo 'go build did not mention incorrect import:'
+	cat testdata/err
+	ok=false
+fi
+TEST 'import comment - syntax error'
+if ./testgo build ./testdata/importcom/bad.go 2>testdata/err; then
+	echo 'go build ./testdata/importcom/bad.go suceeded'
+	ok=false
+elif ! grep 'cannot parse import comment' testdata/err >/dev/null; then
+	echo 'go build did not mention syntax error:'
+	cat testdata/err
+	ok=false
+fi
+TEST 'import comment - conflict'
+if ./testgo build ./testdata/importcom/conflict.go 2>testdata/err; then
+	echo 'go build ./testdata/importcom/conflict.go suceeded'
+	ok=false
+elif ! grep 'found import comments' testdata/err >/dev/null; then
+	echo 'go build did not mention comment conflict:'
+	cat testdata/err
+	ok=false
+fi
+rm -f ./testdata/err
+unset GOPATH
+
 TEST error message for syntax error in test go file says FAIL
 export GOPATH=$(pwd)/testdata
 if ./testgo test syntaxerror 2>testdata/err; then
@@ -524,6 +576,17 @@ fi
 TEST go get cover
 ./testgo get code.google.com/p/go.tools/cmd/cover || ok=false
 
+unset GOPATH
+rm -rf $d
+
+TEST go get -t "code.google.com/p/go-get-issue-8181/{a,b}"
+d=$(TMPDIR=/var/tmp mktemp -d -t testgoXXX)
+export GOPATH=$d
+if ./testgo get -t code.google.com/p/go-get-issue-8181/{a,b}; then
+	./testgo list ... | grep go.tools/godoc > /dev/null || ok=false
+else
+	ok=false
+fi
 unset GOPATH
 rm -rf $d
 

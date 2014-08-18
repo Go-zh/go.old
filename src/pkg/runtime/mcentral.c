@@ -19,7 +19,6 @@
 #include "malloc.h"
 
 static bool MCentral_Grow(MCentral *c);
-static void MCentral_ReturnToHeap(MCentral *c, MSpan *s);
 
 // Initialize a single central free list.
 void
@@ -38,14 +37,14 @@ runtime·MCentral_CacheSpan(MCentral *c)
 	int32 cap, n;
 	uint32 sg;
 
-	runtime·lock(c);
+	runtime·lock(&c->lock);
 	sg = runtime·mheap.sweepgen;
 retry:
 	for(s = c->nonempty.next; s != &c->nonempty; s = s->next) {
 		if(s->sweepgen == sg-2 && runtime·cas(&s->sweepgen, sg-2, sg-1)) {
-			runtime·unlock(c);
+			runtime·unlock(&c->lock);
 			runtime·MSpan_Sweep(s);
-			runtime·lock(c);
+			runtime·lock(&c->lock);
 			// the span could have been moved to heap, retry
 			goto retry;
 		}
@@ -64,9 +63,9 @@ retry:
 			runtime·MSpanList_Remove(s);
 			// swept spans are at the end of the list
 			runtime·MSpanList_InsertBack(&c->empty, s);
-			runtime·unlock(c);
+			runtime·unlock(&c->lock);
 			runtime·MSpan_Sweep(s);
-			runtime·lock(c);
+			runtime·lock(&c->lock);
 			// the span could be moved to nonempty or heap, retry
 			goto retry;
 		}
@@ -81,7 +80,7 @@ retry:
 
 	// Replenish central list if empty.
 	if(!MCentral_Grow(c)) {
-		runtime·unlock(c);
+		runtime·unlock(&c->lock);
 		return nil;
 	}
 	goto retry;
@@ -96,7 +95,7 @@ havespan:
 	runtime·MSpanList_Remove(s);
 	runtime·MSpanList_InsertBack(&c->empty, s);
 	s->incache = true;
-	runtime·unlock(c);
+	runtime·unlock(&c->lock);
 	return s;
 }
 
@@ -106,23 +105,20 @@ runtime·MCentral_UncacheSpan(MCentral *c, MSpan *s)
 {
 	int32 cap, n;
 
-	runtime·lock(c);
+	runtime·lock(&c->lock);
 
 	s->incache = false;
 
-	if(s->ref == 0) {
-		// Free back to heap.  Unlikely, but possible.
-		MCentral_ReturnToHeap(c, s); // unlocks c
-		return;
-	}
-	
+	if(s->ref == 0)
+		runtime·throw("uncaching full span");
+
 	cap = (s->npages << PageShift) / s->elemsize;
 	n = cap - s->ref;
 	if(n > 0) {
 		runtime·MSpanList_Remove(s);
 		runtime·MSpanList_Insert(&c->nonempty, s);
 	}
-	runtime·unlock(c);
+	runtime·unlock(&c->lock);
 }
 
 // Free n objects from a span s back into the central free list c.
@@ -134,7 +130,7 @@ runtime·MCentral_FreeSpan(MCentral *c, MSpan *s, int32 n, MLink *start, MLink *
 {
 	if(s->incache)
 		runtime·throw("freespan into cached span");
-	runtime·lock(c);
+	runtime·lock(&c->lock);
 
 	// Move to nonempty if necessary.
 	if(s->freelist == nil) {
@@ -154,26 +150,18 @@ runtime·MCentral_FreeSpan(MCentral *c, MSpan *s, int32 n, MLink *start, MLink *
 	runtime·atomicstore(&s->sweepgen, runtime·mheap.sweepgen);
 
 	if(s->ref != 0) {
-		runtime·unlock(c);
+		runtime·unlock(&c->lock);
 		return false;
 	}
 
 	// s is completely freed, return it to the heap.
-	MCentral_ReturnToHeap(c, s); // unlocks c
+	runtime·MSpanList_Remove(s);
+	s->needzero = 1;
+	s->freelist = nil;
+	runtime·unlock(&c->lock);
+	runtime·unmarkspan((byte*)(s->start<<PageShift), s->npages<<PageShift);
+	runtime·MHeap_Free(&runtime·mheap, s, 0);
 	return true;
-}
-
-void
-runtime·MGetSizeClassInfo(int32 sizeclass, uintptr *sizep, int32 *npagesp, int32 *nobj)
-{
-	int32 size;
-	int32 npages;
-
-	npages = runtime·class_to_allocnpages[sizeclass];
-	size = runtime·class_to_size[sizeclass];
-	*npagesp = npages;
-	*sizep = size;
-	*nobj = (npages << PageShift) / size;
 }
 
 // Fetch a new span from the heap and
@@ -181,18 +169,19 @@ runtime·MGetSizeClassInfo(int32 sizeclass, uintptr *sizep, int32 *npagesp, int3
 static bool
 MCentral_Grow(MCentral *c)
 {
-	int32 i, n, npages;
-	uintptr size;
+	uintptr size, npages, i, n;
 	MLink **tailp, *v;
 	byte *p;
 	MSpan *s;
 
-	runtime·unlock(c);
-	runtime·MGetSizeClassInfo(c->sizeclass, &size, &npages, &n);
+	runtime·unlock(&c->lock);
+	npages = runtime·class_to_allocnpages[c->sizeclass];
+	size = runtime·class_to_size[c->sizeclass];
+	n = (npages << PageShift) / size;
 	s = runtime·MHeap_Alloc(&runtime·mheap, npages, c->sizeclass, 0, 1);
 	if(s == nil) {
 		// TODO(rsc): Log out of memory
-		runtime·lock(c);
+		runtime·lock(&c->lock);
 		return false;
 	}
 
@@ -209,21 +198,7 @@ MCentral_Grow(MCentral *c)
 	*tailp = nil;
 	runtime·markspan((byte*)(s->start<<PageShift), size, n, size*n < (s->npages<<PageShift));
 
-	runtime·lock(c);
+	runtime·lock(&c->lock);
 	runtime·MSpanList_Insert(&c->nonempty, s);
 	return true;
-}
-
-// Return s to the heap.  s must be unused (s->ref == 0).  Unlocks c.
-static void
-MCentral_ReturnToHeap(MCentral *c, MSpan *s)
-{
-	runtime·MSpanList_Remove(s);
-	s->needzero = 1;
-	s->freelist = nil;
-	if(s->ref != 0)
-		runtime·throw("ref wrong");
-	runtime·unlock(c);
-	runtime·unmarkspan((byte*)(s->start<<PageShift), s->npages<<PageShift);
-	runtime·MHeap_Free(&runtime·mheap, s, 0);
 }

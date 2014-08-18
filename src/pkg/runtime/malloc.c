@@ -35,12 +35,6 @@ runtime·mallocgc(uintptr size, Type *typ, uint32 flag)
 	return ret;
 }
 
-void*
-runtime·malloc(uintptr size)
-{
-	return runtime·mallocgc(size, nil, FlagNoInvokeGC);
-}
-
 int32
 runtime·mlookup(void *v, byte **base, uintptr *size, MSpan **sp)
 {
@@ -51,9 +45,9 @@ runtime·mlookup(void *v, byte **base, uintptr *size, MSpan **sp)
 	g->m->mcache->local_nlookup++;
 	if (sizeof(void*) == 4 && g->m->mcache->local_nlookup >= (1<<30)) {
 		// purge cache stats to prevent overflow
-		runtime·lock(&runtime·mheap);
+		runtime·lock(&runtime·mheap.lock);
 		runtime·purgecachedstats(g->m->mcache);
-		runtime·unlock(&runtime·mheap);
+		runtime·unlock(&runtime·mheap.lock);
 	}
 
 	s = runtime·MHeap_LookupMaybe(&runtime·mheap, v);
@@ -347,7 +341,7 @@ runtime·MHeap_SysAlloc(MHeap *h, uintptr n)
 
 static struct
 {
-	Lock;
+	Lock	lock;
 	byte*	pos;
 	byte*	end;
 } persistent;
@@ -376,19 +370,19 @@ runtime·persistentalloc(uintptr size, uintptr align, uint64 *stat)
 		align = 8;
 	if(size >= PersistentAllocMaxBlock)
 		return runtime·SysAlloc(size, stat);
-	runtime·lock(&persistent);
+	runtime·lock(&persistent.lock);
 	persistent.pos = (byte*)ROUND((uintptr)persistent.pos, align);
 	if(persistent.pos + size > persistent.end) {
 		persistent.pos = runtime·SysAlloc(PersistentAllocChunk, &mstats.other_sys);
 		if(persistent.pos == nil) {
-			runtime·unlock(&persistent);
+			runtime·unlock(&persistent.lock);
 			runtime·throw("runtime: cannot allocate memory");
 		}
 		persistent.end = persistent.pos + PersistentAllocChunk;
 	}
 	p = persistent.pos;
 	persistent.pos += size;
-	runtime·unlock(&persistent);
+	runtime·unlock(&persistent.lock);
 	if(stat != &mstats.other_sys) {
 		// reaccount the allocation against provided stat
 		runtime·xadd64(stat, size);
@@ -398,12 +392,6 @@ runtime·persistentalloc(uintptr size, uintptr align, uint64 *stat)
 }
 
 // Runtime stubs.
-
-void*
-runtime·mal(uintptr n)
-{
-	return runtime·mallocgc(n, nil, 0);
-}
 
 static void*
 cnew(Type *typ, intgo n)
@@ -514,7 +502,7 @@ throw:
 }
 
 void
-runtime·setFinalizer(void)
+runtime·setFinalizer_m(void)
 {
 	Eface obj, finalizer;
 
@@ -531,13 +519,13 @@ runtime·setFinalizer(void)
 
 // mcallable cache refill
 void 
-runtime·mcacheRefill(void)
+runtime·mcacheRefill_m(void)
 {
 	runtime·MCache_Refill(g->m->mcache, (int32)g->m->scalararg[0]);
 }
 
 void
-runtime·largeAlloc(void)
+runtime·largeAlloc_m(void)
 {
 	uintptr npages, size;
 	MSpan *s;

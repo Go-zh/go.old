@@ -307,14 +307,14 @@ class CL(object):
 		dir = CodeReviewDir(ui, repo)
 		os.unlink(dir + "/cl." + self.name)
 
-	def Subject(self):
+	def Subject(self, ui, repo):
 		s = line1(self.desc)
 		if len(s) > 60:
 			s = s[0:55] + "..."
 		if self.name != "new":
 			s = "code review %s: %s" % (self.name, s)
 		typecheck(s, str)
-		return s
+		return branch_prefix(ui, repo) + s
 
 	def Upload(self, ui, repo, send_mail=False, gofmt=True, gofmt_just_warn=False, creating=False, quiet=False):
 		if not self.files and not creating:
@@ -323,6 +323,7 @@ class CL(object):
 			CheckFormat(ui, repo, self.files, just_warn=gofmt_just_warn)
 		set_status("uploading CL metadata + diffs")
 		os.chdir(repo.root)
+
 		form_fields = [
 			("content_upload", "1"),
 			("reviewers", JoinComma(self.reviewer)),
@@ -358,7 +359,8 @@ class CL(object):
 			form_fields.append(("subject", "diff -r " + vcs.base_rev + " " + ui.expandpath("default")))
 		else:
 			# First upload sets the subject for the CL itself.
-			form_fields.append(("subject", self.Subject()))
+			form_fields.append(("subject", self.Subject(ui, repo)))
+		
 		ctype, body = EncodeMultipartFormData(form_fields, uploaded_diff_file)
 		response_body = MySend("/upload", body, content_type=ctype)
 		patchset = None
@@ -387,6 +389,8 @@ class CL(object):
 		if vcs:
 			set_status("uploading base files")
 			vcs.UploadBaseFiles(issue, rpc, patches, patchset, upload_options, files)
+		if patchset != "1":
+			MySend("/" + issue + "/upload_complete/" + patchset, payload="")
 		if send_mail:
 			set_status("sending mail")
 			MySend("/" + issue + "/mail", payload="")
@@ -403,11 +407,15 @@ class CL(object):
 		pmsg += "\n"
 		repourl = ui.expandpath("default")
 		if not self.mailed:
-			pmsg += "I'd like you to review this change to\n" + repourl + "\n"
+			pmsg += "I'd like you to review this change to"
+			branch = repo[None].branch()
+			if branch.startswith("dev."):
+				pmsg += " the " + branch + " branch of"
+			pmsg += "\n" + repourl + "\n"
 		else:
 			pmsg += "Please take another look.\n"
 		typecheck(pmsg, str)
-		PostMessage(ui, self.name, pmsg, subject=self.Subject())
+		PostMessage(ui, self.name, pmsg, subject=self.Subject(ui, repo))
 		self.mailed = True
 		self.Flush(ui, repo)
 
@@ -1333,7 +1341,7 @@ def change(ui, repo, *pats, **opts):
 	else:
 		name = "new"
 		cl = CL("new")
-		if repo[None].branch() != "default":
+		if not workbranch(repo[None].branch()):
 			raise hg_util.Abort("cannot create CL outside default branch; switch with 'hg update default'")
 		dirty[cl] = True
 		files = ChangedFiles(ui, repo, pats, taken=Taken(ui, repo))
@@ -1434,7 +1442,7 @@ def clpatch(ui, repo, clname, **opts):
 	Submitting an imported patch will keep the original author's
 	name as the Author: line but add your own name to a Committer: line.
 	"""
-	if repo[None].branch() != "default":
+	if not workbranch(repo[None].branch()):
 		raise hg_util.Abort("cannot run hg clpatch outside default branch")
 	err = clpatch_or_undo(ui, repo, clname, opts, mode="clpatch")
 	if err:
@@ -1448,7 +1456,7 @@ def undo(ui, repo, clname, **opts):
 	After creating the CL, opens the CL text for editing so that
 	you can add the reason for the undo to the description.
 	"""
-	if repo[None].branch() != "default":
+	if not workbranch(repo[None].branch()):
 		raise hg_util.Abort("cannot run hg undo outside default branch")
 	err = clpatch_or_undo(ui, repo, clname, opts, mode="undo")
 	if err:
@@ -1910,6 +1918,13 @@ def pending(ui, repo, *pats, **opts):
 def need_sync():
 	raise hg_util.Abort("local repository out of date; must sync before submit")
 
+def branch_prefix(ui, repo):
+	prefix = ""
+	branch = repo[None].branch()
+	if branch.startswith("dev."):
+		prefix = "[" + branch + "] "
+	return prefix
+
 @hgcommand
 def submit(ui, repo, *pats, **opts):
 	"""submit change to remote repository
@@ -1979,7 +1994,7 @@ def submit(ui, repo, *pats, **opts):
 		cl.Mail(ui, repo)
 
 	# submit changes locally
-	message = cl.desc.rstrip() + "\n\n" + about
+	message = branch_prefix(ui, repo) + cl.desc.rstrip() + "\n\n" + about
 	typecheck(message, str)
 
 	set_status("pushing " + cl.name + " to remote server")
@@ -1989,12 +2004,22 @@ def submit(ui, repo, *pats, **opts):
 	
 	old_heads = len(hg_heads(ui, repo).split())
 
+	# Normally we commit listing the specific files in the CL.
+	# If there are no changed files other than those in the CL, however,
+	# let hg build the list, because then committing a merge works.
+	# (You cannot name files for a merge commit, even if you name
+	# all the files that would be committed by not naming any.)
+	files = ['path:'+f for f in cl.files]
+	if ChangedFiles(ui, repo, []) == cl.files:
+		files = []
+
 	global commit_okay
 	commit_okay = True
-	ret = hg_commit(ui, repo, *['path:'+f for f in cl.files], message=message, user=userline)
+	ret = hg_commit(ui, repo, *files, message=message, user=userline)
 	commit_okay = False
 	if ret:
 		raise hg_util.Abort("nothing changed")
+
 	node = repo["-1"].node()
 	# push to remote; if it fails for any reason, roll back
 	try:
@@ -2699,6 +2724,9 @@ def RietveldSetup(ui, repo):
 	for t in tags:
 		if t.startswith('release-branch.go'):
 			releaseBranch = t			
+
+def workbranch(name):
+	return name == "default" or name.startswith('dev.')
 
 #######################################################################
 # http://codereview.appspot.com/static/upload.py, heavily edited.
@@ -3464,11 +3492,23 @@ class MercurialVCS(VersionControlSystem):
 		if not err and mqparent != "":
 			self.base_rev = mqparent
 		else:
-			out = RunShell(["hg", "parents", "-q"], silent_ok=True).strip()
+			out = RunShell(["hg", "parents", "-q", "--template={node} {branch}"], silent_ok=True).strip()
 			if not out:
 				# No revisions; use 0 to mean a repository with nothing.
-				out = "0:0"
-			self.base_rev = out.split(':')[1].strip()
+				out = "0:0 default"
+			
+			# Find parent along current branch.
+			branch = repo[None].branch()
+			base = ""
+			for line in out.splitlines():
+				fields = line.strip().split(' ')
+				if fields[1] == branch:
+					base = fields[0]
+					break
+			if base == "":
+				# Use the first parent
+				base = out.strip().split(' ')[0]
+			self.base_rev = base
 
 	def _GetRelPath(self, filename):
 		"""Get relative path of a file according to the current directory,

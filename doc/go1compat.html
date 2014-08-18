@@ -305,6 +305,35 @@ with the Go 1 point releases.
 </p>
 
 <div class="english">
+<h2 id="operating_systems">Operating systems</h2>
+</div>
+
+<h2 id="操作系统">操作系统</h2>
+
+<div class="english">
+<p>
+It is impossible to guarantee long-term compatibility with operating
+system interfaces, which are changed by outside parties.
+The <a href="/pkg/syscall/"><code>syscall</code></a> package
+is therefore outside the purview of the guarantees made here.
+As of Go version 1.4, the <code>syscall</code> package is frozen.
+Any evolution of the system call interface must be supported elsewhere,
+such as in the
+<a href="http://godoc.org/code.google.com/p/go.sys">go.sys</a> subrepository.
+For details and background, see
+<a href="https://golang.org/s/go1.4-syscall">this document</a>.
+</p>
+</div>
+
+<p>
+Go语言无法保证与系统接口的长期兼容性，因为它们会被外部用户修改。
+因此 <a href="/pkg/syscall/"><code>syscall</code></a> 包不在本文所做的担保之内。
+截至 Go 1.4 版本，<code>syscall</code> 包将会被冻结。任何系统调用接口的发展必须在其它地方支持，
+如 <a href="http://godoc.org/code.google.com/p/go.sys">go.sys</a> 子代码库。
+更多详情与背景见<a href="https://golang.org/s/go1.4-syscall">此文档</a>。
+</p>
+
+<div class="english">
 <h2 id="tools">Tools</h2>
 </div>
 

@@ -122,14 +122,15 @@ import (
 	"time"
 )
 
-// ErrHelp is the error returned if the flag -help is invoked but no such flag is defined.
+// ErrHelp is the error returned if the -help or -h flag is invoked
+// but no such flag is defined.
 
-// ErrHelp的使用场景是：标签 -help被调用，但没有定义help标签。
+// ErrHelp 在 -help 或 -h 标志未定义却调用了它时返回一个错误。
 var ErrHelp = errors.New("flag: help requested")
 
 // -- bool Value
 
-// -- bool值
+// -- bool 值
 type boolValue bool
 
 func newBoolValue(val bool, p *bool) *boolValue {
@@ -1041,11 +1042,11 @@ func (f *FlagSet) parseOne() (bool, error) {
 // Parse parses flag definitions from the argument list, which should not
 // include the command name.  Must be called after all flags in the FlagSet
 // are defined and before flags are accessed by the program.
-// The return value will be ErrHelp if -help was set but not defined.
+// The return value will be ErrHelp if -help or -h were set but not defined.
 
 // Parse从参数列表中解析定义的标签，这个参数列表并不包含执行的命令名字。
 // 这个方法调用时间点必须在FlagSet的所有标签都定义之后，程序访问这些标签之前。
-// 当-help标签没有定义却被调用了的时候，这个方法返回ErrHelp。
+// 当 -help 或 -h 标签没有定义却被调用了的时候，这个方法返回 ErrHelp。
 func (f *FlagSet) Parse(arguments []string) error {
 	f.parsed = true
 	f.args = arguments

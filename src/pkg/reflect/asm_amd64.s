@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-#include "../../cmd/ld/textflag.h"
+#include "textflag.h"
 
 // makeFuncStub is the code half of the function returned by MakeFunc.
 // See the comment on the declaration of makeFuncStub in makefunc.go
@@ -46,3 +46,9 @@ TEXT ·maplen(SB),NOSPLIT,$0-0
 	JMP	runtime·reflect_maplen(SB)
 TEXT ·ismapkey(SB),NOSPLIT,$0-0
 	JMP	runtime·reflect_ismapkey(SB)
+TEXT ·ifaceE2I(SB),NOSPLIT,$0-0
+	JMP	runtime·reflect_ifaceE2I(SB)
+TEXT ·unsafe_New(SB),NOSPLIT,$0-0
+	JMP	runtime·newobject(SB)
+TEXT ·unsafe_NewArray(SB),NOSPLIT,$0-0
+	JMP	runtime·newarray(SB)
