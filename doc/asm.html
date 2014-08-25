@@ -1,5 +1,5 @@
 <!--{
-	"Title": "Go汇编器快速指南",
+	"Title": "Go 汇编器快速指南",
 	"Path":  "/doc/asm"
 }-->
 
@@ -12,13 +12,19 @@
 <h2 id="introduction">A Quick Guide to Go's Assembler</h2>
 </div>
 
-<h2 id="引言">Go汇编快速指南</h2>
+<h2 id="引言">Go 汇编快速指南</h2>
 
 <div class="english">
 <p>
 This document is a quick outline of the unusual form of assembly language used by the <code>gc</code>
 suite of Go compilers (<code>6g</code>, <code>8g</code>, etc.).
 The document is not comprehensive.
+</p>
+</div>
+
+<p>
+本文档简述了 Go 编译器套件（<code>6g</code>、<code>8g</code> 等）中 <code>gc</code>
+使用的非一般形式的汇编语言。本文档并不全面。
 </p>
 
 <p>
@@ -28,14 +34,12 @@ If you plan to write assembly language, you should read that document although m
 This document provides a summary of the syntax and
 describes the peculiarities that apply when writing assembly code to interact with Go.
 </p>
-</div>
 
 <p>
-此文档简述了Go编译器套件（<code>6g</code>、<code>8g</code> 等）中 <code>gc</code>
-使用的非一般形式的汇编语言。它基于Plan 9汇编的输入，详情见
-<a href="http://plan9.bell-labs.com/sys/doc/asm.html">Plan 9</a>上的文档。
-尽管它是Plan 9的规范，但你若想编写汇编语言，同样需要阅读该文档。本文档提供了语法的概括，
-并描述了编写汇编代码与Go交互时所要用到的特性。
+该汇编器基于 Plan 9 汇编的输入，详情见
+<a href="http://plan9.bell-labs.com/sys/doc/asm.html">Plan 9 网站</a> 上的文档。
+尽管它是 Plan 9 的规范，但你若想编写汇编语言，同样需要阅读该文档。本文档提供了语法的概要，
+并描述了编写汇编代码与 Go 交互时所要用到的特性。
 </p>
 
 <div class="english">
@@ -57,7 +61,7 @@ The details vary with architecture, and we apologize for the imprecision; the si
 </div>
 
 <p>
-关于Go的汇编，最重要的一点就是它并非底层机器码的直接表示。其中有些细节与机器码精确对应，
+关于 Go 的汇编，最重要的一点就是它并非底层机器码的直接表示。其中有些细节与机器码精确对应，
 有些则不是。这是因为该编译器套件
 （见<a href="http://plan9.bell-labs.com/sys/doc/compiler.html">此描述</a>）
 并不需要在普通管道中传递汇编，而是由编译器按二进制形式产生一种未完整定义的指令集，
@@ -119,12 +123,12 @@ for use by the garbage collector; they are introduced by the compiler.
 </p>
 </div>
 
-<!-- Commenting out because the feature is gone but it's popular and may come back.
-
 <p>
 <code>FUNCDATA</code> 和 <code>PCDATA</code> 命令包含了垃圾回收器所要用到的信息，
 它们由编译器引入。
 </p>
+
+<!-- Commenting out because the feature is gone but it's popular and may come back.
 
 <div class="english">
 <p>
@@ -214,7 +218,7 @@ and offsets match.
 就是函数的第一个实参，而 <code>8(FP)</code> 就是第二个（在64位机器上），依次类推。
 当通过这种方式引用一个函数实参时，约定将名字放在前面，就像 <code>first_arg+0(FP)</code>
 和 <code>second_arg+8(FP)</code> 这样。有些汇编器强制遵循此约定，拒绝单纯的
-<code>0(FP)</code> 和 <code>8(FP)</code>。对于带Go原型的汇编函数，<code>go vet</code>
+<code>0(FP)</code> 和 <code>8(FP)</code>。对于带 Go 原型的汇编函数，<code>go vet</code>
 会检查该实参的名称和偏移匹配。
 </p>
 
