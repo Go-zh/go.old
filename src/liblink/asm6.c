@@ -1302,7 +1302,7 @@ static Optab optab[] =
 	{ ASETNE,	yscond,	Pm, {0x95,(00)} },
 	{ ASETOC,	yscond,	Pm, {0x91,(00)} },
 	{ ASETOS,	yscond,	Pm, {0x90,(00)} },
-	{ ASETPC,	yscond,	Pm, {0x96,(00)} },
+	{ ASETPC,	yscond,	Pm, {0x9b,(00)} },
 	{ ASETPL,	yscond,	Pm, {0x99,(00)} },
 	{ ASETPS,	yscond,	Pm, {0x9a,(00)} },
 	{ ASHLB,	yshb,	Pb, {0xd0,(04),0xc0,(04),0xd2,(04)} },
@@ -1932,10 +1932,7 @@ oclass(Link *ctxt, Addr *a)
 				switch(a->index) {
 				case D_EXTERN:
 				case D_STATIC:
-					if(ctxt->flag_shared || ctxt->headtype == Hnacl)
-						return Yiauto;
-					else
-						return Yi32;	/* TO DO: Yi64 */
+					return Yiauto; // use pc-relative addressing
 				case D_AUTO:
 				case D_PARAM:
 					return Yiauto;
@@ -2290,15 +2287,12 @@ vaddr(Link *ctxt, Addr *a, Reloc *r)
 		r->sym = s;
 		r->add = v;
 		v = 0;
-		if(ctxt->flag_shared || ctxt->headtype == Hnacl) {
-			if(s->type == STLSBSS) {
-				r->xadd = r->add - r->siz;
-				r->type = R_TLS;
-				r->xsym = s;
-			} else
-				r->type = R_PCREL;
-		} else
-			r->type = R_ADDR;
+		r->type = R_PCREL;
+		if(s->type == STLSBSS) {
+			r->xadd = r->add - r->siz;
+			r->type = R_TLS;
+			r->xsym = s;
+		}
 		break;
 	
 	case D_INDIR+D_TLS:
@@ -2333,13 +2327,6 @@ asmandsz(Link *ctxt, Addr *a, int r, int rex, int m64)
 			switch(t) {
 			default:
 				goto bad;
-			case D_STATIC:
-			case D_EXTERN:
-				if(ctxt->flag_shared || ctxt->headtype == Hnacl)
-					goto bad;
-				t = D_NONE;
-				v = vaddr(ctxt, a, &rel);
-				break;
 			case D_AUTO:
 			case D_PARAM:
 				t = D_SP;
@@ -2399,7 +2386,7 @@ asmandsz(Link *ctxt, Addr *a, int r, int rex, int m64)
 
 	ctxt->rexflag |= (regrex[t] & Rxb) | rex;
 	if(t == D_NONE || (D_CS <= t && t <= D_GS) || t == D_TLS) {
-		if((ctxt->flag_shared || ctxt->headtype == Hnacl) && t == D_NONE && (a->type == D_STATIC || a->type == D_EXTERN) || ctxt->asmode != 64) {
+		if(t == D_NONE && (a->type == D_STATIC || a->type == D_EXTERN) || ctxt->asmode != 64) {
 			*ctxt->andptr++ = (0 << 6) | (5 << 0) | (r << 3);
 			goto putrelv;
 		}

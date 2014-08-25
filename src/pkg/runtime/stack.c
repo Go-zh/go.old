@@ -268,8 +268,10 @@ runtime·stackfree(G *gp, void *v, Stktop *top)
 	n = (uintptr)(top+1) - (uintptr)v;
 	if(n & (n-1))
 		runtime·throw("stack not a power of 2");
-	if(StackDebug >= 1)
+	if(StackDebug >= 1) {
 		runtime·printf("stackfree %p %d\n", v, (int32)n);
+		runtime·memclr(v, n); // for testing, clobber stack data
+	}
 	gp->stacksize -= n;
 	if(runtime·debug.efence || StackFromSystem) {
 		if(runtime·debug.efence || StackFaultOnFree)
@@ -343,7 +345,7 @@ runtime·oldstack(void)
 	gp->sched.ret = g->m->cret;
 	g->m->cret = 0; // drop reference
 	gp->status = Gwaiting;
-	gp->waitreason = "stack unsplit";
+	gp->waitreason = runtime·gostringnocopy((byte*)"stack unsplit");
 
 	if(argsize > 0) {
 		sp -= argsize;
@@ -399,6 +401,7 @@ struct CopyableInfo {
 };
 
 void runtime·main(void);
+void runtime·switchtoM(void(*)(void));
 
 static bool
 checkframecopy(Stkframe *frame, void *arg)
@@ -423,6 +426,13 @@ checkframecopy(Stkframe *frame, void *arg)
 		// have full GC info for it (because it is written in C).
 		cinfo->frames++;
 		return false; // stop traceback
+	}
+	if(f->entry == (uintptr)runtime·switchtoM) {
+		// A special routine at the bottom of stack of a goroutine that does onM call.
+		// We will allow it to be copied even though we don't
+		// have full GC info for it (because it is written in asm).
+		cinfo->frames++;
+		return true;
 	}
 	if(frame->varp != (byte*)frame->sp) { // not in prologue (and has at least one local or outarg)
 		stackmap = runtime·funcdata(f, FUNCDATA_LocalsPointerMaps);
@@ -476,6 +486,9 @@ copyabletopsegment(G *gp)
 	if(StackDebug >= 1 && cinfo.frames != -1)
 		runtime·printf("copystack: %d copyable frames\n", cinfo.frames);
 
+	if(cinfo.frames == -1)
+		return -1;
+
 	// Check to make sure all Defers are copyable
 	for(d = gp->defer; d != nil; d = d->link) {
 		if(cinfo.stk <= (byte*)d && (byte*)d < cinfo.base) {
@@ -490,8 +503,11 @@ copyabletopsegment(G *gp)
 		if(fn == nil) // See issue 8047
 			continue;
 		f = runtime·findfunc((uintptr)fn->fn);
-		if(f == nil)
+		if(f == nil) {
+			if(StackDebug >= 1)
+				runtime·printf("copystack: no func for deferred pc %p\n", fn->fn);
 			return -1;
+		}
 
 		// Check to make sure we have an args pointer map for the defer's args.
 		// We only need the args map, but we check
@@ -499,11 +515,17 @@ copyabletopsegment(G *gp)
 		// isn't provided it means the ptr map came from C and
 		// C (particularly, cgo) lies to us.  See issue 7695.
 		stackmap = runtime·funcdata(f, FUNCDATA_ArgsPointerMaps);
-		if(stackmap == nil || stackmap->n <= 0)
+		if(stackmap == nil || stackmap->n <= 0) {
+			if(StackDebug >= 1)
+				runtime·printf("copystack: no arg info for deferred %s\n", runtime·funcname(f));
 			return -1;
+		}
 		stackmap = runtime·funcdata(f, FUNCDATA_LocalsPointerMaps);
-		if(stackmap == nil || stackmap->n <= 0)
+		if(stackmap == nil || stackmap->n <= 0) {
+			if(StackDebug >= 1)
+				runtime·printf("copystack: no local info for deferred %s\n", runtime·funcname(f));
 			return -1;
+		}
 
 		if(cinfo.stk <= (byte*)fn && (byte*)fn < cinfo.base) {
 			// FuncVal is on the stack.  Again, its copyableness
@@ -585,7 +607,7 @@ adjustpointers(byte **scanp, BitVector *bv, AdjustInfo *adjinfo, Func *f)
 				break;
 			case BitsEface:
 				t = (Type*)scanp[i];
-				if(t != nil && (t->size > PtrSize || (t->kind & KindNoPointers) == 0)) {
+				if(t != nil && ((t->kind & KindDirectIface) == 0 || (t->kind & KindNoPointers) == 0)) {
 					p = scanp[i+1];
 					if(minp <= p && p < maxp) {
 						if(StackDebug >= 3)
@@ -602,7 +624,7 @@ adjustpointers(byte **scanp, BitVector *bv, AdjustInfo *adjinfo, Func *f)
 				if(tab != nil) {
 					t = tab->type;
 					//runtime·printf("          type=%p\n", t);
-					if(t->size > PtrSize || (t->kind & KindNoPointers) == 0) {
+					if((t->kind & KindDirectIface) == 0 || (t->kind & KindNoPointers) == 0) {
 						p = scanp[i+1];
 						if(minp <= p && p < maxp) {
 							if(StackDebug >= 3)
@@ -636,7 +658,8 @@ adjustframe(Stkframe *frame, void *arg)
 	f = frame->fn;
 	if(StackDebug >= 2)
 		runtime·printf("    adjusting %s frame=[%p,%p] pc=%p continpc=%p\n", runtime·funcname(f), frame->sp, frame->fp, frame->pc, frame->continpc);
-	if(f->entry == (uintptr)runtime·main)
+	if(f->entry == (uintptr)runtime·main ||
+		f->entry == (uintptr)runtime·switchtoM)
 		return true;
 	targetpc = frame->continpc;
 	if(targetpc == 0) {
@@ -732,6 +755,21 @@ adjustdefers(G *gp, AdjustInfo *adjinfo)
 	}
 }
 
+static void
+adjustsudogs(G *gp, AdjustInfo *adjinfo)
+{
+	SudoG *s;
+	byte *e;
+
+	// the data elements pointed to by a SudoG structure
+	// might be in the stack.
+	for(s = gp->waiting; s != nil; s = s->waitlink) {
+		e = s->elem;
+		if(adjinfo->oldstk <= e && e < adjinfo->oldbase)
+			s->elem = e + adjinfo->delta;
+	}
+}
+
 // Copies the top stack segment of gp to a new stack segment of a
 // different size.  The top segment must contain nframes frames.
 static void
@@ -770,6 +808,7 @@ copystack(G *gp, uintptr nframes, uintptr newsize)
 	// adjust other miscellaneous things that have pointers into stacks.
 	adjustctxt(gp, &adjinfo);
 	adjustdefers(gp, &adjinfo);
+	adjustsudogs(gp, &adjinfo);
 	
 	// copy the stack (including Stktop) to the new location
 	runtime·memmove(newbase - used, oldbase - used, used);
@@ -839,7 +878,7 @@ runtime·newstack(void)
 	g->m->morebuf.lr = (uintptr)nil;
 	g->m->morebuf.sp = (uintptr)nil;
 	gp->status = Gwaiting;
-	gp->waitreason = "stack growth";
+	gp->waitreason = runtime·gostringnocopy((byte*)"stack growth");
 	newstackcall = framesize==1;
 	if(newstackcall)
 		framesize = 0;
@@ -891,7 +930,7 @@ runtime·newstack(void)
 		}
 		// Act like goroutine called runtime.Gosched.
 		gp->status = oldstatus;
-		runtime·gosched0(gp);	// never return
+		runtime·gosched_m(gp);	// never return
 	}
 
 	// If every frame on the top segment is copyable, allocate a bigger segment
@@ -1048,6 +1087,8 @@ runtime·shrinkstack(G *gp)
 	if(gp->m != nil && gp->m->libcallsp != 0)
 		return;
 #endif
+	if(StackDebug > 0)
+		runtime·printf("shrinking stack %D->%D\n", (uint64)oldsize, (uint64)newsize);
 	nframes = copyabletopsegment(gp);
 	if(nframes == -1)
 		return;

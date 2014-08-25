@@ -6,6 +6,8 @@
 
 package runtime
 
+import "unsafe"
+
 var Fadd64 = fadd64
 var Fsub64 = fsub64
 var Fmul64 = fmul64
@@ -17,7 +19,6 @@ var Fintto64 = fintto64
 var F64toint = f64toint
 
 func entersyscall()
-func exitsyscall()
 func golockedOSThread() bool
 func stackguard() (sp, limit uintptr)
 
@@ -31,11 +32,28 @@ type LFNode struct {
 	Pushcnt uintptr
 }
 
-func lfstackpush_go(head *uint64, node *LFNode)
-func lfstackpop_go(head *uint64) *LFNode
+var (
+	lfstackpush_m,
+	lfstackpop_m mFunction
+)
 
-var LFStackPush = lfstackpush_go
-var LFStackPop = lfstackpop_go
+func LFStackPush(head *uint64, node *LFNode) {
+	mp := acquirem()
+	mp.ptrarg[0] = unsafe.Pointer(head)
+	mp.ptrarg[1] = unsafe.Pointer(node)
+	onM(&lfstackpush_m)
+	releasem(mp)
+}
+
+func LFStackPop(head *uint64) *LFNode {
+	mp := acquirem()
+	mp.ptrarg[0] = unsafe.Pointer(head)
+	onM(&lfstackpop_m)
+	node := (*LFNode)(unsafe.Pointer(mp.ptrarg[0]))
+	mp.ptrarg[0] = nil
+	releasem(mp)
+	return node
+}
 
 type ParFor struct {
 	body    *byte
@@ -48,18 +66,54 @@ type ParFor struct {
 	wait    bool
 }
 
-func newParFor(nthrmax uint32) *ParFor
-func parForSetup(desc *ParFor, nthr, n uint32, ctx *byte, wait bool, body func(*ParFor, uint32))
-func parForDo(desc *ParFor)
-func parForIters(desc *ParFor, tid uintptr) (uintptr, uintptr)
+var (
+	newparfor_m,
+	parforsetup_m,
+	parfordo_m,
+	parforiters_m mFunction
+)
 
-var NewParFor = newParFor
-var ParForSetup = parForSetup
-var ParForDo = parForDo
+func NewParFor(nthrmax uint32) *ParFor {
+	mp := acquirem()
+	mp.scalararg[0] = uint(nthrmax)
+	onM(&newparfor_m)
+	desc := (*ParFor)(mp.ptrarg[0])
+	mp.ptrarg[0] = nil
+	releasem(mp)
+	return desc
+}
+
+func ParForSetup(desc *ParFor, nthr, n uint32, ctx *byte, wait bool, body func(*ParFor, uint32)) {
+	mp := acquirem()
+	mp.ptrarg[0] = unsafe.Pointer(desc)
+	mp.ptrarg[1] = unsafe.Pointer(ctx)
+	mp.ptrarg[2] = **(**unsafe.Pointer)(unsafe.Pointer(&body))
+	mp.scalararg[0] = uint(nthr)
+	mp.scalararg[1] = uint(n)
+	mp.scalararg[2] = 0
+	if wait {
+		mp.scalararg[2] = 1
+	}
+	onM(&parforsetup_m)
+	releasem(mp)
+}
+
+func ParForDo(desc *ParFor) {
+	mp := acquirem()
+	mp.ptrarg[0] = unsafe.Pointer(desc)
+	onM(&parfordo_m)
+	releasem(mp)
+}
 
 func ParForIters(desc *ParFor, tid uint32) (uint32, uint32) {
-	begin, end := parForIters(desc, uintptr(tid))
-	return uint32(begin), uint32(end)
+	mp := acquirem()
+	mp.ptrarg[0] = unsafe.Pointer(desc)
+	mp.scalararg[0] = uint(tid)
+	onM(&parforiters_m)
+	begin := uint32(mp.scalararg[0])
+	end := uint32(mp.scalararg[1])
+	releasem(mp)
+	return begin, end
 }
 
 //go:noescape
@@ -78,12 +132,9 @@ var Int32Hash = int32Hash
 var Int64Hash = int64Hash
 var EfaceHash = efaceHash
 var IfaceHash = ifaceHash
+var MemclrBytes = memclrBytes
 
 var HashLoad = &hashLoad
-
-func memclrBytes(b []byte)
-
-var MemclrBytes = memclrBytes
 
 func gogoBytes() int32
 

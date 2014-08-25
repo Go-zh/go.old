@@ -21,7 +21,10 @@ MHeap runtime·mheap;
 #pragma dataflag NOPTR
 MStats runtime·memstats;
 
+static Type* notype;
+
 void runtime·cmallocgc(uintptr size, Type *typ, uint32 flag, void **ret);
+void runtime·gc_notype_ptr(Eface*);
 
 void*
 runtime·mallocgc(uintptr size, Type *typ, uint32 flag)
@@ -31,6 +34,8 @@ runtime·mallocgc(uintptr size, Type *typ, uint32 flag)
 	// Call into the Go version of mallocgc.
 	// TODO: maybe someday we can get rid of this.  It is
 	// probably the only location where we run Go code on the M stack.
+	if((flag&FlagNoScan) == 0 && typ == nil)
+		typ = notype;
 	runtime·cmallocgc(size, typ, flag, &ret);
 	return ret;
 }
@@ -124,6 +129,7 @@ runtime·mallocinit(void)
 	uintptr limit;
 	uint64 i;
 	bool reserved;
+	Eface notype_eface;
 
 	p = nil;
 	p_size = 0;
@@ -251,6 +257,9 @@ runtime·mallocinit(void)
 	// Initialize the rest of the allocator.	
 	runtime·MHeap_Init(&runtime·mheap);
 	g->m->mcache = runtime·allocmcache();
+
+	runtime·gc_notype_ptr(&notype_eface);
+	notype = notype_eface.type;
 }
 
 void*
@@ -459,7 +468,7 @@ setFinalizer(Eface obj, Eface finalizer)
 	}
 	if(finalizer.type != nil) {
 		runtime·createfing();
-		if(finalizer.type->kind != KindFunc)
+		if((finalizer.type->kind&KindMask) != KindFunc)
 			goto badfunc;
 		ft = (FuncType*)finalizer.type;
 		if(ft->dotdotdot || ft->in.len != 1)
@@ -467,12 +476,12 @@ setFinalizer(Eface obj, Eface finalizer)
 		fint = *(Type**)ft->in.array;
 		if(fint == obj.type) {
 			// ok - same type
-		} else if(fint->kind == KindPtr && (fint->x == nil || fint->x->name == nil || obj.type->x == nil || obj.type->x->name == nil) && ((PtrType*)fint)->elem == ((PtrType*)obj.type)->elem) {
+		} else if((fint->kind&KindMask) == KindPtr && (fint->x == nil || fint->x->name == nil || obj.type->x == nil || obj.type->x->name == nil) && ((PtrType*)fint)->elem == ((PtrType*)obj.type)->elem) {
 			// ok - not same type, but both pointers,
 			// one or the other is unnamed, and same element type, so assignable.
-		} else if(fint->kind == KindInterface && ((InterfaceType*)fint)->mhdr.len == 0) {
+		} else if((fint->kind&KindMask) == KindInterface && ((InterfaceType*)fint)->mhdr.len == 0) {
 			// ok - satisfies empty interface
-		} else if(fint->kind == KindInterface && runtime·ifaceE2I2((InterfaceType*)fint, obj, &iface)) {
+		} else if((fint->kind&KindMask) == KindInterface && runtime·ifaceE2I2((InterfaceType*)fint, obj, &iface)) {
 			// ok - satisfies non-empty interface
 		} else
 			goto badfunc;

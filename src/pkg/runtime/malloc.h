@@ -283,6 +283,7 @@ struct MStats
 #define mstats runtime·memstats
 extern MStats mstats;
 void	runtime·updatememstats(GCStats *stats);
+void	runtime·ReadMemStats(MStats *stats);
 
 // Size classes.  Computed and initialized by InitSizes.
 //
@@ -317,6 +318,8 @@ struct StackFreeList
 	uintptr size; // total size of stacks in list
 };
 
+typedef struct SudoG SudoG;
+
 // Per-thread (in Go, per-P) cache for small objects.
 // No locking needed because it is per-thread (per-P).
 struct MCache
@@ -333,6 +336,8 @@ struct MCache
 	MSpan*	alloc[NumSizeClasses];	// spans to allocate from
 
 	StackFreeList stackcache[NumStackOrders];
+
+	SudoG*	sudogcache;
 
 	void*	gcworkbuf;
 
@@ -423,7 +428,7 @@ struct MSpan
 
 void	runtime·MSpan_Init(MSpan *span, PageID start, uintptr npages);
 void	runtime·MSpan_EnsureSwept(MSpan *span);
-bool	runtime·MSpan_Sweep(MSpan *span);
+bool	runtime·MSpan_Sweep(MSpan *span, bool preserve);
 
 // Every MSpan is in one doubly-linked list,
 // either one of the MHeap's free lists or one of the
@@ -447,7 +452,7 @@ struct MCentral
 void	runtime·MCentral_Init(MCentral *c, int32 sizeclass);
 MSpan*	runtime·MCentral_CacheSpan(MCentral *c);
 void	runtime·MCentral_UncacheSpan(MCentral *c, MSpan *s);
-bool	runtime·MCentral_FreeSpan(MCentral *c, MSpan *s, int32 n, MLink *start, MLink *end);
+bool	runtime·MCentral_FreeSpan(MCentral *c, MSpan *s, int32 n, MLink *start, MLink *end, bool preserve);
 
 // Main malloc heap.
 // The heap itself is the "free[]" and "large" arrays,
@@ -460,7 +465,7 @@ struct MHeap
 	MSpan busy[MaxMHeapList];	// busy lists of large objects of given length
 	MSpan busylarge;		// busy lists of large objects length >= MaxMHeapList
 	MSpan **allspans;		// all spans out there
-	MSpan **sweepspans;		// copy of allspans referenced by sweeper
+	MSpan **gcspans;		// copy of allspans referenced by GC marker or sweeper
 	uint32	nspan;
 	uint32	nspancap;
 	uint32	sweepgen;		// sweep generation, see comment in MSpan

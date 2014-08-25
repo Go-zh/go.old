@@ -110,30 +110,6 @@ func (r *MemProfileRecord) Stack() []uintptr {
 	return r.Stack0[0:]
 }
 
-// MemProfile returns n, the number of records in the current memory profile.
-// If len(p) >= n, MemProfile copies the profile into p and returns n, true.
-// If len(p) < n, MemProfile does not change p and returns n, false.
-//
-// If inuseZero is true, the profile includes allocation records
-// where r.AllocBytes > 0 but r.AllocBytes == r.FreeBytes.
-// These are sites where memory was allocated, but it has all
-// been released back to the runtime.
-//
-// Most clients should use the runtime/pprof package or
-// the testing package's -test.memprofile flag instead
-// of calling MemProfile directly.
-
-// MemProfile 返回当前内存分析报告中的记录数 n。
-// 若 len(p) >= n，MemProfile 就会将此分析报告复制到 p 中并返回 n, true。
-// 若 len(p) < n，MemProfile 则不会更改 p，而只返回 n, false。
-//
-// 若 inuseZero 为 true，该分析报告就会包含分配记录，其中 r.AllocBytes > 0，
-// 而 r.AllocBytes == r.FreeBytes。这些位置的内存已经分配，但它们都会释放回运行时。
-//
-// 大多数客户端应当使用 runtime/pprof 包或 testing 包的 -test.memprofile 标记，
-// 而非直接调用 MemProfile。
-func MemProfile(p []MemProfileRecord, inuseZero bool) (n int, ok bool)
-
 // A StackRecord describes a single execution stack.
 
 // StackRecord 记录一个单一执行的栈。
@@ -154,20 +130,6 @@ func (r *StackRecord) Stack() []uintptr {
 	}
 	return r.Stack0[0:]
 }
-
-// ThreadCreateProfile returns n, the number of records in the thread creation profile.
-// If len(p) >= n, ThreadCreateProfile copies the profile into p and returns n, true.
-// If len(p) < n, ThreadCreateProfile does not change p and returns n, false.
-//
-// Most clients should use the runtime/pprof package instead
-// of calling ThreadCreateProfile directly.
-
-// ThreadCreateProfile 返回线程创建分析报告中的记录数 n。
-// 若 len(p) >= n，ThreadCreateProfile 就会将此分析报告复制到 p 中并返回 n, true。
-// 若 len(p) < n，ThreadCreateProfile 则不会更改 p，而只返回 n, false。
-//
-// 大多数客户端应当使用 runtime/pprof 包，而非直接调用 ThreadCreateProfile。
-func ThreadCreateProfile(p []StackRecord) (n int, ok bool)
 
 // GoroutineProfile returns n, the number of records in the active goroutine stack profile.
 // If len(p) >= n, GoroutineProfile copies the profile into p and returns n, true.
@@ -238,23 +200,6 @@ type BlockProfileRecord struct {
 	Cycles int64
 	StackRecord
 }
-
-// BlockProfile returns n, the number of records in the current blocking profile.
-// If len(p) >= n, BlockProfile copies the profile into p and returns n, true.
-// If len(p) < n, BlockProfile does not change p and returns n, false.
-//
-// Most clients should use the runtime/pprof package or
-// the testing package's -test.blockprofile flag instead
-// of calling BlockProfile directly.
-
-// BlockProfile 返回
-// GoroutineProfile 返回当前阻塞分析中的记录数 n。
-// 若 len(p) >= n，BlockProfile 就会将此分析报告复制到 p 中并返回 n, true。
-// 若 len(p) < n，BlockProfile 则不会更改 p，而只返回 n, false。
-//
-// 大多数客户端应当使用 runtime/pprof 包或 testing 包的 -test.memprofile 标记，
-// 而非直接调用 BlockProfile。
-func BlockProfile(p []BlockProfileRecord) (n int, ok bool)
 
 // Stack formats a stack trace of the calling goroutine into buf
 // and returns the number of bytes written to buf.

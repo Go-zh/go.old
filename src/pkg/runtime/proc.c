@@ -113,7 +113,7 @@ static uint32 retake(int64);
 static void incidlelocked(int32);
 static void checkdead(void);
 static void exitsyscall0(G*);
-static void park0(G*);
+void runtime·park_m(G*);
 static void goexit0(G*);
 static void gfput(P*, G*);
 static G* gfget(P*);
@@ -158,7 +158,6 @@ runtime·schedinit(void)
 	runtime·symtabinit();
 	runtime·stackinit();
 	runtime·mallocinit();
-	runtime·chaninit();
 	mcommoninit(g->m);
 	
 	// Initialize the itable value for newErrorCString,
@@ -167,13 +166,10 @@ runtime·schedinit(void)
 	// need to allocated memory.
 	runtime·newErrorCString(0, &i);
 	
-	// Initialize the cached gotraceback value, since
-	// gotraceback calls getenv, which mallocs on Plan 9.
-	runtime·gotraceback(nil);
-
 	runtime·goargs();
 	runtime·goenvs();
 	runtime·parsedebugvars();
+	runtime·gcinit();
 
 	runtime·sched.lastpoll = runtime·nanotime();
 	procs = 1;
@@ -268,7 +264,7 @@ runtime·main(void)
 	// let the other goroutine finish printing the panic trace.
 	// Once it does, it will exit. See issue 3934.
 	if(runtime·panicking)
-		runtime·park(nil, nil, "panicwait");
+		runtime·park(nil, nil, runtime·gostringnocopy((byte*)"panicwait"));
 
 	runtime·exit(0);
 	for(;;)
@@ -278,30 +274,30 @@ runtime·main(void)
 void
 runtime·goroutineheader(G *gp)
 {
-	int8 *status;
+	String status;
 	int64 waitfor;
 
 	switch(gp->status) {
 	case Gidle:
-		status = "idle";
+		status = runtime·gostringnocopy((byte*)"idle");
 		break;
 	case Grunnable:
-		status = "runnable";
+		status = runtime·gostringnocopy((byte*)"runnable");
 		break;
 	case Grunning:
-		status = "running";
+		status = runtime·gostringnocopy((byte*)"running");
 		break;
 	case Gsyscall:
-		status = "syscall";
+		status = runtime·gostringnocopy((byte*)"syscall");
 		break;
 	case Gwaiting:
-		if(gp->waitreason)
+		if(gp->waitreason.str != nil)
 			status = gp->waitreason;
 		else
-			status = "waiting";
+			status = runtime·gostringnocopy((byte*)"waiting");
 		break;
 	default:
-		status = "???";
+		status = runtime·gostringnocopy((byte*)"???");
 		break;
 	}
 
@@ -310,7 +306,7 @@ runtime·goroutineheader(G *gp)
 	if((gp->status == Gwaiting || gp->status == Gsyscall) && gp->waitsince != 0)
 		waitfor = (runtime·nanotime() - gp->waitsince) / (60LL*1000*1000*1000);
 
-	runtime·printf("goroutine %D [%s", gp->goid, status);
+	runtime·printf("goroutine %D [%S", gp->goid, status);
 	if(waitfor >= 1)
 		runtime·printf(", %D minutes", waitfor);
 	if(gp->lockedm != nil)
@@ -402,6 +398,16 @@ runtime·ready(G *gp)
 	g->m->locks--;
 	if(g->m->locks == 0 && g->preempt)  // restore the preemption request in case we've cleared it in newstack
 		g->stackguard0 = StackPreempt;
+}
+
+void
+runtime·ready_m(void)
+{
+	G *gp;
+
+	gp = g->m->ptrarg[0];
+	g->m->ptrarg[0] = nil;
+	runtime·ready(gp);
 }
 
 int32
@@ -497,6 +503,14 @@ runtime·stoptheworld(void)
 	P *p;
 	bool wait;
 
+	// If we hold a lock, then we won't be able to stop another M
+	// that is blocked trying to acquire the lock.
+	if(g->m->locks > 0)
+		runtime·throw("stoptheworld: holding locks");
+	// There is no evidence that stoptheworld on g0 does not work,
+	// we just don't do it today.
+	if(g == g->m->g0)
+		runtime·throw("stoptheworld: on g0");
 	runtime·lock(&runtime·sched.lock);
 	runtime·sched.stopwait = runtime·gomaxprocs;
 	runtime·atomicstore((uint32*)&runtime·sched.gcwaiting, 1);
@@ -1396,18 +1410,18 @@ dropg(void)
 // Puts the current goroutine into a waiting state and calls unlockf.
 // If unlockf returns false, the goroutine is resumed.
 void
-runtime·park(bool(*unlockf)(G*, void*), void *lock, int8 *reason)
+runtime·park(bool(*unlockf)(G*, void*), void *lock, String reason)
 {
 	if(g->status != Grunning)
 		runtime·throw("bad g status");
 	g->m->waitlock = lock;
 	g->m->waitunlockf = unlockf;
 	g->waitreason = reason;
-	runtime·mcall(park0);
+	runtime·mcall(runtime·park_m);
 }
 
-static bool
-parkunlock(G *gp, void *lock)
+bool
+runtime·parkunlock_c(G *gp, void *lock)
 {
 	USED(gp);
 	runtime·unlock(lock);
@@ -1417,14 +1431,14 @@ parkunlock(G *gp, void *lock)
 // Puts the current goroutine into a waiting state and unlocks the lock.
 // The goroutine can be made runnable again by calling runtime·ready(gp).
 void
-runtime·parkunlock(Lock *lock, int8 *reason)
+runtime·parkunlock(Lock *lock, String reason)
 {
-	runtime·park(parkunlock, lock, reason);
+	runtime·park(runtime·parkunlock_c, lock, reason);
 }
 
 // runtime·park continuation on g0.
-static void
-park0(G *gp)
+void
+runtime·park_m(G *gp)
 {
 	bool ok;
 
@@ -1448,15 +1462,15 @@ park0(G *gp)
 void
 runtime·gosched(void)
 {
-	if(g->status != Grunning)
-		runtime·throw("bad g status");
-	runtime·mcall(runtime·gosched0);
+	runtime·mcall(runtime·gosched_m);
 }
 
 // runtime·gosched continuation on g0.
 void
-runtime·gosched0(G *gp)
+runtime·gosched_m(G *gp)
 {
+	if(gp->status != Grunning)
+		runtime·throw("bad g status");
 	gp->status = Grunnable;
 	dropg();
 	runtime·lock(&runtime·sched.lock);
@@ -1494,7 +1508,8 @@ goexit0(G *gp)
 	gp->panic = nil; // non-nil for Goexit during panic. points at stack-allocated data.
 	gp->writenbuf = 0;
 	gp->writebuf = nil;
-	gp->waitreason = nil;
+	gp->waitreason.str = nil;
+	gp->waitreason.len = 0;
 	gp->param = nil;
 	
 	dropg();
@@ -1612,6 +1627,31 @@ void
 
 	g->stackguard0 = StackPreempt;  // see comment in entersyscall
 	g->m->locks--;
+}
+
+// The same as runtime·entersyscallblock(), but called on g0 stack.
+void
+runtime·entersyscallblock_m(void)
+{
+	G *gp;
+
+	gp = g->m->curg;
+	// sched.{g,pc,sp,lr} are already set by mcall.
+	gp->stackguard0 = StackPreempt;  // we are on g0, the goroutine must not touch its stack until exitsyscall
+	gp->sched.ret = 0;
+	gp->sched.ctxt = 0;
+	gp->syscallsp = gp->sched.sp;
+	gp->syscallpc = gp->sched.pc;
+	gp->syscallstack = gp->stackbase;
+	gp->syscallguard = gp->stackguard;
+	gp->status = Gsyscall;
+	if(gp->syscallsp < gp->syscallguard-StackGuard || gp->syscallstack < gp->syscallsp) {
+		// runtime·printf("entersyscall inconsistent %p [%p,%p]\n",
+		//	gp->syscallsp, gp->syscallguard-StackGuard, gp->syscallstack);
+		runtime·throw("entersyscall_m");
+	}
+
+	handoffp(releasep());
 }
 
 // The goroutine g exited its system call.
@@ -1820,13 +1860,30 @@ runtime·malg(int32 stacksize)
 	return newg;
 }
 
+static void
+newproc_m(void)
+{
+	byte *argp;
+	void *callerpc;
+	FuncVal *fn;
+	int32 siz;
+
+	siz = g->m->scalararg[0];
+	callerpc = (void*)g->m->scalararg[1];	
+	argp = g->m->ptrarg[0];
+	fn = (FuncVal*)g->m->ptrarg[1];
+
+	runtime·newproc1(fn, argp, siz, 0, callerpc);
+	g->m->ptrarg[0] = nil;
+	g->m->ptrarg[1] = nil;
+}
+
 // Create a new g running fn with siz bytes of arguments.
 // Put it on the queue of g's waiting to run.
 // The compiler turns a go statement into a call to this.
 // Cannot split the stack because it assumes that the arguments
 // are available sequentially after &fn; they would not be
-// copied if a stack split occurred.  It's OK for this to call
-// functions that split the stack.
+// copied if a stack split occurred.
 #pragma textflag NOSPLIT
 void
 runtime·newproc(int32 siz, FuncVal* fn, ...)
@@ -1837,7 +1894,14 @@ runtime·newproc(int32 siz, FuncVal* fn, ...)
 		argp = (byte*)(&fn+2);  // skip caller's saved LR
 	else
 		argp = (byte*)(&fn+1);
-	runtime·newproc1(fn, argp, siz, 0, runtime·getcallerpc(&siz));
+
+	g->m->locks++;
+	g->m->scalararg[0] = siz;
+	g->m->scalararg[1] = (uintptr)runtime·getcallerpc(&siz);
+	g->m->ptrarg[0] = argp;
+	g->m->ptrarg[1] = fn;
+	runtime·onM(newproc_m);
+	g->m->locks--;
 }
 
 // Create a new g running fn with narg bytes of arguments starting
@@ -2052,12 +2116,6 @@ void
 runtime·Breakpoint(void)
 {
 	runtime·breakpoint();
-}
-
-void
-runtime·Gosched(void)
-{
-	runtime·gosched();
 }
 
 // Implementation of runtime.GOMAXPROCS.
@@ -2820,7 +2878,7 @@ runtime·schedtrace(bool detailed)
 		gp = runtime·allg[gi];
 		mp = gp->m;
 		lockedm = gp->lockedm;
-		runtime·printf("  G%D: status=%d(%s) m=%d lockedm=%d\n",
+		runtime·printf("  G%D: status=%d(%S) m=%d lockedm=%d\n",
 			gp->goid, gp->status, gp->waitreason, mp ? mp->id : -1,
 			lockedm ? lockedm->id : -1);
 	}

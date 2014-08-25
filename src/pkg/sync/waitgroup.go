@@ -52,18 +52,23 @@ type WaitGroup struct {
 // If the counter becomes zero, all goroutines blocked on Wait are released.
 // If the counter goes negative, Add panics.
 //
-// Note that calls with positive delta must happen before the call to Wait,
-// or else Wait may wait for too small a group. Typically this means the calls
-// to Add should execute before the statement creating the goroutine or
-// other event to be waited for. See the WaitGroup example.
+// Note that calls with a positive delta that occur when the counter is zero
+// must happen before a Wait. Calls with a negative delta, or calls with a
+// positive delta that start when the counter is greater than zero, may happen
+// at any time.
+// Typically this means the calls to Add should execute before the statement
+// creating the goroutine or other event to be waited for.
+// See the WaitGroup example.
 
 // Add 添加 delta，对于 WaitGroup 的 counter 来说，它可能为负数。
 // 若 counter 变为零，在 Wait() 被释放后所有Go程就会阻塞。
 // 若 counter 变为负数，Add 就会引发Panic。
 //
-// 注意，用正整数的 delta 调用它必须发生在调用 Wait 之前，否则 Wait
-// 等待一组的时间会太短。一般来说这意味着对 Add 的调用应当执行在该语句创建Go程，
-// 或等待其它事件之前。具体见 WaitGroup 的示例。
+// 注意，当 counter 为零时，用正整数的 delta 调用它必须发生在调用 Wait 之前。
+// 用负整数的 delta 调用它，或在 counter 大于零时开始用正整数的 delta 调用它，
+// 那么它可以在任何时候发生。
+// 一般来说，这意味着对 Add 的调用应当在该语句创建Go程，或等待其它事件之前执行。
+// 具体见 WaitGroup 的示例。
 func (wg *WaitGroup) Add(delta int) {
 	if raceenabled {
 		_ = wg.m.state // trigger nil deref early
@@ -127,6 +132,7 @@ func (wg *WaitGroup) Wait() {
 	// This code is racing with the unlocked path in Add above.
 	// The code above modifies counter and then reads waiters.
 	// We must modify waiters and then read counter (the opposite order)
+	//
 	// 此代码与上面 Add 中的解锁路径竞争。上面的代码修改 counter 然后读取 waiters。
 	// 我们必须修改 waiters 然后读取 counter（按相反顺序）来避免失去一次 Add。
 	if atomic.LoadInt32(&wg.counter) == 0 {

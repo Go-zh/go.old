@@ -63,6 +63,7 @@ typedef	uint8			byte;
 typedef	struct	Func		Func;
 typedef	struct	G		G;
 typedef	struct	Gobuf		Gobuf;
+typedef	struct	SudoG		SudoG;
 typedef	struct	Lock		Lock;
 typedef	struct	M		M;
 typedef	struct	P		P;
@@ -217,6 +218,18 @@ struct	Gobuf
 	uintreg	ret;
 	uintptr	lr;
 };
+// Known to compiler.
+// Changes here must also be made in src/cmd/gc/select.c's selecttype.
+struct	SudoG
+{
+	G*	g;
+	uint32*	selectdone;
+	SudoG*	link;
+	byte*	elem;		// data element
+	int64	releasetime;
+	int32	nrelease;	// -1 for acquire
+	SudoG*	waitlink;	// G.waiting list
+};
 struct	GCStats
 {
 	// the struct must consist of only uint64's,
@@ -267,7 +280,7 @@ struct	G
 	int16	status;
 	int64	goid;
 	int64	waitsince;	// approx time when the G become blocked
-	int8*	waitreason;	// if status==Gwaiting
+	String	waitreason;	// if status==Gwaiting
 	G*	schedlink;
 	bool	ispanic;
 	bool	issystem;	// do not output in stack dump
@@ -285,6 +298,7 @@ struct	G
 	uintptr	sigpc;
 	uintptr	gopc;		// pc of go statement that created this goroutine
 	uintptr	racectx;
+	SudoG   *waiting;	// sudog structures this G is waiting on (that have a valid elem ptr)
 	uintptr	end[];
 };
 
@@ -447,7 +461,7 @@ enum
 // Layout of in-memory per-function information prepared by linker
 // See http://golang.org/s/go12symtab.
 // Keep in sync with linker and with ../../libmach/sym.c
-// and with package debug/gosym.
+// and with package debug/gosym and with symtab.go in package runtime.
 struct	Func
 {
 	uintptr	entry;	// start pc
@@ -779,6 +793,9 @@ extern	uint32	runtime·cpuid_ecx;
 extern	uint32	runtime·cpuid_edx;
 extern	DebugVars	runtime·debug;
 extern	uintptr	runtime·maxstacksize;
+extern	byte*	runtime·gcdatamask;
+extern	byte*	runtime·gcbssmask;
+extern	Note	runtime·signote;
 
 /*
  * common functions and data
@@ -880,7 +897,7 @@ void	runtime·shrinkstack(G*);
 MCache*	runtime·allocmcache(void);
 void	runtime·freemcache(MCache*);
 void	runtime·mallocinit(void);
-void	runtime·chaninit(void);
+void	runtime·gcinit(void);
 void*	runtime·mallocgc(uintptr size, Type* typ, uint32 flag);
 void	runtime·runpanic(Panic*);
 uintptr	runtime·getcallersp(void*);
@@ -910,23 +927,25 @@ void	runtime·atomicstore64(uint64 volatile*, uint64);
 uint64	runtime·atomicload64(uint64 volatile*);
 void*	runtime·atomicloadp(void* volatile*);
 void	runtime·atomicstorep(void* volatile*, void*);
+void	runtime·atomicor8(byte volatile*, byte);
 
 void	runtime·setg(G*);
 void	runtime·newextram(void);
 void	runtime·exit(int32);
 void	runtime·breakpoint(void);
 void	runtime·gosched(void);
-void	runtime·gosched0(G*);
+void	runtime·gosched_m(G*);
 void	runtime·schedtrace(bool);
-void	runtime·park(bool(*)(G*, void*), void*, int8*);
-void	runtime·parkunlock(Lock*, int8*);
-void	runtime·tsleep(int64, int8*);
+void	runtime·park(bool(*)(G*, void*), void*, String);
+void	runtime·parkunlock(Lock*, String);
+void	runtime·tsleep(int64, String);
 M*	runtime·newm(void);
 void	runtime·goexit(void);
 void	runtime·asmcgocall(void (*fn)(void*), void*);
 void	runtime·entersyscall(void);
 void	runtime·entersyscallblock(void);
 void	runtime·exitsyscall(void);
+void	runtime·entersyscallblock_m(void);
 G*	runtime·newproc1(FuncVal*, byte*, int32, int32, void*);
 bool	runtime·sigsend(int32 sig);
 int32	runtime·callers(int32, uintptr*, int32);

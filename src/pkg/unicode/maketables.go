@@ -42,7 +42,7 @@ func main() {
 var dataURL = flag.String("data", "", "full URL for UnicodeData.txt; defaults to --url/UnicodeData.txt")
 var casefoldingURL = flag.String("casefolding", "", "full URL for CaseFolding.txt; defaults to --url/CaseFolding.txt")
 var url = flag.String("url",
-	"http://www.unicode.org/Public/6.3.0/ucd/",
+	"http://www.unicode.org/Public/7.0.0/ucd/",
 	"URL of Unicode database directory")
 var tablelist = flag.String("tables",
 	"all",
@@ -411,6 +411,7 @@ func loadCasefold() {
 		logger.Fatal(scanner.Err())
 	}
 }
+
 /*
 const progHeader = `// Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -453,12 +454,12 @@ func printCategories() {
 	}
 	fmt.Printf(progHeader, *tablelist, *dataURL, *casefoldingURL)
 	// fmt.Println("// Version is the Unicode edition from which the tables are derived.")
-	fmt.Println("// Version 为得到此表所用的Unicode版本。")
+	fmt.Println("// Version 为得到此表所用的 Unicode 版本。")
 	fmt.Printf("const Version = %q\n\n", version())
 
 	if *tablelist == "all" {
 		// fmt.Println("// Categories is the set of Unicode category tables.")
-		fmt.Println("// Categories 为Unicode类别表的集合。")
+		fmt.Println("// Categories 为 Unicode 类别表的集合。")
 		fmt.Println("var Categories = map[string] *RangeTable {")
 		for _, k := range allCategories() {
 			fmt.Printf("\t%q: %s,\n", k, k)
@@ -515,40 +516,40 @@ func printCategories() {
 		*/
 		switch name {
 		case "C":
-			varDecl = "\tOther = _C;	// Other/C 为类别 C 中的Unicode控制和特殊字符集合。\n"
+			varDecl = "\tOther = _C;	// Other/C 为类别 C 中的 Unicode 控制和特殊字符集合。\n"
 			varDecl += "\tC = _C\n"
 		case "L":
-			varDecl = "\tLetter = _L;	// Letter/L 为类别 L 中的Unicode字母字符集合。\n"
+			varDecl = "\tLetter = _L;	// Letter/L 为类别 L 中的 Unicode 字母字符集合。\n"
 			varDecl += "\tL = _L\n"
 		case "M":
-			varDecl = "\tMark = _M;	// Mark/M 为类别 M 中的Unicode标记字符集合。\n"
+			varDecl = "\tMark = _M;	// Mark/M 为类别 M 中的 Unicode 标记字符集合。\n"
 			varDecl += "\tM = _M\n"
 		case "N":
-			varDecl = "\tNumber = _N;	// Number/N 为类别 N 中的Unicode数字字符集合。\n"
+			varDecl = "\tNumber = _N;	// Number/N 为类别 N 中的 Unicode 数字字符集合。\n"
 			varDecl += "\tN = _N\n"
 		case "P":
-			varDecl = "\tPunct = _P;	// Punct/P 为类别 P 中的Unicode标点字符集合。\n"
+			varDecl = "\tPunct = _P;	// Punct/P 为类别 P 中的 Unicode 标点字符集合。\n"
 			varDecl += "\tP = _P\n"
 		case "S":
-			varDecl = "\tSymbol = _S;	// Symbol/S 为类别 S 中的Unicode符号字符集合。\n"
+			varDecl = "\tSymbol = _S;	// Symbol/S 为类别 S 中的 Unicode 符号字符集合。\n"
 			varDecl += "\tS = _S\n"
 		case "Z":
-			varDecl = "\tSpace = _Z;	// Space/Z 为类别 Z 中的Unicode空白字符集合。\n"
+			varDecl = "\tSpace = _Z;	// Space/Z 为类别 Z 中的 Unicode 空白字符集合。\n"
 			varDecl += "\tZ = _Z\n"
 		case "Nd":
-			varDecl = "\tDigit = _Nd;	// Digit 为带属性“十进制数字”的Unicode字符集合。\n"
+			varDecl = "\tDigit = _Nd;	// Digit 为带属性“十进制数字”的 Unicode 字符集合。\n"
 		case "Lu":
-			varDecl = "\tUpper = _Lu;	// Upper 为Unicode大写字母集合。\n"
+			varDecl = "\tUpper = _Lu;	// Upper 为 Unicode 大写字母集合。\n"
 		case "Ll":
-			varDecl = "\tLower = _Ll;	// Lower 为Unicode小写字母集合。\n"
+			varDecl = "\tLower = _Ll;	// Lower 为 Unicode 小写字母集合。\n"
 		case "Lt":
-			varDecl = "\tTitle = _Lt;	// Title 为Unicode标题字母集合。\n"
+			varDecl = "\tTitle = _Lt;	// Title 为 Unicode 标题字母集合。\n"
 		}
 
 		if len(name) > 1 {
 			varDecl += fmt.Sprintf(
 				// "\t%s = _%s;	// %s is the set of Unicode characters in category %s.\n",
-				"\t%s = _%s;	// %s 为类别 %s 中的Unicode字符集合。\n",
+				"\t%s = _%s;	// %s 为类别 %s 中的 Unicode 字符集合。\n",
 				name, name, name, name)
 		}
 		decl[ndecl] = varDecl
@@ -842,11 +843,11 @@ func printScriptOrProperty(doProps bool) {
 	if flaglist == "all" {
 		if doProps {
 			// fmt.Println("// Properties is the set of Unicode property tables.")
-			fmt.Println("// Properties 为Unicode属性表的集合。")
+			fmt.Println("// Properties 为 Unicode 属性表的集合。")
 			fmt.Println("var Properties = map[string] *RangeTable{")
 		} else {
 			// fmt.Println("// Scripts is the set of Unicode script tables.")
-			fmt.Println("// Scripts 为Unicode书写表的集合。")
+			fmt.Println("// Scripts 为 Unicode 书写表的集合。")
 			fmt.Println("var Scripts = map[string] *RangeTable{")
 		}
 		for _, k := range all(table) {
@@ -861,12 +862,12 @@ func printScriptOrProperty(doProps bool) {
 		if doProps {
 			decl[ndecl] = fmt.Sprintf(
 				// "\t%s = _%s;\t// %s is the set of Unicode characters with property %s.\n",
-				"\t%s = _%s;\t// %s 为带属性 %s 的Unicode字符集合。\n",
+				"\t%s = _%s;\t// %s 为带属性 %s 的 Unicode 字符集合。\n",
 				name, name, name, name)
 		} else {
 			decl[ndecl] = fmt.Sprintf(
 				// "\t%s = _%s;\t// %s is the set of Unicode characters in script %s.\n",
-				"\t%s = _%s;\t// %s 为书写系统 %s 中的Unicode字符集合。\n",
+				"\t%s = _%s;\t// %s 为书写系统 %s 中的 Unicode 字符集合。\n",
 				name, name, name, name)
 		}
 		ndecl++
@@ -926,7 +927,7 @@ func (c *caseState) adjacent(d *caseState) bool {
 		c, d = d, c
 	}
 	switch {
-	case d.point != c.point+1: // code points not adjacent (shouldn't happen) // 码点不相邻（应该不会发生的）
+	case d.point != c.point+1: // code points not adjacent (shouldn't happen) // 码点不相邻（应该不会发生）
 		return false
 	case d._case != c._case: // different cases // 不同的写法
 		return c.upperLowerAdjacent(d)
@@ -1085,7 +1086,7 @@ func printCases() {
 		"// 生成自\n"+
 			"//	maketables --data=%s --casefolding=%s\n"+
 			"// 请勿编辑！\n\n"+
-			"// CaseRanges 是描述所有“非自我映射字母”的写法映射表。\n"+
+			"// CaseRanges 是描述所有“非自映射字母”的写法映射表。\n"+
 			"var CaseRanges = _CaseRanges\n"+
 			"var _CaseRanges = []CaseRange {\n",
 		*dataURL, *casefoldingURL)
@@ -1485,12 +1486,12 @@ func printSizes() {
 	}
 	fmt.Println()
 	// fmt.Printf("// Range entries: %d 16-bit, %d 32-bit, %d total.\n", range16Count, range32Count,
-	fmt.Printf("// 范围条目数：%d 16-bit，%d 32-bit，%d 总数。\n", range16Count, range32Count, range16Count+range32Count)
+	fmt.Printf("// 范围条目数：%d 16-bit，%d 32-bit，总计 %d 个。\n", range16Count, range32Count, range16Count+range32Count)
 	range16Bytes := range16Count * 3 * 2
 	range32Bytes := range32Count * 3 * 4
 	// fmt.Printf("// Range bytes: %d 16-bit, %d 32-bit, %d total.\n", range16Bytes, range32Bytes,
-	fmt.Printf("// 范围字节数：%d 16-bit，%d 32-bit，%d 总数。\n", range16Bytes, range32Bytes, range16Bytes+range32Bytes)
+	fmt.Printf("// 范围字节数：%d 16-bit，%d 32-bit，总计 %d 个。\n", range16Bytes, range32Bytes, range16Bytes+range32Bytes)
 	fmt.Println()
 	// fmt.Printf("// Fold orbit bytes: %d pairs, %d bytes\n", foldPairCount, foldPairCount*2*2)
-	fmt.Printf("// 转换轨道字节数: %d 对，%d 字节\n", foldPairCount, foldPairCount*2*2)
+	fmt.Printf("// 折叠轨道字节数: %d 对，%d 字节\n", foldPairCount, foldPairCount*2*2)
 }

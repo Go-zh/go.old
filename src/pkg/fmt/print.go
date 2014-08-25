@@ -154,7 +154,7 @@ type pp struct {
 	fmt        fmt
 }
 
-var ppFree = sync.Pool {
+var ppFree = sync.Pool{
 	New: func() interface{} { return new(pp) },
 }
 
@@ -949,6 +949,8 @@ func (p *pp) printValue(value reflect.Value, verb rune, plus, goSyntax bool, dep
 	return p.printReflectValue(value, verb, plus, goSyntax, depth)
 }
 
+var byteType = reflect.TypeOf(byte(0))
+
 // printReflectValue is the fallback for both printArg and printValue.
 // It uses reflect to print the value.
 
@@ -1045,9 +1047,17 @@ BigSwitch:
 			wasString = p.printValue(value, verb, plus, goSyntax, depth+1)
 		}
 	case reflect.Array, reflect.Slice:
-		// Byte slices are special.
-		// 字节切片比较特殊。
-		if typ := f.Type(); typ.Elem().Kind() == reflect.Uint8 {
+		// Byte slices are special:
+		// - Handle []byte (== []uint8) with fmtBytes.
+		// - Handle []T, where T is a named byte type, with fmtBytes only
+		//   for the s, q, an x verbs. For other verbs, T might be a
+		//   Stringer, so we use printValue to print each element.
+		//
+		// 字节切片比较特殊：
+		// - 用 fmtBytes 处理 []byte (== []uint8)。
+		// - 用 fmtBytes 处理 []T 的 s、q 和 x 占位符。其中 T 为已命名的字节类型。
+		//   对于其它占位符，T 可能为 Stringer，因此我们用 printValue 来打印每个元素。
+		if typ := f.Type(); typ.Elem().Kind() == reflect.Uint8 && (typ.Elem() == byteType || verb == 's' || verb == 'q' || verb == 'x') {
 			var bytes []byte
 			if f.Kind() == reflect.Slice {
 				bytes = f.Bytes()

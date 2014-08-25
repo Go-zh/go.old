@@ -619,6 +619,14 @@ TEXT runtime·atomicstore64(SB), NOSPLIT, $0-12
 	XADDL	AX, (SP)
 	RET
 
+// void	runtime·atomicor8(byte volatile*, byte);
+TEXT runtime·atomicor8(SB), NOSPLIT, $0-8
+	MOVL	ptr+0(FP), AX
+	MOVB	val+4(FP), BX
+	LOCK
+	ORB	BX, (AX)
+	RET
+
 // void jmpdefer(fn, sp);
 // called from deferreturn.
 // 1. pop the caller
@@ -859,6 +867,12 @@ TEXT runtime·cputicks(SB),NOSPLIT,$0-4
 	MOVL	ret+0(FP), DI
 	MOVL	AX, 0(DI)
 	MOVL	DX, 4(DI)
+	RET
+
+TEXT runtime·gocputicks(SB),NOSPLIT,$0-8
+	RDTSC
+	MOVL    AX, ret+0(FP)
+	MOVL    DX, ret+4(FP)
 	RET
 
 TEXT runtime·ldt0setup(SB),NOSPLIT,$16-0
@@ -1159,7 +1173,7 @@ TEXT runtime·memeq(SB),NOSPLIT,$0-13
 
 // eqstring tests whether two strings are equal.
 // See runtime_test.go:eqstring_generic for
-// equivlaent Go code.
+// equivalent Go code.
 TEXT runtime·eqstring(SB),NOSPLIT,$0-17
 	MOVL	s1len+4(FP), AX
 	MOVL	s2len+12(FP), BX

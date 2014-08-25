@@ -55,6 +55,12 @@ type ReverseProxy struct {
 	// FlushInterval代表客户端拷贝回复消息体的刷新间隔时间。
 	// 如果设置为zero，则不进行定期的刷新。
 	FlushInterval time.Duration
+
+	// ErrorLog specifies an optional logger for errors
+	// that occur when attempting to proxy the request.
+	// If nil, logging goes to os.Stderr via the log package's
+	// standard logger.
+	ErrorLog *log.Logger
 }
 
 func singleJoiningSlash(a, b string) string {
@@ -157,7 +163,7 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	res, err := transport.RoundTrip(outreq)
 	if err != nil {
-		log.Printf("http: proxy error: %v", err)
+		p.logf("http: proxy error: %v", err)
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -188,6 +194,14 @@ func (p *ReverseProxy) copyResponse(dst io.Writer, src io.Reader) {
 	}
 
 	io.Copy(dst, src)
+}
+
+func (p *ReverseProxy) logf(format string, args ...interface{}) {
+	if p.ErrorLog != nil {
+		p.ErrorLog.Printf(format, args...)
+	} else {
+		log.Printf(format, args...)
+	}
 }
 
 type writeFlusher interface {

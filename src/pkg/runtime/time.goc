@@ -36,7 +36,7 @@ func runtimeNano() (ns int64) {
 
 // Sleep puts the current goroutine to sleep for at least ns nanoseconds.
 func Sleep(ns int64) {
-	runtime·tsleep(ns, "sleep");
+	runtime·tsleep(ns, runtime·gostringnocopy((byte*)"sleep"));
 }
 
 // startTimer adds t to the timer heap.
@@ -70,10 +70,8 @@ static void siftdown(int32);
 
 // Ready the goroutine e.data.
 static void
-ready(int64 now, Eface e)
+ready(Eface e)
 {
-	USED(now);
-
 	runtime·ready(e.data);
 }
 
@@ -81,7 +79,7 @@ static FuncVal readyv = {(void(*)(void))ready};
 
 // Put the current goroutine to sleep for ns nanoseconds.
 void
-runtime·tsleep(int64 ns, int8 *reason)
+runtime·tsleep(int64 ns, String reason)
 {
 	Timer t;
 
@@ -201,7 +199,7 @@ timerproc(void)
 {
 	int64 delta, now;
 	Timer *t;
-	void (*f)(int64, Eface);
+	void (*f)(Eface);
 	Eface arg;
 
 	for(;;) {
@@ -233,7 +231,7 @@ timerproc(void)
 			runtime·unlock(&timers.lock);
 			if(raceenabled)
 				runtime·raceacquire(t);
-			f(now, arg);
+			f(arg);
 
 			// clear f and arg to avoid leak while sleeping for next timer
 			f = nil;
@@ -248,7 +246,7 @@ timerproc(void)
 			// No timers left - put goroutine to sleep.
 			timers.rescheduling = true;
 			g->isbackground = true;
-			runtime·parkunlock(&timers.lock, "timer goroutine (idle)");
+			runtime·parkunlock(&timers.lock, runtime·gostringnocopy((byte*)"timer goroutine (idle)"));
 			g->isbackground = false;
 			continue;
 		}

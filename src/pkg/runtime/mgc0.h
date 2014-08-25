@@ -8,8 +8,8 @@ enum {
 	ScanStackByFrames = 1,
 
 	// Four bits per word (see #defines below).
-	wordsPerBitmapWord = sizeof(void*)*8/4,
 	gcBits = 4,
+	wordsPerBitmapByte = 8/gcBits,
 
 	// GC type info programs.
 	// The programs allow to store type info required for GC in a compact form.
@@ -55,7 +55,8 @@ enum {
 	BitsIface	= 2,
 	BitsEface	= 3,
 
-	MaxGCMask	= 0,	// disabled because wastes several bytes of memory
+	// 64 bytes cover objects of size 1024/512 on 64/32 bits, respectively.
+	MaxGCMask	= 64,
 };
 
 // Bits in per-word bitmap.

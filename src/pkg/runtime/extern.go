@@ -110,13 +110,6 @@ GOARCH、GOOS 和 GOROOT 会在编译时被记录，并使该包中的常量或�
 */
 package runtime
 
-// Gosched yields the processor, allowing other goroutines to run.  It does not
-// suspend the current goroutine, so execution resumes automatically.
-
-// Gosched 使当前Go程放弃处理器以让其它Go程运行。
-// 它不会挂起当前Go程，因而它会自动继续执行。
-func Gosched()
-
 // Goexit terminates the goroutine that calls it.  No other goroutine is affected.
 // Goexit runs all deferred calls before terminating the goroutine.
 //
@@ -155,48 +148,6 @@ func Caller(skip int) (pc uintptr, file string, line int, ok bool)
 // 实参 skip 为开始在 pc 中记录之前所要跳过的栈帧数，若为0则表示 Callers 自身的栈帧，
 // 若为1则表示 Callers 的调用者。它返回写入到 pc 中的项数。
 func Callers(skip int, pc []uintptr) int
-
-type Func struct {
-	opaque struct{} // unexported field to disallow conversions // 用未导出字段来进制转换
-}
-
-// FuncForPC returns a *Func describing the function that contains the
-// given program counter address, or else nil.
-
-// FuncForPC 返回一个 *Func，它描述了包含给定程序计数器地址的函数，否则返回 nil。
-func FuncForPC(pc uintptr) *Func
-
-// Name returns the name of the function.
-
-// Name 返回该函数的名称
-func (f *Func) Name() string {
-	return funcname_go(f)
-}
-
-// Entry returns the entry address of the function.
-
-// Entry 返回该项函数的地址。
-func (f *Func) Entry() uintptr {
-	return funcentry_go(f)
-}
-
-// FileLine returns the file name and line number of the
-// source code corresponding to the program counter pc.
-// The result will not be accurate if pc is not a program
-// counter within f.
-
-// FileLine 返回与程序计数器 pc 对应的源码文件名和行号。
-// 若 pc 不是 f 中的程序计数器，其结果将是不确定的。
-func (f *Func) FileLine(pc uintptr) (file string, line int) {
-	return funcline_go(f, pc)
-}
-
-// implemented in symtab.c
-
-// 在 symtab.c 中实现
-func funcline_go(*Func, uintptr) (string, int)
-func funcname_go(*Func) string
-func funcentry_go(*Func) uintptr
 
 func getgoroot() string
 

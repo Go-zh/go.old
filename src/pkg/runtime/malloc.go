@@ -14,15 +14,6 @@ const (
 	flagNoScan = 1 << 0 // GC doesn't have to scan object
 	flagNoZero = 1 << 1 // don't zero memory
 
-	kindArray      = 17
-	kindFunc       = 19
-	kindInterface  = 20
-	kindPtr        = 22
-	kindStruct     = 25
-	kindMask       = 1<<6 - 1
-	kindGCProg     = 1 << 6
-	kindNoPointers = 1 << 7
-
 	maxTinySize   = 16
 	tinySizeClass = 2
 	maxSmallSize  = 32 << 10
@@ -31,13 +22,13 @@ const (
 	pageSize  = 1 << pageShift
 	pageMask  = pageSize - 1
 
-	wordsPerBitmapWord = ptrSize * 8 / 4
 	gcBits             = 4
+	wordsPerBitmapByte = 8 / gcBits
 	bitsPerPointer     = 2
 	bitsMask           = 1<<bitsPerPointer - 1
 	pointersPerByte    = 8 / bitsPerPointer
 	bitPtrMask         = bitsMask << 2
-	maxGCMask          = 0 // disabled because wastes several bytes of memory
+	maxGCMask          = 64
 	bitsDead           = 0
 	bitsPointer        = 2
 
@@ -59,14 +50,25 @@ func gomallocgc(size uintptr, typ *_type, flags int) unsafe.Pointer {
 	if size == 0 {
 		return unsafe.Pointer(&zeroObject)
 	}
-	mp := acquirem()
-	if mp.mallocing != 0 {
-		gothrow("malloc/free - deadlock")
-	}
-	mp.mallocing = 1
 	size0 := size
 
-	c := mp.mcache
+	// This function must be atomic wrt GC, but for performance reasons
+	// we don't acquirem/releasem on fast path. The code below does not have
+	// split stack checks, so it can't be preempted by GC.
+	// Functions like roundup/add are inlined. And onM/racemalloc are nosplit.
+	// If debugMalloc = true, these assumptions are checked below.
+	if debugMalloc {
+		mp := acquirem()
+		if mp.mallocing != 0 {
+			gothrow("malloc deadlock")
+		}
+		mp.mallocing = 1
+		if mp.curg != nil {
+			mp.curg.stackguard0 = ^uint(0xfff) | 0xbad
+		}
+	}
+
+	c := gomcache()
 	var s *mspan
 	var x unsafe.Pointer
 	if size <= maxSmallSize {
@@ -118,8 +120,18 @@ func gomallocgc(size uintptr, typ *_type, flags int) unsafe.Pointer {
 					x = tiny
 					c.tiny = (*byte)(add(x, size))
 					c.tinysize -= uint(size1)
-					mp.mallocing = 0
-					releasem(mp)
+					if debugMalloc {
+						mp := acquirem()
+						if mp.mallocing == 0 {
+							gothrow("bad malloc")
+						}
+						mp.mallocing = 0
+						if mp.curg != nil {
+							mp.curg.stackguard0 = mp.curg.stackguard
+						}
+						releasem(mp)
+						releasem(mp)
+					}
 					return x
 				}
 			}
@@ -127,8 +139,10 @@ func gomallocgc(size uintptr, typ *_type, flags int) unsafe.Pointer {
 			s = c.alloc[tinySizeClass]
 			v := s.freelist
 			if v == nil {
+				mp := acquirem()
 				mp.scalararg[0] = tinySizeClass
 				onM(&mcacheRefill_m)
+				releasem(mp)
 				s = c.alloc[tinySizeClass]
 				v = s.freelist
 			}
@@ -156,8 +170,10 @@ func gomallocgc(size uintptr, typ *_type, flags int) unsafe.Pointer {
 			s = c.alloc[sizeclass]
 			v := s.freelist
 			if v == nil {
+				mp := acquirem()
 				mp.scalararg[0] = uint(sizeclass)
 				onM(&mcacheRefill_m)
+				releasem(mp)
 				s = c.alloc[sizeclass]
 				v = s.freelist
 			}
@@ -174,11 +190,13 @@ func gomallocgc(size uintptr, typ *_type, flags int) unsafe.Pointer {
 		}
 		c.local_cachealloc += int(size)
 	} else {
+		mp := acquirem()
 		mp.scalararg[0] = uint(size)
 		mp.scalararg[1] = uint(flags)
 		onM(&largeAlloc_m)
 		s = (*mspan)(mp.ptrarg[0])
 		mp.ptrarg[0] = nil
+		releasem(mp)
 		x = unsafe.Pointer(uintptr(s.start << pageShift))
 		size = uintptr(s.elemsize)
 	}
@@ -193,8 +211,8 @@ func gomallocgc(size uintptr, typ *_type, flags int) unsafe.Pointer {
 	{
 		arena_start := uintptr(unsafe.Pointer(mheap_.arena_start))
 		off := (uintptr(x) - arena_start) / ptrSize
-		xbits := (*uintptr)(unsafe.Pointer(arena_start - off/wordsPerBitmapWord*ptrSize - ptrSize))
-		shift := (off % wordsPerBitmapWord) * gcBits
+		xbits := (*uint8)(unsafe.Pointer(arena_start - off/wordsPerBitmapByte - 1))
+		shift := (off % wordsPerBitmapByte) * gcBits
 		if debugMalloc && ((*xbits>>shift)&(bitMask|bitPtrMask)) != bitBoundary {
 			println("runtime: bits =", (*xbits>>shift)&(bitMask|bitPtrMask))
 			gothrow("bad bits in markallocated")
@@ -207,62 +225,55 @@ func gomallocgc(size uintptr, typ *_type, flags int) unsafe.Pointer {
 			*xbits |= (bitsPointer << 2) << shift
 			goto marked
 		}
-		if typ != nil && (uintptr(typ.gc[0])|uintptr(typ.gc[1])) != 0 && uintptr(typ.size) > ptrSize {
-			if typ.kind&kindGCProg != 0 {
-				nptr := (uintptr(typ.size) + ptrSize - 1) / ptrSize
-				masksize := nptr
-				if masksize%2 != 0 {
-					masksize *= 2 // repeated
-				}
-				masksize = masksize * pointersPerByte / 8 // 4 bits per word
-				masksize++                                // unroll flag in the beginning
-				if masksize > maxGCMask && typ.gc[1] != 0 {
-					// If the mask is too large, unroll the program directly
-					// into the GC bitmap. It's 7 times slower than copying
-					// from the pre-unrolled mask, but saves 1/16 of type size
-					// memory for the mask.
-					mp.ptrarg[0] = x
-					mp.ptrarg[1] = unsafe.Pointer(typ)
-					mp.scalararg[0] = uint(size)
-					mp.scalararg[1] = uint(size0)
-					onM(&unrollgcproginplace_m)
-					goto marked
-				}
-				ptrmask = (*uint8)(unsafe.Pointer(uintptr(typ.gc[0])))
-				// Check whether the program is already unrolled.
-				if uintptr(goatomicloadp(unsafe.Pointer(ptrmask)))&0xff == 0 {
-					mp.ptrarg[0] = unsafe.Pointer(typ)
-					onM(&unrollgcprog_m)
-				}
-				ptrmask = (*uint8)(add(unsafe.Pointer(ptrmask), 1)) // skip the unroll flag byte
-			} else {
-				ptrmask = (*uint8)(unsafe.Pointer(&typ.gc[0])) // embed mask
+		if typ.kind&kindGCProg != 0 {
+			nptr := (uintptr(typ.size) + ptrSize - 1) / ptrSize
+			masksize := nptr
+			if masksize%2 != 0 {
+				masksize *= 2 // repeated
 			}
-			if size == 2*ptrSize {
-				xbitsb := (*uint8)(add(unsafe.Pointer(xbits), shift/8))
-				*xbitsb = *ptrmask | bitBoundary
+			masksize = masksize * pointersPerByte / 8 // 4 bits per word
+			masksize++                                // unroll flag in the beginning
+			if masksize > maxGCMask && typ.gc[1] != 0 {
+				// If the mask is too large, unroll the program directly
+				// into the GC bitmap. It's 7 times slower than copying
+				// from the pre-unrolled mask, but saves 1/16 of type size
+				// memory for the mask.
+				mp := acquirem()
+				mp.ptrarg[0] = x
+				mp.ptrarg[1] = unsafe.Pointer(typ)
+				mp.scalararg[0] = uint(size)
+				mp.scalararg[1] = uint(size0)
+				onM(&unrollgcproginplace_m)
+				releasem(mp)
 				goto marked
 			}
-			te = uintptr(typ.size) / ptrSize
-			// If the type occupies odd number of words, its mask is repeated.
-			if te%2 == 0 {
-				te /= 2
+			ptrmask = (*uint8)(unsafe.Pointer(uintptr(typ.gc[0])))
+			// Check whether the program is already unrolled.
+			if uintptr(goatomicloadp(unsafe.Pointer(ptrmask)))&0xff == 0 {
+				mp := acquirem()
+				mp.ptrarg[0] = unsafe.Pointer(typ)
+				onM(&unrollgcprog_m)
+				releasem(mp)
 			}
+			ptrmask = (*uint8)(add(unsafe.Pointer(ptrmask), 1)) // skip the unroll flag byte
+		} else {
+			ptrmask = (*uint8)(unsafe.Pointer(&typ.gc[0])) // embed mask
 		}
 		if size == 2*ptrSize {
-			xbitsb := (*uint8)(add(unsafe.Pointer(xbits), shift/8))
-			*xbitsb = (bitsPointer << 2) | (bitsPointer << 6) | bitBoundary
+			*xbits = *ptrmask | bitBoundary
 			goto marked
+		}
+		te = uintptr(typ.size) / ptrSize
+		// If the type occupies odd number of words, its mask is repeated.
+		if te%2 == 0 {
+			te /= 2
 		}
 		// Copy pointer bitmask into the bitmap.
 		for i := uintptr(0); i < size0; i += 2 * ptrSize {
-			v := uint8((bitsPointer << 2) | (bitsPointer << 6))
-			if ptrmask != nil {
-				v = *(*uint8)(add(unsafe.Pointer(ptrmask), ti))
-				ti++
-				if ti == te {
-					ti = 0
-				}
+			v := *(*uint8)(add(unsafe.Pointer(ptrmask), ti))
+			ti++
+			if ti == te {
+				ti = 0
 			}
 			if i == 0 {
 				v |= bitBoundary
@@ -271,27 +282,32 @@ func gomallocgc(size uintptr, typ *_type, flags int) unsafe.Pointer {
 				v &^= uint8(bitPtrMask << 4)
 			}
 
-			off := (uintptr(x) + i - arena_start) / ptrSize
-			xbits := (*uintptr)(unsafe.Pointer(arena_start - off/wordsPerBitmapWord*ptrSize - ptrSize))
-			shift := (off % wordsPerBitmapWord) * gcBits
-			xbitsb := (*uint8)(add(unsafe.Pointer(xbits), shift/8))
-			*xbitsb = v
+			*xbits = v
+			xbits = (*byte)(add(unsafe.Pointer(xbits), ^uintptr(0)))
 		}
 		if size0%(2*ptrSize) == 0 && size0 < size {
 			// Mark the word after last object's word as bitsDead.
-			off := (uintptr(x) + size0 - arena_start) / ptrSize
-			xbits := (*uintptr)(unsafe.Pointer(arena_start - off/wordsPerBitmapWord*ptrSize - ptrSize))
-			shift := (off % wordsPerBitmapWord) * gcBits
-			xbitsb := (*uint8)(add(unsafe.Pointer(xbits), shift/8))
-			*xbitsb = bitsDead << 2
+			*xbits = bitsDead << 2
 		}
 	}
 marked:
-	mp.mallocing = 0
-
 	if raceenabled {
 		racemalloc(x, size)
 	}
+
+	if debugMalloc {
+		mp := acquirem()
+		if mp.mallocing == 0 {
+			gothrow("bad malloc")
+		}
+		mp.mallocing = 0
+		if mp.curg != nil {
+			mp.curg.stackguard0 = mp.curg.stackguard
+		}
+		releasem(mp)
+		releasem(mp)
+	}
+
 	if debug.allocfreetrace != 0 {
 		tracealloc(x, size, typ)
 	}
@@ -300,11 +316,11 @@ marked:
 		if size < uintptr(rate) && int32(size) < c.next_sample {
 			c.next_sample -= int32(size)
 		} else {
+			mp := acquirem()
 			profilealloc(mp, x, size)
+			releasem(mp)
 		}
 	}
-
-	releasem(mp)
 
 	if memstats.heap_alloc >= memstats.next_gc {
 		gogc(0)
@@ -397,6 +413,7 @@ func gogc(force int32) {
 		return
 	}
 	releasem(mp)
+	mp = nil
 
 	if panicking != 0 {
 		return
@@ -425,7 +442,11 @@ func gogc(force int32) {
 	startTime := gonanotime()
 	mp = acquirem()
 	mp.gcing = 1
+	releasem(mp)
 	stoptheworld()
+	if mp != acquirem() {
+		gothrow("gogc: rescheduled")
+	}
 
 	clearpools()
 
@@ -443,11 +464,12 @@ func gogc(force int32) {
 			startTime = gonanotime()
 		}
 		// switch to g0, call gc, then switch back
-		mp.scalararg[0] = uint(startTime)
+		mp.scalararg[0] = uint(uint32(startTime)) // low 32 bits
+		mp.scalararg[1] = uint(startTime >> 32)   // high 32 bits
 		if force >= 2 {
-			mp.scalararg[1] = 1 // eagersweep
+			mp.scalararg[2] = 1 // eagersweep
 		} else {
-			mp.scalararg[1] = 0
+			mp.scalararg[2] = 0
 		}
 		onM(&gc_m)
 	}
@@ -457,6 +479,7 @@ func gogc(force int32) {
 	semrelease(&worldsema)
 	starttheworld()
 	releasem(mp)
+	mp = nil
 
 	// now that gc is done, kick off finalizer thread if needed
 	if !concurrentSweep {

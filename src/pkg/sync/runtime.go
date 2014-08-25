@@ -26,8 +26,12 @@ func runtime_Semacquire(s *uint32)
 // 其目的是用作同步库的简单唤醒原语，你不应直接使用它。
 func runtime_Semrelease(s *uint32)
 
-// Opaque representation of SyncSema in runtime/sema.goc.
-type syncSema [3]uintptr
+// Approximation of syncSema in runtime/sema.go.
+type syncSema struct {
+	lock uintptr
+	head unsafe.Pointer
+	tail unsafe.Pointer
+}
 
 // Syncsemacquire waits for a pairing Syncsemrelease on the same semaphore s.
 func runtime_Syncsemacquire(s *syncSema)

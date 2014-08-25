@@ -23,8 +23,6 @@ extern byte data[];
 extern byte edata[];
 extern byte bss[];
 extern byte ebss[];
-extern byte gcdata[];
-extern byte gcbss[];
 
 enum {
 	FieldKindEol = 0,
@@ -198,7 +196,7 @@ dumptype(Type *t)
 		write((byte*)".", 1);
 		write(t->x->name->str, t->x->name->len);
 	}
-	dumpbool(t->size > PtrSize || (t->kind & KindNoPointers) == 0);
+	dumpbool((t->kind & KindDirectIface) == 0 || (t->kind & KindNoPointers) == 0);
 	dumpfields((BitVector){0, nil});
 }
 
@@ -410,7 +408,7 @@ dumpgoroutine(G *gp)
 	dumpbool(gp->issystem);
 	dumpbool(gp->isbackground);
 	dumpint(gp->waitsince);
-	dumpcstr(gp->waitreason);
+	dumpstr(gp->waitreason);
 	dumpint((uintptr)gp->sched.ctxt);
 	dumpint((uintptr)gp->m);
 	dumpint((uintptr)gp->defer);
@@ -497,13 +495,13 @@ dumproots(void)
 	dumpint(TagData);
 	dumpint((uintptr)data);
 	dumpmemrange(data, edata - data);
-	dumpfields((BitVector){(edata - data)*8, (uint32*)gcdata});
+	dumpfields((BitVector){(edata - data)*8, (uint32*)runtime·gcdatamask});
 
 	// bss segment
 	dumpint(TagBss);
 	dumpint((uintptr)bss);
 	dumpmemrange(bss, ebss - bss);
-	dumpfields((BitVector){(ebss - bss)*8, (uint32*)gcbss});
+	dumpfields((BitVector){(ebss - bss)*8, (uint32*)runtime·gcbssmask});
 
 	// MSpan.types
 	allspans = runtime·mheap.allspans;
@@ -586,7 +584,7 @@ itab_callback(Itab *tab)
 	dumpint(TagItab);
 	dumpint((uintptr)tab);
 	t = tab->type;
-	dumpbool(t->size > PtrSize || (t->kind & KindNoPointers) == 0);
+	dumpbool((t->kind & KindDirectIface) == 0 || (t->kind & KindNoPointers) == 0);
 }
 
 static void
@@ -750,7 +748,6 @@ runtime∕debug·WriteHeapDump(uintptr fd)
 	// Stop the world.
 	runtime·semacquire(&runtime·worldsema, false);
 	g->m->gcing = 1;
-	g->m->locks++;
 	runtime·stoptheworld();
 
 	// Update stats so we can dump them.
@@ -763,7 +760,7 @@ runtime∕debug·WriteHeapDump(uintptr fd)
 
 	// Call dump routine on M stack.
 	g->status = Gwaiting;
-	g->waitreason = "dumping heap";
+	g->waitreason = runtime·gostringnocopy((byte*)"dumping heap");
 	runtime·mcall(mdump);
 
 	// Reset dump file.
@@ -776,6 +773,7 @@ runtime∕debug·WriteHeapDump(uintptr fd)
 
 	// Start up the world again.
 	g->m->gcing = 0;
+	g->m->locks++;
 	runtime·semrelease(&runtime·worldsema);
 	runtime·starttheworld();
 	g->m->locks--;
@@ -822,7 +820,8 @@ dumpbvtypes(BitVector *bv, byte *base)
 static BitVector
 makeheapobjbv(byte *p, uintptr size)
 {
-	uintptr off, shift, *bitp, bits, nptr, i;
+	uintptr off, nptr, i;
+	byte shift, *bitp, bits;
 	bool mw;
 
 	// Extend the temp buffer if necessary.
@@ -840,13 +839,13 @@ makeheapobjbv(byte *p, uintptr size)
 	mw = false;
 	for(i = 0; i < nptr; i++) {
 		off = (uintptr*)(p + i*PtrSize) - (uintptr*)runtime·mheap.arena_start;
-		bitp = (uintptr*)runtime·mheap.arena_start - off/wordsPerBitmapWord - 1;
-		shift = (off % wordsPerBitmapWord) * gcBits;
-		bits = (*bitp >> (shift + 2)) & 3;
+		bitp = runtime·mheap.arena_start - off/wordsPerBitmapByte - 1;
+		shift = (off % wordsPerBitmapByte) * gcBits;
+		bits = (*bitp >> (shift + 2)) & BitsMask;
 		if(!mw && bits == BitsDead)
 			break;  // end of heap object
 		mw = !mw && bits == BitsMultiWord;
-		tmpbuf[i*BitsPerPointer/8] &= ~(3<<((i*BitsPerPointer)%8));
+		tmpbuf[i*BitsPerPointer/8] &= ~(BitsMask<<((i*BitsPerPointer)%8));
 		tmpbuf[i*BitsPerPointer/8] |= bits<<((i*BitsPerPointer)%8);
 	}
 	return (BitVector){i*BitsPerPointer, (uint32*)tmpbuf};

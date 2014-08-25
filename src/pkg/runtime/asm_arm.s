@@ -651,6 +651,12 @@ TEXT runtime·abort(SB),NOSPLIT,$-4-0
 	MOVW	$0, R0
 	MOVW	(R0), R1
 
+TEXT runtime·gocputicks(SB),NOSPLIT,$4-8
+	MOVW	$ret_lo+0(FP), R0
+	MOVW	R0, 4(R13)
+	BL      runtime·cputicks(SB)
+	RET
+
 // bool armcas(int32 *val, int32 old, int32 new)
 // Atomically:
 //	if(*val == old){
@@ -724,7 +730,7 @@ _next2:
 
 // eqstring tests whether two strings are equal.
 // See runtime_test.go:eqstring_generic for
-// equivlaent Go code.
+// equivalent Go code.
 TEXT runtime·eqstring(SB),NOSPLIT,$-4-17
 	MOVW	s1len+4(FP), R0
 	MOVW	s2len+12(FP), R1

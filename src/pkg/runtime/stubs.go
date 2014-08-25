@@ -30,6 +30,18 @@ func racereadrangepc(addr unsafe.Pointer, len int, callpc, pc uintptr)
 //go:noescape
 func racewriterangepc(addr unsafe.Pointer, len int, callpc, pc uintptr)
 
+//go:noescape
+func raceacquire(addr unsafe.Pointer)
+
+//go:noescape
+func racerelease(addr unsafe.Pointer)
+
+//go:noescape
+func raceacquireg(gp *g, addr unsafe.Pointer)
+
+//go:noescape
+func racereleaseg(gp *g, addr unsafe.Pointer)
+
 // Should be a built-in for unsafe.Pointer?
 func add(p unsafe.Pointer, x uintptr) unsafe.Pointer {
 	return unsafe.Pointer(uintptr(p) + x)
@@ -41,8 +53,10 @@ func roundup(p unsafe.Pointer, n uintptr) unsafe.Pointer {
 }
 
 // in stubs.goc
+func getg() *g
 func acquirem() *m
 func releasem(mp *m)
+func gomcache() *mcache
 
 // An mFunction represents a C function that runs on the M stack.  It
 // can be called from Go using mcall or onM.  Through the magic of
@@ -67,7 +81,13 @@ var (
 	setFinalizer_m,
 	markallocated_m,
 	unrollgcprog_m,
-	unrollgcproginplace_m mFunction
+	unrollgcproginplace_m,
+	gosched_m,
+	ready_m,
+	park_m,
+	blockevent_m,
+	notewakeup_m,
+	notetsleepg_m mFunction
 )
 
 // memclr clears n bytes starting at ptr.
@@ -161,3 +181,28 @@ func noescape(p unsafe.Pointer) unsafe.Pointer {
 // gopersistentalloc allocates a permanent (not garbage collected)
 // memory region of size n.  Use wisely!
 func gopersistentalloc(n uintptr) unsafe.Pointer
+
+func gocputicks() int64
+
+func gonoteclear(n *note) {
+	n.key = 0
+}
+
+func gonotewakeup(n *note) {
+	mp := acquirem()
+	mp.ptrarg[0] = unsafe.Pointer(n)
+	onM(&notewakeup_m)
+	releasem(mp)
+}
+
+func gonotetsleepg(n *note, t int64) {
+	mp := acquirem()
+	mp.ptrarg[0] = unsafe.Pointer(n)
+	mp.scalararg[0] = uint(uint32(t)) // low 32 bits
+	mp.scalararg[1] = uint(t >> 32)   // high 32 bits
+	releasem(mp)
+	mcall(&notetsleepg_m)
+	exitsyscall()
+}
+
+func exitsyscall()
