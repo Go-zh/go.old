@@ -29,7 +29,7 @@ TODO
 [ ] 需要描述关于函数/方法的调用规则
 [ ] #赋值（即常量推广）的最后一段应放到别处，并加上对空接口赋值的说明
 [ ] 需要说明选择器的“作用域”？
-[ ] 阐明什么是结构体声明中的字段名（struct{T} 之于 struct {T T} 之于 struct {t T}）
+[ ] 阐明什么是结构体声明中的字段名（struct{T} vs. struct {T T} vs. struct {t T}）
 [ ] 关于操作符的结果类型需要详尽的语言描述
 [ ] 或许该写一些关于语句求值顺序的东西，尽管它很明显
 [ ] 在“选择器”一节中，阐明在方法调用中传递的是接收者的什么值
@@ -49,8 +49,8 @@ more information and other documents, see <a href="/">golang.org</a>.
 </div>
 
 <p>
-这是一份关于Go语言的参考手册。欲获取更多信息与文档，
-请访问<a href="/">http://golang.org</a>。
+这是一份关于 Go 语言的参考手册。欲获取更多信息与文档，
+请访问 <a href="/">http://golang.org</a>。
 </p>
 
 <div class="english">
@@ -65,7 +65,7 @@ compile/link model to generate executable binaries.
 </div>
 
 <p>
-Go是通用型的编程语言，它为系统编程而设计。它是强类型化的语言，具有垃圾回收机制，
+Go 是通用型的编程语言，它为系统编程而设计。它是强类型化的语言，具有垃圾回收机制，
 并显式地支持并发编程。程序由<b>包</b>构造，以此来提供高效的依赖管理功能。
 既有实现使用传统的“编译-链接”模型，生成可执行的二进制文件。
 </p>
@@ -78,7 +78,7 @@ automatic tools such as integrated development environments.
 </div>
 
 <p>
-其语法紧凑而规则，便于IDE等自动化工具分析。
+其语法紧凑而规则，便于 IDE 等自动化工具分析。
 </p>
 
 <div class="english">
@@ -111,8 +111,8 @@ Repetition  = "{" Expression "}" .
 生成式 = 生成式名 "=" [ 表达式 ] "." .
 表达式 = 选择项 { "|" 选择项 } .
 选择项 = 条目 { 条目 } .
-条目   = 生成式名 | 标记 [ "…" 标记 ] | 组 | 可选项 | 重复项 .
-组     = "(" 表达式 ")" .
+条目   = 生成式名 | 标记 [ "…" 标记 ] | 分组 | 可选项 | 重复项 .
+分组     = "(" 表达式 ")" .
 可选项 = "[" 表达式 "]" .
 重复项 = "{" 表达式 "}" .
 </pre>
@@ -189,9 +189,9 @@ in the source text.
 </div>
 
 <p>
-源码是采用<a href="http://en.wikipedia.org/wiki/UTF-8">UTF-8</a>编码的Unicode文本。
+源码是采用 <a href="http://en.wikipedia.org/wiki/UTF-8">UTF-8</a> 编码的 Unicode 文本。
 该文本是非标准化的，因此单一的着重号码点不同于结合了字母与着重号的字符结构，
-那些应视作两个码点。为简单起见，本文档将使用非正式的术语<b>字符</b>在源文本中指代Unicode码点。
+那些应视作两个码点。为简单起见，本文档将使用非正式的术语<b>字符</b>在源文本中指代 Unicode 码点。
 </p>
 
 <p>
