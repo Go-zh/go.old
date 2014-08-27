@@ -24,9 +24,9 @@ see <a href="gccgo_contribute.html">Contributing to gccgo</a>.)
 </div>
 
 <p>
-本文档就如何向Go项目贡献更改进行说明。假定你已经按照<a href="/doc/install/source">安装说明</a>安装了Go，
+本文档就如何向 Go 项目贡献更改进行说明。假定你已经按照<a href="/doc/install/source">安装说明</a>安装了 Go，
 且已经<a href="code.html">编写并测试了你的代码</a>。（关于 <code>gccgo</code>
-前端的文档见 <a href="gccgo_contribute.html">为gccgo做贡献</a>.）
+前端的文档见 <a href="gccgo_contribute.html">为 gccgo 做贡献</a>.）
 </p>
 
 <div class="english">
@@ -60,7 +60,7 @@ discussions.
 </div>
 
 <p>
-在许诺为Go项目编写新东西时，请向此
+在承诺为 Go 项目编写新东西时，请向此
 <a href="http://groups.google.com/group/golang-nuts">邮件列表</a>
 发送邮件来讨论你的计划。这将给所有人确认该设计的机会，以帮助避免重复的努力，
 并对此想法是否符合该语言或工具的目标进行确认。这亦可保证在编写代码前，该设计考虑的充分性；
@@ -75,7 +75,7 @@ And don't start the discussion by mailing a change list!
 </div>
 
 <p>
-简言之，编码前请发邮件，不要通过发送更改列表来开始讨论！
+简言之，写代码前请发邮件，不要通过发送更改列表来开始讨论！
 </p>
 
 <div class="english">
@@ -106,7 +106,7 @@ $ ./all.bash
 
 <pre>
 cd $GOROOT/src
-./all.bash    # 在Windows下，请运行all.bat
+./all.bash    # 在 Windows 下，请运行all.bat
 </pre>
 
 <div class="english">
@@ -143,15 +143,15 @@ to be added to your Mercurial configuration.
 
 <p>
 无论谁对Go进行更改，在它被递交前都必须进行审核。（在特殊情况下，比如修复一个构建，
-可在递交后进行审核。）Mercurial扩展可帮助管理代码审核流程。该扩展包含在Go源码树中，
-但需要添加到你的Mercurial配置中。
+可在递交后进行审核。）Mercurial 扩展可帮助管理代码审核流程。该扩展包含在 Go 源码树中，
+但需要添加到你的 Mercurial 配置中。
 </p>
 
 <div class="english">
 <h3>Caveat for Mercurial aficionados</h3>
 </div>
 
-<h3>敬告Mercurial死忠</h3>
+<h3>敬告 Mercurial 狂人</h3>
 
 <div class="english">
 <p>
@@ -161,7 +161,7 @@ as using standard Mercurial.</i>
 </div>
 
 <p>
-<i>通过代码审核扩展使用Mercurial不同于使用标准的Mercurial。</i>
+<i>通过代码审核扩展使用 Mercurial 不同于使用标准的 Mercurial。</i>
 </p>
 
 <div class="english">
@@ -182,10 +182,10 @@ and it checks that the author of the code is properly recorded for
 </div>
 
 <p>
-Go代码库作为独立的审核更改线来维护，我们想避免Mercurial随意更改图表的复杂性。
+Go代码库作为独立的审核更改线来维护，我们想避免 Mercurial 随意更改图表的复杂性。
 代码审核扩展对你的帮助：它的 <code>hg submit</code> 命令会自动检查并提醒本地仓库与远程的比较是否过时。
-<code>hg submit</code> 也可核对Go仓库的其它属性。例如，它默认通过<a href="/cmd/gofmt">gofmt</a>
-来检查签入的Go代码是否已按照标准风格格式化，并检查代码的作者是否为<a href="#版权">版权目的</a>正确地记录。
+<code>hg submit</code> 也可核对 Go 仓库的其它属性。例如，它默认通过<a href="/cmd/gofmt">gofmt</a>
+来检查签入的 Go 代码是否已按照标准风格格式化，并检查代码的作者是否为<a href="#版权">版权目的</a>正确地记录。
 </p>
 
 <div class="english">
@@ -238,7 +238,7 @@ you are a committer (see below), but Mercurial complains if it is missing.
 </div>
 
 <p>
-除非你是一个提交者，否则 <code>username</code> 不会被使用（见下），但没它的话Mercurial会抱怨的。
+除非你是一个提交者，否则 <code>username</code> 不会被使用（见下），但没它的话 Mercurial 会抱怨的。
 </p>
 
 <div class="english">
@@ -301,9 +301,9 @@ on the <a href="https://code.google.com/p/go-wiki/wiki">Go Wiki</a> for details.
 </div>
 
 <p>
-Windows用户需要执行额外的步骤才能让代码审核扩展工作。详情见
-<a href="https://code.google.com/p/go-wiki/wiki">Go维基</a> 中的
-<a href="https://code.google.com/p/go-wiki/wiki/CodeReview">CodeReview页面</a>。
+Windows 用户需要执行额外的步骤才能让代码审核扩展工作。详情见
+<a href="https://code.google.com/p/go-wiki/wiki">Go 维基</a> 中的
+<a href="https://code.google.com/p/go-wiki/wiki/CodeReview">CodeReview 页面</a>。
 </p>
 
 <div class="english">
@@ -329,12 +329,12 @@ application-specific password and use that when prompted for a password.
 </div>
 
 <p>
-代码审核服务使用Google账户认证。（若你可以使用某个账户
-<a href="https://www.google.com/accounts/Login?hl=en&amp;continue=http://www.google.com/">登录到google.com</a>，
+代码审核服务使用 Google 账户认证。（若你可以使用某个账户
+<a href="https://www.google.com/accounts/Login?hl=en&amp;continue=http://www.google.com/">登录到 google.com</a>，
 你就可以使用它登录到代码审核服务。）你在代码审核站点上使用的电子邮件地址将被记录在
-<a href="http://code.google.com/p/go/source/list">Mercurial更改日志</a> 和
+<a href="http://code.google.com/p/go/source/list">Mercurial 更改日志</a> 和
 <a href="/CONTRIBUTORS"><code>CONTRIBUTORS</code></a> 文件中。
-你可以<a href="https://www.google.com/accounts/NewAccount">创建一个Google账户</a>来关联到任何你接收邮件的地址。
+你可以<a href="https://www.google.com/accounts/NewAccount">创建一个 Google 账户</a>来关联到任何你接收邮件的地址。
 如果你开启了两步验证特性，请不要忘记生成一个特定于应用的密码并在提示输入密码时输入它。
 </p>
 
@@ -362,7 +362,7 @@ Many people prefer to set the Context option to
 
 <p>
 编辑你的<a href="https://codereview.appspot.com/settings">代码审核设置</a>。设置一个昵称。
-一些人更喜欢将Context选项设置为&ldquo;Whole file&rdquo;以便在审核更改时看到更多上下文。
+一些人更喜欢将 Context 选项设置为&ldquo;Whole file&rdquo;以便在审核更改时看到更多上下文。
 </p>
 
 <div class="english">
@@ -381,7 +381,7 @@ For example, <code>rsc</code> is an alias for <code>rsc@golang.org</code>.
 <h3>Switch to the default branch</h3>
 </div>
 
-<h3>切换到default分支</h3>
+<h3>切换到 default 分支</h3>
 
 <div class="english">
 <p>
@@ -393,9 +393,9 @@ Before making a change, make sure you use the default branch:
 </div>
 
 <p>
-大多数Go安装使用release分支，但是任何新的改动都只能对default分支进行。
-（它们会在发布下一步发布版时候被合并到release分支。）
-在做任何更改之前，请确保已经切换到了default分支：
+大多数 Go 安装使用 release 分支，但是任何新的改动都只能对 default 分支进行。
+（它们会在发布下一步发布版时候被合并到 release 分支。）
+在做任何更改之前，请确保已经切换到了 default 分支：
 </p>
 
 <pre>
@@ -423,8 +423,8 @@ or
 </div>
 
 <p>
-整个检出的树都是可写的。若你需要编辑文件，就直接编辑它，Mercurial会找出哪个被更改了。
-若你需要告诉Mercurial哪个文件被添加、移除、复制或重命名了，只需运行
+整个检出的树都是可写的。若你需要编辑文件，就直接编辑它，Mercurial 会找出哪个被更改了。
+若你需要告诉 Mercurial 哪个文件被添加、移除、复制或重命名了，只需运行
 <code>hg add</code>、<code>hg rm</code>、<code>hg cp</code> 或 <code>hg mv</code>。
 </p>
 
@@ -432,7 +432,7 @@ or
 <p>When you are ready to send a change out for review, run</p>
 </div>
 
-<p>当你准备好为审核发出一个更改了，就可以在你的Go仓库中的任何目录下运行</p>
+<p>当你准备好为审核发出一个更改了，就可以在你的 Go 仓库中的任何目录下运行</p>
 
 <pre>
 $ hg change
@@ -447,7 +447,7 @@ The file will look like:
 </div>
 
 <p>
-Mercurial就会在你的编辑器中打开一个更改描述文件。
+Mercurial 就会在你的编辑器中打开一个更改描述文件。
 （它使用由 <code>$EDITOR</code> 环境变量命名的编辑器，默认为<code>vi</code>。）
 此文件看起来会像这样：
 </p>
@@ -486,7 +486,7 @@ mailing list will be used as the reviewer.
 <p>
 <code>Reviewer</code> 一行列出指定此更改的审核者，<code>CC</code> 一行则列出该变更通知的人。
 这些可以使代码审核昵称或任意邮件地址。除非明确告知，例如在发送到更改列表前的讨论中，否则，
-请将审核者字段留空。这意味着<a href="http://groups.google.com/group/golang-dev">golang-dev@googlegroups.com</a>
+请将审核者字段留空。这意味着 <a href="http://groups.google.com/group/golang-dev">golang-dev@googlegroups.com</a>
 邮件列表将被用作审核者。
 </p>
 
@@ -502,7 +502,7 @@ description elaborates.
 </div>
 
 <p>
-请将 &ldquo;<code>&lt;enter description here&gt;</code>&rdquo;替换为你的更改描述。
+请将 &ldquo;<code>&lt;enter description here&gt;</code>&rdquo; 替换为你的更改描述。
 按照惯例，更改描述的第一行应为该更改的概述，前缀主要影响的包，它将作为代码审核邮件的主题；
 其余为详细的描述。
 </p>
@@ -563,8 +563,8 @@ tracker will automatically mark the issue as fixed.
 </div>
 
 <p>
-特殊的句子&ldquo;Fixes issue 159.&rdquo;将此更改与<a href="http://code.google.com/p/go/issues/list">Go问题跟踪系统</a>
-中的第195号问题相关联。在此更改被最终递交后，问题跟踪系统将自动把该问题标记为已修复。
+特殊的句子 &ldquo;Fixes issue 159.&rdquo; 将此更改与<a href="http://code.google.com/p/go/issues/list">Go 问题跟踪系统</a>
+中的第 195 号问题相关联。在此更改被最终递交后，问题跟踪系统将自动把该问题标记为已修复。
 </p>
 
 <div class="english">
@@ -584,7 +584,7 @@ which <code>hg change</code> will print, something like:
 </div>
 
 <p>
-代码审核服务会为你的更改分配一个问题编号与URL，<code>hg change</code>
+代码审核服务会为你的更改分配一个问题编号与 URL，<code>hg change</code>
 会将它打印出来，就像这样：
 </p>
 
@@ -677,7 +677,7 @@ to send comments back.
 </div>
 
 <p>
-运行 <code>hg mail</code> 会将一封邮件发送至审核者以请求他们访问问题URL，并对该更改进行评论。
+运行 <code>hg mail</code> 会将一封邮件发送至审核者以请求他们访问问题 URL，并对该更改进行评论。
 在结束后，审核者会单击&ldquo;Publish and Mail comments&rdquo;返回评论。
 </p>
 
@@ -806,7 +806,7 @@ $ hg file 99999 somefile
 </pre>
 
 <p>
-将 <code>somefile</code> 添加到CL 99999，也可以用
+将 <code>somefile</code> 添加到 CL 99999，也可以用
 </p>
 
 <pre>
@@ -825,7 +825,7 @@ will issue a warning if a file is moved between changes.
 </div>
 
 <p>
-某文件可能同时只属于一个活动的CL。若该文件在更改之间被移动了，<code>hg file</code>
+某文件可能同时只属于一个活动的 CL。若该文件在更改之间被移动了，<code>hg file</code>
 就会发出警告。
 </p>
 
@@ -854,7 +854,7 @@ but then also synchronizes the local change list state against the new data.)</p
 </div>
 
 <p>
-（对于Mercurial粉来说，<code>hg sync</code> 不仅会运行
+（对于 Mercurial 粉来说，<code>hg sync</code> 不仅会运行
 <code>hg pull -u</code>，还会针对新的数据同步本地更改列表状态。）
 </p>
 
@@ -866,7 +866,7 @@ remote changes into your local changes.  It may leave some files to merge by han
 </div>
 
 <p>
-若你编辑过的文件已被更改，Mercurial会尽可能将远程更改改合并到你的本地更改中。
+若你编辑过的文件已被更改，Mercurial 会尽可能将远程更改改合并到你的本地更改中。
 </p>
 
 <div class="english">
@@ -913,8 +913,8 @@ might turn up:
 </div>
 
 <p>
-该抄本最重要的部分为斜体行：Mercurial将你的更改与独立的更改合并时可能会失败。
-当发生该情况时，Mercurial会在文件中保留二者的编辑，并以
+该抄本最重要的部分为斜体行：Mercurial 将你的更改与独立的更改合并时可能会失败。
+当发生该情况时，Mercurial 会在文件中保留二者的编辑，并以
 <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> 与 <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code>
 标记。现在你要做的就是编辑该文件以将它们结合起来。
 继续该例子，在 <code>flag_test.go</code> 中搜索那些字符串时会出现：
@@ -940,7 +940,7 @@ to remove the markers and leave the correct code:
 </div>
 
 <p>
-Mercurial不会显示它，但假如你们同时编辑的原文本均为6，你加了1而其他人加了2，
+Mercurial 不会显示它，但假如你们同时编辑的原文本均为6，你加了1而其他人加了2，
 那么正确的答案也许为9。首先，编辑该小节以移除标记并留下正确的代码：
 </p>
 
@@ -957,7 +957,7 @@ Then ask Mercurial to mark the conflict as resolved:
 </div>
 
 <p>
-然后请求Mercurial将此冲突标记为已解决：
+然后请求 Mercurial 将此冲突标记为已解决：
 </p>
 
 <pre>
@@ -988,7 +988,7 @@ by using the <code>hg clpatch</code> command. Running
 </div>
 
 <p>
-你可以用 <code>hg clpatch</code> 命令来将他人建议的CL导入到你本地的Mercurial客户端。
+你可以用 <code>hg clpatch</code> 命令来将他人建议的 CL 导入到你本地的 Mercurial 客户端。
 运行
 </p>
 
@@ -1006,8 +1006,8 @@ the output of <code>hg pending</code> and others.
 </div>
 
 <p>
-会将CL 99999最新的diff应用到你的工作副本中。若CL 99999引用的文件进行了本地的修改，
-<code>clpatch</code> 会拒绝应用整个diff。一旦它被应用，CL 99999会在 <code>hg pending</code>
+会将 CL 99999 最新的 diff 应用到你的工作副本中。若 CL 99999 引用的文件进行了本地的修改，
+<code>clpatch</code> 会拒绝应用整个 diff。一旦它被应用，CL 99999 会在 <code>hg pending</code>
 或其它的标准输出中显示。
 </p>
 
@@ -1035,7 +1035,7 @@ be an effective way of reverting one CL revision and applying another.
 
 <div class="english">
 <p>
-会将CL 99999的所有文件恢复到它们原来的状态。这是种恢复某个CL修订并应用另一个CL的有效方式。
+会将 CL 99999 的所有文件恢复到它们原来的状态。这是种恢复某个 CL 修订并应用另一个 CL 的有效方式。
 </p>
 </div>
 
@@ -1049,9 +1049,9 @@ You can use <code>hg change -D 99999</code> to remove the reference to CL 99999.
 </div>
 
 <p>
-该CL一旦被递交，你在下次运行 <code>hg sync</code> 时，它会从你本地的待定列表中移除。
+该 CL 一旦被递交，你在下次运行 <code>hg sync</code> 时，它会从你本地的待定列表中移除。
 有时，待定列表不会同步已关闭的过时引用或被丢弃的CL。你可以使用 <code>hg change -D 99999</code>
-来移除CL 99999的引用。
+来移除 CL 99999 的引用。
 </p>
 
 <div class="english">
@@ -1068,7 +1068,7 @@ it to the Mercurial repository.
 </div>
 
 <p>
-在该代码被评论 <code>LGTM</code> 后，就该将它递交到Mercurial代码仓库了。
+在该代码被评论 <code>LGTM</code> 后，就该将它递交到 Mercurial 代码仓库了。
 </p>
 
 <div class="english">
@@ -1161,7 +1161,7 @@ Feel free to contribute to this page as you learn the review process.
 </div>
 
 <p>
-除本文中的信息外，Go社区还维护了一份<a href="https://code.google.com/p/go-wiki/wiki/CodeReview">代码审核</a>维基页面。
+除本文中的信息外，Go 社区还维护了一份<a href="https://code.google.com/p/go-wiki/wiki/CodeReview">代码审核</a>维基页面。
 欢迎你根据自己所了解的审核过程编辑此页。
 </p>
 
@@ -1182,7 +1182,7 @@ and perhaps the <a href="/AUTHORS"><code>AUTHORS</code></a> file.
 
 <p>
 Go仓库中的文件不会列出作者的名字，以此避免混乱及必须保持该列表更新的麻烦。
-取而代之，你的名字将出现在 <a href="http://code.google.com/p/go/source/list">Mercurial更改日志</a>
+取而代之，你的名字将出现在 <a href="http://code.google.com/p/go/source/list">Mercurial 更改日志</a>
 与 <a href="/CONTRIBUTORS"><code>CONTRIBUTORS</code></a> 文件中，
 也许还会出现在 <a href="/AUTHORS"><code>AUTHORS</code></a> 文件中。
 </p>
@@ -1202,7 +1202,7 @@ contributor license agreements:
 <p>
 <a href="/CONTRIBUTORS"><code>CONTRIBUTORS</code></a> 文件详述了哪些人是Go的贡献者；
 <a href="/AUTHORS"><code>AUTHORS</code></a> 文件详述了谁是&ldquo;Go的作者&rdquo;，
-即版权的持有者。Google的Go开发者将在你第一次递交更改时更新这些文件。
+即版权的持有者。Google 的 Go 开发者将在你第一次递交更改时更新这些文件。
 为此，你必须完成贡献者许可协议之一：
 </p>
 
@@ -1258,7 +1258,7 @@ This rigmarole needs to be done only for your first submission.
 </pre>
 </div>
 
-<p>你贡献的代码应使用标准版权页眉：</p>
+<p>你贡献的代码应使用标准版权头：</p>
 
 <pre>
 // Copyright 2013 The Go Authors. All rights reserved.

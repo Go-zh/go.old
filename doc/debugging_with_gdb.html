@@ -17,8 +17,8 @@ Besides this overview you might want to consult the
 </div>
 
 <p><i>
-本文档适用于 <code>gc</code> 工具链。Gccgo拥有gdb的原生支持。
-除此概览外，你或许还想查阅<a href="http://sourceware.org/gdb/current/onlinedocs/gdb/">GDB手册</a>。
+本文档适用于 <code>gc</code> 工具链。Gccgo 拥有 gdb 的原生支持。
+除此概览外，你或许还想查阅<a href="http://sourceware.org/gdb/current/onlinedocs/gdb/">GDB 手册</a>。
 </i></p>
 
 <div class="english">
@@ -37,10 +37,10 @@ to use GDB when it works, not as a guarantee of success.
 </div>
 
 <p>
-GDB 无法很好地理解Go程序。堆栈管理、线程和运行时包含的方面与 GDB 预期的执行模型非常不同，
+GDB 无法很好地理解 Go 程序。堆栈管理、线程和运行时包含的方面与 GDB 预期的执行模型非常不同，
 即便程序是由 gccgo 编译的，它们也会把调试器搞乱。作为一个推论，即便 GDB 在某些情况下很有用，
-但对于 Go 程序来说它并不是个可靠的调试器，对大的并发来说更是如此。此外，它并不是 Go
-项目需要优先解决的问题，这是很难的。简言之，就是以下指令仅在 GDB 能用时才可作为指导被采纳，
+但对于 Go 程序来说它并不是个可靠的调试器，对大并发来说更是如此。此外，它并不是 Go
+项目需要优先解决的问题，这是很难的。简言之，就是以下指令仅在 GDB 可用时才能作为指导被采纳，
 而并不保证成功。
 </p>
 
@@ -70,9 +70,9 @@ use to inspect a live process or a core dump.
 </div>
 
 <p>
-当你使用 <code>gc</code> 工具链在Linux、Mac OS X或FreeBSD上编译或链接Go程序时，
-所产生的二进制文件包含DWARFv3调试信息，最近版本（&gt;7.1）的
-GDB调试器可用于检查实时进程或核心转储。
+当你使用 <code>gc</code> 工具链在 Linux、Mac OS X、FreeBSD 或 NetBSD 上编译或链接 Go 程序时，
+所产生的二进制文件会包含 DWARFv3 调试信息，最近版本（&gt;7.1）的
+GDB 调试器可用于检查实时进程或核心转储。
 </p>
 
 <div class="english">
@@ -174,7 +174,7 @@ Show the name, type and location of global variables:
 <h3 id="Go_Extensions">Go Extensions</h3>
 </div>
 
-<h3 id="Go扩展">Go扩展</h3>
+<h3 id="Go扩展">Go 扩展</h3>
 
 <div class="english">
 <p>
@@ -186,8 +186,8 @@ pretty print the built-in map, slice and channel types.
 </div>
 
 <p>
-GDB最近的一个扩展机制允许它为给定的二进制文件加载扩展脚本。工具链以此用少数命令来扩展GDB，
-检查运行时代码的内部构件（例如Go程），并美观打印出内建映射、切片与信道类型。
+GDB 最近的一个扩展机制允许它为给定的二进制文件加载扩展脚本。工具链以此用少数命令来扩展 GDB，
+检查运行时代码的内部构件（例如 Go 程），并美观打印出内建映射、切片与信道类型。
 </p>
 
 <div class="english">
@@ -301,9 +301,8 @@ the form <code>pkg.(*MyType).Meth</code>.
 <ol>
 <li>字符串的美观打印只会为类型string触发，而不会为从它衍生出的类型触发。</li>
 <li>运行时库C部分的类型信息缺失。</li>
-<li>GDB不理解Go的名称限定且将 <code>"fmt.Print"</code> 作为需要引用的带
-	<code>"."</code> 的无结构字面来对待。该对象甚至比 <code>pkg.(*MyType).Meth</code>
-	形式的方法名更强。
+<li>GDB不理解Go的名称限定且将 <code>"fmt.Print"</code> 作为需要引用的带 <code>"."</code>
+的无结构字面来对待。该对象甚至比 <code>pkg.(*MyType).Meth</code> 形式的方法名更强。
 <li>所有全局变量都集中在包 <code>"main"</code> 中。</li>
 </ol>
 
@@ -324,7 +323,7 @@ This should produce an executable file named <code>regexp.test</code>.
 </div>
 
 <p>
-在此教程中，我们将检查<a href="/pkg/regexp/">regexp</a>包单元测试的二进制文件。
+在此教程中，我们将检查 <a href="/pkg/regexp/">regexp</a> 包单元测试的二进制文件。
 要构建此二进制文件，切换到 <code>$GOROOT/src/pkg/regexp</code> 目录并运行
 <code>go test -c</code>。这将产生一个名为 <code>regexp.test</code> 的可执行文件。
 </p>
@@ -380,7 +379,7 @@ pass your <code>$GOROOT</code> with the <code>'-d'</code> flag:
 </div>
 
 <p>
-要帮助GDB找到Go运行时源及其伴随的支持脚本，请将你的 <code>$GOROOT</code> 通过
+要帮助 GDB 找到 Go 运行时源及其伴随的支持脚本，请将你的 <code>$GOROOT</code> 通过
 <code>'-d'</code> 标记传入：
 </p>
 
@@ -397,8 +396,8 @@ it by hand by telling gdb (assuming you have the go sources in
 </div>
 
 <p>
-若因为一些原因GDB仍然不能找到该目录或该脚本，你可以通过手动告诉gdb来加载它
-（假定你在 <code>~/go/</code> 中拥有go源码）。
+若因为一些原因 GDB 仍然不能找到该目录或该脚本，你可以通过手动告诉 gdb 来加载它
+（假定你在 <code>~/go/</code> 中拥有 go 源码）。
 </p>
 
 <pre>
@@ -474,7 +473,7 @@ package is known to GDB as <code>'regexp.Compile'</code>.
 
 <p>
 变量与函数名必须由它们所属的包名限定。来自 <code>regexp</code> 包的
-<code>Compile</code> 函数被GDB视作 <code>'regexp.Compile'</code>。
+<code>Compile</code> 函数被 GDB 视作 <code>'regexp.Compile'</code>。
 </p>
 
 <div class="english">
@@ -548,7 +547,7 @@ See which goroutines are running, and what they're doing:
 </div>
 
 <p>
-执行会在断点处暂停。看看哪个Go程正在运行，以及它们在做什么：
+执行会在断点处暂停。看看哪个 Go 程正在运行，以及它们在做什么：
 </p>
 
 <pre>
@@ -564,7 +563,7 @@ the one marked with the <code>*</code> is the current goroutine.
 </div>
 
 <p>
-以 <code>*</code> 标记的为当前Go程。
+以 <code>*</code> 标记的为当前 Go 程。
 </p>
 
 <div class="english">
@@ -682,7 +681,7 @@ on the right-hand side of the type name and made up a 'struct' keyword, in tradi
 
 <p>
 在打印该实参时，注意它是指向 <code>Regexp</code> 值的指针。另外请注意GDB错误地将 <code>*</code>
-放在了类型名的右边，并按照传统的C风格添加了 <code>'struct'</code> 关键字。
+放在了类型名的右边，并按照传统的 C 风格添加了 <code>'struct'</code> 关键字。
 </p>
 
 <pre>
@@ -812,7 +811,7 @@ GDB's pretty printing mechanism is triggered by regexp matches on type names.  A
 </div>
 
 <p>
-GDB的美观打印机制由类型名的正则匹配触发。一个切片的例子：
+GDB 的美观打印机制由类型名的正则匹配触发。一个切片的例子：
 </p>
 
 <pre>
@@ -828,7 +827,7 @@ you can look inside the runtime representation to do that (tab completion helps 
 </div>
 
 <p>
-由于切片、数组及字符串并非C指针，GDB无法为你解释下标操作，不过你可以查看运行时中的表示来达到目的（tab补全可以帮你）：
+由于切片、数组及字符串并非 C 指针，GDB 无法为你解释下标操作，不过你可以查看运行时中的表示来达到目的（tab 补全可以帮你）：
 </p>
 
 <pre>
@@ -866,7 +865,7 @@ Channels and maps are 'reference' types, which gdb shows as pointers to C++-like
 </div>
 
 <p>
-信道与映射为“引用”类型，gdb会将它作为指向类C++类型 <code>hash&lt;int,string&gt;*</code> 的指针来显示。
+信道与映射为“引用”类型，gdb 会将它作为指向类 C++ 类型 <code>hash&lt;int,string&gt;*</code> 的指针来显示。
 解引用将触发美观打印。
 </p>
 
@@ -877,9 +876,9 @@ Interfaces are represented in the runtime as a pointer to a type descriptor and 
 </div>
 
 <p>
-接口在运行时会表示为一个指向类型描述符的指针与一个指向值的指针。Go的
-GDB运行时扩展可将其解码并为该运行时类型自动触发美观打印。扩展函数 <code>$dtype</code> 可为你解码动态类型。
-（例子从 <code>regexp.go</code> 第293行的断点处获取。）
+接口在运行时会表示为一个指向类型描述符的指针与一个指向值的指针。Go 的 GDB
+运行时扩展可将其解码并为该运行时类型自动触发美观打印。扩展函数 <code>$dtype</code> 可为你解码动态类型。
+（例子从 <code>regexp.go</code> 第 293 行的断点处获取。）
 </p>
 
 <pre>

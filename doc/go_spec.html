@@ -29,7 +29,7 @@ TODO
 [ ] 需要描述关于函数/方法的调用规则
 [ ] #赋值（即常量推广）的最后一段应放到别处，并加上对空接口赋值的说明
 [ ] 需要说明选择器的“作用域”？
-[ ] 阐明什么是结构体声明中的字段名（struct{T} vs. struct {T T} vs. struct {t T}）
+[ ] 阐明结构体声明中的字段名是什么（struct{T} vs. struct {T T} vs. struct {t T}）
 [ ] 关于操作符的结果类型需要详尽的语言描述
 [ ] 或许该写一些关于语句求值顺序的东西，尽管它很明显
 [ ] 在“选择器”一节中，阐明在方法调用中传递的是接收者的什么值
@@ -122,6 +122,7 @@ Repetition  = "{" Expression "}" .
 Productions are expressions constructed from terms and the following
 operators, in increasing precedence:
 </p>
+
 <pre class="grammar">
 |   alternation
 ()  grouping
@@ -131,8 +132,9 @@ operators, in increasing precedence:
 </div>
 
 <p>
-生成式由表达式构造，表达式通过术语及以下操作符构造，自上而下优先级递增（低=>高）：
+生成式由表达式构造，表达式通过术语及以下操作符构造，自上而下优先级递增（低=&gt;高）：
 </p>
+
 <pre class="grammar">
 |   选择
 ()  分组
@@ -149,7 +151,7 @@ double quotes <code>""</code> or back quotes <code>``</code>.
 </div>
 
 <p>
-小写生成式名用于标识词法标记。非最终（Non-terminals）词法标记使用驼峰记法（CamelCase）。
+小写生成式名用于标识词法标记。非终止（Non-terminals）词法标记使用驼峰记法（CamelCase）。
 置于双引号 <code>""</code> 或反引号 <code>``</code> 中的即为词法标记。
 </p>
 
@@ -166,7 +168,7 @@ language.
 
 <p>
 形式 <code>a … b</code> 表示把从 <code>a</code> 到 <code>b</code> 的字符集作为选择项。
-横向省略号 <code>…</code> 也在本文档中非正式地表示各种列举或简略的代码片断。
+横向省略号 <code>…</code> 也在本文档中非正式地表示各种列举或简略代码片断。
 单个字符 <code>…</code>（不同于三个字符 <code>...</code>）并非Go语言本身的标记。
 </p>
 
@@ -194,33 +196,77 @@ in the source text.
 那些应视作两个码点。为简单起见，本文档将使用非正式的术语<b>字符</b>在源文本中指代 Unicode 码点。
 </p>
 
+<div class="english">
 <p>
 Each code point is distinct; for instance, upper and lower case letters
 are different characters.
 </p>
+</div>
+
+<p>
+每个码点都是不同的，例如，大写与小写的字母就是不同的字符。
+</p>
+
+<div class="english">
 <p>
 Implementation restriction: For compatibility with other tools, a
 compiler may disallow the NUL character (U+0000) in the source text.
 </p>
+</div>
+
+<p>
+实现限制：为兼容其它工具，编译器会阻止字符 NUL（U+0000）出现在源码文本中。
+</p>
+
+<div class="english">
 <p>
 Implementation restriction: For compatibility with other tools, a
 compiler may ignore a UTF-8-encoded byte order mark
 (U+FEFF) if it is the first Unicode code point in the source text.
 A byte order mark may be disallowed anywhere else in the source.
 </p>
+</div>
 
+<p>
+实现限制：为兼容其它工具，若 UTF-8 编码的字节序标记（U+FEFF）为源文本中的第一个 Unicode 码点，
+那么编译器就会忽略它。
+</p>
+
+<div class="english">
 <h3 id="Characters">Characters</h3>
+</div>
 
+<h3 id="字符">字符</h3>
+
+<div class="english">
 <p>
 The following terms are used to denote specific Unicode character classes:
 </p>
+</div>
+
+<p>
+The following terms are used to denote specific Unicode character classes:
+
+具体的 Unicode 字符类别由以下术语表示：
+</p>
+
+<div class="english">
 <pre class="ebnf">
 newline        = /* the Unicode code point U+000A */ .
 unicode_char   = /* an arbitrary Unicode code point except newline */ .
 unicode_letter = /* a Unicode code point classified as "Letter" */ .
 unicode_digit  = /* a Unicode code point classified as "Decimal Digit" */ .
 </pre>
+</div>
 
+<pre class="ebnf">
+换行符      = /* 即 Unicode 码点 U+000A */ .
+Unicode字符 = /* 除 newline 以外的任意 Unicode 码点 */ .
+Unicode字母 = /* 类型为“字母”的 Unicode 码点 */ .
+Unicode数字 = /* 类型为“十进制数字”的 Unicode 码点 */ .
+</pre>
+
+<div class="english">
 <p>
 In <a href="http://www.unicode.org/versions/Unicode6.3.0/">The Unicode Standard 6.3</a>,
 Section 4.5 "General Category"
@@ -228,17 +274,44 @@ defines a set of character categories.  Go treats
 those characters in category Lu, Ll, Lt, Lm, or Lo as Unicode letters,
 and those in category Nd as Unicode digits.
 </p>
+</div>
 
+<p>
+在<a href="http://www.unicode.org/versions/Unicode6.3.0/">Unicode 标准 6.3</a>，
+章节4.5 “一般类别” 中定义了字符集类别。其中类别 Lu，Ll，Lt，Lm 及 Lo 被视为
+Unicode 字母，类别 Nd 被视为 Unicode 数字。
+</p>
+
+<div class="english">
 <h3 id="Letters_and_digits">Letters and digits</h3>
+</div>
 
+<h3 id="字母和数字">字母和数字</h3>
+
+<div class="english">
 <p>
 The underscore character <code>_</code> (U+005F) is considered a letter.
 </p>
+</div>
+
+<p>
+下划线字符 <code>_</code>（U+005F）被视为一个字母。
+</p>
+
+<div class="english">
 <pre class="ebnf">
 letter        = unicode_letter | "_" .
 decimal_digit = "0" … "9" .
 octal_digit   = "0" … "7" .
 hex_digit     = "0" … "9" | "A" … "F" | "a" … "f" .
+</pre>
+</div>
+
+<pre class="ebnf">
+字母         = Unicode字母 | "_" .
+十进制数字   = "0" … "9" .
+八进制数字   = "0" … "7" .
+十六进制数字 = "0" … "9" | "A" … "F" | "a" … "f" .
 </pre>
 
 <h2 id="Lexical_elements">Lexical elements</h2>
