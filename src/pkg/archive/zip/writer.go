@@ -17,6 +17,8 @@ import (
 // TODO(adg): support specifying deflate level
 
 // Writer implements a zip file writer.
+
+// Writer类型实现了zip文件的写入器。
 type Writer struct {
 	cw     *countWriter
 	dir    []*header
@@ -30,12 +32,17 @@ type header struct {
 }
 
 // NewWriter returns a new Writer writing a zip file to w.
+
+// NewWriter创建并返回一个将zip文件写入w的*Writer。
 func NewWriter(w io.Writer) *Writer {
 	return &Writer{cw: &countWriter{w: bufio.NewWriter(w)}}
 }
 
 // Close finishes writing the zip file by writing the central directory.
 // It does not (and can not) close the underlying writer.
+
+// Close方法通过写入中央目录关闭该*Writer。
+// 本方法不会也没办法关闭下层的io.Writer接口。
 func (w *Writer) Close() error {
 	if w.last != nil && !w.last.closed {
 		if err := w.last.close(); err != nil {
@@ -167,6 +174,11 @@ func (w *Writer) Close() error {
 // allowed.
 // The file's contents must be written to the io.Writer before the next
 // call to Create, CreateHeader, or Close.
+
+// 使用给出的文件名添加一个文件进zip文件。
+// 本方法返回一个io.Writer接口（用于写入新添加文件的内容）。
+// 文件名必须是相对路径，不能以设备或斜杠开始，只接受'/'作为路径分隔。
+// 新增文件的内容必须在下一次调用CreateHeader、Create或Close方法之前全部写入。
 func (w *Writer) Create(name string) (io.Writer, error) {
 	header := &FileHeader{
 		Name:   name,
@@ -180,6 +192,10 @@ func (w *Writer) Create(name string) (io.Writer, error) {
 // It returns a Writer to which the file contents should be written.
 // The file's contents must be written to the io.Writer before the next
 // call to Create, CreateHeader, or Close.
+
+// 使用给出的*FileHeader来作为文件的元数据添加一个文件进zip文件。
+// 本方法返回一个io.Writer接口（用于写入新添加文件的内容）。
+// 新增文件的内容必须在下一次调用CreateHeader、Create或Close方法之前全部写入。
 func (w *Writer) CreateHeader(fh *FileHeader) (io.Writer, error) {
 	if w.last != nil && !w.last.closed {
 		if err := w.last.close(); err != nil {

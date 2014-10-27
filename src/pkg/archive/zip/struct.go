@@ -17,6 +17,20 @@ for normal archives both fields will be the same. For files requiring
 the ZIP64 format the 32 bit fields will be 0xffffffff and the 64 bit
 fields must be used instead.
 */
+
+/*
+zip包提供了zip档案文件的读写服务.
+
+参见http://www.pkware.com/documents/casestudies/APPNOTE.TXT
+
+本包不支持跨硬盘的压缩。
+
+关于ZIP64：
+
+为了向下兼容，FileHeader同时拥有32位和64位的Size字段。
+64位字段总是包含正确的值，对普通格式的档案未见它们的值是相同的。
+对zip64格式的档案文件32位字段将是0xffffffff，必须使用64位字段。
+*/
 package zip
 
 import (
@@ -26,6 +40,8 @@ import (
 )
 
 // Compression methods.
+
+// 预定义压缩算法。
 const (
 	Store   uint16 = 0
 	Deflate uint16 = 8
@@ -67,30 +83,38 @@ const (
 
 // FileHeader describes a file within a zip file.
 // See the zip spec for details.
+
+// FileHeader描述zip文件中的一个文件。
+// 参见zip的定义获取细节。
 type FileHeader struct {
 	// Name is the name of the file.
 	// It must be a relative path: it must not start with a drive
 	// letter (e.g. C:) or leading slash, and only forward slashes
 	// are allowed.
+
+	// Name是文件名，它必须是相对路径，
+	// 不能以设备或斜杠开始，只接受'/'作为路径分隔符
 	Name string
 
 	CreatorVersion     uint16
 	ReaderVersion      uint16
 	Flags              uint16
 	Method             uint16
-	ModifiedTime       uint16 // MS-DOS time
-	ModifiedDate       uint16 // MS-DOS date
+	ModifiedTime       uint16 // MS-DOS time // MS-DOS时间
+	ModifiedDate       uint16 // MS-DOS date // MS-DOS日期
 	CRC32              uint32
-	CompressedSize     uint32 // deprecated; use CompressedSize64
-	UncompressedSize   uint32 // deprecated; use UncompressedSize64
+	CompressedSize     uint32 // deprecated; use CompressedSize64 // 已弃用；请使用CompressedSize64
+	UncompressedSize   uint32 // deprecated; use UncompressedSize64 // 已弃用；请使用UncompressedSize64
 	CompressedSize64   uint64
 	UncompressedSize64 uint64
 	Extra              []byte
-	ExternalAttrs      uint32 // Meaning depends on CreatorVersion
+	ExternalAttrs      uint32 // Meaning depends on CreatorVersion // 其含义依赖于CreatorVersion
 	Comment            string
 }
 
 // FileInfo returns an os.FileInfo for the FileHeader.
+
+// FileInfo返回一个根据h的信息生成的os.FileInfo。
 func (h *FileHeader) FileInfo() os.FileInfo {
 	return headerFileInfo{h}
 }
@@ -117,6 +141,10 @@ func (fi headerFileInfo) Sys() interface{}   { return fi.fh }
 // Because os.FileInfo's Name method returns only the base name of
 // the file it describes, it may be necessary to modify the Name field
 // of the returned header to provide the full path name of the file.
+
+// FileInfoHeader返回一个根据fi填写了部分字段的Header。
+// 因为os.FileInfo接口的Name方法只返回它描述的文件的无路径名，
+// 有可能需要将返回值的Name字段修改为文件的完整路径名。
 func FileInfoHeader(fi os.FileInfo) (*FileHeader, error) {
 	size := fi.Size()
 	fh := &FileHeader{
@@ -176,12 +204,16 @@ func timeToMsDosTime(t time.Time) (fDate uint16, fTime uint16) {
 
 // ModTime returns the modification time in UTC.
 // The resolution is 2s.
+
+// 返回最近一次修改的UTC时间。（精度2s）
 func (h *FileHeader) ModTime() time.Time {
 	return msDosTimeToTime(h.ModifiedDate, h.ModifiedTime)
 }
 
 // SetModTime sets the ModifiedTime and ModifiedDate fields to the given time in UTC.
 // The resolution is 2s.
+
+// 将ModifiedTime和ModifiedDate字段设置为给定的UTC时间。（精度2s）
 func (h *FileHeader) SetModTime(t time.Time) {
 	h.ModifiedDate, h.ModifiedTime = timeToMsDosTime(t)
 }
@@ -206,6 +238,8 @@ const (
 )
 
 // Mode returns the permission and mode bits for the FileHeader.
+
+// Mode返回h的权限和模式位。
 func (h *FileHeader) Mode() (mode os.FileMode) {
 	switch h.CreatorVersion >> 8 {
 	case creatorUnix, creatorMacOSX:
@@ -220,6 +254,8 @@ func (h *FileHeader) Mode() (mode os.FileMode) {
 }
 
 // SetMode changes the permission and mode bits for the FileHeader.
+
+// SetMode修改h的权限和模式位。
 func (h *FileHeader) SetMode(mode os.FileMode) {
 	h.CreatorVersion = h.CreatorVersion&0xff | creatorUnix<<8
 	h.ExternalAttrs = fileModeToUnixMode(mode) << 16

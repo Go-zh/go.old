@@ -14,12 +14,20 @@ import (
 
 // A Compressor returns a compressing writer, writing to the
 // provided writer. On Close, any pending data should be flushed.
+
+// Compressor函数类型会返回一个io.WriteCloser，该接口会将数据压缩后写入提供的接口。
+// 关闭时，应将缓冲中的数据刷新到下层接口中。
 type Compressor func(io.Writer) (io.WriteCloser, error)
 
 // Decompressor is a function that wraps a Reader with a decompressing Reader.
 // The decompressed ReadCloser is returned to callers who open files from
 // within the archive.  These callers are responsible for closing this reader
 // when they're finished reading.
+
+// Decompressor函数类型会把一个io.Reader包装成具有decompressing特性的io.Reader.
+// Decompressor函数类型会返回一个io.ReadCloser，
+// 该接口的Read方法会将读取自提供的接口的数据提前解压缩。
+// 程序员有责任在读取结束时关闭该io.ReadCloser。
 type Decompressor func(io.Reader) io.ReadCloser
 
 var flateWriterPool sync.Pool
@@ -75,6 +83,8 @@ var (
 )
 
 // RegisterDecompressor allows custom decompressors for a specified method ID.
+
+// RegisterDecompressor使用指定的方法ID注册一个Decompressor类型函数。
 func RegisterDecompressor(method uint16, d Decompressor) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -87,6 +97,9 @@ func RegisterDecompressor(method uint16, d Decompressor) {
 
 // RegisterCompressor registers custom compressors for a specified method ID.
 // The common methods Store and Deflate are built in.
+
+// RegisterCompressor使用指定的方法ID注册一个Compressor类型函数。
+// 常用的方法Store和Deflate是内建的。
 func RegisterCompressor(method uint16, comp Compressor) {
 	mu.Lock()
 	defer mu.Unlock()

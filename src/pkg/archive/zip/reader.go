@@ -33,6 +33,7 @@ type ReadCloser struct {
 
 type File struct {
 	FileHeader
+
 	zipr         io.ReaderAt
 	zipsize      int64
 	headerOffset int64
@@ -43,6 +44,8 @@ func (f *File) hasDataDescriptor() bool {
 }
 
 // OpenReader will open the Zip file specified by name and return a ReadCloser.
+
+// OpenReader会打开name指定的zip文件并返回一个*ReadCloser。
 func OpenReader(name string) (*ReadCloser, error) {
 	f, err := os.Open(name)
 	if err != nil {
@@ -64,6 +67,8 @@ func OpenReader(name string) (*ReadCloser, error) {
 
 // NewReader returns a new Reader reading from r, which is assumed to
 // have the given size in bytes.
+
+// NewReader返回一个从r读取数据的*Reader，r被假设其大小为size字节。
 func NewReader(r io.ReaderAt, size int64) (*Reader, error) {
 	zr := new(Reader)
 	if err := zr.init(r, size); err != nil {
@@ -110,6 +115,8 @@ func (z *Reader) init(r io.ReaderAt, size int64) error {
 }
 
 // Close closes the Zip file, rendering it unusable for I/O.
+
+// Close关闭zip文件，使它不能用于I/O。
 func (rc *ReadCloser) Close() error {
 	return rc.f.Close()
 }
@@ -119,6 +126,9 @@ func (rc *ReadCloser) Close() error {
 //
 // Most callers should instead use Open, which transparently
 // decompresses data and verifies checksums.
+
+// DataOffset返回文件的可能存在的压缩数据相对于zip文件起始的偏移量。
+// 大多数调用者应使用Open代替，该方法会主动解压缩数据并验证校验和。
 func (f *File) DataOffset() (offset int64, err error) {
 	bodyOffset, err := f.findBodyOffset()
 	if err != nil {
@@ -129,6 +139,9 @@ func (f *File) DataOffset() (offset int64, err error) {
 
 // Open returns a ReadCloser that provides access to the File's contents.
 // Multiple files may be read concurrently.
+
+// Open方法返回一个io.ReadCloser接口，提供读取文件内容的方法。
+// 可以同时读取多个文件。
 func (f *File) Open() (rc io.ReadCloser, err error) {
 	bodyOffset, err := f.findBodyOffset()
 	if err != nil {

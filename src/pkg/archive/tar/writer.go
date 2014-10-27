@@ -31,6 +31,11 @@ var (
 // A tar archive consists of a sequence of files.
 // Call WriteHeader to begin a new file, and then call Write to supply that file's data,
 // writing at most hdr.Size bytes in total.
+
+// Writer类型提供了POSIX.1格式的tar档案文件的顺序写入。
+// 一个tar档案文件包含一系列文件。
+// 调用WriteHeader来写入一个新的文件，
+// 然后调用Write写入文件的数据，该记录写入的数据不能超过hdr.Size字节。
 type Writer struct {
 	w          io.Writer
 	err        error
@@ -44,9 +49,13 @@ type Writer struct {
 }
 
 // NewWriter creates a new Writer writing to w.
+
+// NewWriter创建一个写入w的*Writer。
 func NewWriter(w io.Writer) *Writer { return &Writer{w: w} }
 
 // Flush finishes writing the current file (optional).
+
+// Flush结束当前文件的写入。（可选的）
 func (tw *Writer) Flush() error {
 	if tw.nb > 0 {
 		tw.err = fmt.Errorf("archive/tar: missed writing %d bytes", tw.nb)
@@ -135,6 +144,10 @@ var (
 // WriteHeader writes hdr and prepares to accept the file's contents.
 // WriteHeader calls Flush if it is not the first header.
 // Calling after a Close will return ErrWriteAfterClose.
+
+// WriteHeader写入hdr并准备接受文件内容。
+// 如果不是第一次调用本方法，会调用Flush。
+// 在Close之后调用本方法会返回ErrWriteAfterClose。
 func (tw *Writer) WriteHeader(hdr *Header) error {
 	return tw.writeHeader(hdr, true)
 }
@@ -353,6 +366,10 @@ func paxHeader(msg string) string {
 // Write writes to the current entry in the tar archive.
 // Write returns the error ErrWriteTooLong if more than
 // hdr.Size bytes are written after WriteHeader.
+
+// Write向tar档案文件的当前记录中写入数据。
+// 如果写入的数据总数超出上一次调用WriteHeader的参数hdr.Size字节，
+// 返回ErrWriteTooLong错误。
 func (tw *Writer) Write(b []byte) (n int, err error) {
 	if tw.closed {
 		err = ErrWriteTooLong
@@ -375,6 +392,9 @@ func (tw *Writer) Write(b []byte) (n int, err error) {
 
 // Close closes the tar archive, flushing any unwritten
 // data to the underlying writer.
+
+// Close关闭tar档案文件，
+// 会将缓冲中未写入下层的io.Writer接口的数据刷新到下层。
 func (tw *Writer) Close() error {
 	if tw.err != nil || tw.closed {
 		return tw.err

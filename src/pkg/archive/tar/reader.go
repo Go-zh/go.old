@@ -28,6 +28,11 @@ const maxNanoSecondIntSize = 9
 // A tar archive consists of a sequence of files.
 // The Next method advances to the next file in the archive (including the first),
 // and then it can be treated as an io.Reader to access the file's data.
+
+// Reader提供了对一个tar档案文件的顺序读取。
+// 一个tar档案文件包含一系列文件。
+// Next方法返回档案中的下一个文件（包括第一个），
+// 返回值可以被视为io.Reader来获取文件的数据。
 type Reader struct {
 	r       io.Reader
 	err     error
@@ -82,9 +87,13 @@ const (
 )
 
 // NewReader creates a new Reader reading from r.
+
+// NewReader创建一个从r读取的Reader。
 func NewReader(r io.Reader) *Reader { return &Reader{r: r} }
 
 // Next advances to the next entry in the tar archive.
+
+// 转入tar档案文件下一记录，它会返回下一记录的头域。
 func (tr *Reader) Next() (*Header, error) {
 	var hdr *Header
 	if tr.err == nil {
@@ -726,6 +735,9 @@ func (tr *Reader) numBytes() int64 {
 // Read reads from the current entry in the tar archive.
 // It returns 0, io.EOF when it reaches the end of that entry,
 // until Next is called to advance to the next entry.
+
+// 从档案文件的当前记录读取数据，
+// 到达记录末端时返回(0, EOF)，直到调用Next方法转入下一记录。
 func (tr *Reader) Read(b []byte) (n int, err error) {
 	if tr.curr == nil {
 		return 0, io.EOF
