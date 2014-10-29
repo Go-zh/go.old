@@ -76,6 +76,8 @@ func NewReader(rd io.Reader) *Reader {
 
 // Reset discards any buffered data, resets all state, and switches
 // the buffered reader to read from r.
+
+// Reset丢弃缓冲中的数据，清除任何错误，将b重设为其下层从r读取数据。
 func (b *Reader) Reset(r io.Reader) {
 	b.reset(b.buf, r)
 }
