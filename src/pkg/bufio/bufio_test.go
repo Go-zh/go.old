@@ -435,7 +435,7 @@ func TestUnreadRuneError(t *testing.T) {
 	if err != nil {
 		t.Error("unexpected error on ReadRune (2):", err)
 	}
-	for r := range buf {
+	for _ = range buf {
 		_, err = r.ReadByte()
 		if err != nil {
 			t.Error("unexpected error on ReadByte (2):", err)
