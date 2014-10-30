@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -190,7 +191,6 @@ func main() {
 		return
 	}
 	defer os.RemoveAll(dir)
-	ioutil.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\nfunc main()\n"), 0666)
 
 	tests = strings.Replace(tests, "\t", " ", -1)
 	tests = commentRE.ReplaceAllString(tests, "")
@@ -230,6 +230,9 @@ TestCases:
 			continue
 		}
 
+		var gobuf bytes.Buffer
+		fmt.Fprintf(&gobuf, "package main\n")
+
 		var buf bytes.Buffer
 		if goarch == "arm" {
 			fmt.Fprintf(&buf, "#define CALL BL\n#define REGISTER (R0)\n")
@@ -242,7 +245,7 @@ TestCases:
 			if line == "" {
 				continue
 			}
-			for _, subline := range strings.Split(line, ";") {
+			for i, subline := range strings.Split(line, ";") {
 				subline = strings.TrimSpace(subline)
 				if subline == "" {
 					continue
@@ -255,6 +258,14 @@ TestCases:
 				}
 				name := m[1]
 				size, _ := strconv.Atoi(m[2])
+
+				// The limit was originally 128 but is now 384.
+				// Instead of rewriting the test cases above, adjust
+				// the first stack frame to use up the extra 32 bytes.
+				if i == 0 {
+					size += 384 - 128
+				}
+
 				if goarch == "amd64" && size%8 == 4 {
 					continue TestCases
 				}
@@ -269,11 +280,17 @@ TestCases:
 				body = callRE.ReplaceAllString(body, "CALL ·$1(SB);")
 				body = callindRE.ReplaceAllString(body, "CALL REGISTER;")
 
+				fmt.Fprintf(&gobuf, "func %s()\n", name)
 				fmt.Fprintf(&buf, "TEXT ·%s(SB)%s,$%d-0\n\t%s\n\tRET\n\n", name, nosplit, size, body)
 			}
 		}
 
-		ioutil.WriteFile(filepath.Join(dir, "asm.s"), buf.Bytes(), 0666)
+		if err := ioutil.WriteFile(filepath.Join(dir, "asm.s"), buf.Bytes(), 0666); err != nil {
+			log.Fatal(err)
+		}
+		if err := ioutil.WriteFile(filepath.Join(dir, "main.go"), gobuf.Bytes(), 0666); err != nil {
+			log.Fatal(err)
+		}
 
 		cmd := exec.Command("go", "build")
 		cmd.Dir = dir

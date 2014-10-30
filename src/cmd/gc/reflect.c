@@ -6,8 +6,8 @@
 #include <libc.h>
 #include "go.h"
 #include "../ld/textflag.h"
-#include "../../pkg/runtime/mgc0.h"
-#include "../../pkg/runtime/typekind.h"
+#include "../../runtime/mgc0.h"
+#include "../../runtime/typekind.h"
 
 /*
  * runtime interface and reflection data structures
@@ -109,7 +109,7 @@ lsort(Sig *l, int(*f)(Sig*, Sig*))
 // the given map type.  This type is not visible to users -
 // we include only enough information to generate a correct GC
 // program for it.
-// Make sure this stays in sync with ../../pkg/runtime/hashmap.c!
+// Make sure this stays in sync with ../../runtime/hashmap.c!
 enum {
 	BUCKETSIZE = 8,
 	MAXKEYSIZE = 128,
@@ -192,7 +192,7 @@ mapbucket(Type *t)
 // the given map type.  This type is not visible to users -
 // we include only enough information to generate a correct GC
 // program for it.
-// Make sure this stays in sync with ../../pkg/runtime/hashmap.go!
+// Make sure this stays in sync with ../../runtime/hashmap.go!
 static Type*
 hmap(Type *t)
 {
@@ -261,7 +261,7 @@ hiter(Type *t)
 	//    bptr *Bucket
 	//    other [4]uintptr
 	// }
-	// must match ../../pkg/runtime/hashmap.c:hash_iter.
+	// must match ../../runtime/hashmap.c:hash_iter.
 	field[0] = typ(TFIELD);
 	field[0]->type = ptrto(t->down);
 	field[0]->sym = mal(sizeof(Sym));
@@ -550,7 +550,7 @@ dgopkgpath(Sym *s, int ot, Pkg *pkg)
 
 /*
  * uncommonType
- * ../../pkg/runtime/type.go:/uncommonType
+ * ../../runtime/type.go:/uncommonType
  */
 static int
 dextratype(Sym *sym, int off, Type *t, int ptroff)
@@ -594,7 +594,7 @@ dextratype(Sym *sym, int off, Type *t, int ptroff)
 	// methods
 	for(a=m; a; a=a->link) {
 		// method
-		// ../../pkg/runtime/type.go:/method
+		// ../../runtime/type.go:/method
 		ot = dgostringptr(s, ot, a->name);
 		ot = dgopkgpath(s, ot, a->pkg);
 		ot = dsymptr(s, ot, dtypesym(a->mtype), 0);
@@ -710,29 +710,30 @@ haspointers(Type *t)
 
 /*
  * commonType
- * ../../pkg/runtime/type.go:/commonType
+ * ../../runtime/type.go:/commonType
  */
 static int
 dcommontype(Sym *s, int ot, Type *t)
 {
 	int i, alg, sizeofAlg, gcprog;
-	Sym *sptr, *algsym, *zero, *gcprog0, *gcprog1;
+	Sym *sptr, *algsym, *zero, *gcprog0, *gcprog1, *sbits;
 	uint8 gcmask[16];
 	static Sym *algarray;
+	uint64 x1, x2;
 	char *p;
 	
 	if(ot != 0)
 		fatal("dcommontype %d", ot);
 
-	sizeofAlg = 4*widthptr;
+	sizeofAlg = 2*widthptr;
 	if(algarray == nil)
 		algarray = pkglookup("algarray", runtimepkg);
+	dowidth(t);
 	alg = algtype(t);
 	algsym = S;
 	if(alg < 0)
 		algsym = dalgsym(t);
 
-	dowidth(t);
 	if(t->sym != nil && !isptr[t->etype])
 		sptr = dtypesym(ptrto(t));
 	else
@@ -804,8 +805,26 @@ dcommontype(Sym *s, int ot, Type *t)
 		ot = dsymptr(s, ot, gcprog1, 0);
 	} else {
 		gengcmask(t, gcmask);
-		for(i = 0; i < 2*widthptr; i++)
-			ot = duint8(s, ot, gcmask[i]);
+		x1 = 0;
+		for(i=0; i<8; i++)
+			x1 = x1<<8 | gcmask[i];
+		if(widthptr == 4) {
+			p = smprint("gcbits.%#016llux", x1);
+		} else {
+			x2 = 0;
+			for(i=0; i<8; i++)
+				x2 = x2<<8 | gcmask[i+8];
+			p = smprint("gcbits.%#016llux%016llux", x1, x2);
+		}
+		sbits = pkglookup(p, runtimepkg);
+		if((sbits->flags & SymUniq) == 0) {
+			sbits->flags |= SymUniq;
+			for(i = 0; i < 2*widthptr; i++)
+				duint8(sbits, i, gcmask[i]);
+			ggloblsym(sbits, 2*widthptr, DUPOK|RODATA);
+		}
+		ot = dsymptr(s, ot, sbits, 0);
+		ot = duintptr(s, ot, 0);
 	}
 	p = smprint("%-uT", t);
 	//print("dcommontype: %s\n", p);
@@ -992,7 +1011,7 @@ ok:
 
 	case TARRAY:
 		if(t->bound >= 0) {
-			// ../../pkg/runtime/type.go:/ArrayType
+			// ../../runtime/type.go:/ArrayType
 			s1 = dtypesym(t->type);
 			t2 = typ(TARRAY);
 			t2->type = t->type;
@@ -1004,7 +1023,7 @@ ok:
 			ot = dsymptr(s, ot, s2, 0);
 			ot = duintptr(s, ot, t->bound);
 		} else {
-			// ../../pkg/runtime/type.go:/SliceType
+			// ../../runtime/type.go:/SliceType
 			s1 = dtypesym(t->type);
 			ot = dcommontype(s, ot, t);
 			xt = ot - 3*widthptr;
@@ -1013,7 +1032,7 @@ ok:
 		break;
 
 	case TCHAN:
-		// ../../pkg/runtime/type.go:/ChanType
+		// ../../runtime/type.go:/ChanType
 		s1 = dtypesym(t->type);
 		ot = dcommontype(s, ot, t);
 		xt = ot - 3*widthptr;
@@ -1063,14 +1082,14 @@ ok:
 			n++;
 		}
 
-		// ../../pkg/runtime/type.go:/InterfaceType
+		// ../../runtime/type.go:/InterfaceType
 		ot = dcommontype(s, ot, t);
 		xt = ot - 3*widthptr;
 		ot = dsymptr(s, ot, s, ot+widthptr+2*widthint);
 		ot = duintxx(s, ot, n, widthint);
 		ot = duintxx(s, ot, n, widthint);
 		for(a=m; a; a=a->link) {
-			// ../../pkg/runtime/type.go:/imethod
+			// ../../runtime/type.go:/imethod
 			ot = dgostringptr(s, ot, a->name);
 			ot = dgopkgpath(s, ot, a->pkg);
 			ot = dsymptr(s, ot, dtypesym(a->type), 0);
@@ -1078,7 +1097,7 @@ ok:
 		break;
 
 	case TMAP:
-		// ../../pkg/runtime/type.go:/MapType
+		// ../../runtime/type.go:/MapType
 		s1 = dtypesym(t->down);
 		s2 = dtypesym(t->type);
 		s3 = dtypesym(mapbucket(t));
@@ -1109,11 +1128,11 @@ ok:
 	case TPTR32:
 	case TPTR64:
 		if(t->type->etype == TANY) {
-			// ../../pkg/runtime/type.go:/UnsafePointerType
+			// ../../runtime/type.go:/UnsafePointerType
 			ot = dcommontype(s, ot, t);
 			break;
 		}
-		// ../../pkg/runtime/type.go:/PtrType
+		// ../../runtime/type.go:/PtrType
 		s1 = dtypesym(t->type);
 		ot = dcommontype(s, ot, t);
 		xt = ot - 3*widthptr;
@@ -1121,7 +1140,7 @@ ok:
 		break;
 
 	case TSTRUCT:
-		// ../../pkg/runtime/type.go:/StructType
+		// ../../runtime/type.go:/StructType
 		// for security, only the exported fields.
 		n = 0;
 		for(t1=t->type; t1!=T; t1=t1->down) {
@@ -1134,7 +1153,7 @@ ok:
 		ot = duintxx(s, ot, n, widthint);
 		ot = duintxx(s, ot, n, widthint);
 		for(t1=t->type; t1!=T; t1=t1->down) {
-			// ../../pkg/runtime/type.go:/structField
+			// ../../runtime/type.go:/structField
 			if(t1->sym && !t1->embedded) {
 				ot = dgostringptr(s, ot, t1->sym->name);
 				if(exportname(t1->sym->name))
@@ -1242,7 +1261,6 @@ dalgsym(Type *t)
 {
 	int ot;
 	Sym *s, *hash, *hashfunc, *eq, *eqfunc;
-	char buf[100];
 
 	// dalgsym is only called for a type that needs an algorithm table,
 	// which implies that the type is comparable (or else it would use ANOEQ).
@@ -1261,24 +1279,10 @@ dalgsym(Type *t)
 	dsymptr(eqfunc, 0, eq, 0);
 	ggloblsym(eqfunc, widthptr, DUPOK|RODATA);
 
-	// ../../pkg/runtime/runtime.h:/Alg
+	// ../../runtime/alg.go:/typeAlg
 	ot = 0;
 	ot = dsymptr(s, ot, hashfunc, 0);
 	ot = dsymptr(s, ot, eqfunc, 0);
-	ot = dsymptr(s, ot, pkglookup("memprint", runtimepkg), 0);
-	switch(t->width) {
-	default:
-		ot = dsymptr(s, ot, pkglookup("memcopy", runtimepkg), 0);
-		break;
-	case 1:
-	case 2:
-	case 4:
-	case 8:
-	case 16:
-		snprint(buf, sizeof buf, "memcopy%d", (int)t->width*8);
-		ot = dsymptr(s, ot, pkglookup(buf, runtimepkg), 0);
-		break;
-	}
 
 	ggloblsym(s, ot, DUPOK|RODATA);
 	return s;
@@ -1516,8 +1520,8 @@ gengcprog1(ProgGen *g, Type *t, vlong *xoffset)
 		*xoffset += t->width;
 		break;
 	case TSTRING:
-		proggendata(g, BitsMultiWord);
-		proggendata(g, BitsString);
+		proggendata(g, BitsPointer);
+		proggendata(g, BitsScalar);
 		*xoffset += t->width;
 		break;
 	case TINTER:
@@ -1530,8 +1534,8 @@ gengcprog1(ProgGen *g, Type *t, vlong *xoffset)
 		break;
 	case TARRAY:
 		if(isslice(t)) {
-			proggendata(g, BitsMultiWord);
-			proggendata(g, BitsSlice);
+			proggendata(g, BitsPointer);
+			proggendata(g, BitsScalar);
 			proggendata(g, BitsScalar);
 		} else {
 			t1 = t->type;

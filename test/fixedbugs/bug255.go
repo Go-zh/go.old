@@ -13,3 +13,8 @@ var d ["abc"]int   // ERROR "invalid array bound|not numeric"
 var e [nil]int     // ERROR "invalid array bound|not numeric"
 var f [e]int       // ERROR "invalid array bound|not constant"
 var g [1 << 65]int // ERROR "array bound is too large|overflows"
+var h [len(a)]int  // ok
+
+func ff() string
+
+var i [len([1]string{ff()})]int // ERROR "non-constant array bound|not constant"

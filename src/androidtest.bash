@@ -42,12 +42,13 @@ GOOS=$GOHOSTOS GOARCH=$GOHOSTARCH go build \
 # into a subdirectory of /data.
 export ANDROID_PRODUCT_OUT=/tmp/androidtest-$$
 FAKE_GOROOT=$ANDROID_PRODUCT_OUT/data/local/tmp/goroot
-mkdir -p $FAKE_GOROOT/src
-ln -s $GOROOT/src/cmd $FAKE_GOROOT/src/cmd
-ln -s $GOROOT/src/pkg $FAKE_GOROOT/src/pkg
+mkdir -p $FAKE_GOROOT
+ln -s $GOROOT/src $FAKE_GOROOT/src
 ln -s $GOROOT/test $FAKE_GOROOT/test
 ln -s $GOROOT/lib $FAKE_GOROOT/lib
-adb sync data
+echo '# Syncing test files to android device'
+time adb sync data &> /dev/null
+echo ''
 rm -rf "$ANDROID_PRODUCT_OUT"
 
 # Run standard build and tests.

@@ -35,7 +35,6 @@ bool	rebuildall;
 bool defaultclang;
 
 static bool shouldbuild(char*, char*);
-static void copy(char*, char*, int);
 static void dopack(char*, char*, char**, int);
 static char *findgoversion(void);
 
@@ -367,8 +366,8 @@ static char *oldtool[] = {
 // not be in release branches.
 static char *unreleased[] = {
 	"src/cmd/link",
-	"src/pkg/debug/goobj",
-	"src/pkg/old",
+	"src/debug/goobj",
+	"src/old",
 };
 
 // setup sets up the tree for the initial build.
@@ -591,7 +590,7 @@ static struct {
 		"$GOROOT/pkg/obj/$GOHOSTOS_$GOHOSTARCH/libbio.a",
 		"$GOROOT/pkg/obj/$GOHOSTOS_$GOHOSTARCH/lib9.a",
 	}},
-	{"pkg/runtime", {
+	{"runtime", {
 		"zaexperiment.h", // must sort above zasm
 		"zasm_$GOOS_$GOARCH.h",
 		"zsys_$GOOS_$GOARCH.s",
@@ -608,7 +607,6 @@ char *depsuffix[] = {
 	".h",
 	".s",
 	".go",
-	".goc",
 };
 
 // gentab records how to generate some trivial files.
@@ -674,7 +672,7 @@ install(char *dir)
 
 	// For misc/prof, copy into the tool directory and we're done.
 	if(hasprefix(dir, "misc/")) {
-		copy(bpathf(&b, "%s/%s", tooldir, name),
+		copyfile(bpathf(&b, "%s/%s", tooldir, name),
 			bpathf(&b1, "%s/misc/%s", goroot, name), 1);
 		goto out;
 	}
@@ -708,7 +706,7 @@ install(char *dir)
 	}
 
 	islib = hasprefix(dir, "lib") || streq(dir, "cmd/cc") || streq(dir, "cmd/gc");
-	ispkg = hasprefix(dir, "pkg");
+	ispkg = !islib && !hasprefix(dir, "cmd/");
 	isgo = ispkg || streq(dir, "cmd/go") || streq(dir, "cmd/cgo");
 
 	exe = "";
@@ -734,11 +732,11 @@ install(char *dir)
 		// Go library (package).
 		ispackcmd = 1;
 		vadd(&link, "pack"); // program name - unused here, but all the other cases record one
-		p = bprintf(&b, "%s/pkg/%s_%s/%s", goroot, goos, goarch, dir+4);
+		p = bprintf(&b, "%s/pkg/%s_%s/%s", goroot, goos, goarch, dir);
 		*xstrrchr(p, '/') = '\0';
 		xmkdirall(p);
 		targ = link.len;
-		vadd(&link, bpathf(&b, "%s/pkg/%s_%s/%s.a", goroot, goos, goarch, dir+4));
+		vadd(&link, bpathf(&b, "%s/pkg/%s_%s/%s.a", goroot, goos, goarch, dir));
 	} else if(streq(dir, "cmd/go") || streq(dir, "cmd/cgo")) {
 		// Go command.
 		vadd(&link, bpathf(&b, "%s/%sl", tooldir, gochar));
@@ -885,18 +883,22 @@ install(char *dir)
 		goto out;
 
 	// For package runtime, copy some files into the work space.
-	if(streq(dir, "pkg/runtime")) {
-		copy(bpathf(&b, "%s/arch_GOARCH.h", workdir),
+	if(streq(dir, "runtime")) {
+		copyfile(bpathf(&b, "%s/arch_GOARCH.h", workdir),
 			bpathf(&b1, "%s/arch_%s.h", bstr(&path), goarch), 0);
-		copy(bpathf(&b, "%s/defs_GOOS_GOARCH.h", workdir),
+		copyfile(bpathf(&b, "%s/defs_GOOS_GOARCH.h", workdir),
 			bpathf(&b1, "%s/defs_%s_%s.h", bstr(&path), goos, goarch), 0);
 		p = bpathf(&b1, "%s/signal_%s_%s.h", bstr(&path), goos, goarch);
 		if(isfile(p))
-			copy(bpathf(&b, "%s/signal_GOOS_GOARCH.h", workdir), p, 0);
-		copy(bpathf(&b, "%s/os_GOOS.h", workdir),
+			copyfile(bpathf(&b, "%s/signal_GOOS_GOARCH.h", workdir), p, 0);
+		copyfile(bpathf(&b, "%s/os_GOOS.h", workdir),
 			bpathf(&b1, "%s/os_%s.h", bstr(&path), goos), 0);
-		copy(bpathf(&b, "%s/signals_GOOS.h", workdir),
+		copyfile(bpathf(&b, "%s/signals_GOOS.h", workdir),
 			bpathf(&b1, "%s/signals_%s.h", bstr(&path), goos), 0);
+		copyfile(bpathf(&b, "%s/pkg/%s_%s/textflag.h", goroot, goos, goarch),
+			bpathf(&b1, "%s/src/cmd/ld/textflag.h", goroot), 0);
+		copyfile(bpathf(&b, "%s/pkg/%s_%s/funcdata.h", goroot, goos, goarch),
+			bpathf(&b1, "%s/src/runtime/funcdata.h", goroot), 0);
 	}
 
 	// Generate any missing files; regenerate existing ones.
@@ -911,7 +913,7 @@ install(char *dir)
 					errprintf("generate %s\n", p);
 				gentab[j].gen(bstr(&path), p);
 				// Do not add generated file to clean list.
-				// In pkg/runtime, we want to be able to
+				// In runtime, we want to be able to
 				// build the package with the go tool,
 				// and it assumes these generated files already
 				// exist (it does not know how to build them).
@@ -929,26 +931,9 @@ install(char *dir)
 	// One more copy for package runtime.
 	// The last batch was required for the generators.
 	// This one is generated.
-	if(streq(dir, "pkg/runtime")) {
-		copy(bpathf(&b, "%s/zasm_GOOS_GOARCH.h", workdir),
+	if(streq(dir, "runtime")) {
+		copyfile(bpathf(&b, "%s/zasm_GOOS_GOARCH.h", workdir),
 			bpathf(&b1, "%s/zasm_%s_%s.h", bstr(&path), goos, goarch), 0);
-	}
-
-	// Generate .c files from .goc files.
-	if(streq(dir, "pkg/runtime")) {
-		for(i=0; i<files.len; i++) {
-			p = files.p[i];
-			if(!hassuffix(p, ".goc"))
-				continue;
-			// b = path/zp but with _goos_goarch.c instead of .goc
-			bprintf(&b, "%s%sz%s", bstr(&path), slash, lastelem(p));
-			bprintf(&final_name, "%s%s%s", bstr(&final_path), slash, lastelem(p));
-			b.len -= 4;
-			bwritef(&b, "_%s_%s.c", goos, goarch);
-			goc2c(p, bstr(&final_name), bstr(&b));
-			vadd(&files, bstr(&b));
-		}
-		vuniq(&files);
 	}
 
 	if((!streq(goos, gohostos) || !streq(goarch, gohostarch)) && isgo) {
@@ -1091,7 +1076,7 @@ install(char *dir)
 		else
 			vadd(&compile, "main");
 
-		if(streq(dir, "pkg/runtime"))
+		if(streq(dir, "runtime"))
 			vadd(&compile, "-+");
 
 		vcopy(&compile, go.p, go.len);
@@ -1119,15 +1104,12 @@ install(char *dir)
 
 nobuild:
 	// In package runtime, we install runtime.h and cgocall.h too,
-	// for use by cgo compilation. For assembler source, we also
-	// copy cmd/ld/textflag.h.
-	if(streq(dir, "pkg/runtime")) {
-		copy(bpathf(&b, "%s/pkg/%s_%s/cgocall.h", goroot, goos, goarch),
-			bpathf(&b1, "%s/src/pkg/runtime/cgocall.h", goroot), 0);
-		copy(bpathf(&b, "%s/pkg/%s_%s/runtime.h", goroot, goos, goarch),
-			bpathf(&b1, "%s/src/pkg/runtime/runtime.h", goroot), 0);
-		copy(bpathf(&b, "%s/pkg/%s_%s/textflag.h", goroot, goos, goarch),
-			bpathf(&b1, "%s/src/cmd/ld/textflag.h", goroot), 0);
+	// for use by cgo compilation.
+	if(streq(dir, "runtime")) {
+		copyfile(bpathf(&b, "%s/pkg/%s_%s/cgocall.h", goroot, goos, goarch),
+			bpathf(&b1, "%s/src/runtime/cgocall.h", goroot), 0);
+		copyfile(bpathf(&b, "%s/pkg/%s_%s/runtime.h", goroot, goos, goarch),
+			bpathf(&b1, "%s/src/runtime/runtime.h", goroot), 0);
 	}
 
 
@@ -1249,8 +1231,8 @@ out:
 }
 
 // copy copies the file src to dst, via memory (so only good for small files).
-static void
-copy(char *dst, char *src, int exec)
+void
+copyfile(char *dst, char *src, int exec)
 {
 	Buf b;
 
@@ -1324,47 +1306,47 @@ static char *buildorder[] = {
 	// back when there were build scripts.  Will have to
 	// be maintained by hand, but shouldn't change very
 	// often.
-	"pkg/runtime",
-	"pkg/errors",
-	"pkg/sync/atomic",
-	"pkg/sync",
-	"pkg/io",
-	"pkg/unicode",
-	"pkg/unicode/utf8",
-	"pkg/unicode/utf16",
-	"pkg/bytes",
-	"pkg/math",
-	"pkg/strings",
-	"pkg/strconv",
-	"pkg/bufio",
-	"pkg/sort",
-	"pkg/container/heap",
-	"pkg/encoding/base64",
-	"pkg/syscall",
-	"pkg/time",
-	"pkg/os",
-	"pkg/reflect",
-	"pkg/fmt",
-	"pkg/encoding",
-	"pkg/encoding/json",
-	"pkg/flag",
-	"pkg/path/filepath",
-	"pkg/path",
-	"pkg/io/ioutil",
-	"pkg/log",
-	"pkg/regexp/syntax",
-	"pkg/regexp",
-	"pkg/go/token",
-	"pkg/go/scanner",
-	"pkg/go/ast",
-	"pkg/go/parser",
-	"pkg/os/exec",
-	"pkg/os/signal",
-	"pkg/net/url",
-	"pkg/text/template/parse",
-	"pkg/text/template",
-	"pkg/go/doc",
-	"pkg/go/build",
+	"runtime",
+	"errors",
+	"sync/atomic",
+	"sync",
+	"io",
+	"unicode",
+	"unicode/utf8",
+	"unicode/utf16",
+	"bytes",
+	"math",
+	"strings",
+	"strconv",
+	"bufio",
+	"sort",
+	"container/heap",
+	"encoding/base64",
+	"syscall",
+	"time",
+	"os",
+	"reflect",
+	"fmt",
+	"encoding",
+	"encoding/json",
+	"flag",
+	"path/filepath",
+	"path",
+	"io/ioutil",
+	"log",
+	"regexp/syntax",
+	"regexp",
+	"go/token",
+	"go/scanner",
+	"go/ast",
+	"go/parser",
+	"os/exec",
+	"os/signal",
+	"net/url",
+	"text/template/parse",
+	"text/template",
+	"go/doc",
+	"go/build",
 	"cmd/go",
 };
 
@@ -1372,6 +1354,7 @@ static char *buildorder[] = {
 // It is bigger than the buildorder because we clean all the
 // compilers but build only the $GOARCH ones.
 static char *cleantab[] = {
+	// Commands and C libraries.
 	"cmd/5a",
 	"cmd/5c",
 	"cmd/5g",
@@ -1390,46 +1373,48 @@ static char *cleantab[] = {
 	"lib9",
 	"libbio",
 	"liblink",
-	"pkg/bufio",
-	"pkg/bytes",
-	"pkg/container/heap",
-	"pkg/encoding",
-	"pkg/encoding/base64",
-	"pkg/encoding/json",
-	"pkg/errors",
-	"pkg/flag",
-	"pkg/fmt",
-	"pkg/go/ast",
-	"pkg/go/build",
-	"pkg/go/doc",
-	"pkg/go/parser",
-	"pkg/go/scanner",
-	"pkg/go/token",
-	"pkg/io",
-	"pkg/io/ioutil",
-	"pkg/log",
-	"pkg/math",
-	"pkg/net/url",
-	"pkg/os",
-	"pkg/os/exec",
-	"pkg/path",
-	"pkg/path/filepath",
-	"pkg/reflect",
-	"pkg/regexp",
-	"pkg/regexp/syntax",
-	"pkg/runtime",
-	"pkg/sort",
-	"pkg/strconv",
-	"pkg/strings",
-	"pkg/sync",
-	"pkg/sync/atomic",
-	"pkg/syscall",
-	"pkg/text/template",
-	"pkg/text/template/parse",
-	"pkg/time",
-	"pkg/unicode",
-	"pkg/unicode/utf16",
-	"pkg/unicode/utf8",
+
+	// Go packages.
+	"bufio",
+	"bytes",
+	"container/heap",
+	"encoding",
+	"encoding/base64",
+	"encoding/json",
+	"errors",
+	"flag",
+	"fmt",
+	"go/ast",
+	"go/build",
+	"go/doc",
+	"go/parser",
+	"go/scanner",
+	"go/token",
+	"io",
+	"io/ioutil",
+	"log",
+	"math",
+	"net/url",
+	"os",
+	"os/exec",
+	"path",
+	"path/filepath",
+	"reflect",
+	"regexp",
+	"regexp/syntax",
+	"runtime",
+	"sort",
+	"strconv",
+	"strings",
+	"sync",
+	"sync/atomic",
+	"syscall",
+	"text/template",
+	"text/template/parse",
+	"time",
+	"unicode",
+	"unicode/utf16",
+	"unicode/utf8",
 };
 
 static void
@@ -1458,9 +1443,9 @@ clean(void)
 			xremove(bpathf(&b, "%s/%s", bstr(&path), cleantab[i]+4));
 	}
 
-	// remove src/pkg/runtime/z* unconditionally
+	// remove src/runtime/z* unconditionally
 	vreset(&dir);
-	bpathf(&path, "%s/src/pkg/runtime", goroot);
+	bpathf(&path, "%s/src/runtime", goroot);
 	xreaddir(&dir, bstr(&path));
 	for(j=0; j<dir.len; j++) {
 		if(hasprefix(dir.p[j], "z"))
@@ -1597,6 +1582,15 @@ cmdbootstrap(int argc, char **argv)
 	if(argc > 0)
 		usage();
 
+	if(isdir(bpathf(&b, "%s/src/pkg", goroot))) {
+		fatal("\n\n"
+			"The Go package sources have moved to $GOROOT/src.\n"
+			"*** %s still exists. ***\n"
+			"It probably contains stale files that may confuse the build.\n"
+			"Please (check what's there and) remove it and try again.\n"
+			"See http://golang.org/s/go14nopkg\n", bpathf(&b, "%s/src/pkg", goroot));
+	}
+	
 	if(rebuildall)
 		clean();
 	goversion = findgoversion();
@@ -1627,9 +1621,9 @@ cmdbootstrap(int argc, char **argv)
 	xsetenv("GOARCH", goarch);
 	xsetenv("GOOS", goos);
 
-	// Build pkg/runtime for actual goos/goarch too.
+	// Build runtime for actual goos/goarch too.
 	if(!streq(goos, gohostos) || !streq(goarch, gohostarch))
-		install("pkg/runtime");
+		install("runtime");
 
 	bfree(&b);
 }

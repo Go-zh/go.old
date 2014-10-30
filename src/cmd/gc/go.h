@@ -283,6 +283,7 @@ struct	Node
 	uchar	addrtaken;	// address taken, even if not moved to heap
 	uchar	dupok;	// duplicate definitions ok (for func)
 	uchar	wrapper;	// is method wrapper (for func)
+	uchar	reslice;	// this is a reslice x = x[0:y] or x = append(x, ...)
 	schar	likely; // likeliness of if statement
 	uchar	hasbreak;	// has break statement
 	uchar	needzero; // if it contains pointers, needs to be zeroed on function entry
@@ -447,7 +448,6 @@ enum
 	OSUB,	// x - y
 	OOR,	// x | y
 	OXOR,	// x ^ y
-	OADDPTR,	// ptr + uintptr, inserted by compiler only, used to avoid unsafe type changes during codegen
 	OADDSTR,	// s + "foo"
 	OADDR,	// &x
 	OANDAND,	// b0 && b1
@@ -974,6 +974,7 @@ EXTERN	int	funcdepth;
 EXTERN	int	typecheckok;
 EXTERN	int	compiling_runtime;
 EXTERN	int	compiling_wrappers;
+EXTERN	int	use_writebarrier;
 EXTERN	int	pure_go;
 EXTERN	char*	flag_installsuffix;
 EXTERN	int	flag_race;
@@ -1169,6 +1170,7 @@ void	cgen_callmeth(Node *n, int proc);
 void	cgen_eface(Node* n, Node* res);
 void	cgen_slice(Node* n, Node* res);
 void	clearlabels(void);
+void	clearslim(Node*);
 void	checklabels(void);
 int	dotoffset(Node *n, int64 *oary, Node **nn);
 void	gen(Node *n);
@@ -1284,6 +1286,7 @@ LSym*	linksym(Sym*);
  *	order.c
  */
 void	order(Node *fn);
+void	orderstmtinplace(Node **stmt);
 
 /*
  *	range.c
@@ -1372,6 +1375,7 @@ int	isnilinter(Type *t);
 int	isptrto(Type *t, int et);
 int	isslice(Type *t);
 int	istype(Type *t, int et);
+int	iszero(Node *n);
 void	linehist(char *file, int32 off, int relative);
 NodeList*	list(NodeList *l, Node *n);
 NodeList*	list1(Node *n);
@@ -1464,6 +1468,7 @@ void	walkstmt(Node **np);
 void	walkstmtlist(NodeList *l);
 Node*	conv(Node*, Type*);
 int	candiscard(Node*);
+int	needwritebarrier(Node*, Node*);
 Node*	outervalue(Node*);
 void	usefield(Node*);
 

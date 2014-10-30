@@ -50,6 +50,9 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+
+	"cmd/internal/rsc.io/arm/armasm"
+	"cmd/internal/rsc.io/x86/x86asm"
 )
 
 var symregexp = flag.String("s", "", "only dump symbols matching this regexp")
@@ -101,7 +104,7 @@ func main() {
 	keep := syms[:0]
 	for _, sym := range syms {
 		switch sym.Name {
-		case "text", "_text", "etext", "_etext":
+		case "runtime.text", "text", "_text", "runtime.etext", "etext", "_etext":
 			// drop
 		default:
 			keep = append(keep, sym)
@@ -118,7 +121,7 @@ func main() {
 		i := sort.Search(len(syms), func(i int) bool { return syms[i].Addr > addr })
 		if i > 0 {
 			s := syms[i-1]
-			if s.Addr <= addr && addr < s.Addr+uint64(s.Size) && s.Name != "etext" && s.Name != "_etext" {
+			if s.Addr <= addr && addr < s.Addr+uint64(s.Size) && s.Name != "runtime.etext" && s.Name != "etext" && s.Name != "_etext" {
 				return s.Name, s.Addr
 			}
 		}
@@ -156,7 +159,7 @@ func dump(tab *gosym.Table, lookup lookupFunc, disasm disasmFunc, goarch string,
 
 	printed := false
 	for _, sym := range syms {
-		if sym.Code != 'T' || sym.Size == 0 || sym.Name == "_text" || sym.Name == "text" || sym.Addr < textStart || symRE != nil && !symRE.MatchString(sym.Name) {
+		if (sym.Code != 'T' && sym.Code != 't') || sym.Size == 0 || sym.Name == "_text" || sym.Name == "text" || sym.Addr < textStart || symRE != nil && !symRE.MatchString(sym.Name) {
 			continue
 		}
 		if sym.Addr >= textStart+uint64(len(textData)) || sym.Addr+uint64(sym.Size) > textStart+uint64(len(textData)) {
@@ -199,14 +202,14 @@ func disasm_amd64(code []byte, pc uint64, lookup lookupFunc) (string, int) {
 }
 
 func disasm_x86(code []byte, pc uint64, lookup lookupFunc, arch int) (string, int) {
-	inst, err := x86_Decode(code, 64)
+	inst, err := x86asm.Decode(code, 64)
 	var text string
 	size := inst.Len
 	if err != nil || size == 0 || inst.Op == 0 {
 		size = 1
 		text = "?"
 	} else {
-		text = x86_plan9Syntax(inst, pc, lookup)
+		text = x86asm.Plan9Syntax(inst, pc, lookup)
 	}
 	return text, size
 }
@@ -232,14 +235,14 @@ func (r textReader) ReadAt(data []byte, off int64) (n int, err error) {
 }
 
 func disasm_arm(code []byte, pc uint64, lookup lookupFunc) (string, int) {
-	inst, err := arm_Decode(code, arm_ModeARM)
+	inst, err := armasm.Decode(code, armasm.ModeARM)
 	var text string
 	size := inst.Len
 	if err != nil || size == 0 || inst.Op == 0 {
 		size = 4
 		text = "?"
 	} else {
-		text = arm_plan9Syntax(inst, pc, lookup, textReader{code, pc})
+		text = armasm.Plan9Syntax(inst, pc, lookup, textReader{code, pc})
 	}
 	return text, size
 }
@@ -355,11 +358,20 @@ func loadTables(f *os.File) (textStart uint64, textData, symtab, pclntab []byte,
 			textStart = imageBase + uint64(sect.VirtualAddress)
 			textData, _ = sect.Data()
 		}
-		if pclntab, err = loadPETable(obj, "pclntab", "epclntab"); err != nil {
-			return 0, nil, nil, nil, err
+		if pclntab, err = loadPETable(obj, "runtime.pclntab", "runtime.epclntab"); err != nil {
+			// We didn't find the symbols, so look for the names used in 1.3 and earlier.
+			// TODO: Remove code looking for the old symbols when we no longer care about 1.3.
+			var err2 error
+			if pclntab, err2 = loadPETable(obj, "pclntab", "epclntab"); err2 != nil {
+				return 0, nil, nil, nil, err
+			}
 		}
-		if symtab, err = loadPETable(obj, "symtab", "esymtab"); err != nil {
-			return 0, nil, nil, nil, err
+		if symtab, err = loadPETable(obj, "runtime.symtab", "runtime.esymtab"); err != nil {
+			// Same as above.
+			var err2 error
+			if symtab, err2 = loadPETable(obj, "symtab", "esymtab"); err2 != nil {
+				return 0, nil, nil, nil, err
+			}
 		}
 		return textStart, textData, symtab, pclntab, nil
 	}
@@ -369,11 +381,20 @@ func loadTables(f *os.File) (textStart uint64, textData, symtab, pclntab []byte,
 		if sect := obj.Section("text"); sect != nil {
 			textData, _ = sect.Data()
 		}
-		if pclntab, err = loadPlan9Table(obj, "pclntab", "epclntab"); err != nil {
-			return 0, nil, nil, nil, err
+		if pclntab, err = loadPlan9Table(obj, "runtime.pclntab", "runtime.epclntab"); err != nil {
+			// We didn't find the symbols, so look for the names used in 1.3 and earlier.
+			// TODO: Remove code looking for the old symbols when we no longer care about 1.3.
+			var err2 error
+			if pclntab, err2 = loadPlan9Table(obj, "pclntab", "epclntab"); err2 != nil {
+				return 0, nil, nil, nil, err
+			}
 		}
-		if symtab, err = loadPlan9Table(obj, "symtab", "esymtab"); err != nil {
-			return 0, nil, nil, nil, err
+		if symtab, err = loadPlan9Table(obj, "runtime.symtab", "runtime.esymtab"); err != nil {
+			// Same as above.
+			var err2 error
+			if symtab, err2 = loadPlan9Table(obj, "symtab", "esymtab"); err2 != nil {
+				return 0, nil, nil, nil, err
+			}
 		}
 		return textStart, textData, symtab, pclntab, nil
 	}

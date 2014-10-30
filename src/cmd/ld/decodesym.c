@@ -4,10 +4,10 @@
 
 #include	"l.h"
 #include	"lib.h"
-#include	"../../pkg/runtime/typekind.h"
+#include	"../../runtime/typekind.h"
 
 // Decoding the type.* symbols.	 This has to be in sync with
-// ../../pkg/runtime/type.go, or more specificaly, with what
+// ../../runtime/type.go, or more specificaly, with what
 // ../gc/reflect.c stuffs in these.
 
 static Reloc*
@@ -111,7 +111,10 @@ decodetype_gcprog(LSym *s)
 uint8*
 decodetype_gcmask(LSym *s)
 {
-	return (uint8*)(s->p + 1*PtrSize + 8 + 1*PtrSize);
+	LSym *mask;
+	
+	mask = decode_reloc_sym(s, 1*PtrSize + 8 + 1*PtrSize);
+	return mask->p;
 }
 
 // Type.ArrayType.elem and Type.SliceType.Elem

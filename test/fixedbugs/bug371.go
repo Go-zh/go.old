@@ -19,6 +19,6 @@ func main() {
 	p.m()
 
 	q := &p
-	q.m() // ERROR "requires explicit dereference"
-	q.pm()
+	q.m()  // ERROR "requires explicit dereference"
+	q.pm() // ERROR "requires explicit dereference"
 }

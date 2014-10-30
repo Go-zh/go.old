@@ -9,16 +9,21 @@ void callback(void *f);
 void callGoFoo(void);
 void callGoStackCheck(void);
 void callPanic(void);
+void callCgoAllocate(void);
+int callGoReturnVal(void);
+int returnAfterGrow(void);
+int returnAfterGrowFromGo(void);
 */
 import "C"
 
 import (
-	"./backdoor"
 	"path"
 	"runtime"
 	"strings"
 	"testing"
 	"unsafe"
+
+	"./backdoor"
 )
 
 // nestedCall calls into C, back into Go, and finally to f.
@@ -152,11 +157,13 @@ func testCallbackCallers(t *testing.T) {
 	n := 0
 	name := []string{
 		"test.goCallback",
+		"runtime.call16",
 		"runtime.cgocallbackg1",
 		"runtime.cgocallbackg",
 		"runtime.cgocallback_gofunc",
-		"runtime.asmcgocall",
-		"runtime.cgocall",
+		"asmcgocall",
+		"runtime.asmcgocall_errno",
+		"runtime.cgocall_errno",
 		"test._Cfunc_callback",
 		"test.nestedCall",
 		"test.testCallbackCallers",
@@ -181,8 +188,12 @@ func testCallbackCallers(t *testing.T) {
 		if strings.HasPrefix(fname, "_") {
 			fname = path.Base(f.Name()[1:])
 		}
-		if fname != name[i] {
-			t.Errorf("expected function name %s, got %s", name[i], fname)
+		namei := ""
+		if i < len(name) {
+			namei = name[i]
+		}
+		if fname != namei {
+			t.Errorf("stk[%d] = %q, want %q", i, fname, namei)
 		}
 	}
 }
@@ -198,6 +209,52 @@ func testPanicFromC(t *testing.T) {
 		}
 	}()
 	C.callPanic()
+}
+
+func testAllocateFromC(t *testing.T) {
+	C.callCgoAllocate() // crashes or exits on failure
+}
+
+// Test that C code can return a value if it calls a Go function that
+// causes a stack copy.
+func testReturnAfterGrow(t *testing.T) {
+	// Use a new goroutine so that we get a small stack.
+	c := make(chan int)
+	go func() {
+		c <- int(C.returnAfterGrow())
+	}()
+	if got, want := <-c, 123456; got != want {
+		t.Errorf("got %d want %d", got, want)
+	}
+}
+
+// Test that we can return a value from Go->C->Go if the Go code
+// causes a stack copy.
+func testReturnAfterGrowFromGo(t *testing.T) {
+	// Use a new goroutine so that we get a small stack.
+	c := make(chan int)
+	go func() {
+		c <- int(C.returnAfterGrowFromGo())
+	}()
+	if got, want := <-c, 129*128/2; got != want {
+		t.Errorf("got %d want %d", got, want)
+	}
+}
+
+//export goReturnVal
+func goReturnVal() (r C.int) {
+	// Force a stack copy.
+	var f func(int) int
+	f = func(i int) int {
+		var buf [256]byte
+		use(buf[:])
+		if i == 0 {
+			return 0
+		}
+		return i + f(i-1)
+	}
+	r = C.int(f(128))
+	return
 }
 
 func testCallbackStack(t *testing.T) {

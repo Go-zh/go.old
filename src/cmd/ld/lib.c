@@ -33,8 +33,8 @@
 #include	"lib.h"
 #include	"../ld/elf.h"
 #include	"../ld/dwarf.h"
-#include	"../../pkg/runtime/stack.h"
-#include	"../../pkg/runtime/funcdata.h"
+#include	"../../runtime/stack.h"
+#include	"../../runtime/funcdata.h"
 
 #include	<ar.h>
 #if !(defined(_WIN32) || defined(PLAN9))
@@ -144,6 +144,10 @@ libinit(void)
 void
 errorexit(void)
 {
+	if(cout >= 0) {
+		// For rmtemp run at atexit time on Windows.
+		close(cout);
+	}
 	if(nerrors) {
 		if(cout >= 0)
 			mayberemoveoutfile();
@@ -217,8 +221,12 @@ loadlib(void)
 		// Provided by the code that imports the package.
 		// Since we are simulating the import, we have to provide this string.
 		cgostrsym = "go.string.\"runtime/cgo\"";
-		if(linkrlookup(ctxt, cgostrsym, 0) == nil)
+		if(linkrlookup(ctxt, cgostrsym, 0) == nil) {
+			s = linklookup(ctxt, cgostrsym, 0);
+			s->type = SRODATA;
+			s->reachable = 1;
 			addstrdata(cgostrsym, "runtime/cgo");
+		}
 	}
 
 	if(linkmode == LinkAuto) {
@@ -899,7 +907,7 @@ unmal(void *v, uint32 n)
  * escaping are %, ., and ", but we escape all control characters too.
  *
  * If you edit this, edit ../gc/subr.c:/^pathtoprefix too.
- * If you edit this, edit ../../pkg/debug/goobj/read.go:/importPathToPrefix too.
+ * If you edit this, edit ../../debug/goobj/read.go:/importPathToPrefix too.
  */
 static char*
 pathtoprefix(char *s)
@@ -1349,10 +1357,10 @@ genasmsym(void (*put)(LSym*, char*, int, vlong, vlong, int, LSym*))
 
 	// These symbols won't show up in the first loop below because we
 	// skip STEXT symbols. Normal STEXT symbols are emitted by walking textp.
-	s = linklookup(ctxt, "text", 0);
+	s = linklookup(ctxt, "runtime.text", 0);
 	if(s->type == STEXT)
 		put(s, s->name, 'T', s->value, s->size, s->version, 0);
-	s = linklookup(ctxt, "etext", 0);
+	s = linklookup(ctxt, "runtime.etext", 0);
 	if(s->type == STEXT)
 		put(s, s->name, 'T', s->value, s->size, s->version, 0);
 
@@ -1552,5 +1560,58 @@ diag(char *fmt, ...)
 	if(nerrors > 20) {
 		print("too many errors\n");
 		errorexit();
+	}
+}
+
+void
+checkgo(void)
+{
+	LSym *s;
+	Reloc *r;
+	int i;
+	int changed;
+	
+	if(!debug['C'])
+		return;
+	
+	// TODO(rsc,khr): Eventually we want to get to no Go-called C functions at all,
+	// which would simplify this logic quite a bit.
+
+	// Mark every Go-called C function with cfunc=2, recursively.
+	do {
+		changed = 0;
+		for(s = ctxt->textp; s != nil; s = s->next) {
+			if(s->cfunc == 0 || (s->cfunc == 2 && s->nosplit)) {
+				for(i=0; i<s->nr; i++) {
+					r = &s->r[i];
+					if(r->sym == nil)
+						continue;
+					if((r->type == R_CALL || r->type == R_CALLARM) && r->sym->type == STEXT) {
+						if(r->sym->cfunc == 1) {
+							changed = 1;
+							r->sym->cfunc = 2;
+						}
+					}
+				}
+			}
+		}
+	}while(changed);
+
+	// Complain about Go-called C functions that can split the stack
+	// (that can be preempted for garbage collection or trigger a stack copy).
+	for(s = ctxt->textp; s != nil; s = s->next) {
+		if(s->cfunc == 0 || (s->cfunc == 2 && s->nosplit)) {
+			for(i=0; i<s->nr; i++) {
+				r = &s->r[i];
+				if(r->sym == nil)
+					continue;
+				if((r->type == R_CALL || r->type == R_CALLARM) && r->sym->type == STEXT) {
+					if(s->cfunc == 0 && r->sym->cfunc == 2 && !r->sym->nosplit)
+						print("Go %s calls C %s\n", s->name, r->sym->name);
+					else if(s->cfunc == 2 && s->nosplit && !r->sym->nosplit)
+						print("Go calls C %s calls %s\n", s->name, r->sym->name);
+				}
+			}
+		}
 	}
 }

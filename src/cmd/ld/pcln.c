@@ -4,7 +4,7 @@
 
 #include	"l.h"
 #include	"lib.h"
-#include	"../../pkg/runtime/funcdata.h"
+#include	"../../runtime/funcdata.h"
 
 static void
 addvarint(Pcdata *d, uint32 val)
@@ -119,7 +119,7 @@ pclntab(void)
 	static Pcln zpcln;
 	
 	funcdata_bytes = 0;
-	ftab = linklookup(ctxt, "pclntab", 0);
+	ftab = linklookup(ctxt, "runtime.pclntab", 0);
 	ftab->type = SPCLNTAB;
 	ftab->reachable = 1;
 

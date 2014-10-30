@@ -325,7 +325,7 @@ out:
 	lineno = lno;
 }
 
-// Keep in sync with src/pkg/runtime/chan.h.
+// Keep in sync with src/runtime/chan.h.
 static Type*
 selecttype(int32 size)
 {
@@ -337,6 +337,7 @@ selecttype(int32 size)
 	sudog->list = list(sudog->list, nod(ODCLFIELD, newname(lookup("g")), typenod(ptrto(types[TUINT8]))));
 	sudog->list = list(sudog->list, nod(ODCLFIELD, newname(lookup("selectdone")), typenod(ptrto(types[TUINT8]))));
 	sudog->list = list(sudog->list, nod(ODCLFIELD, newname(lookup("link")), typenod(ptrto(types[TUINT8]))));
+	sudog->list = list(sudog->list, nod(ODCLFIELD, newname(lookup("prev")), typenod(ptrto(types[TUINT8]))));
 	sudog->list = list(sudog->list, nod(ODCLFIELD, newname(lookup("elem")), typenod(ptrto(types[TUINT8]))));
 	sudog->list = list(sudog->list, nod(ODCLFIELD, newname(lookup("releasetime")), typenod(types[TUINT64])));
 	sudog->list = list(sudog->list, nod(ODCLFIELD, newname(lookup("nrelease")), typenod(types[TINT32])));
@@ -346,12 +347,13 @@ selecttype(int32 size)
 	sudog->type->local = 1;
 
 	scase = nod(OTSTRUCT, N, N);
-	scase->list = list(scase->list, nod(ODCLFIELD, newname(lookup("sg")), sudog));
+	scase->list = list(scase->list, nod(ODCLFIELD, newname(lookup("elem")), typenod(ptrto(types[TUINT8]))));
 	scase->list = list(scase->list, nod(ODCLFIELD, newname(lookup("chan")), typenod(ptrto(types[TUINT8]))));
 	scase->list = list(scase->list, nod(ODCLFIELD, newname(lookup("pc")), typenod(types[TUINTPTR])));
 	scase->list = list(scase->list, nod(ODCLFIELD, newname(lookup("kind")), typenod(types[TUINT16])));
 	scase->list = list(scase->list, nod(ODCLFIELD, newname(lookup("so")), typenod(types[TUINT16])));
 	scase->list = list(scase->list, nod(ODCLFIELD, newname(lookup("receivedp")), typenod(ptrto(types[TUINT8]))));
+	scase->list = list(scase->list, nod(ODCLFIELD, newname(lookup("releasetime")), typenod(types[TUINT64])));
 	typecheck(&scase, Etype);
 	scase->type->noalg = 1;
 	scase->type->local = 1;

@@ -47,6 +47,58 @@ Go内存模型阐明了一个Go程对某变量的写入，如何才能确保被�
 </p>
 
 <div class="english">
+<h2>Advice</h2>
+</div>
+
+<h2>忠告</h2>
+
+<div class="english">
+<p>
+Programs that modify data being simultaneously accessed by multiple goroutines
+must serialize such access.
+</p>
+</div>
+
+<p>
+程序在修改被多个Go程同时访问的数据时必须序列化该访问。
+</p>
+
+<div class="english">
+<p>
+To serialize access, protect the data with channel operations or other synchronization primitives
+such as those in the <a href="/pkg/sync/"><code>sync</code></a>
+and <a href="/pkg/sync/atomic/"><code>sync/atomic</code></a> packages.
+</p>
+</div>
+
+<p>
+要序列化访问，需通过信道操作，或其它像 <a href="/pkg/sync/"><code>sync</code></a>
+和 <a href="/pkg/sync/atomic/"><code>sync/atomic</code></a> 包中的同步原语来保护数据。
+</p>
+
+<div class="english">
+<p>
+If you must read the rest of this document to understand the behavior of your program,
+you are being too clever.
+</p>
+</div>
+
+<p>
+若您想通过继续阅读本文档来理解您程序的行为，那真是太明智了。
+</p>
+
+<div class="english">
+<p>
+Don't be clever.
+</p>
+</div>
+
+<p>
+别太聪明了。
+</p>
+
+
+<div class="english">
 <h2>Happens Before</h2>
 </div>
 

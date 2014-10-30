@@ -529,7 +529,8 @@ algtype1(Type *t, Type **bad)
 	
 	if(bad)
 		*bad = T;
-
+	if(t->broke)
+		return AMEM;
 	if(t->noalg)
 		return ANOEQ;
 
@@ -656,11 +657,15 @@ maptype(Type *key, Type *val)
 {
 	Type *t;
 	Type *bad;
-	int atype;
+	int atype, mtype;
 
 	if(key != nil) {
 		atype = algtype1(key, &bad);
-		switch(bad == T ? key->etype : bad->etype) {
+		if(bad == T)
+			mtype = key->etype;
+		else
+			mtype = bad->etype;
+		switch(mtype) {
 		default:
 			if(atype == ANOEQ)
 				yyerror("invalid map key type %T", key);
@@ -3462,7 +3467,7 @@ smagic(Magic *m)
 	p = m->w-1;
 	ad = m->sd;
 	if(m->sd < 0)
-		ad = -m->sd;
+		ad = -(uvlong)m->sd;
 
 	// bad denominators
 	if(ad == 0 || ad == 1 || ad == two31) {
@@ -3637,7 +3642,7 @@ ngotype(Node *n)
  * users if we escape that as little as possible.
  *
  * If you edit this, edit ../ld/lib.c:/^pathtoprefix too.
- * If you edit this, edit ../../pkg/debug/goobj/read.go:/importPathToPrefix too.
+ * If you edit this, edit ../../debug/goobj/read.go:/importPathToPrefix too.
  */
 static char*
 pathtoprefix(char *s)
@@ -3808,7 +3813,7 @@ isdirectiface(Type *t)
 	// where the data word can hold a pointer or any
 	// non-pointer value no bigger than a pointer.
 	enum {
-		IfacePointerOnly = 0,
+		IfacePointerOnly = 1,
 	};
 
 	if(IfacePointerOnly) {

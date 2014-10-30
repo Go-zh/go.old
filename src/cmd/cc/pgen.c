@@ -29,51 +29,27 @@
 // THE SOFTWARE.
 
 #include "gc.h"
-#include "../../pkg/runtime/funcdata.h"
-
-enum { BitsPerPointer = 2 };
-
-static void dumpgcargs(Type *fn, Sym *sym);
-
-static Sym*
-makefuncdatasym(char *namefmt, int64 funcdatakind)
-{
-	Node nod;
-	Sym *sym;
-	static int32 nsym;
-	static char namebuf[40];
-
-	snprint(namebuf, sizeof(namebuf), namefmt, nsym++);
-	sym = slookup(namebuf);
-	sym->class = CSTATIC;
-	memset(&nod, 0, sizeof nod);
-	nod.op = ONAME;
-	nod.sym = sym;
-	nod.class = CSTATIC;
-	gins(AFUNCDATA, nodconst(funcdatakind), &nod);
-	linksym(sym)->type = SRODATA;
-	return sym;
-}
+#include "../../runtime/funcdata.h"
 
 int
-hasdotdotdot(void)
+hasdotdotdot(Type *t)
 {
-	Type *t;
-
-	for(t=thisfn->down; t!=T; t=t->down)
+	for(t=t->down; t!=T; t=t->down)
 		if(t->etype == TDOT)
 			return 1;
 	return 0;
 }
 
 vlong
-argsize(void)
+argsize(int doret)
 {
 	Type *t;
 	int32 s;
 
 //print("t=%T\n", thisfn);
-	s = align(0, thisfn->link, Aarg0, nil);
+	s = 0;
+	if(hasdotdotdot(thisfn))
+		s = align(s, thisfn->link, Aarg0, nil);
 	for(t=thisfn->down; t!=T; t=t->down) {
 		switch(t->etype) {
 		case TVOID:
@@ -93,6 +69,14 @@ argsize(void)
 		s = (s+7) & ~7;
 	else
 		s = (s+3) & ~3;
+	if(doret && thisfn->link->etype != TVOID) {
+		s = align(s, thisfn->link, Aarg1, nil);
+		s = align(s, thisfn->link, Aarg2, nil);
+		if(thechar == '6')
+			s = (s+7) & ~7;
+		else
+			s = (s+3) & ~3;
+	}
 	return s;
 }
 
@@ -101,9 +85,6 @@ codgen(Node *n, Node *nn)
 {
 	Prog *sp;
 	Node *n1, nod, nod1;
-	Sym *gcargs;
-	Sym *gclocals;
-	int isvarargs;
 
 	cursafe = 0;
 	curarg = 0;
@@ -123,17 +104,8 @@ codgen(Node *n, Node *nn)
 	nearln = nn->lineno;
 
 	p = gtext(n1->sym, stkoff);
+	p->from.sym->cfunc = 1;
 	sp = p;
-
-	/*
-	 * generate funcdata symbol for this function.
-	 * data is filled in at the end of codgen().
-	 */
-	isvarargs = hasdotdotdot();
-	gcargs = nil;
-	if(!isvarargs)
-		gcargs = makefuncdatasym("gcargs·%d", FUNCDATA_ArgsPointerMaps);
-	gclocals = makefuncdatasym("gclocals·%d", FUNCDATA_LocalsPointerMaps);
 
 	/*
 	 * isolate first argument
@@ -169,22 +141,6 @@ codgen(Node *n, Node *nn)
 	if(thechar=='6' || thechar=='7')	/* [sic] */
 		maxargsafe = xround(maxargsafe, 8);
 	sp->to.offset += maxargsafe;
-
-	if(!isvarargs)
-		dumpgcargs(thisfn, gcargs);
-
-	// TODO(rsc): "stkoff" is not right. It does not account for
-	// the possibility of data stored in .safe variables.
-	// Unfortunately those move up and down just like
-	// the argument frame (and in fact dovetail with it)
-	// so the number we need is not available or even
-	// well-defined. Probably we need to make the safe
-	// area its own section.
-	// That said, we've been using stkoff for months
-	// and nothing too terrible has happened.
-	gextern(gclocals, nodconst(-stkoff), 0, 4); // locals
-	gclocals->type = typ(0, T);
-	gclocals->type->width = 4;
 }
 
 void
@@ -212,7 +168,7 @@ supgen(Node *n)
 void
 gen(Node *n)
 {
-	Node *l, nod;
+	Node *l, nod, nod1;
 	Prog *sp, *spc, *spb;
 	Case *cn;
 	long sbc, scc;
@@ -273,14 +229,26 @@ loop:
 			gbranch(ORETURN);
 			break;
 		}
+		if(typecmplx[n->type->etype] && !hasdotdotdot(thisfn)) {
+			regret(&nod, n, thisfn, 2);
+			sugen(l, &nod, n->type->width);
+			noretval(3);
+			gbranch(ORETURN);
+			break;
+		}
 		if(typecmplx[n->type->etype]) {
 			sugen(l, nodret, n->type->width);
 			noretval(3);
 			gbranch(ORETURN);
 			break;
 		}
-		regret(&nod, n);
+		regret(&nod1, n, thisfn, 2);
+		nod = nod1;
+		if(nod.op != OREGISTER)
+			regalloc(&nod, n, Z);
 		cgen(l, &nod);
+		if(nod1.op != OREGISTER)
+			gmove(&nod, &nod1);
 		regfree(&nod);
 		if(typefd[n->type->etype])
 			noretval(1);
@@ -651,112 +619,4 @@ bcomplex(Node *n, Node *c)
 	bool64(n);
 	boolgen(n, 1, Z);
 	return 0;
-}
-
-// Updates the bitvector with a set bit for each pointer containing
-// value in the type description starting at offset.
-static void
-walktype1(Type *t, int32 offset, Bvec *bv, int param)
-{
-	Type *t1;
-	int32 o;
-	int32 widthptr;
-
-	widthptr = ewidth[TIND];
-	switch(t->etype) {
-	case TCHAR:
-	case TUCHAR:
-	case TSHORT:
-	case TUSHORT:
-	case TINT:
-	case TUINT:
-	case TLONG:
-	case TULONG:
-	case TVLONG:
-	case TUVLONG:
-	case TFLOAT:
-	case TDOUBLE:
-		// non-pointer types
-		for(o = 0; o < t->width; o++)
-			bvset(bv, ((offset + t->offset + o) / widthptr) * BitsPerPointer); // 1 = live scalar
-		break;
-
-	case TIND:
-	pointer:
-		// pointer types
-		if((offset + t->offset) % widthptr != 0)
-			yyerror("unaligned pointer");
-		bvset(bv, ((offset + t->offset) / widthptr)*BitsPerPointer + 1); // 2 = live ptr
-		break;
-
-	case TARRAY:
-		if(param)	// unlike Go, C passes arrays by reference
-			goto pointer;
-		// array in struct or union is an actual array
-		for(o = 0; o < t->width; o += t->link->width)
-			walktype1(t->link, offset+o, bv, 0);
-		break;
-
-	case TSTRUCT:
-		// build map recursively
-		for(t1 = t->link; t1 != T; t1 = t1->down)
-			walktype1(t1, offset, bv, 0);
-		break;
-
-	case TUNION:
-		walktype1(t->link, offset, bv, 0);
-		break;
-
-	default:
-		yyerror("can't handle arg type %s\n", tnames[t->etype]);
-	}
-}
-
-// Compute a bit vector to describe the pointer containing locations
-// in the argument list.  Adds the data to gcsym and returns the offset
-// of end of the bit vector.
-static void
-dumpgcargs(Type *fn, Sym *sym)
-{
-	Bvec *bv;
-	Type *t;
-	int32 i;
-	int32 argbytes;
-	int32 symoffset, argoffset;
-
-	// Dump the length of the bitmap array.  This value is always one for
-	// functions written in C.
-	symoffset = 0;
-	gextern(sym, nodconst(1), symoffset, 4);
-	symoffset += 4;
-	argbytes = (argsize() + ewidth[TIND] - 1);
-	bv = bvalloc((argbytes  / ewidth[TIND]) * BitsPerPointer);
-	argoffset = align(0, fn->link, Aarg0, nil);
-	if(argoffset > 0) {
-		// The C calling convention returns structs by copying them to a
-		// location pointed to by a hidden first argument.  This first
-		// argument is a pointer.
-		if(argoffset != ewidth[TIND])
-			yyerror("passbyptr arg not the right size");
-		bvset(bv, 1); // 2 = live ptr
-	}
-	for(t = fn->down; t != T; t = t->down) {
-		if(t->etype == TVOID)
-			continue;
-		argoffset = align(argoffset, t, Aarg1, nil);
-		walktype1(t, argoffset, bv, 1);
-		argoffset = align(argoffset, t, Aarg2, nil);
-	}
-	// Dump the length of the bitmap.
-	gextern(sym, nodconst(bv->n), symoffset, 4);
-	symoffset += 4;
-	// Dump the words of the bitmap.
-	for(i = 0; i < bv->n; i += 32) {
-		gextern(sym, nodconst(bv->b[i/32]), symoffset, 4);
-		symoffset += 4;
-	}
-	free(bv);
-	// Finalize the gc symbol.
-	sym->type = typ(0, T);
-	sym->type->width = symoffset;
 }

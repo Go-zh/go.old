@@ -1775,6 +1775,17 @@ encourages you to be explicit.
 </p>
 
 <div class="english">
+<p>
+A blog post, title <a href="http://blog.golang.org/constants">Constants</a>,
+explores this topic in more detail.
+</p>
+</div>
+
+<p>
+<a href="http://blog.golang.org/constants">常量</a>一文探讨了此话题的更多细节。
+</p>
+
+<div class="english">
 <h3 id="builtin_maps">
 Why are maps built in?</h3>
 </div>
@@ -1948,7 +1959,7 @@ How do I submit patches to the Go libraries?</h3>
 
 <div class="english">
 <p>
-The library sources are in <code>go/src/pkg</code>.
+The library sources are in the <code>src</code> directory of the repository.
 If you want to make a significant change, please discuss on the mailing list before embarking.
 </p>
 </div>
@@ -2231,7 +2242,7 @@ error but the situation can still be confusing, because sometimes a
 <a href="#different_method_sets">pointer
 is necessary to satisfy an interface</a>.
 The insight is that although a pointer to a concrete type can satisfy
-an interface, with one exception <em>a pointer to an interface can never satisfy a interface</em>.
+an interface, with one exception <em>a pointer to an interface can never satisfy an interface</em>.
 </p>
 </div>
 
@@ -2736,7 +2747,7 @@ to speed it up.
 
 <div class="english">
 <p>
-Go's goroutine scheduler is not as good as it needs to be. In future, it
+Go's goroutine scheduler is not as good as it needs to be. In the future, it
 should recognize such cases and optimize its use of OS threads. For now,
 <code>GOMAXPROCS</code> should be set on a per-application basis.
 </p>
@@ -3173,7 +3184,7 @@ table-driven, iterating over a list of inputs and outputs defined
 in a data structure (Go has excellent support for data structure literals).
 The work to write a good test and good error messages will then be amortized over many
 test cases. The standard Go library is full of illustrative examples, such as in
-<a href="/src/pkg/fmt/fmt_test.go">the formatting tests for the <code>fmt</code> package</a>.
+<a href="/src/fmt/fmt_test.go">the formatting tests for the <code>fmt</code> package</a>.
 </p>
 </div>
 
@@ -3218,15 +3229,19 @@ http://plan9.bell-labs.com/sys/doc/compiler.html</a>）并使用了Plan 9加载�
 
 <div class="english">
 <p>
-We considered writing <code>gc</code>, the original Go compiler, in Go itself but
+We considered using LLVM for <code>gc</code> but we felt it was too large and
+slow to meet our performance goals.
+</p>
+
+<p>
+We also considered writing <code>gc</code>, the original Go compiler, in Go itself but
 elected not to do so because of the difficulties of bootstrapping and
 especially of open source distribution&mdash;you'd need a Go compiler to
 set up a Go environment. <code>Gccgo</code>, which came later, makes it possible to
-consider writing a compiler in Go, which might well happen.
-(Go would be a
-fine language in which to implement a compiler; a native lexer and
-parser are already available in the <a href="/pkg/go/"><code>go</code></a> package
-and a type checker is in the works.)
+consider writing a compiler in Go.
+A plan to do that by machine translation of the existing compiler is under development.
+<a href="http://golang.org/s/go13compiler">A separate document</a>
+explains the reason for this approach.
 </p>
 </div>
 
@@ -3240,8 +3255,13 @@ and a type checker is in the works.)
 
 <div class="english">
 <p>
-We also considered using LLVM for <code>gc</code> but we felt it was too large and
-slow to meet our performance goals.
+That plan aside,
+Go is a
+fine language in which to implement a self-hosting compiler: a native lexer and
+parser are already available in the <a href="/pkg/go/"><code>go</code></a> package
+and a separate type checking
+<a href="http://godoc.org/code.google.com/p/go.tools/go/types">package</a>
+has also been written.
 </p>
 </div>
 
@@ -3258,10 +3278,11 @@ How is the run-time support implemented?</h3>
 
 <div class="english">
 <p>
-Again due to bootstrapping issues, the run-time code is mostly in C (with a
-tiny bit of assembler) although Go is capable of implementing most of
-it now. <code>Gccgo</code>'s run-time support uses <code>glibc</code>.
-<code>Gc</code> uses a custom library to keep the footprint under
+Again due to bootstrapping issues, the run-time code was originally written mostly in C (with a
+tiny bit of assembler) although much of it has been translated to Go since then
+and one day all of it might be (except for the assembler bits).
+<code>Gccgo</code>'s run-time support uses <code>glibc</code>.
+<code>Gc</code> uses a custom C library to keep the footprint under
 control; it is
 compiled with a version of the Plan 9 C compiler that supports
 resizable stacks for goroutines.
@@ -3307,8 +3328,8 @@ A simple C "hello, world" program compiled and linked statically using gcc
 on Linux is around 750 kB,
 including an implementation of <code>printf</code>.
 An equivalent Go program using <code>fmt.Printf</code>
-is around 1.2 MB, but
-that includes more powerful run-time support.
+is around 1.9 MB, but
+that includes more powerful run-time support and type information.
 </p>
 </div>
 
@@ -3328,10 +3349,13 @@ Can I stop these complaints about my unused variable/import?</h3>
 <div class="english">
 <p>
 The presence of an unused variable may indicate a bug, while
-unused imports just slow down compilation.
-Accumulate enough unused imports in your code tree and
-things can get very slow.
-For these reasons, Go allows neither.
+unused imports just slow down compilation,
+an effect that can become substantial as a program accumulates
+code and programmers over time.
+For these reasons, Go refuses to compile programs with unused
+variables or imports,
+trading short-term convenience for long-term build speed and
+program clarity.
 </p>
 </div>
 
@@ -3343,7 +3367,7 @@ For these reasons, Go allows neither.
 
 <div class="english">
 <p>
-When developing code, it's common to create these situations
+Still, when developing code, it's common to create these situations
 temporarily and it can be annoying to have to edit them out before the
 program will compile.
 </p>
@@ -3426,6 +3450,23 @@ func main() {
     ....
 }
 </pre>
+
+<div class="english">
+<p>
+Nowadays, most Go programmers use a tool,
+<a href="http://godoc.org/code.google.com/p/go.tools/cmd/goimports">goimports</a>,
+which automatically rewrites a Go source file to have the correct imports,
+eliminating the unused imports issue in practice.
+This program is easily connected to most editors to run automatically when a Go source file is written.
+</p>
+</div>
+
+<p>
+现在，大多数 Go 程序员会使用
+<a href="http://godoc.org/code.google.com/p/go.tools/cmd/goimports">goimports</a>
+工具，它能自动重写 Go 源文件使其拥有正确的导入，消除实践中的未使用导入问题。
+此程序很容易连接到大多数编辑器，使其在保存 Go 源文件时自动运行。
+</p>
 
 <div class="english">
 <h2 id="Performance">Performance</h2>

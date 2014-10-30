@@ -51,7 +51,6 @@ void	allocparams(void);
 void	checklabels(void);
 void	ginscall(Node*, int);
 int	gen_as_init(Node*);
-void	clearslim(Node*);
 
 /*
  * cgen.c
@@ -100,7 +99,6 @@ int	sudoaddable(int, Node*, Addr*);
 void	afunclit(Addr*, Node*);
 void	nodfconst(Node*, Type*, Mpflt*);
 void	gtrack(Sym*);
-void	gargsize(vlong);
 void	fixlargeoffset(Node *n);
 
 /*

@@ -1,4 +1,4 @@
-// errorcheck -0 -l -live
+// errorcheck -0 -l -live -wb=0
 
 // Copyright 2014 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -467,7 +467,7 @@ func f31(b1, b2, b3 bool) {
 		h31("b") // ERROR "live at call to newobject: autotmp_[0-9]+$" "live at call to convT2E: autotmp_[0-9]+ autotmp_[0-9]+$" "live at call to h31: autotmp_[0-9]+$"
 	}
 	if b3 {
-		panic("asdf") // ERROR "live at call to convT2E: autotmp_[0-9]+$" "live at call to panic: autotmp_[0-9]+$"
+		panic("asdf") // ERROR "live at call to convT2E: autotmp_[0-9]+$" "live at call to gopanic: autotmp_[0-9]+$"
 	}
 	print(b3)
 }
@@ -586,14 +586,16 @@ func f39a() (x []int) {
 }
 
 func f39b() (x [10]*int) {
-	x = [10]*int{new(int)} // ERROR "live at call to newobject: x"
-	println()              // ERROR "live at call to printnl: x"
+	x = [10]*int{}
+	x[0] = new(int) // ERROR "live at call to newobject: x"
+	println()       // ERROR "live at call to printnl: x"
 	return x
 }
 
 func f39c() (x [10]*int) {
-	x = [10]*int{new(int)} // ERROR "live at call to newobject: x"
-	println()              // ERROR "live at call to printnl: x"
+	x = [10]*int{}
+	x[0] = new(int) // ERROR "live at call to newobject: x"
+	println()       // ERROR "live at call to printnl: x"
 	return
 }
 
@@ -605,9 +607,8 @@ type T40 struct {
 }
 
 func newT40() *T40 {
-	ret := T40{ // ERROR "live at call to makemap: &ret"
-		make(map[int]int),
-	}
+	ret := T40{}
+	ret.m = make(map[int]int) // ERROR "live at call to makemap: &ret"
 	return &ret
 }
 
@@ -618,9 +619,8 @@ func bad40() {
 }
 
 func good40() {
-	ret := T40{ // ERROR "live at call to makemap: ret"
-		make(map[int]int),
-	}
+	ret := T40{}
+	ret.m = make(map[int]int) // ERROR "live at call to makemap: ret"
 	t := &ret
 	println() // ERROR "live at call to printnl: ret"
 	_ = t

@@ -18,8 +18,8 @@
 #include "gg.h"
 #include "opt.h"
 #include "../ld/textflag.h"
-#include "../../pkg/runtime/funcdata.h"
-#include "../../pkg/runtime/mgc0.h"
+#include "../../runtime/funcdata.h"
+#include "../../runtime/mgc0.h"
 
 enum {
 	UNVISITED = 0,
@@ -1113,8 +1113,7 @@ twobitwalktype1(Type *t, vlong *xoffset, Bvec *bv)
 		// struct { byte *str; intgo len; }
 		if((*xoffset & (widthptr-1)) != 0)
 			fatal("twobitwalktype1: invalid alignment, %T", t);
-		bvset(bv, (*xoffset / widthptr) * BitsPerPointer + 0);
-		bvset(bv, (*xoffset / widthptr) * BitsPerPointer + 1); // 3:0 = multiword:string
+		bvset(bv, (*xoffset / widthptr) * BitsPerPointer + 1); // 2 = live ptr in first slot
 		*xoffset += t->width;
 		break;
 
@@ -1145,9 +1144,7 @@ twobitwalktype1(Type *t, vlong *xoffset, Bvec *bv)
 			// struct { byte *array; uintgo len; uintgo cap; }
 			if((*xoffset & (widthptr-1)) != 0)
 				fatal("twobitwalktype1: invalid TARRAY alignment, %T", t);
-			bvset(bv, (*xoffset / widthptr) * BitsPerPointer + 0);
-			bvset(bv, (*xoffset / widthptr) * BitsPerPointer + 1);
-			bvset(bv, (*xoffset / widthptr) * BitsPerPointer + 2); // 3:1 = multiword/slice
+			bvset(bv, (*xoffset / widthptr) * BitsPerPointer + 1); // 2 = live ptr in first slot
 			*xoffset += t->width;
 		} else
 			for(i = 0; i < t->bound; i++)
@@ -1939,7 +1936,11 @@ twobitwritesymbol(Array *arr, Sym *sym)
 			break;
 		for(j = 0; j < bv->n; j += 32) {
 			word = bv->b[j/32];
-			off = duint32(sym, off, word);
+			// Runtime reads the bitmaps as byte arrays. Oblige.
+			off = duint8(sym, off, word);
+			off = duint8(sym, off, word>>8);
+			off = duint8(sym, off, word>>16);
+			off = duint8(sym, off, word>>24);
 		}
 	}
 	duint32(sym, 0, i); // number of bitmaps

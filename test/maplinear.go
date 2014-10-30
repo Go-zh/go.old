@@ -44,13 +44,20 @@ func checkLinear(typ string, tries int, f func(n int)) {
 			}
 			return
 		}
-		fails++
-		if fails == 6 {
+		// If n ops run in under a second and the ratio
+		// doesn't work out, make n bigger, trying to reduce
+		// the effect that a constant amount of overhead has
+		// on the computed ratio.
+		if t1 < 1*time.Second {
+			n *= 2
+			continue
+		}
+		// Once the test runs long enough for n ops,
+		// try to get the right ratio at least once.
+		// If five in a row all fail, give up.
+		if fails++; fails >= 5 {
 			panic(fmt.Sprintf("%s: too slow: %d inserts: %v; %d inserts: %v\n",
 				typ, n, t1, 2*n, t2))
-		}
-		if fails < 4 {
-			n *= 2
 		}
 	}
 }
@@ -138,6 +145,28 @@ func main() {
 		m := map[complex128]int{}
 		for i := 0; i < n; i++ {
 			m[complex(float64(i), float64(i))] = 1
+		}
+	})
+
+	// ~70ms on a 1.6GHz Zeon.
+	// The iterate/delete idiom currently takes expected
+	// O(n lg n) time.  Fortunately, the checkLinear test
+	// leaves enough wiggle room to include n lg n time
+	// (it actually tests for O(n^log_2(3)).
+	// To prevent false positives, average away variation
+	// by doing multiple rounds within a single run.
+	checkLinear("iterdelete", 2500, func(n int) {
+		for round := 0; round < 4; round++ {
+			m := map[int]int{}
+			for i := 0; i < n; i++ {
+				m[i] = i
+			}
+			for i := 0; i < n; i++ {
+				for k := range m {
+					delete(m, k)
+					break
+				}
+			}
 		}
 	})
 }

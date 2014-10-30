@@ -30,6 +30,9 @@
 
 #include <u.h>
 #include "cc.h"
+#include "../ld/textflag.h"
+
+static int haspointers(Type*);
 
 Node*
 dodecl(void (*f)(int,Type*,Sym*), int c, Type *t, Node *n)
@@ -123,7 +126,8 @@ loop:
 		if(dataflag) {
 			s->dataflag = dataflag;
 			dataflag = 0;
-		}
+		} else if(s->type != T && !haspointers(s->type))
+			s->dataflag = NOPTR;
 		firstbit = 0;
 		n->sym = s;
 		n->type = s->type;
@@ -568,9 +572,8 @@ haspointers(Type *t)
 		return 0;
 	case TARRAY:
 		return haspointers(t->link);
-	case TFUNC:
 	case TIND:
-		return 1;
+		return t->link->etype != TFUNC;
 	default:
 		return 0;
 	}
@@ -697,7 +700,8 @@ argmark(Node *n, int pass)
 {
 	Type *t;
 
-	autoffset = align(0, thisfn->link, Aarg0, nil);
+	if(hasdotdotdot(thisfn->link))
+		autoffset = align(0, thisfn->link, Aarg0, nil);
 	stkoff = 0;
 	for(; n->left != Z; n = n->left) {
 		if(n->op != OFUNC || n->left->op != ONAME)
@@ -1401,6 +1405,10 @@ xdecl(int c, Type *t, Sym *s)
 		}
 	tmerge(t, s);
 	s->type = t;
+	if(c == CTYPEDEF && (typechlv[t->etype] || typefd[t->etype])) {
+		s->type = copytyp(t);
+		s->type->tag = s;
+	}
 	s->class = c;
 	s->block = 0;
 	s->offset = o;

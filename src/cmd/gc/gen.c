@@ -54,9 +54,6 @@ addrescapes(Node *n)
 		if(n->class == PAUTO && n->esc == EscNever)
 			break;
 
-		if(debug['N'] && n->esc != EscUnknown)
-			fatal("without escape analysis, only PAUTO's should have esc: %N", n);
-
 		switch(n->class) {
 		case PPARAMREF:
 			addrescapes(n->defn);
@@ -91,8 +88,7 @@ addrescapes(Node *n)
 			snprint(buf, sizeof buf, "&%S", n->sym);
 			n->heapaddr->sym = lookup(buf);
 			n->heapaddr->orig->sym = n->heapaddr->sym;
-			if(!debug['N'])
-				n->esc = EscHeap;
+			n->esc = EscHeap;
 			if(debug['m'])
 				print("%L: moved to heap: %N\n", n->lineno, n);
 			curfn = oldfn;
@@ -585,7 +581,7 @@ cgen_dcl(Node *n)
 	if(!(n->class & PHEAP))
 		return;
 	if(compiling_runtime)
-		fatal("%N escapes to heap, not allowed in runtime.", n);
+		yyerror("%N escapes to heap, not allowed in runtime.", n);
 	if(n->alloc == nil)
 		n->alloc = callnew(n->type);
 	cgen_as(n->heapaddr, n->alloc);
@@ -735,14 +731,10 @@ cgen_as(Node *nl, Node *nr)
 		return;
 	}
 
-	if(nr == N || isnil(nr)) {
-		// externals and heaps should already be clear
-		if(nr == N) {
-			if(nl->class == PEXTERN)
-				return;
-			if(nl->class & PHEAP)
-				return;
-		}
+	if(nr == N || iszero(nr)) {
+		// heaps should already be clear
+		if(nr == N && (nl->class & PHEAP))
+			return;
 
 		tl = nl->type;
 		if(tl == T)
@@ -806,7 +798,8 @@ cgen_eface(Node *n, Node *res)
 void
 cgen_slice(Node *n, Node *res)
 {
-	Node src, dst, *cap, *len, *offs, *add, *base;
+	Node src, dst, *cap, *len, *offs, *add, *base, *tmpcap, *tmplen, *cmp, con;
+	Prog *p1, *p2;
 
 	cap = n->list->n;
 	len = n->list->next->n;
@@ -823,6 +816,11 @@ cgen_slice(Node *n, Node *res)
 	// garbage collector can see.
 	
 	base = temp(types[TUINTPTR]);
+	tmplen = temp(types[TINT]);
+	if(n->op != OSLICESTR)
+		tmpcap = temp(types[TINT]);
+	else
+		tmpcap = tmplen;
 
 	if(isnil(n->left)) {
 		tempname(&src, n->left->type);
@@ -837,43 +835,62 @@ cgen_slice(Node *n, Node *res)
 			fatal("slicearr is supposed to work on pointer: %+N\n", n);
 		cgen(&src, base);
 		cgen_checknil(base);
-		if(offs != N) {
-			add = nod(OADD, base, offs);
-			typecheck(&add, Erv);
-			cgen(add, base);
-		}
-	} else if(offs == N) {
-		src.type = types[tptr];
-		cgen(&src, base);
 	} else {
 		src.type = types[tptr];
-		add = nod(OADDPTR, &src, offs);
-		typecheck(&add, Erv);
-		cgen(add, base);
+		cgen(&src, base);
 	}
 	
 	// committed to the update
 	gvardef(res);
 
+	// compute len and cap.
+	// len = n-i, cap = m-i, and offs = i*width.
+	// computing offs last lets the multiply overwrite i.
+	cgen(len, tmplen);
+	if(n->op != OSLICESTR)
+		cgen(cap, tmpcap);
+
+	// if new cap != 0 { base += add }
+	// This avoids advancing base past the end of the underlying array/string,
+	// so that it cannot point at the next object in memory.
+	// If cap == 0, the base doesn't matter except insofar as it is 0 or non-zero.
+	// In essence we are replacing x[i:j:k] where i == j == k
+	// or x[i:j] where i == j == cap(x) with x[0:0:0].
+	if(offs != N) {
+		p1 = gjmp(P);
+		p2 = gjmp(P);
+		patch(p1, pc);
+
+		nodconst(&con, tmpcap->type, 0);
+		cmp = nod(OEQ, tmpcap, &con);
+		typecheck(&cmp, Erv);
+		bgen(cmp, 1, -1, p2);
+
+		add = nod(OADD, base, offs);
+		typecheck(&add, Erv);
+		cgen(add, base);
+
+		patch(p2, pc);
+	}
+
 	// dst.array = src.array  [ + lo *width ]
 	dst = *res;
 	dst.xoffset += Array_array;
 	dst.type = types[tptr];
-	
 	cgen(base, &dst);
 
 	// dst.len = hi [ - lo ]
 	dst = *res;
 	dst.xoffset += Array_nel;
 	dst.type = types[simtype[TUINT]];
-	cgen(len, &dst);
+	cgen(tmplen, &dst);
 
 	if(n->op != OSLICESTR) {
 		// dst.cap = cap [ - lo ]
 		dst = *res;
 		dst.xoffset += Array_cap;
 		dst.type = types[simtype[TUINT]];
-		cgen(cap, &dst);
+		cgen(tmpcap, &dst);
 	}
 }
 

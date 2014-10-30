@@ -13,6 +13,15 @@ import (
 	"sort"
 )
 
+var validSymType = map[rune]bool{
+	'T': true,
+	't': true,
+	'D': true,
+	'd': true,
+	'B': true,
+	'b': true,
+}
+
 type plan9File struct {
 	plan9 *plan9obj.File
 }
@@ -35,6 +44,9 @@ func (f *plan9File) symbols() ([]Sym, error) {
 	// We infer the size of a symbol by looking at where the next symbol begins.
 	var addrs []uint64
 	for _, s := range plan9Syms {
+		if !validSymType[s.Type] {
+			continue
+		}
 		addrs = append(addrs, s.Value)
 	}
 	sort.Sort(uint64s(addrs))
@@ -42,6 +54,9 @@ func (f *plan9File) symbols() ([]Sym, error) {
 	var syms []Sym
 
 	for _, s := range plan9Syms {
+		if !validSymType[s.Type] {
+			continue
+		}
 		sym := Sym{Addr: s.Value, Name: s.Name, Code: rune(s.Type)}
 		i := sort.Search(len(addrs), func(x int) bool { return addrs[x] > s.Value })
 		if i < len(addrs) {
@@ -55,11 +70,20 @@ func (f *plan9File) symbols() ([]Sym, error) {
 
 func (f *plan9File) pcln() (textStart uint64, symtab, pclntab []byte, err error) {
 	textStart = f.plan9.LoadAddress + f.plan9.HdrSize
-	if pclntab, err = loadPlan9Table(f.plan9, "pclntab", "epclntab"); err != nil {
-		return 0, nil, nil, err
+	if pclntab, err = loadPlan9Table(f.plan9, "runtime.pclntab", "runtime.epclntab"); err != nil {
+		// We didn't find the symbols, so look for the names used in 1.3 and earlier.
+		// TODO: Remove code looking for the old symbols when we no longer care about 1.3.
+		var err2 error
+		if pclntab, err2 = loadPlan9Table(f.plan9, "pclntab", "epclntab"); err2 != nil {
+			return 0, nil, nil, err
+		}
 	}
-	if symtab, err = loadPlan9Table(f.plan9, "symtab", "esymtab"); err != nil {
-		return 0, nil, nil, err
+	if symtab, err = loadPlan9Table(f.plan9, "runtime.symtab", "runtime.esymtab"); err != nil {
+		// Same as above.
+		var err2 error
+		if symtab, err2 = loadPlan9Table(f.plan9, "symtab", "esymtab"); err2 != nil {
+			return 0, nil, nil, err
+		}
 	}
 	return textStart, symtab, pclntab, nil
 }
