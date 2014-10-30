@@ -159,15 +159,29 @@ func Caller(skip int) (pc uintptr, file string, line int, ok bool) {
 	return
 }
 
-// Callers fills the slice pc with the program counters of function invocations
+// Callers fills the slice pc with the return program counters of function invocations
 // on the calling goroutine's stack.  The argument skip is the number of stack frames
 // to skip before recording in pc, with 0 identifying the frame for Callers itself and
 // 1 identifying the caller of Callers.
 // It returns the number of entries written to pc.
+//
+// Note that since each slice entry pc[i] is a return program counter,
+// looking up the file and line for pc[i] (for example, using (*Func).FileLine)
+// will return the file and line number of the instruction immediately
+// following the call.
+// To look up the file and line number of the call itself, use pc[i]-1.
+// As an exception to this rule, if pc[i-1] corresponds to the function
+// runtime.sigpanic, then pc[i] is the program counter of a faulting
+// instruction and should be used without any subtraction.
 
-// Callers 把调用它的函数Go程栈上的程序计数器填入切片 pc 中。
-// 实参 skip 为开始在 pc 中记录之前所要跳过的栈帧数，若为0则表示 Callers 自身的栈帧，
-// 若为1则表示 Callers 的调用者。它返回写入到 pc 中的项数。
+// Callers 把调用它的Go程栈上函数请求的返回程序计数器填充到切片 pc 中。
+// 实参 skip 为开始在 pc 中记录之前所要跳过的栈帧数，若为 0 则表示 Callers 自身的栈帧，
+// 若为 1 则表示 Callers 的调用者。它返回写入到 pc 中的项数。
+//
+// 注意，由于每个切片项 pc[i] 都是一个返回程序计数器，因此查找 pc[i] 的文件和行（例如，使用
+// (*Func).FileLine）将会在该调用之后立即返回该指令所在的文件和行号。
+// 要查找该调用本身所在的文件和行号，请使用 pc[i]-1。此规则的一个例外是，若 pc[i-1]
+// 对应于函数 runtime.sigpanic，那么 pc[i] 就是失败指令的程序计数器，因此应当不通过任何减法来使用。
 func Callers(skip int, pc []uintptr) int {
 	// runtime.callers uses pc.array==nil as a signal
 	// to print a stack trace.  Pick off 0-length pc here

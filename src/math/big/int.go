@@ -945,8 +945,8 @@ func (z *Int) ModInverse(g, n *Int) *Int {
 	// relatively prime, d = 1. Taking that modulo n results in
 	// g*x = 1, therefore x is the inverse element.
 	//
-	// x 和 y 满足 g*x + n*y = d。由于 g 与 n 互质，所以 d = 1。
-	// g*x = 1 的结果取模为 n，因此 x 是所求的逆元素。
+	// 存在 x 和 y 满足 g*x + n*y = d。由于 g 与 n 互质，所以 d = 1。
+	// 对其取模为 n 时 g*x = 1，因此 x 是所求的逆元。
 	if z.neg {
 		z.Add(z, n)
 	}
