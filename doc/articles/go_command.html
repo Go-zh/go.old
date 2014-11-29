@@ -168,30 +168,32 @@ well-established conventions.</p>
 source code.  For Bitbucket, GitHub, Google Code, and Launchpad, the
 root directory of the repository is identified by the repository's
 main URL, without the <code>http://</code> prefix.  Subdirectories are named by
-adding to that path.  For example, the supplemental networking
-libraries for Go are obtained by running</p>
+adding to that path.
+For example, the Go example programs are obtained by running</p>
 </div>
 
 <p>
 第一，导入路径源自源码的URL。对于Bitbucket、GitHub、Google Code和Launchpad来说，
 其代码仓库的根目录由该仓库的主URL确定，无需 <code>http://</code> 前缀。
-子目录名附加在该路径之后。例如Go补充的网络库可通过运行
+子目录名附加在该路径之后。例如，Go示例程序可通过运行
 </p>
 
 <pre>
-hg clone http://code.google.com/p/go.net
+git clone https://github.com/golang/example
 </pre>
 
 <div class="english">
 <p>and thus the import path for the root directory of that repository is
-"<code>code.google.com/p/go.net</code>".  The websocket package is stored in a
-subdirectory, so its import path is
-"<code>code.google.com/p/go.net/websocket</code>".</p>
+"<code>github.com/golang/example</code>".
+The <a href="https://godoc.org/github.com/golang/example/stringutil">stringutil</a>
+package is stored in a subdirectory, so its import path is
+"<code>github.com/golang/example/stringutil</code>".</p>
 </div>
 
 <p>
-获得，因此该仓库根目录的导入路径为“<code>code.google.com/p/go.net</code>”。websocket
-包存储在子目录中，因此它的导入路径为“<code>code.google.com/p/go.net/websocket</code>”。</p>
+获得，因此该仓库根目录的导入路径为“<code>github.com/golang/example</code>”。
+<a href="https://godoc.org/github.com/golang/example/stringutil">stringutil</a>
+包存储在子目录中，因此它的导入路径为“<code>github.com/golang/example/stringutil</code>”。</p>
 
 <div class="english">
 <p>These paths are on the long side, but in exchange we get an

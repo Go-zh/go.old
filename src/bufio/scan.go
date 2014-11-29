@@ -49,6 +49,7 @@ type Scanner struct {
 	start        int       // First non-processed byte in buf.
 	end          int       // End of data in buf.
 	err          error     // Sticky error.
+	empties      int       // Count of successive empty tokens.
 }
 
 // SplitFunc is the signature of the split function used to tokenize the
@@ -146,12 +147,16 @@ func (s *Scanner) Text() string {
 // After Scan returns false, the Err method will return any error that
 // occurred during scanning, except that if it was io.EOF, Err
 // will return nil.
+// Split panics if the split function returns 100 empty tokens without
+// advancing the input. This is a common error mode for scanners.
 
 // Scan方法获取当前位置的token（该token可以通过Bytes或Text方法获得），
 // 并让Scanner的扫描位置移动到下一个token。
 // 当扫描因为抵达输入流结尾或者遇到错误而停止时，
 // 本方法会返回false。在Scan方法返回false后，
 // Err方法将返回扫描时遇到的任何错误；除非是io.EOF，此时Err会返回nil。
+// 若 split 函数返回了 100 个空标记而没有推进输入，那么它就会派错（panic）。这是 scanner
+// 的一个常见错误。
 func (s *Scanner) Scan() bool {
 	// Loop until we have a token.
 	for {
@@ -169,6 +174,15 @@ func (s *Scanner) Scan() bool {
 			}
 			s.token = token
 			if token != nil {
+				if s.err == nil || advance > 0 {
+					s.empties = 0
+				} else {
+					// Returning tokens not advancing input at EOF.
+					s.empties++
+					if s.empties > 100 {
+						panic("bufio.Scan: 100 empty tokens without progressing")
+					}
+				}
 				return true
 			}
 		}
@@ -216,6 +230,7 @@ func (s *Scanner) Scan() bool {
 				break
 			}
 			if n > 0 {
+				s.empties = 0
 				break
 			}
 			loop++

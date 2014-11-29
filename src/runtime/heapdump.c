@@ -7,7 +7,7 @@
 // finalizers, etc.) to a file.
 
 // The format of the dumped file is described at
-// http://code.google.com/p/go-wiki/wiki/heapdump14
+// http://golang.org/s/go14heapdump.
 
 #include "runtime.h"
 #include "arch_GOARCH.h"
@@ -251,7 +251,9 @@ dumpbv(BitVector *bv, uintptr offset)
 	for(i = 0; i < bv->n; i += BitsPerPointer) {
 		switch(bv->bytedata[i/8] >> i%8 & 3) {
 		case BitsDead:
-			return;
+			// BitsDead has already been processed in makeheapobjbv.
+			// We should only see it in stack maps, in which case we should continue processing.
+			break;
 		case BitsScalar:
 			break;
 		case BitsPointer:
