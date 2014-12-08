@@ -3,13 +3,13 @@ syntax:glob
 .git
 .gitignore
 .idea
-*.[568ao]
-*.a[568o]
+*.[5689ao]
+*.a[5689o]
 *.so
 *.pyc
 ._*
 .nfs.*
-[568a].out
+[5689a].out
 *~
 *.orig
 *.rej

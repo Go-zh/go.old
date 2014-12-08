@@ -134,7 +134,7 @@ if %FAIL%==1 goto fail
 set GOMAXPROCS=%OLDGOMAXPROCS%
 set OLDGOMAXPROCS=
 
-echo # Checking API compatibility.
+:: echo # Checking API compatibility.
 go run "%GOROOT%\src\cmd\api\run.go"
 if errorlevel 1 goto fail
 echo.

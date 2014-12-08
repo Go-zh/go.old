@@ -708,6 +708,10 @@ main(int argc, char **argv)
 			gohostarch = "386";
 		else if(contains(u.machine, "arm"))
 			gohostarch = "arm";
+		else if(contains(u.machine, "ppc64le"))
+			gohostarch = "ppc64le";
+		else if(contains(u.machine, "ppc64"))
+			gohostarch = "ppc64";
 		else
 			fatal("unknown architecture: %s", u.machine);
 	}

@@ -255,7 +255,6 @@ rm -f runtest
 [ "$GOOS" == nacl ] ||
 (
 echo
-echo '# Checking API compatibility.'
 time go run $GOROOT/src/cmd/api/run.go || exit 1
 ) || exit $?
 

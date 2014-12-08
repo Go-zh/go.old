@@ -142,9 +142,6 @@ import "unsafe"
 // 注：舍入方式检测在此省略。常量“mask”、“shift”和"bias"可在
 // src/pkg/math/bits.go 中找到。
 const (
-	uvnan      = 0x7FF8000000000001
-	uvinf      = 0x7FF0000000000000
-	uvneginf   = 0xFFF0000000000000
 	mask       = 0x7FF
 	shift      = 64 - 11 - 1
 	bias       = 1023
@@ -161,7 +158,7 @@ func sqrt(x float64) float64 {
 	case x == 0 || x != x || x > maxFloat64:
 		return x
 	case x < 0:
-		return nan
+		return nan()
 	}
 	ix := float64bits(x)
 	// normalize x
@@ -207,8 +204,4 @@ func sqrt(x float64) float64 {
 	// 有效数字 + 偏移指数。
 	ix = q>>1 + uint64(exp-1+bias)<<shift // significand + biased exponent
 	return float64frombits(ix)
-}
-
-func sqrtC(f float64, r *float64) {
-	*r = sqrt(f)
 }

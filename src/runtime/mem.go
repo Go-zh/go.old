@@ -73,7 +73,15 @@ type MemStats struct {
 	}
 }
 
-var sizeof_C_MStats uintptr // filled in by malloc.goc  // 由 malloc.goc 填入
+// Size of the trailing by_size array differs between Go and C,
+// and all data after by_size is local to runtime, not exported.
+// NumSizeClasses was changed, but we can not change Go struct because of backward compatibility.
+// sizeof_C_MStats is what C thinks about size of Go struct.
+
+// Go 和 C 的 by_size 数组结尾是不同的，且 by_size 之后的所有数据对运行时而言是局部的，未导出的。
+// NumSizeClasses 已被修改，但考虑到向后兼容，我们不能修改 Go 的结构体。
+// sizeof_C_MStats 对于 C 来说类似于 Go 的结构体大小。
+var sizeof_C_MStats = unsafe.Offsetof(memstats.by_size) + 61*unsafe.Sizeof(memstats.by_size[0])
 
 func init() {
 	var memStats MemStats
@@ -94,15 +102,16 @@ func ReadMemStats(m *MemStats) {
 	semacquire(&worldsema, false)
 	gp := getg()
 	gp.m.gcing = 1
-	onM(stoptheworld)
+	systemstack(stoptheworld)
 
-	gp.m.ptrarg[0] = noescape(unsafe.Pointer(m))
-	onM(readmemstats_m)
+	systemstack(func() {
+		readmemstats_m(m)
+	})
 
 	gp.m.gcing = 0
 	gp.m.locks++
 	semrelease(&worldsema)
-	onM(starttheworld)
+	systemstack(starttheworld)
 	gp.m.locks--
 }
 
@@ -111,14 +120,15 @@ func writeHeapDump(fd uintptr) {
 	semacquire(&worldsema, false)
 	gp := getg()
 	gp.m.gcing = 1
-	onM(stoptheworld)
+	systemstack(stoptheworld)
 
-	gp.m.scalararg[0] = fd
-	onM(writeheapdump_m)
+	systemstack(func() {
+		writeheapdump_m(fd)
+	})
 
 	gp.m.gcing = 0
 	gp.m.locks++
 	semrelease(&worldsema)
-	onM(starttheworld)
+	systemstack(starttheworld)
 	gp.m.locks--
 }

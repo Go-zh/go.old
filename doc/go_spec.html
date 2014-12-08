@@ -852,7 +852,7 @@ acts like a variable.
 </p>
 
 <p>
-The <i>static type</i> (or just <i>type</i>) of a variable is the	
+The <i>static type</i> (or just <i>type</i>) of a variable is the
 type given in its declaration, the type provided in the
 <code>new</code> call or composite literal, or the type of
 an element of a structured variable.
@@ -862,8 +862,8 @@ which is the concrete type of the value assigned to the variable at run time
 which has no type).
 The dynamic type may vary during execution but values stored in interface
 variables are always <a href="#Assignability">assignable</a>
-to the static type of the variable.	
-</p>	
+to the static type of the variable.
+</p>
 
 <pre>
 var x interface{}  // x is nil and has static type interface{}
@@ -5754,7 +5754,7 @@ s3 := append(s2, s0...)            // append a slice              s3 == []int{0,
 s4 := append(s3[3:6], s3[2:]...)   // append overlapping slice    s4 == []int{3, 5, 7, 2, 3, 5, 7, 0, 0}
 
 var t []interface{}
-t = append(t, 42, 3.1415, "foo")                                  t == []interface{}{42, 3.1415, "foo"}
+t = append(t, 42, 3.1415, "foo")   //                             t == []interface{}{42, 3.1415, "foo"}
 
 var b []byte
 b = append(b, "bar"...)            // append string contents      b == []byte{'b', 'a', 'r' }

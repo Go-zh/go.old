@@ -1533,12 +1533,8 @@ func (gc *gcProg) appendProg(t *rtype) {
 			gc.appendProg(e)
 		}
 	case Interface:
-		gc.appendWord(bitsMultiWord)
-		if t.NumMethod() == 0 {
-			gc.appendWord(bitsEface)
-		} else {
-			gc.appendWord(bitsIface)
-		}
+		gc.appendWord(bitsPointer)
+		gc.appendWord(bitsPointer)
 	case Struct:
 		c := t.NumField()
 		for i := 0; i < c; i++ {
@@ -1592,9 +1588,8 @@ func (gc *gcProg) align(a uintptr) {
 
 // These constants must stay in sync with ../runtime/mgc0.h.
 const (
-	bitsScalar    = 1
-	bitsPointer   = 2
-	bitsMultiWord = 3
+	bitsScalar  = 1
+	bitsPointer = 2
 
 	bitsIface = 2
 	bitsEface = 3
@@ -1894,14 +1889,14 @@ func addTypeBits(bv *bitVector, offset *uintptr, t *rtype) {
 	switch Kind(t.kind & kindMask) {
 	case Chan, Func, Map, Ptr, Slice, String, UnsafePointer:
 		// 1 pointer at start of representation
-		for bv.n < uint32(*offset/uintptr(ptrSize)) {
+		for bv.n < 2*uint32(*offset/uintptr(ptrSize)) {
 			bv.append2(bitsScalar)
 		}
 		bv.append2(bitsPointer)
 
 	case Interface:
 		// 2 pointers
-		for bv.n < uint32(*offset/uintptr(ptrSize)) {
+		for bv.n < 2*uint32(*offset/uintptr(ptrSize)) {
 			bv.append2(bitsScalar)
 		}
 		bv.append2(bitsPointer)

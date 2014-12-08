@@ -167,8 +167,8 @@ func selunlock(sel *_select) {
 	}
 }
 
-func selparkcommit(gp *g, sel *_select) bool {
-	selunlock(sel)
+func selparkcommit(gp *g, sel unsafe.Pointer) bool {
+	selunlock((*_select)(sel))
 	return true
 }
 
@@ -363,7 +363,7 @@ loop:
 
 	// wait for someone to wake us up
 	gp.param = nil
-	gopark(unsafe.Pointer(funcPC(selparkcommit)), unsafe.Pointer(sel), "select")
+	gopark(selparkcommit, unsafe.Pointer(sel), "select")
 
 	// someone woke us up
 	sellock(sel)
@@ -377,12 +377,7 @@ loop:
 	// iterating through the linked list they are in reverse order.
 	cas = nil
 	sglist = gp.waiting
-	// Clear all selectdone and elem before unlinking from gp.waiting.
-	// They must be cleared before being put back into the sudog cache.
-	// Clear before unlinking, because if a stack copy happens after the unlink,
-	// they will not be updated, they will be left pointing to the old stack,
-	// which creates dangling pointers, which may be detected by the
-	// garbage collector.
+	// Clear all elem before unlinking from gp.waiting.
 	for sg1 := gp.waiting; sg1 != nil; sg1 = sg1.waitlink {
 		sg1.selectdone = nil
 		sg1.elem = nil
