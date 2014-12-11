@@ -1,8 +1,4 @@
-syntax:glob
 .DS_Store
-.git
-.gitignore
-.idea
 *.[5689ao]
 *.a[5689o]
 *.so
@@ -18,7 +14,6 @@ syntax:glob
 core
 *.cgo*.go
 *.cgo*.c
-*.iml
 _cgo_*
 _obj
 _test
@@ -53,8 +48,5 @@ goinstall.log
 last-change
 VERSION.cache
 
-syntax:regexp
-^bin/
-^pkg/
-^src/cmd/(.*)/6?\1$
-^.*/core.[0-9]*$
+bin/
+pkg/
