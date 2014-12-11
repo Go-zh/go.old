@@ -310,7 +310,7 @@ func goalg(a unsafe.Pointer) *typeAlg {
 }
 
 // used in asm_{386,amd64}.s
-const hashRandomBytes = 32
+const hashRandomBytes = ptrSize / 4 * 64
 
 var aeskeysched [hashRandomBytes]byte
 
@@ -332,18 +332,6 @@ func init() {
 		algarray[alg_MEM128].hash = aeshash
 		algarray[alg_STRING].hash = aeshashstr
 		// Initialize with random data so hash collisions will be hard to engineer.
-		var rnd unsafe.Pointer
-		var n int32
-		get_random_data(&rnd, &n)
-		if n > hashRandomBytes {
-			n = hashRandomBytes
-		}
-		memmove(unsafe.Pointer(&aeskeysched[0]), rnd, uintptr(n))
-		if n < hashRandomBytes {
-			// Not very random, but better than nothing.
-			for t := nanotime(); n < hashRandomBytes; n++ {
-				aeskeysched[n] = byte(t >> uint(8*(n%8)))
-			}
-		}
+		getRandomData(aeskeysched[:])
 	}
 }
