@@ -10,7 +10,7 @@ It is the work of hundreds of contributors. We appreciate your help!
 
 Go 是个开源项目。
 
-它是上百位贡献者工作的结晶。我们感谢你们的帮助！
+它是数百名贡献者努力工作的结晶。我们感谢你们的帮助！
 
 <!--
 ## Filing issues

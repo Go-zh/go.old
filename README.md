@@ -38,7 +38,7 @@ Go 是一门开源的编程语言，它能让你轻松地构建简单、可靠�
 
 若发现问题请在此报告：https://golang.org/issue/new
 
-Go 是上百位贡献者努力工作的结晶。我们感谢你们的帮助！
+Go 是数百名贡献者努力工作的结晶。我们感谢你们的帮助！
 
 要做出贡献，请先阅读贡献指南：
 	https://golang.org/doc/contribute.html
