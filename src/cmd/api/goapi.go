@@ -107,12 +107,22 @@ func setContexts() {
 	}
 }
 
-var internalPkg = regexp.MustCompile(`(^|/)internal($|/)`)
+var (
+	internalPkg = regexp.MustCompile(`(^|/)internal($|/)`)
+	hashRx      = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+)
+
+func isDevelVersion(v string) bool {
+	if strings.Contains(v, "devel") {
+		return true
+	}
+	return hashRx.MatchString(v)
+}
 
 func main() {
 	flag.Parse()
 
-	if !strings.Contains(runtime.Version(), "weekly") && !strings.Contains(runtime.Version(), "devel") {
+	if v := runtime.Version(); !strings.Contains(v, "weekly") && !isDevelVersion(v) {
 		if *nextFile != "" {
 			fmt.Printf("Go version is %q, ignoring -next %s\n", runtime.Version(), *nextFile)
 			*nextFile = ""
@@ -283,7 +293,7 @@ func compareAPI(w io.Writer, features, required, optional, exception []string) (
 				delete(optionalSet, newFeature)
 			} else {
 				fmt.Fprintf(w, "+%s\n", newFeature)
-				if !*allowNew {
+				if !*allowNew || !isDevelVersion(runtime.Version()) {
 					ok = false // we're in lock-down mode for next release
 				}
 			}
@@ -313,11 +323,15 @@ func fileFeatures(filename string) []string {
 	if err != nil {
 		log.Fatalf("Error reading file %s: %v", filename, err)
 	}
-	text := strings.TrimSpace(string(bs))
-	if text == "" {
-		return nil
+	lines := strings.Split(string(bs), "\n")
+	var nonblank []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "#") {
+			nonblank = append(nonblank, line)
+		}
 	}
-	return strings.Split(text, "\n")
+	return nonblank
 }
 
 var fset = token.NewFileSet()
