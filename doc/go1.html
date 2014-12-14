@@ -155,12 +155,12 @@ Attempting to close such a channel is a compile-time error.
 </p>
 
 <pre>
-	var c chan int
-	var csend chan&lt;- int = c
-	var crecv &lt;-chan int = c
-	close(c)     // legal
-	close(csend) // legal
-	close(crecv) // illegal
+    var c chan int
+    var csend chan&lt;- int = c
+    var crecv &lt;-chan int = c
+    close(c)     // legal
+    close(csend) // legal
+    close(crecv) // illegal
 </pre>
 
 <p>
@@ -276,9 +276,9 @@ Go 1 introduces a new built-in type, <code>error</code>, which has the following
 </p>
 
 <pre>
-	type error interface {
-		Error() string
-	}
+    type error interface {
+        Error() string
+    }
 </pre>
 
 <p>
@@ -297,7 +297,7 @@ In the old language, to delete the entry with key <code>k</code> from map <code>
 </p>
 
 <pre>
-	m[k] = value, false
+    m[k] = value, false
 </pre>
 
 <p>
@@ -355,7 +355,7 @@ This change means that code that depends on iteration order is very likely to br
 Just as important, it allows the map implementation to ensure better map balancing even when programs are using range loops to select an element from a map.
 </p>
 
-{{code "/doc/progs/go1.go" `/Sunday/` `/^	}/`}}
+{{code "/doc/progs/go1.go" `/Sunday/` `/^   }/`}}
 
 <p>
 <em>Updating</em>:
@@ -422,17 +422,17 @@ This function implicitly returns a shadowed return value and will be rejected by
 </p>
 
 <pre>
-	func Bug() (i, j, k int) {
-		for i = 0; i &lt; 5; i++ {
-			for j := 0; j &lt; 5; j++ { // Redeclares j.
-				k += i*j
-				if k > 100 {
-					return // Rejected: j is shadowed here.
-				}
-			}
-		}
-		return // OK: j is not shadowed here.
-	}
+    func Bug() (i, j, k int) {
+        for i = 0; i &lt; 5; i++ {
+            for j := 0; j &lt; 5; j++ { // Redeclares j.
+                k += i*j
+                if k > 100 {
+                    return // Rejected: j is shadowed here.
+                }
+            }
+        }
+        return // OK: j is not shadowed here.
+    }
 </pre>
 
 <p>
@@ -466,16 +466,16 @@ As an example, if package <code>p</code> includes the definitions,
 </p>
 
 <pre>
-	type Struct struct {
-		Public int
-		secret int
-	}
-	func NewStruct(a int) Struct {  // Note: not a pointer.
-		return Struct{a, f(a)}
-	}
-	func (s Struct) String() string {
-		return fmt.Sprintf("{%d (secret %d)}", s.Public, s.secret)
-	}
+    type Struct struct {
+        Public int
+        secret int
+    }
+    func NewStruct(a int) Struct {  // Note: not a pointer.
+        return Struct{a, f(a)}
+    }
+    func (s Struct) String() string {
+        return fmt.Sprintf("{%d (secret %d)}", s.Public, s.secret)
+    }
 </pre>
 
 <p>
@@ -487,11 +487,11 @@ but the client code will never be aware of them. The code
 </p>
 
 <pre>
-	import "p"
+    import "p"
 
-	myStruct := p.NewStruct(23)
-	copyOfMyStruct := myStruct
-	fmt.Println(myStruct, copyOfMyStruct)
+    myStruct := p.NewStruct(23)
+    copyOfMyStruct := myStruct
+    fmt.Println(myStruct, copyOfMyStruct)
 </pre>
 
 <p>
@@ -867,9 +867,9 @@ the name <code>Error</code> for that method:
 </p>
 
 <pre>
-	type error interface {
-		Error() string
-	}
+    type error interface {
+        Error() string
+    }
 </pre>
 
 <p>
@@ -1356,7 +1356,7 @@ documentation for a package is created with:
 </p>
 
 <pre>
-	doc.New(pkg, importpath, mode)
+    doc.New(pkg, importpath, mode)
 </pre>
 
 <p>
@@ -1761,14 +1761,14 @@ changing it from a struct to an interface:
 </p>
 
 <pre>
-	type FileInfo interface {
-		Name() string       // base name of the file
-		Size() int64        // length in bytes
-		Mode() FileMode     // file mode bits
-		ModTime() time.Time // modification time
-		IsDir() bool        // abbreviation for Mode().IsDir()
-		Sys() interface{}   // underlying data source (can return nil)
-	}
+    type FileInfo interface {
+        Name() string       // base name of the file
+        Size() int64        // length in bytes
+        Mode() FileMode     // file mode bits
+        ModTime() time.Time // modification time
+        IsDir() bool        // abbreviation for Mode().IsDir()
+        Sys() interface{}   // underlying data source (can return nil)
+    }
 </pre>
 
 <p>
@@ -1790,16 +1790,16 @@ the <code>FileInfo</code> like this:
 </p>
 
 <pre>
-	fi, err := os.Stat("hello.go")
-	if err != nil {
-		log.Fatal(err)
-	}
-	// Check that it's a Unix file.
-	unixStat, ok := fi.Sys().(*syscall.Stat_t)
-	if !ok {
-		log.Fatal("hello.go: not a Unix file")
-	}
-	fmt.Printf("file i-number: %d\n", unixStat.Ino)
+    fi, err := os.Stat("hello.go")
+    if err != nil {
+        log.Fatal(err)
+    }
+    // Check that it's a Unix file.
+    unixStat, ok := fi.Sys().(*syscall.Stat_t)
+    if !ok {
+        log.Fatal("hello.go: not a Unix file")
+    }
+    fmt.Printf("file i-number: %d\n", unixStat.Ino)
 </pre>
 
 <p>
@@ -1808,7 +1808,7 @@ the i-number expression could be contracted to
 </p>
 
 <pre>
-	fi.Sys().(*syscall.Stat_t).Ino
+    fi.Sys().(*syscall.Stat_t).Ino
 </pre>
 
 <p>
@@ -1891,7 +1891,7 @@ instead of a <code>Visitor</code> interface value.
 </p>
 
 <pre>
-	type WalkFunc func(path string, info os.FileInfo, err error) error
+    type WalkFunc func(path string, info os.FileInfo, err error) error
 </pre>
 
 <p>
@@ -2219,11 +2219,11 @@ path for such URLs. In Go 1, the cited URL parses as:
 </p>
 
 <pre>
-	URL{
-		Scheme: "mailto",
-		Opaque: "dev@golang.org",
-		RawQuery: "subject=Hi",
-	}
+    URL{
+        Scheme: "mailto",
+        Opaque: "dev@golang.org",
+        RawQuery: "subject=Hi",
+    }
 </pre>
 
 <p>
