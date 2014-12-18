@@ -160,8 +160,13 @@ Solaris以及Windows作为目标。它所支持组合的完整集将在下文的
 
 <div class="english">
 <p>
+<<<<<<< HEAD
 The Go tool chain is written in C. To build it, you need a C compiler installed.
 Please refer to the <a href="//golang.org/wiki/InstallFromSource#Install_C_tools">InstallFromSource</a>
+=======
+The Go tool chain is written in C. To build it, you need a C compiler installed. 
+Please refer to the <a href="//golang.org/wiki/InstallFromSource#install-c-tools">InstallFromSource</a>
+>>>>>>> upstream/master
 page on the Go community Wiki for operating system specific instructions.
 </p>
 </div>
@@ -172,16 +177,20 @@ Go工具链用C写成。要想构建它，你需要一个已安装的C编译器�
 页面来获得具体操作系统的说明。
 </p>
 
+<<<<<<< HEAD
 <div class="english">
 <h2 id="mercurial">Install Mercurial, if needed</h2>
 </div>
+=======
+<h2 id="git">Install Git, if needed</h2>
+>>>>>>> upstream/master
 
 <h2 id="hg">若需要，则安装Mercurial</h2>
 
 <div class="english">
 <p>
-To perform the next step you must have Mercurial installed. (Check that you
-have an <code>hg</code> command.)
+To perform the next step you must have Git installed. (Check that you
+have a <code>git</code> command before proceeding.)
 </p>
 </div>
 
@@ -191,8 +200,9 @@ have an <code>hg</code> command.)
 
 <div class="english">
 <p>
-If you do not have a working Mercurial installation,
+If you do not have a working Git installation,
 follow the instructions on the
+<<<<<<< HEAD
 <a href="http://mercurial.selenic.com/downloads">Mercurial downloads</a> page.
 </p>
 </div>
@@ -234,6 +244,9 @@ when using Mercurial indicate that the CAs are missing.
 Check your Mercurial version (<code>hg --version</code>) and
 <a href="http://mercurial.selenic.com/wiki/CACertificates#Configuration_of_HTTPS_certificate_authorities">configure the CAs</a>
 if necessary.
+=======
+<a href="http://git-scm.com/downloads">Git downloads</a> page.
+>>>>>>> upstream/master
 </p>
 </div>
 
@@ -253,6 +266,7 @@ if necessary.
 <p>Go will install to a directory named <code>go</code>.
 Change to the directory that will be its parent
 and make sure the <code>go</code> directory does not exist.
+<<<<<<< HEAD
 Then check out the repository:</p>
 </div>
 
@@ -264,6 +278,26 @@ Go将安装到名为 <code>go</code> 的目录。
 
 <pre>
 $ hg clone -u release https://code.google.com/p/go
+=======
+Then clone the repository and check out the latest release tag:</p>
+
+<pre>
+$ git clone https://go.googlesource.com/go
+$ cd go
+$ git checkout go1.4
+</pre>
+
+<h2 id="head">(Optional) Switch to the master branch</h2>
+
+<p>If you intend to modify the go source code, and
+<a href="/doc/contribute.html">contribute your changes</a>
+to the project, then move your repository
+off the release branch, and onto the master (development) branch.
+Otherwise, skip this step.</p>
+
+<pre>
+$ git checkout master
+>>>>>>> upstream/master
 </pre>
 
 <div class="english">
@@ -496,8 +530,13 @@ $ go get golang.org/x/tools/cmd/godoc
 
 <div class="english">
 <p>
+<<<<<<< HEAD
 To install these tools, the <code>go</code> <code>get</code> command requires
 that <a href="#mercurial">Mercurial</a> be installed locally.
+=======
+To install these tools, the <code>go</code> <code>get</code> command requires 
+that <a href="#git">Git</a> be installed locally.
+>>>>>>> upstream/master
 </p>
 </div>
 
@@ -567,7 +606,7 @@ that receives a message summarizing each checkin to the Go repository.
 
 <div class="english">
 <p>
-Bugs can be reported using the <a href="//code.google.com/p/go/issues/list">Go issue tracker</a>.
+Bugs can be reported using the <a href="//golang.org/issue/new">Go issue tracker</a>.
 </p>
 </div>
 
@@ -582,6 +621,7 @@ Bug应当使用<a href="//code.google.com/p/go/issues/list">Go问题跟踪系统
 
 <div class="english">
 <p>
+<<<<<<< HEAD
 The Go project maintains a stable tags in its Mercurial repository:
 <code>release</code>.
 </p>
@@ -595,8 +635,13 @@ Go项目在其Mercurial仓库中维护一个稳定的标签：<code>release</cod
 <p>
 The <code>release</code> tag refers to the current stable release of Go.
 Most Go users should use this version. New releases are announced on the
+=======
+New releases are announced on the
+>>>>>>> upstream/master
 <a href="//groups.google.com/group/golang-announce">golang-announce</a>
 mailing list.
+Each announcement mentions the latest release tag, for instance,
+<code>go1.4</code>.
 </p>
 </div>
 
@@ -618,10 +663,12 @@ To update an existing tree to the latest release, you can run:
 
 <pre>
 $ cd go/src
-$ hg pull
-$ hg update release
+$ git fetch
+$ git checkout <i>&lt;tag&gt;</i>
 $ ./all.bash
 </pre>
+
+Where <code>&lt;tag&gt;</code> is the version string of the release.
 
 
 <div class="english">
