@@ -68,7 +68,7 @@ compile/link model to generate executable binaries.
 
 <p>
 Go是通用型编程语言，它为系统编程而设计。它是强类型化的语言，具有垃圾回收机制，并显式支持并发编程。
-程序由<i>包</i>构造，以此来提供高效的依赖管理功能。当前实现使用传统的“编译-链接”模型来生成可执行的二进制文件。
+程序由<b>包</b>构造，以此来提供高效的依赖管理功能。当前实现使用传统的“编译-链接”模型来生成可执行的二进制文件。
 </p>
 
 <div class="english">
@@ -196,7 +196,7 @@ in the source text.
 <p>
 源码是采用<a href="http://en.wikipedia.org/wiki/UTF-8">UTF-8</a>编码的Unicode文本。
 该文本是非标准化的，因此单一的着重号码点不同于结合了字母与着重号的字符结构，
-那些应当视为两个码点。为简单起见，本文档将使用未限定的术语<i>字符</i>在源文本中代替Unicode码点。
+那些应当视为两个码点。为简单起见，本文档将使用未限定的术语<b>字符</b>在源文本中代替Unicode码点。
 </p>
 
 <div class="english">
@@ -348,10 +348,10 @@ like a space.
 
 <ol>
 <li>
-<i>行注释</i> 以<code>//</code> 开始，至行尾结束。一条行注释视为一个换行符。
+<b>行注释</b> 以<code>//</code> 开始，至行尾结束。一条行注释视为一个换行符。
 </li>
 <li>
-<i>块注释</i> 以 <code>/*</code> 开始，至 <code>*/</code> 结束。
+<b>块注释</b> 以 <code>/*</code> 开始，至 <code>*/</code> 结束。
 块注释在包含多行时视为一个换行符，否则视为一个空格。
 </li>
 </ol>
@@ -389,8 +389,8 @@ valid token.
 </div>
 
 <p>
-标记构成Go语言的词汇。它有4种类型：<i>标识符</i>，<i>关键字</i>，
-<i>运算符与分隔符</i>以及<i>字面</i>。<i>空白符</i>由空格（U+0020），
+标记构成Go语言的词汇。它有4种类型：<b>标识符</b>，<b>关键字</b>，
+<b>运算符与分隔符</b>以及<b>字面</b>。<b>空白符</b>由空格（U+0020），
 横向制表符（U+0009），回车符（U+000D）和换行符（U+000A）组成，除非用它来分隔会结合成单个的标记，
 否则它将被忽略。此外，换行符或EOF（文件结束符）会触发<a href="#分号">分号</a>的插入。
 当把输入分解为标记时，可形成有效标记的最长字符序列将作为下一个标记。
@@ -1006,7 +1006,7 @@ interpreted_string_lit = `"` { unicode_value | byte_value } `"` .
 在该引号内，不包含换行符的文本形成字面的值，反斜杠转义序列如同在符文字面中一样以相同的限制被解译
 （其中<code>\'</code>是非法的，而 <code>\"</code> 是合法的）。
 3位八进制（<code>\</code><i>nnn</i>）和2位十六进制（<code>\x</code><i>nn</i>）
-转义表示字符串值的独立 <i>字节</i> ；其它转义符表示（可多字节）UTF-8编码的独立 <i>字符</i>。
+转义表示字符串值的独立 <b>字节</b> ；其它转义符表示（可多字节）UTF-8编码的独立 <b>字符</b>。
 因此在字符串字面中，<code>\377</code> 和 <code>\xFF</code> 表示值为 <code>0xFF</code>=255的单个字节，
 而<code>ÿ</code>、<code>\u00FF</code>、<code>\U000000FF</code> 和 <code>\xc3\xbf</code>
 则表示UTF-8编码的字符U+00FF的两个字节<code>0xc3</code> <code>0xbf</code>。
@@ -1091,10 +1091,10 @@ collectively called <i>numeric constants</i>.
 </div>
 
 <p>
-常量包含<i>布尔常量</i>，<i>符文常量</i>，
-<i>整数常量</i>，<i>浮点数常量</i>，
-<i>复数常量</i>和<i>字符串常量</i>。
-字符，整数，浮点数和复数常量统称为<i>数值常量</i>。
+常量包含<b>布尔常量</b>，<b>符文常量</b>，
+<b>整数常量</b>，<b>浮点数常量</b>，
+<b>复数常量</b>和<b>字符串常量</b>。
+字符，整数，浮点数和复数常量统称为<b>数值常量</b>。
 </p>
 
 <div class="english">
@@ -1298,7 +1298,7 @@ TypeLit   = ArrayType | StructType | PointerType | FunctionType | InterfaceType 
 
 <p>
 类型决定值的集合与该类型值特定的操作。类型可通过（或许为<a href="#限定标识符">限定的</a>）
-<i>类型名</i>（§<a href="#类型声明">类型声明</a>）或<i>类型字面</i>指定，
+<b>类型名</b>（§<a href="#类型声明">类型声明</a>）或<b>类型字面</b>指定，
 它将根据之前声明的类型组成新的类型。
 </p>
 
@@ -1321,7 +1321,7 @@ type literals.
 
 <p>
 布尔值，数值与字符串类型的实例的命名是<a href="#预声明标识符">预声明</a>的。
-数组，结构，指针，函数，接口，切片，映射和信道这些<i>复合类型</i>可由类型字面构造。
+数组，结构，指针，函数，接口，切片，映射和信道这些<b>复合类型</b>可由类型字面构造。
 </p>
 
 <div class="english">
@@ -1338,8 +1338,8 @@ types, the dynamic type is always the static type.
 </div>
 
 <p>
-变量的<i>静态类型</i>（或<i>类型</i>）是通过其声明定义的类型。
-接口类型的变量也有一个独特的<i>动态类型</i>，这是在运行时存储在变量中的值的实际类型。
+变量的<b>静态类型</b>（或<b>类型</b>）是通过其声明定义的类型。
+接口类型的变量也有一个独特的<b>动态类型</b>，这是在运行时存储在变量中的值的实际类型。
 动态类型在执行过程中可能会有所不同，但对于接口变量的静态类型，它总是<a href="#可赋值性">可赋值</a>的。
 对于非接口类型，其动态类型始终为其静态类型。
 </p>
@@ -1355,7 +1355,7 @@ is the underlying type of the type to which <code>T</code> refers in its
 </div>
 
 <p>
-每个类型 <code>T</code> 都有一个 <i>基本类型</i>：若 <code>T</code> 为预声明类型或类型字面，
+每个类型 <code>T</code> 都有一个 <b>基本类型</b>：若 <code>T</code> 为预声明类型或类型字面，
 其相应的基本类型为 <code>T</code> 本身。否则，<code>T</code>的基本类型为其
 <a href="#类型声明">类型声明</a>中所依据类型的基本类型。
 </p>
@@ -1405,7 +1405,7 @@ In a method set, each method must have a
 </div>
 
 <p>
-类型可拥有一个与其相关联的 <i>方法集</i>（§<a href="#接口类型">接口类型</a>，§<a href="#方法声明">方法声明</a>）。
+类型可拥有一个与其相关联的 <b>方法集</b>（§<a href="#接口类型">接口类型</a>，§<a href="#方法声明">方法声明</a>）。
 <a href="#接口类型">接口类型</a>的方法集为其接口。其它任意类型 <code>T</code> 的方法集由所有带接收者类型
 <code>T</code> 的方法组成。与指针类型 <code>*T</code> 相应的方法集为所有带接收者 <code>*T</code> 或 <code>T</code>
 的方法的集（就是说，它也包含 <code>T</code> 的方法集）。根据<a href="#结构类型">结构类型</a>一节的描述，
@@ -1442,7 +1442,7 @@ and <code>false</code>. The predeclared boolean type is <code>bool</code>.
 </div>
 
 <p>
-<i>布尔类型</i> 表示由预声明常量 <code>true</code> 和 <code>false</code>所代表的布尔值的集。
+<b>布尔类型</b> 表示由预声明常量 <code>true</code> 和 <code>false</code>所代表的布尔值的集。
 预声明的布尔类型为 <code>bool</code>。
 </p>
 
@@ -1481,7 +1481,7 @@ rune        alias for int32
 </div>
 
 <p>
-<i>数值类型</i>表示整数值和浮点数值的集。
+<b>数值类型</b>表示整数值和浮点数值的集。
 架构中立的预声明数值类型为：
 </p>
 
@@ -1578,7 +1578,7 @@ The predeclared string type is <code>string</code>.
 </div>
 
 <p>
-<i>字符串类型</i> 表示字符串值的集。字符串的值为（可能为空的）字节序列。字符串是不可变的：
+<b>字符串类型</b> 表示字符串值的集。字符串的值为（可能为空的）字节序列。字符串是不可变的：
 一旦被创建，字符串的内容就不能更改。预声明的字符串类型为 <code>string</code>。
 </p>
 
@@ -1747,7 +1747,7 @@ built-in function <a href="#Length_and_capacity"><code>cap(a)</code></a>.
 </div>
 
 <p>
-切片的基本数组可扩展其切片的结尾。<i>容量</i> 是该扩展的量度：
+切片的基本数组可扩展其切片的结尾。<b>容量</b> 是该扩展的量度：
 它是切片的长度和切片往后数组的长度之和；长度达到其容量的切片可通过从原切片
 （§<a href="#Slices">Slices</a>）‘切下’一个新的来创建。
 切片 <code>a</code> 的容量可使用内建函数 <a href="#长度与容量"><code>cap(a)</code></a> 获取。
@@ -1909,7 +1909,7 @@ struct {
 </div>
 
 <p>
-通过有类型而无显式字段名声明的字段为 <i>匿名字段</i>，亦称为 <i>嵌入式</i> 字段或该结构中此种类型的嵌入。
+通过有类型而无显式字段名声明的字段为 <b>匿名字段</b>，亦称为 <b>嵌入式</b> 字段或该结构中此种类型的嵌入。
 这种字段类型必须作为一个类型名 <code>T</code> 或一个非接口类型名的指针 <code>*T</code>来实现，
 且 <code>T</code> 本身不能为指针类型。未限定类型名的行为类似于字段名。
 </p>
@@ -1964,7 +1964,7 @@ that field or method <code>f</code>.
 <p>
 在结构 <code>x</code> 中，若 <code>x.f</code> 为表示字段或<a href="#方法声明">方法</a>
 <code>f</code> 的合法<a href="#选择者">选择者</a>，则匿名字段的字段或方法 <code>f</code>
-即为<i>已提升</i>的。
+即为<b>已提升</b>的。
 </p>
 
 <div class="english">
@@ -2039,7 +2039,7 @@ struct {
 </div>
 
 <p>
-字段声明可后跟一个可选的字符串字面 <i>标注</i>，成为所有相应字段声明中字段的属性。
+字段声明可后跟一个可选的字符串字面 <b>标注</b>，成为所有相应字段声明中字段的属性。
 标注可通过 <a href="/pkg/reflect/#StructTag">反射接口</a> 获得，否则就会被忽略。
 </p>
 
@@ -2073,7 +2073,7 @@ BaseType = Type .
 </div>
 
 <p>
-指针类型表示一个所有给定类型变量的指针的集，称为指针的 <i>基础类型</i>。
+指针类型表示一个所有给定类型变量的指针的集，称为指针的 <b>基础类型</b>。
 未初始化的指针的值为 <code>nil</code>。
 </p>
 
@@ -2156,7 +2156,7 @@ may be invoked with zero or more arguments for that parameter.
 
 <p>
 函数签名中的最后一个形参可能有一个带 <code>...</code> 前缀的类型。
-带这样形参的函数被称为 <i>变参函数</i> 它可接受零个或多个实参的函数。
+带这样形参的函数被称为 <b>变参函数</b> 它可接受零个或多个实参的函数。
 </p>
 
 <pre>
@@ -2195,9 +2195,9 @@ InterfaceTypeName  = TypeName .
 </div>
 
 <p>
-接口类型指定一个称为 <i>接口</i> 的 <a href="#方法集">方法集</a>。
+接口类型指定一个称为 <b>接口</b> 的 <a href="#方法集">方法集</a>。
 接口类型变量可存储任何带方法集类型的值，该方法集为此接口的超集。
-这种类型表示 <i>实现此接口</i>。未初始化的接口类型变量的值为 <code>nil</code>。
+这种类型表示 <b>实现此接口</b>。未初始化的接口类型变量的值为 <code>nil</code>。
 </p>
 
 <pre class="ebnf">
@@ -2279,7 +2279,7 @@ instance, all types implement the <i>empty interface</i>:
 
 <p>
 类型可实现任何接口，包括任何其方法的子集，因此可能实现几个不同的接口。
-例如，所有类型都实现了 <i>空接口</i>：
+例如，所有类型都实现了 <b>空接口</b>：
 </p>
 
 <pre>
@@ -2436,7 +2436,7 @@ KeyType     = Type .
 
 <p>
 映射是一个同种类型元素的无序组，该类型称为元素类型；
-映射通过另一类型唯一的 <i>键</i> 集索引，该类型称为键类型。
+映射通过另一类型唯一的 <b>键</b> 集索引，该类型称为键类型。
 未初始化的映射值为 <code>nil</code>。
 </p>
 
@@ -2569,8 +2569,8 @@ chan&lt;- float64  // can only be used to send float64s
 </div>
 
 <p>
-<code>&lt;-</code> 操作符指定信道的 <i>方向</i>，<i>发送</i> 或 <i>接收</i>。
-若没有给定方向，那么该信道就是 <i>双向的</i>。
+<code>&lt;-</code> 操作符指定信道的 <b>方向</b>，<b>发送</b> 或 <b>接收</b>。
+若没有给定方向，那么该信道就是 <b>双向的</b>。
 信道可通过<a href="#类型转换">类型转换</a> 或 <a href="#赋值">赋值</a>被强制为只发送或只接收。
 </p>
 
@@ -2676,7 +2676,7 @@ Two types are either <i>identical</i> or <i>different</i>.
 </div>
 
 <p>
-两个类型若非 <i>相同</i> 即为 <i>不同</i>。
+两个类型若非 <b>相同</b> 即为 <b>不同</b>。
 </p>
 
 <div class="english">
@@ -2848,7 +2848,7 @@ by a value of type <code>T</code>.
 </div>
 
 <p>
-在下列情况下，值 <code>x</code> <i>可赋予</i> 类型为 <code>T</code> 的变量
+在下列情况下，值 <code>x</code> <b>可赋予</b> 类型为 <code>T</code> 的变量
 （"<code>x</code> 可赋予 <code>T</code>"）：
 </p>
 
@@ -2905,7 +2905,7 @@ Block = "{" { Statement ";" } "}" .
 </div>
 
 <p>
-<i>块</i> 为一对大括号括住的声明和语句。
+<b>块</b> 为一对大括号括住的声明和语句。
 </p>
 
 <pre class="ebnf">
@@ -2939,11 +2939,11 @@ In addition to explicit blocks in the source code, there are implicit blocks:
 </p>
 
 <ol>
-	<li><i>全域块</i> 包含所有的Go源码文本。</li>
+	<li><b>全域块</b> 包含所有的Go源码文本。</li>
 
-	<li>每个<a href="#包">包</a>都有包含其所有Go源码文本的 <i>包块</i>。</li>
+	<li>每个<a href="#包">包</a>都有包含其所有Go源码文本的 <b>包块</b>。</li>
 
-	<li>每个文件都有包含其所有Go源码文本的 <i>文件块</i>。</li>
+	<li>每个文件都有包含其所有Go源码文本的 <b>文件块</b>。</li>
 
 	<li>每个 <code>if</code>、<code>for</code> 和
 		<code>switch</code> 语句都被视为处于其自身的隐式块中。</li>
@@ -3001,7 +3001,7 @@ the identifier denotes the specified constant, type, variable, function, or pack
 </div>
 
 <p>
-已声明标识符的 <i>作用域</i> 即为该标识符所表示的具体常量、类型、变量、函数或包在源文本中的作用范围。
+已声明标识符的 <b>作用域</b> 即为该标识符所表示的具体常量、类型、变量、函数或包在源文本中的作用范围。
 </p>
 
 <div class="english">
@@ -3124,7 +3124,7 @@ any other identifier but the declaration does not introduce a new binding.
 </div>
 
 <p>
-<i>空白标识符</i> 通过下划线字符 <code>_</code> 表示，
+<b>空白标识符</b> 通过下划线字符 <code>_</code> 表示，
 它可像其它标识符一样用于声明，但该标识符不能传入一个新的绑定。
 </p>
 
@@ -3206,7 +3206,7 @@ All other identifiers are not exported.
 </div>
 
 <p>
-标识符可被 <i>导出</i> 以允许从另一个包访问。同时符合以下条件即为可导出标识符：
+标识符可被 <b>导出</b> 以允许从另一个包访问。同时符合以下条件即为可导出标识符：
 </p>
 
 <ol>
@@ -3236,7 +3236,7 @@ appear in different <a href="#Packages">packages</a> and are not
 </div>
 
 <p>
-给定一个标识符集，若其中一个标识符<i>不同于</i>该集中的任一标识符，那么它就是<i>唯一的</i>。
+给定一个标识符集，若其中一个标识符<b>不同于</b>该集中的任一标识符，那么它就是<b>唯一的</b>。
 若两个标识符拼写不同，或它们出现在不同的<a href="#包">包</a>中且未
 <a href="可导出标识符">导出</a>，那么它们就是不同的。否则，它们就是相同的。
 </p>
@@ -3496,7 +3496,7 @@ TypeSpec     = identifier Type .
 </div>
 
 <p>
-类型声明将标识符、<i>类型名</i> 绑定至一个与现存类型有相同的
+类型声明将标识符、<b>类型名</b> 绑定至一个与现存类型有相同的
 <a href="#类型标识">基本类型</a>的新类型。新类型<a href="#类型">不同</a>于现有类型。
 </p>
 
@@ -3734,7 +3734,7 @@ ShortVarDecl = IdentifierList ":=" ExpressionList .
 </div>
 
 <p>
-<i>短变量声明</i> 使用此语法：
+<b>短变量声明</b> 使用此语法：
 </p>
 
 <pre class="ebnf">
@@ -3840,7 +3840,7 @@ Body         = Block .
 </div>
 
 <p>
-函数声明将标识符，即 <i>函数名</i> 绑定至函数。
+函数声明将标识符，即 <b>函数名</b> 绑定至函数。
 </p>
 
 <pre class="ebnf">
@@ -3903,8 +3903,8 @@ BaseTypeName = identifier .
 </div>
 
 <p>
-方法为带 <i>接收者</i> 的函数。方法声明将标识符，即 <i>方法名</i> 绑定至方法。
-它也将该接收者的 <i>基础类型</i> 关联至该方法。
+方法为带 <b>接收者</b> 的函数。方法声明将标识符，即 <b>方法名</b> 绑定至方法。
+它也将该接收者的 <b>基础类型</b> 关联至该方法。
 </p>
 
 <pre class="ebnf">
@@ -3926,9 +3926,9 @@ is visible only within selectors for that type.
 
 <p>
 接收者类型必须为形式 <code>T</code> 或 <code>*T</code>，其中 <code>T</code> 为类型名。
-由 <code>T</code> 表示的类型称为接收者的 <i>基础类型</i>；
+由 <code>T</code> 表示的类型称为接收者的 <b>基础类型</b>；
 它不能为指针或接口类型且必须在同一包中声明为方法。
-也就是说，该方法被 <i>绑定</i> 至基础类型且该方法名只对其内部此类型选择者可见。
+也就是说，该方法被 <b>绑定</b> 至基础类型且该方法名只对其内部此类型选择者可见。
 </p>
 
 <div class="english">
@@ -4528,7 +4528,7 @@ as they are accessible.
 </div>
 
 <p>
-<i>闭包</i> 的函数字面：它们可引用定义在外围函数中的变量。
+<b>闭包</b> 的函数字面：它们可引用定义在外围函数中的变量。
 那些变量共享于外围函数与函数字面之间，并且只要它们可访问就会继续存在。
 </p>
 
@@ -4617,7 +4617,7 @@ that is not a <a href="#Package_clause">package name</a>, the
 
 <p>
 对于不为<a href="#包子句">包名</a>的<a href="#主表达式">主表达式</a> <code>x</code>，
-<i>选择其表达式</i>
+<b>选择其表达式</b>
 </p>
 
 <pre>
@@ -4638,7 +4638,7 @@ If <code>x</code> is a package name, see the section on
 
 <p>
 表示值 <code>x</code>（有时为 <code>*x</code>，见下）的字段或方法 <code>f</code>。
-标识符 <code>f</code> 称为（字段或方法）<i>选择者</i>，它不能为<a href="#空白标识符">空白标识符</a>。
+标识符 <code>f</code> 称为（字段或方法）<b>选择者</b>，它不能为<a href="#空白标识符">空白标识符</a>。
 该选择者表达式的类型即为 <code>f</code> 的类型。若 <code>x</code> 为包名，
 见<a href="#限定标识符">限定标识符</a>的相关章节。
 </p>
@@ -4662,7 +4662,7 @@ depth of <code>f</code> in <code>A</code> plus one.
 <p>
 选择者 <code>f</code> 可代表类型为 <code>T</code> 的字段或方法 <code>f</code>，
 或引用 <code>T</code> 中嵌套<a href="#结构类型">匿名字段</a>的字段或方法 <code>f</code>。
-在 <code>T</code> 中遍历区域 <code>f</code> 的匿名字段所得的数量称为它的 <i>深度</i>。
+在 <code>T</code> 中遍历区域 <code>f</code> 的匿名字段所得的数量称为它的 <b>深度</b>。
 以 <code>T</code> 声明的字段或方法 <code>f</code> 的深度为0。
 在 <code>T</code> 中以匿名字段 <code>A</code> 声明的字段或方法 <code>f</code> 的深度
 为 <code>f</code> 在 <code>A</code> 中的深度加1。
@@ -4872,7 +4872,7 @@ rules apply:
 
 <p>
 的主表达式表示数组、切片、字符串或映射 <code>a</code> 的元素通过 <code>x</code> 检索。
-值 <code>x</code> 称为 <i>下标</i> 或 <i>映射键</i>。以下规则适用于其对应的类型：
+值 <code>x</code> 称为 <b>下标</b> 或 <b>映射键</b>。以下规则适用于其对应的类型：
 </p>
 
 <div class="english">
@@ -4896,7 +4896,7 @@ If <code>a</code> is not a map:
 </p>
 <ul>
 	<li>下标 <code>x</code> 必须为整数值；若 <code>0 &lt;= x &lt; len(a)</code>
-		则该下标在<i>界内</i>，否则即为<i>越界</i></li>
+		则该下标在<b>界内</b>，否则即为<b>越界</b></li>
 	<li>a <a href="#常量">常量</a>下标必须为可表示成 <code>int</code> 类型的值</li>
 </ul>
 
@@ -5182,7 +5182,7 @@ or if the indices are out of range at run time, a <a href="#Run_time_panics">run
 
 <p>
 对于数组或字符串，若 <code>0 &lt;= <code>low</code> &lt;= <code>high</code> &lt;= len(a)</code>
-下标 <code>low</code> 和 <code>high</code> 即在<i>界内</i>，否则即在<code>界外</code>。
+下标 <code>low</code> 和 <code>high</code> 即在<b>界内</b>，否则即在<code>界外</code>。
 对于切片，其上界为该切片的容量 <code>cap(a)</code> 而非长度。<a href="#常量">常量</a>下标必为非负值，
 且可表示为 <code>int</code> 类型的值。若其下标也为常量，它们必定满足 <code>low &lt;= high</code>。
 若 <code>a</code> 为 <code>nil</code> 或其下标在运行时越界，就会引发一个<a href="#运行时恐慌">运行时恐慌</a>。
@@ -5235,7 +5235,7 @@ The notation <code>x.(T)</code> is called a <i>type assertion</i>.
 
 <p>
 断言 <code>x</code> 不为 <code>nil</code> 且存储于 <code>x</code> 中的值其类型为 <code>T</code>。
-记法 <code>x.(T)</code> 称为 <i>类型断言</i>。
+记法 <code>x.(T)</code> 称为 <b>类型断言</b>。
 </p>
 
 <div class="english">
@@ -6166,9 +6166,9 @@ These terms and the result of the comparisons are defined as follows:
 </div>
 
 <p>
-相等性操作符 <code>==</code> 和 <code>!=</code> 适用于<i>可比较</i>操作数。
+相等性操作符 <code>==</code> 和 <code>!=</code> 适用于<b>可比较</b>操作数。
 顺序操作符 <code>&lt;</code>、<code>&lt;=</code>、<code>&gt;</code> 和 <code>&gt;=</code>
-适用于<i>有序的</i>操作数。这些比较操作的关系和值定义如下：
+适用于<b>有序的</b>操作数。这些比较操作的关系和值定义如下：
 </p>
 
 <ul>
@@ -6340,7 +6340,7 @@ As an exception to the addressability requirement, <code>x</code> may also be a
 
 <p>
 对于类型为 <code>T</code> 的操作数 <code>x</code>，地址操作符 <code>&amp;x</code> 将生成一个类型为
-<code>*T</code> 的指针指向 <code>x</code>。操作数必须<i>可寻址</i>，即，变量、间接指针、切片索引操作，
+<code>*T</code> 的指针指向 <code>x</code>。操作数必须<b>可寻址</b>，即，变量、间接指针、切片索引操作，
 或可寻址结构操作数的字段选择者，或可寻址数组的数组索引操作均不可寻址。作为可寻址性需求的例外，
 <code>x</code> 也可为（可能带有括号的）<a href="#复合字面">复合字面</a>.
 </p>
@@ -7307,7 +7307,7 @@ Four * 100   // product 400 cannot be represented as an int8 (type of Four)
 </div>
 
 <p>
-<i>类型化</i>常量的值必须总是可作为该常量类型的值被准确地表示。以下为非法常量表达式：
+<b>类型化</b>常量的值必须总是可作为该常量类型的值被准确地表示。以下为非法常量表达式：
 </p>
 
 <pre>
@@ -7786,7 +7786,7 @@ must contain exactly one single-valued expression.
 </div>
 
 <p>
-<i>赋值操作</i> <code>x</code> <i>op</i><code>=</code> <code>y</code>，其中 <i>op</i> 为一个二元算术操作符，它等价于
+<b>赋值操作</b> <code>x</code> <i>op</i><code>=</code> <code>y</code>，其中 <i>op</i> 为一个二元算术操作符，它等价于
 <code>x</code> <code>=</code> <code>x</code> <i>op</i> <code>y</code>，但只对 <code>x</code> 求值一次。
 <i>op</i><code>=</code> 为单个标记。在赋值操作中，左、右表达式列表必须均刚好包含一个单值表达式。
 </p>
@@ -8435,7 +8435,7 @@ PostStmt = SimpleStmt .
 </div>
 
 <p>
-带For子句的"for"语句也通过其条件控制，此外，它也可指定一个<i>初始化</i>或<i>步进</i>语句，
+带For子句的"for"语句也通过其条件控制，此外，它也可指定一个<b>初始化</b>或<b>步进</b>语句，
 例如一个赋值、一个递增或递减语句。初始化语句可为一个<a href="#短变量声明">短变量声明</a>，
 而步进语句则不能。
 </p>
@@ -8497,7 +8497,7 @@ RangeClause = ( ExpressionList "=" | IdentifierList ":=" ) "range" Expression .
 
 <p>
 带"range"子句的"for"语句通过遍历数组、切片、字符串或映射的所有项，以及从信道上接收的值来迭代。
-对于每一项，它将<i>迭代值</i>赋予其相应的<i>迭代变量</i>，然后执行该块。
+对于每一项，它将<b>迭代值</b>赋予其相应的<b>迭代变量</b>，然后执行该块。
 </p>
 
 <pre class="ebnf">
@@ -10066,7 +10066,7 @@ This termination sequence is called <i>panicking</i>.
 的调用行为自身如同对 <code>panic</code> 的调用，即终止其自身的执行，
 并以相同的方式运行被推迟的函数。这会持续到该Go程中所有函数都按相反顺序停止执行之后。
 到那时，该程序将被终止，而该错误情况会被报告，包括引发 <code>panic</code> 的实参值。
-此终止序列称为<i>恐慌过程</i>。
+此终止序列称为<b>恐慌过程</b>。
 </p>
 
 <pre>
@@ -10090,7 +10090,7 @@ was <code>nil</code>, <code>recover</code> returns <code>nil</code>.
 </div>
 
 <p>
-<code>recover</code> 函数允许程序管理恐慌过程Go程的行为。在<i>已推迟函数</i>
+<code>recover</code> 函数允许程序管理恐慌过程Go程的行为。在<b>已推迟函数</b>
 （而不是任何被它调用的函数）中，执行 <code>recover</code> 调用会通过恢复正常执行，
 并取回传递至 <code>panic</code> 调用的错误值来停止恐慌过程序列。若 <code>recover</code>
 在已推迟函数之外被调用，它将不会停止恐慌过程序列。在此情况下，或当Go程不在恐慌过程中时，
@@ -10190,7 +10190,7 @@ of the same package. Those elements may be
 </div>
 
 <p>
-Go程序由联系在一起的<i>包</i>构造。包由一个或更多源文件构造转化而来，
+Go程序由联系在一起的<b>包</b>构造。包由一个或更多源文件构造转化而来，
 源文件与其常量、类型、变量和函数声明一同属于该包，且在相同包的所有文件中它们可互相访问。
 这些元素可<a href="#可导出标识符">被导出</a>并用于其它包。
 </p>
@@ -10302,7 +10302,7 @@ ImportPath       = string_lit .
 </div>
 
 <p>
-导入声明陈述了源文件中所包含的声明，这取决于<i>已导入</i>包的功能
+导入声明陈述了源文件中所包含的声明，这取决于<b>已导入</b>包的功能
 （§<a href="#程序初始化与执行">程序初始化与执行</a>），
 并使其能够访问该包的<a href="#可导出标识符">可导出</a>标识符。
 导入通过命名一个标识符（包名）用于访问，而导入路径则指定可导出的包。
@@ -10544,7 +10544,7 @@ array of structs will have its fields zeroed if no value is specified.
 
 <p>
 当内存为存储值而分配时，不是通过声明就是通过 <code>make</code> 或 <code>new</code> 调用来分配。
-而在未提供显式的初始化时，内存将被赋予一个默认的初始化。每个这样的值的元素将置为该类型的<i>零值</i>：
+而在未提供显式的初始化时，内存将被赋予一个默认的初始化。每个这样的值的元素将置为该类型的<b>零值</b>：
 布尔类型为 <code>false</code>，整数类型为 <code>0</code>，浮点数类型为 <code>0.0</code>，
 字符串类型为 <code>""</code>，而指针、函数、接口、切片、信道及映射类型则为 <code>nil</code>。
 该初始化递归地完成，例如，对于结构的数组的每一个元素，若没有值被指定，则将其拥有的字段归零。
@@ -10735,7 +10735,7 @@ arguments and returns no value.
 </div>
 
 <p>
-一个完整的程序通过链接一个单一的、不会被导入的、称为 <i>主包</i> 的，带所有其传递地导入包的包创建。
+一个完整的程序通过链接一个单一的、不会被导入的、称为 <b>主包</b> 的，带所有其传递地导入包的包创建。
 主包必须拥有包名 <code>main</code> 且声明一个无实参无返回值的函数 <code>main</code>。
 </p>
 
@@ -10845,7 +10845,7 @@ type Error interface {
 </div>
 
 <p>
-例如试图索引一个越界的数组这类的执行错误会引发<i>运行时恐慌</i>，它等价于
+例如试图索引一个越界的数组这类的执行错误会引发<b>运行时恐慌</b>，它等价于
 一个定义实现了接口类型 <code>runtime.Error</code> 的值的内建函数
 <a href="#恐慌处理"><code>panic</code></a> 的调用。该类型满足预声明接口类型
 <a href="#错误"><code>error</code></a>。表示明显的运行时错误状态的准确错误值是不确定的。
@@ -10979,7 +10979,7 @@ alignment of the (type of the) variable in bytes.  For a variable
 </div>
 
 <p>
-计算机架构可能需要内存地址 <i>对齐</i>，即，为使变量的地址为因数的倍数，该变量的类型需要对齐。函数
+计算机架构可能需要内存地址 <b>对齐</b>，即，为使变量的地址为因数的倍数，该变量的类型需要对齐。函数
 <code>Alignof</code> 接受一个表示任何类型变量的表达式并返回该（类型的）变量对齐的字节。对于变量 <code>x</code>：
 </p>
 

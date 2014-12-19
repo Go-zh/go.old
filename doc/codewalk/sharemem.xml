@@ -24,7 +24,7 @@ URLs, checking their HTTP response codes and periodically printing their state.
 <step title="引言" src="doc/codewalk/urlpoll.go">
 Go实现并发的方式，不同于传统的使用线程共享内存的方式。从哲学上，它可以概括为：
 <br/><br/>
-<i>不要通过共享内存来通信，而要通过通信来共享内存。</i>
+<b>不要通过共享内存来通信，而要通过通信来共享内存。</b>
 <br/><br/>
 信道允许你在Go程间传递数据结构的引用。如果你把它看做传递数据的所有权
 （即读写该数据的能力），它们就会成为强大而富有表达能力的同步机制。

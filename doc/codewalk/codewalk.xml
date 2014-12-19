@@ -36,8 +36,8 @@
 	文件翻译为你现在正在阅览的这样的HTML页面。
 	<br/><br/>
 
-	代码漫步及其URL路径 <code>/doc/codewalk/</code><i>名称</i> 加载自输入的文件
-	<code>$GOROOT/doc/codewalk/</code><i>名称</i><code>.xml</code>。
+	代码漫步及其URL路径 <code>/doc/codewalk/</code><b>名称</b> 加载自输入的文件
+	<code>$GOROOT/doc/codewalk/</code><b>名称</b><code>.xml</code>。
 	<br/><br/>
 
 	本代码漫步通过测验其自身的源码讲解了如何编写一个代码漫步，
@@ -115,8 +115,8 @@
 	就算文件被编辑后，描述性地址也能继续引用文件中正确的部分。
 	<br/><br/>
 
-	要指定一行源代码，请使用 <i>文件名</i><code>:</code><i>地址</i> 形式的
-	<code>src</code> 属性，其中 <i>地址</i> 是文本编辑器 <i>sam</i> 和 <i>acme</i>
+	要指定一行源代码，请使用 <b>文件名</b><code>:</code><b>地址</b> 形式的
+	<code>src</code> 属性，其中 <b>地址</b> 是文本编辑器 <i>sam</i> 和 <i>acme</i>
 	使用的地址语法。
 	<br/><br/>
 
@@ -155,7 +155,7 @@
 	而包含<i>regexp2</i>匹配的第一个行将是最后一个。
 	<br/><br/>
 
-	地址 <code>/<i>引言</i>/,/step&gt;</code> 在本文件中查找第一个 <code>/<i>引言</i>/</code>
+	地址 <code>/<b>引言</b>/,/step&gt;</code> 在本文件中查找第一个 <code>/<b>引言</b>/</code>
 	的实例，接着从此处往后，找到第一个 <code>/step&gt;/</code>的实例。
 	（点击上面的“步骤”这一步查看高亮的作用。）请注意 <code>&lt;</code> 和
 	<code>&gt;</code> 必使用XML转义来保证它是有效的XML。
