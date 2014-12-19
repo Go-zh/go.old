@@ -1,28 +1,61 @@
 <!--{
+	"Title": "贡献指南"
+}-->
+
+<!--{
 	"Title": "Contribution Guidelines"
 }-->
 
+<div class="english">
 <h2 id="Introduction">Introduction</h2>
+</div>
 
+<h2 id="引言">引言</h2>
+
+<div class="english">
 <p>
 This document explains how to contribute changes to the Go project.
 It assumes you have followed the
 <a href="/doc/install/source">installation instructions</a> and
 have <a href="code.html">written and tested your code</a>.
 </p>
+</div>
 
+<p>
+本文档说明了如何向 Go 项目贡献更改。假设你已经按照
+<a href="/doc/install/source">安装说明</a> 安装了Go，且已经
+<a href="code.html">编写并测试了你的代码</a>。
+</p>
+
+<div class="english">
 <p>
 (Note that the <code>gccgo</code> frontend lives elsewhere;
 see <a href="gccgo_contribute.html">Contributing to gccgo</a>.)
 </p>
+</div>
 
+<p>
+（关于 <code>gccgo</code> 前端的文档见<a href="gccgo_contribute.html">为 gccgo 做贡献</a>。）
+</p>
+
+<div class="english">
 <h2 id="Design">Discuss your design</h2>
+</div>
 
+<h2 id="设计">讨论你的设计</h2>
+
+<div class="english">
 <p>
 The project welcomes submissions but please let everyone know what
 you're working on if you want it to become part of the main repository.
 </p>
+</div>
 
+<p>
+本项目欢迎提交意见，但若想让它成为主源码库的一部分，请让所有人都知道你所做的事。
+</p>
+
+<div class="english">
 <p>
 Before undertaking to write something new for the Go project, send
 mail to the <a href="https://groups.google.com/group/golang-nuts">mailing
@@ -33,18 +66,44 @@ and tools.  It also guarantees that the design is sound before code
 is written; the code review tool is not the place for high-level
 discussions.
 </p>
+</div>
 
+<p>
+在着手为 Go 项目编写新代码前，请先向
+<a href="https://groups.google.com/group/golang-nuts">邮件列表</a>
+发送邮件来讨论你的计划。这能让所有人都确认你的设计，帮助避免重复劳动，
+并确认此想法是否符合该语言或工具的目标。此外，这也能在编写代码前保证该设计经过了充分的考虑；
+代码审核工具并不是进行高级讨论的地方。
+</p>
+
+<div class="english">
 <p>
 In short, send mail before you code.
 And don't start the discussion by mailing a change list!
 </p>
+</div>
 
+<p>
+简言之，写代码前请先发邮件，不要通过发送更改列表来开始讨论！
+</p>
+
+<div class="english">
 <h2 id="Testing">Testing redux</h2>
+</div>
 
+<h2 id="测试">最终测试</h2>
+
+<div class="english">
 <p>
 You've <a href="code.html">written and tested your code</a>, but
 before sending code out for review, run all the tests for the whole
 tree to make sure the changes don't break other packages or programs:
+</p>
+</div>
+
+<p>
+若你已经 <a href="code.html">编写并测试了你的代码</a>，
+在发送代码接受审核前，还需要对整个代码树运行所有的测试，以确保此更改不会破坏其它包或程序：
 </p>
 
 <pre>
@@ -52,17 +111,35 @@ $ cd go/src
 $ ./all.bash
 </pre>
 
+<div class="english">
 <p>
 (To build under Windows use <code>all.bat</code>.)
 </p>
+</div>
 
+<p>
+（在 Windows 下，请运行 <code>all.bat</code>。）
+</p>
+
+<div class="english">
 <p>
 After running for a while, the command should print
 "<code>ALL</code> <code>TESTS</code> <code>PASSED</code>".
 </p>
+</div>
 
+<p>
+在运行一会儿之后，命令行应当打印出
+"<code>ALL</code> <code>TESTS</code> <code>PASSED</code>".
+</p>
+
+<div class="english">
 <h2 id="Code_review">Code review</h2>
+</div>
 
+<h2 id="代码审核">代码审核</h2>
+
+<div class="english">
 <p>
 Changes to Go must be reviewed before they are submitted,
 no matter who makes the change.
@@ -73,9 +150,22 @@ discussed below, helps manage the code review process through a Google-hosted
 <a href="https://go-review.googlesource.com/">instance</a> of the code review
 system called <a href="https://code.google.com/p/gerrit/">Gerrit</a>.
 </p>
+</div>
 
+<p>
+无论谁对 Go 进行更改，在它被递交前都必须进行审核（在特殊情况下，比如修复一个构建，可在递交后进行审核）。
+稍后我们会讨论名为 <code>git-codereview</code> 的定制 git 命令，它能通过
+<a href="https://code.google.com/p/gerrit/">Gerrit</a> 代码审核系统的 Google 托管的
+<a href="https://go-review.googlesource.com/">实例</a> 来帮助管理代码审核流程。
+</p>
+
+<div class="english">
 <h3>Set up authentication for code review</h3>
+</div>
 
+<h3>设置代码审核认证</h3>
+
+<div class="english">
 <p>
 The Git code hosting server and Gerrit code review server both use a Google
 Account to authenticate. You therefore need a Google Account to proceed.
@@ -88,18 +178,42 @@ and in the <a href="/CONTRIBUTORS"><code>CONTRIBUTORS</code></a> file.
 You can <a href="https://www.google.com/accounts/NewAccount">create a Google Account</a>
 associated with any address where you receive email.
 </p>
+</div>
 
+<p>
+Git 代码托管服务器和 Gerrit 代码审核服务器都通过 Google 账户来认证，因此你需要一个 Google
+账户来继续（就是说只要你能用一个账户<a href="https://www.google.com/accounts/Login">登录到 google.com</a>，
+那么就能用它来登录到代码审核服务器）。你在代码审核系统上使用的邮件地址会被记录在
+<a href="https://go.googlesource.com/go">更改记录</a> 和
+<a href="/CONTRIBUTORS"><code>CONTRIBUTORS</code></a> 文件中。
+你可以用任何可接收邮件的地址来<a href="https://www.google.com/accounts/NewAccount">创建一个 Google 账户</a>。
+</p>
+
+<div class="english">
 <p>
 Visit the site <a href="https://go.googlesource.com">go.googlesource.com</a>
 and log in using your Google Account.
 Click on the "Generate Password" link that appears at the top of the page.
 </p>
+</div>
 
+<p>
+请访问 <a href="https://go.googlesource.com">go.googlesource.com</a>
+并通过你的 Google 账户登录，点击顶部的“Generate Password”（生成密码）连接。
+</p>
+
+<div class="english">
 <p>
 Click the radio button that says "Only <code>go.googlesource.com</code>"
 to use this authentication token only for the Go project.
 </p>
+</div>
 
+<p>
+接着点击“Only <code>go.googlesource.com</code>”选项来只为 Go 项目使用此认证标记。
+</p>
+
+<div class="english">
 <p>
 Further down the page is a box containing commands to install
 the authentication cookie in file called <code>.gitcookies</code> in your home
@@ -107,14 +221,31 @@ directory.
 Copy the text for the commands into a Unix shell window to execute it.
 That will install the authentication token.
 </p>
+</div>
 
+<p>
+接着本页中的文本框内会显示一些命令，请将它们复制到 Unix shell 中执行，这会将此 cookie
+认证标记安装到你的 home 目录下的 <code>.gitcookies</code> 文件中。
+</p>
+
+<div class="english">
 <p>
 (If you are on a Windows computer, you should instead follow the instructions
 in the yellow box to run the command.)
 </p>
+</div>
 
+<p>
+（若你在 Windows 系统上，请按照黄色文本框内的指示来运行命令。）
+</p>
+
+<div class="english">
 <h3>Register with Gerrit</h3>
+</div>
 
+<h3>注册 Gerrit</h3>
+
+<div class="english">
 <p>
 Now that you have a Google account and the authentication token,
 you need to register your account with Gerrit, the code review system.
@@ -122,30 +253,61 @@ To do this, visit <a href="https://golang.org/cl">golang.org/cl</a>
 and log in using the same Google Account you used above.
 That is all that is required.
 </p>
-
-<h3>Install the git-codereview command</h3>
+</div>
 
 <p>
+现在你已经有了 Google 账户和认证标记，还需要在 Gerrit 代码审核系统上注册你的账户。
+请访问 <a href="https://golang.org/cl">golang.org/cl</a> 并使用前面的 Google 账户登录，
+这样就设置完成了。
+</p>
+
+<div class="english">
+<h3>Install the git-codereview command</h3>
+</div>
+
+<h3>安装 git-codereview 命令</h3>
+
+<div class="english">
+<p>
 Now install the <code>git-codereview</code> command by running,
+</p>
+</div>
+
+<p>
+现在安装 <code>git-codereview</code> 命令。运行
 </p>
 
 <pre>
 go get -u golang.org/x/review/git-codereview
 </pre>
 
+<div class="english">
 <p>
 Make sure <code>git-codereview</code> is installed in your shell path, so that the
 <code>git</code> command can find it. Check that
+</p>
+</div>
+
+<p>
+请确保 <code>git-codereview</code> 安装到了你的 shell 路径中，这样 <code>git</code>
+命令就能找到它了。请运行
 </p>
 
 <pre>
 $ git codereview help
 </pre>
 
+<div class="english">
 <p>
 prints help text, not an error.
 </p>
+</div>
 
+<p>
+来检查，应该会打印出帮助文本而非错误。
+</p>
+
+<div class="english">
 <p>
 Note to Git aficionados: The <code>git-codereview</code> command is not required to
 upload and manage Gerrit code reviews. For those who prefer plain Git, the text
@@ -156,37 +318,76 @@ message and check that all Go source files have been formatted with gofmt. Even
 if you intend to use plain Git for daily work, install the hooks in a new Git
 checkout by running <code>git-codereview</code> <code>hooks</code>).
 </p>
+</div>
 
+<p>
+Git 迷请注意：<code>git-codereview</code> 对于上传并管理 Gerrit 代码审核来说并不是必须的。
+对于喜欢纯 Git 的人来说，下面的方法可以让 Git 等价于每个 git-codereview 命令。若你使用纯
+Git，那么你仍需要 git-codereview 命令来设置提交钩子（hook），这些钩子会在提交信息中添加一行
+Gerrit <code>Change-Id</code>，并检查所有的 Go 源文件是否已被 gofmt 格式化。
+即便你想要在日常工作中使用纯 Git，也需要在新的 Git 检出中运行
+<code>git-codereview</code> <code>hooks</code> 来安装这些钩子。
+</p>
+
+<div class="english">
 <h3>Set up git aliases</h3>
+</div>
 
+<h3>设置 Git 别名</h3>
+
+<div class="english">
 <p>
 The <code>git-codereview</code> command can be run directly from the shell
 by typing, for instance,
+</p>
+</div>
+
+<p>
+<code>git-codereview</code> 命令可直接在 shell 中输入运行。例如
 </p>
 
 <pre>
 $ git codereview sync
 </pre>
 
+<div class="english">
 <p>
 but it is more convenient to set up aliases for <code>git-codereview</code>'s own
 subcommands, so that the above becomes,
+</p>
+</div>
+
+<p>
+不过为 <code>git-codereview</code> 的子命令设置别名会更加方便，这样上面的命令就变成了
 </p>
 
 <pre>
 $ git sync
 </pre>
 
+<div class="english">
 <p>
 The <code>git-codereview</code> subcommands have been chosen to be distinct from
 Git's own, so it's safe to do so.
 </p>
+</div>
 
+<p>
+<code>git-codereview</code> 的子命令与 Git 自己的不同，所以这么做很安全。
+</p>
+
+<div class="english">
 <p>
 The aliases are optional, but in the rest of this document we will assume
 they are installed.
 To install them, copy this text into your Git configuration file
 (usually <code>.gitconfig</code> in your home directory):
+</p>
+</div>
+
+<p>
+这些别名是可选的，不过之后本文档会假定你已经安装了它们。要设置这些别名，请将以下文本复制到你的
+Git 配置文件中（一般为你的 home 目录中的 <code>.gitconfig</code> 文件）：
 </p>
 
 <pre>
@@ -199,21 +400,43 @@ To install them, copy this text into your Git configuration file
 	sync = codereview sync
 </pre>
 
+<div class="english">
 <h3>Understanding the git-codereview command</h3>
+</div>
 
+<h3>了解 git-codereview 命令</h3>
+
+<div class="english">
 <p>After installing the <code>git-codereview</code> command, you can run</p>
+</div>
+
+<p>
+在安装好 <code>git-codereview</code> 命令后，你可以运行
+</p>
 
 <pre>
 $ git codereview help
 </pre>
 
+<div class="english">
 <p>
 to learn more about its commands.
 You can also read the <a href="https://godoc.org/golang.org/x/review/git-codereview">command documentation</a>.
 </p>
+</div>
 
+<p>
+来了解此命令的更多详情。你也可以阅读它的
+<a href="https://godoc.org/golang.org/x/review/git-codereview">命令文档</a>。
+</p>
+
+<div class="english">
 <h3>Switch to the master branch</h3>
+</div>
 
+<h3>切换到 master 分支</h3>
+
+<div class="english">
 <p>
 Most Go installations use a release branch, but new changes should
 only be made based on the master branch.
@@ -221,19 +444,38 @@ only be made based on the master branch.
 but most contributors won't do this themselves.)
 Before making a change, make sure you start on the master branch:
 </p>
+</div>
+
+<p>
+大部分 Go 安装会使用发行（release）分支，但新的更改应当只在 master 分支上进行。
+（之后它们或许会被作为发行流程的一部分应用到某个发行分支，不过大部分贡献者不会自己做这件事。）
+在进行更改前，请确保你处在 master 分支上：
+</p>
 
 <pre>
 $ git checkout master
 $ git sync
 </pre>
 
+<div class="english">
 <p>
 (In Git terms, <code>git</code> <code>sync</code> runs
 <code>git</code> <code>pull</code> <code>-r</code>.)
 </p>
+</div>
 
+<p>
+（按照 Git 术语，<code>git</code> <code>sync</code> 会运行
+<code>git</code> <code>pull</code> <code>-r</code>。）
+</p>
+
+<div class="english">
 <h3>Make a change</h3>
+</div>
 
+<h3>进行更改</h3>
+
+<div class="english">
 <p>
 The entire checked-out tree is writable.
 Once you have edited files, you must tell Git that they have been modified.
@@ -244,32 +486,69 @@ These operations are done with the usual Git commands,
 and
 <code>git</code> <code>mv</code>.
 </p>
+</div>
 
 <p>
+整个检出的树都是可写的。在你编辑过文件后，必须要告诉 Git 它们已被修改。你还必须告诉 Git
+哪些文件已被添加，移除或重命名。这些操作可分别用一般的 Git 命令
+<code>git</code> <code>add</code>、<code>git</code> <code>rm</code> 和
+<code>git</code> <code>mv</code> 来完成。
+</p>
+
+<div class="english">
+<p>
 If you wish to checkpoint your work, or are ready to send the code out for review, run</p>
+</div>
+
+<p>
+若你想要检查自己的工作，或已准备好发送代码以备审核，请在你想要提交更改的 Go 源码库中运行
+</p>
 
 <pre>
 $ git change <i>&lt;branch&gt;</i>
 </pre>
 
+<div class="english">
 <p>
 from any directory in your Go repository to commit the changes so far.
 The name <i>&lt;branch&gt;</i> is an arbitrary one you choose to identify the
 local branch containing your changes.
 </p>
+</div>
 
+<p>
+这里的 <i>&lt;branch&gt;</i> 是由你命名的本地分支，你需要选择它的名字来标示出你所进行的更改。
+</p>
+
+<div class="english">
 <p>
 (In Git terms, <code>git</code> <code>change</code> <code>&lt;branch&gt;</code>
 runs <code>git</code> <code>checkout</code> <code>-b</code> <code>branch</code>,
 then <code>git</code> <code>branch</code> <code>--set-upstream-to</code> <code>origin/master</code>,
 then <code>git</code> <code>commit</code>.)
 </p>
+</div>
 
+<p>
+（按照 Git 术语，<code>git</code> <code>change</code> <code>&lt;branch&gt;</code>
+会依次运行 <code>git</code> <code>checkout</code> <code>-b</code> <code>branch</code>、
+<code>git</code> <code>branch</code> <code>--set-upstream-to</code> <code>origin/master</code>
+和 <code>git</code> <code>commit</code>。）
+</p>
+
+<div class="english">
 <p>
 Git will open a change description file in your editor.
 (It uses the editor named by the <code>$EDITOR</code> environment variable,
 <code>vi</code> by default.)
 The file will look like:
+</p>
+</div>
+
+<p>
+Git 会在你的编辑器中打开一份更改描述文件。
+（它会使用 <code>$EDITOR</code> 环境变量指定的编辑器，默认为 <code>vi</code>。）
+该文件看起来就像这样：
 </p>
 
 <pre>
@@ -282,6 +561,7 @@ The file will look like:
 #
 </pre>
 
+<div class="english">
 <p>
 At the beginning of this file is a blank line; replace it
 with a thorough description of your change.
@@ -293,9 +573,22 @@ description elaborates and should provide context for the
 change and explain what it does.
 If there is a helpful reference, mention it here.
 </p>
+</div>
 
 <p>
+本文件开头为一行空行，请在此对你的更改进行全面的描述。按照约定，该描述的第一行为单行的更改摘要，
+前缀主要影响的包，它将作为代码审核邮件的主题。剩下的描述需阐明此更改并提供上下文，以及解释它做了什么。
+若有相关的帮助引用，请在此提及。
+</p>
+
+<div class="english">
+<p>
 After editing, the template might now read:
+</p>
+</div>
+
+<p>
+在编辑之后，该模版会类似于这样：
 </p>
 
 <pre>
@@ -317,13 +610,21 @@ Fixes #159
 #
 </pre>
 
+<div class="english">
 <p>
 The commented section of the file lists all the modified files in your client.
 It is best to keep unrelated changes in different change lists,
 so if you see a file listed that should not be included, abort
 the command and move that file to a different branch.
 </p>
+</div>
 
+<p>
+本文件中的注释一节会列出你在本地修改过的所有文件。我们最好将无关的更改放到不同的更改列表中，
+因此若你看到列表中出现了不应包含的文件，请中断此命令，并将该文件移动到不同的分支中。
+</p>
+
+<div class="english">
 <p>
 The special notation "Fixes #159" associates the change with issue 159 in the
 <a href="https://golang.org/issue/159">Go issue tracker</a>.
@@ -332,21 +633,44 @@ tracker will automatically mark the issue as fixed.
 (There are several such conventions, described in detail in the
 <a href="https://help.github.com/articles/closing-issues-via-commit-messages/">GitHub Issue Tracker documentation</a>.)
 </p>
+</div>
 
+<p>
+The special notation "Fixes #159" associates the change with issue 159 in the
+特殊的标记“Fixes issue 159.”会将此更改关联到 <a href="https://golang.org/issue/159">Go 问题跟踪器</a>
+中的第159号问题。当此更改最终被递交后，问题跟踪器会自动将该问题标记为已修复。
+（还有几个类似的约定，在
+<a href="https://help.github.com/articles/closing-issues-via-commit-messages/">GitHub 问题跟踪器文档</a>
+中有详细的描述。）
+</p>
+
+<div class="english">
 <p>
 Once you have finished writing the commit message,
 save the file and exit the editor.
 </p>
+</div>
 
+<p>
+写完提交信息后，请保存文件并退出编辑器。
+</p>
+
+<div class="english">
 <p>
 If you wish to do more editing, re-stage your changes using
 <code>git</code> <code>add</code>, and then run
+</p>
+</div>
+
+<p>
+若你想要进行更多编辑，请用 <code>git</code> <code>add</code> 命令再次暂存你的更改，然后运行
 </p>
 
 <pre>
 $ git change
 </pre>
 
+<div class="english">
 <p>
 to update the change description and incorporate the staged changes.  The
 change description contains a <code>Change-Id</code> line near the bottom,
@@ -355,32 +679,64 @@ added by a Git commit hook during the initial
 That line is used by Gerrit to match successive uploads of the same change.
 Do not edit or delete it.
 </p>
+</div>
 
+<p>
+来更新更改描述并加入暂存的更改。Git 提交钩子会在初始执行 <code>git</code> <code>change</code>
+时在更改描述的底部加入一行 <code>Change-Id</code>，以便让 Gerrit 跟踪同一更改的后续上传。
+请勿编辑或删除它。
+</p>
+
+<div class="english">
 <p>
 (In Git terms, <code>git</code> <code>change</code> with no branch name
 runs <code>git</code> <code>commit</code> <code>--amend</code>.)
 </p>
-
-<h3>Mail the change for review</h3>
+</div>
 
 <p>
+（按照 Git 术语，不带分支名的 <code>git</code> <code>change</code> 会运行
+<code>git</code> <code>commit</code> <code>--amend</code>。）
+</p>
+
+<div class="english">
+<h3>Mail the change for review</h3>
+</div>
+
+<h3>为审核邮寄更改</h3>
+
+<div class="english">
+<p>
 Once the change is ready, mail it out for review:
+</p>
+</div>
+
+<p>
+一旦更改就绪，请邮寄它已备审核：
 </p>
 
 <pre>
 $ git mail
 </pre>
 
+<div class="english">
 <p>
 You can specify a reviewer or CC interested parties
 using the <code>-r</code> or <code>-cc</code> options.
 Both accept a comma-separated list of email addresses:
+</p>
+</div>
+
+<p>
+你可以通过 <code>-r</code> 或 <code>-cc</code> 选项来指定审核者或抄送给对它感兴趣的同伴。
+两个命令都接受逗号分隔的邮件地址列表：
 </p>
 
 <pre>
 $ git mail -r joe@golang.org -cc mabel@example.com,math-nuts@swtch.com
 </pre>
 
+<div class="english">
 <p>
 Unless explicitly told otherwise, such as in the discussion leading
 up to sending in the change list, it's better not to specify a reviewer.
@@ -388,21 +744,49 @@ All changes are automatically CC'ed to the
 <a href="https://groups.google.com/group/golang-codereviews">golang-codereviews@googlegroups.com</a>
 mailing list.
 </p>
+</div>
 
+<p>
+除非被明确告知，例如在讨论中需要接收此更改列表的人，否则最好不要指定审核者。所有更改都会自动抄送至
+<a href="https://groups.google.com/group/golang-codereviews">golang-codereviews@googlegroups.com</a>
+邮件列表。
+</p>
+
+<div class="english">
 <p>
 (In Git terms, <code>git</code> <code>mail</code> pushes the local committed
 changes to Gerrit using <code>git</code> <code>push</code> <code>origin</code>
 <code>HEAD:refs/for/master</code>.)
 </p>
+</div>
 
+<p>
+（按照 Git 术语，<code>git</code> <code>mail</code> 会通过
+<code>git</code> <code>push</code> <code>origin</code>
+<code>HEAD:refs/for/master</code> 来将本地提交的更改推送到 Gerrit。）
+</p>
+
+<div class="english">
 <p>
 If your change relates to an open issue, please add a comment to the issue
 announcing your proposed fix, including a link to your CL.
 </p>
+</div>
 
+<p>
+若你的更改涉及到一个开放问题，请为该问题添加一条评论宣布你提议的修复，其中包括你的CL（更改列表）链接。
+</p>
+
+<div class="english">
 <p>
 The code review server assigns your change an issue number and URL,
 which <code>git</code> <code>mail</code> will print, something like:
+</p>
+</div>
+
+<p>
+代码审核服务器会为你的更改分配一个问题编号和URL，<code>git</code> <code>mail</code>
+会打印出它，类似于：
 </p>
 
 <pre>
@@ -410,8 +794,13 @@ remote: New Changes:
 remote:   https://go-review.googlesource.com/99999 math: improved Sin, Cos and Tan precision for very large arguments
 </pre>
 
+<div class="english">
 <h3>Reviewing code</h3>
+</div>
 
+<h3>审核代码</h3>
+
+<div class="english">
 <p>
 Running <code>git</code> <code>mail</code> will send an email to you and the
 reviewers asking them to visit the issue's URL and make comments on the change.
@@ -421,14 +810,34 @@ You will receive a mail notification when this happens.
 You must reply through the web interface.
 (Unlike with the old Rietveld review system, replying by mail has no effect.)
 </p>
+</div>
 
+<p>
+运行 <code>git</code> <code>mail</code> 会向你和审核者发送一封邮件，
+要求他们访问该问题的URL并对该更改进行评论。之后，审核者会通过 Gerrit 用户界面添加怕你概论并点击
+“Reply”（回复）来发送评论，此时你会收到一封邮件提醒。你必须通过Web界面来回复。
+（不像旧的 Rietveld 审核系统，直接通过邮件回复不会有任何效果。）
+</p>
+
+<div class="english">
 <h3>Revise and upload</h3>
+</div>
 
+<h3>修订并上传</h3>
+
+<div class="english">
 <p>
 You must respond to review comments through the web interface.
 (Unlike with the old Rietveld review system, responding by mail has no effect.)
 </p>
+</div>
 
+<p>
+你必须通过Web界面来回应审核评论。
+（不像旧的 Rietveld 审核系统，直接通过邮件回应不会有任何效果。）
+</p>
+
+<div class="english">
 <p>
 When you have revised the code and are ready for another round of review,
 stage those changes and use <code>git</code> <code>change</code> to update the
@@ -436,46 +845,98 @@ commit.
 To send the update change list for another round of review,
 run <code>git</code> <code>mail</code> again.
 </p>
+</div>
 
+<p>
+当你修订过代码并准备进行下一轮审核时，请暂存那些更改并通过 <code>git</code> <code>change</code>
+来更新提交。要为下一轮审核发送更新后的更改列表，请再次运行 <code>git</code> <code>mail</code>。
+</p>
+
+<div class="english">
 <p>
 The reviewer can comment on the new copy, and the process repeats.
 The reviewer approves the change by giving it a positive score
 (+1 or +2) and replying <code>LGTM</code>: looks good to me.
 </p>
+</div>
 
+<p>
+审核者会对新的副本进行评论，此过程继续重复。若审核者者接受了此更改，就会给它加分（+1或+2）并回复
+<code>LGTM</code>：looks good to me（在我看来不错）。
+</p>
+
+<div class="english">
 <p>
 You can see a list of your pending changes by running <code>git</code>
 <code>pending</code>, and switch between change branches with <code>git</code>
 <code>change</code> <code><i>&lt;branch&gt;</i></code>.
 </p>
+</div>
 
+<p>
+你可以通过运行 <code>git</code> <code>pending</code> 来查看待定的更改，运行
+<code>git</code> <code>change</code> <code><i>&lt;branch&gt;</i></code> 可以切换更改分支。
+</p>
+
+<div class="english">
 <h3>Synchronize your client</h3>
+</div>
 
+<h3>同步客户端</h3>
+
+<div class="english">
 <p>
 While you were working, others might have submitted changes to the repository.
 To update your local branch, run
+</p>
+</div>
+
+<p>
+在你工作期间，其他人可能已经向源码库递交了更改。要更新你的本地分支，请运行
 </p>
 
 <pre>
 $ git sync
 </pre>
 
+<div class="english">
 <p>
 (In git terms, git sync runs
 <code>git</code> <code>pull</code> <code>-r</code>.)
 </p>
+</div>
 
+<p>
+（按照 Git 术语，<code>git</code> <code>sync</code> 会运行
+<code>git</code> <code>pull</code> <code>-r</code>。）
+</p>
+
+<div class="english">
 <p>
 If files you were editing have changed, Git does its best to merge the
 remote changes into your local changes.
 It may leave some files to merge by hand.
 </p>
+</div>
 
+<p>
+若你编辑的文件已被更改，Git 会尽力将远程修改合并到你的本地分支更改中。
+它也可能会留下一些需要手动合并的文件。
+</p>
+
+<div class="english">
 <p>
 For example, suppose you have edited <code>sin.go</code> but
 someone else has committed an independent change.
 When you run <code>git</code> <code>sync</code>,
 you will get the (scary-looking) output:
+</p>
+</div>
+
+<p>
+例如，假设你编辑了 <code>sin.go</code>，但某人又提交了一个独立的更改。
+当你在运行 <code>git</code> <code>sync</code> 时，会看到略吓人的输出：
+</p>
 
 <pre>
 $ git sync
@@ -489,17 +950,29 @@ If you prefer to skip this patch, run "git rebase --skip" instead.
 To check out the original branch and stop rebasing, run "git rebase --abort".
 </pre>
 
+<div class="english">
 <p>
 If this happens, run
+</p>
+</div>
+
+<p>
+若发生了这种情况，请运行
 </p>
 
 <pre>
 $ git status
 </pre>
 
+<div class="english">
 <p>
 to see which files failed to merge.
 The output will look something like this:
+</p>
+</div>
+
+<p>
+来查看哪些文件合并失败了。输出看起来会像这样：
 </p>
 
 <pre>
@@ -516,6 +989,7 @@ Unmerged paths:
 	<i>both modified:   sin.go</i>
 </pre>
 
+<div class="english">
 <p>
 The only important part in that transcript is the italicized "both modified"
 line: Git failed to merge your changes with the conflicting change.
@@ -525,6 +999,15 @@ with conflicts marked by <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> and
 It is now your job to edit the file to combine them.
 Continuing the example, searching for those strings in <code>sin.go</code>
 might turn up:
+</p>
+</div>
+
+<p>
+这些记录中唯一重要的部分就是斜体的“both modified”行：Git 在将你的更改和冲突的更改合并时失败了。
+在发生这种情况时，Git 会在该文件中保留两种编辑版本，并用冲突标记
+<code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> 和
+<code>&gt;&gt;&gt;&gt;&gt;&gt;&gt;</code> 标出。现在你需要编辑该文件来合并它们。
+继续这个例子，在 <code>sin.go</code> 中搜索这些标记会找到：
 </p>
 
 <pre>
@@ -537,11 +1020,18 @@ might turn up:
 		largeReduce(arg)
 </pre>
 
+<div class="english">
 <p>
 Git doesn't show it, but suppose the original text that both edits
 started with was 1e8; you changed it to 1e10 and the other change to 1e9,
 so the correct answer might now be 1e10.  First, edit the section
 to remove the markers and leave the correct code:
+</p>
+</div>
+
+<p>
+Git 不会显示它，不过假设二者编辑前的原始的文本为 1e8，你把它改成了 1e10 而另一个人把它改成了
+1e9，所以正确的答案或许为 1e10。首先，编辑这一小节来移除冲突标记并保留正确的代码：
 </p>
 
 <pre>
@@ -550,14 +1040,21 @@ to remove the markers and leave the correct code:
 		largeReduce(arg)
 </pre>
 
+<div class="english">
 <p>
 Then tell Git that the conflict is resolved by running
+</p>
+</div>
+
+<p>
+然后运行以下命令告诉 Git 该冲突已被解决
 </p>
 
 <pre>
 $ git add sin.go
 </pre>
 
+<div class="english">
 <p>
 If you had been editing the file, say for debugging, but do not
 care to preserve your changes, you can run
@@ -566,33 +1063,71 @@ to abandon your changes.
 Then run <code>git</code> <code>rebase</code> <code>--continue</code> to
 restore the change commit.
 </p>
+</div>
 
+<p>
+若你已经编辑了该文件（比如说为了调试），但并不想保留你的更改，那么可以运行
+<code>git</code> <code>reset</code> <code>HEAD</code> <code>sin.go</code>
+来丢弃你的更改。接着运行 <code>git</code> <code>rebase</code> <code>--continue</code>
+来恢复更改提交。
+</p>
+
+<div class="english">
 <h3>Reviewing code by others</h3>
+</div>
 
+<h3>由他人审核</h3>
+
+<div class="english">
 <p>
 You can import a change proposed by someone else into your local Git repository.
 On the Gerrit review page, click the "Download ▼" link in the upper right
 corner, copy the "Checkout" command and run it from your local Git repo.
 It should look something like this:
 </p>
+</div>
+
+<p>
+You can import a change proposed by someone else into your local Git repository.
+你可以将他人提议的更改导入到自己本地的 Git 源码库中。在 Geriit 审核页面中，点击右上角的
+“Download ▼” 链接，复制“Checkout”命令并在你的本地 Git 源码库中运行它。它看起来类似于：
+</p>
 
 <pre>
 $ git fetch https://go.googlesource.com/review refs/changes/21/1221/1 && git checkout FETCH_HEAD
 </pre>
 
+<div class="english">
 <p>
 To revert, change back to the branch you were working in.
 </p>
+</div>
 
+<p>
+要恢复，只需切换回你工作的分支即可。
+</p>
+
+<div class="english">
 <h3>Submit the change after the review</h3>
+</div>
 
+<h3>审核后递交更改</h3>
+
+<div class="english">
 <p>
 After the code has been <code>LGTM</code>'ed, an approver may
 submit it to the master branch using the Gerrit UI.
 There is a "Submit" button on the web page for the change
 that appears once the change is approved (marked +2).
 </p>
+</div>
 
+<p>
+在代码被标为 <code>LGTM</code> 后，批准人可能会通过 Gerrit 界面将它递交到 master 分支。
+一旦该更改通过后（标记为+2），其Web页面上就会出现“Submit”（递交）按钮。
+</p>
+
+<div class="english">
 <p>
 This checks the change into the repository.
 The change description will include a link to the code review,
@@ -602,16 +1137,39 @@ Since the method used to integrate the changes is "Cherry Pick",
 the commit hashes in the repository will be changed by
 the submit operation.
 </p>
+</div>
 
+<p>
+这会将该更改签入到源码库中。
+更改记录会包含此代码审核页面的链接，而该页面则会被添加上此更改在源码库中的链接。
+由于用来集成此更改的方法是“Cherry Pick”，因此源码库中的提交校验值（hash）会被递交操作更改。
+</p>
+
+<div class="english">
 <h3>More information</h3>
+</div>
 
+<h3>更多信息</h3>
+
+<div class="english">
 <p>
 In addition to the information here, the Go community maintains a <a href="https://golang.org/wiki/CodeReview">CodeReview</a> wiki page.
 Feel free to contribute to this page as you learn the review process.
 </p>
+</div>
 
+<p>
+除了这里的信息，Go 社区还维护了一份 <a href="https://golang.org/wiki/CodeReview">CodeReview</a>
+维基页面。请随意向此页面贡献你所了解的审核流程。
+</p>
+
+<div class="english">
 <h2 id="copyright">Copyright</h2>
+</div>
 
+<h2 id="版权">版权</h2>
+
+<div class="english">
 <p>Files in the Go repository don't list author names,
 both to avoid clutter and to avoid having to keep the lists up to date.
 Instead, your name will appear in the
@@ -619,7 +1177,16 @@ Instead, your name will appear in the
 and in the <a href="/CONTRIBUTORS"><code>CONTRIBUTORS</code></a> file
 and perhaps the <a href="/AUTHORS"><code>AUTHORS</code></a> file.
 </p>
+</div>
 
+<p>
+Go 源码库中的文件不会列出作者的名字，这样既能避免混乱，又能避免时刻保持列表更新。
+取而代之，你的名字会出现在<a href="https://golang.org/change">更改记录</a>和
+<a href="/CONTRIBUTORS"><code>CONTRIBUTORS</code></a> 文件内，也可能出现在
+<a href="/AUTHORS"><code>AUTHORS</code></a> 文件中。
+</p>
+
+<div class="english">
 <p>The <a href="/CONTRIBUTORS"><code>CONTRIBUTORS</code></a> file
 defines who the Go contributors&mdash;the people&mdash;are;
 the <a href="/AUTHORS"><code>AUTHORS</code></a> file defines
@@ -628,6 +1195,17 @@ The Go developers at Google will update these files when submitting
 your first change.
 In order for them to do that, you need to have completed one of the
 contributor license agreements:
+</p>
+</div>
+
+<p>
+<a href="/CONTRIBUTORS"><code>CONTRIBUTORS</code></a> 文件定义了谁是 Go 的贡献者，
+即个人贡献者；<a href="/AUTHORS"><code>AUTHORS</code></a> 文件定义了谁是版权拥有者，
+即“Go 的作者”。Google 的 Go 开发者会在递交你的第一个更改时更新这些文件。
+为此，你必须完成贡献者许可协议之一：
+</p>
+
+<div class="english">
 <ul>
 <li>
 If you are the copyright holder, you will need to agree to the
@@ -644,12 +1222,38 @@ agreement in connection with another Google open source project,
 it does not need to be completed again.)
 </li>
 </ul>
+</div>
 
+<ul>
+<li>
+若你是版权所有者，你必须接受
+<a href="https://developers.google.com/open-source/cla/individual">个人贡献者许可协议</a>，
+这可以在线完成。
+</li>
+<li>
+若你的组织为版权所有者，该组织必须接受
+<a href="https://developers.google.com/open-source/cla/corporate">团体贡献者许可协议</a>。
+若你的代码的版权持有者已在另一个 Google 开源项目中完成了协议，则无需再次完成。）
+</li>
+</ul>
+
+<div class="english">
 <p>
 This rigmarole needs to be done only for your first submission.
 </p>
+</div>
 
+<p>
+这些琐事只需在你第一次递交时完成。
+</p>
+
+<div class="english">
 <p>Code that you contribute should use the standard copyright header:</p>
+</div>
+
+<p>
+你贡献的代码应使用标准的版权文件头：
+</p>
 
 <pre>
 // Copyright 2014 The Go Authors. All rights reserved.
@@ -657,7 +1261,13 @@ This rigmarole needs to be done only for your first submission.
 // license that can be found in the LICENSE file.
 </pre>
 
+<div class="english">
 <p>
 Files in the repository are copyright the year they are added. It is not
 necessary to update the copyright year on files that you change.
+</p>
+</div>
+
+<p>
+源码库中的文件其版权年份即为它被添加的年份。你在更改这些文件时，无需更新版权年份。
 </p>
