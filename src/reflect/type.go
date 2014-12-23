@@ -1525,8 +1525,9 @@ func isReflexive(t *rtype) bool {
 
 // gcProg is a helper type for generatation of GC pointer info.
 type gcProg struct {
-	gc   []byte
-	size uintptr // size of type in bytes
+	gc     []byte
+	size   uintptr // size of type in bytes
+	hasPtr bool
 }
 
 func (gc *gcProg) append(v byte) {
@@ -1583,11 +1584,14 @@ func (gc *gcProg) appendWord(v byte) {
 	gc.gc[nptr/2] &= ^(3 << ((nptr%2)*4 + 2))
 	gc.gc[nptr/2] |= v << ((nptr%2)*4 + 2)
 	gc.size += ptrsize
+	if v == bitsPointer {
+		gc.hasPtr = true
+	}
 }
 
-func (gc *gcProg) finalize() unsafe.Pointer {
+func (gc *gcProg) finalize() (unsafe.Pointer, bool) {
 	if gc.size == 0 {
-		return nil
+		return nil, false
 	}
 	ptrsize := unsafe.Sizeof(uintptr(0))
 	gc.align(ptrsize)
@@ -1602,7 +1606,7 @@ func (gc *gcProg) finalize() unsafe.Pointer {
 			gc.appendWord(extractGCWord(gc.gc, i))
 		}
 	}
-	return unsafe.Pointer(&gc.gc[0])
+	return unsafe.Pointer(&gc.gc[0]), gc.hasPtr
 }
 
 func extractGCWord(gc []byte, i uintptr) byte {
@@ -1646,10 +1650,6 @@ func bucketOf(ktyp, etyp *rtype) *rtype {
 	for i := 0; i < int(bucketSize*unsafe.Sizeof(uint8(0))/ptrsize); i++ {
 		gc.append(bitsScalar)
 	}
-	gc.append(bitsPointer) // overflow
-	if runtime.GOARCH == "amd64p32" {
-		gc.append(bitsScalar)
-	}
 	// keys
 	for i := 0; i < bucketSize; i++ {
 		gc.appendProg(ktyp)
@@ -1658,10 +1658,15 @@ func bucketOf(ktyp, etyp *rtype) *rtype {
 	for i := 0; i < bucketSize; i++ {
 		gc.appendProg(etyp)
 	}
+	// overflow
+	gc.append(bitsPointer)
+	if runtime.GOARCH == "amd64p32" {
+		gc.append(bitsScalar)
+	}
 
 	b := new(rtype)
 	b.size = gc.size
-	b.gc[0] = gc.finalize()
+	b.gc[0], _ = gc.finalize()
 	s := "bucket(" + *ktyp.string + "," + *etyp.string + ")"
 	b.string = &s
 	return b
@@ -1862,7 +1867,11 @@ func funcLayout(t *rtype, rcvr *rtype) (frametype *rtype, argSize, retOffset uin
 	// build dummy rtype holding gc program
 	x := new(rtype)
 	x.size = gc.size
-	x.gc[0] = gc.finalize()
+	var hasPtr bool
+	x.gc[0], hasPtr = gc.finalize()
+	if !hasPtr {
+		x.kind |= kindNoPointers
+	}
 	var s string
 	if rcvr != nil {
 		s = "methodargs(" + *rcvr.string + ")(" + *t.string + ")"

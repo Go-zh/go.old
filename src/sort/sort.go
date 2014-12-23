@@ -383,7 +383,7 @@ func StringsAreSorted(a []string) bool { return IsSorted(StringSlice(a)) }
 // data.Less and O(n*log(n)*log(n)) calls to data.Swap.
 func Stable(data Interface) {
 	n := data.Len()
-	blockSize := 20
+	blockSize := 20 // must be > 0
 	a, b := 0, blockSize
 	for b <= n {
 		insertionSort(data, a, b)
@@ -399,7 +399,9 @@ func Stable(data Interface) {
 			a = b
 			b += 2 * blockSize
 		}
-		symMerge(data, a, a+blockSize, n)
+		if m := a + blockSize; m < n {
+			symMerge(data, a, m, n)
+		}
 		blockSize *= 2
 	}
 }
@@ -419,41 +421,40 @@ func Stable(data Interface) {
 // rotation algorithm which uses O(M+N+gcd(M+N)) assignments. The argumentation
 // in the paper carries through for Swap operations, especially as the block
 // swapping rotate uses only O(M+N) Swaps.
+//
+// symMerge assumes non-degenerate arguments: a < m && m < b.
+// Having the caller check this condition eliminates many leaf recursion calls,
+// which improves performance.
 func symMerge(data Interface, a, m, b int) {
-	if a >= m || m >= b {
-		return
-	}
-
 	mid := a + (b-a)/2
 	n := mid + m
-	start := 0
+	var start, r int
 	if m > mid {
 		start = n - b
-		r, p := mid, n-1
-		for start < r {
-			c := start + (r-start)/2
-			if !data.Less(p-c, c) {
-				start = c + 1
-			} else {
-				r = c
-			}
-		}
+		r = mid
 	} else {
 		start = a
-		r, p := m, n-1
-		for start < r {
-			c := start + (r-start)/2
-			if !data.Less(p-c, c) {
-				start = c + 1
-			} else {
-				r = c
-			}
+		r = m
+	}
+	p := n - 1
+
+	for start < r {
+		c := start + (r-start)/2
+		if !data.Less(p-c, c) {
+			start = c + 1
+		} else {
+			r = c
 		}
 	}
+
 	end := n - start
 	rotate(data, start, m, end)
-	symMerge(data, a, start, mid)
-	symMerge(data, mid, end, b)
+	if a < start && start < mid {
+		symMerge(data, a, start, mid)
+	}
+	if mid < end && end < b {
+		symMerge(data, mid, end, b)
+	}
 }
 
 // Rotate two consecutives blocks u = data[a:m] and v = data[m:b] in data:

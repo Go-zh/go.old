@@ -18,7 +18,7 @@ func seek(fd int32, offset int64, whence int32) int64
 func exits(msg *byte)
 
 //go:noescape
-func brk_(addr unsafe.Pointer) uintptr
+func brk_(addr unsafe.Pointer) int32
 
 func sleep(ms int32) int32
 
@@ -53,6 +53,7 @@ func errstr() string
 
 type _Plink uintptr
 
+//go:linkname os_sigpipe os.sigpipe
 func os_sigpipe() {
 	gothrow("too many writes on closed pipe")
 }
