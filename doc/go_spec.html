@@ -6,7 +6,7 @@
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of November 11, 2014",
+	"Subtitle": "Version of December 26, 2014",
 	"Path": "/ref/spec"
 }-->
 
@@ -2156,7 +2156,7 @@ with no explicit type.
 </p>
 
 <pre>
-var d = math.Sin(0.5)  // d is int64
+var d = math.Sin(0.5)  // d is float64
 var i = 42             // i is int
 var t, ok = x.(T)      // t is T, ok is bool
 var n = nil            // illegal
@@ -5630,7 +5630,7 @@ const (
 	c2 = len([10]float64{2})         // [10]float64{2} contains no function calls
 	c3 = len([10]float64{c1})        // [10]float64{c1} contains no function calls
 	c4 = len([10]float64{imag(2i)})  // imag(2i) is a constant and no function call is issued
-	c5 = len([10]float64{imag(z)})   // invalid: imag(x) is a (non-constant) function call
+	c5 = len([10]float64{imag(z)})   // invalid: imag(z) is a (non-constant) function call
 )
 var z complex128
 </pre>

@@ -899,11 +899,54 @@ func TestClientTimeout(t *testing.T) {
 	select {
 	case err := <-errc:
 		if err == nil {
-			t.Error("expected error from ReadAll")
+			t.Fatal("expected error from ReadAll")
 		}
-		// Expected error.
+		ne, ok := err.(net.Error)
+		if !ok {
+			t.Errorf("error value from ReadAll was %T; expected some net.Error", err)
+		} else if !ne.Timeout() {
+			t.Errorf("net.Error.Timeout = false; want true")
+		}
+		if got := ne.Error(); !strings.Contains(got, "Client.Timeout exceeded") {
+			t.Errorf("error string = %q; missing timeout substring", got)
+		}
 	case <-time.After(failTime):
 		t.Errorf("timeout after %v waiting for timeout of %v", failTime, timeout)
+	}
+}
+
+// Client.Timeout firing before getting to the body
+func TestClientTimeout_Headers(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
+	defer afterTest(t)
+	donec := make(chan bool)
+	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+		<-donec
+	}))
+	defer ts.Close()
+	defer close(donec)
+
+	c := &Client{Timeout: 500 * time.Millisecond}
+
+	_, err := c.Get(ts.URL)
+	if err == nil {
+		t.Fatal("got response from Get; expected error")
+	}
+	ue, ok := err.(*url.Error)
+	if !ok {
+		t.Fatalf("Got error of type %T; want *url.Error", err)
+	}
+	ne, ok := ue.Err.(net.Error)
+	if !ok {
+		t.Fatalf("Got url.Error.Err of type %T; want some net.Error", err)
+	}
+	if !ne.Timeout() {
+		t.Error("net.Error.Timeout = false; want true")
+	}
+	if got := ne.Error(); !strings.Contains(got, "Client.Timeout exceeded") {
+		t.Errorf("error string = %q; missing timeout substring", got)
 	}
 }
 
@@ -984,24 +1027,12 @@ func TestClientTrailers(t *testing.T) {
 				r.Trailer.Get("Client-Trailer-B"))
 		}
 
-		// TODO: golang.org/issue/7759: there's no way yet for
-		// the server to set trailers without hijacking, so do
-		// that for now, just to test the client.  Later, in
-		// Go 1.4, it should be implicit that any mutations
-		// to w.Header() after the initial write are the
-		// trailers to be sent, if and only if they were
-		// previously declared with w.Header().Set("Trailer",
-		// ..keys..)
-		w.(Flusher).Flush()
-		conn, buf, _ := w.(Hijacker).Hijack()
-		t := Header{}
-		t.Set("Server-Trailer-A", "valuea")
-		t.Set("Server-Trailer-C", "valuec") // skipping B
-		buf.WriteString("0\r\n")            // eof
-		t.Write(buf)
-		buf.WriteString("\r\n") // end of trailers
-		buf.Flush()
-		conn.Close()
+		// How handlers set Trailers: declare it ahead of time
+		// with the Trailer header, and then mutate the
+		// Header() of those values later, after the response
+		// has been written (we wrote to w above).
+		w.Header().Set("Server-Trailer-A", "valuea")
+		w.Header().Set("Server-Trailer-C", "valuec") // skipping B
 	}))
 	defer ts.Close()
 

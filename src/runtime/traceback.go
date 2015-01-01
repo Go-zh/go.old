@@ -32,13 +32,11 @@ const usesLR = GOARCH != "amd64" && GOARCH != "amd64p32" && GOARCH != "386"
 
 var (
 	// initialized in tracebackinit
-	deferprocPC          uintptr
 	goexitPC             uintptr
 	jmpdeferPC           uintptr
 	mcallPC              uintptr
 	morestackPC          uintptr
 	mstartPC             uintptr
-	newprocPC            uintptr
 	rt0_goPC             uintptr
 	sigpanicPC           uintptr
 	systemstack_switchPC uintptr
@@ -51,13 +49,11 @@ func tracebackinit() {
 	// Instead of initializing the variables above in the declarations,
 	// schedinit calls this function so that the variables are
 	// initialized and available earlier in the startup sequence.
-	deferprocPC = funcPC(deferproc)
 	goexitPC = funcPC(goexit)
 	jmpdeferPC = funcPC(jmpdefer)
 	mcallPC = funcPC(mcall)
 	morestackPC = funcPC(morestack)
 	mstartPC = funcPC(mstart)
-	newprocPC = funcPC(newproc)
 	rt0_goPC = funcPC(rt0_go)
 	sigpanicPC = funcPC(sigpanic)
 	systemstack_switchPC = funcPC(systemstack_switch)
@@ -81,7 +77,7 @@ func tracebackdefers(gp *g, callback func(*stkframe, unsafe.Pointer) bool, v uns
 			f := findfunc(frame.pc)
 			if f == nil {
 				print("runtime: unknown pc in defer ", hex(frame.pc), "\n")
-				gothrow("unknown pc")
+				throw("unknown pc")
 			}
 			frame.fn = f
 			frame.argp = uintptr(deferArgs(d))
@@ -100,7 +96,7 @@ func tracebackdefers(gp *g, callback func(*stkframe, unsafe.Pointer) bool, v uns
 // duplicating the code and all its subtlety.
 func gentraceback(pc0 uintptr, sp0 uintptr, lr0 uintptr, gp *g, skip int, pcbuf *uintptr, max int, callback func(*stkframe, unsafe.Pointer) bool, v unsafe.Pointer, flags uint) int {
 	if goexitPC == 0 {
-		gothrow("gentraceback before goexitPC initialization")
+		throw("gentraceback before goexitPC initialization")
 	}
 	g := getg()
 	if g == gp && g == g.m.curg {
@@ -117,7 +113,7 @@ func gentraceback(pc0 uintptr, sp0 uintptr, lr0 uintptr, gp *g, skip int, pcbuf 
 		// accepts an sp for the current goroutine (typically obtained by
 		// calling getcallersp) must not run on that goroutine's stack but
 		// instead on the g0 stack.
-		gothrow("gentraceback cannot trace user goroutine on its own stack")
+		throw("gentraceback cannot trace user goroutine on its own stack")
 	}
 	gotraceback := gotraceback(nil)
 	if pc0 == ^uintptr(0) && sp0 == ^uintptr(0) { // Signal to fetch saved values from gp.
@@ -144,11 +140,10 @@ func gentraceback(pc0 uintptr, sp0 uintptr, lr0 uintptr, gp *g, skip int, pcbuf 
 		frame.lr = lr0
 	}
 	waspanic := false
-	wasnewproc := false
 	printing := pcbuf == nil && callback == nil
 	_defer := gp._defer
 
-	for _defer != nil && uintptr(_defer.argp) == _NoArgs {
+	for _defer != nil && uintptr(_defer.sp) == _NoArgs {
 		_defer = _defer.link
 	}
 
@@ -168,7 +163,7 @@ func gentraceback(pc0 uintptr, sp0 uintptr, lr0 uintptr, gp *g, skip int, pcbuf 
 	if f == nil {
 		if callback != nil {
 			print("runtime: unknown pc ", hex(frame.pc), "\n")
-			gothrow("unknown pc")
+			throw("unknown pc")
 		}
 		return 0
 	}
@@ -205,7 +200,7 @@ func gentraceback(pc0 uintptr, sp0 uintptr, lr0 uintptr, gp *g, skip int, pcbuf 
 			// to avoid that confusion.
 			// See golang.org/issue/8153.
 			if callback != nil {
-				gothrow("traceback_arm: found jmpdefer when tracing with callback")
+				throw("traceback_arm: found jmpdefer when tracing with callback")
 			}
 			frame.lr = 0
 		} else {
@@ -225,8 +220,8 @@ func gentraceback(pc0 uintptr, sp0 uintptr, lr0 uintptr, gp *g, skip int, pcbuf 
 				// But if callback is set, we're doing a garbage collection and must
 				// get everything, so crash loudly.
 				if callback != nil {
-					print("runtime: unexpected return pc for ", gofuncname(f), " called from ", hex(frame.lr), "\n")
-					gothrow("unknown caller pc")
+					print("runtime: unexpected return pc for ", funcname(f), " called from ", hex(frame.lr), "\n")
+					throw("unknown caller pc")
 				}
 			}
 		}
@@ -251,32 +246,6 @@ func gentraceback(pc0 uintptr, sp0 uintptr, lr0 uintptr, gp *g, skip int, pcbuf 
 			setArgInfo(&frame, f, callback != nil)
 		}
 
-		// Determine function SP where deferproc would find its arguments.
-		var sparg uintptr
-		if usesLR {
-			// On link register architectures, that's the standard bottom-of-stack plus 1 word
-			// for the saved LR. If the previous frame was a direct call to newproc/deferproc,
-			// however, the SP is three words lower than normal.
-			// If the function has no frame at all - perhaps it just started, or perhaps
-			// it is a leaf with no local variables - then we cannot possibly find its
-			// SP in a defer, and we might confuse its SP for its caller's SP, so
-			// leave sparg=0 in that case.
-			if frame.fp != frame.sp {
-				sparg = frame.sp + regSize
-				if wasnewproc {
-					sparg += 3 * regSize
-				}
-			}
-		} else {
-			// On x86 that's the standard bottom-of-stack, so SP exactly.
-			// If the previous frame was a direct call to newproc/deferproc, however,
-			// the SP is two words lower than normal.
-			sparg = frame.sp
-			if wasnewproc {
-				sparg += 2 * ptrSize
-			}
-		}
-
 		// Determine frame's 'continuation PC', where it can continue.
 		// Normally this is the return address on the stack, but if sigpanic
 		// is immediately below this function on the stack, then the frame
@@ -289,7 +258,7 @@ func gentraceback(pc0 uintptr, sp0 uintptr, lr0 uintptr, gp *g, skip int, pcbuf 
 		// returns; everything live at earlier deferprocs is still live at that one.
 		frame.continpc = frame.pc
 		if waspanic {
-			if _defer != nil && _defer.argp == sparg {
+			if _defer != nil && _defer.sp == frame.sp {
 				frame.continpc = _defer.pc
 			} else {
 				frame.continpc = 0
@@ -297,7 +266,7 @@ func gentraceback(pc0 uintptr, sp0 uintptr, lr0 uintptr, gp *g, skip int, pcbuf 
 		}
 
 		// Unwind our local defer stack past this frame.
-		for _defer != nil && (_defer.argp == sparg || _defer.argp == _NoArgs) {
+		for _defer != nil && (_defer.sp == frame.sp || _defer.sp == _NoArgs) {
 			_defer = _defer.link
 		}
 
@@ -324,7 +293,7 @@ func gentraceback(pc0 uintptr, sp0 uintptr, lr0 uintptr, gp *g, skip int, pcbuf 
 				if (n > 0 || flags&_TraceTrap == 0) && frame.pc > f.entry && !waspanic {
 					tracepc--
 				}
-				print(gofuncname(f), "(")
+				print(funcname(f), "(")
 				argp := (*[100]uintptr)(unsafe.Pointer(frame.argp))
 				for i := uintptr(0); i < frame.arglen/ptrSize; i++ {
 					if i >= 10 {
@@ -353,7 +322,6 @@ func gentraceback(pc0 uintptr, sp0 uintptr, lr0 uintptr, gp *g, skip int, pcbuf 
 
 	skipped:
 		waspanic = f.entry == sigpanicPC
-		wasnewproc = f.entry == newprocPC || f.entry == deferprocPC
 
 		// Do not unwind past the bottom of the stack.
 		if flr == nil {
@@ -438,12 +406,12 @@ func gentraceback(pc0 uintptr, sp0 uintptr, lr0 uintptr, gp *g, skip int, pcbuf 
 	// incomplete information then is still better than nothing.
 	if callback != nil && n < max && _defer != nil {
 		if _defer != nil {
-			print("runtime: g", gp.goid, ": leftover defer argp=", hex(_defer.argp), " pc=", hex(_defer.pc), "\n")
+			print("runtime: g", gp.goid, ": leftover defer sp=", hex(_defer.sp), " pc=", hex(_defer.pc), "\n")
 		}
 		for _defer = gp._defer; _defer != nil; _defer = _defer.link {
-			print("\tdefer ", _defer, " argp=", hex(_defer.argp), " pc=", hex(_defer.pc), "\n")
+			print("\tdefer ", _defer, " sp=", hex(_defer.sp), " pc=", hex(_defer.pc), "\n")
 		}
-		gothrow("traceback has leftover defers")
+		throw("traceback has leftover defers")
 	}
 
 	return n
@@ -453,7 +421,7 @@ func setArgInfo(frame *stkframe, f *_func, needArgMap bool) {
 	frame.arglen = uintptr(f.args)
 	if needArgMap && f.args == _ArgsSizeUnknown {
 		// Extract argument bitmaps for reflect stubs from the calls they made to reflect.
-		switch gofuncname(f) {
+		switch funcname(f) {
 		case "reflect.makeFuncStub", "reflect.methodValueCall":
 			arg0 := frame.sp
 			if usesLR {
@@ -461,8 +429,8 @@ func setArgInfo(frame *stkframe, f *_func, needArgMap bool) {
 			}
 			fn := *(**[2]uintptr)(unsafe.Pointer(arg0))
 			if fn[0] != f.entry {
-				print("runtime: confused by ", gofuncname(f), "\n")
-				gothrow("reflect mismatch")
+				print("runtime: confused by ", funcname(f), "\n")
+				throw("reflect mismatch")
 			}
 			bv := (*bitvector)(unsafe.Pointer(fn[1]))
 			frame.arglen = uintptr(bv.n / 2 * ptrSize)
@@ -476,7 +444,7 @@ func printcreatedby(gp *g) {
 	pc := gp.gopc
 	f := findfunc(pc)
 	if f != nil && showframe(f, gp) && gp.goid != 1 {
-		print("created by ", gofuncname(f), "\n")
+		print("created by ", funcname(f), "\n")
 		tracepc := pc // back up to CALL instruction for funcline.
 		if pc > f.entry {
 			tracepc -= _PCQuantum
@@ -544,7 +512,7 @@ func showframe(f *_func, gp *g) bool {
 		return true
 	}
 	traceback := gotraceback(nil)
-	name := gostringnocopy(funcname(f))
+	name := funcname(f)
 
 	// Special case: always show runtime.panic frame, so that we can
 	// see where a panic started in the middle of a stack trace.

@@ -92,7 +92,12 @@ func file(s ...string) string {
 // It tries to re-use a go.tools checkout from a previous run if possible,
 // else it hg clones it.
 func prepGoPath() string {
-	const tempBase = "go.tools.TMP"
+	// Use a builder-specific temp directory name, so builders running
+	// two copies don't trample on each other: https://golang.org/issue/9407
+	// We don't use io.TempDir or a PID or timestamp here because we do
+	// want this to be stable between runs, to minimize "git clone" calls
+	// in the common case.
+	var tempBase = fmt.Sprintf("go.tools.TMP.%s.%s", runtime.GOOS, runtime.GOARCH)
 
 	username := ""
 	u, err := user.Current()
@@ -145,7 +150,19 @@ func prepGoPath() string {
 	}
 
 	if err := os.Rename(tmpDir, finalDir); err != nil {
-		log.Fatal(err)
+		if os.IsExist(err) {
+			// A different builder beat us into putting this repo into
+			// its final place. But that's fine; if it's there, it's
+			// the right version and we can use it.
+			//
+			// This happens on the Go project's Windows builders
+			// especially, where we have two builders (386 and amd64)
+			// running at the same time, trying to compete for moving
+			// it into place.
+			os.RemoveAll(tmpDir)
+		} else {
+			log.Fatal(err)
+		}
 	}
 	return gopath
 }

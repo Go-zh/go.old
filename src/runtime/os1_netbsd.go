@@ -162,7 +162,7 @@ func newosproc(mp *m, stk unsafe.Pointer) {
 	ret := lwp_create(unsafe.Pointer(&uc), 0, unsafe.Pointer(&mp.procid))
 	if ret < 0 {
 		print("runtime: failed to create new OS thread (have ", mcount()-1, " already; errno=", -ret, ")\n")
-		gothrow("runtime.newosproc")
+		throw("runtime.newosproc")
 	}
 }
 
@@ -231,6 +231,10 @@ func setsig(i int32, fn uintptr, restart bool) {
 	}
 	sa.sa_sigaction = fn
 	sigaction(i, &sa, nil)
+}
+
+func setsigstack(i int32) {
+	throw("setsigstack")
 }
 
 func getsig(i int32) uintptr {

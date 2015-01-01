@@ -26,7 +26,7 @@ type fInterface interface {
 
 func getitab(inter *interfacetype, typ *_type, canfail bool) *itab {
 	if len(inter.mhdr) == 0 {
-		gothrow("internal error - misuse of itab")
+		throw("internal error - misuse of itab")
 	}
 
 	// easy case
@@ -114,7 +114,7 @@ search:
 	nextimethod:
 	}
 	if locked == 0 {
-		gothrow("invalid itab locking")
+		throw("invalid itab locking")
 	}
 	m.link = hash[h]
 	atomicstorep(unsafe.Pointer(&hash[h]), unsafe.Pointer(m))
@@ -386,6 +386,7 @@ func assertE2I2(inter *interfacetype, e interface{}) (r fInterface, ok bool) {
 	return
 }
 
+//go:linkname reflect_ifaceE2I reflect.ifaceE2I
 func reflect_ifaceE2I(inter *interfacetype, e interface{}, dst *fInterface) {
 	*dst = assertE2I(inter, e)
 }

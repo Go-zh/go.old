@@ -22,8 +22,7 @@ TEXT runtime·rt0_go(SB),NOSPLIT,$0
 	MOVD	$runtime·g0(SB), g
 	MOVD	$(-64*1024), R31
 	ADD	R31, R1, R3
-	MOVD	R3, g_stackguard0(g)
-	MOVD	R3, g_stackguard1(g)
+	MOVD	R3, g_stackguard(g)
 	MOVD	R3, (g_stack+stack_lo)(g)
 	MOVD	R1, (g_stack+stack_hi)(g)
 
@@ -284,6 +283,9 @@ TEXT runtime·morestack_noctxt(SB),NOSPLIT,$-8-0
 	MOVD	R31, CTR;		\
 	BR	(CTR)
 // Note: can't just "BR NAME(SB)" - bad inlining results.
+
+TEXT reflect·call(SB), NOSPLIT, $0-0
+	BR	·reflectcall(SB)
 
 TEXT ·reflectcall(SB), NOSPLIT, $-8-24
 	MOVWZ n+16(FP), R3

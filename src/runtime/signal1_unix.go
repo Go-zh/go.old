@@ -16,7 +16,7 @@ func initsig() {
 	// sigtable should describe what to do for all the possible signals.
 	if len(sigtable) != _NSIG {
 		print("runtime: len(sigtable)=", len(sigtable), " _NSIG=", _NSIG, "\n")
-		gothrow("initsig")
+		throw("initsig")
 	}
 
 	// First call: basic setup.
@@ -35,6 +35,11 @@ func initsig() {
 				t.flags = _SigNotify | _SigIgnored
 				continue
 			}
+		}
+
+		if t.flags&_SigSetStack != 0 {
+			setsigstack(i)
+			continue
 		}
 
 		t.flags |= _SigHandling

@@ -4,16 +4,19 @@
 
 package runtime
 
+import _ "unsafe" // for go:linkname
+
 type stdFunction *byte
 
+//go:linkname os_sigpipe os.sigpipe
 func os_sigpipe() {
-	gothrow("too many writes on closed pipe")
+	throw("too many writes on closed pipe")
 }
 
 func sigpanic() {
 	g := getg()
 	if !canpanic(g) {
-		gothrow("unexpected signal during runtime execution")
+		throw("unexpected signal during runtime execution")
 	}
 
 	switch uint32(g.sig) {
@@ -22,7 +25,7 @@ func sigpanic() {
 			panicmem()
 		}
 		print("unexpected fault address ", hex(g.sigcode1), "\n")
-		gothrow("fault")
+		throw("fault")
 	case _EXCEPTION_INT_DIVIDE_BY_ZERO:
 		panicdivide()
 	case _EXCEPTION_INT_OVERFLOW:
@@ -34,5 +37,5 @@ func sigpanic() {
 		_EXCEPTION_FLT_UNDERFLOW:
 		panicfloat()
 	}
-	gothrow("fault")
+	throw("fault")
 }

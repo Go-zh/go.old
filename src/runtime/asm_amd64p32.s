@@ -22,8 +22,7 @@ TEXT runtime·rt0_go(SB),NOSPLIT,$0
 	// create istack out of the given (operating system) stack.
 	MOVL	$runtime·g0(SB), DI
 	LEAL	(-64*1024+104)(SP), BX
-	MOVL	BX, g_stackguard0(DI)
-	MOVL	BX, g_stackguard1(DI)
+	MOVL	BX, g_stackguard(DI)
 	MOVL	BX, (g_stack+stack_lo)(DI)
 	MOVL	SP, (g_stack+stack_hi)(DI)
 
@@ -301,6 +300,9 @@ TEXT runtime·morestack_noctxt(SB),NOSPLIT,$0
 	MOVL	$NAME(SB), AX;		\
 	JMP	AX
 // Note: can't just "JMP NAME(SB)" - bad inlining results.
+
+TEXT reflect·call(SB), NOSPLIT, $0-0
+	JMP	·reflectcall(SB)
 
 TEXT ·reflectcall(SB), NOSPLIT, $0-16
 	MOVLQZX argsize+8(FP), CX
@@ -804,7 +806,7 @@ TEXT runtime·cmpstring(SB),NOSPLIT,$0-20
 	MOVL	AX, ret+16(FP)
 	RET
 
-TEXT runtime·cmpbytes(SB),NOSPLIT,$0-28
+TEXT bytes·Compare(SB),NOSPLIT,$0-28
 	MOVL	s1+0(FP), SI
 	MOVL	s1+4(FP), BX
 	MOVL	s2+12(FP), DI

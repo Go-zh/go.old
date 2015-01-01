@@ -72,8 +72,6 @@ var algarray = [alg_max]typeAlg{
 	alg_CPLX128:  {c128hash, c128equal},
 }
 
-const nacl = GOOS == "nacl"
-
 var useAeshash bool
 
 // in asm_*.s
@@ -82,22 +80,9 @@ func aeshash32(p unsafe.Pointer, s, h uintptr) uintptr
 func aeshash64(p unsafe.Pointer, s, h uintptr) uintptr
 func aeshashstr(p unsafe.Pointer, s, h uintptr) uintptr
 
-func memhash(p unsafe.Pointer, s, h uintptr) uintptr {
-	if !nacl && useAeshash {
-		return aeshash(p, s, h)
-	}
-
-	h ^= c0
-	for s > 0 {
-		h = (h ^ uintptr(*(*byte)(p))) * c1
-		p = add(p, 1)
-		s--
-	}
-	return h
-}
-
 func strhash(a unsafe.Pointer, s, h uintptr) uintptr {
-	return memhash((*stringStruct)(a).str, uintptr(len(*(*string)(a))), h)
+	x := (*stringStruct)(a)
+	return memhash(x.str, uintptr(x.len), h)
 }
 
 // NOTE: Because NaN != NaN, a map can contain any
@@ -146,7 +131,7 @@ func interhash(p unsafe.Pointer, s, h uintptr) uintptr {
 		return h
 	}
 	t := tab._type
-	fn := goalg(t.alg).hash
+	fn := t.alg.hash
 	if fn == nil {
 		panic(errorString("hash of unhashable type " + *t._string))
 	}
@@ -163,7 +148,7 @@ func nilinterhash(p unsafe.Pointer, s, h uintptr) uintptr {
 	if t == nil {
 		return h
 	}
-	fn := goalg(t.alg).hash
+	fn := t.alg.hash
 	if fn == nil {
 		panic(errorString("hash of unhashable type " + *t._string))
 	}
@@ -234,7 +219,7 @@ func efaceeq(p, q interface{}) bool {
 	if t == nil {
 		return true
 	}
-	eq := goalg(t.alg).equal
+	eq := t.alg.equal
 	if eq == nil {
 		panic(errorString("comparing uncomparable type " + *t._string))
 	}
@@ -256,7 +241,7 @@ func ifaceeq(p, q interface {
 		return true
 	}
 	t := xtab._type
-	eq := goalg(t.alg).equal
+	eq := t.alg.equal
 	if eq == nil {
 		panic(errorString("comparing uncomparable type " + *t._string))
 	}
@@ -267,10 +252,6 @@ func ifaceeq(p, q interface {
 }
 
 // Testing adapters for hash quality tests (see hash_test.go)
-func haveGoodHash() bool {
-	return useAeshash
-}
-
 func stringHash(s string, seed uintptr) uintptr {
 	return algarray[alg_STRING].hash(noescape(unsafe.Pointer(&s)), unsafe.Sizeof(s), seed)
 }
@@ -304,18 +285,13 @@ func memclrBytes(b []byte) {
 	memclr(s.array, uintptr(s.len))
 }
 
-// TODO(dvyukov): remove when Type is converted to Go and contains *typeAlg.
-func goalg(a unsafe.Pointer) *typeAlg {
-	return (*typeAlg)(a)
-}
-
 // used in asm_{386,amd64}.s
 const hashRandomBytes = ptrSize / 4 * 64
 
 var aeskeysched [hashRandomBytes]byte
 
 func init() {
-	if theGoos == "nacl" {
+	if GOOS == "nacl" {
 		return
 	}
 

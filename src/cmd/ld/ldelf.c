@@ -545,7 +545,10 @@ ldelf(Biobuf *f, char *pkg, int64 len, char *pn)
 			s->type = SRODATA;
 			break;
 		case ElfSectFlagAlloc + ElfSectFlagWrite:
-			s->type = SNOPTRDATA;
+			if(sect->type == ElfSectNobits)
+				s->type = SNOPTRBSS;
+			else
+				s->type = SNOPTRDATA;
 			break;
 		case ElfSectFlagAlloc + ElfSectFlagExec:
 			s->type = STEXT;
@@ -825,14 +828,18 @@ readsym(ElfObj *obj, int i, ElfSym *sym, int needSym)
 			}
 			break;
 		case ElfSymBindLocal:
-			if(!(thechar == '5' && (strncmp(sym->name, "$a", 2) == 0 || strncmp(sym->name, "$d", 2) == 0))) // binutils for arm generate these mapping symbols, ignore these
-				if(needSym) {
-					// local names and hidden visiblity global names are unique
-					// and should only reference by its index, not name, so we
-					// don't bother to add them into hash table
-					s = linknewsym(ctxt, sym->name, ctxt->version);
-					s->type |= SHIDDEN;
-				}
+			if(thechar == '5' && (strncmp(sym->name, "$a", 2) == 0 || strncmp(sym->name, "$d", 2) == 0)) {
+				// binutils for arm generate these mapping
+				// symbols, ignore these
+				break;
+			}
+			if(needSym) {
+				// local names and hidden visiblity global names are unique
+				// and should only reference by its index, not name, so we
+				// don't bother to add them into hash table
+				s = linknewsym(ctxt, sym->name, ctxt->version);
+				s->type |= SHIDDEN;
+			}
 			break;
 		case ElfSymBindWeak:
 			if(needSym) {

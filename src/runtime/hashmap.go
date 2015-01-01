@@ -117,12 +117,12 @@ type hmap struct {
 
 // A bucket for a Go map.
 type bmap struct {
-	tophash  [bucketCnt]uint8
-	overflow *bmap
+	tophash [bucketCnt]uint8
 	// Followed by bucketCnt keys and then bucketCnt values.
 	// NOTE: packing all the keys together and then all the values together makes the
 	// code a bit more complicated than alternating key/value/key/value/... but it allows
 	// us to eliminate padding which would be needed for, e.g., map[int64]int8.
+	// Followed by an overflow pointer.
 }
 
 // A hash iteration structure.
@@ -149,9 +149,16 @@ func evacuated(b *bmap) bool {
 	return h > empty && h < minTopHash
 }
 
+func (b *bmap) overflow(t *maptype) *bmap {
+	return *(**bmap)(add(unsafe.Pointer(b), uintptr(t.bucketsize)-regSize))
+}
+func (b *bmap) setoverflow(t *maptype, ovf *bmap) {
+	*(**bmap)(add(unsafe.Pointer(b), uintptr(t.bucketsize)-regSize)) = ovf
+}
+
 func makemap(t *maptype, hint int64) *hmap {
 	if sz := unsafe.Sizeof(hmap{}); sz > 48 || sz != uintptr(t.hmap.size) {
-		gothrow("bad hmap size")
+		throw("bad hmap size")
 	}
 
 	if hint < 0 || int64(int32(hint)) != hint {
@@ -160,41 +167,41 @@ func makemap(t *maptype, hint int64) *hmap {
 	}
 
 	if !ismapkey(t.key) {
-		gothrow("runtime.makemap: unsupported map key type")
+		throw("runtime.makemap: unsupported map key type")
 	}
 
 	// check compiler's and reflect's math
 	if t.key.size > maxKeySize && (!t.indirectkey || t.keysize != uint8(ptrSize)) ||
 		t.key.size <= maxKeySize && (t.indirectkey || t.keysize != uint8(t.key.size)) {
-		gothrow("key size wrong")
+		throw("key size wrong")
 	}
 	if t.elem.size > maxValueSize && (!t.indirectvalue || t.valuesize != uint8(ptrSize)) ||
 		t.elem.size <= maxValueSize && (t.indirectvalue || t.valuesize != uint8(t.elem.size)) {
-		gothrow("value size wrong")
+		throw("value size wrong")
 	}
 
 	// invariants we depend on.  We should probably check these at compile time
 	// somewhere, but for now we'll do it here.
 	if t.key.align > bucketCnt {
-		gothrow("key align too big")
+		throw("key align too big")
 	}
 	if t.elem.align > bucketCnt {
-		gothrow("value align too big")
+		throw("value align too big")
 	}
 	if uintptr(t.key.size)%uintptr(t.key.align) != 0 {
-		gothrow("key size not a multiple of key align")
+		throw("key size not a multiple of key align")
 	}
 	if uintptr(t.elem.size)%uintptr(t.elem.align) != 0 {
-		gothrow("value size not a multiple of value align")
+		throw("value size not a multiple of value align")
 	}
 	if bucketCnt < 8 {
-		gothrow("bucketsize too small for proper alignment")
+		throw("bucketsize too small for proper alignment")
 	}
 	if dataOffset%uintptr(t.key.align) != 0 {
-		gothrow("need padding in bucket (key)")
+		throw("need padding in bucket (key)")
 	}
 	if dataOffset%uintptr(t.elem.align) != 0 {
-		gothrow("need padding in bucket (value)")
+		throw("need padding in bucket (value)")
 	}
 
 	// find size parameter which will hold the requested # of elements
@@ -244,7 +251,7 @@ func mapaccess1(t *maptype, h *hmap, key unsafe.Pointer) unsafe.Pointer {
 	if h == nil || h.count == 0 {
 		return unsafe.Pointer(t.elem.zero)
 	}
-	alg := goalg(t.key.alg)
+	alg := t.key.alg
 	hash := alg.hash(key, uintptr(t.key.size), uintptr(h.hash0))
 	m := uintptr(1)<<h.B - 1
 	b := (*bmap)(add(h.buckets, (hash&m)*uintptr(t.bucketsize)))
@@ -275,7 +282,7 @@ func mapaccess1(t *maptype, h *hmap, key unsafe.Pointer) unsafe.Pointer {
 				return v
 			}
 		}
-		b = b.overflow
+		b = b.overflow(t)
 		if b == nil {
 			return unsafe.Pointer(t.elem.zero)
 		}
@@ -292,7 +299,7 @@ func mapaccess2(t *maptype, h *hmap, key unsafe.Pointer) (unsafe.Pointer, bool) 
 	if h == nil || h.count == 0 {
 		return unsafe.Pointer(t.elem.zero), false
 	}
-	alg := goalg(t.key.alg)
+	alg := t.key.alg
 	hash := alg.hash(key, uintptr(t.key.size), uintptr(h.hash0))
 	m := uintptr(1)<<h.B - 1
 	b := (*bmap)(unsafe.Pointer(uintptr(h.buckets) + (hash&m)*uintptr(t.bucketsize)))
@@ -323,7 +330,7 @@ func mapaccess2(t *maptype, h *hmap, key unsafe.Pointer) (unsafe.Pointer, bool) 
 				return v, true
 			}
 		}
-		b = b.overflow
+		b = b.overflow(t)
 		if b == nil {
 			return unsafe.Pointer(t.elem.zero), false
 		}
@@ -335,7 +342,7 @@ func mapaccessK(t *maptype, h *hmap, key unsafe.Pointer) (unsafe.Pointer, unsafe
 	if h == nil || h.count == 0 {
 		return nil, nil
 	}
-	alg := goalg(t.key.alg)
+	alg := t.key.alg
 	hash := alg.hash(key, uintptr(t.key.size), uintptr(h.hash0))
 	m := uintptr(1)<<h.B - 1
 	b := (*bmap)(unsafe.Pointer(uintptr(h.buckets) + (hash&m)*uintptr(t.bucketsize)))
@@ -366,7 +373,7 @@ func mapaccessK(t *maptype, h *hmap, key unsafe.Pointer) (unsafe.Pointer, unsafe
 				return k, v
 			}
 		}
-		b = b.overflow
+		b = b.overflow(t)
 		if b == nil {
 			return nil, nil
 		}
@@ -385,7 +392,7 @@ func mapassign1(t *maptype, h *hmap, key unsafe.Pointer, val unsafe.Pointer) {
 		raceReadObjectPC(t.elem, val, callerpc, pc)
 	}
 
-	alg := goalg(t.key.alg)
+	alg := t.key.alg
 	hash := alg.hash(key, uintptr(t.key.size), uintptr(h.hash0))
 
 	if h.buckets == nil {
@@ -437,10 +444,11 @@ again:
 			memmove(v2, val, uintptr(t.elem.size))
 			return
 		}
-		if b.overflow == nil {
+		ovf := b.overflow(t)
+		if ovf == nil {
 			break
 		}
-		b = b.overflow
+		b = ovf
 	}
 
 	// did not find mapping for key.  Allocate new cell & add entry.
@@ -455,7 +463,7 @@ again:
 			memstats.next_gc = memstats.heap_alloc
 		}
 		newb := (*bmap)(newobject(t.bucket))
-		b.overflow = newb
+		b.setoverflow(t, newb)
 		inserti = &newb.tophash[0]
 		insertk = add(unsafe.Pointer(newb), dataOffset)
 		insertv = add(insertk, bucketCnt*uintptr(t.keysize))
@@ -494,7 +502,7 @@ func mapdelete(t *maptype, h *hmap, key unsafe.Pointer) {
 	if h == nil || h.count == 0 {
 		return
 	}
-	alg := goalg(t.key.alg)
+	alg := t.key.alg
 	hash := alg.hash(key, uintptr(t.key.size), uintptr(h.hash0))
 	bucket := hash & (uintptr(1)<<h.B - 1)
 	if h.oldbuckets != nil {
@@ -525,7 +533,7 @@ func mapdelete(t *maptype, h *hmap, key unsafe.Pointer) {
 			h.count--
 			return
 		}
-		b = b.overflow
+		b = b.overflow(t)
 		if b == nil {
 			return
 		}
@@ -553,7 +561,7 @@ func mapiterinit(t *maptype, h *hmap, it *hiter) {
 	}
 
 	if unsafe.Sizeof(hiter{})/ptrSize != 10 {
-		gothrow("hash_iter size incorrect") // see ../../cmd/gc/reflect.c
+		throw("hash_iter size incorrect") // see ../../cmd/gc/reflect.c
 	}
 	it.t = t
 	it.h = h
@@ -601,7 +609,7 @@ func mapiternext(it *hiter) {
 	b := it.bptr
 	i := it.i
 	checkBucket := it.checkBucket
-	alg := goalg(t.key.alg)
+	alg := t.key.alg
 
 next:
 	if b == nil {
@@ -720,14 +728,14 @@ next:
 			return
 		}
 	}
-	b = b.overflow
+	b = b.overflow(t)
 	i = 0
 	goto next
 }
 
 func hashGrow(t *maptype, h *hmap) {
 	if h.oldbuckets != nil {
-		gothrow("evacuation not done in time")
+		throw("evacuation not done in time")
 	}
 	oldbuckets := h.buckets
 	if checkgc {
@@ -765,7 +773,7 @@ func growWork(t *maptype, h *hmap, bucket uintptr) {
 func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
 	b := (*bmap)(add(h.oldbuckets, oldbucket*uintptr(t.bucketsize)))
 	newbit := uintptr(1) << (h.B - 1)
-	alg := goalg(t.key.alg)
+	alg := t.key.alg
 	if !evacuated(b) {
 		// TODO: reuse overflow buckets instead of using new ones, if there
 		// is no iterator using the old buckets.  (If !oldIterator.)
@@ -778,7 +786,7 @@ func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
 		yk := add(unsafe.Pointer(y), dataOffset)
 		xv := add(xk, bucketCnt*uintptr(t.keysize))
 		yv := add(yk, bucketCnt*uintptr(t.keysize))
-		for ; b != nil; b = b.overflow {
+		for ; b != nil; b = b.overflow(t) {
 			k := add(unsafe.Pointer(b), dataOffset)
 			v := add(k, bucketCnt*uintptr(t.keysize))
 			for i := 0; i < bucketCnt; i, k, v = i+1, add(k, uintptr(t.keysize)), add(v, uintptr(t.valuesize)) {
@@ -788,7 +796,7 @@ func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
 					continue
 				}
 				if top < minTopHash {
-					gothrow("bad map state")
+					throw("bad map state")
 				}
 				k2 := k
 				if t.indirectkey {
@@ -828,7 +836,7 @@ func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
 							memstats.next_gc = memstats.heap_alloc
 						}
 						newx := (*bmap)(newobject(t.bucket))
-						x.overflow = newx
+						x.setoverflow(t, newx)
 						x = newx
 						xi = 0
 						xk = add(unsafe.Pointer(x), dataOffset)
@@ -855,7 +863,7 @@ func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
 							memstats.next_gc = memstats.heap_alloc
 						}
 						newy := (*bmap)(newobject(t.bucket))
-						y.overflow = newy
+						y.setoverflow(t, newy)
 						y = newy
 						yi = 0
 						yk = add(unsafe.Pointer(y), dataOffset)
@@ -881,7 +889,6 @@ func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
 		// Unlink the overflow buckets & clear key/value to help GC.
 		if h.flags&oldIterator == 0 {
 			b = (*bmap)(add(h.oldbuckets, oldbucket*uintptr(t.bucketsize)))
-			b.overflow = nil
 			memclr(add(unsafe.Pointer(b), dataOffset), uintptr(t.bucketsize)-dataOffset)
 		}
 	}
@@ -897,15 +904,17 @@ func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
 }
 
 func ismapkey(t *_type) bool {
-	return goalg(t.alg).hash != nil
+	return t.alg.hash != nil
 }
 
 // Reflect stubs.  Called from ../reflect/asm_*.s
 
+//go:linkname reflect_makemap reflect.makemap
 func reflect_makemap(t *maptype) *hmap {
 	return makemap(t, 0)
 }
 
+//go:linkname reflect_mapaccess reflect.mapaccess
 func reflect_mapaccess(t *maptype, h *hmap, key unsafe.Pointer) unsafe.Pointer {
 	val, ok := mapaccess2(t, h, key)
 	if !ok {
@@ -915,28 +924,34 @@ func reflect_mapaccess(t *maptype, h *hmap, key unsafe.Pointer) unsafe.Pointer {
 	return val
 }
 
+//go:linkname reflect_mapassign reflect.mapassign
 func reflect_mapassign(t *maptype, h *hmap, key unsafe.Pointer, val unsafe.Pointer) {
 	mapassign1(t, h, key, val)
 }
 
+//go:linkname reflect_mapdelete reflect.mapdelete
 func reflect_mapdelete(t *maptype, h *hmap, key unsafe.Pointer) {
 	mapdelete(t, h, key)
 }
 
+//go:linkname reflect_mapiterinit reflect.mapiterinit
 func reflect_mapiterinit(t *maptype, h *hmap) *hiter {
 	it := new(hiter)
 	mapiterinit(t, h, it)
 	return it
 }
 
+//go:linkname reflect_mapiternext reflect.mapiternext
 func reflect_mapiternext(it *hiter) {
 	mapiternext(it)
 }
 
+//go:linkname reflect_mapiterkey reflect.mapiterkey
 func reflect_mapiterkey(it *hiter) unsafe.Pointer {
 	return it.key
 }
 
+//go:linkname reflect_maplen reflect.maplen
 func reflect_maplen(h *hmap) int {
 	if h == nil {
 		return 0
@@ -948,6 +963,7 @@ func reflect_maplen(h *hmap) int {
 	return h.count
 }
 
+//go:linkname reflect_ismapkey reflect.ismapkey
 func reflect_ismapkey(t *_type) bool {
 	return ismapkey(t)
 }

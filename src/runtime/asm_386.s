@@ -20,8 +20,7 @@ TEXT runtime·rt0_go(SB),NOSPLIT,$0
 	// _cgo_init may update stackguard.
 	MOVL	$runtime·g0(SB), BP
 	LEAL	(-64*1024+104)(SP), BX
-	MOVL	BX, g_stackguard0(BP)
-	MOVL	BX, g_stackguard1(BP)
+	MOVL	BX, g_stackguard(BP)
 	MOVL	BX, (g_stack+stack_lo)(BP)
 	MOVL	SP, (g_stack+stack_hi)(BP)
 	
@@ -51,8 +50,7 @@ nocpuinfo:
 	MOVL	$runtime·g0(SB), CX
 	MOVL	(g_stack+stack_lo)(CX), AX
 	ADDL	$const__StackGuard, AX
-	MOVL	AX, g_stackguard0(CX)
-	MOVL	AX, g_stackguard1(CX)
+	MOVL	AX, g_stackguard(CX)
 
 	// skip runtime·ldt0setup(SB) and tls test after _cgo_init for non-windows
 	CMPL runtime·iswindows(SB), $0
@@ -340,6 +338,9 @@ TEXT runtime·morestack_noctxt(SB),NOSPLIT,$0-0
 	MOVL	$NAME(SB), AX;		\
 	JMP	AX
 // Note: can't just "JMP NAME(SB)" - bad inlining results.
+
+TEXT reflect·call(SB), NOSPLIT, $0-0
+	JMP	·reflectcall(SB)
 
 TEXT ·reflectcall(SB), NOSPLIT, $0-16
 	MOVL	argsize+8(FP), CX
@@ -1403,7 +1404,7 @@ TEXT runtime·cmpstring(SB),NOSPLIT,$0-20
 	MOVL	AX, ret+16(FP)
 	RET
 
-TEXT runtime·cmpbytes(SB),NOSPLIT,$0-28
+TEXT bytes·Compare(SB),NOSPLIT,$0-28
 	MOVL	s1+0(FP), SI
 	MOVL	s1+4(FP), BX
 	MOVL	s2+12(FP), DI

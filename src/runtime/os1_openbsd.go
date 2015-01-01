@@ -130,7 +130,7 @@ func newosproc(mp *m, stk unsafe.Pointer) {
 		if ret == -ENOTSUP {
 			print("runtime: is kern.rthreads disabled?\n")
 		}
-		gothrow("runtime.newosproc")
+		throw("runtime.newosproc")
 	}
 }
 
@@ -201,6 +201,10 @@ func setsig(i int32, fn uintptr, restart bool) {
 	}
 	sa.sa_sigaction = fn
 	sigaction(i, &sa, nil)
+}
+
+func setsigstack(i int32) {
+	throw("setsigstack")
 }
 
 func getsig(i int32) uintptr {

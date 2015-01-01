@@ -20,8 +20,7 @@ TEXT runtime·rt0_go(SB),NOSPLIT,$0
 	// _cgo_init may update stackguard.
 	MOVQ	$runtime·g0(SB), DI
 	LEAQ	(-64*1024+104)(SP), BX
-	MOVQ	BX, g_stackguard0(DI)
-	MOVQ	BX, g_stackguard1(DI)
+	MOVQ	BX, g_stackguard(DI)
 	MOVQ	BX, (g_stack+stack_lo)(DI)
 	MOVQ	SP, (g_stack+stack_hi)(DI)
 
@@ -49,8 +48,7 @@ nocpuinfo:
 	MOVQ	$runtime·g0(SB), CX
 	MOVQ	(g_stack+stack_lo)(CX), AX
 	ADDQ	$const__StackGuard, AX
-	MOVQ	AX, g_stackguard0(CX)
-	MOVQ	AX, g_stackguard1(CX)
+	MOVQ	AX, g_stackguard(CX)
 
 	CMPL	runtime·iswindows(SB), $0
 	JEQ ok
@@ -329,6 +327,9 @@ TEXT runtime·morestack_noctxt(SB),NOSPLIT,$0
 	MOVQ	$NAME(SB), AX;		\
 	JMP	AX
 // Note: can't just "JMP NAME(SB)" - bad inlining results.
+
+TEXT reflect·call(SB), NOSPLIT, $0-0
+	JMP	·reflectcall(SB)
 
 TEXT ·reflectcall(SB), NOSPLIT, $0-24
 	MOVLQZX argsize+16(FP), CX
@@ -1336,7 +1337,7 @@ TEXT runtime·cmpstring(SB),NOSPLIT,$0-40
 	MOVQ	AX, ret+32(FP)
 	RET
 
-TEXT runtime·cmpbytes(SB),NOSPLIT,$0-56
+TEXT bytes·Compare(SB),NOSPLIT,$0-56
 	MOVQ	s1+0(FP), SI
 	MOVQ	s1+8(FP), BX
 	MOVQ	s2+24(FP), DI

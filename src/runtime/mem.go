@@ -87,7 +87,7 @@ func init() {
 	var memStats MemStats
 	if sizeof_C_MStats != unsafe.Sizeof(memStats) {
 		println(sizeof_C_MStats, unsafe.Sizeof(memStats))
-		gothrow("MStats vs MemStatsType size mismatch")
+		throw("MStats vs MemStatsType size mismatch")
 	}
 }
 
@@ -115,8 +115,8 @@ func ReadMemStats(m *MemStats) {
 	gp.m.locks--
 }
 
-// Implementation of runtime/debug.WriteHeapDump
-func writeHeapDump(fd uintptr) {
+//go:linkname runtime_debug_WriteHeapDump runtime/debug.WriteHeapDump
+func runtime_debug_WriteHeapDump(fd uintptr) {
 	semacquire(&worldsema, false)
 	gp := getg()
 	gp.m.gcing = 1
