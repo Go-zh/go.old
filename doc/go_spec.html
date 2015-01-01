@@ -6,7 +6,7 @@
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of December 22, 2014",
+	"Subtitle": "Version of December 26, 2014",
 	"Path": "/ref/spec"
 }-->
 
@@ -66,7 +66,7 @@ compile/link model to generate executable binaries.
 
 <p>
 Go 是通用型的编程语言，它为系统编程而设计。它是强类型化的语言，具有垃圾回收机制，
-并显式地支持并发编程。程序由<b>包</b>构造，以此来提供高效的依赖管理功能。
+并明确支持并发编程。程序由<b>包</b>构造，以此来提供高效的依赖管理功能。
 既有实现使用传统的“编译-链接”模型，生成可执行的二进制文件。
 </p>
 
@@ -112,7 +112,7 @@ Repetition  = "{" Expression "}" .
 表达式 = 选择项 { "|" 选择项 } .
 选择项 = 条目 { 条目 } .
 条目   = 生成式名 | 标记 [ "…" 标记 ] | 分组 | 可选项 | 重复项 .
-分组     = "(" 表达式 ")" .
+分组   = "(" 表达式 ")" .
 可选项 = "[" 表达式 "]" .
 重复项 = "{" 表达式 "}" .
 </pre>
@@ -151,8 +151,8 @@ double quotes <code>""</code> or back quotes <code>``</code>.
 </div>
 
 <p>
-小写生成式名用于标识词法标记。非终止（Non-terminals）词法标记使用驼峰记法（CamelCase）。
-置于双引号 <code>""</code> 或反引号 <code>``</code> 中的即为词法标记。
+小写生成式名用于标识词法标记。非最终（Non-terminals）词法标记使用驼峰记法（CamelCase）。
+位于双引号 <code>""</code> 或反引号 <code>``</code> 内的即为词法标记。
 </p>
 
 <div class="english">
@@ -168,7 +168,7 @@ language.
 
 <p>
 形式 <code>a … b</code> 表示把从 <code>a</code> 到 <code>b</code> 的字符集作为选择项。
-横向省略号 <code>…</code> 也在本文档中非正式地表示各种列举或简略代码片断。
+横向省略号 <code>…</code> 也在本文档中非正式地表示各种列举或简略的代码片断。
 单个字符 <code>…</code>（不同于三个字符 <code>...</code>）并非Go语言本身的标记。
 </p>
 
@@ -191,9 +191,9 @@ in the source text.
 </div>
 
 <p>
-源码是采用 <a href="http://en.wikipedia.org/wiki/UTF-8">UTF-8</a> 编码的 Unicode 文本。
-该文本是非标准化的，因此单一的着重号码点不同于结合了字母与着重号的字符结构，
-那些应视作两个码点。为简单起见，本文档将使用非正式的术语<b>字符</b>在源文本中指代 Unicode 码点。
+源码为采用 <a href="http://en.wikipedia.org/wiki/UTF-8">UTF-8</a> 编码的 Unicode 文本，
+其文本并未标准化。因此单个带变音符号的码点不同于结合了字母与变音符号的字符结构，
+它们应视作两个码点。为简单起见，本文档将使用非正式的术语<b>字符</b>在源文本中指代 Unicode 码点。
 </p>
 
 <div class="english">
@@ -5630,7 +5630,7 @@ const (
 	c2 = len([10]float64{2})         // [10]float64{2} contains no function calls
 	c3 = len([10]float64{c1})        // [10]float64{c1} contains no function calls
 	c4 = len([10]float64{imag(2i)})  // imag(2i) is a constant and no function call is issued
-	c5 = len([10]float64{imag(z)})   // invalid: imag(x) is a (non-constant) function call
+	c5 = len([10]float64{imag(z)})   // invalid: imag(z) is a (non-constant) function call
 )
 var z complex128
 </pre>

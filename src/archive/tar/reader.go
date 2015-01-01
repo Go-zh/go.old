@@ -92,8 +92,11 @@ const (
 func NewReader(r io.Reader) *Reader { return &Reader{r: r} }
 
 // Next advances to the next entry in the tar archive.
+//
+// io.EOF is returned at the end of the input.
 
 // 转入tar档案文件下一记录，它会返回下一记录的头域。
+// io.EOF 在输入的最后返回。
 func (tr *Reader) Next() (*Header, error) {
 	var hdr *Header
 	if tr.err == nil {

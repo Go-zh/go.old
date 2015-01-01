@@ -1049,9 +1049,9 @@ func hexDigit(d rune) (int, bool) {
 // It returns ok==false if the next bytes in the input do not encode a hex byte.
 // If the first byte is hex and the second is not, processing stops.
 
-// hexByte 从输入中返回下一个以十六进制编码的（即两个字符的）字节。
-// 若输入中的下一个字节并非十六进制字节的编码，则返回 ok==false。
-// 若第一个字节为十六进制，而第二个不是，则处理终止。
+// hexByte 从输入中返回下一个以十六进制编码的（两个字符的）字节。
+// 若输入中的下一组字节并未编码一个十六进制字节，则返回 ok==false。
+// 若第一个字节为十六进制而第二个不是，则处理终止。
 func (s *ss) hexByte() (b byte, ok bool) {
 	rune1 := s.getRune()
 	if rune1 == eof {
