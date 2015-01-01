@@ -1031,7 +1031,7 @@ func (s *ss) quotedString() string {
 
 // hexDigit returns the value of the hexadecimal digit.
 
-// hexDigit 返回十六进制数字的值
+// hexDigit 返回十六进制数字的值。
 func hexDigit(d rune) (int, bool) {
 	digit := int(d)
 	switch digit {
