@@ -243,7 +243,7 @@ func Printf(format string, a ...interface{}) (n int, err error) {
 
 // Sprintf formats according to a format specifier and returns the resulting string.
 
-// Fprintf 根据于格式说明符进行格式化并返回其结果字符串。
+// Sprintf 根据于格式说明符进行格式化并返回其结果字符串。
 func Sprintf(format string, a ...interface{}) string {
 	p := newPrinter()
 	p.doPrintf(format, a)
@@ -327,7 +327,7 @@ func Fprintln(w io.Writer, a ...interface{}) (n int, err error) {
 // Spaces are always added between operands and a newline is appended.
 // It returns the number of bytes written and any write error encountered.
 
-// Fprintln 使用其操作数的默认格式进行格式化并写入到标准输出。
+// Println 使用其操作数的默认格式进行格式化并写入到标准输出。
 // 其操作数之间总是添加空格，且总在最后追加一个换行符。
 // 它返回写入的字节数以及任何遇到的错误。
 func Println(a ...interface{}) (n int, err error) {
@@ -337,7 +337,7 @@ func Println(a ...interface{}) (n int, err error) {
 // Sprintln formats using the default formats for its operands and returns the resulting string.
 // Spaces are always added between operands and a newline is appended.
 
-// Fprintln 使用其操作数的默认格式进行格式化并写返回其结果字符串。
+// Sprintln 使用其操作数的默认格式进行格式化并写返回其结果字符串。
 // 其操作数之间总是添加空格，且总在最后追加一个换行符。
 func Sprintln(a ...interface{}) string {
 	p := newPrinter()
@@ -851,7 +851,6 @@ func (p *pp) printArg(arg interface{}, verb rune, depth int) (wasString bool) {
 		p.fmtPointer(reflect.ValueOf(arg), verb)
 		return false
 	}
-
 
 	// Some types can be done without reflection.
 	// 有些类型可以不用反射就能完成。
