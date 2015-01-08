@@ -1,6 +1,6 @@
 <!--{
 	"Title": "Go编程语言规范",
-	"Subtitle": "版本：2013年7月25日 || 译者：Oling Cat",
+	"Subtitle": "版本：2014年12月26日 || 译者：Oling Cat",
 	"Path": "/ref/spec"
 }-->
 
@@ -66,7 +66,7 @@ compile/link model to generate executable binaries.
 
 <p>
 Go 是通用型的编程语言，它为系统编程而设计。它是强类型化的语言，具有垃圾回收机制，
-并明确支持并发编程。程序由<b>包</b>构造，以此来提供高效的依赖管理功能。
+并显式支持并发编程。程序由<b>包</b>构造，以此来提供高效的依赖管理功能。
 既有实现使用传统的“编译-链接”模型，生成可执行的二进制文件。
 </p>
 
@@ -228,8 +228,8 @@ A byte order mark may be disallowed anywhere else in the source.
 </div>
 
 <p>
-实现限制：为兼容其它工具，若 UTF-8 编码的字节序标记（U+FEFF）为源文本中的第一个 Unicode 码点，
-那么编译器就会忽略它。
+实现限制：为兼容其它工具，若 UTF-8 编码的字节序标记（U+FEFF）为源文本中的第一个
+Unicode 码点，那么编译器就会忽略它。
 </p>
 
 <div class="english">
@@ -245,8 +245,6 @@ The following terms are used to denote specific Unicode character classes:
 </div>
 
 <p>
-The following terms are used to denote specific Unicode character classes:
-
 具体的 Unicode 字符类别由以下术语表示：
 </p>
 
@@ -278,7 +276,7 @@ and those in category Nd as Unicode digits.
 
 <p>
 在<a href="http://www.unicode.org/versions/Unicode6.3.0/">Unicode 标准 6.3</a>，
-章节4.5 “一般类别” 中定义了字符集类别。其中类别 Lu，Ll，Lt，Lm 及 Lo 被视为
+章节 4.5“一般类别”中定义了字符集类别。其中类别 Lu，Ll，Lt，Lm 及 Lo 被视为
 Unicode 字母，类别 Nd 被视为 Unicode 数字。
 </p>
 
@@ -314,14 +312,29 @@ hex_digit     = "0" … "9" | "A" … "F" | "a" … "f" .
 十六进制数字 = "0" … "9" | "A" … "F" | "a" … "f" .
 </pre>
 
+<div class="english">
 <h2 id="Lexical_elements">Lexical elements</h2>
+</div>
 
+<h2 id="词法元素">词法元素</h2>
+
+<div class="english">
 <h3 id="Comments">Comments</h3>
+</div>
 
+<h3 id="注释">注释</h3>
+
+<div class="english">
 <p>
 There are two forms of comments:
 </p>
+</div>
 
+<p>
+注释有两种形式：
+</p>
+
+<div class="english">
 <ol>
 <li>
 <i>Line comments</i> start with the character sequence <code>//</code>
@@ -334,14 +347,36 @@ comment containing one or more newlines acts like a newline, otherwise it acts
 like a space.
 </li>
 </ol>
+</div>
 
+<ol>
+<li>
+<b>行注释</b>以 <code>//</code> 开始，至行尾结束。一条行注释视为一个换行符。
+</li>
+<li>
+<b>块注释</b> 以 <code>/*</code> 开始，至 <code>*/</code> 结束。
+块注释在包含多行时视为一个换行符，否则视为一个空格。
+</li>
+</ol>
+
+<div class="english">
 <p>
 Comments do not nest.
 </p>
+</div>
+
+<p>
+注释不可嵌套。
+</p>
 
 
+<div class="english">
 <h3 id="Tokens">Tokens</h3>
+</div>
 
+<h3 id="标记">标记</h3>
+
+<div class="english">
 <p>
 Tokens form the vocabulary of the Go language.
 There are four classes: <i>identifiers</i>, <i>keywords</i>, <i>operators
@@ -354,6 +389,15 @@ may trigger the insertion of a <a href="#Semicolons">semicolon</a>.
 While breaking the input into tokens,
 the next token is the longest sequence of characters that form a
 valid token.
+</p>
+</div>
+
+<p>
+标记构成 Go 语言的词汇。它有四种类型：<b>标识符</b>，<b>关键字</b>，
+<b>运算符与分隔符</b>以及<b>字面</b>。<b>空白符</b>包括空格（U+0020），
+横向制表符（U+0009），回车符（U+000D）和换行符（U+000A），除非用它们来分隔会结合成单个的标记，
+否则将被忽略。此外，换行符或EOF（文件结束符）会触发<a href="#分号">分号</a>的插入。
+当把输入分解为标记时，可形成有效标记的最长字符序列将作为下一个标记。
 </p>
 
 <h3 id="Semicolons">Semicolons</h3>
