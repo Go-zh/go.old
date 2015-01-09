@@ -9,7 +9,7 @@ package errors
 
 // New returns an error that formats as the given text.
 
-// New 返回一个给定文本格式的错误。
+// New 返回一个按给定文本格式化的错误。
 func New(text string) error {
 	return &errorString{text}
 }
