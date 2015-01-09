@@ -229,10 +229,20 @@ func cgocallbackg1() {
 	case "386":
 		// On 386, stack frame is three words, plus caller PC.
 		cb = (*args)(unsafe.Pointer(sp + 4*ptrSize))
+	case "ppc64", "ppc64le":
+		// On ppc64, stack frame is two words and there's a
+		// saved LR between SP and the stack frame and between
+		// the stack frame and the arguments.
+		cb = (*args)(unsafe.Pointer(sp + 4*ptrSize))
 	}
 
 	// Invoke callback.
-	reflectcall(unsafe.Pointer(cb.fn), unsafe.Pointer(cb.arg), uint32(cb.argsize), 0)
+	// NOTE(rsc): passing nil for argtype means that the copying of the
+	// results back into cb.arg happens without any corresponding write barriers.
+	// For cgo, cb.arg points into a C stack frame and therefore doesn't
+	// hold any pointers that the GC can find anyway - the write barrier
+	// would be a no-op.
+	reflectcall(nil, unsafe.Pointer(cb.fn), unsafe.Pointer(cb.arg), uint32(cb.argsize), 0)
 
 	if raceenabled {
 		racereleasemerge(unsafe.Pointer(&racecgosync))
@@ -258,6 +268,8 @@ func unwindm(restore *bool) {
 		sched.sp = *(*uintptr)(unsafe.Pointer(sched.sp))
 	case "arm":
 		sched.sp = *(*uintptr)(unsafe.Pointer(sched.sp + 4))
+	case "ppc64", "ppc64le":
+		sched.sp = *(*uintptr)(unsafe.Pointer(sched.sp + 8))
 	}
 	releasem(mp)
 }

@@ -7,6 +7,7 @@
 package runtime_test
 
 import (
+	"os/exec"
 	"runtime"
 	"strings"
 	"testing"
@@ -52,8 +53,25 @@ func TestCgoExternalThreadPanic(t *testing.T) {
 
 func TestCgoExternalThreadSIGPROF(t *testing.T) {
 	// issue 9456.
-	if runtime.GOOS == "plan9" || runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "plan9", "windows":
 		t.Skipf("no pthreads on %s", runtime.GOOS)
+	case "darwin":
+		// static constructor needs external linking, but we don't support
+		// external linking on OS X 10.6.
+		out, err := exec.Command("uname", "-r").Output()
+		if err != nil {
+			t.Fatalf("uname -r failed: %v", err)
+		}
+		// OS X 10.6 == Darwin 10.x
+		if strings.HasPrefix(string(out), "10.") {
+			t.Skipf("no external linking on OS X 10.6")
+		}
+	}
+	if runtime.GOARCH == "ppc64" || runtime.GOARCH == "ppc64le" {
+		// TODO(austin) External linking not implemented on
+		// ppc64 (issue #8912)
+		t.Skipf("no external linking on ppc64")
 	}
 	got := executeTest(t, cgoExternalThreadSIGPROFSource, nil)
 	want := "OK\n"

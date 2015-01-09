@@ -22,7 +22,8 @@ TEXT runtime·rt0_go(SB),NOSPLIT,$0
 	// create istack out of the given (operating system) stack.
 	MOVL	$runtime·g0(SB), DI
 	LEAL	(-64*1024+104)(SP), BX
-	MOVL	BX, g_stackguard(DI)
+	MOVL	BX, g_stackguard0(DI)
+	MOVL	BX, g_stackguard1(DI)
 	MOVL	BX, (g_stack+stack_lo)(DI)
 	MOVL	SP, (g_stack+stack_hi)(DI)
 
@@ -289,7 +290,7 @@ TEXT runtime·morestack_noctxt(SB),NOSPLIT,$0
 	JMP	runtime·morestack(SB)
 
 // reflectcall: call a function with the given argument list
-// func call(f *FuncVal, arg *byte, argsize, retoffset uint32).
+// func call(argtype *_type, f *FuncVal, arg *byte, argsize, retoffset uint32).
 // we don't have variable-sized frames, so we use a small number
 // of constant-sized-frame functions to encode a few bits of size in the pc.
 // Caution: ugly multiline assembly macros in your future!
@@ -304,8 +305,8 @@ TEXT runtime·morestack_noctxt(SB),NOSPLIT,$0
 TEXT reflect·call(SB), NOSPLIT, $0-0
 	JMP	·reflectcall(SB)
 
-TEXT ·reflectcall(SB), NOSPLIT, $0-16
-	MOVLQZX argsize+8(FP), CX
+TEXT ·reflectcall(SB), NOSPLIT, $0-20
+	MOVLQZX argsize+12(FP), CX
 	DISPATCH(runtime·call16, 16)
 	DISPATCH(runtime·call32, 32)
 	DISPATCH(runtime·call64, 64)
@@ -337,26 +338,36 @@ TEXT ·reflectcall(SB), NOSPLIT, $0-16
 	JMP	AX
 
 #define CALLFN(NAME,MAXSIZE)			\
-TEXT NAME(SB), WRAPPER, $MAXSIZE-16;		\
+TEXT NAME(SB), WRAPPER, $MAXSIZE-20;		\
 	NO_LOCAL_POINTERS;			\
 	/* copy arguments to stack */		\
-	MOVL	argptr+4(FP), SI;		\
-	MOVL	argsize+8(FP), CX;		\
+	MOVL	argptr+8(FP), SI;		\
+	MOVL	argsize+12(FP), CX;		\
 	MOVL	SP, DI;				\
 	REP;MOVSB;				\
 	/* call function */			\
-	MOVL	f+0(FP), DX;			\
+	MOVL	f+4(FP), DX;			\
 	MOVL	(DX), AX;			\
 	CALL	AX;				\
 	/* copy return values back */		\
-	MOVL	argptr+4(FP), DI;		\
-	MOVL	argsize+8(FP), CX;		\
-	MOVL	retoffset+12(FP), BX;		\
+	MOVL	argptr+8(FP), DI;		\
+	MOVL	argsize+12(FP), CX;		\
+	MOVL	retoffset+16(FP), BX;		\
 	MOVL	SP, SI;				\
 	ADDL	BX, DI;				\
 	ADDL	BX, SI;				\
 	SUBL	BX, CX;				\
 	REP;MOVSB;				\
+	/* execute write barrier updates */	\
+	MOVL	argtype+0(FP), DX;		\
+	MOVL	argptr+8(FP), DI;		\
+	MOVL	argsize+12(FP), CX;		\
+	MOVL	retoffset+16(FP), BX;		\
+	MOVL	DX, 0(SP);			\
+	MOVL	DI, 4(SP);			\
+	MOVL	CX, 8(SP);			\
+	MOVL	BX, 12(SP);			\
+	CALL	runtime·callwritebarrier(SB);	\
 	RET
 
 CALLFN(·call16, 16)
@@ -400,12 +411,7 @@ TEXT runtime·cas(SB), NOSPLIT, $0-17
 	MOVL	new+8(FP), CX
 	LOCK
 	CMPXCHGL	CX, 0(BX)
-	JZ 4(PC)
-	MOVL	$0, AX
-	MOVB	AX, ret+16(FP)
-	RET
-	MOVL	$1, AX
-	MOVB	AX, ret+16(FP)
+	SETEQ	ret+16(FP)
 	RET
 
 TEXT runtime·casuintptr(SB), NOSPLIT, $0-17
@@ -434,13 +440,7 @@ TEXT runtime·cas64(SB), NOSPLIT, $0-25
 	MOVQ	new+16(FP), CX
 	LOCK
 	CMPXCHGQ	CX, 0(BX)
-	JNZ	fail
-	MOVL	$1, AX
-	MOVB	AX, ret+24(FP)
-	RET
-fail:
-	MOVL	$0, AX
-	MOVB	AX, ret+24(FP)
+	SETEQ	ret+24(FP)
 	RET
 
 // bool casp(void **val, void *old, void *new)
@@ -456,12 +456,7 @@ TEXT runtime·casp1(SB), NOSPLIT, $0-17
 	MOVL	new+8(FP), CX
 	LOCK
 	CMPXCHGL	CX, 0(BX)
-	JZ 4(PC)
-	MOVL	$0, AX
-	MOVB	AX, ret+16(FP)
-	RET
-	MOVL	$1, AX
-	MOVB	AX, ret+16(FP)
+	SETEQ	ret+16(FP)
 	RET
 
 // uint32 xadd(uint32 volatile *val, int32 delta)
@@ -647,6 +642,23 @@ TEXT runtime·cputicks(SB),NOSPLIT,$0-0
 	MOVQ	AX, ret+0(FP)
 	RET
 
+// memhash_varlen(p unsafe.Pointer, h seed) uintptr
+// redirects to memhash(p, h, size) using the size
+// stored in the closure.
+TEXT runtime·memhash_varlen(SB),NOSPLIT,$20-12
+	GO_ARGS
+	NO_LOCAL_POINTERS
+	MOVL	p+0(FP), AX
+	MOVL	h+4(FP), BX
+	MOVL	4(DX), CX
+	MOVL	AX, 0(SP)
+	MOVL	BX, 4(SP)
+	MOVL	CX, 8(SP)
+	CALL	runtime·memhash(SB)
+	MOVL	16(SP), AX
+	MOVL	AX, ret+8(FP)
+	RET
+
 // hash function using AES hardware instructions
 // For now, our one amd64p32 system (NaCl) does not
 // support using AES instructions, so have not bothered to
@@ -675,6 +687,20 @@ TEXT runtime·memeq(SB),NOSPLIT,$0-17
 	MOVL	size+8(FP), BX
 	CALL	runtime·memeqbody(SB)
 	MOVB	AX, ret+16(FP)
+	RET
+
+// memequal_varlen(a, b unsafe.Pointer) bool
+TEXT runtime·memequal_varlen(SB),NOSPLIT,$0-9
+	MOVL    a+0(FP), SI
+	MOVL    b+4(FP), DI
+	CMPL    SI, DI
+	JEQ     eq
+	MOVL    4(DX), BX    // compiler stores size at offset 4 in the closure
+	CALL    runtime·memeqbody(SB)
+	MOVB    AX, ret+8(FP)
+	RET
+eq:
+	MOVB    $1, ret+8(FP)
 	RET
 
 // eqstring tests whether two strings are equal.

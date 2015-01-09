@@ -316,7 +316,7 @@ Git, note that you still need the commit hooks that the git-codereview command
 configures; those hooks add a Gerrit <code>Change-Id</code> line to the commit
 message and check that all Go source files have been formatted with gofmt. Even
 if you intend to use plain Git for daily work, install the hooks in a new Git
-checkout by running <code>git-codereview</code> <code>hooks</code>).
+checkout by running <code>git-codereview</code> <code>hooks</code>.
 </p>
 </div>
 
@@ -861,7 +861,7 @@ The reviewer approves the change by giving it a positive score
 
 <p>
 审核者会对新的副本进行评论，此过程继续重复。若审核者者接受了此更改，就会给它加分（+1或+2）并回复
-<code>LGTM</code>：looks good to me（在我看来不错）。
+<code>LGTM</code>：looks good to me（我很满意）。
 </p>
 
 <div class="english">
@@ -900,7 +900,7 @@ $ git sync
 
 <div class="english">
 <p>
-(In git terms, git sync runs
+(In git terms, <code>git</code> <code>sync</code> runs
 <code>git</code> <code>pull</code> <code>-r</code>.)
 </p>
 </div>

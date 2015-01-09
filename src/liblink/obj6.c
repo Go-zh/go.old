@@ -241,6 +241,19 @@ progedit(Link *ctxt, Prog *p)
 
 	// Rewrite float constants to values stored in memory.
 	switch(p->as) {
+	case AMOVSS:
+		// Convert AMOVSS $(0), Xx to AXORPS Xx, Xx
+		if(p->from.type == D_FCONST)
+		if(p->from.u.dval == 0)
+		if(p->to.type >= D_X0)
+		if(p->to.type <= D_X15) {
+			p->as = AXORPS;
+			p->from.type = p->to.type;
+			p->from.index = p->to.index;
+			break;
+		}
+		// fallthrough
+
 	case AFMOVF:
 	case AFADDF:
 	case AFSUBF:
@@ -250,7 +263,6 @@ progedit(Link *ctxt, Prog *p)
 	case AFDIVRF:
 	case AFCOMF:
 	case AFCOMFP:
-	case AMOVSS:
 	case AADDSS:
 	case ASUBSS:
 	case AMULSS:
@@ -274,6 +286,19 @@ progedit(Link *ctxt, Prog *p)
 			p->from.offset = 0;
 		}
 		break;
+
+	case AMOVSD:
+		// Convert AMOVSD $(0), Xx to AXORPS Xx, Xx
+		if(p->from.type == D_FCONST)
+		if(p->from.u.dval == 0)
+		if(p->to.type >= D_X0)
+		if(p->to.type <= D_X15) {
+			p->as = AXORPS;
+			p->from.type = p->to.type;
+			p->from.index = p->to.index;
+			break;
+		}
+		// fallthrough
 	
 	case AFMOVD:
 	case AFADDD:
@@ -284,7 +309,6 @@ progedit(Link *ctxt, Prog *p)
 	case AFDIVRD:
 	case AFCOMD:
 	case AFCOMDP:
-	case AMOVSD:
 	case AADDSD:
 	case ASUBSD:
 	case AMULSD:
@@ -452,7 +476,7 @@ addstacksplit(Link *ctxt, LSym *cursym)
 		p = appendp(ctxt, p);
 		p->as = AMOVQ;
 		p->from.type = D_INDIR+D_CX;
-		p->from.offset = 3*ctxt->arch->ptrsize; // G.panic
+		p->from.offset = 4*ctxt->arch->ptrsize; // G.panic
 		p->to.type = D_BX;
 		if(ctxt->headtype == Hnacl) {
 			p->as = AMOVL;
@@ -689,7 +713,9 @@ stacksplit(Link *ctxt, Prog *p, int32 framesize, int32 textarg, int noctxt, Prog
 		p->as = cmp;
 		p->from.type = D_SP;
 		indir_cx(ctxt, &p->to);
-		p->to.offset = 2*ctxt->arch->ptrsize;	// G.stackguard
+		p->to.offset = 2*ctxt->arch->ptrsize;	// G.stackguard0
+		if(ctxt->cursym->cfunc)
+			p->to.offset = 3*ctxt->arch->ptrsize;	// G.stackguard1
 	} else if(framesize <= StackBig) {
 		// large stack: SP-framesize <= stackguard-StackSmall
 		//	LEAQ -xxx(SP), AX
@@ -704,7 +730,9 @@ stacksplit(Link *ctxt, Prog *p, int32 framesize, int32 textarg, int noctxt, Prog
 		p->as = cmp;
 		p->from.type = D_AX;
 		indir_cx(ctxt, &p->to);
-		p->to.offset = 2*ctxt->arch->ptrsize;	// G.stackguard
+		p->to.offset = 2*ctxt->arch->ptrsize;	// G.stackguard0
+		if(ctxt->cursym->cfunc)
+			p->to.offset = 3*ctxt->arch->ptrsize;	// G.stackguard1
 	} else {
 		// Such a large stack we need to protect against wraparound.
 		// If SP is close to zero:
@@ -724,7 +752,9 @@ stacksplit(Link *ctxt, Prog *p, int32 framesize, int32 textarg, int noctxt, Prog
 		p = appendp(ctxt, p);
 		p->as = mov;
 		indir_cx(ctxt, &p->from);
-		p->from.offset = 2*ctxt->arch->ptrsize;	// G.stackguard
+		p->from.offset = 2*ctxt->arch->ptrsize;	// G.stackguard0
+		if(ctxt->cursym->cfunc)
+			p->from.offset = 3*ctxt->arch->ptrsize;	// G.stackguard1
 		p->to.type = D_SI;
 
 		p = appendp(ctxt, p);
@@ -765,7 +795,10 @@ stacksplit(Link *ctxt, Prog *p, int32 framesize, int32 textarg, int noctxt, Prog
 	p = appendp(ctxt, p);
 	p->as = ACALL;
 	p->to.type = D_BRANCH;
-	p->to.sym = ctxt->symmorestack[noctxt];
+	if(ctxt->cursym->cfunc)
+		p->to.sym = linklookup(ctxt, "runtime.morestackc", 0);
+	else
+		p->to.sym = ctxt->symmorestack[noctxt];
 	
 	p = appendp(ctxt, p);
 	p->as = AJMP;

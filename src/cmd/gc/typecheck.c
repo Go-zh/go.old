@@ -1233,6 +1233,10 @@ reswitch:
 		ok |= Erv;
 		if(count(n->list) == 1) {
 			typechecklist(n->list, Efnstruct);
+			if(n->list->n->op != OCALLFUNC && n->list->n->op != OCALLMETH) {
+				yyerror("invalid operation: complex expects two arguments");
+				goto error;
+			}
 			t = n->list->n->left->type;
 			if(t->outtuple != 2) {
 				yyerror("invalid operation: complex expects two arguments, %N returns %d results", n->list->n, t->outtuple);
@@ -2782,6 +2786,7 @@ islvalue(Node *n)
 	case OIND:
 	case ODOTPTR:
 	case OCLOSUREVAR:
+	case OPARAM:
 		return 1;
 	case ODOT:
 		return islvalue(n->left);

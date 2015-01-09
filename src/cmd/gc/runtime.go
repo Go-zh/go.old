@@ -66,20 +66,18 @@ func convT2E(typ *byte, elem *any) (ret any)
 func convT2I(typ *byte, typ2 *byte, cache **byte, elem *any) (ret any)
 
 // interface type assertions  x.(T)
-func assertE2E(typ *byte, iface any) (ret any)
-func assertE2E2(typ *byte, iface any) (ret any, ok bool)
-func assertE2I(typ *byte, iface any) (ret any)
-func assertE2I2(typ *byte, iface any) (ret any, ok bool)
-func assertE2T(typ *byte, iface any) (ret any)
-func assertE2T2(typ *byte, iface any) (ret any, ok bool)
-func assertI2E(typ *byte, iface any) (ret any)
-func assertI2E2(typ *byte, iface any) (ret any, ok bool)
-func assertI2I(typ *byte, iface any) (ret any)
-func assertI2I2(typ *byte, iface any) (ret any, ok bool)
-func assertI2T(typ *byte, iface any) (ret any)
-func assertI2T2(typ *byte, iface any) (ret any, ok bool)
-func assertI2TOK(typ *byte, iface any) (ok bool)
-func assertE2TOK(typ *byte, iface any) (ok bool)
+func assertE2E(typ *byte, iface any, ret *any)
+func assertE2E2(typ *byte, iface any, ret *any) bool
+func assertE2I(typ *byte, iface any, ret *any)
+func assertE2I2(typ *byte, iface any, ret *any) bool
+func assertE2T(typ *byte, iface any, ret *any)
+func assertE2T2(typ *byte, iface any, ret *any) bool
+func assertI2E(typ *byte, iface any, ret *any)
+func assertI2E2(typ *byte, iface any, ret *any) bool
+func assertI2I(typ *byte, iface any, ret *any)
+func assertI2I2(typ *byte, iface any, ret *any) bool
+func assertI2T(typ *byte, iface any, ret *any)
+func assertI2T2(typ *byte, iface any, ret *any) bool
 
 func ifaceeq(i1 any, i2 any) (ret bool)
 func efaceeq(i1 any, i2 any) (ret bool)
@@ -144,8 +142,8 @@ func writebarrierfat1101(dst *any, _ *byte, src any)
 func writebarrierfat1110(dst *any, _ *byte, src any)
 func writebarrierfat1111(dst *any, _ *byte, src any)
 
-func writebarrierfat(typ *byte, dst *any, src *any)
-func writebarriercopy(typ *byte, dst any, src any) int
+func typedmemmove(typ *byte, dst *any, src *any)
+func typedslicecopy(typ *byte, dst any, src any) int
 
 func selectnbsend(chanType *byte, hchan chan<- any, elem *any) bool
 func selectnbrecv(chanType *byte, elem *any, hchan <-chan any) bool
@@ -164,11 +162,11 @@ func growslice(typ *byte, old []any, n int64) (ary []any)
 func memmove(to *any, frm *any, length uintptr)
 
 func memequal(x, y *any, size uintptr) bool
-func memequal8(x, y *any, size uintptr) bool
-func memequal16(x, y *any, size uintptr) bool
-func memequal32(x, y *any, size uintptr) bool
-func memequal64(x, y *any, size uintptr) bool
-func memequal128(x, y *any, size uintptr) bool
+func memequal8(x, y *any) bool
+func memequal16(x, y *any) bool
+func memequal32(x, y *any) bool
+func memequal64(x, y *any) bool
+func memequal128(x, y *any) bool
 
 // only used on 32-bit
 func int64div(int64, int64) int64

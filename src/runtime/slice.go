@@ -81,24 +81,32 @@ func growslice(t *slicetype, old sliceStruct, n int64) sliceStruct {
 	var p unsafe.Pointer
 	if et.kind&kindNoPointers != 0 {
 		p = rawmem(capmem)
+		memmove(p, old.array, lenmem)
 		memclr(add(p, lenmem), capmem-lenmem)
 	} else {
-		// Note: can't use rawmem (which avoids zeroing of memory), because then GC can scan unitialized memory
+		// Note: can't use rawmem (which avoids zeroing of memory), because then GC can scan unitialized memory.
+		// TODO(rsc): Use memmove when !needwb().
 		p = newarray(et, uintptr(newcap))
+		for i := 0; i < old.len; i++ {
+			typedmemmove(et, add(p, uintptr(i)*et.size), add(old.array, uintptr(i)*et.size))
+		}
 	}
-	memmove(p, old.array, lenmem)
 
 	return sliceStruct{p, old.len, newcap}
 }
 
 func slicecopy(to sliceStruct, fm sliceStruct, width uintptr) int {
-	if fm.len == 0 || to.len == 0 || width == 0 {
+	if fm.len == 0 || to.len == 0 {
 		return 0
 	}
 
 	n := fm.len
 	if to.len < n {
 		n = to.len
+	}
+
+	if width == 0 {
+		return n
 	}
 
 	if raceenabled {
