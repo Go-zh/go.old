@@ -93,11 +93,35 @@ type slice struct {
 	cap   uint  // allocated number of elements
 }
 
+// A guintptr holds a goroutine pointer, but typed as a uintptr
+// to bypass write barriers. It is used in the Gobuf goroutine state.
+//
+// The Gobuf.g goroutine pointer is almost always updated by assembly code.
+// In one of the few places it is updated by Go code - func save - it must be
+// treated as a uintptr to avoid a write barrier being emitted at a bad time.
+// Instead of figuring out how to emit the write barriers missing in the
+// assembly manipulation, we change the type of the field to uintptr,
+// so that it does not require write barriers at all.
+//
+// Goroutine structs are published in the allg list and never freed.
+// That will keep the goroutine structs from being collected.
+// There is never a time that Gobuf.g's contain the only references
+// to a goroutine: the publishing of the goroutine in allg comes first.
+// Goroutine pointers are also kept in non-GC-visible places like TLS,
+// so I can't see them ever moving. If we did want to start moving data
+// in the GC, we'd need to allocate the goroutine structs from an
+// alternate arena. Using guintptr doesn't make that problem any worse.
+type guintptr uintptr
+
+func (gp guintptr) ptr() *g {
+	return (*g)(unsafe.Pointer(gp))
+}
+
 type gobuf struct {
 	// The offsets of sp, pc, and g are known to (hard-coded in) libmach.
 	sp   uintptr
 	pc   uintptr
-	g    *g
+	g    guintptr
 	ctxt unsafe.Pointer // this has to be a pointer so that gc scans it
 	ret  uintreg
 	lr   uintptr
@@ -154,10 +178,14 @@ type stack struct {
 type g struct {
 	// Stack parameters.
 	// stack describes the actual stack memory: [stack.lo, stack.hi).
-	// stackguard is the stack pointer compared in the Go stack growth prologue.
+	// stackguard0 is the stack pointer compared in the Go stack growth prologue.
 	// It is stack.lo+StackGuard normally, but can be StackPreempt to trigger a preemption.
-	stack      stack   // offset known to runtime/cgo
-	stackguard uintptr // offset known to liblink
+	// stackguard1 is the stack pointer compared in the C stack growth prologue.
+	// It is stack.lo+StackGuard on g0 and gsignal stacks.
+	// It is ~0 on other goroutine stacks, to trigger a call to morestackc (and crash).
+	stack       stack   // offset known to runtime/cgo
+	stackguard0 uintptr // offset known to liblink
+	stackguard1 uintptr // offset known to liblink
 
 	_panic       *_panic // innermost panic - offset known to liblink
 	_defer       *_defer // innermost defer
@@ -171,7 +199,7 @@ type g struct {
 	waitreason   string // if status==gwaiting
 	schedlink    *g
 	issystem     bool // do not output in stack dump, ignore in deadlock detector
-	preempt      bool // preemption signal, duplicates stackguard = stackpreempt
+	preempt      bool // preemption signal, duplicates stackguard0 = stackpreempt
 	paniconfault bool // panic (instead of crash) on unexpected fault address
 	preemptscan  bool // preempted g does scan for gc
 	gcworkdone   bool // debug: cleared at begining of gc work phase cycle, set by gcphasework, tested at end of cycle
@@ -187,7 +215,6 @@ type g struct {
 	gopc         uintptr // pc of go statement that created this goroutine
 	racectx      uintptr
 	waiting      *sudog // sudog structures this g is waiting on (that have a valid elem ptr)
-	end          [0]byte
 }
 
 type mts struct {
@@ -270,7 +297,6 @@ type m struct {
 	notesig *int8
 	errstr  *byte
 	//#endif
-	end [0]byte
 }
 
 type p struct {
@@ -397,7 +423,7 @@ type itab struct {
 	link   *itab
 	bad    int32
 	unused int32
-	fun    [0]uintptr
+	fun    [1]uintptr // variable sized
 }
 
 // Lock-free stack node.
@@ -433,17 +459,6 @@ type parfor struct {
 type cgomal struct {
 	next  *cgomal
 	alloc unsafe.Pointer
-}
-
-// Holds variables parsed from GODEBUG env var.
-type debugvars struct {
-	allocfreetrace int32
-	efence         int32
-	gctrace        int32
-	gcdead         int32
-	scheddetail    int32
-	schedtrace     int32
-	scavenge       int32
 }
 
 // Indicates to write barrier and sychronization task to preform.
@@ -488,7 +503,7 @@ func extendRandom(r []byte, n int) {
 		if w > 16 {
 			w = 16
 		}
-		h := memhash(unsafe.Pointer(&r[n-w]), uintptr(w), uintptr(nanotime()))
+		h := memhash(unsafe.Pointer(&r[n-w]), uintptr(nanotime()), uintptr(w))
 		for i := 0; i < ptrSize && n < len(r); i++ {
 			r[n] = byte(h)
 			n++
@@ -496,8 +511,6 @@ func extendRandom(r []byte, n int) {
 		}
 	}
 }
-
-var invalidptr int32
 
 /*
  * deferred subroutine calls
@@ -565,7 +578,6 @@ var (
 	iscgo       bool
 	cpuid_ecx   uint32
 	cpuid_edx   uint32
-	debug       debugvars
 	signote     note
 	forcegc     forcegcstate
 	sched       schedt

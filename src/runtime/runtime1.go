@@ -77,6 +77,9 @@ func goargs() {
 }
 
 func goenvs_unix() {
+	// TODO(austin): ppc64 in dynamic linking mode doesn't
+	// guarantee env[] will immediately follow argv.  Might cause
+	// problems.
 	n := int32(0)
 	for argv_index(argv, argc+1+n) != nil {
 		n++
@@ -301,18 +304,31 @@ type dbgVar struct {
 	value *int32
 }
 
-// Do we report invalid pointers found during stack or heap scans?
-//var invalidptr int32 = 1
+// TODO(rsc): Make GC respect debug.invalidptr.
+
+// Holds variables parsed from GODEBUG env var.
+var debug struct {
+	allocfreetrace int32
+	efence         int32
+	gcdead         int32
+	gctrace        int32
+	invalidptr     int32
+	scavenge       int32
+	scheddetail    int32
+	schedtrace     int32
+	wbshadow       int32
+}
 
 var dbgvars = []dbgVar{
 	{"allocfreetrace", &debug.allocfreetrace},
-	{"invalidptr", &invalidptr},
 	{"efence", &debug.efence},
-	{"gctrace", &debug.gctrace},
 	{"gcdead", &debug.gcdead},
+	{"gctrace", &debug.gctrace},
+	{"invalidptr", &debug.invalidptr},
+	{"scavenge", &debug.scavenge},
 	{"scheddetail", &debug.scheddetail},
 	{"schedtrace", &debug.schedtrace},
-	{"scavenge", &debug.scavenge},
+	{"wbshadow", &debug.wbshadow},
 }
 
 func parsedebugvars() {
@@ -386,7 +402,7 @@ func releasem(mp *m) {
 	mp.locks--
 	if mp.locks == 0 && _g_.preempt {
 		// restore the preemption request in case we've cleared it in newstack
-		_g_.stackguard = stackPreempt
+		_g_.stackguard0 = stackPreempt
 	}
 }
 

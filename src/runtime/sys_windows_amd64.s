@@ -225,28 +225,29 @@ TEXT runtime·externalthreadhandler(SB),NOSPLIT,$0
 	MOVQ	SP, DX
 
 	// setup dummy m, g
-	SUBQ	$m_end, SP		// space for M
+	SUBQ	$m__size, SP		// space for M
 	MOVQ	SP, 0(SP)
-	MOVQ	$m_end, 8(SP)
+	MOVQ	$m__size, 8(SP)
 	CALL	runtime·memclr(SB)	// smashes AX,BX,CX
 
 	LEAQ	m_tls(SP), CX
 	MOVQ	CX, 0x28(GS)
 	MOVQ	SP, BX
-	SUBQ	$g_end, SP		// space for G
+	SUBQ	$g__size, SP		// space for G
 	MOVQ	SP, g(CX)
 	MOVQ	SP, m_g0(BX)
 
 	MOVQ	SP, 0(SP)
-	MOVQ	$g_end, 8(SP)
+	MOVQ	$g__size, 8(SP)
 	CALL	runtime·memclr(SB)	// smashes AX,BX,CX
-	LEAQ	g_end(SP), BX
+	LEAQ	g__size(SP), BX
 	MOVQ	BX, g_m(SP)
 
 	LEAQ	-8192(SP), CX
 	MOVQ	CX, (g_stack+stack_lo)(SP)
 	ADDQ	$const__StackGuard, CX
-	MOVQ	CX, g_stackguard(SP)
+	MOVQ	CX, g_stackguard0(SP)
+	MOVQ	CX, g_stackguard1(SP)
 	MOVQ	DX, (g_stack+stack_hi)(SP)
 
 	PUSHQ	32(BP)			// arg for handler
@@ -355,7 +356,8 @@ TEXT runtime·tstart_stdcall(SB),NOSPLIT,$0
 	SUBQ	$(64*1024), AX		// stack size
 	MOVQ	AX, (g_stack+stack_lo)(DX)
 	ADDQ	$const__StackGuard, AX
-	MOVQ	AX, g_stackguard(DX)
+	MOVQ	AX, g_stackguard0(DX)
+	MOVQ	AX, g_stackguard1(DX)
 
 	// Set up tls.
 	LEAQ	m_tls(CX), SI

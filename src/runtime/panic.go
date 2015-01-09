@@ -177,6 +177,16 @@ func newdefer(siz int32) *_defer {
 		d = (*_defer)(mallocgc(total, deferType, 0))
 	}
 	d.siz = siz
+	if mheap_.shadow_enabled {
+		// This memory will be written directly, with no write barrier,
+		// and then scanned like stacks during collection.
+		// Unlike real stacks, it is from heap spans, so mark the
+		// shadow as explicitly unusable.
+		p := deferArgs(d)
+		for i := uintptr(0); i+ptrSize <= uintptr(siz); i += ptrSize {
+			writebarrierptr_noshadow((*uintptr)(add(p, i)))
+		}
+	}
 	gp := mp.curg
 	d.link = gp._defer
 	gp._defer = d
@@ -193,6 +203,12 @@ func freedefer(d *_defer) {
 	}
 	if d.fn != nil {
 		freedeferfn()
+	}
+	if mheap_.shadow_enabled {
+		// Undo the marking in newdefer.
+		systemstack(func() {
+			clearshadow(uintptr(deferArgs(d)), uintptr(d.siz))
+		})
 	}
 	sc := deferclass(uintptr(d.siz))
 	if sc < uintptr(len(p{}.deferpool)) {
@@ -285,7 +301,7 @@ func Goexit() {
 			continue
 		}
 		d.started = true
-		reflectcall(unsafe.Pointer(d.fn), deferArgs(d), uint32(d.siz), uint32(d.siz))
+		reflectcall(nil, unsafe.Pointer(d.fn), deferArgs(d), uint32(d.siz), uint32(d.siz))
 		if gp._defer != d {
 			throw("bad defer entry in Goexit")
 		}
@@ -385,7 +401,7 @@ func gopanic(e interface{}) {
 		d._panic = (*_panic)(noescape((unsafe.Pointer)(&p)))
 
 		p.argp = unsafe.Pointer(getargp(0))
-		reflectcall(unsafe.Pointer(d.fn), deferArgs(d), uint32(d.siz), uint32(d.siz))
+		reflectcall(nil, unsafe.Pointer(d.fn), deferArgs(d), uint32(d.siz), uint32(d.siz))
 		p.argp = nil
 
 		// reflectcall did not panic. Remove d.

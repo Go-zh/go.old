@@ -123,7 +123,7 @@ const (
 	_DebugGCPtrs     = false // if true, print trace of every pointer load during GC
 	_ConcurrentSweep = true
 
-	_WorkbufSize     = 4 * 1024
+	_WorkbufSize     = 4 * 256
 	_FinBlockSize    = 4 * 1024
 	_RootData        = 0
 	_RootBss         = 1
@@ -191,9 +191,9 @@ var badblock [1024]uintptr
 var nbadblock int32
 
 type workdata struct {
-	full    uint64                // lock-free list of full blocks
-	empty   uint64                // lock-free list of empty blocks
-	partial uint64                // lock-free list of partially filled blocks
+	full    uint64                // lock-free list of full blocks workbuf
+	empty   uint64                // lock-free list of empty blocks workbuf
+	partial uint64                // lock-free list of partially filled blocks workbuf
 	pad0    [_CacheLineSize]uint8 // prevents false-sharing between full/empty and nproc/nwait
 	nproc   uint32
 	tstart  int64
@@ -241,8 +241,8 @@ var (
 	gccheckmarkenable = true
 )
 
-// Is address b in the known heap. If it doesn't have a valid gcmap
-// returns false. For example pointers into stacks will return false.
+// inheap reports whether b is a pointer into a (potentially dead) heap object.
+// It returns false for pointers into stack spans.
 //go:nowritebarrier
 func inheap(b uintptr) bool {
 	if b == 0 || b < mheap_.arena_start || b >= mheap_.arena_used {
@@ -408,8 +408,9 @@ func gcmarknewobject_m(obj uintptr) {
 // obj is the start of an object with mark mbits.
 // If it isn't already marked, mark it and enqueue into workbuf.
 // Return possibly new workbuf to use.
+// base and off are for debugging only and could be removed.
 //go:nowritebarrier
-func greyobject(obj uintptr, mbits *markbits, wbuf *workbuf) *workbuf {
+func greyobject(obj uintptr, base, off uintptr, mbits *markbits, wbuf *workbuf) *workbuf {
 	// obj should be start of allocation, and so must be at least pointer-aligned.
 	if obj&(ptrSize-1) != 0 {
 		throw("greyobject: obj not pointer-aligned")
@@ -418,6 +419,7 @@ func greyobject(obj uintptr, mbits *markbits, wbuf *workbuf) *workbuf {
 	if checkmark {
 		if !ismarked(mbits) {
 			print("runtime:greyobject: checkmarks finds unexpected unmarked object obj=", hex(obj), ", mbits->bits=", hex(mbits.bits), " *mbits->bitp=", hex(*mbits.bitp), "\n")
+			print("runtime: found obj at *(", hex(base), "+", hex(off), ")\n")
 
 			k := obj >> _PageShift
 			x := k
@@ -557,6 +559,10 @@ func scanobject(b, n uintptr, ptrmask *uint8, wbuf *workbuf) *workbuf {
 			continue
 		}
 
+		if mheap_.shadow_enabled && debug.wbshadow >= 2 && gccheckmarkenable && checkmark {
+			checkwbshadow((*uintptr)(unsafe.Pointer(b + i)))
+		}
+
 		// Mark the object. return some important bits.
 		// We we combine the following two rotines we don't have to pass mbits or obj around.
 		var mbits markbits
@@ -564,7 +570,7 @@ func scanobject(b, n uintptr, ptrmask *uint8, wbuf *workbuf) *workbuf {
 		if obj == 0 {
 			continue
 		}
-		wbuf = greyobject(obj, &mbits, wbuf)
+		wbuf = greyobject(obj, b, i, &mbits, wbuf)
 	}
 	return wbuf
 }
@@ -575,7 +581,17 @@ func scanobject(b, n uintptr, ptrmask *uint8, wbuf *workbuf) *workbuf {
 // As a special case, scanblock(nil, 0, nil) means to scan previously queued work,
 // stopping only when no work is left in the system.
 //go:nowritebarrier
-func scanblock(b, n uintptr, ptrmask *uint8) {
+func scanblock(b0, n0 uintptr, ptrmask *uint8) {
+	// Use local copies of original parameters, so that a stack trace
+	// due to one of the throws below shows the original block
+	// base and extent.
+	b := b0
+	n := n0
+
+	// ptrmask can have 2 possible values:
+	// 1. nil - obtain pointer mask from GC bitmap.
+	// 2. pointer to a compact mask (for stacks and data).
+
 	wbuf := getpartialorempty()
 	if b != 0 {
 		wbuf = scanobject(b, n, ptrmask, wbuf)
@@ -589,18 +605,23 @@ func scanblock(b, n uintptr, ptrmask *uint8) {
 			return
 		}
 	}
-	if gcphase == _GCscan {
-		throw("scanblock: In GCscan phase but no b passed in.")
+
+	drainallwbufs := b == 0
+	drainworkbuf(wbuf, drainallwbufs)
+}
+
+// Scan objects in wbuf until wbuf is empty.
+// If drainallwbufs is true find all other available workbufs and repeat the process.
+//go:nowritebarrier
+func drainworkbuf(wbuf *workbuf, drainallwbufs bool) {
+	if gcphase != _GCmark && gcphase != _GCmarktermination {
+		println("gcphase", gcphase)
+		throw("scanblock phase")
 	}
 
-	keepworking := b == 0
-
-	// ptrmask can have 2 possible values:
-	// 1. nil - obtain pointer mask from GC bitmap.
-	// 2. pointer to a compact mask (for stacks and data).
 	for {
 		if wbuf.nobj == 0 {
-			if !keepworking {
+			if !drainallwbufs {
 				putempty(wbuf)
 				return
 			}
@@ -625,9 +646,30 @@ func scanblock(b, n uintptr, ptrmask *uint8) {
 		//         PREFETCH(wbuf->obj[wbuf->nobj - 3];
 		//  }
 		wbuf.nobj--
-		b = wbuf.obj[wbuf.nobj]
+		b := wbuf.obj[wbuf.nobj]
 		wbuf = scanobject(b, mheap_.arena_used-b, nil, wbuf)
 	}
+}
+
+// Scan at most count objects in the wbuf.
+//go:nowritebarrier
+func drainobjects(wbuf *workbuf, count uintptr) {
+	for i := uintptr(0); i < count; i++ {
+		if wbuf.nobj == 0 {
+			putempty(wbuf)
+			return
+		}
+
+		// This might be a good place to add prefetch code...
+		// if(wbuf->nobj > 4) {
+		//         PREFETCH(wbuf->obj[wbuf->nobj - 3];
+		//  }
+		wbuf.nobj--
+		b := wbuf.obj[wbuf.nobj]
+		wbuf = scanobject(b, mheap_.arena_used-b, nil, wbuf)
+	}
+	putpartial(wbuf)
+	return
 }
 
 //go:nowritebarrier
@@ -791,6 +833,17 @@ func putpartial(b *workbuf) {
 		print("b=", b, " b.nobj=", b.nobj, " len(b.obj)=", len(b.obj), "\n")
 		throw("putpartial: bad Workbuf b.nobj")
 	}
+}
+
+// trygetfull tries to get a full or partially empty workbuffer.
+// if one is not immediately available return nil
+//go:nowritebarrier
+func trygetfull() *workbuf {
+	wbuf := (*workbuf)(lfstackpop(&work.full))
+	if wbuf == nil {
+		wbuf = (*workbuf)(lfstackpop(&work.partial))
+	}
+	return wbuf
 }
 
 // Get a full work buffer off the work.full or a partially
@@ -1019,7 +1072,7 @@ func shade(b uintptr) {
 	var mbits markbits
 	obj := objectstart(b, &mbits)
 	if obj != 0 {
-		wbuf = greyobject(obj, &mbits, wbuf) // augments the wbuf
+		wbuf = greyobject(obj, 0, 0, &mbits, wbuf) // augments the wbuf
 	}
 	putpartial(wbuf)
 }
@@ -1071,6 +1124,38 @@ func gcmarkwb_m(slot *uintptr, ptr uintptr) {
 		if ptr != 0 && inheap(ptr) {
 			shade(ptr)
 		}
+	}
+}
+
+// gchelpwork does a small bounded amount of gc work. The purpose is to
+// shorten the time (as measured by allocations) spent doing a concurrent GC.
+// The number of mutator calls is roughly propotional to the number of allocations
+// made by that mutator. This slows down the allocation while speeding up the GC.
+//go:nowritebarrier
+func gchelpwork() {
+	switch gcphase {
+	default:
+		throw("gcphasework in bad gcphase")
+	case _GCoff, _GCquiesce, _GCstw:
+		// No work.
+	case _GCsweep:
+		// We could help by calling sweepone to sweep a single span.
+		// _ = sweepone()
+	case _GCscan:
+		// scan the stack, mark the objects, put pointers in work buffers
+		// hanging off the P where this is being run.
+		// scanstack(gp)
+	case _GCmark:
+		// Get a full work buffer and empty it.
+		var wbuf *workbuf
+		wbuf = trygetfull()
+		if wbuf != nil {
+			drainobjects(wbuf, uintptr(len(wbuf.obj))) // drain upto one buffer's worth of objects
+		}
+	case _GCmarktermination:
+		// We should never be here since the world is stopped.
+		// All available mark work will be emptied before returning.
+		throw("gcphasework in bad gcphase")
 	}
 }
 
@@ -1408,6 +1493,14 @@ type sweepdata struct {
 }
 
 var sweep sweepdata
+
+// State of the background concurrent GC goroutine.
+var bggc struct {
+	lock    mutex
+	g       *g
+	working uint
+	started bool
+}
 
 // sweeps one span
 // returns number of pages returned to heap, or ^uintptr(0) if there is nothing to sweep
@@ -1773,9 +1866,7 @@ func gccheckmark_m(startTime int64, eagersweep bool) {
 
 	checkmark = true
 	clearcheckmarkbits()        // Converts BitsDead to BitsScalar.
-	gc_m(startTime, eagersweep) // turns off checkmark
-	// Work done, fixed up the GC bitmap to remove the checkmark bits.
-	clearcheckmarkbits()
+	gc_m(startTime, eagersweep) // turns off checkmark + calls clearcheckmarkbits
 }
 
 //go:nowritebarrier
@@ -1824,7 +1915,6 @@ func gcscan_m() {
 	// by placing it onto a scanenqueue state and then calling
 	// runtime·restartg(mastergp) to make it Grunnable.
 	// At the bottom we will want to return this p back to the scheduler.
-	oldphase := gcphase
 
 	// Prepare flag indicating that the scan has not been completed.
 	lock(&allglock)
@@ -1838,7 +1928,6 @@ func gcscan_m() {
 	work.nwait = 0
 	work.ndone = 0
 	work.nproc = 1 // For now do not do this in parallel.
-	gcphase = _GCscan
 	//	ackgcphase is not needed since we are not scanning running goroutines.
 	parforsetup(work.markfor, work.nproc, uint32(_RootCount+local_allglen), nil, false, markroot)
 	parfordo(work.markfor)
@@ -1853,7 +1942,6 @@ func gcscan_m() {
 	}
 	unlock(&allglock)
 
-	gcphase = oldphase
 	casgstatus(mastergp, _Gwaiting, _Grunning)
 	// Let the g that called us continue to run.
 }
@@ -2026,6 +2114,7 @@ func gc(start_time int64, eagersweep bool) {
 			return
 		}
 		checkmark = false // done checking marks
+		clearcheckmarkbits()
 	}
 
 	// Cache the current array for sweeping.

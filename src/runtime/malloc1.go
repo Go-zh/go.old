@@ -223,6 +223,92 @@ func mallocinit() {
 	_g_.m.mcache = allocmcache()
 }
 
+func wbshadowinit() {
+	// Initialize write barrier shadow heap if we were asked for it
+	// and we have enough address space (not on 32-bit).
+	if debug.wbshadow == 0 {
+		return
+	}
+	if ptrSize != 8 {
+		print("runtime: GODEBUG=wbshadow=1 disabled on 32-bit system\n")
+		return
+	}
+
+	var reserved bool
+	p1 := sysReserveHigh(mheap_.arena_end-mheap_.arena_start, &reserved)
+	if p1 == nil {
+		throw("cannot map shadow heap")
+	}
+	mheap_.shadow_heap = uintptr(p1) - mheap_.arena_start
+	sysMap(p1, mheap_.arena_used-mheap_.arena_start, reserved, &memstats.other_sys)
+	memmove(p1, unsafe.Pointer(mheap_.arena_start), mheap_.arena_used-mheap_.arena_start)
+
+	mheap_.shadow_reserved = reserved
+	start := ^uintptr(0)
+	end := uintptr(0)
+	if start > uintptr(unsafe.Pointer(&noptrdata)) {
+		start = uintptr(unsafe.Pointer(&noptrdata))
+	}
+	if start > uintptr(unsafe.Pointer(&data)) {
+		start = uintptr(unsafe.Pointer(&data))
+	}
+	if start > uintptr(unsafe.Pointer(&noptrbss)) {
+		start = uintptr(unsafe.Pointer(&noptrbss))
+	}
+	if start > uintptr(unsafe.Pointer(&bss)) {
+		start = uintptr(unsafe.Pointer(&bss))
+	}
+	if end < uintptr(unsafe.Pointer(&enoptrdata)) {
+		end = uintptr(unsafe.Pointer(&enoptrdata))
+	}
+	if end < uintptr(unsafe.Pointer(&edata)) {
+		end = uintptr(unsafe.Pointer(&edata))
+	}
+	if end < uintptr(unsafe.Pointer(&enoptrbss)) {
+		end = uintptr(unsafe.Pointer(&enoptrbss))
+	}
+	if end < uintptr(unsafe.Pointer(&ebss)) {
+		end = uintptr(unsafe.Pointer(&ebss))
+	}
+	start &^= _PageSize - 1
+	end = round(end, _PageSize)
+	mheap_.data_start = start
+	mheap_.data_end = end
+	reserved = false
+	p1 = sysReserveHigh(end-start, &reserved)
+	if p1 == nil {
+		throw("cannot map shadow data")
+	}
+	mheap_.shadow_data = uintptr(p1) - start
+	sysMap(p1, end-start, reserved, &memstats.other_sys)
+	memmove(p1, unsafe.Pointer(start), end-start)
+
+	mheap_.shadow_enabled = true
+}
+
+// sysReserveHigh reserves space somewhere high in the address space.
+// sysReserve doesn't actually reserve the full amount requested on
+// 64-bit systems, because of problems with ulimit. Instead it checks
+// that it can get the first 64 kB and assumes it can grab the rest as
+// needed. This doesn't work well with the "let the kernel pick an address"
+// mode, so don't do that. Pick a high address instead.
+func sysReserveHigh(n uintptr, reserved *bool) unsafe.Pointer {
+	if ptrSize == 4 {
+		return sysReserve(nil, n, reserved)
+	}
+
+	for i := 0; i <= 0x7f; i++ {
+		p := uintptr(i)<<40 | uintptrMask&(0x00c0<<32)
+		*reserved = false
+		p = uintptr(sysReserve(unsafe.Pointer(p), n, reserved))
+		if p != 0 {
+			return unsafe.Pointer(p)
+		}
+	}
+
+	return sysReserve(nil, n, reserved)
+}
+
 func mHeap_SysAlloc(h *mheap, n uintptr) unsafe.Pointer {
 	if n > uintptr(h.arena_end)-uintptr(h.arena_used) {
 		// We are in 32-bit mode, maybe we didn't use all possible address space yet.
@@ -259,6 +345,9 @@ func mHeap_SysAlloc(h *mheap, n uintptr) unsafe.Pointer {
 		mHeap_MapSpans(h)
 		if raceenabled {
 			racemapshadow((unsafe.Pointer)(p), n)
+		}
+		if mheap_.shadow_enabled {
+			sysMap(unsafe.Pointer(p+mheap_.shadow_heap), n, h.shadow_reserved, &memstats.other_sys)
 		}
 
 		if uintptr(p)&(_PageSize-1) != 0 {

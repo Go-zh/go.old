@@ -776,14 +776,12 @@ var hammer32 = map[string]func(*uint32, int){
 	"SwapInt32":             hammerSwapInt32,
 	"SwapUint32":            hammerSwapUint32,
 	"SwapUintptr":           hammerSwapUintptr32,
-	"SwapPointer":           hammerSwapPointer32,
 	"AddInt32":              hammerAddInt32,
 	"AddUint32":             hammerAddUint32,
 	"AddUintptr":            hammerAddUintptr32,
 	"CompareAndSwapInt32":   hammerCompareAndSwapInt32,
 	"CompareAndSwapUint32":  hammerCompareAndSwapUint32,
 	"CompareAndSwapUintptr": hammerCompareAndSwapUintptr32,
-	"CompareAndSwapPointer": hammerCompareAndSwapPointer32,
 }
 
 func init() {
@@ -833,21 +831,6 @@ func hammerSwapUintptr32(uaddr *uint32, count int) {
 		old := SwapUintptr(addr, new)
 		if old>>16 != old<<16>>16 {
 			panic(fmt.Sprintf("SwapUintptr is not atomic: %#08x", old))
-		}
-	}
-}
-
-func hammerSwapPointer32(uaddr *uint32, count int) {
-	// only safe when uintptr is 32-bit.
-	// not called on 64-bit systems.
-	// 仅当 uintptr 为32位时才安全。不在64位系统上调用。
-	addr := (*unsafe.Pointer)(unsafe.Pointer(uaddr))
-	seed := int(uintptr(unsafe.Pointer(&count)))
-	for i := 0; i < count; i++ {
-		new := uintptr(seed+i)<<16 | uintptr(seed+i)<<16>>16
-		old := uintptr(SwapPointer(addr, unsafe.Pointer(new)))
-		if old>>16 != old<<16>>16 {
-			panic(fmt.Sprintf("SwapPointer is not atomic: %#08x", old))
 		}
 	}
 }
@@ -913,21 +896,6 @@ func hammerCompareAndSwapUintptr32(uaddr *uint32, count int) {
 	}
 }
 
-func hammerCompareAndSwapPointer32(uaddr *uint32, count int) {
-	// only safe when uintptr is 32-bit.
-	// not called on 64-bit systems.
-	// 仅当 uintptr 为32位时才安全。不在64位系统上调用。
-	addr := (*unsafe.Pointer)(unsafe.Pointer(uaddr))
-	for i := 0; i < count; i++ {
-		for {
-			v := LoadPointer(addr)
-			if CompareAndSwapPointer(addr, v, unsafe.Pointer(uintptr(v)+1)) {
-				break
-			}
-		}
-	}
-}
-
 func TestHammer32(t *testing.T) {
 	const p = 4
 	n := 100000
@@ -963,14 +931,12 @@ var hammer64 = map[string]func(*uint64, int){
 	"SwapInt64":             hammerSwapInt64,
 	"SwapUint64":            hammerSwapUint64,
 	"SwapUintptr":           hammerSwapUintptr64,
-	"SwapPointer":           hammerSwapPointer64,
 	"AddInt64":              hammerAddInt64,
 	"AddUint64":             hammerAddUint64,
 	"AddUintptr":            hammerAddUintptr64,
 	"CompareAndSwapInt64":   hammerCompareAndSwapInt64,
 	"CompareAndSwapUint64":  hammerCompareAndSwapUint64,
 	"CompareAndSwapUintptr": hammerCompareAndSwapUintptr64,
-	"CompareAndSwapPointer": hammerCompareAndSwapPointer64,
 }
 
 func init() {
@@ -1020,21 +986,6 @@ func hammerSwapUintptr64(uaddr *uint64, count int) {
 		old := SwapUintptr(addr, new)
 		if old>>32 != old<<32>>32 {
 			panic(fmt.Sprintf("SwapUintptr is not atomic: %v", old))
-		}
-	}
-}
-
-func hammerSwapPointer64(uaddr *uint64, count int) {
-	// only safe when uintptr is 64-bit.
-	// not called on 32-bit systems.
-	// 仅当 uintptr 为64位时才安全。不在32位系统上调用。
-	addr := (*unsafe.Pointer)(unsafe.Pointer(uaddr))
-	seed := int(uintptr(unsafe.Pointer(&count)))
-	for i := 0; i < count; i++ {
-		new := uintptr(seed+i)<<32 | uintptr(seed+i)<<32>>32
-		old := uintptr(SwapPointer(addr, unsafe.Pointer(new)))
-		if old>>32 != old<<32>>32 {
-			panic(fmt.Sprintf("SwapPointer is not atomic: %v", old))
 		}
 	}
 }
@@ -1094,21 +1045,6 @@ func hammerCompareAndSwapUintptr64(uaddr *uint64, count int) {
 		for {
 			v := LoadUintptr(addr)
 			if CompareAndSwapUintptr(addr, v, v+1) {
-				break
-			}
-		}
-	}
-}
-
-func hammerCompareAndSwapPointer64(uaddr *uint64, count int) {
-	// only safe when uintptr is 64-bit.
-	// not called on 32-bit systems.
-	// 仅当 uintptr 为64位时才安全。不在32位系统上调用。
-	addr := (*unsafe.Pointer)(unsafe.Pointer(uaddr))
-	for i := 0; i < count; i++ {
-		for {
-			v := LoadPointer(addr)
-			if CompareAndSwapPointer(addr, v, unsafe.Pointer(uintptr(v)+1)) {
 				break
 			}
 		}

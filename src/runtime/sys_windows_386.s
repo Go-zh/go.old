@@ -189,27 +189,28 @@ TEXT runtime·externalthreadhandler(SB),NOSPLIT,$0
 	MOVL	SP, DX
 
 	// setup dummy m, g
-	SUBL	$m_end, SP		// space for M
+	SUBL	$m__size, SP		// space for M
 	MOVL	SP, 0(SP)
-	MOVL	$m_end, 4(SP)
+	MOVL	$m__size, 4(SP)
 	CALL	runtime·memclr(SB)	// smashes AX,BX,CX
 
 	LEAL	m_tls(SP), CX
 	MOVL	CX, 0x14(FS)
 	MOVL	SP, BX
-	SUBL	$g_end, SP		// space for G
+	SUBL	$g__size, SP		// space for G
 	MOVL	SP, g(CX)
 	MOVL	SP, m_g0(BX)
 
 	MOVL	SP, 0(SP)
-	MOVL	$g_end, 4(SP)
+	MOVL	$g__size, 4(SP)
 	CALL	runtime·memclr(SB)	// smashes AX,BX,CX
-	LEAL	g_end(SP), BX
+	LEAL	g__size(SP), BX
 	MOVL	BX, g_m(SP)
 	LEAL	-8192(SP), CX
 	MOVL	CX, (g_stack+stack_lo)(SP)
 	ADDL	$const__StackGuard, CX
-	MOVL	CX, g_stackguard(SP)
+	MOVL	CX, g_stackguard0(SP)
+	MOVL	CX, g_stackguard1(SP)
 	MOVL	DX, (g_stack+stack_hi)(SP)
 
 	PUSHL	16(BP)			// arg for handler
@@ -314,7 +315,8 @@ TEXT runtime·tstart(SB),NOSPLIT,$0
 	SUBL	$(64*1024), AX		// stack size
 	MOVL	AX, (g_stack+stack_lo)(DX)
 	ADDL	$const__StackGuard, AX
-	MOVL	AX, g_stackguard(DX)
+	MOVL	AX, g_stackguard0(DX)
+	MOVL	AX, g_stackguard1(DX)
 
 	// Set up tls.
 	LEAL	m_tls(CX), SI

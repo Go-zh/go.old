@@ -110,7 +110,17 @@ func asminit()
 func setg(gg *g)
 func breakpoint()
 
-func reflectcall(fn, arg unsafe.Pointer, n uint32, retoffset uint32)
+// reflectcall calls fn with a copy of the n argument bytes pointed at by arg.
+// After fn returns, reflectcall copies n-retoffset result bytes
+// back into arg+retoffset before returning. If copying result bytes back,
+// the caller should pass the argument frame type as argtype, so that
+// call can execute appropriate write barriers during the copy.
+// Package reflect passes a frame type. In package runtime, there is only
+// one call that copies results back, in cgocallbackg1, and it does NOT pass a
+// frame type, meaning there are no write barriers invoked. See that call
+// site for justification.
+func reflectcall(argtype *_type, fn, arg unsafe.Pointer, argsize uint32, retoffset uint32)
+
 func procyield(cycles uint32)
 func cgocallback_gofunc(fv *funcval, frame unsafe.Pointer, framesize uintptr)
 func goexit()
@@ -118,18 +128,7 @@ func goexit()
 //go:noescape
 func cas(ptr *uint32, old, new uint32) bool
 
-// casp cannot have a go:noescape annotation, because
-// while ptr and old do not escape, new does. If new is marked as
-// not escaping, the compiler will make incorrect escape analysis
-// decisions about the value being xchg'ed.
-// Instead, make casp a wrapper around the actual atomic.
-// When calling the wrapper we mark ptr as noescape explicitly.
-
-//go:nosplit
-func casp(ptr *unsafe.Pointer, old, new unsafe.Pointer) bool {
-	return casp1((*unsafe.Pointer)(noescape(unsafe.Pointer(ptr))), noescape(old), new)
-}
-
+// NO go:noescape annotation; see atomic_pointer.go.
 func casp1(ptr *unsafe.Pointer, old, new unsafe.Pointer) bool
 
 func nop() // call to prevent inlining of function body
