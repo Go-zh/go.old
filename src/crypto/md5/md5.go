@@ -4,7 +4,9 @@
 
 //go:generate go run gen.go -full -output md5block.go
 
-// Package md5 implements the MD5 hash algorithm as defined in RFC 1321.
+//	 Package md5 implements the MD5 hash algorithm as defined in RFC 1321.
+
+// md5包实现了在RFC 1321中定义的MD5哈希算法.
 package md5
 
 import (
