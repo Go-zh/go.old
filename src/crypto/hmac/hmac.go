@@ -3,15 +3,31 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package hmac implements the Keyed-Hash Message Authentication Code (HMAC) as
-defined in U.S. Federal Information Processing Standards Publication 198.
-An HMAC is a cryptographic hash that uses a key to sign a message.
-The receiver verifies the hash by recomputing it using the same key.
+	Package hmac implements the Keyed-Hash Message Authentication Code (HMAC) as
+	defined in U.S. Federal Information Processing Standards Publication 198.
+	An HMAC is a cryptographic hash that uses a key to sign a message.
+	The receiver verifies the hash by recomputing it using the same key.
+	
+	Receivers should be careful to use Equal to compare MACs in order to avoid
+	timing side-channels:
+	
+		// CheckMAC returns true if messageMAC is a valid HMAC tag for message.
+		func CheckMAC(message, messageMAC, key []byte) bool {
+			mac := hmac.New(sha256.New, key)
+			mac.Write(message)
+			expectedMAC := mac.Sum(nil)
+			return hmac.Equal(messageMAC, expectedMAC)
+		}
+*/
 
-Receivers should be careful to use Equal to compare MACs in order to avoid
-timing side-channels:
+/*
+hmac 包实现了基于关键字的哈希消息身份认证码(HMAC)，其在美国联邦信息处理标准发布稿 198中
+定义。HMAC是使用密钥对一段消息进行签名的密码学意义的哈希值。接收者使用同样的密钥重新计算
+一遍来验证该哈希值。
 
-	// CheckMAC returns true if messageMAC is a valid HMAC tag for message.
+接收者需要很小心的使用 Equal 方法来比较消息身份认证码(MAC)值，从而避免时间相关的旁道攻击:
+
+	// CheckMAC 返回 true 如果 messageMAC 是 message 的正确HMAC标记。
 	func CheckMAC(message, messageMAC, key []byte) bool {
 		mac := hmac.New(sha256.New, key)
 		mac.Write(message)
@@ -26,12 +42,20 @@ import (
 	"hash"
 )
 
-// FIPS 198:
+//	FIPS 198:
+//	http://csrc.nist.gov/publications/fips/fips198/fips-198a.pdf
+
+//	key is zero padded to the block size of the hash function
+//	ipad = 0x36 byte repeated for key length
+//	opad = 0x5c byte repeated for key length
+//	hmac = H([key ^ opad] H([key ^ ipad] text))
+
+// 美国联邦信息处理标准发布稿 198
 // http://csrc.nist.gov/publications/fips/fips198/fips-198a.pdf
 
-// key is zero padded to the block size of the hash function
-// ipad = 0x36 byte repeated for key length
-// opad = 0x5c byte repeated for key length
+// key 是用0来补充一个哈希函数的块大小的
+// ipad = 0x36 重复的字节，个数与 key 的长度相同
+// opad = 0x5c 重复的字节，个数与 key 的长度相同
 // hmac = H([key ^ opad] H([key ^ ipad] text))
 
 type hmac struct {
@@ -74,7 +98,9 @@ func (h *hmac) Reset() {
 	h.inner.Write(h.tmp[:h.blocksize])
 }
 
-// New returns a new HMAC hash using the given hash.Hash type and key.
+//	New returns a new HMAC hash using the given hash.Hash type and key.
+
+// New 使用给定的 hash.Hash 类型和 key 来构造一个新的 HMAC 哈希函数，并将其返回。
 func New(h func() hash.Hash, key []byte) hash.Hash {
 	hm := new(hmac)
 	hm.outer = h()
@@ -93,7 +119,9 @@ func New(h func() hash.Hash, key []byte) hash.Hash {
 	return hm
 }
 
-// Equal compares two MACs for equality without leaking timing information.
+//	Equal compares two MACs for equality without leaking timing information.
+
+// Equal 比较两个消息身份认证码(MAC)是否相等，并且不会泄露CPU耗时信息。
 func Equal(mac1, mac2 []byte) bool {
 	// We don't have to be constant time if the lengths of the MACs are
 	// different as that suggests that a completely different hash function
