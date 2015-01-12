@@ -4,11 +4,11 @@
 
 package math
 
-// Abs returns the absolute value of x.
+//	Abs returns the absolute value of x.
 //
-// Special cases are:
-//	Abs(±Inf) = +Inf
-//	Abs(NaN) = NaN
+//	Special cases are:
+//		Abs(±Inf) = +Inf
+//		Abs(NaN) = NaN
 
 // Abs 返回 x 的绝对值。
 // 特殊情况为：
