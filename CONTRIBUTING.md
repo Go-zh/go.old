@@ -35,6 +35,14 @@ When filing an issue, make sure to answer these five questions:
 5. 你实际看到了什么？
 
 <!--
+General questions should go to the [golang-nuts mailing list](https://groups.google.com/group/golang-nuts) instead of the issue tracker.
+The gophers there will answer or ask you to file an issue if you've tripped over a bug.
+-->
+
+一般问题请在 [golang-nuts 邮件列表](https://groups.google.com/group/golang-nuts)
+里提问，那里的 Gopher 们会回答你。当你遇到是 Bug 时，他们自会建议你在问题跟踪器里提交一个问题。
+
+<!--
 ## Contributing code
 
 Please read the [Contribution Guidelines](https://golang.org/doc/contribute.html)

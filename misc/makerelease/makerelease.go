@@ -30,15 +30,16 @@ import (
 	"runtime"
 	"strings"
 
-	"code.google.com/p/goauth2/oauth"
 	storage "code.google.com/p/google-api-go-client/storage/v1"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 )
 
 var (
-	tag             = flag.String("tag", "release", "mercurial tag to check out")
-	toolTag         = flag.String("tool", defaultToolTag, "go.tools tag to check out")
+	tag             = flag.String("tag", "", "git revision to check out")
+	toolTag         = flag.String("tool", defaultToolTag, "go.tools revision to check out")
 	tourTag         = flag.String("tour", defaultTourTag, "go-tour tag to check out")
-	repo            = flag.String("repo", "https://code.google.com/p/go", "repo URL")
+	repo            = flag.String("repo", "https://go.googlesource.com/go", "repo URL")
 	verbose         = flag.Bool("v", false, "verbose output")
 	upload          = flag.Bool("upload", false, "upload resulting files to Google Code")
 	addLabel        = flag.String("label", "", "additional label to apply to file when uploading")
@@ -80,9 +81,9 @@ var preBuildCleanFiles = []string{
 }
 
 var cleanFiles = []string{
-	".hg",
-	".hgtags",
-	".hgignore",
+	".git",
+	".gitignore",
+	".gitattributes",
 	"VERSION.cache",
 }
 
@@ -205,6 +206,10 @@ func main() {
 				}
 			}
 		}
+		if *tag == "" {
+			fmt.Fprintln(os.Stderr, "you must specify a -tag")
+			os.Exit(2)
+		}
 		if err := b.Do(); err != nil {
 			log.Printf("%s: %v", targ, err)
 			ok = false
@@ -236,11 +241,11 @@ func (b *Build) Do() error {
 	b.gopath = work
 
 	// Clone Go distribution and update to tag.
-	_, err = b.hgCmd(work, "clone", *repo, b.root)
+	_, err = b.run(work, "git", "clone", *repo, b.root)
 	if err != nil {
 		return err
 	}
-	_, err = b.hgCmd(b.root, "update", *tag)
+	_, err = b.run(b.root, "git", "checkout", *tag)
 	if err != nil {
 		return err
 	}
@@ -272,13 +277,27 @@ func (b *Build) Do() error {
 			if b.OS == "windows" {
 				goCmd += ".exe"
 			}
+			// Because on release branches, go install -a std is a NOP,
+			// we have to resort to delete pkg/$GOOS_$GOARCH, install -race,
+			// and then reinstall std so that we're not left with a slower,
+			// race-enabled cmd/go, etc.
+			goPkg := filepath.Join(b.root, "pkg", b.OS+"_"+b.Arch)
+			err = os.RemoveAll(goPkg)
+			if err != nil {
+				return err
+			}
+			_, err = b.run(src, goCmd, "tool", "dist", "install", "runtime")
+			if err != nil {
+				return err
+			}
 			_, err = b.run(src, goCmd, "install", "-race", "std")
 			if err != nil {
 				return err
 			}
-			// Re-install std without -race, so that we're not left
-			// with a slower, race-enabled cmd/go, etc.
-			_, err = b.run(src, goCmd, "install", "-a", "std")
+			_, err = b.run(src, goCmd, "install", "std")
+			if err != nil {
+				return err
+			}
 			// Re-building go command leaves old versions of go.exe as go.exe~ on windows.
 			// See (*builder).copyFile in $GOROOT/src/cmd/go/build.go for details.
 			// Remove it manually.
@@ -620,10 +639,6 @@ func ext() string {
 	return ""
 }
 
-func (b *Build) hgCmd(dir string, args ...string) ([]byte, error) {
-	return b.run(dir, "hg", append([]string{"--config", "extensions.codereview=!"}, args...)...)
-}
-
 func (b *Build) run(dir, name string, args ...string) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	absName, err := lookPath(name)
@@ -749,39 +764,45 @@ type File struct {
 }
 
 func setupOAuthClient() error {
-	config := &oauth.Config{
-		ClientId:     "999119582588-h7kpj5pcm6d9solh5lgrbusmvvk4m9dn.apps.googleusercontent.com",
+	config := &oauth2.Config{
+		ClientID:     "999119582588-h7kpj5pcm6d9solh5lgrbusmvvk4m9dn.apps.googleusercontent.com",
 		ClientSecret: "8YLFgOhXIELWbO-NtF3iqIQz",
-		Scope:        storage.DevstorageRead_writeScope,
-		AuthURL:      "https://accounts.google.com/o/oauth2/auth",
-		TokenURL:     "https://accounts.google.com/o/oauth2/token",
-		TokenCache:   oauth.CacheFile(*tokenCache),
+		Endpoint:     google.Endpoint,
+		Scopes:       []string{storage.DevstorageRead_writeScope},
 		RedirectURL:  "oob",
 	}
-	transport := &oauth.Transport{Config: config}
-	if token, err := config.TokenCache.Token(); err != nil {
-		url := transport.Config.AuthCodeURL("")
-		fmt.Println("Visit the following URL, obtain an authentication" +
-			"code, and enter it below.")
-		fmt.Println(url)
-		fmt.Print("Enter authentication code: ")
-		code := ""
-		if _, err := fmt.Scan(&code); err != nil {
-			return err
-		}
-		if _, err := transport.Exchange(code); err != nil {
-			return err
-		}
-	} else {
-		transport.Token = token
+	url := config.AuthCodeURL("junk")
+	fmt.Println("Visit the following URL, obtain an authentication" +
+		"code, and enter it below.")
+	fmt.Println(url)
+	fmt.Print("Enter authentication code: ")
+	code := ""
+	if _, err := fmt.Scan(&code); err != nil {
+		return err
 	}
-	oauthClient = transport.Client()
+	tok, err := config.Exchange(oauth2.NoContext, code)
+	if err != nil {
+		return err
+	}
+	oauthClient = config.Client(oauth2.NoContext, tok)
 	return nil
 }
 
 func (b *Build) clean(files []string) error {
 	for _, name := range files {
-		err := os.RemoveAll(filepath.Join(b.root, name))
+		path := filepath.Join(b.root, name)
+		var err error
+		if b.OS == "windows" {
+			// Git sets some of its packfiles as 'read only',
+			// so os.RemoveAll will fail for the ".git" directory.
+			// Instead, shell out to cmd's 'del' subcommand.
+			cmd := exec.Command("cmd.exe", "/C", "del", "/Q", "/F", "/S", path)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			err = cmd.Run()
+		} else {
+			err = os.RemoveAll(path)
+		}
 		if err != nil {
 			return err
 		}
@@ -1011,6 +1032,11 @@ var hgTool = tool{
 	},
 }
 
+var gitTool = tool{
+	"http://git-scm.com/download/win",
+	[]string{`C:\Program Files\Git`, `C:\Program Files (x86)\Git`},
+}
+
 var gccTool = tool{
 	"Mingw gcc; http://sourceforge.net/projects/mingw/files/Installer/mingw-get-inst/",
 	[]string{`C:\Mingw\bin`},
@@ -1022,6 +1048,7 @@ var windowsDeps = map[string]tool{
 	"candle": wixTool,
 	"light":  wixTool,
 	"cmd":    {"Windows cmd.exe", nil},
+	"git":    gitTool,
 	"hg":     hgTool,
 }
 

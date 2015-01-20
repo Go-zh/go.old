@@ -22,7 +22,6 @@ const (
 
 const (
 	uintptrMask = 1<<(8*ptrSize) - 1
-	poisonGC    = uintptrMask & 0xf969696969696969
 	poisonStack = uintptrMask & 0x6868686868686868
 
 	// Goroutine preemption request.
@@ -297,9 +296,9 @@ func stackfree(stk stack) {
 var maxstacksize uintptr = 1 << 20 // enough until runtime.main sets it for real
 
 var mapnames = []string{
-	_BitsDead:    "---",
-	_BitsScalar:  "scalar",
-	_BitsPointer: "ptr",
+	typeDead:    "---",
+	typeScalar:  "scalar",
+	typePointer: "ptr",
 }
 
 // Stack frame layout
@@ -372,7 +371,7 @@ func adjustpointers(scanp unsafe.Pointer, cbv *bitvector, adjinfo *adjustinfo, f
 	minp := adjinfo.old.lo
 	maxp := adjinfo.old.hi
 	delta := adjinfo.delta
-	num := uintptr(bv.n / _BitsPerPointer)
+	num := uintptr(bv.n) / typeBitsWidth
 	for i := uintptr(0); i < num; i++ {
 		if stackDebug >= 4 {
 			print("        ", add(scanp, i*ptrSize), ":", mapnames[ptrbits(&bv, i)], ":", hex(*(*uintptr)(add(scanp, i*ptrSize))), " # ", i, " ", bv.bytedata[i/4], "\n")
@@ -380,16 +379,16 @@ func adjustpointers(scanp unsafe.Pointer, cbv *bitvector, adjinfo *adjustinfo, f
 		switch ptrbits(&bv, i) {
 		default:
 			throw("unexpected pointer bits")
-		case _BitsDead:
+		case typeDead:
 			if debug.gcdead != 0 {
 				*(*unsafe.Pointer)(add(scanp, i*ptrSize)) = unsafe.Pointer(uintptr(poisonStack))
 			}
-		case _BitsScalar:
+		case typeScalar:
 			// ok
-		case _BitsPointer:
+		case typePointer:
 			p := *(*unsafe.Pointer)(add(scanp, i*ptrSize))
 			up := uintptr(p)
-			if f != nil && 0 < up && up < _PageSize && debug.invalidptr != 0 || up == poisonGC || up == poisonStack {
+			if f != nil && 0 < up && up < _PageSize && debug.invalidptr != 0 || up == poisonStack {
 				// Looks like a junk value in a pointer slot.
 				// Live analysis wrong?
 				getg().m.traceback = 2
@@ -454,7 +453,7 @@ func adjustframe(frame *stkframe, arg unsafe.Pointer) bool {
 			throw("bad symbol table")
 		}
 		bv = stackmapdata(stackmap, pcdata)
-		size = (uintptr(bv.n) * ptrSize) / _BitsPerPointer
+		size = (uintptr(bv.n) / typeBitsWidth) * ptrSize
 		if stackDebug >= 3 {
 			print("      locals ", pcdata, "/", stackmap.n, " ", size/ptrSize, " words ", bv.bytedata, "\n")
 		}
@@ -634,20 +633,43 @@ func newstack() {
 		throw("runtime: stack split at bad time")
 	}
 
-	// The goroutine must be executing in order to call newstack,
-	// so it must be Grunning or Gscanrunning.
-
 	gp := thisg.m.curg
 	morebuf := thisg.m.morebuf
 	thisg.m.morebuf.pc = 0
 	thisg.m.morebuf.lr = 0
 	thisg.m.morebuf.sp = 0
 	thisg.m.morebuf.g = 0
+	rewindmorestack(&gp.sched)
 
+	// NOTE: stackguard0 may change underfoot, if another thread
+	// is about to try to preempt gp. Read it just once and use that same
+	// value now and below.
+	preempt := atomicloaduintptr(&gp.stackguard0) == stackPreempt
+
+	// Be conservative about where we preempt.
+	// We are interested in preempting user Go code, not runtime code.
+	// If we're holding locks, mallocing, or GCing, don't preempt.
+	// This check is very early in newstack so that even the status change
+	// from Grunning to Gwaiting and back doesn't happen in this case.
+	// That status change by itself can be viewed as a small preemption,
+	// because the GC might change Gwaiting to Gscanwaiting, and then
+	// this goroutine has to wait for the GC to finish before continuing.
+	// If the GC is in some way dependent on this goroutine (for example,
+	// it needs a lock held by the goroutine), that small preemption turns
+	// into a real deadlock.
+	if preempt {
+		if thisg.m.locks != 0 || thisg.m.mallocing != 0 || thisg.m.gcing != 0 || thisg.m.p.status != _Prunning {
+			// Let the goroutine keep running for now.
+			// gp->preempt is set, so it will be preempted next time.
+			gp.stackguard0 = gp.stack.lo + _StackGuard
+			gogo(&gp.sched) // never return
+		}
+	}
+
+	// The goroutine must be executing in order to call newstack,
+	// so it must be Grunning (or Gscanrunning).
 	casgstatus(gp, _Grunning, _Gwaiting)
 	gp.waitreason = "stack growth"
-
-	rewindmorestack(&gp.sched)
 
 	if gp.stack.lo == 0 {
 		throw("missing stack in newstack")
@@ -676,7 +698,7 @@ func newstack() {
 		writebarrierptr_nostore((*uintptr)(unsafe.Pointer(&gp.sched.ctxt)), uintptr(gp.sched.ctxt))
 	}
 
-	if gp.stackguard0 == stackPreempt {
+	if preempt {
 		if gp == thisg.m.g0 {
 			throw("runtime: preempt g0")
 		}
@@ -695,16 +717,6 @@ func newstack() {
 			gp.preempt = false
 			gp.preemptscan = false // Tells the GC premption was successful.
 			gogo(&gp.sched)        // never return
-		}
-
-		// Be conservative about where we preempt.
-		// We are interested in preempting user Go code, not runtime code.
-		if thisg.m.locks != 0 || thisg.m.mallocing != 0 || thisg.m.gcing != 0 || thisg.m.p.status != _Prunning {
-			// Let the goroutine keep running for now.
-			// gp->preempt is set, so it will be preempted next time.
-			gp.stackguard0 = gp.stack.lo + _StackGuard
-			casgstatus(gp, _Gwaiting, _Grunning)
-			gogo(&gp.sched) // never return
 		}
 
 		// Act like goroutine called runtime.Gosched.

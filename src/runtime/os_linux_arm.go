@@ -2,10 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Copyright 2009 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package runtime
 
 import "unsafe"
@@ -38,8 +34,7 @@ func checkgoarm() {
 	}
 }
 
-//go:nosplit
-func setup_auxv(argc int32, argv **byte) {
+func sysargs(argc int32, argv **byte) {
 	// skip over argv, envv to get to auxv
 	n := argc + 1
 	for argv_index(argv, n) != nil {

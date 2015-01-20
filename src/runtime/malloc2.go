@@ -104,7 +104,7 @@ const (
 	// Tunable constants.
 	_MaxSmallSize = 32 << 10
 
-	// Tiny allocator parameters, see "Tiny allocator" comment in malloc.goc.
+	// Tiny allocator parameters, see "Tiny allocator" comment in malloc.go.
 	_TinySize      = 16
 	_TinySizeClass = 2
 
@@ -322,9 +322,9 @@ type mcache struct {
 	next_sample      int32  // trigger heap sample after allocating this many bytes
 	local_cachealloc intptr // bytes allocated (or freed) from cache since last lock of heap
 	// Allocator cache for tiny objects w/o pointers.
-	// See "Tiny allocator" comment in malloc.goc.
-	tiny             *byte
-	tinysize         uintptr
+	// See "Tiny allocator" comment in malloc.go.
+	tiny             unsafe.Pointer
+	tinyoffset       uintptr
 	local_tinyallocs uintptr // number of tiny allocs not counted in other stats
 
 	// The rest is not accessed on every malloc.
@@ -403,6 +403,19 @@ type mspan struct {
 	limit       uintptr  // end of data in span
 	speciallock mutex    // guards specials list
 	specials    *special // linked list of special records sorted by offset.
+}
+
+func (s *mspan) base() uintptr {
+	return uintptr(s.start << _PageShift)
+}
+
+func (s *mspan) layout() (size, n, total uintptr) {
+	total = s.npages << _PageShift
+	size = s.elemsize
+	if size > 0 {
+		n = total / size
+	}
+	return
 }
 
 // Every MSpan is in one doubly-linked list,
