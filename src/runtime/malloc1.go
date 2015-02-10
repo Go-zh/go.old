@@ -71,6 +71,9 @@ func purgecachedstats(c *mcache) {
 	h := &mheap_
 	memstats.heap_alloc += uint64(c.local_cachealloc)
 	c.local_cachealloc = 0
+	if trace.enabled {
+		traceHeapAlloc()
+	}
 	memstats.tinyallocs += uint64(c.local_tinyallocs)
 	c.local_tinyallocs = 0
 	memstats.nlookup += uint64(c.local_nlookup)
@@ -96,7 +99,7 @@ func mallocinit() {
 	var reserved bool
 
 	// limit = runtime.memlimit();
-	// See https://code.google.com/p/go/issues/detail?id=5049
+	// See https://golang.org/issue/5049
 	// TODO(rsc): Fix after 1.1.
 	limit = 0
 

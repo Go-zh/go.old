@@ -206,6 +206,10 @@ control the execution of any test:
 	-timeout t
 	    If a test runs longer than t, panic.
 
+	-trace trace.out
+	    Write an execution trace to the specified file before exiting.
+	    Writes test binary as -c would.
+
 	-v
 	    Verbose output: log all tests as they are run. Also print all
 	    text from Log and Logf calls even if the test succeeds.
@@ -342,11 +346,11 @@ func runTest(cmd *Command, args []string) {
 	// been given on the command line (implicit current directory)
 	// or when benchmarking.
 	// Also stream if we're showing output anyway with a
-	// single package under test.  In that case, streaming the
-	// output produces the same result as not streaming,
-	// just more immediately.
+	// single package under test or if parallelism is set to 1.
+	// In these cases, streaming the output produces the same result
+	// as not streaming, just more immediately.
 	testStreamOutput = len(pkgArgs) == 0 || testBench ||
-		(len(pkgs) <= 1 && testShowPass)
+		(testShowPass && (len(pkgs) == 1 || buildP == 1))
 
 	var b builder
 	b.init()

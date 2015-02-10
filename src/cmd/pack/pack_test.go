@@ -258,7 +258,7 @@ func TestLargeDefs(t *testing.T) {
 	}
 
 	printf("package large\n\ntype T struct {\n")
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 1000; i++ {
 		printf("f%d int `tag:\"", i)
 		for j := 0; j < 100; j++ {
 			printf("t%d=%d,", j, j)

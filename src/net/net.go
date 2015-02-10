@@ -38,9 +38,6 @@ The Listen function creates servers:
 */
 package net
 
-// TODO(rsc):
-//	support for raw ethernet sockets
-
 import (
 	"errors"
 	"io"
@@ -138,6 +135,8 @@ func (c *conn) Close() error {
 }
 
 // LocalAddr returns the local network address.
+// The Addr returned is shared by all invocations of LocalAddr, so
+// do not modify it.
 func (c *conn) LocalAddr() Addr {
 	if !c.ok() {
 		return nil
@@ -146,6 +145,8 @@ func (c *conn) LocalAddr() Addr {
 }
 
 // RemoteAddr returns the remote network address.
+// The Addr returned is shared by all invocations of RemoteAddr, so
+// do not modify it.
 func (c *conn) RemoteAddr() Addr {
 	if !c.ok() {
 		return nil

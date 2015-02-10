@@ -1414,7 +1414,7 @@ movetomodule(DWDie *parent)
 	die->link = parent->child;
 }
 
-// If the pcln table contains runtime/string.goc, use that to set gdbscript path.
+// If the pcln table contains runtime/runtime.go, use that to set gdbscript path.
 static void
 finddebugruntimepath(LSym *s)
 {
@@ -1427,7 +1427,7 @@ finddebugruntimepath(LSym *s)
 
 	for(i=0; i<s->pcln->nfile; i++) {
 		f = s->pcln->file[i];
-		if((p = strstr(f->name, "runtime/string.goc")) != nil) {
+		if((p = strstr(f->name, "runtime/runtime.go")) != nil) {
 			*p = '\0';
 			snprint(gdbscript, sizeof gdbscript, "%sruntime/runtime-gdb.py", f->name);
 			*p = 'r';
@@ -1658,7 +1658,7 @@ writelines(void)
 		dwfunc->hash = varhash;	 // enable indexing of children by name
 		memset(varhash, 0, sizeof varhash);
 		for(a = s->autom; a; a = a->link) {
-			switch (a->type) {
+			switch (a->name) {
 			case A_AUTO:
 				dt = DW_ABRV_AUTO;
 				offs = a->aoffset - PtrSize;

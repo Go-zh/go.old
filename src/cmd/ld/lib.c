@@ -212,6 +212,14 @@ loadlib(void)
 		// Force external linking for android.
 		if(strcmp(goos, "android") == 0)
 			linkmode = LinkExternal;
+
+		// cgo on Darwin must use external linking
+		// we can always use external linking, but then there will be circular
+		// dependency problems when compiling natively (external linking requires
+		// runtime/cgo, runtime/cgo requires cmd/cgo, but cmd/cgo needs to be
+		// compiled using external linking.)
+		if(thechar == '5' && HEADTYPE == Hdarwin && iscgo)
+			linkmode = LinkExternal;
 	}
 
 	if(linkmode == LinkExternal && !iscgo) {
@@ -257,7 +265,13 @@ loadlib(void)
 	}
 	
 	tlsg = linklookup(ctxt, "runtime.tlsg", 0);
-	tlsg->type = STLSBSS;
+	// For most ports, runtime.tlsg is a placeholder symbol for TLS
+	// relocation. However, the Android and Darwin ports need it to
+	// be a real variable. Instead of hard-coding which platforms
+	// need it to be a real variable, we set the type to STLSBSS only
+	// when the runtime has not declared its type already.
+	if(tlsg->type == 0)
+		tlsg->type = STLSBSS;
 	tlsg->size = PtrSize;
 	tlsg->hide = 1;
 	tlsg->reachable = 1;
@@ -1411,11 +1425,11 @@ genasmsym(void (*put)(LSym*, char*, int, vlong, vlong, int, LSym*))
 		for(a=s->autom; a; a=a->link) {
 			// Emit a or p according to actual offset, even if label is wrong.
 			// This avoids negative offsets, which cannot be encoded.
-			if(a->type != A_AUTO && a->type != A_PARAM)
+			if(a->name != A_AUTO && a->name != A_PARAM)
 				continue;
 			
 			// compute offset relative to FP
-			if(a->type == A_PARAM)
+			if(a->name == A_PARAM)
 				off = a->aoffset;
 			else
 				off = a->aoffset - PtrSize;
