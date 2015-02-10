@@ -1506,6 +1506,17 @@ func TestCallWithStruct(t *testing.T) {
 	}
 }
 
+func BenchmarkCall(b *testing.B) {
+	fv := ValueOf(func(a, b string) {})
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		args := []Value{ValueOf("a"), ValueOf("b")}
+		for pb.Next() {
+			fv.Call(args)
+		}
+	})
+}
+
 func TestMakeFunc(t *testing.T) {
 	f := dummy
 	fv := MakeFunc(TypeOf(f), func(in []Value) []Value { return in })
@@ -2724,6 +2735,8 @@ var tagGetTests = []struct {
 	{`protobuf:"PB(1,2)"`, `rotobuf`, ``},
 	{`protobuf:"PB(1,2)" json:"name"`, `json`, `name`},
 	{`protobuf:"PB(1,2)" json:"name"`, `protobuf`, `PB(1,2)`},
+	{`k0:"values contain spaces" k1:"and\ttabs"`, "k0", "values contain spaces"},
+	{`k0:"values contain spaces" k1:"and\ttabs"`, "k1", "and\ttabs"},
 }
 
 func TestTagGet(t *testing.T) {

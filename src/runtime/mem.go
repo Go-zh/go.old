@@ -56,11 +56,11 @@ type MemStats struct {
 	LastGC       uint64 // end time of last collection (nanoseconds since 1970)
 	PauseTotalNs uint64
 	// 最近GC暂停时间的循环缓存，最近一次应为 [(NumGC+255)%256]
-	PauseNs      [256]uint64 // circular buffer of recent GC pause durations, most recent at [(NumGC+255)%256]
-	PauseEnd     [256]uint64 // circular buffer of recent GC pause end times
-	NumGC        uint32
-	EnableGC     bool
-	DebugGC      bool
+	PauseNs  [256]uint64 // circular buffer of recent GC pause durations, most recent at [(NumGC+255)%256]
+	PauseEnd [256]uint64 // circular buffer of recent GC pause end times
+	NumGC    uint32
+	EnableGC bool
+	DebugGC  bool
 
 	// Per-size allocation statistics.
 	// 61 is NumSizeClasses in the C code.
@@ -101,14 +101,14 @@ func ReadMemStats(m *MemStats) {
 	// a pending garbage collection already calling it.
 	semacquire(&worldsema, false)
 	gp := getg()
-	gp.m.gcing = 1
+	gp.m.preemptoff = "read mem stats"
 	systemstack(stoptheworld)
 
 	systemstack(func() {
 		readmemstats_m(m)
 	})
 
-	gp.m.gcing = 0
+	gp.m.preemptoff = ""
 	gp.m.locks++
 	semrelease(&worldsema)
 	systemstack(starttheworld)
@@ -119,14 +119,14 @@ func ReadMemStats(m *MemStats) {
 func runtime_debug_WriteHeapDump(fd uintptr) {
 	semacquire(&worldsema, false)
 	gp := getg()
-	gp.m.gcing = 1
+	gp.m.preemptoff = "write heap dump"
 	systemstack(stoptheworld)
 
 	systemstack(func() {
 		writeheapdump_m(fd)
 	})
 
-	gp.m.gcing = 0
+	gp.m.preemptoff = ""
 	gp.m.locks++
 	semrelease(&worldsema)
 	systemstack(starttheworld)
