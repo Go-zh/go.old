@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"os"
 	"os/exec"
 	"regexp"
 	"runtime"
@@ -121,16 +122,16 @@ func parseProfile(t *testing.T, bytes []byte, f func(uintptr, []uintptr)) {
 func testCPUProfile(t *testing.T, need []string, f func()) {
 	switch runtime.GOOS {
 	case "darwin":
-		out, err := exec.Command("uname", "-a").CombinedOutput()
-		if err != nil {
-			t.Fatal(err)
+		if runtime.GOARCH != "arm" {
+			out, err := exec.Command("uname", "-a").CombinedOutput()
+			if err != nil {
+				t.Fatal(err)
+			}
+			vers := string(out)
+			t.Logf("uname -a: %v", vers)
 		}
-		vers := string(out)
-		t.Logf("uname -a: %v", vers)
 	case "plan9":
-		// unimplemented
-		// 还未实现
-		return
+		t.Skip("skipping on plan9")
 	}
 
 	var prof bytes.Buffer
@@ -188,11 +189,25 @@ func testCPUProfile(t *testing.T, need []string, f func()) {
 			t.Skipf("ignoring failure on %s; see golang.org/issue/6047", runtime.GOOS)
 			return
 		}
+		// Ignore the failure if the tests are running in a QEMU-based emulator,
+		// QEMU is not perfect at emulating everything.
+		// IN_QEMU environmental variable is set by some of the Go builders.
+		// IN_QEMU=1 indicates that the tests are running in QEMU. See issue 9605.
+		if os.Getenv("IN_QEMU") == "1" {
+			t.Skip("ignore the failure in QEMU; see golang.org/issue/9605")
+			return
+		}
 		t.FailNow()
 	}
 }
 
 func TestCPUProfileWithFork(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		if runtime.GOARCH == "arm" {
+			t.Skipf("skipping on darwin/arm")
+		}
+	}
+
 	// Fork can hang if preempted with signals frequently enough (see issue 5517).
 	// Ensure that we do not do this.
 	heap := 1 << 30
@@ -368,7 +383,7 @@ func TestBlockProfile(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		if !regexp.MustCompile(test.re).MatchString(prof) {
+		if !regexp.MustCompile(strings.Replace(test.re, "\t", "\t+", -1)).MatchString(prof) {
 			t.Fatalf("Bad %v entry, expect:\n%v\ngot:\n%v", test.name, test.re, prof)
 		}
 	}

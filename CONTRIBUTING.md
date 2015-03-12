@@ -40,7 +40,7 @@ The gophers there will answer or ask you to file an issue if you've tripped over
 -->
 
 一般问题请在 [golang-nuts 邮件列表](https://groups.google.com/group/golang-nuts)
-里提问，那里的 Gopher 们会回答你。当你遇到是 Bug 时，他们自会建议你在问题跟踪器里提交一个问题。
+里提问，那里的 Gopher 们会回答你。若你遇到的是 Bug，他们自会建议你在问题跟踪器里提交一个问题。
 
 <!--
 ## Contributing code

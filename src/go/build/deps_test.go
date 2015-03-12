@@ -123,7 +123,7 @@ var pkgDeps = map[string][]string{
 	// Operating system access.
 	"syscall":       {"L0", "unicode/utf16"},
 	"time":          {"L0", "syscall"},
-	"os":            {"L1", "os", "syscall", "time"},
+	"os":            {"L1", "os", "syscall", "time", "internal/syscall/windows"},
 	"path/filepath": {"L2", "os", "syscall"},
 	"io/ioutil":     {"L2", "os", "path/filepath", "time"},
 	"os/exec":       {"L2", "os", "path/filepath", "syscall"},
@@ -240,7 +240,7 @@ var pkgDeps = map[string][]string{
 	// Basic networking.
 	// Because net must be used by any package that wants to
 	// do networking portably, it must have a small dependency set: just L1+basic os.
-	"net": {"L1", "CGO", "os", "syscall", "time"},
+	"net": {"L1", "CGO", "os", "syscall", "time", "internal/syscall/windows"},
 
 	// NET enables use of basic network-related packages.
 	"NET": {
@@ -252,7 +252,7 @@ var pkgDeps = map[string][]string{
 
 	// Uses of networking.
 	"log/syslog":    {"L4", "OS", "net"},
-	"net/mail":      {"L4", "NET", "OS"},
+	"net/mail":      {"L4", "NET", "OS", "internal/mime"},
 	"net/textproto": {"L4", "OS", "net"},
 
 	// Core crypto.
@@ -311,7 +311,7 @@ var pkgDeps = map[string][]string{
 	"crypto/x509/pkix": {"L4", "CRYPTO-MATH"},
 
 	// Simple net+crypto-aware packages.
-	"mime/multipart": {"L4", "OS", "mime", "crypto/rand", "net/textproto", "mime/internal/quotedprintable"},
+	"mime/multipart": {"L4", "OS", "mime", "crypto/rand", "net/textproto", "mime/quotedprintable"},
 	"net/smtp":       {"L4", "CRYPTO", "NET", "crypto/tls"},
 
 	// HTTP, kingpin of dependencies.
@@ -376,10 +376,10 @@ var allowedErrors = map[osPkg]bool{
 }
 
 func TestDependencies(t *testing.T) {
-	if runtime.GOOS == "nacl" {
-		// NaCl tests run in a limited file system and we do not
+	if runtime.GOOS == "nacl" || (runtime.GOOS == "darwin" && runtime.GOARCH == "arm") {
+		// Tests run in a limited file system and we do not
 		// provide access to every source file.
-		t.Skip("skipping on NaCl")
+		t.Skipf("skipping on %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 	var all []string
 

@@ -13,6 +13,24 @@ package runtime
 
 import "unsafe"
 
+//go:linkname runtime_debug_WriteHeapDump runtime/debug.WriteHeapDump
+func runtime_debug_WriteHeapDump(fd uintptr) {
+	semacquire(&worldsema, false)
+	gp := getg()
+	gp.m.preemptoff = "write heap dump"
+	systemstack(stoptheworld)
+
+	systemstack(func() {
+		writeheapdump_m(fd)
+	})
+
+	gp.m.preemptoff = ""
+	gp.m.locks++
+	semrelease(&worldsema)
+	systemstack(starttheworld)
+	gp.m.locks--
+}
+
 const (
 	fieldKindEol       = 0
 	fieldKindPtr       = 1
@@ -344,7 +362,7 @@ func dumpgoroutine(gp *g) {
 	dumpint(uint64(gp.goid))
 	dumpint(uint64(gp.gopc))
 	dumpint(uint64(readgstatus(gp)))
-	dumpbool(gp.issystem)
+	dumpbool(isSystemGoroutine(gp))
 	dumpbool(false) // isbackground
 	dumpint(uint64(gp.waitsince))
 	dumpstr(gp.waitreason)

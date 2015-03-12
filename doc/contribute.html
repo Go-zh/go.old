@@ -141,10 +141,8 @@ After running for a while, the command should print
 
 <div class="english">
 <p>
-Changes to Go must be reviewed before they are submitted,
+Changes to Go must be reviewed before they are accepted,
 no matter who makes the change.
-(In exceptional cases, such as fixing a build, the review can
-follow shortly after submitting.)
 A custom git command called <code>git-codereview</code>,
 discussed below, helps manage the code review process through a Google-hosted
 <a href="https://go-review.googlesource.com/">instance</a> of the code review
@@ -167,16 +165,12 @@ system called <a href="https://code.google.com/p/gerrit/">Gerrit</a>.
 
 <div class="english">
 <p>
-The Git code hosting server and Gerrit code review server both use a Google
-Account to authenticate. You therefore need a Google Account to proceed.
-(If you can use the account to
-<a href="https://www.google.com/accounts/Login">sign in at google.com</a>,
-you can use it to sign in to the code review server.)
-The email address you use with the code review system
-will be recorded in the <a href="https://go.googlesource.com/go">change log</a>
-and in the <a href="/CONTRIBUTORS"><code>CONTRIBUTORS</code></a> file.
-You can <a href="https://www.google.com/accounts/NewAccount">create a Google Account</a>
-associated with any address where you receive email.
+Gerrit uses Google Accounts for authentication. If you don't have
+a Google Account, you can create an account which
+<a href="https://www.google.com/accounts/NewAccount">includes
+a new Gmail email account</a> or create an account associated
+<a href="https://accounts.google.com/SignUpWithoutGmail">with your existing
+email address</a>.
 </p>
 </div>
 
@@ -191,52 +185,65 @@ Git 代码托管服务器和 Gerrit 代码审核服务器都通过 Google 账户
 
 <div class="english">
 <p>
-Visit the site <a href="https://go.googlesource.com">go.googlesource.com</a>
-and log in using your Google Account.
-Click on the "Generate Password" link that appears at the top of the page.
+The email address associated with the Google Account you use will be recorded in
+the <a href="https://go.googlesource.com/go/+log/">change log</a>
+and in the <a href="/CONTRIBUTORS">contributors file</a>.
 </p>
 </div>
 
 <p>
-请访问 <a href="https://go.googlesource.com">go.googlesource.com</a>
-并通过你的 Google 账户登录，点击顶部的“Generate Password”（生成密码）连接。
+与你的 Google 账户关联的邮件地址将被记录在
+<a href="https://go.googlesource.com/go/+log/">更改日志</a> 和
+<a href="/CONTRIBUTORS">贡献者文件</a> 中。
 </p>
 
 <div class="english">
 <p>
-Click the radio button that says "Only <code>go.googlesource.com</code>"
-to use this authentication token only for the Go project.
+To set up your account in Gerrit, visit
+<a href="https://go.googlesource.com">go.googlesource.com</a>
+and click on "Generate Password" in the page's top right menu bar.
 </p>
 </div>
 
 <p>
-接着点击“Only <code>go.googlesource.com</code>”选项来只为 Go 项目使用此认证标记。
+要在 Gerrit 上设置你的账户，请访问
+<a href="https://go.googlesource.com">go.googlesource.com</a>
+并通点击页面右上角菜单中的“Generate Password”（生成密码）。
 </p>
 
 <div class="english">
 <p>
-Further down the page is a box containing commands to install
-the authentication cookie in file called <code>.gitcookies</code> in your home
-directory.
-Copy the text for the commands into a Unix shell window to execute it.
-That will install the authentication token.
+You will be redirected to accounts.google.com to sign in.
 </p>
 </div>
 
 <p>
-接着本页中的文本框内会显示一些命令，请将它们复制到 Unix shell 中执行，这会将此 cookie
-认证标记安装到你的 home 目录下的 <code>.gitcookies</code> 文件中。
+你会被重定向至 accounts.google.com 进行登录。
 </p>
 
 <div class="english">
 <p>
+Once signed in, you are returned back to go.googlesource.com to "Configure Git".
+Follow the instructions on the page.
 (If you are on a Windows computer, you should instead follow the instructions
 in the yellow box to run the command.)
 </p>
 </div>
 
 <p>
-（若你在 Windows 系统上，请按照黄色文本框内的指示来运行命令。）
+一旦登录成功，你就会返回到 go.googlesource.com 来“设置 Git”（Configure Git），
+请遵循该页面的指示进行设置。（若你在 Windows 系统上，请按照黄色文本框内的指示来运行命令。）
+</p>
+
+<div class="english">
+<p>
+Your secret authentication token is now in a <code>.gitcookie</code> file
+and Git is configured to use this file.
+</p>
+</div>
+
+<p>
+现在你的私人认证令牌会存储在 <code>.gitcookie</code> 文件中，Git 会被设置为使用该文件。
 </p>
 
 <div class="english">
@@ -247,10 +254,12 @@ in the yellow box to run the command.)
 
 <div class="english">
 <p>
-Now that you have a Google account and the authentication token,
-you need to register your account with Gerrit, the code review system.
-To do this, visit <a href="https://golang.org/cl">golang.org/cl</a>
-and log in using the same Google Account you used above.
+Now that you have your authentication token,
+you need to register your account with Gerrit.
+To do this, visit
+<a href="https://go-review.googlesource.com/login/">
+go-review.googlesource.com/login/</a>. You will immediately be redirected
+to Google Accounts. Sign in using the same Google Account you used above.
 That is all that is required.
 </p>
 </div>
@@ -278,7 +287,7 @@ Now install the <code>git-codereview</code> command by running,
 </p>
 
 <pre>
-go get -u golang.org/x/review/git-codereview
+$ go get -u golang.org/x/review/git-codereview
 </pre>
 
 <div class="english">
@@ -942,7 +951,7 @@ $ git sync
 Failed to merge in the changes.
 Patch failed at 0023 math: improved Sin, Cos and Tan precision for very large arguments
 The copy of the patch that failed is found in:
-   /home/you/repo/.git/rebase-apply/patch
+   /home/you/repo/.git/rebase-apply/patch
 
 When you have resolved this problem, run "git rebase --continue".
 If you prefer to skip this patch, run "git rebase --skip" instead.
@@ -977,15 +986,15 @@ The output will look something like this:
 <pre>
 rebase in progress; onto a24c3eb
 You are currently rebasing branch 'mcgillicutty' on 'a24c3eb'.
-  (fix conflicts and then run "git rebase --continue")
-  (use "git rebase --skip" to skip this patch)
-  (use "git rebase --abort" to check out the original branch)
+  (fix conflicts and then run "git rebase --continue")
+  (use "git rebase --skip" to skip this patch)
+  (use "git rebase --abort" to check out the original branch)
 
 Unmerged paths:
-  (use "git reset HEAD &lt;file&gt;..." to unstage)
-  (use "git add &lt;file&gt;..." to mark resolution)
+  (use "git reset HEAD &lt;file&gt;..." to unstage)
+  (use "git add &lt;file&gt;..." to mark resolution)
 
-	<i>both modified:   sin.go</i>
+	<i>both modified: sin.go</i>
 </pre>
 
 <div class="english">
@@ -1012,9 +1021,9 @@ might turn up:
 <pre>
 	arg = scale(arg)
 &lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD
-	if arg > 1e9 {
+	if arg &lt; 1e9 {
 =======
-	if arg > 1e10 {
+	if arg &lh; 1e10 {
 &gt;&gt;&gt;&gt;&gt;&gt;&gt; mcgillicutty
 		largeReduce(arg)
 </pre>
@@ -1035,7 +1044,7 @@ Git 不会显示它，不过假设二者编辑前的原始的文本为 1e8，你
 
 <pre>
 	arg = scale(arg)
-	if arg > 1e10 {
+	if arg &lt; 1e10 {
 		largeReduce(arg)
 </pre>
 
@@ -1092,7 +1101,7 @@ It should look something like this:
 </p>
 
 <pre>
-$ git fetch https://go.googlesource.com/review refs/changes/21/1221/1 && git checkout FETCH_HEAD
+$ git fetch https://go.googlesource.com/review refs/changes/21/1221/1 &amp;&amp; git checkout FETCH_HEAD
 </pre>
 
 <div class="english">

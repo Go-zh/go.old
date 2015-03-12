@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"sort"
 	"sync"
+	"sync/atomic"
 )
 
 var drivers = make(map[string]driver.Driver)
@@ -281,6 +282,10 @@ var ErrNoRows = errors.New("sql: no rows in result set")
 type DB struct {
 	driver driver.Driver
 	dsn    string
+	// numClosed is an atomic counter which represents a total number of
+	// closed connections. Stmt.openStmt checks it before cleaning closed
+	// connections in Stmt.css.
+	numClosed uint64
 
 	mu           sync.Mutex // protects following fields // 用于保护以下字段
 	freeConn     []*driverConn
@@ -317,7 +322,7 @@ type driverConn struct {
 	// guarded by db.mu
 	inUse      bool
 	onPut      []func() // code (with db.mu held) run when conn is next returned
-	dbmuClosed bool     // same as closed, but guarded by db.mu, for connIfFree
+	dbmuClosed bool     // same as closed, but guarded by db.mu, for removeClosedStmtLocked
 }
 
 func (dc *driverConn) releaseConn(err error) {
@@ -400,6 +405,7 @@ func (dc *driverConn) finalClose() error {
 	dc.db.maybeOpenNewConnections()
 	dc.db.mu.Unlock()
 
+	atomic.AddUint64(&dc.db.numClosed, 1)
 	return err
 }
 
@@ -773,43 +779,6 @@ var (
 	errConnBusy   = errors.New("database/sql: internal sentinel error: conn is busy")
 )
 
-// connIfFree returns (wanted, nil) if wanted is still a valid conn and
-// isn't in use.
-//
-// The error is errConnClosed if the connection if the requested connection
-// is invalid because it's been closed.
-//
-// The error is errConnBusy if the connection is in use.
-// TODO：待译
-func (db *DB) connIfFree(wanted *driverConn) (*driverConn, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	if wanted.dbmuClosed {
-		return nil, errConnClosed
-	}
-	if wanted.inUse {
-		return nil, errConnBusy
-	}
-	idx := -1
-	for ii, v := range db.freeConn {
-		if v == wanted {
-			idx = ii
-			break
-		}
-	}
-	if idx >= 0 {
-		db.freeConn = append(db.freeConn[:idx], db.freeConn[idx+1:]...)
-		wanted.inUse = true
-		return wanted, nil
-	}
-	// TODO(bradfitz): shouldn't get here. After Go 1.1, change this to:
-	// panic("connIfFree call requested a non-closed, non-busy, non-free conn")
-	// Which passes all the tests, but I'm too paranoid to include this
-	// late in Go 1.1.
-	// Instead, treat it like a busy connection:
-	return nil, errConnBusy
-}
-
 // putConnHook is a hook for testing.
 
 // putConnHook是一个测试使用的钩子。
@@ -957,9 +926,10 @@ func (db *DB) prepare(query string) (*Stmt, error) {
 		return nil, err
 	}
 	stmt := &Stmt{
-		db:    db,
-		query: query,
-		css:   []connStmt{{dc, si}},
+		db:            db,
+		query:         query,
+		css:           []connStmt{{dc, si}},
+		lastNumClosed: atomic.LoadUint64(&db.numClosed),
 	}
 	db.addDep(stmt, stmt)
 	db.putConn(dc, nil)
@@ -1458,6 +1428,10 @@ type Stmt struct {
 	// css是一个底层驱动的声明接口的数组，它只对特定的连接有效。只有当tx == nil的时候才使用，
 	// 它是从在空闲连接池中获取的。如果tx != nil，就会使用txsi。
 	css []connStmt
+
+	// lastNumClosed is copied from db.numClosed when Stmt is created
+	// without tx and closed connections in css are removed.
+	lastNumClosed uint64
 }
 
 // Exec executes a prepared statement with the given arguments and
@@ -1515,6 +1489,32 @@ func resultFromStatement(ds driverStmt, args ...interface{}) (Result, error) {
 	return driverResult{ds.Locker, resi}, nil
 }
 
+// removeClosedStmtLocked removes closed conns in s.css.
+//
+// To avoid lock contention on DB.mu, we do it only when
+// s.db.numClosed - s.lastNum is large enough.
+func (s *Stmt) removeClosedStmtLocked() {
+	t := len(s.css)/2 + 1
+	if t > 10 {
+		t = 10
+	}
+	dbClosed := atomic.LoadUint64(&s.db.numClosed)
+	if dbClosed-s.lastNumClosed < uint64(t) {
+		return
+	}
+
+	s.db.mu.Lock()
+	for i := 0; i < len(s.css); i++ {
+		if s.css[i].dc.dbmuClosed {
+			s.css[i] = s.css[len(s.css)-1]
+			s.css = s.css[:len(s.css)-1]
+			i--
+		}
+	}
+	s.db.mu.Unlock()
+	s.lastNumClosed = dbClosed
+}
+
 // connStmt returns a free driver connection on which to execute the
 // statement, a function to call to release the connection, and a
 // statement bound to that connection.
@@ -1546,35 +1546,15 @@ func (s *Stmt) connStmt() (ci *driverConn, releaseConn func(error), si driver.St
 		return ci, releaseConn, s.txsi.si, nil
 	}
 
-	for i := 0; i < len(s.css); i++ {
-		v := s.css[i]
-		_, err := s.db.connIfFree(v.dc)
-		if err == nil {
-			s.mu.Unlock()
-			return v.dc, v.dc.releaseConn, v.si, nil
-		}
-		if err == errConnClosed {
-			// Lazily remove dead conn from our freelist.
-			s.css[i] = s.css[len(s.css)-1]
-			s.css = s.css[:len(s.css)-1]
-			i--
-		}
-
-	}
+	s.removeClosedStmtLocked()
 	s.mu.Unlock()
 
-	// If all connections are busy, either wait for one to become available (if
-	// we've already hit the maximum number of open connections) or create a
-	// new one.
-	//
 	// TODO(bradfitz): or always wait for one? make configurable later?
 	dc, err := s.db.conn()
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	// Do another pass over the list to see whether this statement has
-	// already been prepared on the connection assigned to us.
 	s.mu.Lock()
 	for _, v := range s.css {
 		if v.dc == dc {

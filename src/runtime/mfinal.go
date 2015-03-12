@@ -8,6 +8,14 @@ package runtime
 
 import "unsafe"
 
+type finblock struct {
+	alllink *finblock
+	next    *finblock
+	cnt     int32
+	_       int32
+	fin     [(_FinBlockSize - 2*ptrSize - 2*4) / unsafe.Sizeof(finalizer{})]finalizer
+}
+
 var finlock mutex  // protects the following variables
 var fing *g        // goroutine that runs finalizers
 var finq *finblock // list of finalizers that are to be executed
@@ -16,6 +24,15 @@ var finptrmask [_FinBlockSize / typeBitmapScale]byte
 var fingwait bool
 var fingwake bool
 var allfin *finblock // list of all blocks
+
+// NOTE: Layout known to queuefinalizer.
+type finalizer struct {
+	fn   *funcval       // function to call
+	arg  unsafe.Pointer // ptr to object
+	nret uintptr        // bytes of return values from fn
+	fint *_type         // type of first argument of fn
+	ot   *ptrtype       // type of ptr to object
+}
 
 var finalizer1 = [...]byte{
 	// Each Finalizer is 5 words, ptr ptr uintptr ptr ptr.
@@ -102,7 +119,10 @@ func wakefing() *g {
 	return res
 }
 
-var fingCreate uint32
+var (
+	fingCreate  uint32
+	fingRunning bool
+)
 
 func createfing() {
 	// start the finalizer goroutine exactly once
@@ -126,9 +146,7 @@ func runfinq() {
 			gp := getg()
 			fing = gp
 			fingwait = true
-			gp.issystem = true
-			goparkunlock(&finlock, "finalizer wait")
-			gp.issystem = false
+			goparkunlock(&finlock, "finalizer wait", traceEvGoBlock, 1)
 			continue
 		}
 		unlock(&finlock)
@@ -136,8 +154,8 @@ func runfinq() {
 			racefingo()
 		}
 		for fb != nil {
-			for i := int32(0); i < fb.cnt; i++ {
-				f := (*finalizer)(add(unsafe.Pointer(&fb.fin), uintptr(i)*unsafe.Sizeof(finalizer{})))
+			for i := fb.cnt; i > 0; i-- {
+				f := (*finalizer)(add(unsafe.Pointer(&fb.fin), uintptr(i-1)*unsafe.Sizeof(finalizer{})))
 
 				framesz := unsafe.Sizeof((interface{})(nil)) + uintptr(f.nret)
 				if framecap < framesz {
@@ -169,14 +187,16 @@ func runfinq() {
 				default:
 					throw("bad kind in runfinq")
 				}
+				fingRunning = true
 				reflectcall(nil, unsafe.Pointer(f.fn), frame, uint32(framesz), uint32(framesz))
+				fingRunning = false
 
 				// drop finalizer queue references to finalized object
 				f.fn = nil
 				f.arg = nil
 				f.ot = nil
+				fb.cnt = i - 1
 			}
-			fb.cnt = 0
 			next := fb.next
 			lock(&finlock)
 			fb.next = finc

@@ -162,17 +162,31 @@ var matchHostnamesTests = []matchHostnamesTest{
 	{"a.b.c", "", false},
 	{"example.com", "example.com", true},
 	{"example.com", "www.example.com", false},
+	{"*.example.com", "example.com", false},
 	{"*.example.com", "www.example.com", true},
+	{"*.example.com", "www.example.com.", true},
 	{"*.example.com", "xyz.www.example.com", false},
-	{"*.*.example.com", "xyz.www.example.com", true},
-	{"*.www.*.com", "xyz.www.example.com", true},
+	{"*.*.example.com", "xyz.www.example.com", false},
+	{"*.www.*.com", "xyz.www.example.com", false},
+	{"*bar.example.com", "foobar.example.com", false},
+	{"f*.example.com", "foobar.example.com", false},
+	{"", ".", false},
+	{".", "", false},
+	{".", ".", false},
+	{"example.com", "example.com.", true},
+	{"example.com.", "example.com", true},
+	{"example.com.", "example.com.", true},
+	{"*.com.", "example.com.", true},
+	{"*.com.", "example.com", true},
+	{"*.com", "example.com", true},
+	{"*.com", "example.com.", true},
 }
 
 func TestMatchHostnames(t *testing.T) {
 	for i, test := range matchHostnamesTests {
 		r := matchHostnames(test.pattern, test.host)
 		if r != test.ok {
-			t.Errorf("#%d mismatch got: %t want: %t", i, r, test.ok)
+			t.Errorf("#%d mismatch got: %t want: %t when matching '%s' against '%s'", i, r, test.ok, test.host, test.pattern)
 		}
 	}
 }
@@ -326,6 +340,18 @@ func TestCreateSelfSignedCertificate(t *testing.T) {
 			Subject: pkix.Name{
 				CommonName:   commonName,
 				Organization: []string{"Σ Acme Co"},
+				Country:      []string{"US"},
+				ExtraNames: []pkix.AttributeTypeAndValue{
+					{
+						Type:  []int{2, 5, 4, 42},
+						Value: "Gopher",
+					},
+					// This should override the Country, above.
+					{
+						Type:  []int{2, 5, 4, 6},
+						Value: "NL",
+					},
+				},
 			},
 			NotBefore: time.Unix(1000, 0),
 			NotAfter:  time.Unix(100000, 0),
@@ -391,6 +417,21 @@ func TestCreateSelfSignedCertificate(t *testing.T) {
 			t.Errorf("%s: subject wasn't correctly copied from the template. Got %s, want %s", test.name, cert.Subject.CommonName, commonName)
 		}
 
+		if len(cert.Subject.Country) != 1 || cert.Subject.Country[0] != "NL" {
+			t.Errorf("%s: ExtraNames didn't override Country", test.name)
+		}
+
+		found := false
+		for _, atv := range cert.Subject.Names {
+			if atv.Type.Equal([]int{2, 5, 4, 42}) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("%s: Names didn't contain oid 2.5.4.42 from ExtraNames", test.name)
+		}
+
 		if cert.Issuer.CommonName != commonName {
 			t.Errorf("%s: issuer wasn't correctly copied from the template. Got %s, want %s", test.name, cert.Issuer.CommonName, commonName)
 		}
@@ -444,6 +485,52 @@ func TestCreateSelfSignedCertificate(t *testing.T) {
 			if err != nil {
 				t.Errorf("%s: signature verification failed: %s", test.name, err)
 			}
+		}
+	}
+}
+
+func TestUnknownCriticalExtension(t *testing.T) {
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("Failed to generate ECDSA key: %s", err)
+	}
+
+	oids := []asn1.ObjectIdentifier{
+		// This OID is in the PKIX arc, but unknown.
+		asn1.ObjectIdentifier{2, 5, 29, 999999},
+		// This is a nonsense, unassigned OID.
+		asn1.ObjectIdentifier{1, 2, 3, 4},
+	}
+
+	for _, oid := range oids {
+		template := Certificate{
+			SerialNumber: big.NewInt(1),
+			Subject: pkix.Name{
+				CommonName: "foo",
+			},
+			NotBefore: time.Unix(1000, 0),
+			NotAfter:  time.Unix(100000, 0),
+
+			ExtraExtensions: []pkix.Extension{
+				{
+					Id:       oid,
+					Critical: true,
+					Value:    nil,
+				},
+			},
+		}
+
+		derBytes, err := CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+		if err != nil {
+			t.Fatalf("failed to create certificate: %s", err)
+		}
+
+		_, err = ParseCertificate(derBytes)
+		if err == nil {
+			t.Fatalf("Certificate with critical extension was parsed without error.")
+		}
+		if _, ok := err.(UnhandledCriticalExtension); !ok {
+			t.Fatalf("Error was %#v, but wanted one of type UnhandledCriticalExtension", err)
 		}
 	}
 }
@@ -742,6 +829,10 @@ func TestImports(t *testing.T) {
 	switch runtime.GOOS {
 	case "android", "nacl":
 		t.Skipf("skipping on %s", runtime.GOOS)
+	case "darwin":
+		if runtime.GOARCH == "arm" {
+			t.Skipf("skipping on %s/%s", runtime.GOOS, runtime.GOARCH)
+		}
 	}
 
 	if err := exec.Command("go", "run", "x509_test_import.go").Run(); err != nil {

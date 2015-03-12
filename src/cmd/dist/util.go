@@ -84,8 +84,23 @@ func run(dir string, mode int, cmd ...string) string {
 
 	xcmd := exec.Command(cmd[0], cmd[1:]...)
 	xcmd.Dir = dir
+	var data []byte
 	var err error
-	data, err := xcmd.CombinedOutput()
+
+	// If we want to show command output and this is not
+	// a background command, assume it's the only thing
+	// running, so we can just let it write directly stdout/stderr
+	// as it runs without fear of mixing the output with some
+	// other command's output. Not buffering lets the output
+	// appear as it is printed instead of once the command exits.
+	// This is most important for the invocation of 'go1.4 build -v bootstrap/...'.
+	if mode&(Background|ShowOutput) == ShowOutput {
+		xcmd.Stdout = os.Stdout
+		xcmd.Stderr = os.Stderr
+		err = xcmd.Run()
+	} else {
+		data, err = xcmd.CombinedOutput()
+	}
 	if err != nil && mode&CheckExit != 0 {
 		outputLock.Lock()
 		if len(data) > 0 {
@@ -275,7 +290,7 @@ func xremoveall(p string) {
 	os.RemoveAll(p)
 }
 
-// xreaddir replaces dst with a list of the names of the files in dir.
+// xreaddir replaces dst with a list of the names of the files and subdirectories in dir.
 // The names are relative to dir; they are not full paths.
 func xreaddir(dir string) []string {
 	f, err := os.Open(dir)
@@ -286,6 +301,27 @@ func xreaddir(dir string) []string {
 	names, err := f.Readdirnames(-1)
 	if err != nil {
 		fatal("reading %s: %v", dir, err)
+	}
+	return names
+}
+
+// xreaddir replaces dst with a list of the names of the files in dir.
+// The names are relative to dir; they are not full paths.
+func xreaddirfiles(dir string) []string {
+	f, err := os.Open(dir)
+	if err != nil {
+		fatal("%v", err)
+	}
+	defer f.Close()
+	infos, err := f.Readdir(-1)
+	if err != nil {
+		fatal("reading %s: %v", dir, err)
+	}
+	var names []string
+	for _, fi := range infos {
+		if !fi.IsDir() {
+			names = append(names, fi.Name())
+		}
 	}
 	return names
 }
@@ -370,6 +406,8 @@ func main() {
 		if gohostarch == "" {
 			fatal("$objtype is unset")
 		}
+	case "windows":
+		exe = ".exe"
 	}
 
 	sysinit()
@@ -388,13 +426,17 @@ func main() {
 			gohostarch = "ppc64le"
 		case strings.Contains(out, "ppc64"):
 			gohostarch = "ppc64"
+		case gohostos == "darwin":
+			if strings.Contains(run("", CheckExit, "uname", "-v"), "RELEASE_ARM_") {
+				gohostarch = "arm"
+			}
 		default:
 			fatal("unknown architecture: %s", out)
 		}
 	}
 
 	if gohostarch == "arm" {
-		maxbg = 1
+		maxbg = min(maxbg, runtime.NumCPU())
 	}
 	bginit()
 
@@ -453,6 +495,12 @@ func xgetgoarm() string {
 		// NaCl guarantees VFPv3 and is always cross-compiled.
 		return "7"
 	}
+	if goos == "darwin" {
+		// Assume all darwin/arm devices are have VFPv3. This
+		// port is also mostly cross-compiled, so it makes little
+		// sense to auto-detect the setting.
+		return "7"
+	}
 	if gohostarch != "arm" || goos != gohostos {
 		// Conservative default for cross-compilation.
 		return "5"
@@ -461,24 +509,45 @@ func xgetgoarm() string {
 		// FreeBSD has broken VFP support.
 		return "5"
 	}
-	if xtryexecfunc(useVFPv3) {
+	if goos != "linux" {
+		// All other arm platforms that we support
+		// require ARMv7.
 		return "7"
 	}
-	if xtryexecfunc(useVFPv1) {
-		return "6"
+	cpuinfo := readfile("/proc/cpuinfo")
+	goarm := "5"
+	for _, line := range splitlines(cpuinfo) {
+		line := strings.SplitN(line, ":", 2)
+		if len(line) < 2 {
+			continue
+		}
+		if strings.TrimSpace(line[0]) != "Features" {
+			continue
+		}
+		features := splitfields(line[1])
+		sort.Strings(features) // so vfpv3 sorts after vfp
+
+		// Infer GOARM value from the vfp features available
+		// on this host. Values of GOARM detected are:
+		// 5: no vfp support was found
+		// 6: vfp (v1) support was detected, but no higher
+		// 7: vfpv3 support was detected.
+		// This matches the assertions in runtime.checkarm.
+		for _, f := range features {
+			switch f {
+			case "vfp":
+				goarm = "6"
+			case "vfpv3":
+				goarm = "7"
+			}
+		}
 	}
-	return "5"
+	return goarm
 }
 
-func xtryexecfunc(f func()) bool {
-	// TODO(rsc): Implement.
-	// The C cmd/dist used this to test whether certain assembly
-	// sequences could be executed properly. It used signals and
-	// timers and sigsetjmp, which is basically not possible in Go.
-	// We probably have to invoke ourselves as a subprocess instead,
-	// to contain the fault/timeout.
-	return false
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
-
-func useVFPv1()
-func useVFPv3()

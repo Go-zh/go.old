@@ -47,6 +47,8 @@ func (c *Conn) serverHandshake() error {
 	if err != nil {
 		return err
 	}
+	hs.finishedHash = newFinishedHash(hs.c.vers, hs.suite.tls12Hash)
+	hs.finishedHash.Write(hs.clientHello.marshal())
 
 	// For an overview of TLS handshaking, see https://tools.ietf.org/html/rfc5246#section-7.3
 	if isResume {
@@ -111,9 +113,6 @@ func (hs *serverHandshakeState) readClientHello() (isResume bool, err error) {
 	}
 	c.haveVers = true
 
-	hs.finishedHash = newFinishedHash(c.vers)
-	hs.finishedHash.Write(hs.clientHello.marshal())
-
 	hs.hello = new(serverHelloMsg)
 
 	supportedCurve := false
@@ -173,7 +172,7 @@ Curves:
 		// Although sending an empty NPN extension is reasonable, Firefox has
 		// had a bug around this. Best to send nothing at all if
 		// config.NextProtos is empty. See
-		// https://code.google.com/p/go/issues/detail?id=5445.
+		// https://golang.org/issue/5445.
 		if hs.clientHello.nextProtoNeg && len(config.NextProtos) > 0 {
 			hs.hello.nextProtoNeg = true
 			hs.hello.nextProtos = config.NextProtos
@@ -230,7 +229,7 @@ Curves:
 			// The client is doing a fallback connection.
 			if hs.clientHello.vers < c.config.maxVersion() {
 				c.sendAlert(alertInappropriateFallback)
-				return false, errors.New("tls: client using inppropriate protocol fallback")
+				return false, errors.New("tls: client using inappropriate protocol fallback")
 			}
 			break
 		}
@@ -248,7 +247,8 @@ func (hs *serverHandshakeState) checkForResumption() bool {
 	}
 
 	var ok bool
-	if hs.sessionState, ok = c.decryptTicket(hs.clientHello.sessionTicket); !ok {
+	var sessionTicket = append([]uint8{}, hs.clientHello.sessionTicket...)
+	if hs.sessionState, ok = c.decryptTicket(sessionTicket); !ok {
 		return false
 	}
 
@@ -463,13 +463,12 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 
 		hs.finishedHash.Write(certVerify.marshal())
 	}
-
 	preMasterSecret, err := keyAgreement.processClientKeyExchange(config, hs.cert, ckx, c.vers)
 	if err != nil {
 		c.sendAlert(alertHandshakeFailure)
 		return err
 	}
-	hs.masterSecret = masterFromPreMasterSecret(c.vers, preMasterSecret, hs.clientHello.random, hs.hello.random)
+	hs.masterSecret = masterFromPreMasterSecret(c.vers, hs.suite.tls12Hash, preMasterSecret, hs.clientHello.random, hs.hello.random)
 
 	return nil
 }
@@ -478,7 +477,7 @@ func (hs *serverHandshakeState) establishKeys() error {
 	c := hs.c
 
 	clientMAC, serverMAC, clientKey, serverKey, clientIV, serverIV :=
-		keysFromMasterSecret(c.vers, hs.masterSecret, hs.clientHello.random, hs.hello.random, hs.suite.macLen, hs.suite.keyLen, hs.suite.ivLen)
+		keysFromMasterSecret(c.vers, hs.suite.tls12Hash, hs.masterSecret, hs.clientHello.random, hs.hello.random, hs.suite.macLen, hs.suite.keyLen, hs.suite.ivLen)
 
 	var clientCipher, serverCipher interface{}
 	var clientHash, serverHash macFunction

@@ -153,39 +153,58 @@ Solaris以及Windows作为目标。它所支持组合的完整集将在下文的
 </div>
 
 <div class="english">
-<h2 id="ctools">Install C tools, if needed</h2>
+<h2 id="go14">Install Go compiler binaries</h2>
 </div>
 
-<h2 id="c工具">若需要，则安装C工具</h2>
+<h2 id="go14">安装 Go 编译器二进制文件</h2>
 
 <div class="english">
 <p>
-<<<<<<< HEAD
-The Go tool chain is written in C. To build it, you need a C compiler installed.
-Please refer to the <a href="//golang.org/wiki/InstallFromSource#Install_C_tools">InstallFromSource</a>
-=======
-The Go tool chain is written in C. To build it, you need a C compiler installed.
-Please refer to the <a href="//golang.org/wiki/InstallFromSource#install-c-tools">InstallFromSource</a>
->>>>>>> upstream/master
-page on the Go community Wiki for operating system specific instructions.
+The Go tool chain is written in Go. To build it, you need a Go compiler installed.
+The scripts that do the initial build of the tools look for an existing Go tool
+chain in <code>$HOME/go1.4</code>.
+(This path may be overridden by setting the <code>GOROOT_BOOTSTRAP</code>
+environment variable.)
 </p>
 </div>
 
 <p>
-Go工具链用C写成。要想构建它，你需要一个已安装的C编译器。请参阅Go社区维基上的
-<a href="//golang.org/wiki/InstallFromSource#Install_C_tools">InstallFromSource</a>
-页面来获得具体操作系统的说明。
+Go 工具链用 Go 编写，你需要安装一个 Go 编译器来构建它。用于初始化构建工具的脚本会在
+<code>$HOME/go1.4</code> 中寻找既有的 Go 工具链。（该路径可通过设置
+<code>GOROOT_BOOTSTRAP</code> 环境变量来覆盖。）
 </p>
 
-<<<<<<< HEAD
 <div class="english">
-<h2 id="mercurial">Install Mercurial, if needed</h2>
+<p>
+Build the tools with Go version 1.4 or a point release (1.4.1, 1.4.2 etc.).
+Go 1.4 binaries can be found at <a href="/dl/">the downloads page</a>.
+</p>
 </div>
-=======
+
+<p>
+构建这些工具需要 Go 1.4 或以上的发型版（1.4.1、1.4.2 等）。Go 1.4 二进制文件可在
+<a href="/dl/">此下载页面找到</a>。
+</p>
+
+<div class="english">
+<p>
+Download the zip or tarball of Go 1.4 for your platform and extract it to
+<code>$HOME/go1.4</code> (or your nominated <code>GOROOT_BOOTSTRAP</code>
+location).
+</p>
+</div>
+
+<p>
+请根据你的平台下载 Go 1.4 的 zip 或 tar 包，并将其提取到
+<code>$HOME/go1.4</code>（或你指定的 <code>GOROOT_BOOTSTRAP</code> 位置）。
+</p>
+
+
+<div class="english">
 <h2 id="git">Install Git, if needed</h2>
->>>>>>> upstream/master
+</div>
 
-<h2 id="hg">若需要，则安装Mercurial</h2>
+<h2 id="git">需要时安装 Git</h2>
 
 <div class="english">
 <p>
@@ -195,64 +214,20 @@ have a <code>git</code> command before proceeding.)
 </div>
 
 <p>
-要完成下一步，你必须安装Mercurial。（检查以下你是否有 <code>hg</code> 命令。）
+要完成下一步，你必须安装 Git。（继续前请检查你是否有 <code>git</code> 命令。）
 </p>
 
 <div class="english">
 <p>
 If you do not have a working Git installation,
 follow the instructions on the
-<<<<<<< HEAD
-<a href="http://mercurial.selenic.com/downloads">Mercurial downloads</a> page.
-</p>
-</div>
-
-<p>
-若你没有可工作的Mercurial安装，请跟随
-<a href="http://mercurial.selenic.com/downloads/">Mercurial下载</a>页面的说明进行操作。
-</p>
-
-<div class="english">
-<p>
-Mercurial versions 1.7.x and up require the configuration of
-<a href="http://mercurial.selenic.com/wiki/CACertificates">Certification Authorities</a>
-(CAs). Error messages of the form:
-</p>
-</div>
-
-<p>
-Mercurial版本1.7.x或更高需要
-<a href="http://mercurial.selenic.com/wiki/CACertificates">认证权限</a>（CA）的配置。
-其错误信息的形式为：
-</p>
-
-<div class="english">
-<pre>
-warning: code.google.com certificate with fingerprint b1:af: ... bc not verified (check hostfingerprints or web.cacerts config setting)
-</pre>
-</div>
-
-<pre>
-warning: code.google.com certificate with fingerprint b1:af: ... bc not verified (check hostfingerprints or web.cacerts config setting)
-或
-警告：code.google.com 的 b1:af: ... bc 指纹证书未经认证（请检查本地指纹或web证书配置设置）
-</pre>
-
-<div class="english">
-<p>
-when using Mercurial indicate that the CAs are missing.
-Check your Mercurial version (<code>hg --version</code>) and
-<a href="http://mercurial.selenic.com/wiki/CACertificates#Configuration_of_HTTPS_certificate_authorities">configure the CAs</a>
-if necessary.
-=======
 <a href="http://git-scm.com/downloads">Git downloads</a> page.
->>>>>>> upstream/master
 </p>
 </div>
 
 <p>
-当使用Mercurial时，该信息表明缺少CA证书。如果需要，检查你的Mercurial版本
-（<code>hg --version</code>）并<a href="http://mercurial.selenic.com/wiki/CACertificates#Configuration_of_HTTPS_certificate_authorities">配置CA证书</a>。
+若你没有可用的 Git，请按照
+<a href="http://git-scm.com/downloads">Git 下载页面</a> 的说明进行操作。
 </p>
 
 
@@ -266,20 +241,14 @@ if necessary.
 <p>Go will install to a directory named <code>go</code>.
 Change to the directory that will be its parent
 and make sure the <code>go</code> directory does not exist.
-<<<<<<< HEAD
-Then check out the repository:</p>
+Then clone the repository and check out the latest release tag:</p>
 </div>
 
 <p>
-Go将安装到名为 <code>go</code> 的目录。
-切换到将成为其父目录的目录并确认 <code>go</code> 目录未被创建。
-然后检出该仓库：
+Go 将安装到名为 <code>go</code> 的目录。
+切换到你想要安装 Go 的目录并确认该目录下没有 <code>go</code> 目录。
+然后 clone 代码库并检出最新的发行版标签：
 </p>
-
-<pre>
-$ hg clone -u release https://code.google.com/p/go
-=======
-Then clone the repository and check out the latest release tag:</p>
 
 <pre>
 $ git clone https://go.googlesource.com/go
@@ -287,24 +256,34 @@ $ cd go
 $ git checkout go1.4
 </pre>
 
+<div class="english">
 <h2 id="head">(Optional) Switch to the master branch</h2>
+</div>
 
+<h2 id="head">（）可选切换到 master 分支</h2>
+
+<div class="english">
 <p>If you intend to modify the go source code, and
 <a href="/doc/contribute.html">contribute your changes</a>
 to the project, then move your repository
 off the release branch, and onto the master (development) branch.
 Otherwise, skip this step.</p>
+</div>
+
+<p>
+若你打算修改 go 源码并向此项目<a href="/doc/contribute.html">贡献你的更改</a>，
+请离开发行版分支并切换到 master（开发）分支上。否者请跳过这一步。
+</p>
 
 <pre>
 $ git checkout master
->>>>>>> upstream/master
 </pre>
 
 <div class="english">
 <h2 id="install">Install Go</h2>
 </div>
 
-<h2 id="安装">安装Go</h2>
+<h2 id="安装">安装 Go</h2>
 
 <div class="english">
 <p>
@@ -313,11 +292,11 @@ To build the Go distribution, run
 </div>
 
 <p>
-要构建Go发行版，请运行
+要构建 Go 发行版，请运行
 </p>
 
 <pre>
-$ cd go/src
+$ cd src
 $ ./all.bash
 </pre>
 
@@ -328,7 +307,7 @@ $ ./all.bash
 </div>
 
 <p>
-（要在Windows下构建请使用 <code>all.bat</code>。）
+（要在 Windows 下构建，请使用 <code>all.bat</code>。）
 </p>
 
 <div class="english">
@@ -358,8 +337,6 @@ architecture, and root directory used during the install.
 </div>
 
 <p>
-where the details on the last few lines reflect the operating system,
-architecture, and root directory used during the install.
 其中最后几行信息反映了操作系统、架构以及在安装中使用的根目录。
 </p>
 
@@ -530,19 +507,14 @@ $ go get golang.org/x/tools/cmd/godoc
 
 <div class="english">
 <p>
-<<<<<<< HEAD
-To install these tools, the <code>go</code> <code>get</code> command requires
-that <a href="#mercurial">Mercurial</a> be installed locally.
-=======
 To install these tools, the <code>go</code> <code>get</code> command requires
 that <a href="#git">Git</a> be installed locally.
->>>>>>> upstream/master
 </p>
 </div>
 
 <p>
-要安装这些工具，<code>go</code> <code>get</code> 要求本地安装了
-<a href="#mercurial">Mercurial</a>。
+要安装这些工具，<code>go</code> <code>get</code> 命令需要本地安装了
+<a href="#git">Git</a>。
 </p>
 
 <div class="english">
@@ -621,23 +593,7 @@ Bug应当使用<a href="//code.google.com/p/go/issues/list">Go问题跟踪系统
 
 <div class="english">
 <p>
-<<<<<<< HEAD
-The Go project maintains a stable tags in its Mercurial repository:
-<code>release</code>.
-</p>
-</div>
-
-<p>
-Go项目在其Mercurial仓库中维护一个稳定的标签：<code>release</code>。
-</p>
-
-<div class="english">
-<p>
-The <code>release</code> tag refers to the current stable release of Go.
-Most Go users should use this version. New releases are announced on the
-=======
 New releases are announced on the
->>>>>>> upstream/master
 <a href="//groups.google.com/group/golang-announce">golang-announce</a>
 mailing list.
 Each announcement mentions the latest release tag, for instance,
@@ -646,9 +602,8 @@ Each announcement mentions the latest release tag, for instance,
 </div>
 
 <p>
-<code>release</code> 标签指当前Go的稳定发行版。大部分Go用户应当使用此版本。
 新的发行版将在<a href="http://groups.google.com/group/golang-announce">golang-announce</a>
-邮件列表中宣布。
+邮件列表中宣布。每次宣布都会提及最新的发型标签，例如 <code>go1.4</code>。
 </p>
 
 <div class="english">

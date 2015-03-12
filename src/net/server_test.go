@@ -21,6 +21,12 @@ func skipServerTest(net, unixsotype, addr string, ipv6, ipv4map, linuxOnly bool)
 		if net == unixsotype {
 			return true
 		}
+	case "darwin":
+		if net == unixsotype {
+			if runtime.GOARCH == "arm" || linuxOnly {
+				return true
+			}
+		}
 	default:
 		if net == unixsotype && linuxOnly {
 			return true
@@ -441,7 +447,7 @@ func runDatagramPacketConnClient(t *testing.T, net, laddr, taddr string, isEmpty
 	}
 	c, err := ListenPacket(net, laddr)
 	if err != nil {
-		t.Fatalf("ListenPacket(%q, %q) faild: %v", net, laddr, err)
+		t.Fatalf("ListenPacket(%q, %q) failed: %v", net, laddr, err)
 	}
 	defer c.Close()
 	c.SetReadDeadline(time.Now().Add(1 * time.Second))

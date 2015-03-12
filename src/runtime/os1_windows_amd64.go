@@ -138,6 +138,5 @@ func sigenable(sig uint32) {
 func sigdisable(sig uint32) {
 }
 
-func dosigprof(r *context, gp *g, mp *m) {
-	sigprof((*byte)(unsafe.Pointer(uintptr(r.rip))), (*byte)(unsafe.Pointer(uintptr(r.rsp))), nil, gp, mp)
+func sigignore(sig uint32) {
 }

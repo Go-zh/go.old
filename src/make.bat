@@ -25,6 +25,12 @@
 :: CGO_ENABLED: Controls cgo usage during the build. Set it to 1
 :: to include all cgo related files, .c and .go file with "cgo"
 :: build directive, in the build. Set it to 0 to ignore them.
+::
+:: CC: Command line to run to compile C code for GOHOSTARCH.
+:: Default is "gcc".
+::
+:: CC_FOR_TARGET: Command line to run compile C code for GOARCH.
+:: This is used by cgo. Default is CC.
 
 @echo off
 
@@ -71,14 +77,12 @@ echo.
 if x%1==x--dist-tool goto copydist
 if x%2==x--dist-tool goto copydist
 
-echo ##### Building compilers and Go bootstrap tool.
 set buildall=-a
 if x%1==x--no-clean set buildall=
 .\cmd\dist\dist bootstrap %buildall% -v
 if errorlevel 1 goto fail
 :: Delay move of dist tool to now, because bootstrap cleared tool directory.
 move .\cmd\dist\dist.exe "%GOTOOLDIR%\dist.exe"
-"%GOTOOLDIR%\go_bootstrap" clean -i std
 echo.
 
 if not %GOHOSTARCH% == %GOARCH% goto localbuild
@@ -86,18 +90,23 @@ if not %GOHOSTOS% == %GOOS% goto localbuild
 goto mainbuild
 
 :localbuild
-echo ##### Building tools for local system. %GOHOSTOS%/%GOHOSTARCH%
+echo ##### Building packages and commands for host, %GOHOSTOS%/%GOHOSTARCH%.
+:: CC_FOR_TARGET is recorded as the default compiler for the go tool. When building for the
+:: host, however, use the host compiler, CC, from `cmd/dist/dist env` instead.
 setlocal
 set GOOS=%GOHOSTOS%
 set GOARCH=%GOHOSTARCH%
-"%GOTOOLDIR%\go_bootstrap" install -gcflags "%GO_GCFLAGS%" -ldflags "%GO_LDFLAGS%" -v std
+"%GOTOOLDIR%\go_bootstrap" install -gcflags "%GO_GCFLAGS%" -ldflags "%GO_LDFLAGS%" -v std cmd
 endlocal
 if errorlevel 1 goto fail
 echo.
 
 :mainbuild
-echo ##### Building packages and commands.
-"%GOTOOLDIR%\go_bootstrap" install -gcflags "%GO_GCFLAGS%" -ldflags "%GO_LDFLAGS%" -a -v std
+echo ##### Building packages and commands for %GOOS%/%GOARCH%.
+setlocal
+set CC=%CC_FOR_TARGET%
+"%GOTOOLDIR%\go_bootstrap" install -gcflags "%GO_GCFLAGS%" -ldflags "%GO_LDFLAGS%" -a -v std cmd
+endlocal
 if errorlevel 1 goto fail
 del "%GOTOOLDIR%\go_bootstrap.exe"
 echo.

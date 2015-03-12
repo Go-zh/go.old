@@ -391,15 +391,32 @@ const (
 
 // goTools is a map of Go program import path to install target directory.
 var goTools = map[string]targetDir{
+	"cmd/5g":                               toTool,
+	"cmd/5l":                               toTool,
+	"cmd/6g":                               toTool,
+	"cmd/6l":                               toTool,
+	"cmd/7g":                               toTool,
+	"cmd/7l":                               toTool,
+	"cmd/8g":                               toTool,
+	"cmd/8l":                               toTool,
+	"cmd/9g":                               toTool,
+	"cmd/9l":                               toTool,
 	"cmd/addr2line":                        toTool,
 	"cmd/api":                              toTool,
+	"cmd/asm":                              toTool,
 	"cmd/cgo":                              toTool,
+	"cmd/dist":                             toTool,
 	"cmd/fix":                              toTool,
 	"cmd/link":                             toTool,
 	"cmd/nm":                               toTool,
 	"cmd/objdump":                          toTool,
+	"cmd/old5a":                            toTool,
+	"cmd/old6a":                            toTool,
+	"cmd/old8a":                            toTool,
+	"cmd/old9a":                            toTool,
 	"cmd/pack":                             toTool,
 	"cmd/pprof":                            toTool,
+	"cmd/trace":                            toTool,
 	"cmd/yacc":                             toTool,
 	"golang.org/x/tools/cmd/cover":         toTool,
 	"golang.org/x/tools/cmd/godoc":         toBin,
@@ -523,6 +540,10 @@ func (p *Package) load(stk *importStack, bp *build.Package, err error) *Package 
 		// Exclude certain packages to avoid circular dependencies.
 		if buildRace && (!p.Standard || !raceExclude[p.ImportPath]) {
 			importPaths = append(importPaths, "runtime/race")
+		}
+		// On ARM with GOARM=5, everything depends on math for the link.
+		if p.ImportPath == "main" && goarch == "arm" {
+			importPaths = append(importPaths, "math")
 		}
 	}
 

@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -617,6 +618,76 @@ var marshalTests = []struct {
 			`</service>`,
 		MarshalOnly: true,
 	},
+	{
+		Value: &struct {
+			XMLName struct{} `xml:"space top"`
+			A       string   `xml:"x>a"`
+			B       string   `xml:"x>b"`
+			C       string   `xml:"space x>c"`
+			C1      string   `xml:"space1 x>c"`
+			D1      string   `xml:"space1 x>d"`
+			E1      string   `xml:"x>e"`
+		}{
+			A:  "a",
+			B:  "b",
+			C:  "c",
+			C1: "c1",
+			D1: "d1",
+			E1: "e1",
+		},
+		ExpectXML: `<top xmlns="space">` +
+			`<x><a>a</a><b>b</b><c>c</c></x>` +
+			`<x xmlns="space1">` +
+			`<c>c1</c>` +
+			`<d>d1</d>` +
+			`</x>` +
+			`<x>` +
+			`<e>e1</e>` +
+			`</x>` +
+			`</top>`,
+	},
+	{
+		Value: &struct {
+			XMLName Name
+			A       string `xml:"x>a"`
+			B       string `xml:"x>b"`
+			C       string `xml:"space x>c"`
+			C1      string `xml:"space1 x>c"`
+			D1      string `xml:"space1 x>d"`
+		}{
+			XMLName: Name{
+				Space: "space0",
+				Local: "top",
+			},
+			A:  "a",
+			B:  "b",
+			C:  "c",
+			C1: "c1",
+			D1: "d1",
+		},
+		ExpectXML: `<top xmlns="space0">` +
+			`<x><a>a</a><b>b</b></x>` +
+			`<x xmlns="space"><c>c</c></x>` +
+			`<x xmlns="space1">` +
+			`<c>c1</c>` +
+			`<d>d1</d>` +
+			`</x>` +
+			`</top>`,
+	},
+	{
+		Value: &struct {
+			XMLName struct{} `xml:"top"`
+			B       string   `xml:"space x>b"`
+			B1      string   `xml:"space1 x>b"`
+		}{
+			B:  "b",
+			B1: "b1",
+		},
+		ExpectXML: `<top>` +
+			`<x xmlns="space"><b>b</b></x>` +
+			`<x xmlns="space1"><b>b1</b></x>` +
+			`</top>`,
+	},
 
 	// Test struct embedding
 	{
@@ -933,7 +1004,7 @@ func TestMarshal(t *testing.T) {
 		}
 		data, err := Marshal(test.Value)
 		if err != nil {
-			t.Errorf("#%d: Error: %s", idx, err)
+			t.Errorf("#%d: marshal(%#v): %s", idx, test.Value, err)
 			continue
 		}
 		if got, want := string(data), test.ExpectXML; got != want {
@@ -1037,7 +1108,6 @@ func TestUnmarshal(t *testing.T) {
 		if _, ok := test.Value.(*Plain); ok {
 			continue
 		}
-
 		vt := reflect.TypeOf(test.Value)
 		dest := reflect.New(vt.Elem()).Interface()
 		err := Unmarshal([]byte(test.ExpectXML), dest)
@@ -1194,41 +1264,363 @@ func TestStructPointerMarshal(t *testing.T) {
 }
 
 var encodeTokenTests = []struct {
-	tok  Token
+	desc string
+	toks []Token
 	want string
-	ok   bool
-}{
-	{StartElement{Name{"space", "local"}, nil}, "<local xmlns=\"space\">", true},
-	{StartElement{Name{"space", ""}, nil}, "", false},
-	{EndElement{Name{"space", ""}}, "", false},
-	{CharData("foo"), "foo", true},
-	{Comment("foo"), "<!--foo-->", true},
-	{Comment("foo-->"), "", false},
-	{ProcInst{"Target", []byte("Instruction")}, "<?Target Instruction?>", true},
-	{ProcInst{"", []byte("Instruction")}, "", false},
-	{ProcInst{"Target", []byte("Instruction?>")}, "", false},
-	{Directive("foo"), "<!foo>", true},
-	{Directive("foo>"), "", false},
-}
+	err  string
+}{{
+	desc: "start element with name space",
+	toks: []Token{
+		StartElement{Name{"space", "local"}, nil},
+	},
+	want: `<space:local xmlns:space="space">`,
+}, {
+	desc: "start element with no name",
+	toks: []Token{
+		StartElement{Name{"space", ""}, nil},
+	},
+	err: "xml: start tag with no name",
+}, {
+	desc: "end element with no name",
+	toks: []Token{
+		EndElement{Name{"space", ""}},
+	},
+	err: "xml: end tag with no name",
+}, {
+	desc: "char data",
+	toks: []Token{
+		CharData("foo"),
+	},
+	want: `foo`,
+}, {
+	desc: "char data with escaped chars",
+	toks: []Token{
+		CharData(" \t\n"),
+	},
+	want: ` &#x9;&#xA;`,
+}, {
+	desc: "comment",
+	toks: []Token{
+		Comment("foo"),
+	},
+	want: `<!--foo-->`,
+}, {
+	desc: "comment with invalid content",
+	toks: []Token{
+		Comment("foo-->"),
+	},
+	err: "xml: EncodeToken of Comment containing --> marker",
+}, {
+	desc: "proc instruction",
+	toks: []Token{
+		ProcInst{"Target", []byte("Instruction")},
+	},
+	want: `<?Target Instruction?>`,
+}, {
+	desc: "proc instruction with empty target",
+	toks: []Token{
+		ProcInst{"", []byte("Instruction")},
+	},
+	err: "xml: EncodeToken of ProcInst with invalid Target",
+}, {
+	desc: "proc instruction with bad content",
+	toks: []Token{
+		ProcInst{"", []byte("Instruction?>")},
+	},
+	err: "xml: EncodeToken of ProcInst with invalid Target",
+}, {
+	desc: "directive",
+	toks: []Token{
+		Directive("foo"),
+	},
+	want: `<!foo>`,
+}, {
+	desc: "directive instruction with bad name",
+	toks: []Token{
+		Directive("foo>"),
+	},
+	err: "xml: EncodeToken of Directive containing > marker",
+}, {
+	desc: "end tag without start tag",
+	toks: []Token{
+		EndElement{Name{"foo", "bar"}},
+	},
+	err: "xml: end tag </bar> without start tag",
+}, {
+	desc: "mismatching end tag local name",
+	toks: []Token{
+		StartElement{Name{"", "foo"}, nil},
+		EndElement{Name{"", "bar"}},
+	},
+	err:  "xml: end tag </bar> does not match start tag <foo>",
+	want: `<foo>`,
+}, {
+	desc: "mismatching end tag namespace",
+	toks: []Token{
+		StartElement{Name{"space", "foo"}, nil},
+		EndElement{Name{"another", "foo"}},
+	},
+	err:  "xml: end tag </foo> in namespace another does not match start tag <foo> in namespace space",
+	want: `<space:foo xmlns:space="space">`,
+}, {
+	desc: "start element with explicit namespace",
+	toks: []Token{
+		StartElement{Name{"space", "local"}, []Attr{
+			{Name{"xmlns", "x"}, "space"},
+			{Name{"space", "foo"}, "value"},
+		}},
+	},
+	want: `<x:local xmlns:x="space" x:foo="value">`,
+}, {
+	desc: "start element with explicit namespace and colliding prefix",
+	toks: []Token{
+		StartElement{Name{"space", "local"}, []Attr{
+			{Name{"xmlns", "x"}, "space"},
+			{Name{"space", "foo"}, "value"},
+			{Name{"x", "bar"}, "other"},
+		}},
+	},
+	want: `<x:local xmlns:x_1="x" xmlns:x="space" x:foo="value" x_1:bar="other">`,
+}, {
+	desc: "start element using previously defined namespace",
+	toks: []Token{
+		StartElement{Name{"", "local"}, []Attr{
+			{Name{"xmlns", "x"}, "space"},
+		}},
+		StartElement{Name{"space", "foo"}, []Attr{
+			{Name{"space", "x"}, "y"},
+		}},
+	},
+	want: `<local xmlns:x="space"><x:foo x:x="y">`,
+}, {
+	desc: "nested name space with same prefix",
+	toks: []Token{
+		StartElement{Name{"", "foo"}, []Attr{
+			{Name{"xmlns", "x"}, "space1"},
+		}},
+		StartElement{Name{"", "foo"}, []Attr{
+			{Name{"xmlns", "x"}, "space2"},
+		}},
+		StartElement{Name{"", "foo"}, []Attr{
+			{Name{"space1", "a"}, "space1 value"},
+			{Name{"space2", "b"}, "space2 value"},
+		}},
+		EndElement{Name{"", "foo"}},
+		EndElement{Name{"", "foo"}},
+		StartElement{Name{"", "foo"}, []Attr{
+			{Name{"space1", "a"}, "space1 value"},
+			{Name{"space2", "b"}, "space2 value"},
+		}},
+	},
+	want: `<foo xmlns:x="space1"><foo xmlns:x="space2"><foo xmlns:space1="space1" space1:a="space1 value" x:b="space2 value"></foo></foo><foo xmlns:space2="space2" x:a="space1 value" space2:b="space2 value">`,
+}, {
+	desc: "start element defining several prefixes for the same name space",
+	toks: []Token{
+		StartElement{Name{"space", "foo"}, []Attr{
+			{Name{"xmlns", "a"}, "space"},
+			{Name{"xmlns", "b"}, "space"},
+			{Name{"space", "x"}, "value"},
+		}},
+	},
+	want: `<a:foo xmlns:a="space" a:x="value">`,
+}, {
+	desc: "nested element redefines name space",
+	toks: []Token{
+		StartElement{Name{"", "foo"}, []Attr{
+			{Name{"xmlns", "x"}, "space"},
+		}},
+		StartElement{Name{"space", "foo"}, []Attr{
+			{Name{"xmlns", "y"}, "space"},
+			{Name{"space", "a"}, "value"},
+		}},
+	},
+	want: `<foo xmlns:x="space"><x:foo x:a="value">`,
+}, {
+	desc: "nested element creates alias for default name space",
+	toks: []Token{
+		StartElement{Name{"space", "foo"}, []Attr{
+			{Name{"", "xmlns"}, "space"},
+		}},
+		StartElement{Name{"space", "foo"}, []Attr{
+			{Name{"xmlns", "y"}, "space"},
+			{Name{"space", "a"}, "value"},
+		}},
+	},
+	want: `<foo xmlns="space"><foo xmlns:y="space" y:a="value">`,
+}, {
+	desc: "nested element defines default name space with existing prefix",
+	toks: []Token{
+		StartElement{Name{"", "foo"}, []Attr{
+			{Name{"xmlns", "x"}, "space"},
+		}},
+		StartElement{Name{"space", "foo"}, []Attr{
+			{Name{"", "xmlns"}, "space"},
+			{Name{"space", "a"}, "value"},
+		}},
+	},
+	want: `<foo xmlns:x="space"><foo xmlns="space" x:a="value">`,
+}, {
+	desc: "nested element uses empty attribute name space when default ns defined",
+	toks: []Token{
+		StartElement{Name{"space", "foo"}, []Attr{
+			{Name{"", "xmlns"}, "space"},
+		}},
+		StartElement{Name{"space", "foo"}, []Attr{
+			{Name{"", "attr"}, "value"},
+		}},
+	},
+	want: `<foo xmlns="space"><foo attr="value">`,
+}, {
+	desc: "redefine xmlns",
+	toks: []Token{
+		StartElement{Name{"", "foo"}, []Attr{
+			{Name{"foo", "xmlns"}, "space"},
+		}},
+	},
+	err: `xml: cannot redefine xmlns attribute prefix`,
+}, {
+	desc: "xmlns with explicit name space #1",
+	toks: []Token{
+		StartElement{Name{"space", "foo"}, []Attr{
+			{Name{"xml", "xmlns"}, "space"},
+		}},
+	},
+	want: `<foo xmlns="space">`,
+}, {
+	desc: "xmlns with explicit name space #2",
+	toks: []Token{
+		StartElement{Name{"space", "foo"}, []Attr{
+			{Name{xmlURL, "xmlns"}, "space"},
+		}},
+	},
+	want: `<foo xmlns="space">`,
+}, {
+	desc: "empty name space declaration is ignored",
+	toks: []Token{
+		StartElement{Name{"", "foo"}, []Attr{
+			{Name{"xmlns", "foo"}, ""},
+		}},
+	},
+	want: `<foo>`,
+}, {
+	desc: "attribute with no name is ignored",
+	toks: []Token{
+		StartElement{Name{"", "foo"}, []Attr{
+			{Name{"", ""}, "value"},
+		}},
+	},
+	want: `<foo>`,
+}, {
+	desc: "namespace URL with non-valid name",
+	toks: []Token{
+		StartElement{Name{"/34", "foo"}, []Attr{
+			{Name{"/34", "x"}, "value"},
+		}},
+	},
+	want: `<_:foo xmlns:_="/34" _:x="value">`,
+}, {
+	desc: "nested element resets default namespace to empty",
+	toks: []Token{
+		StartElement{Name{"space", "foo"}, []Attr{
+			{Name{"", "xmlns"}, "space"},
+		}},
+		StartElement{Name{"", "foo"}, []Attr{
+			{Name{"", "xmlns"}, ""},
+			{Name{"", "x"}, "value"},
+			{Name{"space", "x"}, "value"},
+		}},
+	},
+	want: `<foo xmlns="space"><foo xmlns:space="space" xmlns="" x="value" space:x="value">`,
+}, {
+	desc: "nested element requires empty default name space",
+	toks: []Token{
+		StartElement{Name{"space", "foo"}, []Attr{
+			{Name{"", "xmlns"}, "space"},
+		}},
+		StartElement{Name{"", "foo"}, nil},
+	},
+	want: `<foo xmlns="space"><foo xmlns="">`,
+}, {
+	desc: "attribute uses name space from xmlns",
+	toks: []Token{
+		StartElement{Name{"some/space", "foo"}, []Attr{
+			{Name{"", "attr"}, "value"},
+			{Name{"some/space", "other"}, "other value"},
+		}},
+	},
+	want: `<space:foo xmlns:space="some/space" attr="value" space:other="other value">`,
+}, {
+	desc: "default name space should not be used by attributes",
+	toks: []Token{
+		StartElement{Name{"space", "foo"}, []Attr{
+			{Name{"", "xmlns"}, "space"},
+			{Name{"xmlns", "bar"}, "space"},
+			{Name{"space", "baz"}, "foo"},
+		}},
+		StartElement{Name{"space", "baz"}, nil},
+		EndElement{Name{"space", "baz"}},
+		EndElement{Name{"space", "foo"}},
+	},
+	want: `<foo xmlns:bar="space" xmlns="space" bar:baz="foo"><baz></baz></foo>`,
+}, {
+	desc: "default name space not used by attributes, not explicitly defined",
+	toks: []Token{
+		StartElement{Name{"space", "foo"}, []Attr{
+			{Name{"", "xmlns"}, "space"},
+			{Name{"space", "baz"}, "foo"},
+		}},
+		StartElement{Name{"space", "baz"}, nil},
+		EndElement{Name{"space", "baz"}},
+		EndElement{Name{"space", "foo"}},
+	},
+	want: `<foo xmlns:space="space" xmlns="space" space:baz="foo"><baz></baz></foo>`,
+}, {
+	desc: "impossible xmlns declaration",
+	toks: []Token{
+		StartElement{Name{"", "foo"}, []Attr{
+			{Name{"", "xmlns"}, "space"},
+		}},
+		StartElement{Name{"space", "bar"}, []Attr{
+			{Name{"space", "attr"}, "value"},
+		}},
+	},
+	want: `<foo><space:bar xmlns:space="space" space:attr="value">`,
+}}
 
 func TestEncodeToken(t *testing.T) {
-	for _, tt := range encodeTokenTests {
+loop:
+	for i, tt := range encodeTokenTests {
 		var buf bytes.Buffer
 		enc := NewEncoder(&buf)
-		err := enc.EncodeToken(tt.tok)
+		var err error
+		for j, tok := range tt.toks {
+			err = enc.EncodeToken(tok)
+			if err != nil && j < len(tt.toks)-1 {
+				t.Errorf("#%d %s token #%d: %v", i, tt.desc, j, err)
+				continue loop
+			}
+		}
+		errorf := func(f string, a ...interface{}) {
+			t.Errorf("#%d %s token #%d:%s", i, tt.desc, len(tt.toks)-1, fmt.Sprintf(f, a...))
+		}
 		switch {
-		case !tt.ok && err == nil:
-			t.Errorf("enc.EncodeToken(%#v): expected error; got none", tt.tok)
-		case tt.ok && err != nil:
-			t.Fatalf("enc.EncodeToken: %v", err)
-		case !tt.ok && err != nil:
-			// expected error, got one
+		case tt.err != "" && err == nil:
+			errorf(" expected error; got none")
+			continue
+		case tt.err == "" && err != nil:
+			errorf(" got error: %v", err)
+			continue
+		case tt.err != "" && err != nil && tt.err != err.Error():
+			errorf(" error mismatch; got %v, want %v", err, tt.err)
+			continue
 		}
 		if err := enc.Flush(); err != nil {
-			t.Fatalf("enc.EncodeToken: %v", err)
+			errorf(" %v", err)
+			continue
 		}
 		if got := buf.String(); got != tt.want {
-			t.Errorf("enc.EncodeToken = %s; want: %s", got, tt.want)
+			errorf("\ngot  %v\nwant %v", got, tt.want)
+			continue
 		}
 	}
 }
@@ -1265,4 +1657,21 @@ func TestDecodeEncode(t *testing.T) {
 			t.Fatalf("enc.EncodeToken: Unable to encode token (%#v), %v", tok, err)
 		}
 	}
+}
+
+// Issue 9796. Used to fail with GORACE="halt_on_error=1" -race.
+func TestRace9796(t *testing.T) {
+	type A struct{}
+	type B struct {
+		C []A `xml:"X>Y"`
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			Marshal(B{[]A{A{}}})
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }

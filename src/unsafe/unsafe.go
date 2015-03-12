@@ -39,28 +39,30 @@ type ArbitraryType int
 // 因此 Pointer 允许程序击溃类型系统并读写任意内存。它应当被用得非常小心。
 type Pointer *ArbitraryType
 
-// Sizeof returns the size in bytes occupied by the value v.  The size is that of the
-// "top level" of the value only.  For instance, if v is a slice, it returns the size of
-// the slice descriptor, not the size of the memory referenced by the slice.
+// Sizeof takes an expression x of any type and returns the size in bytes
+// of a hypothetical variable v as if v was declared via var v = x.
+// The size does not include any memory possibly referenced by x.
+// For instance, if x is a slice,  Sizeof returns the size of the slice
+// descriptor, not the size of the memory referenced by the slice.
 
-// Sizeof 返回被值 v 所占用的字节大小。
-// 该大小只是最“顶级”的值。例如，若 v 是一个切片，它会返回该切片描述符的大小，
-// 而非该切片引用的内存大小。
-func Sizeof(v ArbitraryType) uintptr
+// Sizeof 接受一个任意类型的表达式 x 并返回假定的变量 v 的字节大小，这里的 v 可看做通过
+// var v = x 声明的变量。该大小并不包括 x 可能引用的任何内存。例如，若 x 是一个切片，
+// Sizeof 会返回该切片描述符所示的大小，而非该切片引用的内存大小。
+func Sizeof(x ArbitraryType) uintptr
 
-// Offsetof returns the offset within the struct of the field represented by v,
+// Offsetof returns the offset within the struct of the field represented by x,
 // which must be of the form structValue.field.  In other words, it returns the
 // number of bytes between the start of the struct and the start of the field.
 
-// Offsetof 返回由 v 所代表的结构中字段的偏移，它必须为 structValue.field 的形式。
-// 换句话说，它返回该结构起始处与该字段起始处之间的字节数。
-func Offsetof(v ArbitraryType) uintptr
+// Offsetof 返回 x 所代表的结构体中字段的偏移量，它必须为 structValue.field 的形式。
+// 换言之，它返回该结构体起始处与该字段起始处之间的字节数。
+func Offsetof(x ArbitraryType) uintptr
 
-// Alignof returns the alignment of the value v.  It is the maximum value m such
-// that the address of a variable with the type of v will always be zero mod m.
-// If v is of the form structValue.field, it returns the alignment of field f within struct object obj.
+// Alignof takes an expression x of any type and returns the alignment
+// of a hypothetical variable v as if v was declared via var v = x.
+// It is the largest value m such that the address of v is zero mod m.
 
-// Alignof 返回 v 值的对齐方式。
-// 其返回值 m 满足变量 v 的类型地址与 m 取模为 0 的最大值。若 v 是 structValue.field
-// 的形式，它会返回字段 f 在其相应结构对象 obj 中的对齐方式。
-func Alignof(v ArbitraryType) uintptr
+// Alignof 接受一个任意类型的表达式 x 并返回假定的变量 v 的对齐，这里的 v 可看做通过
+// var v = x 声明的变量。它是最大值 m 使其满足 v 的地址取模 m 为零。
+// TODO(osc): 需优化语句
+func Alignof(x ArbitraryType) uintptr

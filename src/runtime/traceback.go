@@ -39,6 +39,11 @@ var (
 	mstartPC             uintptr
 	rt0_goPC             uintptr
 	sigpanicPC           uintptr
+	runfinqPC            uintptr
+	backgroundgcPC       uintptr
+	bgsweepPC            uintptr
+	forcegchelperPC      uintptr
+	timerprocPC          uintptr
 	systemstack_switchPC uintptr
 
 	externalthreadhandlerp uintptr // initialized elsewhere
@@ -56,6 +61,11 @@ func tracebackinit() {
 	mstartPC = funcPC(mstart)
 	rt0_goPC = funcPC(rt0_go)
 	sigpanicPC = funcPC(sigpanic)
+	runfinqPC = funcPC(runfinq)
+	backgroundgcPC = funcPC(backgroundgc)
+	bgsweepPC = funcPC(bgsweep)
+	forcegchelperPC = funcPC(forcegchelper)
+	timerprocPC = funcPC(timerproc)
 	systemstack_switchPC = funcPC(systemstack_switch)
 }
 
@@ -94,7 +104,7 @@ func tracebackdefers(gp *g, callback func(*stkframe, unsafe.Pointer) bool, v uns
 // the runtime.Callers function (pcbuf != nil), as well as the garbage
 // collector (callback != nil).  A little clunky to merge these, but avoids
 // duplicating the code and all its subtlety.
-func gentraceback(pc0 uintptr, sp0 uintptr, lr0 uintptr, gp *g, skip int, pcbuf *uintptr, max int, callback func(*stkframe, unsafe.Pointer) bool, v unsafe.Pointer, flags uint) int {
+func gentraceback(pc0, sp0, lr0 uintptr, gp *g, skip int, pcbuf *uintptr, max int, callback func(*stkframe, unsafe.Pointer) bool, v unsafe.Pointer, flags uint) int {
 	if goexitPC == 0 {
 		throw("gentraceback before goexitPC initialization")
 	}
@@ -232,6 +242,12 @@ func gentraceback(pc0 uintptr, sp0 uintptr, lr0 uintptr, gp *g, skip int, pcbuf 
 			frame.varp -= regSize
 		}
 
+		// If framepointer_enabled and there's a frame, then
+		// there's a saved bp here.
+		if framepointer_enabled && GOARCH == "amd64" && frame.varp > frame.sp {
+			frame.varp -= regSize
+		}
+
 		// Derive size of arguments.
 		// Most functions have a fixed-size argument block,
 		// so we can use metadata about the function f.
@@ -345,13 +361,13 @@ func gentraceback(pc0 uintptr, sp0 uintptr, lr0 uintptr, gp *g, skip int, pcbuf 
 			frame.fn = f
 			if f == nil {
 				frame.pc = x
-			} else if f.frame == 0 {
+			} else if funcspdelta(f, frame.pc) == 0 {
 				frame.lr = x
 			}
 		}
 	}
 
-	if pcbuf == nil && callback == nil {
+	if printing {
 		n = nprint
 	}
 
@@ -458,7 +474,7 @@ func printcreatedby(gp *g) {
 	}
 }
 
-func traceback(pc uintptr, sp uintptr, lr uintptr, gp *g) {
+func traceback(pc, sp, lr uintptr, gp *g) {
 	traceback1(pc, sp, lr, gp, 0)
 }
 
@@ -468,11 +484,11 @@ func traceback(pc uintptr, sp uintptr, lr uintptr, gp *g) {
 // the initial PC must not be rewound to the previous instruction.
 // (All the saved pairs record a PC that is a return address, so we
 // rewind it into the CALL instruction.)
-func tracebacktrap(pc uintptr, sp uintptr, lr uintptr, gp *g) {
+func tracebacktrap(pc, sp, lr uintptr, gp *g) {
 	traceback1(pc, sp, lr, gp, _TraceTrap)
 }
 
-func traceback1(pc uintptr, sp uintptr, lr uintptr, gp *g, flags uint) {
+func traceback1(pc, sp, lr uintptr, gp *g, flags uint) {
 	var n int
 	if readgstatus(gp)&^_Gscan == _Gsyscall {
 		// Override registers if blocked in system call.
@@ -492,18 +508,18 @@ func traceback1(pc uintptr, sp uintptr, lr uintptr, gp *g, flags uint) {
 	printcreatedby(gp)
 }
 
-func callers(skip int, pcbuf *uintptr, m int) int {
+func callers(skip int, pcbuf []uintptr) int {
 	sp := getcallersp(unsafe.Pointer(&skip))
 	pc := uintptr(getcallerpc(unsafe.Pointer(&skip)))
 	var n int
 	systemstack(func() {
-		n = gentraceback(pc, sp, 0, getg(), skip, pcbuf, m, nil, nil, 0)
+		n = gentraceback(pc, sp, 0, getg(), skip, &pcbuf[0], len(pcbuf), nil, nil, 0)
 	})
 	return n
 }
 
-func gcallers(gp *g, skip int, pcbuf *uintptr, m int) int {
-	return gentraceback(^uintptr(0), ^uintptr(0), 0, gp, skip, pcbuf, m, nil, nil, 0)
+func gcallers(gp *g, skip int, pcbuf []uintptr) int {
+	return gentraceback(^uintptr(0), ^uintptr(0), 0, gp, skip, &pcbuf[0], len(pcbuf), nil, nil, 0)
 }
 
 func showframe(f *_func, gp *g) bool {
@@ -600,7 +616,7 @@ func tracebackothers(me *g) {
 
 	lock(&allglock)
 	for _, gp := range allgs {
-		if gp == me || gp == g.m.curg || readgstatus(gp) == _Gdead || gp.issystem && level < 2 {
+		if gp == me || gp == g.m.curg || readgstatus(gp) == _Gdead || isSystemGoroutine(gp) && level < 2 {
 			continue
 		}
 		print("\n")
@@ -624,4 +640,15 @@ func topofstack(f *_func) bool {
 		pc == morestackPC ||
 		pc == rt0_goPC ||
 		externalthreadhandlerp != 0 && pc == externalthreadhandlerp
+}
+
+// isSystemGoroutine returns true if the goroutine g must be omitted in
+// stack dumps and deadlock detector.
+func isSystemGoroutine(gp *g) bool {
+	pc := gp.startpc
+	return pc == runfinqPC && !fingRunning ||
+		pc == backgroundgcPC ||
+		pc == bgsweepPC ||
+		pc == forcegchelperPC ||
+		pc == timerprocPC
 }

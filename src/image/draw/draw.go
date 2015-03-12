@@ -154,6 +154,12 @@ func DrawMask(dst Image, r image.Rectangle, src image.Image, sp image.Point, mas
 					if drawYCbCr(dst0, r, src0, sp) {
 						return
 					}
+				case *image.Gray:
+					drawGray(dst0, r, src0, sp)
+					return
+				case *image.CMYK:
+					drawCMYK(dst0, r, src0, sp)
+					return
 				}
 			} else if mask0, ok := mask.(*image.Alpha); ok {
 				switch src0 := src.(type) {
@@ -178,6 +184,12 @@ func DrawMask(dst Image, r image.Rectangle, src image.Image, sp image.Point, mas
 					if drawYCbCr(dst0, r, src0, sp) {
 						return
 					}
+				case *image.Gray:
+					drawGray(dst0, r, src0, sp)
+					return
+				case *image.CMYK:
+					drawCMYK(dst0, r, src0, sp)
+					return
 				}
 			}
 		}
@@ -266,16 +278,20 @@ func drawFillOver(dst *image.RGBA, r image.Rectangle, src *image.Uniform) {
 
 func drawFillSrc(dst *image.RGBA, r image.Rectangle, src *image.Uniform) {
 	sr, sg, sb, sa := src.RGBA()
+	sr8 := uint8(sr >> 8)
+	sg8 := uint8(sg >> 8)
+	sb8 := uint8(sb >> 8)
+	sa8 := uint8(sa >> 8)
 	// The built-in copy function is faster than a straightforward for loop to fill the destination with
 	// the color, but copy requires a slice source. We therefore use a for loop to fill the first row, and
 	// then use the first row as the slice source for the remaining rows.
 	i0 := dst.PixOffset(r.Min.X, r.Min.Y)
 	i1 := i0 + r.Dx()*4
 	for i := i0; i < i1; i += 4 {
-		dst.Pix[i+0] = uint8(sr >> 8)
-		dst.Pix[i+1] = uint8(sg >> 8)
-		dst.Pix[i+2] = uint8(sb >> 8)
-		dst.Pix[i+3] = uint8(sa >> 8)
+		dst.Pix[i+0] = sr8
+		dst.Pix[i+1] = sg8
+		dst.Pix[i+2] = sb8
+		dst.Pix[i+3] = sa8
 	}
 	firstRow := dst.Pix[i0:i1]
 	for y := r.Min.Y + 1; y < r.Max.Y; y++ {
@@ -419,6 +435,8 @@ func drawNRGBASrc(dst *image.RGBA, r image.Rectangle, src *image.NRGBA, sp image
 	}
 }
 
+// TODO(nigeltao): this function is copy/pasted to image/jpeg/reader.go. We
+// should un-copy/paste it.
 func drawYCbCr(dst *image.RGBA, r image.Rectangle, src *image.YCbCr, sp image.Point) (ok bool) {
 	// An image.YCbCr is always fully opaque, and so if the mask is implicitly nil
 	// (i.e. fully opaque) then the op is effectively always Src.
@@ -485,6 +503,52 @@ func drawYCbCr(dst *image.RGBA, r image.Rectangle, src *image.YCbCr, sp image.Po
 		return false
 	}
 	return true
+}
+
+func drawGray(dst *image.RGBA, r image.Rectangle, src *image.Gray, sp image.Point) {
+	// An image.Gray is always fully opaque, and so if the mask is implicitly nil
+	// (i.e. fully opaque) then the op is effectively always Src.
+	i0 := (r.Min.X - dst.Rect.Min.X) * 4
+	i1 := (r.Max.X - dst.Rect.Min.X) * 4
+	si0 := (sp.X - src.Rect.Min.X) * 1
+	yMax := r.Max.Y - dst.Rect.Min.Y
+
+	y := r.Min.Y - dst.Rect.Min.Y
+	sy := sp.Y - src.Rect.Min.Y
+	for ; y != yMax; y, sy = y+1, sy+1 {
+		dpix := dst.Pix[y*dst.Stride:]
+		spix := src.Pix[sy*src.Stride:]
+
+		for i, si := i0, si0; i < i1; i, si = i+4, si+1 {
+			p := spix[si]
+			dpix[i+0] = p
+			dpix[i+1] = p
+			dpix[i+2] = p
+			dpix[i+3] = 255
+		}
+	}
+}
+
+func drawCMYK(dst *image.RGBA, r image.Rectangle, src *image.CMYK, sp image.Point) {
+	// An image.CMYK is always fully opaque, and so if the mask is implicitly nil
+	// (i.e. fully opaque) then the op is effectively always Src.
+	i0 := (r.Min.X - dst.Rect.Min.X) * 4
+	i1 := (r.Max.X - dst.Rect.Min.X) * 4
+	si0 := (sp.X - src.Rect.Min.X) * 4
+	yMax := r.Max.Y - dst.Rect.Min.Y
+
+	y := r.Min.Y - dst.Rect.Min.Y
+	sy := sp.Y - src.Rect.Min.Y
+	for ; y != yMax; y, sy = y+1, sy+1 {
+		dpix := dst.Pix[y*dst.Stride:]
+		spix := src.Pix[sy*src.Stride:]
+
+		for i, si := i0, si0; i < i1; i, si = i+4, si+4 {
+			dpix[i+0], dpix[i+1], dpix[i+2] =
+				color.CMYKToRGB(spix[si+0], spix[si+1], spix[si+2], spix[si+3])
+			dpix[i+3] = 255
+		}
+	}
 }
 
 func drawGlyphOver(dst *image.RGBA, r image.Rectangle, src *image.Uniform, mask *image.Alpha, mp image.Point) {

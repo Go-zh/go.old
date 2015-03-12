@@ -105,8 +105,8 @@ func IsControl(r rune) bool {
 	if uint32(r) <= MaxLatin1 {
 		return properties[uint8(r)]&pC != 0
 	}
-	// All control characters are < Latin1Max.
-	// 所有的控制字符都 < Latin1Max。
+	// All control characters are < MaxLatin1.
+	// 所有的控制字符都 < MaxLatin1
 	return false
 }
 

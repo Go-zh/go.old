@@ -39,20 +39,8 @@ TEXT runtime·rt0_go(SB),NOSPLIT,$-4
 
 	BL	runtime·emptyfunc(SB)	// fault if stack check is wrong
 
-#ifndef GOOS_nacl
-	// if there is an _cgo_init, call it.
-	MOVW	_cgo_init(SB), R4
-	CMP	$0, R4
-	B.EQ	nocgo
-	MRC     15, 0, R0, C13, C0, 3 	// load TLS base pointer
-	MOVW 	R0, R3 			// arg 3: TLS base pointer
-	MOVW 	$runtime·tlsg(SB), R2 	// arg 2: tlsg
-	MOVW	$setg_gcc<>(SB), R1 	// arg 1: setg
-	MOVW	g, R0 			// arg 0: G
-	BL	(R4) // will clobber R0-R3
-#endif
+	BL	runtime·_initcgo(SB)	// will clobber R0-R3
 
-nocgo:
 	// update stackguard after _cgo_init
 	MOVW	(g_stack+stack_lo)(g), R0
 	ADD	$const__StackGuard, R0
@@ -118,8 +106,8 @@ TEXT runtime·asminit(SB),NOSPLIT,$0-0
 // void gosave(Gobuf*)
 // save state in Gobuf; setjmp
 TEXT runtime·gosave(SB),NOSPLIT,$-4-4
-	MOVW	0(FP), R0		// gobuf
-	MOVW	SP, gobuf_sp(R0)
+	MOVW	buf+0(FP), R0
+	MOVW	R13, gobuf_sp(R0)
 	MOVW	LR, gobuf_pc(R0)
 	MOVW	g, gobuf_g(R0)
 	MOVW	$0, R11
@@ -131,7 +119,7 @@ TEXT runtime·gosave(SB),NOSPLIT,$-4-4
 // void gogo(Gobuf*)
 // restore state from Gobuf; longjmp
 TEXT runtime·gogo(SB),NOSPLIT,$-4-4
-	MOVW	0(FP), R1		// gobuf
+	MOVW	buf+0(FP), R1
 	MOVW	gobuf_g(R1), R0
 	BL	setg<>(SB)
 
@@ -145,7 +133,7 @@ TEXT runtime·gogo(SB),NOSPLIT,$-4-4
 	// after this point: it must be straight-line code until the
 	// final B instruction.
 	// See large comment in sigprof for more details.
-	MOVW	gobuf_sp(R1), SP	// restore SP
+	MOVW	gobuf_sp(R1), R13	// restore SP==R13
 	MOVW	gobuf_lr(R1), LR
 	MOVW	gobuf_ret(R1), R0
 	MOVW	gobuf_ctxt(R1), R7
@@ -164,7 +152,7 @@ TEXT runtime·gogo(SB),NOSPLIT,$-4-4
 // to keep running g.
 TEXT runtime·mcall(SB),NOSPLIT,$-4-4
 	// Save caller state in g->sched.
-	MOVW	SP, (g_sched+gobuf_sp)(g)
+	MOVW	R13, (g_sched+gobuf_sp)(g)
 	MOVW	LR, (g_sched+gobuf_pc)(g)
 	MOVW	$0, R11
 	MOVW	R11, (g_sched+gobuf_lr)(g)
@@ -182,9 +170,9 @@ TEXT runtime·mcall(SB),NOSPLIT,$-4-4
 	CMP	$0, R11
 	BL.NE	runtime·save_g(SB)
 	MOVW	fn+0(FP), R0
-	MOVW	(g_sched+gobuf_sp)(g), SP
-	SUB	$8, SP
-	MOVW	R1, 4(SP)
+	MOVW	(g_sched+gobuf_sp)(g), R13
+	SUB	$8, R13
+	MOVW	R1, 4(R13)
 	MOVW	R0, R7
 	MOVW	0(R0), R0
 	BL	(R0)
@@ -229,7 +217,7 @@ switch:
 	MOVW	$runtime·systemstack_switch(SB), R3
 	ADD	$4, R3, R3 // get past push {lr}
 	MOVW	R3, (g_sched+gobuf_pc)(g)
-	MOVW	SP, (g_sched+gobuf_sp)(g)
+	MOVW	R13, (g_sched+gobuf_sp)(g)
 	MOVW	LR, (g_sched+gobuf_lr)(g)
 	MOVW	g, (g_sched+gobuf_g)(g)
 
@@ -243,7 +231,7 @@ switch:
 	SUB	$4, R3, R3
 	MOVW	$runtime·mstart(SB), R4
 	MOVW	R4, 0(R3)
-	MOVW	R3, SP
+	MOVW	R3, R13
 
 	// call target function
 	MOVW	R0, R7
@@ -254,7 +242,7 @@ switch:
 	MOVW	g_m(g), R1
 	MOVW	m_curg(R1), R0
 	BL	setg<>(SB)
-	MOVW	(g_sched+gobuf_sp)(g), SP
+	MOVW	(g_sched+gobuf_sp)(g), R13
 	MOVW	$0, R3
 	MOVW	R3, (g_sched+gobuf_sp)(g)
 	RET
@@ -296,21 +284,21 @@ TEXT runtime·morestack(SB),NOSPLIT,$-4-0
 	// Called from f.
 	// Set g->sched to context in f.
 	MOVW	R7, (g_sched+gobuf_ctxt)(g)
-	MOVW	SP, (g_sched+gobuf_sp)(g)
+	MOVW	R13, (g_sched+gobuf_sp)(g)
 	MOVW	LR, (g_sched+gobuf_pc)(g)
 	MOVW	R3, (g_sched+gobuf_lr)(g)
 
 	// Called from f.
 	// Set m->morebuf to f's caller.
 	MOVW	R3, (m_morebuf+gobuf_pc)(R8)	// f's caller's PC
-	MOVW	SP, (m_morebuf+gobuf_sp)(R8)	// f's caller's SP
-	MOVW	$4(SP), R3			// f's argument pointer
+	MOVW	R13, (m_morebuf+gobuf_sp)(R8)	// f's caller's SP
+	MOVW	$4(R13), R3			// f's argument pointer
 	MOVW	g, (m_morebuf+gobuf_g)(R8)
 
 	// Call newstack on m->g0's stack.
 	MOVW	m_g0(R8), R0
 	BL	setg<>(SB)
-	MOVW	(g_sched+gobuf_sp)(g), SP
+	MOVW	(g_sched+gobuf_sp)(g), R13
 	BL	runtime·newstack(SB)
 
 	// Not reached, but make sure the return PC from the call to newstack
@@ -374,7 +362,7 @@ TEXT NAME(SB), WRAPPER, $MAXSIZE-20;		\
 	/* copy arguments to stack */		\
 	MOVW	argptr+8(FP), R0;		\
 	MOVW	argsize+12(FP), R2;		\
-	ADD	$4, SP, R1;			\
+	ADD	$4, R13, R1;			\
 	CMP	$0, R2;				\
 	B.EQ	5(PC);				\
 	MOVBU.P	1(R0), R5;			\
@@ -390,7 +378,7 @@ TEXT NAME(SB), WRAPPER, $MAXSIZE-20;		\
 	MOVW	argptr+8(FP), R0;		\
 	MOVW	argsize+12(FP), R2;		\
 	MOVW	retoffset+16(FP), R3;		\
-	ADD	$4, SP, R1;			\
+	ADD	$4, R13, R1;			\
 	ADD	R3, R1;				\
 	ADD	R3, R0;				\
 	SUB	R3, R2;				\
@@ -452,11 +440,11 @@ CALLFN(·call1073741824, 1073741824)
 // interrupt can never see mismatched SP/LR/PC.
 // (And double-check that pop is atomic in that way.)
 TEXT runtime·jmpdefer(SB),NOSPLIT,$0-8
-	MOVW	0(SP), LR
+	MOVW	0(R13), LR
 	MOVW	$-4(LR), LR	// BL deferreturn
 	MOVW	fv+0(FP), R7
-	MOVW	argp+4(FP), SP
-	MOVW	$-4(SP), SP	// SP is 4 below argp, due to saved LR
+	MOVW	argp+4(FP), R13
+	MOVW	$-4(R13), R13	// SP is 4 below argp, due to saved LR
 	MOVW	0(R7), R1
 	B	(R1)
 
@@ -657,29 +645,18 @@ TEXT setg<>(SB),NOSPLIT,$-4-0
 	MOVW	g, R0
 	RET
 
-TEXT runtime·getcallerpc(SB),NOSPLIT,$-4-4
-	MOVW	0(SP), R0
+TEXT runtime·getcallerpc(SB),NOSPLIT,$-4-8
+	MOVW	0(R13), R0
 	MOVW	R0, ret+4(FP)
-	RET
-
-TEXT runtime·gogetcallerpc(SB),NOSPLIT,$-4-8
-	MOVW	R14, ret+4(FP)
 	RET
 
 TEXT runtime·setcallerpc(SB),NOSPLIT,$-4-8
 	MOVW	pc+4(FP), R0
-	MOVW	R0, 0(SP)
+	MOVW	R0, 0(R13)
 	RET
 
-TEXT runtime·getcallersp(SB),NOSPLIT,$-4-4
-	MOVW	0(FP), R0
-	MOVW	$-4(R0), R0
-	MOVW	R0, ret+4(FP)
-	RET
-
-// func gogetcallersp(p unsafe.Pointer) uintptr
-TEXT runtime·gogetcallersp(SB),NOSPLIT,$-4-8
-	MOVW	0(FP), R0
+TEXT runtime·getcallersp(SB),NOSPLIT,$-4-8
+	MOVW	argp+0(FP), R0
 	MOVW	$-4(R0), R0
 	MOVW	R0, ret+4(FP)
 	RET
@@ -806,21 +783,18 @@ eq:
 	RET
 
 // eqstring tests whether two strings are equal.
+// The compiler guarantees that strings passed
+// to eqstring have equal length.
 // See runtime_test.go:eqstring_generic for
 // equivalent Go code.
 TEXT runtime·eqstring(SB),NOSPLIT,$-4-17
-	MOVW	s1len+4(FP), R0
-	MOVW	s2len+12(FP), R1
-	MOVW	$0, R7
-	CMP	R0, R1
-	MOVB.NE R7, v+16(FP)
-	RET.NE
 	MOVW	s1str+0(FP), R2
 	MOVW	s2str+8(FP), R3
 	MOVW	$1, R8
 	MOVB	R8, v+16(FP)
 	CMP	R2, R3
 	RET.EQ
+	MOVW	s1len+4(FP), R0
 	ADD	R2, R0, R6
 loop:
 	CMP	R2, R6
@@ -829,16 +803,12 @@ loop:
 	MOVBU.P	1(R3), R5
 	CMP	R4, R5
 	BEQ	loop
-	MOVB	R7, v+16(FP)
+	MOVW	$0, R8
+	MOVB	R8, v+16(FP)
 	RET
 
-// void setg_gcc(G*); set g called from gcc.
-TEXT setg_gcc<>(SB),NOSPLIT,$0
-	MOVW	R0, g
-	B		runtime·save_g(SB)
-
 // TODO: share code with memeq?
-TEXT bytes·Equal(SB),NOSPLIT,$0
+TEXT bytes·Equal(SB),NOSPLIT,$0-25
 	MOVW	a_len+4(FP), R1
 	MOVW	b_len+16(FP), R3
 	
@@ -867,12 +837,12 @@ equal:
 	MOVBU	R0, ret+24(FP)
 	RET
 
-TEXT bytes·IndexByte(SB),NOSPLIT,$0
+TEXT bytes·IndexByte(SB),NOSPLIT,$0-20
 	MOVW	s+0(FP), R0
 	MOVW	s_len+4(FP), R1
 	MOVBU	c+12(FP), R2	// byte to find
 	MOVW	R0, R4		// store base for later
-	ADD	R0, R1		// end 
+	ADD	R0, R1		// end
 
 _loop:
 	CMP	R0, R1
@@ -883,7 +853,7 @@ _loop:
 
 	SUB	$1, R0		// R0 will be one beyond the position we want
 	SUB	R4, R0		// remove base
-	MOVW    R0, ret+16(FP) 
+	MOVW    R0, ret+16(FP)
 	RET
 
 _notfound:
@@ -891,12 +861,12 @@ _notfound:
 	MOVW	R0, ret+16(FP)
 	RET
 
-TEXT strings·IndexByte(SB),NOSPLIT,$0
+TEXT strings·IndexByte(SB),NOSPLIT,$0-16
 	MOVW	s+0(FP), R0
 	MOVW	s_len+4(FP), R1
 	MOVBU	c+8(FP), R2	// byte to find
 	MOVW	R0, R4		// store base for later
-	ADD	R0, R1		// end 
+	ADD	R0, R1		// end
 
 _sib_loop:
 	CMP	R0, R1
@@ -907,7 +877,7 @@ _sib_loop:
 
 	SUB	$1, R0		// R0 will be one beyond the position we want
 	SUB	R4, R0		// remove base
-	MOVW	R0, ret+12(FP) 
+	MOVW	R0, ret+12(FP)
 	RET
 
 _sib_notfound:
@@ -1368,6 +1338,8 @@ TEXT _cgo_topofstack(SB),NOSPLIT,$8
 TEXT runtime·goexit(SB),NOSPLIT,$-4-0
 	MOVW	R0, R0	// NOP
 	BL	runtime·goexit1(SB)	// does not return
+	// traceback from goexit1 must hit code range of goexit
+	MOVW	R0, R0	// NOP
 
 TEXT runtime·getg(SB),NOSPLIT,$-4-4
 	MOVW	g, ret+0(FP)

@@ -14,32 +14,32 @@ Usage:
 
 The commands are:
 
-    build       compile packages and dependencies
-    clean       remove object files
-    env         print Go environment information
-    fix         run go tool fix on packages
-    fmt         run gofmt on package sources
-    generate    generate Go files by processing source
-    get         download and install packages and dependencies
-    install     compile and install packages and dependencies
-    list        list packages
-    run         compile and run Go program
-    test        test packages
-    tool        run specified go tool
-    version     print Go version
-    vet         run go tool vet on packages
+	build       compile packages and dependencies
+	clean       remove object files
+	env         print Go environment information
+	fix         run go tool fix on packages
+	fmt         run gofmt on package sources
+	generate    generate Go files by processing source
+	get         download and install packages and dependencies
+	install     compile and install packages and dependencies
+	list        list packages
+	run         compile and run Go program
+	test        test packages
+	tool        run specified go tool
+	version     print Go version
+	vet         run go tool vet on packages
 
 Use "go help [command]" for more information about a command.
 
 Additional help topics:
 
-    c           calling between Go and C
-    filetype    file types
-    gopath      GOPATH environment variable
-    importpath  import path syntax
-    packages    description of package lists
-    testflag    description of testing flags
-    testfunc    description of testing functions
+	c           calling between Go and C
+	filetype    file types
+	gopath      GOPATH environment variable
+	importpath  import path syntax
+	packages    description of package lists
+	testflag    description of testing flags
+	testfunc    description of testing functions
 
 Use "go help [topic]" for more information about that topic.
 
@@ -93,25 +93,27 @@ and test commands:
 	-x
 		print the commands.
 
-	-ccflags 'arg list'
-		arguments to pass on each 5c, 6c, or 8c compiler invocation.
 	-compiler name
 		name of compiler to use, as in runtime.Compiler (gccgo or gc).
 	-gccgoflags 'arg list'
 		arguments to pass on each gccgo compiler/linker invocation.
 	-gcflags 'arg list'
-		arguments to pass on each 5g, 6g, or 8g compiler invocation.
+		arguments to pass on each 5g, 6g, 8g, or 9g compiler invocation.
 	-installsuffix suffix
 		a suffix to use in the name of the package installation directory,
 		in order to keep output separate from default builds.
 		If using the -race flag, the install suffix is automatically set to race
 		or, if set explicitly, has _race appended to it.
 	-ldflags 'flag list'
-		arguments to pass on each 5l, 6l, or 8l linker invocation.
+		arguments to pass on each 5l, 6l, 8l, or 9l linker invocation.
 	-tags 'tag list'
 		a list of build tags to consider satisfied during the build.
 		For more information about build tags, see the description of
 		build constraints in the documentation for the go/build package.
+	-toolexec 'cmd args'
+		a program to use to invoke toolchain programs like 5a, 5g, and 5l.
+		For example, instead of running 5g, the go command will run
+		'cmd args /path/to/5g <arguments for 5g>'.
 
 The list flags accept a space-separated list of strings. To embed spaces
 in an element in the list, surround it with either single or double quotes.
@@ -308,6 +310,7 @@ The generator is run in the package's source directory.
 Go generate accepts one specific flag:
 
 	-run=""
+		TODO: This flag is unimplemented.
 		if non-empty, specifies a regular expression to
 		select directives whose command matches the expression.
 
@@ -1058,6 +1061,10 @@ control the execution of any test:
 
 	-timeout t
 	    If a test runs longer than t, panic.
+
+	-trace trace.out
+	    Write an execution trace to the specified file before exiting.
+	    Writes test binary as -c would.
 
 	-v
 	    Verbose output: log all tests as they are run. Also print all

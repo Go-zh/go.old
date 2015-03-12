@@ -45,6 +45,10 @@ a comma-separated list of name=val pairs. Supported names are:
 	This should only be used as a temporary workaround to diagnose buggy code.
 	The real fix is to not store integers in pointer-typed locations.
 
+	memprofilerate: setting memprofilerate=X will update the value of runtime.MemProfileRate.
+	When set to 0 memory profiling is disabled.  Refer to the description of
+	MemProfileRate for the default value.
+
 	scheddetail: setting schedtrace=X and scheddetail=1 causes the scheduler to emit
 	detailed multiline info every X milliseconds, describing state of the scheduler,
 	processors, threads and goroutines.
@@ -152,7 +156,7 @@ func Caller(skip int) (pc uintptr, file string, line int, ok bool) {
 	// and what it called, so that we can see if it
 	// "called" sigpanic.
 	var rpc [2]uintptr
-	if callers(1+skip-1, &rpc[0], 2) < 2 {
+	if callers(1+skip-1, rpc[:]) < 2 {
 		return
 	}
 	f := findfunc(rpc[1])
@@ -208,7 +212,7 @@ func Callers(skip int, pc []uintptr) int {
 	if len(pc) == 0 {
 		return 0
 	}
-	return callers(skip, &pc[0], len(pc))
+	return callers(skip, pc)
 }
 
 // GOROOT returns the root of the Go tree.

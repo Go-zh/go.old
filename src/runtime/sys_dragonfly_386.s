@@ -85,24 +85,32 @@ TEXT runtime·exit1(SB),NOSPLIT,$16
 TEXT runtime·open(SB),NOSPLIT,$-4
 	MOVL	$5, AX
 	INT	$0x80
+	JAE	2(PC)
+	MOVL	$-1, AX
 	MOVL	AX, ret+12(FP)
 	RET
 
 TEXT runtime·close(SB),NOSPLIT,$-4
 	MOVL	$6, AX
 	INT	$0x80
+	JAE	2(PC)
+	MOVL	$-1, AX
 	MOVL	AX, ret+4(FP)
 	RET
 
 TEXT runtime·read(SB),NOSPLIT,$-4
 	MOVL	$3, AX
 	INT	$0x80
+	JAE	2(PC)
+	MOVL	$-1, AX
 	MOVL	AX, ret+12(FP)
 	RET
 
 TEXT runtime·write(SB),NOSPLIT,$-4
 	MOVL	$4, AX
 	INT	$0x80
+	JAE	2(PC)
+	MOVL	$-1, AX
 	MOVL	AX, ret+12(FP)
 	RET
 
@@ -287,9 +295,9 @@ TEXT runtime·setldt(SB),NOSPLIT,$4
 	RET
 
 TEXT runtime·settls(SB),NOSPLIT,$24
-	// adjust for ELF: wants to use -8(GS) and -4(GS) for g and m
+	// adjust for ELF: wants to use -4(GS) for g
 	MOVL	tlsbase+0(FP), CX
-	ADDL	$8, CX
+	ADDL	$4, CX
 
 	// Set up a struct tls_info - a size of -1 maps the whole address
 	// space and is required for direct-tls access of variable data

@@ -44,8 +44,8 @@ type functab struct {
 	funcoff uintptr
 }
 
-const minfunc = 16 // minimum function size
-const pcbucketsize = 256*minfunc // size of bucket in the pc->func lookup table
+const minfunc = 16                 // minimum function size
+const pcbucketsize = 256 * minfunc // size of bucket in the pc->func lookup table
 
 // findfunctab is an array of these structures.
 // Each bucket represents 4096 bytes of the text segment.
@@ -56,7 +56,7 @@ const pcbucketsize = 256*minfunc // size of bucket in the pc->func lookup table
 // index to find the target function.
 // This table uses 20 bytes for every 4096 bytes of code, or ~0.5% overhead.
 type findfuncbucket struct {
-	idx uint32
+	idx        uint32
 	subbuckets [16]byte
 }
 
@@ -154,9 +154,9 @@ func findfunc(pc uintptr) *_func {
 
 	x := pc - minpc
 	b := x / pcbucketsize
-	i := x % pcbucketsize / (pcbucketsize/nsub)
+	i := x % pcbucketsize / (pcbucketsize / nsub)
 
-	ffb := (*findfuncbucket)(add(unsafe.Pointer(&findfunctab), b * unsafe.Sizeof(findfuncbucket{})))
+	ffb := (*findfuncbucket)(add(unsafe.Pointer(&findfunctab), b*unsafe.Sizeof(findfuncbucket{})))
 	idx := ffb.idx + uint32(ffb.subbuckets[i])
 	if pc < ftab[idx].entry {
 		throw("findfunc: bad findfunctab entry")
@@ -298,4 +298,18 @@ func readvarint(p []byte) (newp []byte, val uint32) {
 		shift += 7
 	}
 	return p, v
+}
+
+type stackmap struct {
+	n        int32   // number of bitmaps
+	nbit     int32   // number of bits in each bitmap
+	bytedata [1]byte // bitmaps, each starting on a 32-bit boundary
+}
+
+//go:nowritebarrier
+func stackmapdata(stkmap *stackmap, n int32) bitvector {
+	if n < 0 || n >= stkmap.n {
+		throw("stackmapdata: index out of range")
+	}
+	return bitvector{stkmap.nbit, (*byte)(add(unsafe.Pointer(&stkmap.bytedata), uintptr(n*((stkmap.nbit+31)/32*4))))}
 }

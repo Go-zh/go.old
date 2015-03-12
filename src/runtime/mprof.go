@@ -232,7 +232,7 @@ func mProf_GC() {
 // Called by malloc to record a profiled block.
 func mProf_Malloc(p unsafe.Pointer, size uintptr) {
 	var stk [maxStack]uintptr
-	nstk := callers(4, &stk[0], len(stk))
+	nstk := callers(4, stk[:])
 	lock(&proflock)
 	b := stkbucket(memProfile, size, stk[:nstk], true)
 	mp := b.mp()
@@ -300,9 +300,9 @@ func blockevent(cycles int64, skip int) {
 	var nstk int
 	var stk [maxStack]uintptr
 	if gp.m.curg == nil || gp.m.curg == gp {
-		nstk = callers(skip, &stk[0], len(stk))
+		nstk = callers(skip, stk[:])
 	} else {
-		nstk = gcallers(gp.m.curg, skip, &stk[0], len(stk))
+		nstk = gcallers(gp.m.curg, skip, stk[:])
 	}
 	lock(&proflock)
 	b := stkbucket(blockProfile, 0, stk[:nstk], true)
@@ -522,7 +522,7 @@ func GoroutineProfile(p []StackRecord) (n int, ok bool) {
 	if n <= len(p) {
 		gp := getg()
 		semacquire(&worldsema, false)
-		gp.m.gcing = 1
+		gp.m.preemptoff = "profile"
 		systemstack(stoptheworld)
 
 		n = NumGoroutine()
@@ -544,7 +544,7 @@ func GoroutineProfile(p []StackRecord) (n int, ok bool) {
 			}
 		}
 
-		gp.m.gcing = 0
+		gp.m.preemptoff = ""
 		semrelease(&worldsema)
 		systemstack(starttheworld)
 	}
@@ -567,7 +567,7 @@ func Stack(buf []byte, all bool) int {
 	if all {
 		semacquire(&worldsema, false)
 		gp := getg()
-		gp.m.gcing = 1
+		gp.m.preemptoff = "stack trace"
 		systemstack(stoptheworld)
 	}
 
@@ -591,7 +591,7 @@ func Stack(buf []byte, all bool) int {
 
 	if all {
 		gp := getg()
-		gp.m.gcing = 0
+		gp.m.preemptoff = ""
 		semrelease(&worldsema)
 		systemstack(starttheworld)
 	}

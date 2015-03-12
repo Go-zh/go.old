@@ -63,10 +63,23 @@ func (m *Mutex) Lock() {
 	}
 
 	awoke := false
+	iter := 0
 	for {
 		old := m.state
 		new := old | mutexLocked
 		if old&mutexLocked != 0 {
+			if runtime_canSpin(iter) {
+				// Active spinning makes sense.
+				// Try to set mutexWoken flag to inform Unlock
+				// to not wake other blocked goroutines.
+				if !awoke && old&mutexWoken == 0 && old>>mutexWaiterShift != 0 &&
+					atomic.CompareAndSwapInt32(&m.state, old, old|mutexWoken) {
+					awoke = true
+				}
+				runtime_doSpin()
+				iter++
+				continue
+			}
 			new = old + 1<<mutexWaiterShift
 		}
 		if awoke {
@@ -74,6 +87,9 @@ func (m *Mutex) Lock() {
 			// so we need to reset the flag in either case.
 			// 此Go程已从睡眠状态被唤醒，因此无论在哪种状态下，
 			// 我们都需要充值此标记。
+			if new&mutexWoken == 0 {
+				panic("sync: inconsistent mutex state")
+			}
 			new &^= mutexWoken
 		}
 		if atomic.CompareAndSwapInt32(&m.state, old, new) {
@@ -82,6 +98,7 @@ func (m *Mutex) Lock() {
 			}
 			runtime_Semacquire(&m.sema)
 			awoke = true
+			iter = 0
 		}
 	}
 

@@ -25,9 +25,6 @@
 # GO_LDFLAGS: Additional 5l/6l/8l arguments to use when
 # building the commands.
 #
-# GO_CCFLAGS: Additional 5c/6c/8c arguments to use when
-# building.
-#
 # CGO_ENABLED: Controls cgo usage during the build. Set it to 1
 # to include all cgo related files, .c and .go file with "cgo"
 # build directive, in the build. Set it to 0 to ignore them.
@@ -141,7 +138,6 @@ if [ "$1" = "--dist-tool" ]; then
 	exit 0
 fi
 
-echo "##### Building compilers and Go bootstrap tool for host, $GOHOSTOS/$GOHOSTARCH."
 buildall="-a"
 if [ "$1" = "--no-clean" ]; then
 	buildall=""
@@ -150,7 +146,6 @@ fi
 ./cmd/dist/dist bootstrap $buildall $GO_DISTFLAGS -v # builds go_bootstrap
 # Delay move of dist tool to now, because bootstrap may clear tool directory.
 mv cmd/dist/dist "$GOTOOLDIR"/dist
-"$GOTOOLDIR"/go_bootstrap clean -i std
 echo
 
 if [ "$GOHOSTARCH" != "$GOARCH" -o "$GOHOSTOS" != "$GOOS" ]; then
@@ -158,12 +153,12 @@ if [ "$GOHOSTARCH" != "$GOARCH" -o "$GOHOSTOS" != "$GOOS" ]; then
 	# CC_FOR_TARGET is recorded as the default compiler for the go tool. When building for the host, however,
 	# use the host compiler, CC, from `cmd/dist/dist env` instead.
 	CC=$CC GOOS=$GOHOSTOS GOARCH=$GOHOSTARCH \
-		"$GOTOOLDIR"/go_bootstrap install -ccflags "$GO_CCFLAGS" -gcflags "$GO_GCFLAGS" -ldflags "$GO_LDFLAGS" -v std
+		"$GOTOOLDIR"/go_bootstrap install -gcflags "$GO_GCFLAGS" -ldflags "$GO_LDFLAGS" -v std cmd
 	echo
 fi
 
 echo "##### Building packages and commands for $GOOS/$GOARCH."
-CC=$CC_FOR_TARGET "$GOTOOLDIR"/go_bootstrap install $GO_FLAGS -ccflags "$GO_CCFLAGS" -gcflags "$GO_GCFLAGS" -ldflags "$GO_LDFLAGS" -v std
+CC=$CC_FOR_TARGET "$GOTOOLDIR"/go_bootstrap install $GO_FLAGS -gcflags "$GO_GCFLAGS" -ldflags "$GO_LDFLAGS" -v std cmd
 echo
 
 rm -f "$GOTOOLDIR"/go_bootstrap

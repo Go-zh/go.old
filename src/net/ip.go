@@ -132,7 +132,7 @@ func (ip IP) IsMulticast() bool {
 	return ip[0] == 0xff
 }
 
-// IsInterfaceLinkLocalMulticast returns true if ip is
+// IsInterfaceLocalMulticast returns true if ip is
 // an interface-local multicast address.
 func (ip IP) IsInterfaceLocalMulticast() bool {
 	return len(ip) == IPv6len && ip[0] == 0xff && ip[1]&0x0f == 0x01
@@ -267,10 +267,10 @@ func (ip IP) String() string {
 
 	// If IPv4, use dotted notation.
 	if p4 := p.To4(); len(p4) == IPv4len {
-		return itod(uint(p4[0])) + "." +
-			itod(uint(p4[1])) + "." +
-			itod(uint(p4[2])) + "." +
-			itod(uint(p4[3]))
+		return uitoa(uint(p4[0])) + "." +
+			uitoa(uint(p4[1])) + "." +
+			uitoa(uint(p4[2])) + "." +
+			uitoa(uint(p4[3]))
 	}
 	if len(p) != IPv6len {
 		return "?"
@@ -491,7 +491,7 @@ func (n *IPNet) String() string {
 	if l == -1 {
 		return nn.String() + "/" + m.String()
 	}
-	return nn.String() + "/" + itod(uint(l))
+	return nn.String() + "/" + uitoa(uint(l))
 }
 
 // Parse IPv4 address (d.d.d.d).

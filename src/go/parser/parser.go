@@ -2152,11 +2152,14 @@ func (p *parser) parseStmt() (s ast.Stmt) {
 	case token.FOR:
 		s = p.parseForStmt()
 	case token.SEMICOLON:
-		s = &ast.EmptyStmt{Semicolon: p.pos}
+		// Is it ever possible to have an implicit semicolon
+		// producing an empty statement in a valid program?
+		// (handle correctly anyway)
+		s = &ast.EmptyStmt{Semicolon: p.pos, Implicit: p.lit == "\n"}
 		p.next()
 	case token.RBRACE:
 		// a semicolon may be omitted before a closing "}"
-		s = &ast.EmptyStmt{Semicolon: p.pos}
+		s = &ast.EmptyStmt{Semicolon: p.pos, Implicit: true}
 	default:
 		// no statement found
 		pos := p.pos
@@ -2228,6 +2231,7 @@ func (p *parser) parseValueSpec(doc *ast.CommentGroup, keyword token.Token, iota
 		defer un(trace(p, keyword.String()+"Spec"))
 	}
 
+	pos := p.pos
 	idents := p.parseIdentList()
 	typ := p.tryType()
 	var values []ast.Expr
@@ -2237,6 +2241,17 @@ func (p *parser) parseValueSpec(doc *ast.CommentGroup, keyword token.Token, iota
 		values = p.parseRhsList()
 	}
 	p.expectSemi() // call before accessing p.linecomment
+
+	switch keyword {
+	case token.VAR:
+		if typ == nil && values == nil {
+			p.error(pos, "missing variable type or initialization")
+		}
+	case token.CONST:
+		if values == nil && (iota == 0 || typ != nil) {
+			p.error(pos, "missing constant value")
+		}
+	}
 
 	// Go spec: The scope of a constant or variable identifier declared inside
 	// a function begins at the end of the ConstSpec or VarSpec and ends at

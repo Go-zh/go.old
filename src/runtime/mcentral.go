@@ -12,6 +12,14 @@
 
 package runtime
 
+// Central list of free objects of a given size.
+type mcentral struct {
+	lock      mutex
+	sizeclass int32
+	nonempty  mspan // list of spans with a free object
+	empty     mspan // list of spans with no free objects (or cached in an mcache)
+}
+
 // Initialize a single central free list.
 func mCentral_Init(c *mcentral, sizeclass int32) {
 	c.sizeclass = sizeclass
@@ -165,7 +173,7 @@ func mCentral_FreeSpan(c *mcentral, s *mspan, n int32, start gclinkptr, end gcli
 	s.needzero = 1
 	s.freelist = 0
 	unlock(&c.lock)
-	heapBitsForSpan(s.base()).clearSpan(s.layout())
+	heapBitsForSpan(s.base()).initSpan(s.layout())
 	mHeap_Free(&mheap_, s, 0)
 	return true
 }
