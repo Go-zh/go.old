@@ -4883,11 +4883,7 @@ If <code>a</code> is not a map:
 	<li>the index <code>x</code> must be an integer value; it is <i>in range</i> if <code>0 &lt;= x &lt; len(a)</code>,
 		otherwise it is <i>out of range</i></li>
 	<li>a <a href="#Constants">constant</a> index must be non-negative
-<<<<<<< local
-		 and representable by a value of type <code>int</code>
-=======
-	    and representable by a value of type <code>int</code>
->>>>>>> other
+		and representable by a value of type <code>int</code>
 </ul>
 </div>
 
@@ -4910,11 +4906,7 @@ where <code>A</code> is an <a href="#Array_types">array type</a>:
 	<li>if <code>a</code> is <code>nil</code> or if <code>x</code> is out of range at run time,
 		a <a href="#Run_time_panics">run-time panic</a> occurs</li>
 	<li><code>a[x]</code> is the array element at index <code>x</code> and the type of
-<<<<<<< local
 		<code>a[x]</code> is the element type of <code>A</code></li>
-=======
-	    <code>a[x]</code> is the element type of <code>A</code></li>
->>>>>>> other
 </ul>
 </div>
 
@@ -4937,11 +4929,7 @@ For <code>a</code> of type <code>S</code> where <code>S</code> is a <a href="#Sl
 	<li>if the slice is <code>nil</code> or if <code>x</code> is out of range at run time,
 		a <a href="#Run_time_panics">run-time panic</a> occurs</li>
 	<li><code>a[x]</code> is the slice element at index <code>x</code> and the type of
-<<<<<<< local
 		<code>a[x]</code> is the element type of <code>S</code></li>
-=======
-	    <code>a[x]</code> is the element type of <code>S</code></li>
->>>>>>> other
 </ul>
 </div>
 
@@ -4966,11 +4954,7 @@ where <code>T</code> is a <a href="#String_types">string type</a>:
 	<li>if <code>x</code> is out of range at run time,
 		a <a href="#Run_time_panics">run-time panic</a> occurs</li>
 	<li><code>a[x]</code> is the byte at index <code>x</code> and the type of
-<<<<<<< local
 		<code>a[x]</code> is <code>byte</code></li>
-=======
-	    <code>a[x]</code> is <code>byte</code></li>
->>>>>>> other
 	<li><code>a[x]</code> may not be assigned to</li>
 </ul>
 </div>
@@ -4992,29 +4976,14 @@ where <code>M</code> is a <a href="#Map_types">map type</a>:
 </p>
 <ul>
 	<li><code>x</code>'s type must be
-<<<<<<< local
 		<a href="#Assignability">assignable</a>
 		to the key type of <code>M</code></li>
-=======
-	    <a href="#Assignability">assignable</a>
-	    to the key type of <code>M</code></li>
->>>>>>> other
 	<li>if the map contains an entry with key <code>x</code>,
-<<<<<<< local
 		<code>a[x]</code> is the map value with key <code>x</code>
 		and the type of <code>a[x]</code> is the value type of <code>M</code></li>
-=======
-	    <code>a[x]</code> is the map value with key <code>x</code>
-	    and the type of <code>a[x]</code> is the value type of <code>M</code></li>
->>>>>>> other
 	<li>if the map is <code>nil</code> or does not contain such an entry,
-<<<<<<< local
 		<code>a[x]</code> is the <a href="#The_zero_value">zero value</a>
 		for the value type of <code>M</code></li>
-=======
-	    <code>a[x]</code> is the <a href="#The_zero_value">zero value</a>
-	    for the value type of <code>M</code></li>
->>>>>>> other
 </ul>
 </div>
 
@@ -6910,33 +6879,10 @@ The package <a href="#Package_unsafe"><code>unsafe</code></a>
 implements this functionality under
 restricted circumstances.
 </p>
-<<<<<<< local
-</div>
-=======
->>>>>>> other
-
-<<<<<<< local
-<p>
-没有语言机制能在指针和整数之间转换。包 <a href="#包unsafe"><code>unsafe</code></a>
-可在受限情况下实现此功能。
-</p>
-
-<div class="english">
-<p>
-Implementation restriction: For backward-compatibility with the Go 1 language
-specification, a compiler may accept non-parenthesized literal function types
-in conversions where the syntax is unambiguous.
-</p>
 </div>
 
-<p>
-实现限制：为了与Go1语言规范向后兼容，编译器可在语法明确的转换中，
-接受无括号的字面函数类型。
-</p>
 
 <div class="english">
-=======
->>>>>>> other
 <h4>Conversions between numeric types</h4>
 </div>
 
@@ -10911,23 +10857,15 @@ func Sizeof(variable ArbitraryType) uintptr
 
 <div class="english">
 <p>
-<<<<<<< local
-Any pointer or value of <a href="#Types">underlying type</a> <code>uintptr</code> can be converted into
-a <code>Pointer</code> and vice versa.
+Any pointer or value of <a href="#Types">underlying type</a> <code>uintptr</code> can be converted to
+a <code>Pointer</code> type and vice versa.
 </p>
 </div>
 
 <p>
-任何<a href="#类型">基本类型</a>为 <code>uintptr</code> 的指针或值均可转换为 <code>Pointer</code>，反之亦然。
-=======
-Any pointer or value of <a href="#Types">underlying type</a> <code>uintptr</code> can be converted to
-a <code>Pointer</code> type and vice versa.
->>>>>>> other
+任何<a href="#类型">基本类型</a>为 <code>uintptr</code> 的指针或值均可转换为 <code>Pointer</code> 类型，反之亦然。
 </p>
 
-<<<<<<< local
-<div class="english">
-=======
 <pre>
 var f float64
 bits = *(*uint64)(unsafe.Pointer(&amp;f))
@@ -10936,7 +10874,7 @@ type ptr unsafe.Pointer
 bits = *(*uint64)(ptr(&amp;f))
 </pre>
 
->>>>>>> other
+<div class="english">
 <p>
 The functions <code>Alignof</code> and <code>Sizeof</code> take an expression <code>x</code>
 of any type and return the alignment or size, respectively, of a hypothetical variable <code>v</code>
