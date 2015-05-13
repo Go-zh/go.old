@@ -114,9 +114,11 @@ func Scanln(a ...interface{}) (n int, err error) {
 // Scanf scans text read from standard input, storing successive
 // space-separated values into successive arguments as determined by
 // the format.  It returns the number of items successfully scanned.
+// If that is less than the number of arguments, err will report why.
 
 // Scanf 扫描从标准输入中读取的文本，并将连续由空格分隔的值存储为连续的实参，
-// 其格式由 format 决定。它返回成功扫描的条目数。
+// 其格式由 format 决定。它返回成功扫描的条目数。若返回的条目数小于实参数，
+// 则会报告错误原因 err。
 func Scanf(format string, a ...interface{}) (n int, err error) {
 	return Fscanf(os.Stdin, format, a...)
 }

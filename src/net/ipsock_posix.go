@@ -14,12 +14,12 @@ import (
 )
 
 func probeIPv4Stack() bool {
-	s, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_TCP)
+	s, err := socketFunc(syscall.AF_INET, syscall.SOCK_STREAM, syscall.IPPROTO_TCP)
 	switch err {
 	case syscall.EAFNOSUPPORT, syscall.EPROTONOSUPPORT:
 		return false
 	case nil:
-		closesocket(s)
+		closeFunc(s)
 	}
 	return true
 }
@@ -50,11 +50,11 @@ func probeIPv6Stack() (supportsIPv6, supportsIPv4map bool) {
 	}
 
 	for i := range probes {
-		s, err := syscall.Socket(syscall.AF_INET6, syscall.SOCK_STREAM, syscall.IPPROTO_TCP)
+		s, err := socketFunc(syscall.AF_INET6, syscall.SOCK_STREAM, syscall.IPPROTO_TCP)
 		if err != nil {
 			continue
 		}
-		defer closesocket(s)
+		defer closeFunc(s)
 		syscall.SetsockoptInt(s, syscall.IPPROTO_IPV6, syscall.IPV6_V6ONLY, probes[i].value)
 		sa, err := probes[i].laddr.sockaddr(syscall.AF_INET6)
 		if err != nil {
@@ -144,7 +144,7 @@ func ipToSockaddr(family int, ip IP, port int, zone string) (syscall.Sockaddr, e
 			ip = IPv4zero
 		}
 		if ip = ip.To4(); ip == nil {
-			return nil, InvalidAddrError("non-IPv4 address")
+			return nil, &AddrError{Err: "non-IPv4 address", Addr: ip.String()}
 		}
 		sa := new(syscall.SockaddrInet4)
 		for i := 0; i < IPv4len; i++ {
@@ -163,7 +163,7 @@ func ipToSockaddr(family int, ip IP, port int, zone string) (syscall.Sockaddr, e
 			ip = IPv6zero
 		}
 		if ip = ip.To16(); ip == nil {
-			return nil, InvalidAddrError("non-IPv6 address")
+			return nil, &AddrError{Err: "non-IPv6 address", Addr: ip.String()}
 		}
 		sa := new(syscall.SockaddrInet6)
 		for i := 0; i < IPv6len; i++ {
@@ -173,5 +173,5 @@ func ipToSockaddr(family int, ip IP, port int, zone string) (syscall.Sockaddr, e
 		sa.ZoneId = uint32(zoneToInt(zone))
 		return sa, nil
 	}
-	return nil, InvalidAddrError("unexpected socket family")
+	return nil, &AddrError{Err: "invalid address family", Addr: ip.String()}
 }

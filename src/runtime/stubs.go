@@ -8,8 +8,9 @@ import "unsafe"
 
 // Declarations for runtime services implemented in C or assembly.
 
-const ptrSize = 4 << (^uintptr(0) >> 63) // unsafe.Sizeof(uintptr(0)) but an ideal const
-const regSize = 4 << (^uintreg(0) >> 63) // unsafe.Sizeof(uintreg(0)) but an ideal const
+const ptrSize = 4 << (^uintptr(0) >> 63)             // unsafe.Sizeof(uintptr(0)) but an ideal const
+const regSize = 4 << (^uintreg(0) >> 63)             // unsafe.Sizeof(uintreg(0)) but an ideal const
+const spAlign = 1*(1-goarch_arm64) + 16*goarch_arm64 // SP alignment: 1 normally, 16 for ARM64
 
 // Should be a built-in for unsafe.Pointer?
 //go:nosplit
@@ -17,6 +18,9 @@ func add(p unsafe.Pointer, x uintptr) unsafe.Pointer {
 	return unsafe.Pointer(uintptr(p) + x)
 }
 
+// getg returns the pointer to the current g.
+// The compiler rewrites calls to this function into instructions
+// that fetch the g directly (from TLS or from the dedicated register).
 func getg() *g
 
 // mcall switches from the g to the g0 stack and invokes fn(g),
@@ -29,7 +33,10 @@ func getg() *g
 // run other goroutines.
 //
 // mcall can only be called from g stacks (not g0, not gsignal).
-//go:noescape
+//
+// This must NOT be go:noescape: if fn is a stack-allocated closure,
+// fn puts g on a run queue, and g executes before fn returns, the
+// closure will be invalidated while it is still executing.
 func mcall(fn func(*g))
 
 // systemstack runs fn on a system stack.
@@ -143,6 +150,22 @@ func atomicloaduintptr(ptr *uintptr) uintptr
 
 //go:noescape
 func atomicloaduint(ptr *uint) uint
+
+// TODO: Write native implementations of int64 atomic ops (or improve
+// inliner). These portable ones can't be inlined right now, so we're
+// taking an extra function call hit.
+
+func atomicstoreint64(ptr *int64, new int64) {
+	atomicstore64((*uint64)(unsafe.Pointer(ptr)), uint64(new))
+}
+
+func atomicloadint64(ptr *int64) int64 {
+	return int64(atomicload64((*uint64)(unsafe.Pointer(ptr))))
+}
+
+func xaddint64(ptr *int64, delta int64) int64 {
+	return int64(xadd64((*uint64)(unsafe.Pointer(ptr)), delta))
+}
 
 //go:noescape
 func setcallerpc(argp unsafe.Pointer, pc uintptr)

@@ -9,6 +9,7 @@ import (
 	. "fmt"
 	"io"
 	"math"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -138,28 +139,34 @@ var fmtTests = []struct {
 	// basic string
 	// 基本字符串
 	{"%s", "abc", "abc"},
+	{"%q", "abc", `"abc"`},
 	{"%x", "abc", "616263"},
+	{"%x", "\xff\xf0\x0f\xff", "fff00fff"},
+	{"%X", "\xff\xf0\x0f\xff", "FFF00FFF"},
 	{"%x", "xyz", "78797a"},
 	{"%X", "xyz", "78797A"},
-	{"%q", "abc", `"abc"`},
-	{"%#x", []byte("abc\xff"), "0x616263ff"},
-	{"%#X", []byte("abc\xff"), "0X616263FF"},
-	{"%# x", []byte("abc\xff"), "0x61 0x62 0x63 0xff"},
-	{"%# X", []byte("abc\xff"), "0X61 0X62 0X63 0XFF"},
+	{"% x", "xyz", "78 79 7a"},
+	{"% X", "xyz", "78 79 7A"},
+	{"%#x", "xyz", "0x78797a"},
+	{"%#X", "xyz", "0X78797A"},
+	{"%# x", "xyz", "0x78 0x79 0x7a"},
+	{"%# X", "xyz", "0X78 0X79 0X7A"},
 
 	// basic bytes
 	// 基本字节
 	{"%s", []byte("abc"), "abc"},
+	{"%q", []byte("abc"), `"abc"`},
 	{"%x", []byte("abc"), "616263"},
-	{"% x", []byte("abc\xff"), "61 62 63 ff"},
-	{"%#x", []byte("abc\xff"), "0x616263ff"},
-	{"%#X", []byte("abc\xff"), "0X616263FF"},
-	{"%# x", []byte("abc\xff"), "0x61 0x62 0x63 0xff"},
-	{"%# X", []byte("abc\xff"), "0X61 0X62 0X63 0XFF"},
-	{"% X", []byte("abc\xff"), "61 62 63 FF"},
+	{"%x", []byte("\xff\xf0\x0f\xff"), "fff00fff"},
+	{"%X", []byte("\xff\xf0\x0f\xff"), "FFF00FFF"},
 	{"%x", []byte("xyz"), "78797a"},
 	{"%X", []byte("xyz"), "78797A"},
-	{"%q", []byte("abc"), `"abc"`},
+	{"% x", []byte("xyz"), "78 79 7a"},
+	{"% X", []byte("xyz"), "78 79 7A"},
+	{"%#x", []byte("xyz"), "0x78797a"},
+	{"%#X", []byte("xyz"), "0X78797A"},
+	{"%# x", []byte("xyz"), "0x78 0x79 0x7a"},
+	{"%# X", []byte("xyz"), "0X78 0X79 0X7A"},
 
 	// escaped strings
 	// 转义字符串
@@ -403,6 +410,8 @@ var fmtTests = []struct {
 	{"%v", &slice, "&[1 2 3 4 5]"},
 	{"%v", &islice, "&[1 hello 2.5 <nil>]"},
 	{"%v", &bslice, "&[1 2 3 4 5]"},
+	{"%v", []byte{1}, "[1]"},
+	{"%v", []byte{}, "[]"},
 
 	// complexes with %v
 	// 复数的 %v 格式
@@ -462,6 +471,12 @@ var fmtTests = []struct {
 	{"%d", []int{1, 2, 15}, `[1 2 15]`},
 	{"%d", []byte{1, 2, 15}, `[1 2 15]`},
 	{"%q", []string{"a", "b"}, `["a" "b"]`},
+	{"% 02x", []byte{1}, "01"},
+	{"% 02x", []byte{1, 2, 3}, "01 02 03"},
+	// Special care for empty slices.
+	{"%x", []byte{}, ""},
+	{"%02x", []byte{}, ""},
+	{"% 02x", []byte{}, ""},
 
 	// renamings
 	// 类型重命名测试
@@ -552,6 +567,8 @@ var fmtTests = []struct {
 	{"%s", nil, "%!s(<nil>)"},
 	{"%T", nil, "<nil>"},
 	{"%-1", 100, "%!(NOVERB)%!(EXTRA int=100)"},
+	{"%017091901790959340919092959340919017929593813360", 0, "%!(NOVERB)%!(EXTRA int=0)"},
+	{"%184467440737095516170v", 0, "%!(NOVERB)%!(EXTRA int=0)"},
 
 	// The "<nil>" show up because maps are printed by
 	// first obtaining a list of keys and then looking up
@@ -574,6 +591,14 @@ var fmtTests = []struct {
 	{"%0100d", -1, zeroFill("-", 99, "1")},
 	{"%0.100f", 1.0, zeroFill("1.", 100, "")},
 	{"%0.100f", -1.0, zeroFill("-1.", 100, "")},
+
+	// Used to panic: integer function didn't look at f.prec or f.unicode or f.width.
+	{"%#.80x", 42, "0x0000000000000000000000000000000000000000000000000000000000000000000000000000002a"},
+	{"%.80U", 42, "U+0000000000000000000000000000000000000000000000000000000000000000000000000000002A"},
+	{"%#.80U", '日', "U+000000000000000000000000000000000000000000000000000000000000000000000000000065E5 '日'"},
+	{"%+.65d", 44, "+00000000000000000000000000000000000000000000000000000000000000044"},
+	{"% .65d", 44, " 00000000000000000000000000000000000000000000000000000000000000044"},
+	{"%  +.65d", 44, "+00000000000000000000000000000000000000000000000000000000000000044"},
 
 	// Comparison of padding rules with C printf.
 	/*
@@ -701,6 +726,20 @@ var fmtTests = []struct {
 	{"%x", byteFormatterSlice, "61626364"},
 	// This next case seems wrong, but the docs say the Formatter wins here.
 	{"%#v", byteFormatterSlice, "[]fmt_test.byteFormatter{X, X, X, X}"},
+
+	// reflect.Value handled specially in Go 1.5, making it possible to
+	// see inside non-exported fields (which cannot be accessed with Interface()).
+	// Issue 8965.
+	{"%v", reflect.ValueOf(A{}).Field(0).String(), "<int Value>"}, // Equivalent to the old way.
+	{"%v", reflect.ValueOf(A{}).Field(0), "0"},                    // Sees inside the field.
+
+	// verbs apply to the extracted value too.
+	{"%s", reflect.ValueOf("hello"), "hello"},
+	{"%q", reflect.ValueOf("hello"), `"hello"`},
+	{"%#04x", reflect.ValueOf(256), "0x0100"},
+
+	// invalid reflect.Value doesn't crash.
+	{"%v", reflect.Value{}, "<invalid reflect.Value>"},
 }
 
 // zeroFill generates zero-filled strings of the specified width. The length
@@ -828,6 +867,7 @@ var reorderTests = []struct {
 	{"%d %d %d %#[1]o %#o %#o %#o", SE{11, 12, 13}, "11 12 13 013 014 015 %!o(MISSING)"},
 	{"%[5]d %[2]d %d", SE{1, 2, 3}, "%!d(BADINDEX) 2 3"},
 	{"%d %[3]d %d", SE{1, 2}, "1 %!d(BADINDEX) 2"}, // Erroneous index does not affect sequence.
+	{"%.[]", SE{}, "%!](BADINDEX)"},                // Issue 10675
 }
 
 func TestReorder(t *testing.T) {
@@ -949,11 +989,13 @@ var mallocTest = []struct {
 var _ bytes.Buffer
 
 func TestCountMallocs(t *testing.T) {
-	if testing.Short() {
+	switch {
+	case testing.Short():
 		t.Skip("skipping malloc count in short mode")
-	}
-	if runtime.GOMAXPROCS(0) > 1 {
+	case runtime.GOMAXPROCS(0) > 1:
 		t.Skip("skipping; GOMAXPROCS>1")
+	case raceenabled:
+		t.Skip("skipping malloc count under race detector")
 	}
 	for _, mt := range mallocTest {
 		mallocs := testing.AllocsPerRun(100, mt.fn)

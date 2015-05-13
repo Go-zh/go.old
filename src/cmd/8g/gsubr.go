@@ -42,6 +42,13 @@ import (
 // At the same time, can raise StackBig in ../../runtime/stack.h.
 var unmappedzero uint32 = 4096
 
+// foptoas flags
+const (
+	Frev  = 1 << 0
+	Fpop  = 1 << 1
+	Fpop2 = 1 << 2
+)
+
 /*
  * return Axxx for Oxxx on type t.
  */
@@ -53,7 +60,7 @@ func optoas(op int, t *gc.Type) int {
 	a := obj.AXXX
 	switch uint32(op)<<16 | uint32(gc.Simtype[t.Etype]) {
 	default:
-		gc.Fatal("optoas: no entry %v-%v", gc.Oconv(int(op), 0), gc.Tconv(t, 0))
+		gc.Fatal("optoas: no entry %v-%v", gc.Oconv(int(op), 0), t)
 
 	case gc.OADDR<<16 | gc.TPTR32:
 		a = x86.ALEAL
@@ -402,10 +409,10 @@ func foptoas(op int, t *gc.Type, flg int) int {
 	a := obj.AXXX
 	et := int(gc.Simtype[t.Etype])
 
-	if gc.Use_sse != 0 {
+	if !gc.Thearch.Use387 {
 		switch uint32(op)<<16 | uint32(et) {
 		default:
-			gc.Fatal("foptoas-sse: no entry %v-%v", gc.Oconv(int(op), 0), gc.Tconv(t, 0))
+			gc.Fatal("foptoas-sse: no entry %v-%v", gc.Oconv(int(op), 0), t)
 
 		case gc.OCMP<<16 | gc.TFLOAT32:
 			a = x86.AUCOMISS
@@ -538,7 +545,7 @@ func foptoas(op int, t *gc.Type, flg int) int {
 		return x86.AFCHS
 	}
 
-	gc.Fatal("foptoas %v %v %#x", gc.Oconv(int(op), 0), gc.Tconv(t, 0), flg)
+	gc.Fatal("foptoas %v %v %#x", gc.Oconv(int(op), 0), t, flg)
 	return 0
 }
 
@@ -550,184 +557,6 @@ var resvd = []int{
 	x86.REG_CX, // for shift
 	x86.REG_DX, // for divide
 	x86.REG_SP, // for stack
-
-	x86.REG_BL, // because REG_BX can be allocated
-	x86.REG_BH,
-}
-
-func ginit() {
-	for i := 0; i < len(reg); i++ {
-		reg[i] = 1
-	}
-	for i := x86.REG_AX; i <= x86.REG_DI; i++ {
-		reg[i] = 0
-	}
-	for i := x86.REG_X0; i <= x86.REG_X7; i++ {
-		reg[i] = 0
-	}
-	for i := 0; i < len(resvd); i++ {
-		reg[resvd[i]]++
-	}
-}
-
-var regpc [x86.MAXREG]uint32
-
-func gclean() {
-	for i := 0; i < len(resvd); i++ {
-		reg[resvd[i]]--
-	}
-
-	for i := x86.REG_AX; i <= x86.REG_DI; i++ {
-		if reg[i] != 0 {
-			gc.Yyerror("reg %v left allocated at %x", obj.Rconv(i), regpc[i])
-		}
-	}
-	for i := x86.REG_X0; i <= x86.REG_X7; i++ {
-		if reg[i] != 0 {
-			gc.Yyerror("reg %v left allocated\n", obj.Rconv(i))
-		}
-	}
-}
-
-func anyregalloc() bool {
-	var j int
-
-	for i := x86.REG_AX; i <= x86.REG_DI; i++ {
-		if reg[i] == 0 {
-			goto ok
-		}
-		for j = 0; j < len(resvd); j++ {
-			if resvd[j] == i {
-				goto ok
-			}
-		}
-		return true
-	ok:
-	}
-
-	for i := x86.REG_X0; i <= x86.REG_X7; i++ {
-		if reg[i] != 0 {
-			return true
-		}
-	}
-	return false
-}
-
-/*
- * allocate register of type t, leave in n.
- * if o != N, o is desired fixed register.
- * caller must regfree(n).
- */
-func regalloc(n *gc.Node, t *gc.Type, o *gc.Node) {
-	if t == nil {
-		gc.Fatal("regalloc: t nil")
-	}
-	et := int(gc.Simtype[t.Etype])
-
-	var i int
-	switch et {
-	case gc.TINT64,
-		gc.TUINT64:
-		gc.Fatal("regalloc64")
-
-	case gc.TINT8,
-		gc.TUINT8,
-		gc.TINT16,
-		gc.TUINT16,
-		gc.TINT32,
-		gc.TUINT32,
-		gc.TPTR32,
-		gc.TPTR64,
-		gc.TBOOL:
-		if o != nil && o.Op == gc.OREGISTER {
-			i = int(o.Val.U.Reg)
-			if i >= x86.REG_AX && i <= x86.REG_DI {
-				goto out
-			}
-		}
-
-		for i = x86.REG_AX; i <= x86.REG_DI; i++ {
-			if reg[i] == 0 {
-				goto out
-			}
-		}
-
-		fmt.Printf("registers allocated at\n")
-		for i := x86.REG_AX; i <= x86.REG_DI; i++ {
-			fmt.Printf("\t%v\t%#x\n", obj.Rconv(i), regpc[i])
-		}
-		gc.Fatal("out of fixed registers")
-		goto err
-
-	case gc.TFLOAT32,
-		gc.TFLOAT64:
-		if gc.Use_sse == 0 {
-			i = x86.REG_F0
-			goto out
-		}
-
-		if o != nil && o.Op == gc.OREGISTER {
-			i = int(o.Val.U.Reg)
-			if i >= x86.REG_X0 && i <= x86.REG_X7 {
-				goto out
-			}
-		}
-
-		for i = x86.REG_X0; i <= x86.REG_X7; i++ {
-			if reg[i] == 0 {
-				goto out
-			}
-		}
-		fmt.Printf("registers allocated at\n")
-		for i := x86.REG_X0; i <= x86.REG_X7; i++ {
-			fmt.Printf("\t%v\t%#x\n", obj.Rconv(i), regpc[i])
-		}
-		gc.Fatal("out of floating registers")
-	}
-
-	gc.Yyerror("regalloc: unknown type %v", gc.Tconv(t, 0))
-
-err:
-	gc.Nodreg(n, t, 0)
-	return
-
-out:
-	if i == x86.REG_SP {
-		fmt.Printf("alloc SP\n")
-	}
-	if reg[i] == 0 {
-		regpc[i] = uint32(obj.Getcallerpc(&n))
-		if i == x86.REG_AX || i == x86.REG_CX || i == x86.REG_DX || i == x86.REG_SP {
-			gc.Dump("regalloc-o", o)
-			gc.Fatal("regalloc %v", obj.Rconv(i))
-		}
-	}
-
-	reg[i]++
-	gc.Nodreg(n, t, i)
-}
-
-func regfree(n *gc.Node) {
-	if n.Op == gc.ONAME {
-		return
-	}
-	if n.Op != gc.OREGISTER && n.Op != gc.OINDREG {
-		gc.Fatal("regfree: not a register")
-	}
-	i := int(n.Val.U.Reg)
-	if i == x86.REG_SP {
-		return
-	}
-	if i < 0 || i >= len(reg) {
-		gc.Fatal("regfree: reg out of range")
-	}
-	if reg[i] <= 0 {
-		gc.Fatal("regfree: reg not allocated")
-	}
-	reg[i]--
-	if reg[i] == 0 && (i == x86.REG_AX || i == x86.REG_CX || i == x86.REG_DX || i == x86.REG_SP) {
-		gc.Fatal("regfree %v", obj.Rconv(i))
-	}
 }
 
 /*
@@ -741,6 +570,55 @@ func gconreg(as int, c int64, reg int) {
 	gc.Nodconst(&n1, gc.Types[gc.TINT64], c)
 	gc.Nodreg(&n2, gc.Types[gc.TINT64], reg)
 	gins(as, &n1, &n2)
+}
+
+/*
+ * generate
+ *	as $c, n
+ */
+func ginscon(as int, c int64, n2 *gc.Node) {
+	var n1 gc.Node
+	gc.Nodconst(&n1, gc.Types[gc.TINT32], c)
+	gins(as, &n1, n2)
+}
+
+func ginscmp(op int, t *gc.Type, n1, n2 *gc.Node, likely int) *obj.Prog {
+	if gc.Isint[t.Etype] || int(t.Etype) == gc.Tptr {
+		if (n1.Op == gc.OLITERAL || n1.Op == gc.OADDR && n1.Left.Op == gc.ONAME) && n2.Op != gc.OLITERAL {
+			// Reverse comparison to place constant (including address constant) last.
+			op = gc.Brrev(op)
+			n1, n2 = n2, n1
+		}
+	}
+
+	// General case.
+	var r1, r2, g1, g2 gc.Node
+	if n1.Op == gc.ONAME && n1.Class&gc.PHEAP == 0 || n1.Op == gc.OINDREG {
+		r1 = *n1
+	} else {
+		gc.Regalloc(&r1, t, n1)
+		gc.Regalloc(&g1, n1.Type, &r1)
+		gc.Cgen(n1, &g1)
+		gmove(&g1, &r1)
+	}
+	if n2.Op == gc.OLITERAL && gc.Isint[t.Etype] || n2.Op == gc.OADDR && n2.Left.Op == gc.ONAME && n2.Left.Class == gc.PEXTERN {
+		r2 = *n2
+	} else {
+		gc.Regalloc(&r2, t, n2)
+		gc.Regalloc(&g2, n1.Type, &r2)
+		gc.Cgen(n2, &g2)
+		gmove(&g2, &r2)
+	}
+	gins(optoas(gc.OCMP, t), &r1, &r2)
+	if r1.Op == gc.OREGISTER {
+		gc.Regfree(&g1)
+		gc.Regfree(&r1)
+	}
+	if r2.Op == gc.OREGISTER {
+		gc.Regfree(&g2)
+		gc.Regfree(&r2)
+	}
+	return gc.Gbranch(optoas(op, t), nil, likely)
 }
 
 /*
@@ -776,7 +654,7 @@ var nsclean int
  */
 func split64(n *gc.Node, lo *gc.Node, hi *gc.Node) {
 	if !gc.Is64(n.Type) {
-		gc.Fatal("split64 %v", gc.Tconv(n.Type, 0))
+		gc.Fatal("split64 %v", n.Type)
 	}
 
 	if nsclean >= len(sclean) {
@@ -790,7 +668,7 @@ func split64(n *gc.Node, lo *gc.Node, hi *gc.Node) {
 		default:
 			var n1 gc.Node
 			if !dotaddable(n, &n1) {
-				igen(n, &n1, nil)
+				gc.Igen(n, &n1, nil)
 				sclean[nsclean-1] = n1
 			}
 
@@ -799,7 +677,7 @@ func split64(n *gc.Node, lo *gc.Node, hi *gc.Node) {
 		case gc.ONAME:
 			if n.Class == gc.PPARAMREF {
 				var n1 gc.Node
-				cgen(n.Heapaddr, &n1)
+				gc.Cgen(n.Heapaddr, &n1)
 				sclean[nsclean-1] = n1
 				n = &n1
 			}
@@ -839,7 +717,7 @@ func splitclean() {
 	}
 	nsclean--
 	if sclean[nsclean].Op != gc.OEMPTY {
-		regfree(&sclean[nsclean])
+		gc.Regfree(&sclean[nsclean])
 	}
 }
 
@@ -883,7 +761,7 @@ func memname(n *gc.Node, t *gc.Type) {
 
 func gmove(f *gc.Node, t *gc.Node) {
 	if gc.Debug['M'] != 0 {
-		fmt.Printf("gmove %v -> %v\n", gc.Nconv(f, 0), gc.Nconv(t, 0))
+		fmt.Printf("gmove %v -> %v\n", f, t)
 	}
 
 	ft := gc.Simsimtype(f.Type)
@@ -926,7 +804,7 @@ func gmove(f *gc.Node, t *gc.Node) {
 	switch uint32(ft)<<16 | uint32(tt) {
 	default:
 		// should not happen
-		gc.Fatal("gmove %v -> %v", gc.Nconv(f, 0), gc.Nconv(t, 0))
+		gc.Fatal("gmove %v -> %v", f, t)
 		return
 
 		/*
@@ -1139,31 +1017,31 @@ func gmove(f *gc.Node, t *gc.Node) {
 
 	// requires register source
 rsrc:
-	regalloc(&r1, f.Type, t)
+	gc.Regalloc(&r1, f.Type, t)
 
 	gmove(f, &r1)
 	gins(a, &r1, t)
-	regfree(&r1)
+	gc.Regfree(&r1)
 	return
 
 	// requires register destination
 rdst:
 	{
-		regalloc(&r1, t.Type, t)
+		gc.Regalloc(&r1, t.Type, t)
 
 		gins(a, f, &r1)
 		gmove(&r1, t)
-		regfree(&r1)
+		gc.Regfree(&r1)
 		return
 	}
 
 	// requires register intermediate
 hard:
-	regalloc(&r1, cvt, t)
+	gc.Regalloc(&r1, cvt, t)
 
 	gmove(f, &r1)
 	gmove(&r1, t)
-	regfree(&r1)
+	gc.Regfree(&r1)
 	return
 }
 
@@ -1204,10 +1082,10 @@ func floatmove(f *gc.Node, t *gc.Node) {
 
 	switch uint32(ft)<<16 | uint32(tt) {
 	default:
-		if gc.Use_sse != 0 {
-			floatmove_sse(f, t)
-		} else {
+		if gc.Thearch.Use387 {
 			floatmove_387(f, t)
+		} else {
+			floatmove_sse(f, t)
 		}
 		return
 
@@ -1408,11 +1286,11 @@ func floatmove(f *gc.Node, t *gc.Node) {
 
 	// requires register intermediate
 hard:
-	regalloc(&r1, cvt, t)
+	gc.Regalloc(&r1, cvt, t)
 
 	gmove(f, &r1)
 	gmove(&r1, t)
-	regfree(&r1)
+	gc.Regfree(&r1)
 	return
 
 	// requires memory intermediate
@@ -1490,7 +1368,7 @@ func floatmove_387(f *gc.Node, t *gc.Node) {
 		gmove(f, &t1)
 		switch tt {
 		default:
-			gc.Fatal("gmove %v", gc.Nconv(t, 0))
+			gc.Fatal("gmove %v", t)
 
 		case gc.TINT8:
 			gins(x86.ACMPL, &t1, ncon(-0x80&(1<<32-1)))
@@ -1589,7 +1467,7 @@ func floatmove_387(f *gc.Node, t *gc.Node) {
 			goto hard
 		}
 		if f.Op == gc.OREGISTER && t.Op == gc.OREGISTER {
-			if f.Val.U.Reg != x86.REG_F0 || t.Val.U.Reg != x86.REG_F0 {
+			if f.Reg != x86.REG_F0 || t.Reg != x86.REG_F0 {
 				goto fatal
 			}
 			return
@@ -1600,8 +1478,8 @@ func floatmove_387(f *gc.Node, t *gc.Node) {
 			a = x86.AFMOVD
 		}
 		if gc.Ismem(t) {
-			if f.Op != gc.OREGISTER || f.Val.U.Reg != x86.REG_F0 {
-				gc.Fatal("gmove %v", gc.Nconv(f, 0))
+			if f.Op != gc.OREGISTER || f.Reg != x86.REG_F0 {
+				gc.Fatal("gmove %v", f)
 			}
 			a = x86.AFMOVFP
 			if ft == gc.TFLOAT64 {
@@ -1614,7 +1492,7 @@ func floatmove_387(f *gc.Node, t *gc.Node) {
 			goto hard
 		}
 		if f.Op == gc.OREGISTER && t.Op == gc.OREGISTER {
-			if f.Val.U.Reg != x86.REG_F0 || t.Val.U.Reg != x86.REG_F0 {
+			if f.Reg != x86.REG_F0 || t.Reg != x86.REG_F0 {
 				goto fatal
 			}
 			return
@@ -1652,11 +1530,11 @@ func floatmove_387(f *gc.Node, t *gc.Node) {
 
 	// requires register intermediate
 hard:
-	regalloc(&r1, cvt, t)
+	gc.Regalloc(&r1, cvt, t)
 
 	gmove(f, &r1)
 	gmove(&r1, t)
-	regfree(&r1)
+	gc.Regfree(&r1)
 	return
 
 	// requires memory intermediate
@@ -1685,7 +1563,7 @@ func floatmove_sse(f *gc.Node, t *gc.Node) {
 	switch uint32(ft)<<16 | uint32(tt) {
 	// should not happen
 	default:
-		gc.Fatal("gmove %v -> %v", gc.Nconv(f, 0), gc.Nconv(t, 0))
+		gc.Fatal("gmove %v -> %v", f, t)
 
 		return
 
@@ -1774,11 +1652,11 @@ func floatmove_sse(f *gc.Node, t *gc.Node) {
 
 	// requires register intermediate
 hard:
-	regalloc(&r1, cvt, t)
+	gc.Regalloc(&r1, cvt, t)
 
 	gmove(f, &r1)
 	gmove(&r1, t)
-	regfree(&r1)
+	gc.Regfree(&r1)
 	return
 
 	// requires memory intermediate
@@ -1791,11 +1669,11 @@ hardmem:
 
 	// requires register destination
 rdst:
-	regalloc(&r1, t.Type, t)
+	gc.Regalloc(&r1, t.Type, t)
 
 	gins(a, f, &r1)
 	gmove(&r1, t)
-	regfree(&r1)
+	gc.Regfree(&r1)
 	return
 }
 
@@ -1806,7 +1684,7 @@ func samaddr(f *gc.Node, t *gc.Node) bool {
 
 	switch f.Op {
 	case gc.OREGISTER:
-		if f.Val.U.Reg != t.Val.U.Reg {
+		if f.Reg != t.Reg {
 			break
 		}
 		return true
@@ -1826,8 +1704,17 @@ func gins(as int, f *gc.Node, t *gc.Node) *obj.Prog {
 	if as == x86.ACVTSD2SS && f != nil && f.Op == gc.OLITERAL {
 		gc.Fatal("gins CVTSD2SS const")
 	}
-	if as == x86.AMOVSD && t != nil && t.Op == gc.OREGISTER && t.Val.U.Reg == x86.REG_F0 {
+	if as == x86.AMOVSD && t != nil && t.Op == gc.OREGISTER && t.Reg == x86.REG_F0 {
 		gc.Fatal("gins MOVSD into F0")
+	}
+
+	if as == x86.AMOVL && f != nil && f.Op == gc.OADDR && f.Left.Op == gc.ONAME && f.Left.Class != gc.PEXTERN && f.Left.Class != gc.PFUNC {
+		// Turn MOVL $xxx(FP/SP) into LEAL xxx.
+		// These should be equivalent but most of the backend
+		// only expects to see LEAL, because that's what we had
+		// historically generated. Various hidden assumptions are baked in by now.
+		as = x86.ALEAL
+		f = f.Left
 	}
 
 	switch as {
@@ -1840,25 +1727,14 @@ func gins(as int, f *gc.Node, t *gc.Node) *obj.Prog {
 
 	case x86.ALEAL:
 		if f != nil && gc.Isconst(f, gc.CTNIL) {
-			gc.Fatal("gins LEAL nil %v", gc.Tconv(f.Type, 0))
+			gc.Fatal("gins LEAL nil %v", f.Type)
 		}
 	}
 
-	var af obj.Addr
-	var at obj.Addr
-	if f != nil {
-		af = gc.Naddr(f, 1)
-	}
-	if t != nil {
-		at = gc.Naddr(t, 1)
-	}
 	p := gc.Prog(as)
-	if f != nil {
-		p.From = af
-	}
-	if t != nil {
-		p.To = at
-	}
+	gc.Naddr(&p.From, f)
+	gc.Naddr(&p.To, t)
+
 	if gc.Debug['g'] != 0 {
 		fmt.Printf("%v\n", p)
 	}
@@ -1875,10 +1751,10 @@ func gins(as int, f *gc.Node, t *gc.Node) *obj.Prog {
 		w = 4
 	}
 
-	if true && w != 0 && f != nil && (af.Width > int64(w) || at.Width > int64(w)) {
+	if true && w != 0 && f != nil && (p.From.Width > int64(w) || p.To.Width > int64(w)) {
 		gc.Dump("bad width from:", f)
 		gc.Dump("bad width to:", t)
-		gc.Fatal("bad width: %v (%d, %d)\n", p, af.Width, at.Width)
+		gc.Fatal("bad width: %v (%d, %d)\n", p, p.From.Width, p.To.Width)
 	}
 
 	if p.To.Type == obj.TYPE_ADDR && w > 0 {
@@ -1886,6 +1762,12 @@ func gins(as int, f *gc.Node, t *gc.Node) *obj.Prog {
 	}
 
 	return p
+}
+
+func ginsnop() {
+	var reg gc.Node
+	gc.Nodreg(&reg, gc.Types[gc.TINT], x86.REG_AX)
+	gins(x86.AXCHGL, &reg, &reg)
 }
 
 func dotaddable(n *gc.Node, n1 *gc.Node) bool {
@@ -1896,7 +1778,7 @@ func dotaddable(n *gc.Node, n1 *gc.Node) bool {
 	var oary [10]int64
 	var nn *gc.Node
 	o := gc.Dotoffset(n, oary[:], &nn)
-	if nn != nil && nn.Addable != 0 && o == 1 && oary[0] >= 0 {
+	if nn != nil && nn.Addable && o == 1 && oary[0] >= 0 {
 		*n1 = *nn
 		n1.Type = n.Type
 		n1.Xoffset += oary[0]

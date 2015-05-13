@@ -34,7 +34,7 @@ const (
 	surrSelf = 0x10000
 )
 
-// IsSurrogate returns true if the specified Unicode code point
+// IsSurrogate reports whether the specified Unicode code point
 // can appear in a surrogate pair.
 
 // IsSurrogate 在指定的Unicode码点可出现在替代值对中时返回 true。

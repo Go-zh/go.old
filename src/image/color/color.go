@@ -14,20 +14,24 @@ package color
 // 这种转化可能是有损的。
 type Color interface {
 	// RGBA returns the alpha-premultiplied red, green, blue and alpha values
-	// for the color. Each value ranges within [0, 0xFFFF], but is represented
-	// by a uint32 so that multiplying by a blend factor up to 0xFFFF will not
+	// for the color. Each value ranges within [0, 0xffff], but is represented
+	// by a uint32 so that multiplying by a blend factor up to 0xffff will not
 	// overflow.
-
-	// RGBA返回预乘透明度的红，绿，蓝和颜色的透明度。每个值都在[0, 0xFFFF]范围内，
-	// 但是每个值都被uint32代表，这样可以乘以一个综合值来保证不会达到0xFFFF而溢出。
+	//
+	// An alpha-premultiplied color component c has been scaled by alpha (a),
+	// so has valid values 0 <= c <= a.
 	RGBA() (r, g, b, a uint32)
 }
 
-// RGBA represents a traditional 32-bit alpha-premultiplied color,
-// having 8 bits for each of red, green, blue and alpha.
+// RGBA represents a traditional 32-bit alpha-premultiplied color, having 8
+// bits for each of red, green, blue and alpha.
+//
+// An alpha-premultiplied color component C has been scaled by alpha (A), so
+// has valid values 0 <= C <= A.
 
-// RGBA代表一个传统的32位的预乘透明度的颜色，
-// 它的每个红，绿，蓝，和透明度都是个8bit的数值。
+// RGBA 表示一般的 32 位预乘透明度的颜色，其中红，绿，蓝和透明度各占 8 位数值。
+//
+// 一个预乘透明度的颜色成分 C 由透明度 alpha (A) 所调整，因此有效值为 0 <= C <= A。
 type RGBA struct {
 	R, G, B, A uint8
 }
@@ -44,11 +48,15 @@ func (c RGBA) RGBA() (r, g, b, a uint32) {
 	return
 }
 
-// RGBA64 represents a 64-bit alpha-premultiplied color,
-// having 16 bits for each of red, green, blue and alpha.
+// RGBA64 represents a 64-bit alpha-premultiplied color, having 16 bits for
+// each of red, green, blue and alpha.
+//
+// An alpha-premultiplied color component C has been scaled by alpha (A), so
+// has valid values 0 <= C <= A.
 
-// RGBA64代表一个64位的预乘透明度的颜色，
-// 它的每个红，绿，蓝，和透明度都是个8bit的数值。
+// RGBA64 表示一般的 64 位预乘透明度的颜色，其中红，绿，蓝和透明度各占 16 位数值。
+//
+// 一个预乘透明度的颜色成分 C 由透明度 alpha (A) 所调整，因此有效值为 0 <= C <= A。
 type RGBA64 struct {
 	R, G, B, A uint16
 }
@@ -300,37 +308,48 @@ func (p Palette) Convert(c Color) Color {
 }
 
 // Index returns the index of the palette color closest to c in Euclidean
-// R,G,B space.
+// R,G,B,A space.
 
-// Index在Euclidean R,G,B空间中找到最接近c的调色板对应的索引。
+// Index 在欧几里得 R,G,B,A 色彩空间中找到最接近 c 的调色板对应的索引。
 func (p Palette) Index(c Color) int {
 	// A batch version of this computation is in image/draw/draw.go.
 
-	cr, cg, cb, _ := c.RGBA()
-	ret, bestSSD := 0, uint32(1<<32-1)
+	cr, cg, cb, ca := c.RGBA()
+	ret, bestSum := 0, uint32(1<<32-1)
 	for i, v := range p {
-		vr, vg, vb, _ := v.RGBA()
-		// We shift by 1 bit to avoid potential uint32 overflow in
-		// sum-squared-difference.
-		delta := (int32(cr) - int32(vr)) >> 1
-		ssd := uint32(delta * delta)
-		delta = (int32(cg) - int32(vg)) >> 1
-		ssd += uint32(delta * delta)
-		delta = (int32(cb) - int32(vb)) >> 1
-		ssd += uint32(delta * delta)
-		if ssd < bestSSD {
-			if ssd == 0 {
+		vr, vg, vb, va := v.RGBA()
+		sum := sqDiff(cr, vr) + sqDiff(cg, vg) + sqDiff(cb, vb) + sqDiff(ca, va)
+		if sum < bestSum {
+			if sum == 0 {
 				return i
 			}
-			ret, bestSSD = i, ssd
+			ret, bestSum = i, sum
 		}
 	}
 	return ret
 }
 
+// sqDiff returns the squared-difference of x and y, shifted by 2 so that
+// adding four of those won't overflow a uint32.
+//
+// x and y are both assumed to be in the range [0, 0xffff].
+
+// sqDiff 返回 x 与 y 之差的平方，右移 2 位使其加上四个 uint32 也不会溢出。
+//
+// 假设 x 和 y 均在区间 [0, 0xffff] 上。
+func sqDiff(x, y uint32) uint32 {
+	var d uint32
+	if x > y {
+		d = x - y
+	} else {
+		d = y - x
+	}
+	return (d * d) >> 2
+}
+
 // Standard colors.
 
-// 标准的颜色。
+// 标准颜色。
 var (
 	Black       = Gray16{0}
 	White       = Gray16{0xffff}

@@ -25,11 +25,11 @@ func (a *TCPAddr) String() string {
 	return JoinHostPort(ip, itoa(a.Port))
 }
 
-func (a *TCPAddr) toAddr() Addr {
-	if a == nil {
-		return nil
+func (a *TCPAddr) isWildcard() bool {
+	if a == nil || a.IP == nil {
+		return true
 	}
-	return a
+	return a.IP.IsUnspecified()
 }
 
 // ResolveTCPAddr parses addr as a TCP address of the form "host:port"
@@ -46,9 +46,9 @@ func ResolveTCPAddr(net, addr string) (*TCPAddr, error) {
 	default:
 		return nil, UnknownNetworkError(net)
 	}
-	a, err := resolveInternetAddr(net, addr, noDeadline)
+	addrs, err := internetAddrList(net, addr, noDeadline)
 	if err != nil {
 		return nil, err
 	}
-	return a.toAddr().(*TCPAddr), nil
+	return addrs.first(isIPv4).(*TCPAddr), nil
 }

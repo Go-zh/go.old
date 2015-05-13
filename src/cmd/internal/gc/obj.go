@@ -7,6 +7,7 @@ package gc
 import (
 	"cmd/internal/obj"
 	"fmt"
+	"strconv"
 )
 
 /*
@@ -34,7 +35,7 @@ func dumpobj() {
 	if writearchive != 0 {
 		obj.Bwritestring(bout, "!<arch>\n")
 		arhdr = [ArhdrSize]byte{}
-		obj.Bwrite(bout, arhdr[:])
+		bout.Write(arhdr[:])
 		startobj = obj.Boffset(bout)
 	}
 
@@ -42,19 +43,19 @@ func dumpobj() {
 	dumpexport()
 
 	if writearchive != 0 {
-		obj.Bflush(bout)
+		bout.Flush()
 		size := obj.Boffset(bout) - startobj
 		if size&1 != 0 {
 			obj.Bputc(bout, 0)
 		}
 		obj.Bseek(bout, startobj-ArhdrSize, 0)
 		formathdr(arhdr[:], "__.PKGDEF", size)
-		obj.Bwrite(bout, arhdr[:])
-		obj.Bflush(bout)
+		bout.Write(arhdr[:])
+		bout.Flush()
 
 		obj.Bseek(bout, startobj+size+(size&1), 0)
 		arhdr = [ArhdrSize]byte{}
-		obj.Bwrite(bout, arhdr[:])
+		bout.Write(arhdr[:])
 		startobj = obj.Boffset(bout)
 		fmt.Fprintf(bout, "go object %s %s %s %s\n", obj.Getgoos(), obj.Getgoarch(), obj.Getgoversion(), obj.Expstring())
 	}
@@ -95,15 +96,15 @@ func dumpobj() {
 	obj.Writeobjdirect(Ctxt, bout)
 
 	if writearchive != 0 {
-		obj.Bflush(bout)
+		bout.Flush()
 		size := obj.Boffset(bout) - startobj
 		if size&1 != 0 {
 			obj.Bputc(bout, 0)
 		}
 		obj.Bseek(bout, startobj-ArhdrSize, 0)
-		namebuf = fmt.Sprintf("_go_.%c", Thearch.Thechar)
-		formathdr(arhdr[:], namebuf, size)
-		obj.Bwrite(bout, arhdr[:])
+		name := fmt.Sprintf("_go_.%c", Thearch.Thechar)
+		formathdr(arhdr[:], name, size)
+		bout.Write(arhdr[:])
 	}
 
 	obj.Bterm(bout)
@@ -120,7 +121,7 @@ func dumpglobls() {
 		}
 
 		if n.Type == nil {
-			Fatal("external %v nil type\n", Nconv(n, 0))
+			Fatal("external %v nil type\n", n)
 		}
 		if n.Class == PFUNC {
 			continue
@@ -135,7 +136,7 @@ func dumpglobls() {
 
 	for l := funcsyms; l != nil; l = l.Next {
 		n = l.N
-		dsymptr(n.Sym, 0, n.Sym.Def.Shortname.Sym, 0)
+		dsymptr(n.Sym, 0, n.Sym.Def.Func.Shortname.Sym, 0)
 		ggloblsym(n.Sym, int32(Widthptr), obj.DUPOK|obj.RODATA)
 	}
 
@@ -155,16 +156,18 @@ func Linksym(s *Sym) *obj.LSym {
 	if s.Lsym != nil {
 		return s.Lsym
 	}
+	var name string
 	if isblanksym(s) {
-		s.Lsym = obj.Linklookup(Ctxt, "_", 0)
+		name = "_"
 	} else if s.Linkname != "" {
-		s.Lsym = obj.Linklookup(Ctxt, s.Linkname, 0)
+		name = s.Linkname
 	} else {
-		p := fmt.Sprintf("%s.%s", s.Pkg.Prefix, s.Name)
-		s.Lsym = obj.Linklookup(Ctxt, p, 0)
+		name = s.Pkg.Prefix + "." + s.Name
 	}
 
-	return s.Lsym
+	ls := obj.Linklookup(Ctxt, name, 0)
+	s.Lsym = ls
+	return ls
 }
 
 func duintxx(s *Sym, off int, v uint64, wid int) int {
@@ -199,22 +202,23 @@ func duintptr(s *Sym, off int, v uint64) int {
 var stringsym_gen int
 
 func stringsym(s string) *Sym {
+	var symname string
 	var pkg *Pkg
 	if len(s) > 100 {
 		// huge strings are made static to avoid long names
 		stringsym_gen++
-		namebuf = fmt.Sprintf(".gostring.%d", stringsym_gen)
+		symname = fmt.Sprintf(".gostring.%d", stringsym_gen)
 
 		pkg = localpkg
 	} else {
 		// small strings get named by their contents,
 		// so that multiple modules using the same string
 		// can share it.
-		namebuf = fmt.Sprintf("%q", s)
+		symname = strconv.Quote(s)
 		pkg = gostringpkg
 	}
 
-	sym := Pkglookup(namebuf, pkg)
+	sym := Pkglookup(symname, pkg)
 
 	// SymUniq flag indicates that data is generated already
 	if sym.Flags&SymUniq != 0 {
@@ -241,7 +245,7 @@ func stringsym(s string) *Sym {
 
 	off = duint8(sym, off, 0)                    // terminating NUL for runtime
 	off = (off + Widthptr - 1) &^ (Widthptr - 1) // round to pointer alignment
-	ggloblsym(sym, int32(off), obj.DUPOK|obj.RODATA)
+	ggloblsym(sym, int32(off), obj.DUPOK|obj.RODATA|obj.LOCAL)
 
 	return sym
 }
@@ -252,8 +256,8 @@ func slicebytes(nam *Node, s string, len int) {
 	var m int
 
 	slicebytes_gen++
-	namebuf = fmt.Sprintf(".gobytes.%d", slicebytes_gen)
-	sym := Pkglookup(namebuf, localpkg)
+	symname := fmt.Sprintf(".gobytes.%d", slicebytes_gen)
+	sym := Pkglookup(symname, localpkg)
 	sym.Def = newname(sym)
 
 	off := 0
@@ -265,10 +269,10 @@ func slicebytes(nam *Node, s string, len int) {
 		off = dsname(sym, off, s[n:n+m])
 	}
 
-	ggloblsym(sym, int32(off), obj.NOPTR)
+	ggloblsym(sym, int32(off), obj.NOPTR|obj.LOCAL)
 
 	if nam.Op != ONAME {
-		Fatal("slicebytes %v", Nconv(nam, 0))
+		Fatal("slicebytes %v", nam)
 	}
 	off = int(nam.Xoffset)
 	off = dsymptr(nam.Sym, off, sym, 0)
@@ -294,9 +298,6 @@ func dstringptr(s *Sym, off int, str string) int {
 	return off
 }
 
-/*
- * gobj.c
- */
 func Datastring(s string, a *obj.Addr) {
 	sym := stringsym(s)
 	a.Type = obj.TYPE_MEM
@@ -354,7 +355,7 @@ func dsname(s *Sym, off int, t string) int {
 	p.From3.Offset = int64(len(t))
 
 	p.To.Type = obj.TYPE_SCONST
-	p.To.U.Sval = t
+	p.To.Val = t
 	return off + len(t)
 }
 
@@ -403,14 +404,14 @@ func gdatacomplex(nam *Node, cval *Mpcplx) {
 	p.From3.Type = obj.TYPE_CONST
 	p.From3.Offset = int64(w)
 	p.To.Type = obj.TYPE_FCONST
-	p.To.U.Dval = mpgetflt(&cval.Real)
+	p.To.Val = mpgetflt(&cval.Real)
 
 	p = Thearch.Gins(obj.ADATA, nam, nil)
 	p.From3.Type = obj.TYPE_CONST
 	p.From3.Offset = int64(w)
 	p.From.Offset += int64(w)
 	p.To.Type = obj.TYPE_FCONST
-	p.To.U.Dval = mpgetflt(&cval.Imag)
+	p.To.Val = mpgetflt(&cval.Imag)
 }
 
 func gdatastring(nam *Node, sval string) {

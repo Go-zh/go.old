@@ -42,8 +42,9 @@ func executeTest(t *testing.T, templ string, data interface{}, extra ...string) 
 	case "android", "nacl":
 		t.Skipf("skipping on %s", runtime.GOOS)
 	case "darwin":
-		if runtime.GOARCH == "arm" {
-			t.Skipf("skipping on %s/%s", runtime.GOOS, runtime.GOARCH)
+		switch runtime.GOARCH {
+		case "arm", "arm64":
+			t.Skipf("skipping on %s/%s, no fork", runtime.GOOS, runtime.GOARCH)
 		}
 	}
 
@@ -72,7 +73,14 @@ func executeTest(t *testing.T, templ string, data interface{}, extra ...string) 
 	}
 
 	for i := 0; i < len(extra); i += 2 {
-		if err := ioutil.WriteFile(filepath.Join(dir, extra[i]), []byte(extra[i+1]), 0666); err != nil {
+		fname := extra[i]
+		contents := extra[i+1]
+		if d, _ := filepath.Split(fname); d != "" {
+			if err := os.Mkdir(filepath.Join(dir, d), 0755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := ioutil.WriteFile(filepath.Join(dir, fname), []byte(contents), 0666); err != nil {
 			t.Fatal(err)
 		}
 	}

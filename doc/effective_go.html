@@ -1627,7 +1627,7 @@ var t interface{}
 t = functionOfSomeType()
 switch t := t.(type) {
 default:
-	fmt.Printf("unexpected type %T", t)       // %T 输出 t 是什么类型
+	fmt.Printf("unexpected type %T\n", t)     // %T 输出 t 是什么类型
 case bool:
 	fmt.Printf("boolean %t\n", t)             // t 是 bool 类型
 case int:
@@ -2531,7 +2531,7 @@ limit of how much data to read.  Here is the signature of the
 </p>
 
 <pre>
-func (file *File) Read(buf []byte) (n int, err error)
+func (f *File) Read(buf []byte) (n int, err error)
 </pre>
 
 <div class="english">

@@ -49,7 +49,7 @@ var (
 )
 
 // The known architecture letters.
-var gochars = "566899"
+var gochars = "5667899"
 
 // The known architectures.
 var okgoarch = []string{
@@ -57,6 +57,7 @@ var okgoarch = []string{
 	"arm",
 	"amd64",
 	"amd64p32",
+	"arm64",
 	"386",
 	"ppc64",
 	"ppc64le",
@@ -774,17 +775,6 @@ func shouldbuild(file, dir string) bool {
 		return false
 	}
 
-	// cmd/go/doc.go has a giant /* */ comment before
-	// it gets to the important detail that it is not part of
-	// package main.  We don't parse those comments,
-	// so special case that file.
-	if strings.HasSuffix(file, "cmd/go/doc.go") || strings.HasSuffix(file, "cmd\\go\\doc.go") {
-		return false
-	}
-	if strings.HasSuffix(file, "cmd/cgo/doc.go") || strings.HasSuffix(file, "cmd\\cgo\\doc.go") {
-		return false
-	}
-
 	// Check file contents for // +build lines.
 	for _, p := range splitlines(readfile(file)) {
 		p = strings.TrimSpace(p)
@@ -858,6 +848,7 @@ var buildorder = []string{
 	"errors",
 	"sync/atomic",
 	"sync",
+	"internal/singleflight",
 	"io",
 	"unicode",
 	"unicode/utf8",
@@ -871,6 +862,7 @@ var buildorder = []string{
 	"container/heap",
 	"encoding/base64",
 	"syscall",
+	"internal/syscall/windows/registry",
 	"time",
 	"internal/syscall/windows",
 	"os",
@@ -909,6 +901,8 @@ var cleantab = []string{
 	"cmd/5l",
 	"cmd/6g",
 	"cmd/6l",
+	"cmd/7g",
+	"cmd/7l",
 	"cmd/8g",
 	"cmd/8l",
 	"cmd/9g",
@@ -1017,6 +1011,7 @@ func usage() {
 		"clean          deletes all built files\n" +
 		"env [-p]       print environment (-p: include $PATH)\n" +
 		"install [dir]  install individual directory\n" +
+		"test [-h]      run Go test(s)\n" +
 		"version        print Go version\n" +
 		"\n" +
 		"All commands take -v flags to emit extra information.\n",

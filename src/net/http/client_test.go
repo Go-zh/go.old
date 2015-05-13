@@ -334,6 +334,7 @@ var echoCookiesRedirectHandler = HandlerFunc(func(w ResponseWriter, r *Request) 
 })
 
 func TestClientSendsCookieFromJar(t *testing.T) {
+	defer afterTest(t)
 	tr := &recordingTransport{}
 	client := &Client{Transport: tr}
 	client.Jar = &TestJar{perURL: make(map[string][]*Cookie)}
@@ -926,7 +927,14 @@ func TestClientTimeout_Headers(t *testing.T) {
 		<-donec
 	}))
 	defer ts.Close()
-	defer close(donec)
+	// Note that we use a channel send here and not a close.
+	// The race detector doesn't know that we're waiting for a timeout
+	// and thinks that the waitgroup inside httptest.Server is added to concurrently
+	// with us closing it. If we timed out immediately, we could close the testserver
+	// before we entered the handler. We're not timing out immediately and there's
+	// no way we would be done before we entered the handler, but the race detector
+	// doesn't know this, so synchronize explicitly.
+	defer func() { donec <- true }()
 
 	c := &Client{Timeout: 500 * time.Millisecond}
 

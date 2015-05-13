@@ -90,7 +90,7 @@ func httpJsonTrace(w http.ResponseWriter, r *http.Request) {
 		params.startTime = g.StartTime
 		params.endTime = g.EndTime
 		params.maing = goid
-		params.gs = relatedGoroutines(events, goid)
+		params.gs = trace.RelatedGoroutines(events, goid)
 	}
 
 	err = json.NewEncoder(w).Encode(generateTrace(params))
@@ -323,7 +323,7 @@ func (ctx *traceContext) emit(e *ViewerEvent) {
 
 func (ctx *traceContext) time(ev *trace.Event) int64 {
 	if ev.Ts < ctx.startTime || ev.Ts > ctx.endTime {
-		fmt.Printf("ts=%v startTime=%v endTime\n", ev.Ts, ctx.startTime, ctx.endTime)
+		fmt.Printf("ts=%v startTime=%v endTime=%v\n", ev.Ts, ctx.startTime, ctx.endTime)
 		panic("timestamp is outside of trace range")
 	}
 	// NOTE: trace viewer wants timestamps in microseconds and it does not
@@ -391,7 +391,14 @@ func (ctx *traceContext) emitThreadCounters(ev *trace.Event) {
 }
 
 func (ctx *traceContext) emitInstant(ev *trace.Event, name string) {
-	ctx.emit(&ViewerEvent{Name: name, Phase: "I", Scope: "t", Time: ctx.time(ev), Tid: ctx.proc(ev), Stack: ctx.stack(ev.Stk)})
+	var arg interface{}
+	if ev.Type == trace.EvProcStart {
+		type Arg struct {
+			ThreadID uint64
+		}
+		arg = &Arg{ev.Args[0]}
+	}
+	ctx.emit(&ViewerEvent{Name: name, Phase: "I", Scope: "t", Time: ctx.time(ev), Tid: ctx.proc(ev), Stack: ctx.stack(ev.Stk), Arg: arg})
 }
 
 func (ctx *traceContext) emitArrow(ev *trace.Event, name string) {

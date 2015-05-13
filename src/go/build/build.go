@@ -259,13 +259,15 @@ var Default Context = defaultContext()
 var cgoEnabled = map[string]bool{
 	"darwin/386":      true,
 	"darwin/amd64":    true,
-	"dragonfly/386":   true,
+	"darwin/arm":      true,
+	"darwin/arm64":    true,
 	"dragonfly/amd64": true,
 	"freebsd/386":     true,
 	"freebsd/amd64":   true,
 	"linux/386":       true,
 	"linux/amd64":     true,
 	"linux/arm":       true,
+	"linux/arm64":     true,
 	"linux/ppc64le":   true,
 	"android/386":     true,
 	"android/amd64":   true,
@@ -275,6 +277,7 @@ var cgoEnabled = map[string]bool{
 	"netbsd/arm":      true,
 	"openbsd/386":     true,
 	"openbsd/amd64":   true,
+	"solaris/amd64":   true,
 	"windows/386":     true,
 	"windows/amd64":   true,
 }
@@ -354,6 +357,7 @@ type Package struct {
 	Root          string   // root of Go tree where this package lives
 	SrcRoot       string   // package source root directory ("" if unknown)
 	PkgRoot       string   // package install root directory ("" if unknown)
+	PkgTargetRoot string   // architecture dependent install root directory ("" if unknown)
 	BinDir        string   // command install directory ("" if unknown)
 	Goroot        bool     // package found in Go root
 	PkgObj        string   // installed .a file
@@ -462,18 +466,21 @@ func (ctxt *Context) Import(path string, srcDir string, mode ImportMode) (*Packa
 		return p, fmt.Errorf("import %q: invalid import path", path)
 	}
 
+	var pkgtargetroot string
 	var pkga string
 	var pkgerr error
+	suffix := ""
+	if ctxt.InstallSuffix != "" {
+		suffix = "_" + ctxt.InstallSuffix
+	}
 	switch ctxt.Compiler {
 	case "gccgo":
+		pkgtargetroot = "pkg/gccgo_" + ctxt.GOOS + "_" + ctxt.GOARCH + suffix
 		dir, elem := pathpkg.Split(p.ImportPath)
-		pkga = "pkg/gccgo_" + ctxt.GOOS + "_" + ctxt.GOARCH + "/" + dir + "lib" + elem + ".a"
+		pkga = pkgtargetroot + "/" + dir + "lib" + elem + ".a"
 	case "gc":
-		suffix := ""
-		if ctxt.InstallSuffix != "" {
-			suffix = "_" + ctxt.InstallSuffix
-		}
-		pkga = "pkg/" + ctxt.GOOS + "_" + ctxt.GOARCH + suffix + "/" + p.ImportPath + ".a"
+		pkgtargetroot = "pkg/" + ctxt.GOOS + "_" + ctxt.GOARCH + suffix
+		pkga = pkgtargetroot + "/" + p.ImportPath + ".a"
 	default:
 		// Save error for end of function.
 		pkgerr = fmt.Errorf("import %q: unknown compiler %q", path, ctxt.Compiler)
@@ -590,6 +597,7 @@ Found:
 		p.PkgRoot = ctxt.joinPath(p.Root, "pkg")
 		p.BinDir = ctxt.joinPath(p.Root, "bin")
 		if pkga != "" {
+			p.PkgTargetRoot = ctxt.joinPath(p.Root, pkgtargetroot)
 			p.PkgObj = ctxt.joinPath(p.Root, pkga)
 		}
 	}
@@ -1229,7 +1237,7 @@ func splitQuoted(s string) (r []string, err error) {
 	return args, err
 }
 
-// match returns true if the name is one of:
+// match reports whether the name is one of:
 //
 //	$GOOS
 //	$GOARCH
@@ -1320,7 +1328,7 @@ func (ctxt *Context) goodOSArchFile(name string, allTags map[string]bool) bool {
 	// build tag "linux" in that file. For Go 1.4 and beyond, we require this
 	// auto-tagging to apply only to files with a non-empty prefix, so
 	// "foo_linux.go" is tagged but "linux.go" is not. This allows new operating
-	// sytems, such as android, to arrive without breaking existing code with
+	// systems, such as android, to arrive without breaking existing code with
 	// innocuous source code in "android.go". The easiest fix: cut everything
 	// in the name before the initial _.
 	i := strings.Index(name, "_")
@@ -1397,6 +1405,8 @@ func ArchChar(goarch string) (string, error) {
 		return "6", nil
 	case "arm":
 		return "5", nil
+	case "arm64":
+		return "7", nil
 	case "ppc64", "ppc64le":
 		return "9", nil
 	}

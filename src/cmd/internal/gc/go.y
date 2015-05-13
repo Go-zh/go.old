@@ -449,7 +449,7 @@ simple_stmt:
 			if $1.Next != nil {
 				Yyerror("argument count mismatch: %d = %d", count($1), 1);
 			} else if ($1.N.Op != ONAME && $1.N.Op != OTYPE && $1.N.Op != ONONAME) || isblank($1.N) {
-				Yyerror("invalid variable name %s in type switch", Nconv($1.N, 0));
+				Yyerror("invalid variable name %s in type switch", $1.N);
 			} else {
 				$$.Left = dclname($1.N.Sym);
 			}  // it's a colas, so must not re-use an oldname.
@@ -618,7 +618,7 @@ range_stmt:
 	{
 		$$ = Nod(ORANGE, nil, $4);
 		$$.List = $1;
-		$$.Colas = 1;
+		$$.Colas = true;
 		colasdefn($1, $$);
 	}
 |	LRANGE expr
@@ -631,7 +631,7 @@ for_header:
 	osimple_stmt ';' osimple_stmt ';' osimple_stmt
 	{
 		// init ; test ; incr
-		if $5 != nil && $5.Colas != 0 {
+		if $5 != nil && $5.Colas {
 			Yyerror("cannot declare in the for-increment");
 		}
 		$$ = Nod(OFOR, nil, nil);
@@ -1326,10 +1326,10 @@ xfndcl:
 			Yyerror("can only use //go:noescape with external func implementations");
 		}
 		$$.Nbody = $3;
-		$$.Endlineno = lineno;
+		$$.Func.Endlineno = lineno;
 		$$.Noescape = noescape;
-		$$.Nosplit = nosplit;
-		$$.Nowritebarrier = nowritebarrier;
+		$$.Func.Nosplit = nosplit;
+		$$.Func.Nowritebarrier = nowritebarrier;
 		funcbody($$);
 	}
 
@@ -1358,7 +1358,7 @@ fndcl:
 		t.Rlist = $5;
 
 		$$ = Nod(ODCLFUNC, nil, nil);
-		$$.Nname = newname($1);
+		$$.Nname = newfuncname($1);
 		$$.Nname.Defn = $$;
 		$$.Nname.Ntype = t;		// TODO: check if nname already has an ntype
 		declare($$.Nname, PFUNC);
@@ -1392,8 +1392,8 @@ fndcl:
 		t.Rlist = $8;
 
 		$$ = Nod(ODCLFUNC, nil, nil);
-		$$.Shortname = newname($4);
-		$$.Nname = methodname1($$.Shortname, rcvr.Right);
+		$$.Func.Shortname = newfuncname($4);
+		$$.Nname = methodname1($$.Func.Shortname, rcvr.Right);
 		$$.Nname.Defn = $$;
 		$$.Nname.Ntype = t;
 		$$.Nname.Nointerface = nointerface;
@@ -1419,10 +1419,10 @@ hidden_fndcl:
 				dclcontext = PDISCARD;  // since we skip funchdr below
 				break;
 			}
-			Yyerror("inconsistent definition for func %v during import\n\t%v\n\t%v", Sconv(s, 0), Tconv(s.Def.Type, 0), Tconv(t, 0));
+			Yyerror("inconsistent definition for func %v during import\n\t%v\n\t%v", s, s.Def.Type, t);
 		}
 
-		$$ = newname(s);
+		$$ = newfuncname(s);
 		$$.Type = t;
 		declare($$, PFUNC);
 
@@ -1634,7 +1634,7 @@ packname:
 		var pkg *Pkg
 
 		if $1.Def == nil || $1.Def.Op != OPACK {
-			Yyerror("%v is not a package", Sconv($1, 0));
+			Yyerror("%v is not a package", $1);
 			pkg = localpkg;
 		} else {
 			$1.Def.Used = true;
@@ -1787,7 +1787,7 @@ non_dcl_stmt:
 		if $$.List == nil && Curfn != nil {
 			var l *NodeList
 
-			for l=Curfn.Dcl; l != nil; l=l.Next {
+			for l=Curfn.Func.Dcl; l != nil; l=l.Next {
 				if l.N.Class == PPARAM {
 					continue;
 				}
@@ -1969,15 +1969,15 @@ hidden_import:
 			break;
 		}
 
-		$2.Inl = $3;
+		$2.Func.Inl = $3;
 
 		funcbody($2);
 		importlist = list(importlist, $2);
 
 		if Debug['E'] > 0 {
 			print("import [%q] func %lN \n", importpkg.Path, $2);
-			if Debug['m'] > 2 && $2.Inl != nil {
-				print("inl body:%+H\n", $2.Inl);
+			if Debug['m'] > 2 && $2.Func.Inl != nil {
+				print("inl body:%+H\n", $2.Func.Inl);
 			}
 		}
 	}
@@ -2188,7 +2188,7 @@ hidden_literal:
 	{
 		$$ = oldname(Pkglookup($1.Name, builtinpkg));
 		if $$.Op != OLITERAL {
-			Yyerror("bad constant %v", Sconv($$.Sym, 0));
+			Yyerror("bad constant %v", $$.Sym);
 		}
 	}
 
@@ -2240,7 +2240,6 @@ hidden_interfacedcl_list:
 	}
 
 %%
-
 func fixlbrace(lbr int) {
 	// If the opening brace was an LBODY,
 	// set up for another one now that we're done.
@@ -2249,4 +2248,3 @@ func fixlbrace(lbr int) {
 		loophack = 1
 	}
 }
-

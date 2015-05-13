@@ -94,9 +94,38 @@ func (t *tester) run() {
 		}
 	}
 
+	if t.iOS() {
+		// Install the Mach exception handler used to intercept
+		// EXC_BAD_ACCESS and convert it into a Go panic. This is
+		// necessary for a Go program running under lldb (the way
+		// we run tests). It is disabled by default because iOS
+		// apps are not allowed to access the exc_server symbol.
+		cmd := exec.Command("go", "install", "-a", "-tags", "lldb", "runtime/cgo")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			log.Fatalf("building mach exception handler: %v", err)
+		}
+
+		defer func() {
+			cmd := exec.Command("go", "install", "-a", "runtime/cgo")
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				log.Fatalf("reverting mach exception handler: %v", err)
+			}
+		}()
+	}
+
 	t.timeoutScale = 1
 	if t.goarch == "arm" || t.goos == "windows" {
 		t.timeoutScale = 2
+	}
+	if s := os.Getenv("GO_TEST_TIMEOUT_SCALE"); s != "" {
+		t.timeoutScale, err = strconv.Atoi(s)
+		if err != nil {
+			log.Fatalf("failed to parse $GO_TEST_TIMEOUT_SCALE = %q as integer: %v", s, err)
+		}
 	}
 
 	if t.runRxStr != "" {
@@ -154,7 +183,7 @@ func (t *tester) registerTests() {
 	}
 	// ranGoTest and stdMatches are state closed over by the
 	// stdlib testing func below. The tests are run sequentially,
-	// so there'no need for locks.
+	// so there's no need for locks.
 	var (
 		ranGoTest  bool
 		stdMatches []string
@@ -193,40 +222,30 @@ func (t *tester) registerTests() {
 	}
 
 	// Runtime CPU tests.
-	for _, cpu := range []string{"1", "2", "4"} {
-		cpu := cpu
-		testName := "runtime:cpu" + cpu
-		t.tests = append(t.tests, distTest{
-			name:    testName,
-			heading: "GOMAXPROCS=2 runtime -cpu=1,2,4",
-			fn: func() error {
-				cmd := t.dirCmd(".", "go", "test", "-short", t.timeout(300), "runtime", "-cpu="+cpu)
-				// We set GOMAXPROCS=2 in addition to -cpu=1,2,4 in order to test runtime bootstrap code,
-				// creation of first goroutines and first garbage collections in the parallel setting.
-				cmd.Env = mergeEnvLists([]string{"GOMAXPROCS=2"}, os.Environ())
-				return cmd.Run()
-			},
-		})
-	}
+	testName := "runtime:cpu124"
+	t.tests = append(t.tests, distTest{
+		name:    testName,
+		heading: "GOMAXPROCS=2 runtime -cpu=1,2,4",
+		fn: func() error {
+			cmd := t.dirCmd("src", "go", "test", "-short", t.timeout(300), "runtime", "-cpu=1,2,4")
+			// We set GOMAXPROCS=2 in addition to -cpu=1,2,4 in order to test runtime bootstrap code,
+			// creation of first goroutines and first garbage collections in the parallel setting.
+			cmd.Env = mergeEnvLists([]string{"GOMAXPROCS=2"}, os.Environ())
+			return cmd.Run()
+		},
+	})
 
 	// sync tests
 	t.tests = append(t.tests, distTest{
 		name:    "sync_cpu",
 		heading: "sync -cpu=10",
 		fn: func() error {
-			return t.dirCmd(".", "go", "test", "sync", "-short", t.timeout(120), "-cpu=10").Run()
+			return t.dirCmd("src", "go", "test", "sync", "-short", t.timeout(120), "-cpu=10").Run()
 		},
 	})
 
-	cgo := t.cgoEnabled
-	if t.goos == "android" {
-		// Disable cgo tests on android.
-		// They are not designed to run off the host.
-		// golang.org/issue/8345
-		cgo = false
-	}
-
-	if cgo {
+	if t.cgoEnabled && t.goos != "android" && !t.iOS() {
+		// Disabled on android and iOS. golang.org/issue/8345
 		t.tests = append(t.tests, distTest{
 			name:    "cgo_stdio",
 			heading: "../misc/cgo/stdio",
@@ -243,7 +262,12 @@ func (t *tester) registerTests() {
 					"go", "run", filepath.Join(os.Getenv("GOROOT"), "test/run.go"), "-", ".").Run()
 			},
 		})
-
+	}
+	if t.cgoEnabled && t.goos != "android" && !t.iOS() {
+		// TODO(crawshaw): reenable on android and iOS
+		// golang.org/issue/8345
+		//
+		// These tests are not designed to run off the host.
 		t.tests = append(t.tests, distTest{
 			name:    "cgo_test",
 			heading: "../misc/cgo/test",
@@ -259,42 +283,48 @@ func (t *tester) registerTests() {
 		})
 	}
 
-	if t.hasBash() && cgo && t.goos != "darwin" {
+	if t.hasBash() && t.cgoEnabled && t.goos != "android" && t.goos != "darwin" {
 		t.registerTest("testgodefs", "../misc/cgo/testgodefs", "./test.bash")
 	}
-	if cgo {
+	if t.cgoEnabled {
 		if t.gohostos == "windows" {
 			t.tests = append(t.tests, distTest{
 				name:    "testso",
 				heading: "../misc/cgo/testso",
 				fn:      t.cgoTestSOWindows,
 			})
-		} else if t.hasBash() {
+		} else if t.hasBash() && t.goos != "android" && !t.iOS() {
 			t.registerTest("testso", "../misc/cgo/testso", "./test.bash")
+		}
+		if t.supportedBuildmode("c-archive") {
+			t.registerTest("testcarchive", "../misc/cgo/testcarchive", "./test.bash")
+		}
+		if t.supportedBuildmode("c-shared") {
+			t.registerTest("testcshared", "../misc/cgo/testcshared", "./test.bash")
+		}
+		if t.supportedBuildmode("shared") {
+			t.registerTest("testshared", "../misc/cgo/testshared", "./test.bash")
 		}
 		if t.gohostos == "linux" && t.goarch == "amd64" {
 			t.registerTest("testasan", "../misc/cgo/testasan", "go", "run", "main.go")
 		}
-		if t.hasBash() && t.gohostos != "windows" {
+		if t.hasBash() && t.goos != "android" && !t.iOS() && t.gohostos != "windows" {
 			t.registerTest("cgo_errors", "../misc/cgo/errors", "./test.bash")
 		}
+		if t.gohostos == "linux" && t.extLink() {
+			t.registerTest("testsigfwd", "../misc/cgo/testsigfwd", "go", "run", "main.go")
+		}
 	}
-	if t.hasBash() && t.goos != "nacl" && t.goos != "android" {
-		t.registerTest("doc_progs", "../doc/progs", "time", "./run")
-	}
-	if t.hasBash() && t.goos != "nacl" && t.goos != "android" {
+	if t.hasBash() && t.goos != "nacl" && t.goos != "android" && !t.iOS() {
+		t.registerTest("doc_progs", "../doc/progs", "time", "go", "run", "run.go")
 		t.registerTest("wiki", "../doc/articles/wiki", "./test.bash")
-	}
-	if t.hasBash() && t.goos != "nacl" && t.goos != "android" {
 		t.registerTest("codewalk", "../doc/codewalk", "time", "./run")
-	}
-	if t.hasBash() && t.goos != "nacl" && t.goos != "android" {
 		t.registerTest("shootout", "../test/bench/shootout", "time", "./timing.sh", "-test")
 	}
-	if t.goos != "android" {
+	if t.goos != "android" && !t.iOS() {
 		t.registerTest("bench_go1", "../test/bench/go1", "go", "test")
 	}
-	if t.goos != "android" {
+	if t.goos != "android" && !t.iOS() {
 		// TODO(bradfitz): shard down into these tests, as
 		// this is one of the slowest (and most shardable)
 		// tests.
@@ -304,12 +334,12 @@ func (t *tester) registerTests() {
 			fn:      t.testDirTest,
 		})
 	}
-	if t.goos != "nacl" && t.goos != "android" {
+	if t.goos != "nacl" && t.goos != "android" && !t.iOS() {
 		t.tests = append(t.tests, distTest{
 			name:    "api",
 			heading: "API check",
 			fn: func() error {
-				return t.dirCmd(".", "go", "run", filepath.Join(t.goroot, "src/cmd/api/run.go")).Run()
+				return t.dirCmd("src", "go", "run", filepath.Join(t.goroot, "src/cmd/api/run.go")).Run()
 			},
 		})
 	}
@@ -341,6 +371,10 @@ func (t *tester) dirCmd(dir string, bin string, args ...string) *exec.Cmd {
 	return cmd
 }
 
+func (t *tester) iOS() bool {
+	return t.goos == "darwin" && (t.goarch == "arm" || t.goarch == "arm64")
+}
+
 func (t *tester) out(v string) {
 	if t.banner == "" {
 		return
@@ -352,11 +386,13 @@ func (t *tester) extLink() bool {
 	pair := t.gohostos + "-" + t.goarch
 	switch pair {
 	case "android-arm",
+		"darwin-arm", "darwin-arm64",
 		"dragonfly-386", "dragonfly-amd64",
 		"freebsd-386", "freebsd-amd64", "freebsd-arm",
 		"linux-386", "linux-amd64", "linux-arm",
 		"netbsd-386", "netbsd-amd64",
-		"openbsd-386", "openbsd-amd64":
+		"openbsd-386", "openbsd-amd64",
+		"windows-386", "windows-amd64":
 		return true
 	case "darwin-386", "darwin-amd64":
 		// linkmode=external fails on OS X 10.6 and earlier == Darwin
@@ -371,13 +407,51 @@ func (t *tester) extLink() bool {
 	return false
 }
 
+func (t *tester) supportedBuildmode(mode string) bool {
+	pair := t.goos + "-" + t.goarch
+	switch mode {
+	case "c-archive":
+		if !t.extLink() {
+			return false
+		}
+		switch pair {
+		case "darwin-amd64", "darwin-arm", "darwin-arm64",
+			"linux-amd64", "linux-386":
+			return true
+		}
+		return false
+	case "c-shared":
+		// TODO(hyangah): add linux-386.
+		switch pair {
+		case "linux-amd64", "android-arm":
+			return true
+		}
+		return false
+	case "shared":
+		switch pair {
+		case "linux-amd64":
+			return true
+		}
+		return false
+	default:
+		log.Fatal("internal error: unknown buildmode %s", mode)
+		return false
+	}
+}
+
 func (t *tester) cgoTest() error {
 	env := mergeEnvLists([]string{"GOTRACEBACK=2"}, os.Environ())
 
-	if t.gohostos == "windows" {
+	if t.goos == "android" || t.iOS() {
 		cmd := t.dirCmd("misc/cgo/test", "go", "test")
 		cmd.Env = env
 		return cmd.Run()
+	}
+
+	cmd := t.dirCmd("misc/cgo/test", "go", "test", "-ldflags", "-linkmode=auto")
+	cmd.Env = env
+	if err := cmd.Run(); err != nil {
+		return err
 	}
 
 	if t.gohostos != "dragonfly" {
@@ -398,7 +472,8 @@ func (t *tester) cgoTest() error {
 		if err := cmd.Run(); err != nil {
 			return err
 		}
-	case "darwin-386", "darwin-amd64":
+	case "darwin-386", "darwin-amd64",
+		"windows-386", "windows-amd64":
 		if t.extLink() {
 			cmd := t.dirCmd("misc/cgo/test", "go", "test", "-ldflags", "-linkmode=external")
 			cmd.Env = env
@@ -536,18 +611,18 @@ func (t *tester) raceDetectorSupported() bool {
 }
 
 func (t *tester) raceTest() error {
-	if err := t.dirCmd(".", "go", "test", "-race", "-i", "runtime/race", "flag", "os/exec").Run(); err != nil {
+	if err := t.dirCmd("src", "go", "test", "-race", "-i", "runtime/race", "flag", "os/exec").Run(); err != nil {
 		return err
 	}
-	if err := t.dirCmd(".", "go", "test", "-race", "-run=Output", "runtime/race").Run(); err != nil {
+	if err := t.dirCmd("src", "go", "test", "-race", "-run=Output", "runtime/race").Run(); err != nil {
 		return err
 	}
-	if err := t.dirCmd(".", "go", "test", "-race", "-short", "flag", "os/exec").Run(); err != nil {
+	if err := t.dirCmd("src", "go", "test", "-race", "-short", "flag", "os/exec").Run(); err != nil {
 		return err
 	}
 	if t.extLink() {
 		// Test with external linking; see issue 9133.
-		if err := t.dirCmd(".", "go", "test", "-race", "-short", "-ldflags=-linkmode=external", "flag", "os/exec").Run(); err != nil {
+		if err := t.dirCmd("src", "go", "test", "-race", "-short", "-ldflags=-linkmode=external", "flag", "os/exec").Run(); err != nil {
 			return err
 		}
 	}

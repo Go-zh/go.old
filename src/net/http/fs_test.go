@@ -497,6 +497,7 @@ type fakeFileInfo struct {
 	modtime  time.Time
 	ents     []*fakeFileInfo
 	contents string
+	err      error
 }
 
 func (f *fakeFileInfo) Name() string       { return f.basename }
@@ -548,6 +549,9 @@ func (fs fakeFS) Open(name string) (File, error) {
 	f, ok := fs[name]
 	if !ok {
 		return nil, os.ErrNotExist
+	}
+	if f.err != nil {
+		return nil, f.err
 	}
 	return &fakeFile{ReadSeeker: strings.NewReader(f.contents), fi: f, path: name}, nil
 }
@@ -751,6 +755,12 @@ func TestServeContent(t *testing.T) {
 			wantContentType: "text/css; charset=utf-8",
 			wantLastMod:     "Wed, 25 Jun 2014 17:12:18 GMT",
 		},
+		"unix_zero_modtime": {
+			content:         strings.NewReader("<html>foo"),
+			modtime:         time.Unix(0, 0),
+			wantStatus:      StatusOK,
+			wantContentType: "text/html; charset=utf-8",
+		},
 	}
 	for testName, tt := range tests {
 		var content io.ReadSeeker
@@ -794,6 +804,31 @@ func TestServeContent(t *testing.T) {
 		if g, e := res.Header.Get("Last-Modified"), tt.wantLastMod; g != e {
 			t.Errorf("test %q: last-modified = %q, want %q", testName, g, e)
 		}
+	}
+}
+
+func TestServeContentErrorMessages(t *testing.T) {
+	defer afterTest(t)
+	fs := fakeFS{
+		"/500": &fakeFileInfo{
+			err: errors.New("random error"),
+		},
+		"/403": &fakeFileInfo{
+			err: &os.PathError{Err: os.ErrPermission},
+		},
+	}
+	ts := httptest.NewServer(FileServer(fs))
+	defer ts.Close()
+	for _, code := range []int{403, 404, 500} {
+		res, err := DefaultClient.Get(fmt.Sprintf("%s/%d", ts.URL, code))
+		if err != nil {
+			t.Errorf("Error fetching /%d: %v", code, err)
+			continue
+		}
+		if res.StatusCode != code {
+			t.Errorf("For /%d, status code = %d; want %d", code, res.StatusCode, code)
+		}
+		res.Body.Close()
 	}
 }
 

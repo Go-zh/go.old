@@ -7,31 +7,23 @@ package main
 import (
 	"cmd/internal/gc"
 	"cmd/internal/obj"
-	"cmd/internal/obj/ppc64"
+	"cmd/internal/obj/arm64"
 )
 
-var thechar int = '9'
+var thechar int = '7'
 
-var thestring string = "ppc64"
+var thestring string = "arm64"
 
-var thelinkarch *obj.LinkArch
+var thelinkarch *obj.LinkArch = &arm64.Linkarm64
 
 func linkarchinit() {
-	thestring = obj.Getgoarch()
-	gc.Thearch.Thestring = thestring
-	if thestring == "ppc64le" {
-		thelinkarch = &ppc64.Linkppc64le
-	} else {
-		thelinkarch = &ppc64.Linkppc64
-	}
-	gc.Thearch.Thelinkarch = thelinkarch
 }
 
 var MAXWIDTH int64 = 1 << 50
 
 /*
  * go declares several platform-specific type aliases:
- * int, uint, float, and uintptr
+ * int, uint, and uintptr
  */
 var typedefs = []gc.Typedef{
 	gc.Typedef{"int", gc.TINT, gc.TINT64},
@@ -43,7 +35,6 @@ func betypeinit() {
 	gc.Widthptr = 8
 	gc.Widthint = 8
 	gc.Widthreg = 8
-
 }
 
 func main() {
@@ -51,34 +42,43 @@ func main() {
 	gc.Thearch.Thestring = thestring
 	gc.Thearch.Thelinkarch = thelinkarch
 	gc.Thearch.Typedefs = typedefs
-	gc.Thearch.REGSP = ppc64.REGSP
-	gc.Thearch.REGCTXT = ppc64.REGCTXT
+	gc.Thearch.REGSP = arm64.REGSP
+	gc.Thearch.REGCTXT = arm64.REGCTXT
+	gc.Thearch.REGCALLX = arm64.REGRT1
+	gc.Thearch.REGCALLX2 = arm64.REGRT2
+	gc.Thearch.REGRETURN = arm64.REG_R0
+	gc.Thearch.REGMIN = arm64.REG_R0
+	gc.Thearch.REGMAX = arm64.REG_R31
+	gc.Thearch.REGZERO = arm64.REGZERO
+	gc.Thearch.FREGMIN = arm64.REG_F0
+	gc.Thearch.FREGMAX = arm64.REG_F31
 	gc.Thearch.MAXWIDTH = MAXWIDTH
-	gc.Thearch.Anyregalloc = anyregalloc
+	gc.Thearch.ReservedRegs = resvd
+
 	gc.Thearch.Betypeinit = betypeinit
-	gc.Thearch.Bgen = bgen
-	gc.Thearch.Cgen = cgen
-	gc.Thearch.Cgen_call = cgen_call
-	gc.Thearch.Cgen_callinter = cgen_callinter
-	gc.Thearch.Cgen_ret = cgen_ret
+	gc.Thearch.Cgen_hmul = cgen_hmul
+	gc.Thearch.Cgen_shift = cgen_shift
 	gc.Thearch.Clearfat = clearfat
 	gc.Thearch.Defframe = defframe
+	gc.Thearch.Dodiv = dodiv
 	gc.Thearch.Excise = excise
 	gc.Thearch.Expandchecks = expandchecks
-	gc.Thearch.Gclean = gclean
-	gc.Thearch.Ginit = ginit
+	gc.Thearch.Getg = getg
 	gc.Thearch.Gins = gins
-	gc.Thearch.Ginscall = ginscall
-	gc.Thearch.Igen = igen
+	gc.Thearch.Ginscmp = ginscmp
+	gc.Thearch.Ginscon = ginscon
+	gc.Thearch.Ginsnop = ginsnop
+	gc.Thearch.Gmove = gmove
 	gc.Thearch.Linkarchinit = linkarchinit
 	gc.Thearch.Peep = peep
 	gc.Thearch.Proginfo = proginfo
-	gc.Thearch.Regalloc = regalloc
-	gc.Thearch.Regfree = regfree
 	gc.Thearch.Regtyp = regtyp
 	gc.Thearch.Sameaddr = sameaddr
 	gc.Thearch.Smallindir = smallindir
 	gc.Thearch.Stackaddr = stackaddr
+	gc.Thearch.Blockcopy = blockcopy
+	gc.Thearch.Sudoaddable = sudoaddable
+	gc.Thearch.Sudoclean = sudoclean
 	gc.Thearch.Excludedregs = excludedregs
 	gc.Thearch.RtoB = RtoB
 	gc.Thearch.FtoB = RtoB

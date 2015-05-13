@@ -129,8 +129,7 @@ func walkselect(sel *Node) {
 			case OSEND:
 				ch = n.Left
 
-			case OSELRECV,
-				OSELRECV2:
+			case OSELRECV, OSELRECV2:
 				ch = n.Right.Left
 				if n.Op == OSELRECV || n.Ntest == nil {
 					if n.Left == nil {
@@ -185,8 +184,7 @@ func walkselect(sel *Node) {
 			n.Right = Nod(OADDR, n.Right, nil)
 			typecheck(&n.Right, Erv)
 
-		case OSELRECV,
-			OSELRECV2:
+		case OSELRECV, OSELRECV2:
 			if n.Op == OSELRECV2 && n.Ntest == nil {
 				n.Op = OSELRECV
 			}
@@ -324,7 +322,7 @@ out:
 	lineno = int32(lno)
 }
 
-// Keep in sync with src/runtime/chan.h.
+// Keep in sync with src/runtime/runtime2.go and src/runtime/select.go.
 func selecttype(size int32) *Type {
 	// TODO(dvyukov): it's possible to generate SudoG and Scase only once
 	// and then cache; and also cache Select per size.

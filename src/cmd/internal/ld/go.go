@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// go-specific code shared across loaders (5l, 6l, 8l).
+
 package ld
 
 import (
@@ -9,6 +11,7 @@ import (
 	"cmd/internal/obj"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -18,12 +21,6 @@ import (
 func expandpkg(t0 string, pkg string) string {
 	return strings.Replace(t0, `"".`, pkg+".", -1)
 }
-
-// Copyright 2009 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-// go-specific code shared across loaders (5l, 6l, 8l).
 
 // accumulate all type information from .6 files.
 // check for inconsistencies.
@@ -37,46 +34,26 @@ func expandpkg(t0 string, pkg string) string {
  *	package import data
  */
 type Import struct {
-	hash   *Import // next in hash table
-	prefix string  // "type", "var", "func", "const"
+	prefix string // "type", "var", "func", "const"
 	name   string
 	def    string
 	file   string
 }
 
-const (
-	NIHASH = 1024
-)
+// importmap records type information about imported symbols to detect inconsistencies.
+// Entries are keyed by qualified symbol name (e.g., "runtime.Callers" or "net/url.Error").
+var importmap = map[string]*Import{}
 
-var ihash [NIHASH]*Import
-
-var nimport int
-
-func hashstr(name string) int {
-	h := uint32(0)
-	for cp := name; cp != ""; cp = cp[1:] {
-		h = h*1119 + uint32(cp[0])
+func lookupImport(name string) *Import {
+	if x, ok := importmap[name]; ok {
+		return x
 	}
-	h &= 0xffffff
-	return int(h)
-}
-
-func ilookup(name string) *Import {
-	h := hashstr(name) % NIHASH
-	for x := ihash[h]; x != nil; x = x.hash {
-		if x.name[0] == name[0] && x.name == name {
-			return x
-		}
-	}
-	x := new(Import)
-	x.name = name
-	x.hash = ihash[h]
-	ihash[h] = x
-	nimport++
+	x := &Import{name: name}
+	importmap[name] = x
 	return x
 }
 
-func ldpkg(f *Biobuf, pkg string, length int64, filename string, whence int) {
+func ldpkg(f *obj.Biobuf, pkg string, length int64, filename string, whence int) {
 	var p0, p1 int
 
 	if Debug['g'] != 0 {
@@ -86,16 +63,16 @@ func ldpkg(f *Biobuf, pkg string, length int64, filename string, whence int) {
 	if int64(int(length)) != length {
 		fmt.Fprintf(os.Stderr, "%s: too much pkg data in %s\n", os.Args[0], filename)
 		if Debug['u'] != 0 {
-			Errorexit()
+			errorexit()
 		}
 		return
 	}
 
 	bdata := make([]byte, length)
-	if int64(Bread(f, bdata)) != length {
+	if int64(obj.Bread(f, bdata)) != length {
 		fmt.Fprintf(os.Stderr, "%s: short pkg read %s\n", os.Args[0], filename)
 		if Debug['u'] != 0 {
-			Errorexit()
+			errorexit()
 		}
 		return
 	}
@@ -105,14 +82,13 @@ func ldpkg(f *Biobuf, pkg string, length int64, filename string, whence int) {
 	p0 = strings.Index(data, "\n$$")
 	if p0 < 0 {
 		if Debug['u'] != 0 && whence != ArchiveObj {
-			fmt.Fprintf(os.Stderr, "%s: cannot find export data in %s\n", os.Args[0], filename)
-			Errorexit()
+			Exitf("cannot find export data in %s", filename)
 		}
 		return
 	}
 
 	p0 += 3
-	for p0 < len(data) && data[0] != '\n' {
+	for p0 < len(data) && data[p0] != '\n' {
 		p0++
 	}
 
@@ -121,20 +97,20 @@ func ldpkg(f *Biobuf, pkg string, length int64, filename string, whence int) {
 	if p1 < 0 {
 		fmt.Fprintf(os.Stderr, "%s: cannot find end of exports in %s\n", os.Args[0], filename)
 		if Debug['u'] != 0 {
-			Errorexit()
+			errorexit()
 		}
 		return
 	}
 	p1 += p0
 
-	for p0 < p1 && (data[p0] == ' ' || data[0] == '\t' || data[0] == '\n') {
+	for p0 < p1 && (data[p0] == ' ' || data[p0] == '\t' || data[p0] == '\n') {
 		p0++
 	}
 	if p0 < p1 {
 		if !strings.HasPrefix(data[p0:], "package ") {
 			fmt.Fprintf(os.Stderr, "%s: bad package section in %s - %.20s\n", os.Args[0], filename, data[p0:])
 			if Debug['u'] != 0 {
-				Errorexit()
+				errorexit()
 			}
 			return
 		}
@@ -143,32 +119,24 @@ func ldpkg(f *Biobuf, pkg string, length int64, filename string, whence int) {
 		for p0 < p1 && (data[p0] == ' ' || data[p0] == '\t' || data[p0] == '\n') {
 			p0++
 		}
-		name := data[p0:]
+		pname := p0
 		for p0 < p1 && data[p0] != ' ' && data[p0] != '\t' && data[p0] != '\n' {
 			p0++
 		}
 		if Debug['u'] != 0 && whence != ArchiveObj && (p0+6 > p1 || !strings.HasPrefix(data[p0:], " safe\n")) {
-			fmt.Fprintf(os.Stderr, "%s: load of unsafe package %s\n", os.Args[0], filename)
-			nerrors++
-			Errorexit()
+			Exitf("load of unsafe package %s", filename)
 		}
 
-		name = name[:p1-p0]
+		name := data[pname:p0]
+		for p0 < p1 && data[p0] != '\n' {
+			p0++
+		}
 		if p0 < p1 {
-			if data[p0] == '\n' {
-				p0++
-			} else {
-				p0++
-				for p0 < p1 && data[p0] != '\n' {
-					p0++
-				}
-			}
+			p0++
 		}
 
 		if pkg == "main" && name != "main" {
-			fmt.Fprintf(os.Stderr, "%s: %s: not package main (package %s)\n", os.Args[0], filename, name)
-			nerrors++
-			Errorexit()
+			Exitf("%s: not package main (package %s)", filename, name)
 		}
 
 		loadpkgdata(filename, pkg, data[p0:p1])
@@ -187,7 +155,7 @@ func ldpkg(f *Biobuf, pkg string, length int64, filename string, whence int) {
 		if i < 0 {
 			fmt.Fprintf(os.Stderr, "%s: found $$ // cgo but no newline in %s\n", os.Args[0], filename)
 			if Debug['u'] != 0 {
-				Errorexit()
+				errorexit()
 			}
 			return
 		}
@@ -200,7 +168,7 @@ func ldpkg(f *Biobuf, pkg string, length int64, filename string, whence int) {
 		if p1 < 0 {
 			fmt.Fprintf(os.Stderr, "%s: cannot find end of // cgo section in %s\n", os.Args[0], filename)
 			if Debug['u'] != 0 {
-				Errorexit()
+				errorexit()
 			}
 			return
 		}
@@ -214,12 +182,10 @@ func loadpkgdata(file string, pkg string, data string) {
 	var prefix string
 	var name string
 	var def string
-	var x *Import
 
-	file = file
 	p := data
 	for parsepkgdata(file, pkg, &p, &prefix, &name, &def) > 0 {
-		x = ilookup(name)
+		x := lookupImport(name)
 		if x.prefix == "" {
 			x.prefix = prefix
 			x.def = def
@@ -239,8 +205,6 @@ func loadpkgdata(file string, pkg string, data string) {
 }
 
 func parsepkgdata(file string, pkg string, pp *string, prefixp *string, namep *string, defp *string) int {
-	var prefix string
-
 	// skip white space
 	p := *pp
 
@@ -253,7 +217,7 @@ loop:
 	}
 
 	// prefix: (var|type|func|const)
-	prefix = p
+	prefix := p
 
 	if len(p) < 7 {
 		return -1
@@ -272,7 +236,7 @@ loop:
 			p = p[1:]
 		}
 		p = p[1:]
-		name := p
+		line := p
 		for len(p) > 0 && p[0] != '\n' {
 			p = p[1:]
 		}
@@ -281,9 +245,16 @@ loop:
 			nerrors++
 			return -1
 		}
-		name = name[:len(name)-len(p)]
+		line = line[:len(line)-len(p)]
+		line = strings.TrimSuffix(line, " // indirect")
+		path, err := strconv.Unquote(line)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %s: confused in import path: %q\n", os.Args[0], file, line)
+			nerrors++
+			return -1
+		}
 		p = p[1:]
-		imported(pkg, name)
+		imported(pkg, path)
 		goto loop
 	} else {
 		fmt.Fprintf(os.Stderr, "%s: %s: confused in pkg data near <<%.40s>>\n", os.Args[0], file, prefix)
@@ -457,12 +428,12 @@ func loadcgo(file string, pkg string, p string) {
 			s = Linklookup(Ctxt, local, 0)
 			if local != f[1] {
 			}
-			if s.Type == 0 || s.Type == SXREF || s.Type == SHOSTOBJ {
+			if s.Type == 0 || s.Type == obj.SXREF || s.Type == obj.SHOSTOBJ {
 				s.Dynimplib = lib
 				s.Extname = remote
 				s.Dynimpvers = q
-				if s.Type != SHOSTOBJ {
-					s.Type = SDYNIMPORT
+				if s.Type != obj.SHOSTOBJ {
+					s.Type = obj.SDYNIMPORT
 				}
 				havedynamic = 1
 			}
@@ -476,17 +447,12 @@ func loadcgo(file string, pkg string, p string) {
 			}
 			local = f[1]
 			s = Linklookup(Ctxt, local, 0)
-			s.Type = SHOSTOBJ
+			s.Type = obj.SHOSTOBJ
 			s.Size = 0
 			continue
 		}
 
 		if f[0] == "cgo_export_static" || f[0] == "cgo_export_dynamic" {
-			// TODO: Remove once we know Windows is okay.
-			if f[0] == "cgo_export_static" && HEADTYPE == Hwindows {
-				continue
-			}
-
 			if len(f) < 2 || len(f) > 3 {
 				goto err
 			}
@@ -499,8 +465,11 @@ func loadcgo(file string, pkg string, p string) {
 			local = expandpkg(local, pkg)
 			s = Linklookup(Ctxt, local, 0)
 
-			if Flag_shared != 0 && s == Linklookup(Ctxt, "main", 0) {
-				continue
+			switch Buildmode {
+			case BuildmodeCShared, BuildmodeCArchive:
+				if s == Linklookup(Ctxt, "main", 0) {
+					continue
+				}
 			}
 
 			// export overrides import, for openbsd/cgo.
@@ -595,7 +564,7 @@ func markflood() {
 	var i int
 
 	for s := markq; s != nil; s = s.Queue {
-		if s.Type == STEXT {
+		if s.Type == obj.STEXT {
 			if Debug['v'] > 1 {
 				fmt.Fprintf(&Bso, "marktext %s\n", s.Name)
 			}
@@ -644,45 +613,62 @@ func deadcode() {
 		fmt.Fprintf(&Bso, "%5.2f deadcode\n", obj.Cputime())
 	}
 
-	mark(Linklookup(Ctxt, INITENTRY, 0))
-	for i := 0; i < len(markextra); i++ {
-		mark(Linklookup(Ctxt, markextra[i], 0))
-	}
-
-	for i := 0; i < len(dynexp); i++ {
-		mark(dynexp[i])
-	}
-
-	markflood()
-
-	// keep each beginning with 'typelink.' if the symbol it points at is being kept.
-	for s := Ctxt.Allsym; s != nil; s = s.Allsym {
-		if strings.HasPrefix(s.Name, "go.typelink.") {
-			s.Reachable = len(s.R) == 1 && s.R[0].Sym.Reachable
+	if Buildmode == BuildmodeShared {
+		// Mark all symbols as reachable when building a
+		// shared library.
+		for s := Ctxt.Allsym; s != nil; s = s.Allsym {
+			if s.Type != 0 {
+				mark(s)
+			}
 		}
-	}
-
-	// remove dead text but keep file information (z symbols).
-	var last *LSym
-
-	for s := Ctxt.Textp; s != nil; s = s.Next {
-		if !s.Reachable {
-			continue
-		}
-
-		// NOTE: Removing s from old textp and adding to new, shorter textp.
-		if last == nil {
-			Ctxt.Textp = s
-		} else {
-			last.Next = s
-		}
-		last = s
-	}
-
-	if last == nil {
-		Ctxt.Textp = nil
+		mark(Linkrlookup(Ctxt, "main.main", 0))
+		mark(Linkrlookup(Ctxt, "main.init", 0))
 	} else {
-		last.Next = nil
+		mark(Linklookup(Ctxt, INITENTRY, 0))
+		if Linkshared && Buildmode == BuildmodeExe {
+			mark(Linkrlookup(Ctxt, "main.main", 0))
+			mark(Linkrlookup(Ctxt, "main.init", 0))
+		}
+		for i := 0; i < len(markextra); i++ {
+			mark(Linklookup(Ctxt, markextra[i], 0))
+		}
+
+		for i := 0; i < len(dynexp); i++ {
+			mark(dynexp[i])
+		}
+		markflood()
+
+		// keep each beginning with 'typelink.' if the symbol it points at is being kept.
+		for s := Ctxt.Allsym; s != nil; s = s.Allsym {
+			if strings.HasPrefix(s.Name, "go.typelink.") {
+				s.Reachable = len(s.R) == 1 && s.R[0].Sym.Reachable
+			}
+		}
+
+		// remove dead text but keep file information (z symbols).
+		var last *LSym
+
+		for s := Ctxt.Textp; s != nil; s = s.Next {
+			if !s.Reachable {
+				continue
+			}
+
+			// NOTE: Removing s from old textp and adding to new, shorter textp.
+			if last == nil {
+				Ctxt.Textp = s
+			} else {
+				last.Next = s
+			}
+			last = s
+		}
+
+		if last == nil {
+			Ctxt.Textp = nil
+			Ctxt.Etextp = nil
+		} else {
+			last.Next = nil
+			Ctxt.Etextp = last
+		}
 	}
 
 	for s := Ctxt.Allsym; s != nil; s = s.Allsym {
@@ -709,7 +695,7 @@ func deadcode() {
 				buf.WriteString("\n")
 			}
 
-			s.Type = SCONST
+			s.Type = obj.SCONST
 			s.Value = 0
 		}
 	}
@@ -737,7 +723,7 @@ func doweak() {
 				s.Type = t.Type
 				s.Outer = t
 			} else {
-				s.Type = SCONST
+				s.Type = obj.SCONST
 				s.Value = 0
 			}
 
@@ -747,7 +733,7 @@ func doweak() {
 }
 
 func addexport() {
-	if HEADTYPE == Hdarwin {
+	if HEADTYPE == obj.Hdarwin {
 		return
 	}
 
@@ -757,66 +743,60 @@ func addexport() {
 }
 
 type Pkg struct {
-	mark    uint8
-	checked uint8
-	next    *Pkg
-	path_   string
+	mark    bool
+	checked bool
+	path    string
 	impby   []*Pkg
-	all     *Pkg
 }
 
-var phash [1024]*Pkg
+var (
+	// pkgmap records the imported-by relationship between packages.
+	// Entries are keyed by package path (e.g., "runtime" or "net/url").
+	pkgmap = map[string]*Pkg{}
 
-var pkgall *Pkg
+	pkgall []*Pkg
+)
 
-func getpkg(path_ string) *Pkg {
-	h := hashstr(path_) % len(phash)
-	for p := phash[h]; p != nil; p = p.next {
-		if p.path_ == path_ {
-			return p
-		}
+func lookupPkg(path string) *Pkg {
+	if p, ok := pkgmap[path]; ok {
+		return p
 	}
-	p := new(Pkg)
-	p.path_ = path_
-	p.next = phash[h]
-	phash[h] = p
-	p.all = pkgall
-	pkgall = p
+	p := &Pkg{path: path}
+	pkgmap[path] = p
+	pkgall = append(pkgall, p)
 	return p
 }
 
-func imported(pkg string, import_ string) {
+// imported records that package pkg imports package imp.
+func imported(pkg, imp string) {
 	// everyone imports runtime, even runtime.
-	if import_ == "\"runtime\"" {
+	if imp == "runtime" {
 		return
 	}
 
-	pkg = fmt.Sprintf("%q", pkg) // turn pkg path into quoted form, freed below
-	p := getpkg(pkg)
-	i := getpkg(import_)
+	p := lookupPkg(pkg)
+	i := lookupPkg(imp)
 	i.impby = append(i.impby, p)
 }
 
-func cycle(p *Pkg) *Pkg {
-	if p.checked != 0 {
+func (p *Pkg) cycle() *Pkg {
+	if p.checked {
 		return nil
 	}
 
-	if p.mark != 0 {
+	if p.mark {
 		nerrors++
 		fmt.Printf("import cycle:\n")
-		fmt.Printf("\t%s\n", p.path_)
+		fmt.Printf("\t%s\n", p.path)
 		return p
 	}
 
-	p.mark = 1
-	var bad *Pkg
-	for i := 0; i < len(p.impby); i++ {
-		bad = cycle(p.impby[i])
-		if bad != nil {
-			p.mark = 0
-			p.checked = 1
-			fmt.Printf("\timports %s\n", p.path_)
+	p.mark = true
+	for _, q := range p.impby {
+		if bad := q.cycle(); bad != nil {
+			p.mark = false
+			p.checked = true
+			fmt.Printf("\timports %s\n", p.path)
 			if bad == p {
 				return nil
 			}
@@ -824,14 +804,14 @@ func cycle(p *Pkg) *Pkg {
 		}
 	}
 
-	p.checked = 1
-	p.mark = 0
+	p.checked = true
+	p.mark = false
 	return nil
 }
 
 func importcycles() {
-	for p := pkgall; p != nil; p = p.all {
-		cycle(p)
+	for _, p := range pkgall {
+		p.cycle()
 	}
 }
 
@@ -843,7 +823,6 @@ func setlinkmode(arg string) {
 	} else if arg == "auto" {
 		Linkmode = LinkAuto
 	} else {
-		fmt.Fprintf(os.Stderr, "unknown link mode -linkmode %s\n", arg)
-		Errorexit()
+		Exitf("unknown link mode -linkmode %s", arg)
 	}
 }

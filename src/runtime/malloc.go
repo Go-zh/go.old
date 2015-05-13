@@ -114,7 +114,7 @@ const (
 	_64bit = 1 << (^uintptr(0) >> 63) / 2
 
 	// Computed constant.  The definition of MaxSmallSize and the
-	// algorithm in msize.c produce some number of different allocation
+	// algorithm in msize.go produces some number of different allocation
 	// size classes.  NumSizeClasses is that number.  It's needed here
 	// because there are static arrays of this length; when msize runs its
 	// size choosing algorithm it double-checks that NumSizeClasses agrees.
@@ -155,7 +155,10 @@ const (
 	// See http://golang.org/issue/5402 and http://golang.org/issue/5236.
 	// On other 64-bit platforms, we limit the arena to 128GB, or 37 bits.
 	// On 32-bit, we don't bother limiting anything, so we use the full 32-bit address.
-	_MHeapMap_TotalBits = (_64bit*goos_windows)*35 + (_64bit*(1-goos_windows))*37 + (1-_64bit)*32
+	// On Darwin/arm64, we cannot reserve more than ~5GB of virtual memory,
+	// but as most devices have less than 4GB of physical memory anyway, we
+	// try to be conservative here, and only ask for a 2GB heap.
+	_MHeapMap_TotalBits = (_64bit*goos_windows)*35 + (_64bit*(1-goos_windows)*(1-goos_darwin*goarch_arm64))*37 + goos_darwin*goarch_arm64*31 + (1-_64bit)*32
 	_MHeapMap_Bits      = _MHeapMap_TotalBits - _PageShift
 
 	_MaxMem = uintptr(1<<_MHeapMap_TotalBits - 1)
@@ -253,12 +256,24 @@ func mallocinit() {
 		// but it hardly matters: e0 00 is not valid UTF-8 either.
 		//
 		// If this fails we fall back to the 32 bit memory mechanism
+		//
+		// However, on arm64, we ignore all this advice above and slam the
+		// allocation at 0x40 << 32 because when using 4k pages with 3-level
+		// translation buffers, the user address space is limited to 39 bits
+		// On darwin/arm64, the address space is even smaller.
 		arenaSize := round(_MaxMem, _PageSize)
 		bitmapSize = arenaSize / (ptrSize * 8 / 4)
 		spansSize = arenaSize / _PageSize * ptrSize
 		spansSize = round(spansSize, _PageSize)
 		for i := 0; i <= 0x7f; i++ {
-			p = uintptr(i)<<40 | uintptrMask&(0x00c0<<32)
+			switch {
+			case GOARCH == "arm64" && GOOS == "darwin":
+				p = uintptr(i)<<40 | uintptrMask&(0x0013<<28)
+			case GOARCH == "arm64":
+				p = uintptr(i)<<40 | uintptrMask&(0x0040<<32)
+			default:
+				p = uintptr(i)<<40 | uintptrMask&(0x00c0<<32)
+			}
 			pSize = bitmapSize + spansSize + arenaSize + _PageSize
 			p = uintptr(sysReserve(unsafe.Pointer(p), pSize, &reserved))
 			if p != 0 {
@@ -314,7 +329,7 @@ func mallocinit() {
 			// So adjust it upward a little bit ourselves: 1/4 MB to get
 			// away from the running binary image and then round up
 			// to a MB boundary.
-			p = round(uintptr(unsafe.Pointer(&end))+(1<<18), 1<<20)
+			p = round(firstmoduledata.end+(1<<18), 1<<20)
 			pSize = bitmapSize + spansSize + arenaSize + _PageSize
 			p = uintptr(sysReserve(unsafe.Pointer(p), pSize, &reserved))
 			if p != 0 {
@@ -409,9 +424,6 @@ func mHeap_SysAlloc(h *mheap, n uintptr) unsafe.Pointer {
 		if raceenabled {
 			racemapshadow((unsafe.Pointer)(p), n)
 		}
-		if mheap_.shadow_enabled {
-			sysMap(unsafe.Pointer(p+mheap_.shadow_heap), n, h.shadow_reserved, &memstats.other_sys)
-		}
 
 		if uintptr(p)&(_PageSize-1) != 0 {
 			throw("misrounded allocation in MHeap_SysAlloc")
@@ -475,14 +487,21 @@ func mallocgc(size uintptr, typ *_type, flags uint32) unsafe.Pointer {
 	if gcphase == _GCmarktermination {
 		throw("mallocgc called with gcphase == _GCmarktermination")
 	}
-	shouldhelpgc := false
+
 	if size == 0 {
 		return unsafe.Pointer(&zerobase)
 	}
-	dataSize := size
 
 	if flags&flagNoScan == 0 && typ == nil {
 		throw("malloc missing type")
+	}
+
+	if debug.sbrk != 0 {
+		align := uintptr(16)
+		if typ != nil {
+			align = uintptr(typ.align)
+		}
+		return persistentalloc(size, align, &memstats.other_sys)
 	}
 
 	// Set mp.mallocing to keep from being preempted by GC.
@@ -492,6 +511,8 @@ func mallocgc(size uintptr, typ *_type, flags uint32) unsafe.Pointer {
 	}
 	mp.mallocing = 1
 
+	shouldhelpgc := false
+	dataSize := size
 	c := gomcache()
 	var s *mspan
 	var x unsafe.Pointer
@@ -599,7 +620,7 @@ func mallocgc(size uintptr, typ *_type, flags uint32) unsafe.Pointer {
 				}
 			}
 		}
-		c.local_cachealloc += intptr(size)
+		c.local_cachealloc += size
 	} else {
 		var s *mspan
 		shouldhelpgc = true
@@ -623,6 +644,16 @@ func mallocgc(size uintptr, typ *_type, flags uint32) unsafe.Pointer {
 			dataSize = unsafe.Sizeof(_defer{})
 		}
 		heapBitsSetType(uintptr(x), size, dataSize, typ)
+		if dataSize > typ.size {
+			// Array allocation. If there are any
+			// pointers, GC has to scan to the last
+			// element.
+			if typ.ptrdata != 0 {
+				c.local_scan += dataSize - typ.size + typ.ptrdata
+			}
+		} else {
+			c.local_scan += typ.ptrdata
+		}
 	}
 
 	// GCmarkterminate allocates black
@@ -631,12 +662,8 @@ func mallocgc(size uintptr, typ *_type, flags uint32) unsafe.Pointer {
 	// a race marking the bit.
 	if gcphase == _GCmarktermination {
 		systemstack(func() {
-			gcmarknewobject_m(uintptr(x))
+			gcmarknewobject_m(uintptr(x), size)
 		})
-	}
-
-	if mheap_.shadow_enabled {
-		clearshadow(uintptr(x), size)
 	}
 
 	if raceenabled {
@@ -660,15 +687,14 @@ func mallocgc(size uintptr, typ *_type, flags uint32) unsafe.Pointer {
 		}
 	}
 
-	if shouldtriggergc() {
+	if shouldhelpgc && shouldtriggergc() {
 		startGC(gcBackgroundMode)
-	} else if shouldhelpgc && atomicloaduint(&bggc.working) == 1 {
-		// bggc.lock not taken since race on bggc.working is benign.
-		// At worse we don't call gchelpwork.
-		// Delay the gchelpwork until the epilogue so that it doesn't
-		// interfere with the inner working of malloc such as
-		// mcache refills that might happen while doing the gchelpwork
-		systemstack(gchelpwork)
+	} else if gcBlackenEnabled != 0 {
+		// Assist garbage collector. We delay this until the
+		// epilogue so that it doesn't interfere with the
+		// inner working of malloc such as mcache refills that
+		// might happen while doing the gcAssistAlloc.
+		gcAssistAlloc(size, shouldhelpgc)
 	}
 
 	return x
@@ -753,17 +779,21 @@ func profilealloc(mp *m, x unsafe.Pointer, size uintptr) {
 	mProf_Malloc(x, size)
 }
 
-var persistent struct {
-	lock mutex
+type persistentAlloc struct {
 	base unsafe.Pointer
 	off  uintptr
+}
+
+var globalAlloc struct {
+	mutex
+	persistentAlloc
 }
 
 // Wrapper around sysAlloc that can allocate small chunks.
 // There is no associated free operation.
 // Intended for things like function/type/debug-related persistent data.
 // If align is 0, uses default align (currently 8).
-func persistentalloc(size, align uintptr, stat *uint64) unsafe.Pointer {
+func persistentalloc(size, align uintptr, sysStat *uint64) unsafe.Pointer {
 	const (
 		chunk    = 256 << 10
 		maxBlock = 64 << 10 // VM reservation granularity is 64K on windows
@@ -784,26 +814,38 @@ func persistentalloc(size, align uintptr, stat *uint64) unsafe.Pointer {
 	}
 
 	if size >= maxBlock {
-		return sysAlloc(size, stat)
+		return sysAlloc(size, sysStat)
 	}
 
-	lock(&persistent.lock)
+	mp := acquirem()
+	var persistent *persistentAlloc
+	if mp != nil && mp.p != 0 {
+		persistent = &mp.p.ptr().palloc
+	} else {
+		lock(&globalAlloc.mutex)
+		persistent = &globalAlloc.persistentAlloc
+	}
 	persistent.off = round(persistent.off, align)
 	if persistent.off+size > chunk || persistent.base == nil {
 		persistent.base = sysAlloc(chunk, &memstats.other_sys)
 		if persistent.base == nil {
-			unlock(&persistent.lock)
+			if persistent == &globalAlloc.persistentAlloc {
+				unlock(&globalAlloc.mutex)
+			}
 			throw("runtime: cannot allocate memory")
 		}
 		persistent.off = 0
 	}
 	p := add(persistent.base, persistent.off)
 	persistent.off += size
-	unlock(&persistent.lock)
+	releasem(mp)
+	if persistent == &globalAlloc.persistentAlloc {
+		unlock(&globalAlloc.mutex)
+	}
 
-	if stat != &memstats.other_sys {
-		xadd64(stat, int64(size))
-		xadd64(&memstats.other_sys, -int64(size))
+	if sysStat != &memstats.other_sys {
+		mSysStatInc(sysStat, size)
+		mSysStatDec(&memstats.other_sys, size)
 	}
 	return p
 }

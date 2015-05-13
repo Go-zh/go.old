@@ -4,8 +4,6 @@
 
 package gc
 
-import "fmt"
-
 //	case OADD:
 //		if(n->right->op == OLITERAL) {
 //			v = n->right->vconst;
@@ -31,8 +29,7 @@ var renameinit_initgen int
 
 func renameinit() *Sym {
 	renameinit_initgen++
-	namebuf = fmt.Sprintf("init.%d", renameinit_initgen)
-	return Lookup(namebuf)
+	return Lookupf("init.%d", renameinit_initgen)
 }
 
 /*
@@ -57,13 +54,10 @@ func anyinit(n *NodeList) bool {
 	// are there any interesting init statements
 	for l := n; l != nil; l = l.Next {
 		switch l.N.Op {
-		case ODCLFUNC,
-			ODCLCONST,
-			ODCLTYPE,
-			OEMPTY:
+		case ODCLFUNC, ODCLCONST, ODCLTYPE, OEMPTY:
 			break
 
-		case OAS:
+		case OAS, OASWB:
 			if isblank(l.N.Left) && candiscard(l.N.Right) {
 				break
 			}
@@ -112,18 +106,14 @@ func fninit(n *NodeList) {
 	var r *NodeList
 
 	// (1)
-	namebuf = "initdone·"
-
-	gatevar := newname(Lookup(namebuf))
+	gatevar := newname(Lookup("initdone·"))
 	addvar(gatevar, Types[TUINT8], PEXTERN)
 
 	// (2)
 	Maxarg = 0
 
-	namebuf = "init"
-
 	fn := Nod(ODCLFUNC, nil, nil)
-	initsym := Lookup(namebuf)
+	initsym := Lookup("init")
 	fn.Nname = newname(initsym)
 	fn.Nname.Defn = fn
 	fn.Nname.Ntype = Nod(OTFUNC, nil, nil)
@@ -169,8 +159,7 @@ func fninit(n *NodeList) {
 	// (9)
 	// could check that it is fn of no args/returns
 	for i := 1; ; i++ {
-		namebuf = fmt.Sprintf("init.%d", i)
-		s := Lookup(namebuf)
+		s := Lookupf("init.%d", i)
 		if s.Def == nil {
 			break
 		}
