@@ -1,46 +1,3 @@
-// Derived from Inferno utils/6c/reg.c
-// http://code.google.com/p/inferno-os/source/browse/utils/6c/reg.c
-//
-//	Copyright © 1994-1999 Lucent Technologies Inc.  All rights reserved.
-//	Portions Copyright © 1995-1997 C H Forsyth (forsyth@terzarima.net)
-//	Portions Copyright © 1997-1999 Vita Nuova Limited
-//	Portions Copyright © 2000-2007 Vita Nuova Holdings Limited (www.vitanuova.com)
-//	Portions Copyright © 2004,2006 Bruce Ellis
-//	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
-//	Revisions Copyright © 2000-2007 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in
-// all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-// THE SOFTWARE.
-
-package gc
-
-import (
-	"cmd/internal/obj"
-	"fmt"
-	"sort"
-	"strings"
-)
-
-// "Portable" optimizations.
-// Compiled separately for 5g, 6g, and 8g, so allowed to use gg.h, opt.h.
-// Must code to the intersection of the three back ends.
-
 // Derived from Inferno utils/6c/gc.h
 // http://code.google.com/p/inferno-os/source/browse/utils/6c/gc.h
 //
@@ -71,91 +28,16 @@ import (
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-const (
-	CLOAD = 5
-	CREF  = 5
-	CINF  = 1000
-	LOOP  = 3
+// "Portable" optimizations.
+
+package gc
+
+import (
+	"cmd/internal/obj"
+	"fmt"
+	"sort"
+	"strings"
 )
-
-type Reg struct {
-	set  Bits // regopt variables written by this instruction.
-	use1 Bits // regopt variables read by prog->from.
-	use2 Bits // regopt variables read by prog->to.
-
-	// refahead/refbehind are the regopt variables whose current
-	// value may be used in the following/preceding instructions
-	// up to a CALL (or the value is clobbered).
-	refbehind Bits
-	refahead  Bits
-
-	// calahead/calbehind are similar, but for variables in
-	// instructions that are reachable after hitting at least one
-	// CALL.
-	calbehind Bits
-	calahead  Bits
-
-	regdiff Bits
-	act     Bits
-	regu    uint64 // register used bitmap
-}
-
-type Rgn struct {
-	enter *Flow
-	cost  int16
-	varno int16
-	regno int16
-}
-
-var Z *Node
-
-// A Reg is a wrapper around a single Prog (one instruction) that holds
-// register optimization information while the optimizer runs.
-// r->prog is the instruction.
-
-var R *Reg
-
-const (
-	NRGN = 600
-)
-
-// A Rgn represents a single regopt variable over a region of code
-// where a register could potentially be dedicated to that variable.
-// The code encompassed by a Rgn is defined by the flow graph,
-// starting at enter, flood-filling forward while varno is refahead
-// and backward while varno is refbehind, and following branches.  A
-// single variable may be represented by multiple disjoint Rgns and
-// each Rgn may choose a different register for that variable.
-// Registers are allocated to regions greedily in order of descending
-// cost.
-
-var zreg Reg
-
-var region [NRGN]Rgn
-
-var rgp *Rgn
-
-var nregion int
-
-var nvar int
-
-var regbits uint64
-
-var externs Bits
-
-var params Bits
-
-var consts Bits
-
-var addrs Bits
-
-var ivar Bits
-
-var ovar Bits
-
-var change int
-
-var maxnr int32
 
 type OptStats struct {
 	Ncvtreg int32
@@ -168,26 +50,9 @@ type OptStats struct {
 
 var Ostats OptStats
 
-/*
- * reg.c
- */
-
-/*
- * peep.c
-void	peep(Prog*);
-void	excise(Flow*);
-int	copyu(Prog*, Adr*, Adr*);
-*/
-
-/*
- * prog.c
-
-void proginfo(ProgInfo*, Prog*);
-*/
-// p is a call instruction. Does the call fail to return?
-
 var noreturn_symlist [10]*Sym
 
+// p is a call instruction. Does the call fail to return?
 func Noreturn(p *obj.Prog) bool {
 	if noreturn_symlist[0] == nil {
 		noreturn_symlist[0] = Pkglookup("panicindex", Runtimepkg)
@@ -233,7 +98,7 @@ func chasejmp(p *obj.Prog, jmploop *int) *obj.Prog {
 			break
 		}
 
-		p = p.To.U.Branch
+		p = p.To.Val.(*obj.Prog)
 	}
 
 	return p
@@ -253,8 +118,8 @@ func mark(firstp *obj.Prog) {
 			break
 		}
 		p.Opt = alive
-		if p.As != obj.ACALL && p.To.Type == obj.TYPE_BRANCH && p.To.U.Branch != nil {
-			mark(p.To.U.Branch)
+		if p.As != obj.ACALL && p.To.Type == obj.TYPE_BRANCH && p.To.Val.(*obj.Prog) != nil {
+			mark(p.To.Val.(*obj.Prog))
 		}
 		if p.As == obj.AJMP || p.As == obj.ARET || p.As == obj.AUNDEF {
 			break
@@ -274,8 +139,8 @@ func fixjmp(firstp *obj.Prog) {
 		if Debug['R'] != 0 && Debug['v'] != 0 {
 			fmt.Printf("%v\n", p)
 		}
-		if p.As != obj.ACALL && p.To.Type == obj.TYPE_BRANCH && p.To.U.Branch != nil && p.To.U.Branch.As == obj.AJMP {
-			p.To.U.Branch = chasejmp(p.To.U.Branch, &jmploop)
+		if p.As != obj.ACALL && p.To.Type == obj.TYPE_BRANCH && p.To.Val.(*obj.Prog) != nil && p.To.Val.(*obj.Prog).As == obj.AJMP {
+			p.To.Val = chasejmp(p.To.Val.(*obj.Prog), &jmploop)
 			if Debug['R'] != 0 && Debug['v'] != 0 {
 				fmt.Printf("->%v\n", p)
 			}
@@ -326,7 +191,7 @@ func fixjmp(firstp *obj.Prog) {
 	if jmploop == 0 {
 		var last *obj.Prog
 		for p := firstp; p != nil; p = p.Link {
-			if p.As == obj.AJMP && p.To.Type == obj.TYPE_BRANCH && p.To.U.Branch == p.Link {
+			if p.As == obj.AJMP && p.To.Type == obj.TYPE_BRANCH && p.To.Val == p.Link {
 				if Debug['R'] != 0 && Debug['v'] != 0 {
 					fmt.Printf("del %v\n", p)
 				}
@@ -373,16 +238,19 @@ func fixjmp(firstp *obj.Prog) {
 
 var flowmark int
 
-func Flowstart(firstp *obj.Prog, newData func() interface{}) *Graph {
-	var info ProgInfo
+// MaxFlowProg is the maximum size program (counted in instructions)
+// for which the flow code will build a graph. Functions larger than this limit
+// will not have flow graphs and consequently will not be optimized.
+const MaxFlowProg = 50000
 
+func Flowstart(firstp *obj.Prog, newData func() interface{}) *Graph {
 	// Count and mark instructions to annotate.
 	nf := 0
 
 	for p := firstp; p != nil; p = p.Link {
 		p.Opt = nil // should be already, but just in case
-		info = Thearch.Proginfo(p)
-		if info.Flags&Skip != 0 {
+		Thearch.Proginfo(p)
+		if p.Info.Flags&Skip != 0 {
 			continue
 		}
 		p.Opt = &flowmark
@@ -393,8 +261,10 @@ func Flowstart(firstp *obj.Prog, newData func() interface{}) *Graph {
 		return nil
 	}
 
-	if nf >= 20000 {
-		// fatal("%S is too big (%d instructions)", curfn->nname->sym, nf);
+	if nf >= MaxFlowProg {
+		if Debug['v'] != 0 {
+			Warn("%v is too big (%d instructions)", Curfn.Nname.Sym, nf)
+		}
 		return nil
 	}
 
@@ -428,20 +298,19 @@ func Flowstart(firstp *obj.Prog, newData func() interface{}) *Graph {
 	var p *obj.Prog
 	for f := start; f != nil; f = f.Link {
 		p = f.Prog
-		info = Thearch.Proginfo(p)
-		if info.Flags&Break == 0 {
+		if p.Info.Flags&Break == 0 {
 			f1 = f.Link
 			f.S1 = f1
 			f1.P1 = f
 		}
 
 		if p.To.Type == obj.TYPE_BRANCH {
-			if p.To.U.Branch == nil {
+			if p.To.Val == nil {
 				Fatal("pnil %v", p)
 			}
-			f1 = p.To.U.Branch.Opt.(*Flow)
+			f1 = p.To.Val.(*obj.Prog).Opt.(*Flow)
 			if f1 == nil {
-				Fatal("fnil %v / %v", p, p.To.U.Branch)
+				Fatal("fnil %v / %v", p, p.To.Val.(*obj.Prog))
 			}
 			if f1 == f {
 				//fatal("self loop %P", p);
@@ -461,6 +330,7 @@ func Flowstart(firstp *obj.Prog, newData func() interface{}) *Graph {
 
 func Flowend(graph *Graph) {
 	for f := graph.Start; f != nil; f = f.Link {
+		f.Prog.Info.Flags = 0 // drop cached proginfo
 		f.Prog.Opt = nil
 	}
 }
@@ -647,15 +517,14 @@ func Uniqs(r *Flow) *Flow {
 // ACM TOPLAS 1999.
 
 type TempVar struct {
-	node     *Node
-	def      *Flow    // definition of temp var
-	use      *Flow    // use list, chained through Flow.data
-	freelink *TempVar // next free temp in Type.opt list
-	merge    *TempVar // merge var with this one
-	start    int64    // smallest Prog.pc in live range
-	end      int64    // largest Prog.pc in live range
-	addr     uint8    // address taken - no accurate end
-	removed  uint8    // removed from program
+	node    *Node
+	def     *Flow    // definition of temp var
+	use     *Flow    // use list, chained through Flow.data
+	merge   *TempVar // merge var with this one
+	start   int64    // smallest Prog.pc in live range
+	end     int64    // largest Prog.pc in live range
+	addr    uint8    // address taken - no accurate end
+	removed uint8    // removed from program
 }
 
 type startcmp []*TempVar
@@ -699,7 +568,7 @@ func canmerge(n *Node) bool {
 
 func mergetemp(firstp *obj.Prog) {
 	const (
-		debugmerge = 1
+		debugmerge = 0
 	)
 
 	g := Flowstart(firstp, nil)
@@ -709,7 +578,7 @@ func mergetemp(firstp *obj.Prog) {
 
 	// Build list of all mergeable variables.
 	nvar := 0
-	for l := Curfn.Dcl; l != nil; l = l.Next {
+	for l := Curfn.Func.Dcl; l != nil; l = l.Next {
 		if canmerge(l.N) {
 			nvar++
 		}
@@ -719,7 +588,7 @@ func mergetemp(firstp *obj.Prog) {
 	nvar = 0
 	var n *Node
 	var v *TempVar
-	for l := Curfn.Dcl; l != nil; l = l.Next {
+	for l := Curfn.Func.Dcl; l != nil; l = l.Next {
 		n = l.N
 		if canmerge(n) {
 			v = &var_[nvar]
@@ -733,12 +602,8 @@ func mergetemp(firstp *obj.Prog) {
 	// We assume that the earliest reference to a temporary is its definition.
 	// This is not true of variables in general but our temporaries are all
 	// single-use (that's why we have so many!).
-	var p *obj.Prog
-	var info ProgInfo
 	for f := g.Start; f != nil; f = f.Link {
-		p = f.Prog
-		info = Thearch.Proginfo(p)
-
+		p := f.Prog
 		if p.From.Node != nil && ((p.From.Node).(*Node)).Opt != nil && p.To.Node != nil && ((p.To.Node).(*Node)).Opt != nil {
 			Fatal("double node %v", p)
 		}
@@ -759,7 +624,7 @@ func mergetemp(firstp *obj.Prog) {
 			}
 			f.Data = v.use
 			v.use = f
-			if n == p.From.Node && (info.Flags&LeftAddr != 0) {
+			if n == p.From.Node && (p.Info.Flags&LeftAddr != 0) {
 				v.addr = 1
 			}
 		}
@@ -772,9 +637,6 @@ func mergetemp(firstp *obj.Prog) {
 	nkill := 0
 
 	// Special case.
-	var p1 *obj.Prog
-	var info1 ProgInfo
-	var f *Flow
 	for i := 0; i < len(var_); i++ {
 		v = &var_[i]
 		if v.addr != 0 {
@@ -782,16 +644,15 @@ func mergetemp(firstp *obj.Prog) {
 		}
 
 		// Used in only one instruction, which had better be a write.
-		f = v.use
+		f := v.use
 		if f != nil && f.Data.(*Flow) == nil {
-			p = f.Prog
-			info = Thearch.Proginfo(p)
-			if p.To.Node == v.node && (info.Flags&RightWrite != 0) && info.Flags&RightRead == 0 {
+			p := f.Prog
+			if p.To.Node == v.node && (p.Info.Flags&RightWrite != 0) && p.Info.Flags&RightRead == 0 {
 				p.As = obj.ANOP
 				p.To = obj.Addr{}
 				v.removed = 1
 				if debugmerge > 0 && Debug['v'] != 0 {
-					fmt.Printf("drop write-only %v\n", Sconv(v.node.Sym, 0))
+					fmt.Printf("drop write-only %v\n", v.node.Sym)
 				}
 			} else {
 				Fatal("temp used and not set: %v", p)
@@ -804,19 +665,17 @@ func mergetemp(firstp *obj.Prog) {
 		// no jumps to the next instruction. Happens mainly in 386 compiler.
 		f = v.use
 		if f != nil && f.Link == f.Data.(*Flow) && (f.Data.(*Flow)).Data.(*Flow) == nil && Uniqp(f.Link) == f {
-			p = f.Prog
-			info = Thearch.Proginfo(p)
-			p1 = f.Link.Prog
-			info1 = Thearch.Proginfo(p1)
+			p := f.Prog
+			p1 := f.Link.Prog
 			const (
 				SizeAny = SizeB | SizeW | SizeL | SizeQ | SizeF | SizeD
 			)
-			if p.From.Node == v.node && p1.To.Node == v.node && (info.Flags&Move != 0) && (info.Flags|info1.Flags)&(LeftAddr|RightAddr) == 0 && info.Flags&SizeAny == info1.Flags&SizeAny {
+			if p.From.Node == v.node && p1.To.Node == v.node && (p.Info.Flags&Move != 0) && (p.Info.Flags|p1.Info.Flags)&(LeftAddr|RightAddr) == 0 && p.Info.Flags&SizeAny == p1.Info.Flags&SizeAny {
 				p1.From = p.From
 				Thearch.Excise(f)
 				v.removed = 1
 				if debugmerge > 0 && Debug['v'] != 0 {
-					fmt.Printf("drop immediate-use %v\n", Sconv(v.node.Sym, 0))
+					fmt.Printf("drop immediate-use %v\n", v.node.Sym)
 				}
 			}
 
@@ -833,12 +692,12 @@ func mergetemp(firstp *obj.Prog) {
 	for i := 0; i < len(var_); i++ {
 		v = &var_[i]
 		gen++
-		for f = v.use; f != nil; f = f.Data.(*Flow) {
+		for f := v.use; f != nil; f = f.Data.(*Flow) {
 			mergewalk(v, f, uint32(gen))
 		}
 		if v.addr != 0 {
 			gen++
-			for f = v.use; f != nil; f = f.Data.(*Flow) {
+			for f := v.use; f != nil; f = f.Data.(*Flow) {
 				varkillwalk(v, f, uint32(gen))
 			}
 		}
@@ -893,7 +752,7 @@ func mergetemp(firstp *obj.Prog) {
 		for j = nfree; j < len(var_); j++ {
 			v1 = inuse[j]
 			if debugmerge > 0 && Debug['v'] != 0 {
-				fmt.Printf("consider %v: maybe %v: type=%v,%v addrtaken=%v,%v\n", Nconv(v.node, obj.FmtSharp), Nconv(v1.node, obj.FmtSharp), Tconv(t, 0), Tconv(v1.node.Type, 0), v.node.Addrtaken, v1.node.Addrtaken)
+				fmt.Printf("consider %v: maybe %v: type=%v,%v addrtaken=%v,%v\n", Nconv(v.node, obj.FmtSharp), Nconv(v1.node, obj.FmtSharp), t, v1.node.Type, v.node.Addrtaken, v1.node.Addrtaken)
 			}
 
 			// Require the types to match but also require the addrtaken bits to match.
@@ -927,11 +786,11 @@ func mergetemp(firstp *obj.Prog) {
 	}
 
 	if debugmerge > 0 && Debug['v'] != 0 {
-		fmt.Printf("%v [%d - %d]\n", Sconv(Curfn.Nname.Sym, 0), len(var_), nkill)
+		fmt.Printf("%v [%d - %d]\n", Curfn.Nname.Sym, len(var_), nkill)
 		var v *TempVar
 		for i := 0; i < len(var_); i++ {
 			v = &var_[i]
-			fmt.Printf("var %v %v %d-%d", Nconv(v.node, obj.FmtSharp), Tconv(v.node.Type, 0), v.start, v.end)
+			fmt.Printf("var %v %v %d-%d", Nconv(v.node, obj.FmtSharp), v.node.Type, v.start, v.end)
 			if v.addr != 0 {
 				fmt.Printf(" addr=1")
 			}
@@ -954,7 +813,7 @@ func mergetemp(firstp *obj.Prog) {
 
 	// Update node references to use merged temporaries.
 	for f := g.Start; f != nil; f = f.Link {
-		p = f.Prog
+		p := f.Prog
 		n, _ = p.From.Node.(*Node)
 		if n != nil {
 			v, _ = n.Opt.(*TempVar)
@@ -973,13 +832,13 @@ func mergetemp(firstp *obj.Prog) {
 
 	// Delete merged nodes from declaration list.
 	var l *NodeList
-	for lp := &Curfn.Dcl; ; {
+	for lp := &Curfn.Func.Dcl; ; {
 		l = *lp
 		if l == nil {
 			break
 		}
 
-		Curfn.Dcl.End = l
+		Curfn.Func.Dcl.End = l
 		n = l.N
 		v, _ = n.Opt.(*TempVar)
 		if v != nil && (v.merge != nil || v.removed != 0) {
@@ -1064,8 +923,6 @@ func varkillwalk(v *TempVar, f0 *Flow, gen uint32) {
 // Assume that stack variables with address not taken can be loaded multiple times
 // from memory without being rechecked. Other variables need to be checked on
 // each load.
-type NilVar struct {
-}
 
 var killed int // f->data is either nil or &killed
 
@@ -1123,18 +980,14 @@ func nilopt(firstp *obj.Prog) {
 	Flowend(g)
 
 	if Debug_checknil > 1 {
-		fmt.Printf("%v: removed %d of %d nil checks\n", Sconv(Curfn.Nname.Sym, 0), nkill, ncheck)
+		fmt.Printf("%v: removed %d of %d nil checks\n", Curfn.Nname.Sym, nkill, ncheck)
 	}
 }
 
 func nilwalkback(fcheck *Flow) {
-	var p *obj.Prog
-	var info ProgInfo
-
 	for f := fcheck; f != nil; f = Uniqp(f) {
-		p = f.Prog
-		info = Thearch.Proginfo(p)
-		if (info.Flags&RightWrite != 0) && Thearch.Sameaddr(&p.To, &fcheck.Prog.From) {
+		p := f.Prog
+		if (p.Info.Flags&RightWrite != 0) && Thearch.Sameaddr(&p.To, &fcheck.Prog.From) {
 			// Found initialization of value we're checking for nil.
 			// without first finding the check, so this one is unchecked.
 			return
@@ -1165,8 +1018,7 @@ for(f1 = f0; f1 != nil; f1 = f1->p1) {
 	if(f1 != fcheck && p->as == ACHECKNIL && thearch.sameaddr(&p->from, &fcheck->prog->from))
 		break;
 
-	thearch.proginfo(&info, p);
-	if((info.flags & RightWrite) && thearch.sameaddr(&p->to, &fcheck->prog->from)) {
+	if((p.Info.flags & RightWrite) && thearch.sameaddr(&p->to, &fcheck->prog->from)) {
 		// Found initialization of value we're checking for nil.
 		// without first finding the check, so this one is unchecked.
 		fcheck->kill = 0;
@@ -1187,10 +1039,8 @@ for(f = f0; f != f1; f = f->p1)
 	for(f2 = f->p2; f2 != nil; f2 = f2->p2link)
 		nilwalkback(fcheck, f2, gen);
 */
-func nilwalkfwd(fcheck *Flow) {
-	var p *obj.Prog
-	var info ProgInfo
 
+func nilwalkfwd(fcheck *Flow) {
 	// If the path down from rcheck dereferences the address
 	// (possibly with a small offset) before writing to memory
 	// and before any subsequent checks, it's okay to wait for
@@ -1198,18 +1048,16 @@ func nilwalkfwd(fcheck *Flow) {
 	// avoid problems like:
 	//	_ = *x // should panic
 	//	for {} // no writes but infinite loop may be considered visible
+
 	var last *Flow
-
 	for f := Uniqs(fcheck); f != nil; f = Uniqs(f) {
-		p = f.Prog
-		info = Thearch.Proginfo(p)
-
-		if (info.Flags&LeftRead != 0) && Thearch.Smallindir(&p.From, &fcheck.Prog.From) {
+		p := f.Prog
+		if (p.Info.Flags&LeftRead != 0) && Thearch.Smallindir(&p.From, &fcheck.Prog.From) {
 			fcheck.Data = &killed
 			return
 		}
 
-		if (info.Flags&(RightRead|RightWrite) != 0) && Thearch.Smallindir(&p.To, &fcheck.Prog.From) {
+		if (p.Info.Flags&(RightRead|RightWrite) != 0) && Thearch.Smallindir(&p.To, &fcheck.Prog.From) {
 			fcheck.Data = &killed
 			return
 		}
@@ -1220,12 +1068,12 @@ func nilwalkfwd(fcheck *Flow) {
 		}
 
 		// Stop if value is lost.
-		if (info.Flags&RightWrite != 0) && Thearch.Sameaddr(&p.To, &fcheck.Prog.From) {
+		if (p.Info.Flags&RightWrite != 0) && Thearch.Sameaddr(&p.To, &fcheck.Prog.From) {
 			return
 		}
 
 		// Stop if memory write.
-		if (info.Flags&RightWrite != 0) && !Thearch.Regtyp(&p.To) {
+		if (p.Info.Flags&RightWrite != 0) && !Thearch.Regtyp(&p.To) {
 			return
 		}
 

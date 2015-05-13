@@ -199,6 +199,10 @@ func (p *Package) loadDefines(f *File) {
 			val = strings.TrimSpace(line[tabIndex:])
 		}
 
+		if key == "__clang__" {
+			p.GccIsClang = true
+		}
+
 		if n := f.Name[key]; n != nil {
 			if *debugDefine {
 				fmt.Fprintf(os.Stderr, "#define %s %s\n", key, val)
@@ -762,7 +766,7 @@ func (p *Package) gccCmd() []string {
 		"-c",          // do not link
 		"-xc",         // input language is C
 	)
-	if strings.Contains(c[0], "clang") {
+	if p.GccIsClang {
 		c = append(c,
 			"-ferror-limit=0",
 			// Apple clang version 1.7 (tags/Apple/clang-77) (based on LLVM 2.9svn)
@@ -1042,7 +1046,7 @@ func (tr *TypeRepr) String() string {
 	return fmt.Sprintf(tr.Repr, tr.FormatArgs...)
 }
 
-// Empty returns true if the result of String would be "".
+// Empty reports whether the result of String would be "".
 func (tr *TypeRepr) Empty() bool {
 	return len(tr.Repr) == 0
 }

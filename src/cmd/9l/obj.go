@@ -60,6 +60,7 @@ func linkarchinit() {
 	ld.Thearch.Maxalign = MaxAlign
 	ld.Thearch.Minlc = MINLC
 	ld.Thearch.Dwarfregsp = DWARFREGSP
+	ld.Thearch.Dwarfreglr = DWARFREGLR
 
 	ld.Thearch.Adddynlib = adddynlib
 	ld.Thearch.Adddynrel = adddynrel
@@ -111,11 +112,9 @@ func archinit() {
 
 	switch ld.HEADTYPE {
 	default:
-		ld.Diag("unknown -H option")
-		ld.Errorexit()
-		fallthrough
+		ld.Exitf("unknown -H option: %v", ld.HEADTYPE)
 
-	case ld.Hplan9: /* plan 9 */
+	case obj.Hplan9: /* plan 9 */
 		ld.HEADR = 32
 
 		if ld.INITTEXT == -1 {
@@ -128,7 +127,7 @@ func archinit() {
 			ld.INITRND = 4096
 		}
 
-	case ld.Hlinux: /* ppc64 elf */
+	case obj.Hlinux: /* ppc64 elf */
 		if ld.Thestring == "ppc64" {
 			ld.Debug['d'] = 1 // TODO(austin): ELF ABI v1 not supported yet
 		}
@@ -144,7 +143,7 @@ func archinit() {
 			ld.INITRND = 0x10000
 		}
 
-	case ld.Hnacl:
+	case obj.Hnacl:
 		ld.Elfinit()
 		ld.HEADR = 0x10000
 		ld.Funcalign = 16

@@ -50,8 +50,8 @@ const runtimeimport = "" +
 	"func @\"\".typ2Itab (@\"\".typ·2 *byte, @\"\".typ2·3 *byte, @\"\".cache·4 **byte) (@\"\".ret·1 *byte)\n" +
 	"func @\"\".convI2E (@\"\".elem·2 any) (@\"\".ret·1 any)\n" +
 	"func @\"\".convI2I (@\"\".typ·2 *byte, @\"\".elem·3 any) (@\"\".ret·1 any)\n" +
-	"func @\"\".convT2E (@\"\".typ·2 *byte, @\"\".elem·3 *any) (@\"\".ret·1 any)\n" +
-	"func @\"\".convT2I (@\"\".typ·2 *byte, @\"\".typ2·3 *byte, @\"\".cache·4 **byte, @\"\".elem·5 *any) (@\"\".ret·1 any)\n" +
+	"func @\"\".convT2E (@\"\".typ·2 *byte, @\"\".elem·3 *any, @\"\".buf·4 *any) (@\"\".ret·1 any)\n" +
+	"func @\"\".convT2I (@\"\".typ·2 *byte, @\"\".typ2·3 *byte, @\"\".cache·4 **byte, @\"\".elem·5 *any, @\"\".buf·6 *any) (@\"\".ret·1 any)\n" +
 	"func @\"\".assertE2E (@\"\".typ·1 *byte, @\"\".iface·2 any, @\"\".ret·3 *any)\n" +
 	"func @\"\".assertE2E2 (@\"\".typ·2 *byte, @\"\".iface·3 any, @\"\".ret·4 *any) (? bool)\n" +
 	"func @\"\".assertE2I (@\"\".typ·1 *byte, @\"\".iface·2 any, @\"\".ret·3 *any)\n" +
@@ -64,6 +64,7 @@ const runtimeimport = "" +
 	"func @\"\".assertI2I2 (@\"\".typ·2 *byte, @\"\".iface·3 any, @\"\".ret·4 *any) (? bool)\n" +
 	"func @\"\".assertI2T (@\"\".typ·1 *byte, @\"\".iface·2 any, @\"\".ret·3 *any)\n" +
 	"func @\"\".assertI2T2 (@\"\".typ·2 *byte, @\"\".iface·3 any, @\"\".ret·4 *any) (? bool)\n" +
+	"func @\"\".panicdottype (@\"\".have·1 *byte, @\"\".want·2 *byte, @\"\".iface·3 *byte)\n" +
 	"func @\"\".ifaceeq (@\"\".i1·2 any, @\"\".i2·3 any) (@\"\".ret·1 bool)\n" +
 	"func @\"\".efaceeq (@\"\".i1·2 any, @\"\".i2·3 any) (@\"\".ret·1 bool)\n" +
 	"func @\"\".ifacethash (@\"\".i1·2 any) (@\"\".ret·1 uint32)\n" +
@@ -86,35 +87,36 @@ const runtimeimport = "" +
 	"func @\"\".chanrecv2 (@\"\".chanType·2 *byte, @\"\".hchan·3 <-chan any, @\"\".elem·4 *any) (? bool)\n" +
 	"func @\"\".chansend1 (@\"\".chanType·1 *byte, @\"\".hchan·2 chan<- any, @\"\".elem·3 *any)\n" +
 	"func @\"\".closechan (@\"\".hchan·1 any)\n" +
+	"var @\"\".writeBarrierEnabled bool\n" +
 	"func @\"\".writebarrierptr (@\"\".dst·1 *any, @\"\".src·2 any)\n" +
 	"func @\"\".writebarrierstring (@\"\".dst·1 *any, @\"\".src·2 any)\n" +
 	"func @\"\".writebarrierslice (@\"\".dst·1 *any, @\"\".src·2 any)\n" +
 	"func @\"\".writebarrieriface (@\"\".dst·1 *any, @\"\".src·2 any)\n" +
-	"func @\"\".writebarrierfat01 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat10 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat11 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat001 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat010 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat011 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat100 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat101 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat110 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat111 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat0001 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat0010 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat0011 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat0100 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat0101 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat0110 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat0111 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat1000 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat1001 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat1010 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat1011 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat1100 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat1101 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat1110 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
-	"func @\"\".writebarrierfat1111 (@\"\".dst·1 *any, _ *byte, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat01 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat10 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat11 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat001 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat010 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat011 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat100 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat101 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat110 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat111 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat0001 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat0010 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat0011 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat0100 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat0101 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat0110 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat0111 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat1000 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat1001 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat1010 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat1011 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat1100 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat1101 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat1110 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
+	"func @\"\".writebarrierfat1111 (@\"\".dst·1 *any, _ uintptr, @\"\".src·3 any)\n" +
 	"func @\"\".typedmemmove (@\"\".typ·1 *byte, @\"\".dst·2 *any, @\"\".src·3 *any)\n" +
 	"func @\"\".typedslicecopy (@\"\".typ·2 *byte, @\"\".dst·3 any, @\"\".src·4 any) (? int)\n" +
 	"func @\"\".selectnbsend (@\"\".chanType·2 *byte, @\"\".hchan·3 chan<- any, @\"\".elem·4 *any) (? bool)\n" +

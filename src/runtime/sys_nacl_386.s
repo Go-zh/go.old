@@ -33,7 +33,7 @@ TEXT runtime·open(SB),NOSPLIT,$12
 	MOVL AX, ret+12(FP)
 	RET
 
-TEXT runtime·close(SB),NOSPLIT,$4
+TEXT runtime·closefd(SB),NOSPLIT,$4
 	MOVL fd+0(FP), AX
 	MOVL AX, 0(SP)
 	NACL_SYSCALL(SYS_close)
@@ -362,3 +362,12 @@ ret:
 	// 36(BP) is saved EFLAGS, never to be seen again
 	MOVL	32(BP), BP // saved PC
 	JMP	BP
+
+// func getRandomData([]byte)
+TEXT runtime·getRandomData(SB),NOSPLIT,$8-12
+	MOVL buf+0(FP), AX
+	MOVL AX, 0(SP)
+	MOVL len+4(FP), AX
+	MOVL AX, 4(SP)
+	NACL_SYSCALL(SYS_get_random_bytes)
+	RET

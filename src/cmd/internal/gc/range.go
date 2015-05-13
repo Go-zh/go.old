@@ -62,7 +62,7 @@ func typecheckrange(n *Node) {
 
 	case TCHAN:
 		if t.Chan&Crecv == 0 {
-			Yyerror("invalid operation: range %v (receive from send-only type %v)", Nconv(n.Right, 0), Tconv(n.Right.Type, 0))
+			Yyerror("invalid operation: range %v (receive from send-only type %v)", n.Right, n.Right.Type)
 			goto out
 		}
 
@@ -105,7 +105,7 @@ func typecheckrange(n *Node) {
 		if v1.Defn == n {
 			v1.Type = t1
 		} else if v1.Type != nil && assignop(t1, v1.Type, &why) == 0 {
-			Yyerror("cannot assign type %v to %v in range%s", Tconv(t1, 0), Nconv(v1, obj.FmtLong), why)
+			Yyerror("cannot assign type %v to %v in range%s", t1, Nconv(v1, obj.FmtLong), why)
 		}
 		checkassign(n, v1)
 	}
@@ -114,7 +114,7 @@ func typecheckrange(n *Node) {
 		if v2.Defn == n {
 			v2.Type = t2
 		} else if v2.Type != nil && assignop(t2, v2.Type, &why) == 0 {
-			Yyerror("cannot assign type %v to %v in range%s", Tconv(t2, 0), Nconv(v2, obj.FmtLong), why)
+			Yyerror("cannot assign type %v to %v in range%s", t2, Nconv(v2, obj.FmtLong), why)
 		}
 		checkassign(n, v2)
 	}
@@ -306,19 +306,17 @@ func walkrange(n *Node) {
 		hit := n.Alloc
 		hit.Type = th
 		n.Left = nil
-		keyname := newname(th.Type.Sym)      // depends on layout of iterator struct.  See reflect.c:hiter
+		keyname := newname(th.Type.Sym)      // depends on layout of iterator struct.  See reflect.go:hiter
 		valname := newname(th.Type.Down.Sym) // ditto
 
 		fn := syslook("mapiterinit", 1)
 
-		argtype(fn, t.Down)
-		argtype(fn, t.Type)
-		argtype(fn, th)
+		substArgTypes(fn, t.Down, t.Type, th)
 		init = list(init, mkcall1(fn, nil, nil, typename(t), ha, Nod(OADDR, hit, nil)))
 		n.Ntest = Nod(ONE, Nod(ODOT, hit, keyname), nodnil())
 
 		fn = syslook("mapiternext", 1)
-		argtype(fn, th)
+		substArgTypes(fn, th)
 		n.Nincr = mkcall1(fn, nil, nil, Nod(OADDR, hit, nil))
 
 		key := Nod(ODOT, hit, keyname)

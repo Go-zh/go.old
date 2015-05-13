@@ -165,7 +165,7 @@ func newdefer(siz int32) *_defer {
 	sc := deferclass(uintptr(siz))
 	mp := acquirem()
 	if sc < uintptr(len(p{}.deferpool)) {
-		pp := mp.p
+		pp := mp.p.ptr()
 		if len(pp.deferpool[sc]) == 0 && sched.deferpool[sc] != nil {
 			lock(&sched.deferlock)
 			for len(pp.deferpool[sc]) < cap(pp.deferpool[sc])/2 && sched.deferpool[sc] != nil {
@@ -188,16 +188,6 @@ func newdefer(siz int32) *_defer {
 		d = (*_defer)(mallocgc(total, deferType, 0))
 	}
 	d.siz = siz
-	if mheap_.shadow_enabled {
-		// This memory will be written directly, with no write barrier,
-		// and then scanned like stacks during collection.
-		// Unlike real stacks, it is from heap spans, so mark the
-		// shadow as explicitly unusable.
-		p := deferArgs(d)
-		for i := uintptr(0); i+ptrSize <= uintptr(siz); i += ptrSize {
-			writebarrierptr_noshadow((*uintptr)(add(p, i)))
-		}
-	}
 	gp := mp.curg
 	d.link = gp._defer
 	gp._defer = d
@@ -214,16 +204,10 @@ func freedefer(d *_defer) {
 	if d.fn != nil {
 		freedeferfn()
 	}
-	if mheap_.shadow_enabled {
-		// Undo the marking in newdefer.
-		systemstack(func() {
-			clearshadow(uintptr(deferArgs(d)), uintptr(d.siz))
-		})
-	}
 	sc := deferclass(uintptr(d.siz))
 	if sc < uintptr(len(p{}.deferpool)) {
 		mp := acquirem()
-		pp := mp.p
+		pp := mp.p.ptr()
 		if len(pp.deferpool[sc]) == cap(pp.deferpool[sc]) {
 			// Transfer half of local cache to the central cache.
 			var first, last *_defer

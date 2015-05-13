@@ -17,11 +17,11 @@ Notable divergences:
 /*
 mail 包实现了解析邮件消息的功能.
 
-大多数情况下，这个包跟着RFC 5322定义的格式。
+大多数情况下，这个包遵循 RFC 5322 定义的格式。
 需要注意的：
 	* 过时的地址格式将不能被解析, 包括嵌入路由信息的地址格式。
 	* 组地址不能被解析。
-	* 全范围的空格（CFWS样式元素）不支持，比如使用换行分隔地址。
+	* 全范围的空格（CFWS 语法元素）不支持，比如使用换行分隔地址。
 */
 package mail
 
@@ -30,9 +30,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"internal/mime"
 	"io"
 	"log"
+	"mime"
 	"net/textproto"
 	"strings"
 	"time"
@@ -217,7 +217,7 @@ func (a *Address) String() string {
 		return b.String()
 	}
 
-	return mime.EncodeWord(a.Name) + " " + s
+	return mime.QEncoding.Encode("utf-8", a.Name) + " " + s
 }
 
 type addrParser []byte
@@ -379,9 +379,8 @@ func (p *addrParser) consumePhrase() (phrase string, err error) {
 			word, err = p.consumeAtom(true)
 		}
 
-		// RFC 2047 encoded-word starts with =?, ends with ?=, and has two other ?s.
-		if err == nil && strings.HasPrefix(word, "=?") && strings.HasSuffix(word, "?=") && strings.Count(word, "?") == 4 {
-			word, err = mime.DecodeWord(word)
+		if err == nil {
+			word, err = decodeRFC2047Word(word)
 		}
 
 		if err != nil {
@@ -476,12 +475,38 @@ func (p *addrParser) len() int {
 	return len(*p)
 }
 
+func decodeRFC2047Word(s string) (string, error) {
+	dec, err := rfc2047Decoder.Decode(s)
+	if err == nil {
+		return dec, nil
+	}
+
+	if _, ok := err.(charsetError); ok {
+		return s, err
+	}
+
+	// Ignore invalid RFC 2047 encoded-word errors.
+	return s, nil
+}
+
+var rfc2047Decoder = mime.WordDecoder{
+	CharsetReader: func(charset string, input io.Reader) (io.Reader, error) {
+		return nil, charsetError(charset)
+	},
+}
+
+type charsetError string
+
+func (e charsetError) Error() string {
+	return fmt.Sprintf("charset not supported: %q", string(e))
+}
+
 var atextChars = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
 	"abcdefghijklmnopqrstuvwxyz" +
 	"0123456789" +
 	"!#$%&'*+-/=?^_`{|}~")
 
-// isAtext returns true if c is an RFC 5322 atext character.
+// isAtext reports whether c is an RFC 5322 atext character.
 // If dot is true, period is included.
 
 // isAtext当c是一个RFC 5322定义的atext字符的话返回true。
@@ -493,9 +518,9 @@ func isAtext(c byte, dot bool) bool {
 	return bytes.IndexByte(atextChars, c) >= 0
 }
 
-// isQtext returns true if c is an RFC 5322 qtext character.
+// isQtext reports whether c is an RFC 5322 qtext character.
 
-// isQtext当c是RFC 5322定义的qtest字符的话，返回true。
+// isQtext 判断 c 是否为 RFC 5322 qtext 字符。
 func isQtext(c byte) bool {
 	// Printable US-ASCII, excluding backslash or quote.
 	if c == '\\' || c == '"' {
@@ -504,16 +529,19 @@ func isQtext(c byte) bool {
 	return '!' <= c && c <= '~'
 }
 
-// isVchar returns true if c is an RFC 5322 VCHAR character.
+// isVchar reports whether c is an RFC 5322 VCHAR character.
 
-// isVchar当c是RFC 5322定义的VCHAR字符的话，返回true。
+// isVchar 判断 c 是否为 RFC 5322 VCHAR 字符。
 func isVchar(c byte) bool {
 	// Visible (printing) characters.
 	return '!' <= c && c <= '~'
 }
 
-// isWSP returns true if c is a WSP (white space).
+// isWSP reports whether c is a WSP (white space).
 // WSP is a space or horizontal tab (RFC5234 Appendix B).
+
+// isWSP 判断 c 是否为 WSP（空白字符）。
+// WSP 是一个空格符或横向制表符（RFC5234 附录B）。
 func isWSP(c byte) bool {
 	return c == ' ' || c == '\t'
 }

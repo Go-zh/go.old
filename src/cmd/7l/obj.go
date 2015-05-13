@@ -46,11 +46,7 @@ func main() {
 
 func linkarchinit() {
 	ld.Thestring = obj.Getgoarch()
-	if ld.Thestring == "ppc64le" {
-		ld.Thelinkarch = &ld.Linkppc64le
-	} else {
-		ld.Thelinkarch = &ld.Linkppc64
-	}
+	ld.Thelinkarch = &ld.Linkarm64
 
 	ld.Thearch.Thechar = thechar
 	ld.Thearch.Ptrsize = ld.Thelinkarch.Ptrsize
@@ -60,6 +56,7 @@ func linkarchinit() {
 	ld.Thearch.Maxalign = MaxAlign
 	ld.Thearch.Minlc = MINLC
 	ld.Thearch.Dwarfregsp = DWARFREGSP
+	ld.Thearch.Dwarfreglr = DWARFREGLR
 
 	ld.Thearch.Adddynlib = adddynlib
 	ld.Thearch.Adddynrel = adddynrel
@@ -72,18 +69,11 @@ func linkarchinit() {
 	ld.Thearch.Elfsetupplt = elfsetupplt
 	ld.Thearch.Gentext = gentext
 	ld.Thearch.Machoreloc1 = machoreloc1
-	if ld.Thelinkarch == &ld.Linkppc64le {
-		ld.Thearch.Lput = ld.Lputl
-		ld.Thearch.Wput = ld.Wputl
-		ld.Thearch.Vput = ld.Vputl
-	} else {
-		ld.Thearch.Lput = ld.Lputb
-		ld.Thearch.Wput = ld.Wputb
-		ld.Thearch.Vput = ld.Vputb
-	}
+	ld.Thearch.Lput = ld.Lputl
+	ld.Thearch.Wput = ld.Wputl
+	ld.Thearch.Vput = ld.Vputl
 
-	// TODO(austin): ABI v1 uses /usr/lib/ld.so.1
-	ld.Thearch.Linuxdynld = "/lib64/ld64.so.1"
+	ld.Thearch.Linuxdynld = "/lib/ld-linux-aarch64.so.1"
 
 	ld.Thearch.Freebsddynld = "XXX"
 	ld.Thearch.Openbsddynld = "XXX"
@@ -99,6 +89,11 @@ func archinit() {
 		ld.Linkmode = ld.LinkInternal
 	}
 
+	// Darwin/arm64 only supports external linking
+	if ld.HEADTYPE == obj.Hdarwin {
+		ld.Linkmode = ld.LinkExternal
+	}
+
 	switch ld.HEADTYPE {
 	default:
 		if ld.Linkmode == ld.LinkAuto {
@@ -107,15 +102,15 @@ func archinit() {
 		if ld.Linkmode == ld.LinkExternal && obj.Getgoextlinkenabled() != "1" {
 			log.Fatalf("cannot use -linkmode=external with -H %s", ld.Headstr(int(ld.HEADTYPE)))
 		}
+	case obj.Hlinux, obj.Hdarwin:
+		break
 	}
 
 	switch ld.HEADTYPE {
 	default:
-		ld.Diag("unknown -H option")
-		ld.Errorexit()
-		fallthrough
+		ld.Exitf("unknown -H option: %v", ld.HEADTYPE)
 
-	case ld.Hplan9: /* plan 9 */
+	case obj.Hplan9: /* plan 9 */
 		ld.HEADR = 32
 
 		if ld.INITTEXT == -1 {
@@ -128,10 +123,7 @@ func archinit() {
 			ld.INITRND = 4096
 		}
 
-	case ld.Hlinux: /* ppc64 elf */
-		if ld.Thestring == "ppc64" {
-			ld.Debug['d'] = 1 // TODO(austin): ELF ABI v1 not supported yet
-		}
+	case obj.Hlinux: /* arm64 elf */
 		ld.Elfinit()
 		ld.HEADR = ld.ELFRESERVE
 		if ld.INITTEXT == -1 {
@@ -144,7 +136,21 @@ func archinit() {
 			ld.INITRND = 0x10000
 		}
 
-	case ld.Hnacl:
+	case obj.Hdarwin: /* apple MACH */
+		ld.Debug['w'] = 1 // disable DWARF generation
+		ld.Machoinit()
+		ld.HEADR = ld.INITIAL_MACHO_HEADR
+		if ld.INITTEXT == -1 {
+			ld.INITTEXT = 4096 + int64(ld.HEADR)
+		}
+		if ld.INITDAT == -1 {
+			ld.INITDAT = 0
+		}
+		if ld.INITRND == -1 {
+			ld.INITRND = 4096
+		}
+
+	case obj.Hnacl:
 		ld.Elfinit()
 		ld.HEADR = 0x10000
 		ld.Funcalign = 16

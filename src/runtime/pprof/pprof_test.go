@@ -122,7 +122,10 @@ func parseProfile(t *testing.T, bytes []byte, f func(uintptr, []uintptr)) {
 func testCPUProfile(t *testing.T, need []string, f func()) {
 	switch runtime.GOOS {
 	case "darwin":
-		if runtime.GOARCH != "arm" {
+		switch runtime.GOARCH {
+		case "arm", "arm64":
+			// nothing
+		default:
 			out, err := exec.Command("uname", "-a").CombinedOutput()
 			if err != nil {
 				t.Fatal(err)
@@ -144,7 +147,9 @@ func testCPUProfile(t *testing.T, need []string, f func()) {
 	// Check that profile is well formed and contains need.
 	// 检查分析报告的形式是否符合所需格式。
 	have := make([]uintptr, len(need))
+	var samples uintptr
 	parseProfile(t, prof.Bytes(), func(count uintptr, stk []uintptr) {
+		samples += count
 		for _, pc := range stk {
 			f := runtime.FuncForPC(pc)
 			if f == nil {
@@ -157,6 +162,7 @@ func testCPUProfile(t *testing.T, need []string, f func()) {
 			}
 		}
 	})
+	t.Logf("total %d CPU profile samples collected", samples)
 
 	if len(need) == 0 {
 		return
@@ -201,16 +207,21 @@ func testCPUProfile(t *testing.T, need []string, f func()) {
 	}
 }
 
+// Fork can hang if preempted with signals frequently enough (see issue 5517).
+// Ensure that we do not do this.
 func TestCPUProfileWithFork(t *testing.T) {
 	if runtime.GOOS == "darwin" {
-		if runtime.GOARCH == "arm" {
-			t.Skipf("skipping on darwin/arm")
+		switch runtime.GOARCH {
+		case "arm", "arm64":
+			t.Skipf("skipping on %s/%s, cannot fork", runtime.GOOS, runtime.GOARCH)
 		}
 	}
 
-	// Fork can hang if preempted with signals frequently enough (see issue 5517).
-	// Ensure that we do not do this.
 	heap := 1 << 30
+	if runtime.GOOS == "android" {
+		// Use smaller size for Android to avoid crash.
+		heap = 100 << 20
+	}
 	if testing.Short() {
 		heap = 100 << 20
 	}
@@ -233,7 +244,7 @@ func TestCPUProfileWithFork(t *testing.T) {
 	defer StopCPUProfile()
 
 	for i := 0; i < 10; i++ {
-		exec.Command("go").CombinedOutput()
+		exec.Command(os.Args[0], "-h").CombinedOutput()
 	}
 }
 

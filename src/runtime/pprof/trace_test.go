@@ -7,6 +7,7 @@ package pprof_test
 import (
 	"bytes"
 	"internal/trace"
+	"io"
 	"net"
 	"os"
 	"runtime"
@@ -20,6 +21,11 @@ func skipTraceTestsIfNeeded(t *testing.T) {
 	switch runtime.GOOS {
 	case "solaris":
 		t.Skip("skipping: solaris timer can go backwards (http://golang.org/issue/8976)")
+	case "darwin":
+		switch runtime.GOARCH {
+		case "arm", "arm64":
+			t.Skipf("skipping on %s/%s, cannot fork", runtime.GOOS, runtime.GOARCH)
+		}
 	}
 
 	switch runtime.GOARCH {
@@ -72,6 +78,20 @@ func TestTrace(t *testing.T) {
 	}
 }
 
+func parseTrace(r io.Reader) ([]*trace.Event, map[uint64]*trace.GDesc, error) {
+	events, err := trace.Parse(r)
+	if err != nil {
+		return nil, nil, err
+	}
+	gs := trace.GoroutineStats(events)
+	for goid := range gs {
+		// We don't do any particular checks on the result at the moment.
+		// But still check that RelatedGoroutines does not crash, hang, etc.
+		_ = trace.RelatedGoroutines(events, goid)
+	}
+	return events, gs, nil
+}
+
 func TestTraceStress(t *testing.T) {
 	skipTraceTestsIfNeeded(t)
 
@@ -101,7 +121,7 @@ func TestTraceStress(t *testing.T) {
 		<-done
 		wg.Done()
 	}()
-	time.Sleep(time.Millisecond)
+	time.Sleep(time.Millisecond) // give the goroutine above time to block
 
 	buf := new(bytes.Buffer)
 	if err := StartTrace(buf); err != nil {
@@ -109,6 +129,7 @@ func TestTraceStress(t *testing.T) {
 	}
 
 	procs := runtime.GOMAXPROCS(10)
+	time.Sleep(50 * time.Millisecond) // test proc stop/start events
 
 	go func() {
 		runtime.LockOSThread()
@@ -198,7 +219,7 @@ func TestTraceStress(t *testing.T) {
 	runtime.GOMAXPROCS(procs)
 
 	StopTrace()
-	_, err = trace.Parse(buf)
+	_, _, err = parseTrace(buf)
 	if err != nil {
 		t.Fatalf("failed to parse trace: %v", err)
 	}
@@ -208,6 +229,7 @@ func TestTraceStress(t *testing.T) {
 // And concurrently with all that start/stop trace 3 times.
 func TestTraceStressStartStop(t *testing.T) {
 	skipTraceTestsIfNeeded(t)
+	t.Skip("test is unreliable; issue #10476")
 
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(8))
 	outerDone := make(chan bool)
@@ -338,9 +360,101 @@ func TestTraceStressStartStop(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 		StopTrace()
-		if _, err := trace.Parse(buf); err != nil {
+		if _, _, err := parseTrace(buf); err != nil {
 			t.Fatalf("failed to parse trace: %v", err)
 		}
 	}
 	<-outerDone
+}
+
+func TestTraceFutileWakeup(t *testing.T) {
+	// The test generates a full-load of futile wakeups on channels,
+	// and ensures that the trace is consistent after their removal.
+	skipTraceTestsIfNeeded(t)
+	if runtime.GOOS == "linux" && runtime.GOARCH == "ppc64le" {
+		t.Skip("test is unreliable; issue #10512")
+	}
+
+	buf := new(bytes.Buffer)
+	if err := StartTrace(buf); err != nil {
+		t.Fatalf("failed to start tracing: %v", err)
+	}
+
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(8))
+	c0 := make(chan int, 1)
+	c1 := make(chan int, 1)
+	c2 := make(chan int, 1)
+	const procs = 2
+	var done sync.WaitGroup
+	done.Add(4 * procs)
+	for p := 0; p < procs; p++ {
+		const iters = 1e3
+		go func() {
+			for i := 0; i < iters; i++ {
+				runtime.Gosched()
+				c0 <- 0
+			}
+			done.Done()
+		}()
+		go func() {
+			for i := 0; i < iters; i++ {
+				runtime.Gosched()
+				<-c0
+			}
+			done.Done()
+		}()
+		go func() {
+			for i := 0; i < iters; i++ {
+				runtime.Gosched()
+				select {
+				case c1 <- 0:
+				case c2 <- 0:
+				}
+			}
+			done.Done()
+		}()
+		go func() {
+			for i := 0; i < iters; i++ {
+				runtime.Gosched()
+				select {
+				case <-c1:
+				case <-c2:
+				}
+			}
+			done.Done()
+		}()
+	}
+	done.Wait()
+
+	StopTrace()
+	events, _, err := parseTrace(buf)
+	if err != nil {
+		t.Fatalf("failed to parse trace: %v", err)
+	}
+	// Check that (1) trace does not contain EvFutileWakeup events and
+	// (2) there are no consecutive EvGoBlock/EvGCStart/EvGoBlock events
+	// (we call runtime.Gosched between all operations, so these would be futile wakeups).
+	gs := make(map[uint64]int)
+	for _, ev := range events {
+		switch ev.Type {
+		case trace.EvFutileWakeup:
+			t.Fatalf("found EvFutileWakeup event")
+		case trace.EvGoBlockSend, trace.EvGoBlockRecv, trace.EvGoBlockSelect:
+			if gs[ev.G] == 2 {
+				t.Fatalf("goroutine %v blocked on %v at %v right after start",
+					ev.G, trace.EventDescriptions[ev.Type].Name, ev.Ts)
+			}
+			if gs[ev.G] == 1 {
+				t.Fatalf("goroutine %v blocked on %v at %v while blocked",
+					ev.G, trace.EventDescriptions[ev.Type].Name, ev.Ts)
+			}
+			gs[ev.G] = 1
+		case trace.EvGoStart:
+			if gs[ev.G] == 1 {
+				gs[ev.G] = 2
+			}
+		default:
+			delete(gs, ev.G)
+		}
+	}
 }

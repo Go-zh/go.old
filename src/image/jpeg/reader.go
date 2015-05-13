@@ -10,6 +10,7 @@ package jpeg
 import (
 	"image"
 	"image/color"
+	"image/internal/imageutil"
 	"io"
 )
 
@@ -169,7 +170,7 @@ func (d *decoder) fill() error {
 // can happen when expecting to read a 0xff 0x00 byte-stuffed byte.
 func (d *decoder) unreadByteStuffedByte() {
 	if d.bytes.nUnreadable == 0 {
-		panic("jpeg: unreadByteStuffedByte call cannot be fulfilled")
+		return
 	}
 	d.bytes.i -= d.bytes.nUnreadable
 	d.bytes.nUnreadable = 0
@@ -216,18 +217,19 @@ func (d *decoder) readByteStuffedByte() (x byte, err error) {
 		return 0xff, nil
 	}
 
+	d.bytes.nUnreadable = 0
+
 	x, err = d.readByte()
 	if err != nil {
 		return 0, err
 	}
+	d.bytes.nUnreadable = 1
 	if x != 0xff {
-		d.bytes.nUnreadable = 1
 		return x, nil
 	}
 
 	x, err = d.readByte()
 	if err != nil {
-		d.bytes.nUnreadable = 1
 		return 0, err
 	}
 	d.bytes.nUnreadable = 2
@@ -241,12 +243,7 @@ func (d *decoder) readByteStuffedByte() (x byte, err error) {
 // stuffing.
 func (d *decoder) readFull(p []byte) error {
 	// Unread the overshot bytes, if any.
-	if d.bytes.nUnreadable != 0 {
-		if d.bits.n >= 8 {
-			d.unreadByteStuffedByte()
-		}
-		d.bytes.nUnreadable = 0
-	}
+	d.unreadByteStuffedByte()
 
 	for {
 		n := copy(p, d.bytes.buf[d.bytes.i:d.bytes.j])
@@ -268,12 +265,7 @@ func (d *decoder) readFull(p []byte) error {
 // ignore ignores the next n bytes.
 func (d *decoder) ignore(n int) error {
 	// Unread the overshot bytes, if any.
-	if d.bytes.nUnreadable != 0 {
-		if d.bits.n >= 8 {
-			d.unreadByteStuffedByte()
-		}
-		d.bytes.nUnreadable = 0
-	}
+	d.unreadByteStuffedByte()
 
 	for {
 		m := d.bytes.j - d.bytes.i
@@ -297,6 +289,9 @@ func (d *decoder) ignore(n int) error {
 
 // Specified in section B.2.2.
 func (d *decoder) processSOF(n int) error {
+	if d.nComp != 0 {
+		return FormatError("multiple SOF markers")
+	}
 	switch n {
 	case 6 + 3*1: // Grayscale image.
 		d.nComp = 1
@@ -331,6 +326,10 @@ func (d *decoder) processSOF(n int) error {
 		}
 
 		d.comp[i].tq = d.tmp[8+3*i]
+		if d.comp[i].tq > maxTq {
+			return FormatError("bad Tq value")
+		}
+
 		hv := d.tmp[7+3*i]
 		h, v := int(hv>>4), int(hv&0x0f)
 		if h < 1 || 4 < h || v < 1 || 4 < v {
@@ -672,7 +671,7 @@ func (d *decoder) applyBlack() (image.Image, error) {
 		// above, so in practice, only the fourth channel (black) is inverted.
 		bounds := d.img3.Bounds()
 		img := image.NewRGBA(bounds)
-		drawYCbCr(img, bounds, d.img3, bounds.Min)
+		imageutil.DrawYCbCr(img, bounds, d.img3, bounds.Min)
 		for iBase, y := 0, bounds.Min.Y; y < bounds.Max.Y; iBase, y = iBase+img.Stride, y+1 {
 			for i, x := iBase+3, bounds.Min.X; x < bounds.Max.X; i, x = i+4, x+1 {
 				img.Pix[i] = 255 - d.blackPix[(y-bounds.Min.Y)*d.blackStride+(x-bounds.Min.X)]
@@ -749,82 +748,6 @@ func (d *decoder) convertToRGB() (image.Image, error) {
 		}
 	}
 	return img, nil
-}
-
-// drawYCbCr is the non-exported drawYCbCr function copy/pasted from the
-// image/draw package. It is copy/pasted because it doesn't seem right for the
-// image/jpeg package to depend on image/draw.
-//
-// TODO(nigeltao): remove the copy/paste, possibly by moving this to be an
-// exported method on *image.YCbCr. We'd need to make sure we're totally happy
-// with the API (for the rest of Go 1 compatibility) though, and if we want to
-// have a more general purpose DrawToRGBA method for other image types.
-func drawYCbCr(dst *image.RGBA, r image.Rectangle, src *image.YCbCr, sp image.Point) (ok bool) {
-	// An image.YCbCr is always fully opaque, and so if the mask is implicitly nil
-	// (i.e. fully opaque) then the op is effectively always Src.
-	x0 := (r.Min.X - dst.Rect.Min.X) * 4
-	x1 := (r.Max.X - dst.Rect.Min.X) * 4
-	y0 := r.Min.Y - dst.Rect.Min.Y
-	y1 := r.Max.Y - dst.Rect.Min.Y
-	switch src.SubsampleRatio {
-	case image.YCbCrSubsampleRatio444:
-		for y, sy := y0, sp.Y; y != y1; y, sy = y+1, sy+1 {
-			dpix := dst.Pix[y*dst.Stride:]
-			yi := (sy-src.Rect.Min.Y)*src.YStride + (sp.X - src.Rect.Min.X)
-			ci := (sy-src.Rect.Min.Y)*src.CStride + (sp.X - src.Rect.Min.X)
-			for x := x0; x != x1; x, yi, ci = x+4, yi+1, ci+1 {
-				rr, gg, bb := color.YCbCrToRGB(src.Y[yi], src.Cb[ci], src.Cr[ci])
-				dpix[x+0] = rr
-				dpix[x+1] = gg
-				dpix[x+2] = bb
-				dpix[x+3] = 255
-			}
-		}
-	case image.YCbCrSubsampleRatio422:
-		for y, sy := y0, sp.Y; y != y1; y, sy = y+1, sy+1 {
-			dpix := dst.Pix[y*dst.Stride:]
-			yi := (sy-src.Rect.Min.Y)*src.YStride + (sp.X - src.Rect.Min.X)
-			ciBase := (sy-src.Rect.Min.Y)*src.CStride - src.Rect.Min.X/2
-			for x, sx := x0, sp.X; x != x1; x, sx, yi = x+4, sx+1, yi+1 {
-				ci := ciBase + sx/2
-				rr, gg, bb := color.YCbCrToRGB(src.Y[yi], src.Cb[ci], src.Cr[ci])
-				dpix[x+0] = rr
-				dpix[x+1] = gg
-				dpix[x+2] = bb
-				dpix[x+3] = 255
-			}
-		}
-	case image.YCbCrSubsampleRatio420:
-		for y, sy := y0, sp.Y; y != y1; y, sy = y+1, sy+1 {
-			dpix := dst.Pix[y*dst.Stride:]
-			yi := (sy-src.Rect.Min.Y)*src.YStride + (sp.X - src.Rect.Min.X)
-			ciBase := (sy/2-src.Rect.Min.Y/2)*src.CStride - src.Rect.Min.X/2
-			for x, sx := x0, sp.X; x != x1; x, sx, yi = x+4, sx+1, yi+1 {
-				ci := ciBase + sx/2
-				rr, gg, bb := color.YCbCrToRGB(src.Y[yi], src.Cb[ci], src.Cr[ci])
-				dpix[x+0] = rr
-				dpix[x+1] = gg
-				dpix[x+2] = bb
-				dpix[x+3] = 255
-			}
-		}
-	case image.YCbCrSubsampleRatio440:
-		for y, sy := y0, sp.Y; y != y1; y, sy = y+1, sy+1 {
-			dpix := dst.Pix[y*dst.Stride:]
-			yi := (sy-src.Rect.Min.Y)*src.YStride + (sp.X - src.Rect.Min.X)
-			ci := (sy/2-src.Rect.Min.Y/2)*src.CStride + (sp.X - src.Rect.Min.X)
-			for x := x0; x != x1; x, yi, ci = x+4, yi+1, ci+1 {
-				rr, gg, bb := color.YCbCrToRGB(src.Y[yi], src.Cb[ci], src.Cr[ci])
-				dpix[x+0] = rr
-				dpix[x+1] = gg
-				dpix[x+2] = bb
-				dpix[x+3] = 255
-			}
-		}
-	default:
-		return false
-	}
-	return true
 }
 
 // Decode reads a JPEG image from r and returns it as an image.Image.

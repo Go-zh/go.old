@@ -116,7 +116,7 @@ func (p *Parser) line() bool {
 		for {
 			tok = p.lex.Next()
 			if len(operands) == 0 && len(items) == 0 {
-				if p.arch.Thechar == '5' && tok == '.' {
+				if (p.arch.Thechar == '5' || p.arch.Thechar == '7') && tok == '.' {
 					// ARM conditionals.
 					tok = p.lex.Next()
 					str := p.lex.Text()
@@ -343,7 +343,7 @@ func (p *Parser) operand(a *obj.Addr) bool {
 				p.errorf("floating-point constant must be an immediate")
 			}
 			a.Type = obj.TYPE_FCONST
-			a.U.Dval = p.floatExpr()
+			a.Val = p.floatExpr()
 			// fmt.Printf("FCONST %s\n", obj.Dconv(&emptyProg, 0, a))
 			p.expect(scanner.EOF)
 			return true
@@ -357,7 +357,7 @@ func (p *Parser) operand(a *obj.Addr) bool {
 				p.errorf("string parse error: %s", err)
 			}
 			a.Type = obj.TYPE_SCONST
-			a.U.Sval = str
+			a.Val = str
 			// fmt.Printf("SCONST %s\n", obj.Dconv(&emptyProg, 0, a))
 			p.expect(scanner.EOF)
 			return true
@@ -461,7 +461,7 @@ func (p *Parser) register(name string, prefix rune) (r1, r2 int16, scale int8, o
 		char := p.arch.Thechar
 		switch p.next().ScanToken {
 		case ',':
-			if char != '5' {
+			if char != '5' && char != '7' {
 				p.errorf("illegal register pair syntax")
 				return
 			}
@@ -629,15 +629,17 @@ func (p *Parser) registerIndirect(a *obj.Addr, prefix rune) {
 	a.Reg = r1
 	if r2 != 0 {
 		// TODO: Consistency in the encoding would be nice here.
-		if p.arch.Thechar == '5' {
-			// Special form for ARM: destination register pair (R1, R2).
+		if p.arch.Thechar == '5' || p.arch.Thechar == '7' {
+			// Special form
+			// ARM: destination register pair (R1, R2).
+			// ARM64: register pair (R1, R2) for LDP/STP.
 			if prefix != 0 || scale != 0 {
 				p.errorf("illegal address mode for register pair")
 				return
 			}
 			a.Type = obj.TYPE_REGREG
 			a.Offset = int64(r2)
-			// Nothing may follow; this is always a pure destination.
+			// Nothing may follow
 			return
 		}
 		if p.arch.Thechar == '9' {

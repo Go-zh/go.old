@@ -60,7 +60,7 @@ TEXT runtime·rt0_go(SB),NOSPLIT,$-4
 	BL	runtime·schedinit(SB)
 
 	// create a new goroutine to start program
-	MOVW	$runtime·main·f(SB), R0
+	MOVW	$runtime·mainPC(SB), R0
 	MOVW.W	R0, -4(R13)
 	MOVW	$8, R0
 	MOVW.W	R0, -4(R13)
@@ -76,8 +76,8 @@ TEXT runtime·rt0_go(SB),NOSPLIT,$-4
 	MOVW	$1000, R1
 	MOVW	R0, (R1)	// fail hard
 
-DATA	runtime·main·f+0(SB)/4,$runtime·main(SB)
-GLOBL	runtime·main·f(SB),RODATA,$4
+DATA	runtime·mainPC+0(SB)/4,$runtime·main(SB)
+GLOBL	runtime·mainPC(SB),RODATA,$4
 
 TEXT runtime·breakpoint(SB),NOSPLIT,$0-0
 	// gdb won't skip this breakpoint instruction automatically,
@@ -782,6 +782,57 @@ eq:
 	MOVB	R0, ret+8(FP)
 	RET
 
+TEXT runtime·cmpstring(SB),NOSPLIT,$-4-20
+	MOVW	s1_base+0(FP), R2
+	MOVW	s1_len+4(FP), R0
+	MOVW	s2_base+8(FP), R3
+	MOVW	s2_len+12(FP), R1
+	ADD	$20, R13, R7
+	B	runtime·cmpbody(SB)
+
+TEXT bytes·Compare(SB),NOSPLIT,$-4-28
+	MOVW	s1+0(FP), R2
+	MOVW	s1+4(FP), R0
+	MOVW	s2+12(FP), R3
+	MOVW	s2+16(FP), R1
+	ADD	$28, R13, R7
+	B	runtime·cmpbody(SB)
+
+// On entry:
+// R0 is the length of s1
+// R1 is the length of s2
+// R2 points to the start of s1
+// R3 points to the start of s2
+// R7 points to return value (-1/0/1 will be written here)
+//
+// On exit:
+// R4, R5, and R6 are clobbered
+TEXT runtime·cmpbody(SB),NOSPLIT,$-4-0
+	CMP 	R0, R1
+	MOVW 	R0, R6
+	MOVW.LT	R1, R6	// R6 is min(R0, R1)
+
+	ADD	R2, R6	// R2 is current byte in s1, R6 is last byte in s1 to compare
+loop:
+	CMP	R2, R6
+	BEQ	samebytes // all compared bytes were the same; compare lengths
+	MOVBU.P	1(R2), R4
+	MOVBU.P	1(R3), R5
+	CMP	R4, R5
+	BEQ	loop
+	// bytes differed
+	MOVW.LT	$1, R0
+	MOVW.GT	$-1, R0
+	MOVW	R0, (R7)
+	RET
+samebytes:
+	CMP	R0, R1
+	MOVW.LT	$1, R0
+	MOVW.GT	$-1, R0
+	MOVW.EQ	$0, R0
+	MOVW	R0, (R7)
+	RET
+
 // eqstring tests whether two strings are equal.
 // The compiler guarantees that strings passed
 // to eqstring have equal length.
@@ -885,414 +936,6 @@ _sib_notfound:
 	MOVW	R0, ret+12(FP)
 	RET
 
-// A Duff's device for zeroing memory.
-// The compiler jumps to computed addresses within
-// this routine to zero chunks of memory.  Do not
-// change this code without also changing the code
-// in ../../cmd/5g/ggen.c:clearfat.
-// R0: zero
-// R1: ptr to memory to be zeroed
-// R1 is updated as a side effect.
-TEXT runtime·duffzero(SB),NOSPLIT,$0-0
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	MOVW.P	R0, 4(R1)
-	RET
-
-// A Duff's device for copying memory.
-// The compiler jumps to computed addresses within
-// this routine to copy chunks of memory.  Source
-// and destination must not overlap.  Do not
-// change this code without also changing the code
-// in ../../cmd/5g/cgen.c:sgen.
-// R0: scratch space
-// R1: ptr to source memory
-// R2: ptr to destination memory
-// R1 and R2 are updated as a side effect
-TEXT runtime·duffcopy(SB),NOSPLIT,$0-0
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	MOVW.P	4(R1), R0
-	MOVW.P	R0, 4(R2)
-	RET
-
 TEXT runtime·fastrand1(SB),NOSPLIT,$-4-4
 	MOVW	g_m(g), R1
 	MOVW	m_fastrand(R1), R0
@@ -1340,10 +983,6 @@ TEXT runtime·goexit(SB),NOSPLIT,$-4-0
 	BL	runtime·goexit1(SB)	// does not return
 	// traceback from goexit1 must hit code range of goexit
 	MOVW	R0, R0	// NOP
-
-TEXT runtime·getg(SB),NOSPLIT,$-4-4
-	MOVW	g, ret+0(FP)
-	RET
 
 TEXT runtime·prefetcht0(SB),NOSPLIT,$0-4
 	RET

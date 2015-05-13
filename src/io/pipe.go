@@ -192,9 +192,15 @@ func (w *PipeWriter) Close() error {
 }
 
 // CloseWithError closes the writer; subsequent reads from the
-// read half of the pipe will return no bytes and the error err.
+// read half of the pipe will return no bytes and the error err,
+// or EOF if err is nil.
+//
+// CloseWithError always returns nil.
 
-// CloseWithError 关闭写入器；关闭后如果对管道的读取端进行读取操作，就会返回错误 err 而不返回字节。
+// CloseWithError 关闭写入器；关闭后如果对管道的读取端进行读取操作，就会返回错误 err
+// 而不返回任何字节。
+//
+// CloseWithError 总是返回 nil。
 func (w *PipeWriter) CloseWithError(err error) error {
 	w.p.wclose(err)
 	return nil

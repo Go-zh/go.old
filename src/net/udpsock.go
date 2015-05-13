@@ -25,11 +25,11 @@ func (a *UDPAddr) String() string {
 	return JoinHostPort(ip, itoa(a.Port))
 }
 
-func (a *UDPAddr) toAddr() Addr {
-	if a == nil {
-		return nil
+func (a *UDPAddr) isWildcard() bool {
+	if a == nil || a.IP == nil {
+		return true
 	}
-	return a
+	return a.IP.IsUnspecified()
 }
 
 // ResolveUDPAddr parses addr as a UDP address of the form "host:port"
@@ -46,9 +46,9 @@ func ResolveUDPAddr(net, addr string) (*UDPAddr, error) {
 	default:
 		return nil, UnknownNetworkError(net)
 	}
-	a, err := resolveInternetAddr(net, addr, noDeadline)
+	addrs, err := internetAddrList(net, addr, noDeadline)
 	if err != nil {
 		return nil, err
 	}
-	return a.toAddr().(*UDPAddr), nil
+	return addrs.first(isIPv4).(*UDPAddr), nil
 }

@@ -46,14 +46,11 @@ var gactive uint32
 
 // do we need the carry bit
 func needc(p *obj.Prog) bool {
-	var info gc.ProgInfo
-
 	for p != nil {
-		info = proginfo(p)
-		if info.Flags&gc.UseCarry != 0 {
+		if p.Info.Flags&gc.UseCarry != 0 {
 			return true
 		}
-		if info.Flags&(gc.SetCarry|gc.KillCarry) != 0 {
+		if p.Info.Flags&(gc.SetCarry|gc.KillCarry) != 0 {
 			return false
 		}
 		p = p.Link
@@ -370,7 +367,6 @@ func subprop(r0 *gc.Flow) bool {
 	if !regtyp(v2) {
 		return false
 	}
-	var info gc.ProgInfo
 	for r := gc.Uniqp(r0); r != nil; r = gc.Uniqp(r) {
 		if gc.Debug['P'] != 0 && gc.Debug['v'] != 0 {
 			fmt.Printf("\t? %v\n", r.Prog)
@@ -382,16 +378,15 @@ func subprop(r0 *gc.Flow) bool {
 		if p.As == obj.AVARDEF || p.As == obj.AVARKILL {
 			continue
 		}
-		info = proginfo(p)
-		if info.Flags&gc.Call != 0 {
+		if p.Info.Flags&gc.Call != 0 {
 			return false
 		}
 
-		if info.Reguse|info.Regset != 0 {
+		if p.Info.Reguse|p.Info.Regset != 0 {
 			return false
 		}
 
-		if (info.Flags&gc.Move != 0) && (info.Flags&(gc.SizeL|gc.SizeQ|gc.SizeF|gc.SizeD) != 0) && p.To.Type == v1.Type && p.To.Reg == v1.Reg {
+		if (p.Info.Flags&gc.Move != 0) && (p.Info.Flags&(gc.SizeL|gc.SizeQ|gc.SizeF|gc.SizeD) != 0) && p.To.Type == v1.Type && p.To.Reg == v1.Reg {
 			copysub(&p.To, v1, v2, 1)
 			if gc.Debug['P'] != 0 {
 				fmt.Printf("gotit: %v->%v\n%v", gc.Ctxt.Dconv(v1), gc.Ctxt.Dconv(v2), r.Prog)
@@ -610,26 +605,24 @@ func copyu(p *obj.Prog, v *obj.Addr, s *obj.Addr) int {
 	if p.As == obj.AVARDEF || p.As == obj.AVARKILL {
 		return 0
 	}
-	var info gc.ProgInfo
-	info = proginfo(p)
 
-	if (info.Reguse|info.Regset)&RtoB(int(v.Reg)) != 0 {
+	if (p.Info.Reguse|p.Info.Regset)&RtoB(int(v.Reg)) != 0 {
 		return 2
 	}
 
-	if info.Flags&gc.LeftAddr != 0 {
+	if p.Info.Flags&gc.LeftAddr != 0 {
 		if copyas(&p.From, v) {
 			return 2
 		}
 	}
 
-	if info.Flags&(gc.RightRead|gc.RightWrite) == gc.RightRead|gc.RightWrite {
+	if p.Info.Flags&(gc.RightRead|gc.RightWrite) == gc.RightRead|gc.RightWrite {
 		if copyas(&p.To, v) {
 			return 2
 		}
 	}
 
-	if info.Flags&gc.RightWrite != 0 {
+	if p.Info.Flags&gc.RightWrite != 0 {
 		if copyas(&p.To, v) {
 			if s != nil {
 				return copysub(&p.From, v, s, 1)
@@ -641,7 +634,7 @@ func copyu(p *obj.Prog, v *obj.Addr, s *obj.Addr) int {
 		}
 	}
 
-	if info.Flags&(gc.LeftAddr|gc.LeftRead|gc.LeftWrite|gc.RightAddr|gc.RightRead|gc.RightWrite) != 0 {
+	if p.Info.Flags&(gc.LeftAddr|gc.LeftRead|gc.LeftWrite|gc.RightAddr|gc.RightRead|gc.RightWrite) != 0 {
 		if s != nil {
 			if copysub(&p.From, v, s, 1) != 0 {
 				return 1
@@ -679,7 +672,7 @@ func copyas(a *obj.Addr, v *obj.Addr) bool {
 	if regtyp(v) {
 		return true
 	}
-	if v.Type == obj.TYPE_MEM && (v.Name == obj.NAME_AUTO || v.Name == obj.NAME_PARAM) {
+	if (v.Type == obj.TYPE_MEM || v.Type == obj.TYPE_ADDR) && (v.Name == obj.NAME_AUTO || v.Name == obj.NAME_PARAM) {
 		if v.Offset == a.Offset {
 			return true
 		}
@@ -694,7 +687,7 @@ func sameaddr(a *obj.Addr, v *obj.Addr) bool {
 	if regtyp(v) {
 		return true
 	}
-	if v.Type == obj.TYPE_MEM && (v.Name == obj.NAME_AUTO || v.Name == obj.NAME_PARAM) {
+	if (v.Type == obj.TYPE_MEM || v.Type == obj.TYPE_ADDR) && (v.Name == obj.NAME_AUTO || v.Name == obj.NAME_PARAM) {
 		if v.Offset == a.Offset {
 			return true
 		}
@@ -710,7 +703,7 @@ func copyau(a *obj.Addr, v *obj.Addr) bool {
 		return true
 	}
 	if regtyp(v) {
-		if a.Type == obj.TYPE_MEM && a.Reg == v.Reg {
+		if (a.Type == obj.TYPE_MEM || a.Type == obj.TYPE_ADDR) && a.Reg == v.Reg {
 			return true
 		}
 		if a.Index == v.Reg {
@@ -739,7 +732,7 @@ func copysub(a *obj.Addr, v *obj.Addr, s *obj.Addr, f int) int {
 
 	if regtyp(v) {
 		reg := int(v.Reg)
-		if a.Type == obj.TYPE_MEM && int(a.Reg) == reg {
+		if (a.Type == obj.TYPE_MEM || a.Type == obj.TYPE_ADDR) && int(a.Reg) == reg {
 			if (s.Reg == x86.REG_BP) && a.Index != obj.TYPE_NONE {
 				return 1 /* can't use BP-base with index */
 			}
@@ -797,7 +790,7 @@ loop:
 					if p.From.Node == p0.From.Node {
 						if p.From.Offset == p0.From.Offset {
 							if p.From.Scale == p0.From.Scale {
-								if p.From.Type == obj.TYPE_FCONST && p.From.U.Dval == p0.From.U.Dval {
+								if p.From.Type == obj.TYPE_FCONST && p.From.Val.(float64) == p0.From.Val.(float64) {
 									if p.From.Index == p0.From.Index {
 										excise(r)
 										goto loop

@@ -6,12 +6,9 @@ package gc
 
 import (
 	"bytes"
+	"cmd/internal/gc/big"
 	"cmd/internal/obj"
 )
-
-// Copyright 2009 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
 
 // avoid <ctype.h>
 
@@ -60,26 +57,25 @@ const (
 )
 
 const (
-	Mpscale = 29         // safely smaller than bits in a long
-	Mpprec  = 16         // Mpscale*Mpprec is max number of bits
-	Mpnorm  = Mpprec - 1 // significant words in a normalized float
-	Mpbase  = 1 << Mpscale
-	Mpsign  = Mpbase >> 1
-	Mpmask  = Mpbase - 1
-	Mpdebug = 0
+	// Maximum size in bits for Mpints before signalling
+	// overflow and also mantissa precision for Mpflts.
+	Mpprec = 512
+	// Turn on for constant arithmetic debugging output.
+	Mpdebug = false
 )
 
+// Mpint represents an integer constant.
 type Mpint struct {
-	A   [Mpprec]int
-	Neg uint8
-	Ovf uint8
+	Val big.Int
+	Ovf bool // set if Val overflowed compiler limit (sticky)
 }
 
+// Mpflt represents a floating-point constant.
 type Mpflt struct {
-	Val Mpint
-	Exp int16
+	Val big.Float
 }
 
+// Mpcplx represents a complex constant.
 type Mpcplx struct {
 	Real Mpflt
 	Imag Mpflt
@@ -88,8 +84,7 @@ type Mpcplx struct {
 type Val struct {
 	Ctype int16
 	U     struct {
-		Reg  int16   // OREGISTER
-		Bval int16   // bool value CTBOOL
+		Bval bool    // bool value CTBOOL
 		Xval *Mpint  // int CTINT, rune CTRUNE
 		Fval *Mpflt  // float CTFLT
 		Cval *Mpcplx // float CTCPLX
@@ -112,7 +107,6 @@ type Pkg struct {
 type Sym struct {
 	Lexical   uint16
 	Flags     uint8
-	Sym       uint8 // huffman encoding in object file
 	Link      *Sym
 	Uniqgen   uint32
 	Importdef *Pkg   // where imported definition was found
@@ -127,6 +121,7 @@ type Sym struct {
 	Lastlineno int32  // last declaration for diagnostic
 	Origpkg    *Pkg   // original package for . import
 	Lsym       *obj.LSym
+	Fsym       *Sym // funcsym
 }
 
 type Type struct {
@@ -209,7 +204,6 @@ type Label struct {
 
 type InitEntry struct {
 	Xoffset int64 // struct, array only
-	Key     *Node // map only
 	Expr    *Node // bytes of run-time computed expressions
 }
 
@@ -219,19 +213,6 @@ type InitPlan struct {
 	Expr int64
 	E    []InitEntry
 }
-
-const (
-	EscUnknown = iota
-	EscHeap
-	EscScope
-	EscNone
-	EscReturn
-	EscNever
-	EscBits           = 3
-	EscMask           = (1 << EscBits) - 1
-	EscContentEscapes = 1 << EscBits // value obtained by indirect of parameter escapes to some returned result
-	EscReturnBits     = EscBits + 1
-)
 
 const (
 	SymExport   = 1 << 0 // to be exported
@@ -249,8 +230,6 @@ type Iter struct {
 	Done  int
 	Tfunc *Type
 	T     *Type
-	An    **Node
-	N     *Node
 }
 
 const (
@@ -328,7 +307,7 @@ const (
 
 // declaration context
 const (
-	Pxxx      = iota
+	Pxxx      = uint8(iota)
 	PEXTERN   // global variable
 	PAUTO     // local variables
 	PPARAM    // input arguments
@@ -338,7 +317,7 @@ const (
 
 	PDISCARD // discard during parse of duplicate import
 
-	PHEAP = 1 << 7 // an extra bit to identify an escaped variable
+	PHEAP = uint8(1 << 7) // an extra bit to identify an escaped variable
 )
 
 const (
@@ -354,30 +333,6 @@ const (
 	Eproc     = 1 << 10 // inside a go statement
 	Ecomplit  = 1 << 11 // type in composite literal
 )
-
-const (
-	BITS = 3
-	NVAR = BITS * 64
-)
-
-type Bits struct {
-	b [BITS]uint64
-}
-
-var zbits Bits
-
-type Var struct {
-	offset     int64
-	node       *Node
-	nextinnode *Var
-	width      int
-	id         int
-	name       int8
-	etype      int8
-	addr       int8
-}
-
-var var_ [NVAR]Var
 
 type Typedef struct {
 	Name   string
@@ -399,7 +354,6 @@ type Sig struct {
 type Io struct {
 	infile     string
 	bin        *obj.Biobuf
-	ilineno    int32
 	nlsemi     int
 	eofnl      int
 	last       int
@@ -500,8 +454,6 @@ var safemode int
 
 var nolocalimports int
 
-var namebuf string
-
 var lexbuf bytes.Buffer
 var strbuf bytes.Buffer
 
@@ -512,6 +464,7 @@ var Debug [256]int
 var debugstr string
 
 var Debug_checknil int
+var Debug_typeassert int
 
 var importmyname *Sym // my name for package
 
@@ -531,8 +484,6 @@ var Runtimepkg *Pkg // package runtime
 
 var racepkg *Pkg // package runtime/race
 
-var stringpkg *Pkg // fake package for C strings
-
 var typepkg *Pkg // fake package for runtime type info (headers)
 
 var typelinkpkg *Pkg // fake package for runtime type info (data)
@@ -542,8 +493,6 @@ var weaktypepkg *Pkg // weak references to runtime type info
 var unsafepkg *Pkg // package unsafe
 
 var trackpkg *Pkg // fake package for field tracking
-
-var rawpkg *Pkg // fake package for raw symbol names
 
 var Tptr int // either TPTR32 or TPTR64
 
@@ -615,7 +564,7 @@ var importlist *NodeList // imported functions and methods with inlinable bodies
 
 var funcsyms *NodeList
 
-var dclcontext int // PEXTERN/PAUTO
+var dclcontext uint8 // PEXTERN/PAUTO
 
 var incannedimport int
 
@@ -652,8 +601,6 @@ var Widthreg int
 var typesw *Node
 
 var nblank *Node
-
-var Use_sse int
 
 var hunk string
 
@@ -705,8 +652,6 @@ var breakpc *obj.Prog
 
 var Pc *obj.Prog
 
-var firstpc *obj.Prog
-
 var nodfp *Node
 
 var Disable_checknil int
@@ -744,12 +689,6 @@ type Graph struct {
 /*
  *	interface to back end
  */
-type ProgInfo struct {
-	Flags    uint32 // the bits below
-	Reguse   uint64 // registers implicitly used by this instruction
-	Regset   uint64 // registers implicitly set by this instruction
-	Regindex uint64 // registers used by addressing mode
-}
 
 const (
 	// Pseudo-op, like TEXT, GLOBL, TYPE, PCDATA, FUNCDATA.
@@ -805,46 +744,83 @@ const (
 )
 
 type Arch struct {
-	Thechar        int
-	Thestring      string
-	Thelinkarch    *obj.LinkArch
-	Typedefs       []Typedef
-	REGSP          int
-	REGCTXT        int
-	MAXWIDTH       int64
-	Anyregalloc    func() bool
-	Betypeinit     func()
-	Bgen           func(*Node, bool, int, *obj.Prog)
-	Cgen           func(*Node, *Node)
-	Cgen_call      func(*Node, int)
-	Cgen_callinter func(*Node, *Node, int)
-	Cgen_ret       func(*Node)
-	Clearfat       func(*Node)
-	Defframe       func(*obj.Prog)
-	Excise         func(*Flow)
-	Expandchecks   func(*obj.Prog)
-	Gclean         func()
-	Ginit          func()
-	Gins           func(int, *Node, *Node) *obj.Prog
-	Ginscall       func(*Node, int)
-	Igen           func(*Node, *Node, *Node)
-	Linkarchinit   func()
-	Peep           func(*obj.Prog)
-	Proginfo       func(*obj.Prog) ProgInfo
-	Regalloc       func(*Node, *Type, *Node)
-	Regfree        func(*Node)
-	Regtyp         func(*obj.Addr) bool
-	Sameaddr       func(*obj.Addr, *obj.Addr) bool
-	Smallindir     func(*obj.Addr, *obj.Addr) bool
-	Stackaddr      func(*obj.Addr) bool
-	Excludedregs   func() uint64
-	RtoB           func(int) uint64
-	FtoB           func(int) uint64
-	BtoR           func(uint64) int
-	BtoF           func(uint64) int
-	Optoas         func(int, *Type) int
-	Doregbits      func(int) uint64
-	Regnames       func(*int) []string
+	Thechar      int
+	Thestring    string
+	Thelinkarch  *obj.LinkArch
+	Typedefs     []Typedef
+	REGSP        int
+	REGCTXT      int
+	REGCALLX     int // BX
+	REGCALLX2    int // AX
+	REGRETURN    int // AX
+	REGMIN       int
+	REGMAX       int
+	REGZERO      int // architectural zero register, if available
+	FREGMIN      int
+	FREGMAX      int
+	MAXWIDTH     int64
+	ReservedRegs []int
+
+	AddIndex     func(*Node, int64, *Node) bool // optional
+	Betypeinit   func()
+	Bgen_float   func(*Node, bool, int, *obj.Prog) // optional
+	Cgen64       func(*Node, *Node)                // only on 32-bit systems
+	Cgenindex    func(*Node, *Node, bool) *obj.Prog
+	Cgen_bmul    func(int, *Node, *Node, *Node) bool
+	Cgen_float   func(*Node, *Node) // optional
+	Cgen_hmul    func(*Node, *Node, *Node)
+	Cgen_shift   func(int, bool, *Node, *Node, *Node)
+	Clearfat     func(*Node)
+	Cmp64        func(*Node, *Node, int, int, *obj.Prog) // only on 32-bit systems
+	Defframe     func(*obj.Prog)
+	Dodiv        func(int, *Node, *Node, *Node)
+	Excise       func(*Flow)
+	Expandchecks func(*obj.Prog)
+	Getg         func(*Node)
+	Gins         func(int, *Node, *Node) *obj.Prog
+
+	// Ginscmp generates code comparing n1 to n2 and jumping away if op is satisfied.
+	// The returned prog should be Patch'ed with the jump target.
+	// If op is not satisfied, code falls through to the next emitted instruction.
+	// Likely is the branch prediction hint: +1 for likely, -1 for unlikely, 0 for no opinion.
+	//
+	// Ginscmp must be able to handle all kinds of arguments for n1 and n2,
+	// not just simple registers, although it can assume that there are no
+	// function calls needed during the evaluation, so no in-memory temporaries
+	// are necessary.
+	Ginscmp func(op int, t *Type, n1, n2 *Node, likely int) *obj.Prog
+
+	// Ginsboolval inserts instructions to convert the result
+	// of a just-completed comparison to a boolean value.
+	// The first argument is the conditional jump instruction
+	// corresponding to the desired value.
+	// The second argument is the destination.
+	// If not present, Ginsboolval will be emulated with jumps.
+	Ginsboolval func(int, *Node)
+
+	Ginscon      func(int, int64, *Node)
+	Ginsnop      func()
+	Gmove        func(*Node, *Node)
+	Igenindex    func(*Node, *Node, bool) *obj.Prog
+	Linkarchinit func()
+	Peep         func(*obj.Prog)
+	Proginfo     func(*obj.Prog) // fills in Prog.Info
+	Regtyp       func(*obj.Addr) bool
+	Sameaddr     func(*obj.Addr, *obj.Addr) bool
+	Smallindir   func(*obj.Addr, *obj.Addr) bool
+	Stackaddr    func(*obj.Addr) bool
+	Blockcopy    func(*Node, *Node, int64, int64, int64)
+	Sudoaddable  func(int, *Node, *obj.Addr) bool
+	Sudoclean    func()
+	Excludedregs func() uint64
+	RtoB         func(int) uint64
+	FtoB         func(int) uint64
+	BtoR         func(uint64) int
+	BtoF         func(uint64) int
+	Optoas       func(int, *Type) int
+	Doregbits    func(int) uint64
+	Regnames     func(*int) []string
+	Use387       bool // should 8g use 387 FP instructions instead of sse2.
 }
 
 var pcloc int32

@@ -407,7 +407,6 @@ func subprop(r0 *gc.Flow) bool {
 	if !regtyp(v2) {
 		return false
 	}
-	var info gc.ProgInfo
 	for r := gc.Uniqp(r0); r != nil; r = gc.Uniqp(r) {
 		if gc.Uniqs(r) == nil {
 			break
@@ -416,12 +415,11 @@ func subprop(r0 *gc.Flow) bool {
 		if p.As == obj.AVARDEF || p.As == obj.AVARKILL {
 			continue
 		}
-		info = proginfo(p)
-		if info.Flags&gc.Call != 0 {
+		if p.Info.Flags&gc.Call != 0 {
 			return false
 		}
 
-		if info.Flags&(gc.RightRead|gc.RightWrite) == gc.RightWrite {
+		if p.Info.Flags&(gc.RightRead|gc.RightWrite) == gc.RightWrite {
 			if p.To.Type == v1.Type {
 				if p.To.Reg == v1.Reg {
 					copysub(&p.To, v1, v2, 1)
@@ -483,7 +481,7 @@ func copyprop(r0 *gc.Flow) bool {
 	v2 := (*obj.Addr)(&p.To)
 	if copyas(v1, v2) {
 		if gc.Debug['P'] != 0 {
-			fmt.Printf("eliminating self-move\n", r0.Prog)
+			fmt.Printf("eliminating self-move: %v\n", r0.Prog)
 		}
 		return true
 	}

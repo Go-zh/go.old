@@ -164,6 +164,7 @@ const (
 	Zbr
 	Zcall
 	Zcallcon
+	Zcallduff
 	Zcallind
 	Zcallindreg
 	Zib_
@@ -528,7 +529,7 @@ var ycall = []ytab{
 }
 
 var yduff = []ytab{
-	{Ynone, Ynone, Yi32, Zcall, 1},
+	{Ynone, Ynone, Yi32, Zcallduff, 1},
 }
 
 var yjmp = []ytab{
@@ -1903,6 +1904,9 @@ func instinit() {
 }
 
 func prefixof(ctxt *obj.Link, p *obj.Prog, a *obj.Addr) int {
+	if a.Reg < REG_CS && a.Index < REG_CS { // fast path
+		return 0
+	}
 	if a.Type == obj.TYPE_MEM && a.Name == obj.NAME_NONE {
 		switch a.Reg {
 		case REG_CS:
@@ -2024,6 +2028,7 @@ func oclass(ctxt *obj.Link, p *obj.Prog, a *obj.Addr) int {
 	case obj.TYPE_ADDR:
 		switch a.Name {
 		case obj.NAME_EXTERN,
+			obj.NAME_GOTREF,
 			obj.NAME_STATIC:
 			if a.Sym != nil && isextern(a.Sym) || p.Mode == 32 {
 				return Yi32
@@ -2134,8 +2139,7 @@ func oclass(ctxt *obj.Link, p *obj.Prog, a *obj.Addr) int {
 	case REG_CX:
 		return Ycx
 
-	case REG_DX,
-		REG_BX:
+	case REG_DX, REG_BX:
 		return Yrx
 
 	case REG_R8, /* not really Yrl */
@@ -2151,10 +2155,7 @@ func oclass(ctxt *obj.Link, p *obj.Prog, a *obj.Addr) int {
 		}
 		fallthrough
 
-	case REG_SP,
-		REG_BP,
-		REG_SI,
-		REG_DI:
+	case REG_SP, REG_BP, REG_SI, REG_DI:
 		if p.Mode == 32 {
 			return Yrl32
 		}
@@ -2437,6 +2438,7 @@ func vaddr(ctxt *obj.Link, p *obj.Prog, a *obj.Addr, r *obj.Reloc) int64 {
 
 	switch a.Name {
 	case obj.NAME_STATIC,
+		obj.NAME_GOTREF,
 		obj.NAME_EXTERN:
 		s := a.Sym
 		if r == nil {
@@ -2444,7 +2446,10 @@ func vaddr(ctxt *obj.Link, p *obj.Prog, a *obj.Addr, r *obj.Reloc) int64 {
 			log.Fatalf("reloc")
 		}
 
-		if isextern(s) || p.Mode != 64 {
+		if a.Name == obj.NAME_GOTREF {
+			r.Siz = 4
+			r.Type = obj.R_GOTPCREL
+		} else if isextern(s) || p.Mode != 64 {
 			r.Siz = 4
 			r.Type = obj.R_ADDR
 		} else {
@@ -2455,11 +2460,6 @@ func vaddr(ctxt *obj.Link, p *obj.Prog, a *obj.Addr, r *obj.Reloc) int64 {
 		r.Off = -1 // caller must fill in
 		r.Sym = s
 		r.Add = a.Offset
-		if s.Type == obj.STLSBSS {
-			r.Xadd = r.Add - int64(r.Siz)
-			r.Type = obj.R_TLS
-			r.Xsym = s
-		}
 
 		return 0
 	}
@@ -2519,6 +2519,7 @@ func asmandsz(ctxt *obj.Link, p *obj.Prog, a *obj.Addr, r int, rex int, m64 int)
 		base := int(a.Reg)
 		switch a.Name {
 		case obj.NAME_EXTERN,
+			obj.NAME_GOTREF,
 			obj.NAME_STATIC:
 			if !isextern(a.Sym) && p.Mode == 64 {
 				goto bad
@@ -2564,6 +2565,7 @@ func asmandsz(ctxt *obj.Link, p *obj.Prog, a *obj.Addr, r int, rex int, m64 int)
 	base = int(a.Reg)
 	switch a.Name {
 	case obj.NAME_STATIC,
+		obj.NAME_GOTREF,
 		obj.NAME_EXTERN:
 		if a.Sym == nil {
 			ctxt.Diag("bad addr: %v", p)
@@ -2582,7 +2584,10 @@ func asmandsz(ctxt *obj.Link, p *obj.Prog, a *obj.Addr, r int, rex int, m64 int)
 
 	ctxt.Rexflag |= regrex[base]&Rxb | rex
 	if base == REG_NONE || (REG_CS <= base && base <= REG_GS) || base == REG_TLS {
-		if (a.Sym == nil || !isextern(a.Sym)) && base == REG_NONE && (a.Name == obj.NAME_STATIC || a.Name == obj.NAME_EXTERN) || p.Mode != 64 {
+		if (a.Sym == nil || !isextern(a.Sym)) && base == REG_NONE && (a.Name == obj.NAME_STATIC || a.Name == obj.NAME_EXTERN || a.Name == obj.NAME_GOTREF) || p.Mode != 64 {
+			if a.Name == obj.NAME_GOTREF && (a.Offset != 0 || a.Index != 0 || a.Scale != 0) {
+				ctxt.Diag("%v has offset against gotref", p)
+			}
 			ctxt.Andptr[0] = byte(0<<6 | 5<<0 | r<<3)
 			ctxt.Andptr = ctxt.Andptr[1:]
 			goto putrelv
@@ -2622,7 +2627,7 @@ func asmandsz(ctxt *obj.Link, p *obj.Prog, a *obj.Addr, r int, rex int, m64 int)
 	if REG_AX <= base && base <= REG_R15 {
 		if a.Index == REG_TLS && ctxt.Flag_shared == 0 {
 			rel = obj.Reloc{}
-			rel.Type = obj.R_TLS_IE
+			rel.Type = obj.R_TLS_LE
 			rel.Siz = 4
 			rel.Sym = nil
 			rel.Add = int64(v)
@@ -2837,9 +2842,7 @@ var ymovtab = []Movtab{
 
 func isax(a *obj.Addr) bool {
 	switch a.Reg {
-	case REG_AX,
-		REG_AL,
-		REG_AH:
+	case REG_AX, REG_AL, REG_AH:
 		return true
 	}
 
@@ -2881,10 +2884,7 @@ func subreg(p *obj.Prog, from int, to int) {
 
 func mediaop(ctxt *obj.Link, o *Optab, op int, osize int, z int) int {
 	switch op {
-	case Pm,
-		Pe,
-		Pf2,
-		Pf3:
+	case Pm, Pe, Pf2, Pf3:
 		if osize != 1 {
 			if op != Pm {
 				ctxt.Andptr[0] = byte(op)
@@ -2908,6 +2908,15 @@ func mediaop(ctxt *obj.Link, o *Optab, op int, osize int, z int) int {
 	ctxt.Andptr[0] = byte(op)
 	ctxt.Andptr = ctxt.Andptr[1:]
 	return z
+}
+
+var bpduff1 = []byte{
+	0x48, 0x89, 0x6c, 0x24, 0xf0, // MOVQ BP, -16(SP)
+	0x48, 0x8d, 0x6c, 0x24, 0xf0, // LEAQ -16(SP), BP
+}
+
+var bpduff2 = []byte{
+	0x48, 0x8b, 0x6d, 0x00, // MOVQ 0(BP), BP
 }
 
 func doasm(ctxt *obj.Link, p *obj.Prog) {
@@ -2976,7 +2985,7 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 	f3t := int(p.F3t) * Ymax
 	tt := int(p.Tt) * Ymax
 
-	xo := bool2int(o.op[0] == 0x0f)
+	xo := obj.Bool2int(o.op[0] == 0x0f)
 	z := 0
 	var a *obj.Addr
 	var l int
@@ -2985,8 +2994,8 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 	var r *obj.Reloc
 	var rel obj.Reloc
 	var v int64
-	var yt ytab
-	for _, yt = range o.ytab {
+	for i := range o.ytab {
+		yt := &o.ytab[i]
 		if ycover[ft+int(yt.from)] != 0 && ycover[f3t+int(yt.from3)] != 0 && ycover[tt+int(yt.to)] != 0 {
 			switch o.prefix {
 			case Px1: /* first option valid only in 32-bit mode */
@@ -3241,8 +3250,7 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 				ctxt.Andptr[0] = byte(vaddr(ctxt, p, &p.From, nil))
 				ctxt.Andptr = ctxt.Andptr[1:]
 
-			case Z_ib,
-				Zib_:
+			case Z_ib, Zib_:
 				if yt.zcase == Zib_ {
 					a = &p.From
 				} else {
@@ -3334,8 +3342,7 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 				ctxt.Andptr[0] = byte(vaddr(ctxt, p, &p.From, nil))
 				ctxt.Andptr = ctxt.Andptr[1:]
 
-			case Z_il,
-				Zil_:
+			case Z_il, Zil_:
 				if yt.zcase == Zil_ {
 					a = &p.From
 				} else {
@@ -3353,8 +3360,7 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 					relput4(ctxt, p, a)
 				}
 
-			case Zm_ilo,
-				Zilo_m:
+			case Zm_ilo, Zilo_m:
 				ctxt.Andptr[0] = byte(op)
 				ctxt.Andptr = ctxt.Andptr[1:]
 				if yt.zcase == Zilo_m {
@@ -3433,12 +3439,27 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 				r.Sym = p.To.Sym
 				put4(ctxt, 0)
 
-			case Zcall:
+			case Zcall, Zcallduff:
 				if p.To.Sym == nil {
 					ctxt.Diag("call without target")
 					log.Fatalf("bad code")
 				}
 
+				if yt.zcase == Zcallduff && ctxt.Flag_dynlink {
+					ctxt.Diag("directly calling duff when dynamically linking Go")
+				}
+
+				if obj.Framepointer_enabled != 0 && yt.zcase == Zcallduff && p.Mode == 64 {
+					// Maintain BP around call, since duffcopy/duffzero can't do it
+					// (the call jumps into the middle of the function).
+					// This makes it possible to see call sites for duffcopy/duffzero in
+					// BP-based profiling tools like Linux perf (which is the
+					// whole point of obj.Framepointer_enabled).
+					// MOVQ BP, -16(SP)
+					// LEAQ -16(SP), BP
+					copy(ctxt.Andptr, bpduff1)
+					ctxt.Andptr = ctxt.Andptr[len(bpduff1):]
+				}
 				ctxt.Andptr[0] = byte(op)
 				ctxt.Andptr = ctxt.Andptr[1:]
 				r = obj.Addrel(ctxt.Cursym)
@@ -3449,10 +3470,15 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 				r.Siz = 4
 				put4(ctxt, 0)
 
-				// TODO: jump across functions needs reloc
-			case Zbr,
-				Zjmp,
-				Zloop:
+				if obj.Framepointer_enabled != 0 && yt.zcase == Zcallduff && p.Mode == 64 {
+					// Pop BP pushed above.
+					// MOVQ 0(BP), BP
+					copy(ctxt.Andptr, bpduff2)
+					ctxt.Andptr = ctxt.Andptr[len(bpduff2):]
+				}
+
+			// TODO: jump across functions needs reloc
+			case Zbr, Zjmp, Zloop:
 				if p.To.Sym != nil {
 					if yt.zcase != Zjmp {
 						ctxt.Diag("branch to ATEXT")
@@ -3801,6 +3827,32 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 					default:
 						log.Fatalf("unknown TLS base location for %s", obj.Headstr(ctxt.Headtype))
 
+					case obj.Hlinux:
+						if ctxt.Flag_shared == 0 {
+							log.Fatalf("unknown TLS base location for linux without -shared")
+						}
+						// Note that this is not generating the same insn as the other cases.
+						//     MOV TLS, R_to
+						// becomes
+						//     movq g@gottpoff(%rip), R_to
+						// which is encoded as
+						//     movq 0(%rip), R_to
+						// and a R_TLS_IE reloc. This all assumes the only tls variable we access
+						// is g, which we can't check here, but will when we assemble the second
+						// instruction.
+						ctxt.Rexflag = Pw | (regrex[p.To.Reg] & Rxr)
+
+						ctxt.Andptr[0] = 0x8B
+						ctxt.Andptr = ctxt.Andptr[1:]
+						ctxt.Andptr[0] = byte(0x05 | (reg[p.To.Reg] << 3))
+						ctxt.Andptr = ctxt.Andptr[1:]
+						r = obj.Addrel(ctxt.Cursym)
+						r.Off = int32(p.Pc + int64(-cap(ctxt.Andptr)+cap(ctxt.And[:])))
+						r.Type = obj.R_TLS_IE
+						r.Siz = 4
+						r.Add = -4
+						put4(ctxt, 0)
+
 					case obj.Hplan9:
 						if ctxt.Plan9privates == nil {
 							ctxt.Plan9privates = obj.Linklookup(ctxt, "_privates", 0)
@@ -3991,24 +4043,16 @@ func byteswapreg(ctxt *obj.Link, a *obj.Addr) int {
 			cand = 0
 			cana = cand
 
-		case REG_AX,
-			REG_AL,
-			REG_AH:
+		case REG_AX, REG_AL, REG_AH:
 			cana = 0
 
-		case REG_BX,
-			REG_BL,
-			REG_BH:
+		case REG_BX, REG_BL, REG_BH:
 			canb = 0
 
-		case REG_CX,
-			REG_CL,
-			REG_CH:
+		case REG_CX, REG_CL, REG_CH:
 			canc = 0
 
-		case REG_DX,
-			REG_DL,
-			REG_DH:
+		case REG_DX, REG_DL, REG_DH:
 			cand = 0
 		}
 	}
@@ -4243,10 +4287,7 @@ func asmins(ctxt *obj.Link, p *obj.Prog) {
 			copy(ctxt.Andptr, naclstos)
 			ctxt.Andptr = ctxt.Andptr[len(naclstos):]
 
-		case AMOVSB,
-			AMOVSW,
-			AMOVSL,
-			AMOVSQ:
+		case AMOVSB, AMOVSW, AMOVSL, AMOVSQ:
 			copy(ctxt.Andptr, naclmovs)
 			ctxt.Andptr = ctxt.Andptr[len(naclmovs):]
 		}
@@ -4310,7 +4351,14 @@ func asmins(ctxt *obj.Link, p *obj.Prog) {
 		if ctxt.Rexflag != 0 {
 			r.Off++
 		}
-		if r.Type == obj.R_PCREL || r.Type == obj.R_CALL {
+		if r.Type == obj.R_PCREL {
+			// PC-relative addressing is relative to the end of the instruction,
+			// but the relocations applied by the linker are relative to the end
+			// of the relocation. Because immediate instruction
+			// arguments can follow the PC-relative memory reference in the
+			// instruction encoding, the two may not coincide. In this case,
+			// adjust addend so that linker can keep relocating relative to the
+			// end of the relocation.
 			r.Add -= p.Pc + int64(n) - (int64(r.Off) + int64(r.Siz))
 		}
 	}

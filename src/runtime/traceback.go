@@ -44,7 +44,11 @@ var (
 	bgsweepPC            uintptr
 	forcegchelperPC      uintptr
 	timerprocPC          uintptr
+	gcBgMarkWorkerPC     uintptr
 	systemstack_switchPC uintptr
+	systemstackPC        uintptr
+
+	gogoPC uintptr
 
 	externalthreadhandlerp uintptr // initialized elsewhere
 )
@@ -66,7 +70,12 @@ func tracebackinit() {
 	bgsweepPC = funcPC(bgsweep)
 	forcegchelperPC = funcPC(forcegchelper)
 	timerprocPC = funcPC(timerproc)
+	gcBgMarkWorkerPC = funcPC(gcBgMarkWorker)
 	systemstack_switchPC = funcPC(systemstack_switch)
+	systemstackPC = funcPC(systemstack)
+
+	// used by sigprof handler
+	gogoPC = funcPC(gogo)
 }
 
 // Traceback over the deferred function calls.
@@ -192,7 +201,14 @@ func gentraceback(pc0, sp0, lr0 uintptr, gp *g, skip int, pcbuf *uintptr, max in
 		// Found an actual function.
 		// Derive frame pointer and link register.
 		if frame.fp == 0 {
-			frame.fp = frame.sp + uintptr(funcspdelta(f, frame.pc))
+			// We want to jump over the systemstack switch. If we're running on the
+			// g0, this systemstack is at the top of the stack.
+			// if we're not on g0 or there's a no curg, then this is a regular call.
+			sp := frame.sp
+			if flags&_TraceJumpStack != 0 && f.entry == systemstackPC && gp == g.m.g0 && gp.m.curg != nil {
+				sp = gp.m.curg.sched.sp
+			}
+			frame.fp = sp + uintptr(funcspdelta(f, frame.pc))
 			if !usesLR {
 				// On x86, call instruction pushes return PC before entering new function.
 				frame.fp += regSize
@@ -357,6 +373,10 @@ func gentraceback(pc0, sp0, lr0 uintptr, gp *g, skip int, pcbuf *uintptr, max in
 		if usesLR && waspanic {
 			x := *(*uintptr)(unsafe.Pointer(frame.sp))
 			frame.sp += ptrSize
+			if GOARCH == "arm64" {
+				// arm64 needs 16-byte aligned SP, always
+				frame.sp += ptrSize
+			}
 			f = findfunc(frame.pc)
 			frame.fn = f
 			if f == nil {
@@ -524,7 +544,7 @@ func gcallers(gp *g, skip int, pcbuf []uintptr) int {
 
 func showframe(f *_func, gp *g) bool {
 	g := getg()
-	if g.m.throwing > 0 && gp != nil && (gp == g.m.curg || gp == g.m.caughtsig) {
+	if g.m.throwing > 0 && gp != nil && (gp == g.m.curg || gp == g.m.caughtsig.ptr()) {
 		return true
 	}
 	traceback := gotraceback(nil)
@@ -621,7 +641,11 @@ func tracebackothers(me *g) {
 		}
 		print("\n")
 		goroutineheader(gp)
-		if readgstatus(gp)&^_Gscan == _Grunning {
+		// Note: gp.m == g.m occurs when tracebackothers is
+		// called from a signal handler initiated during a
+		// systemstack call.  The original G is still in the
+		// running state, and we want to print its stack.
+		if gp.m != g.m && readgstatus(gp)&^_Gscan == _Grunning {
 			print("\tgoroutine running on other thread; stack unavailable\n")
 			printcreatedby(gp)
 		} else {
@@ -642,7 +666,7 @@ func topofstack(f *_func) bool {
 		externalthreadhandlerp != 0 && pc == externalthreadhandlerp
 }
 
-// isSystemGoroutine returns true if the goroutine g must be omitted in
+// isSystemGoroutine reports whether the goroutine g must be omitted in
 // stack dumps and deadlock detector.
 func isSystemGoroutine(gp *g) bool {
 	pc := gp.startpc
@@ -650,5 +674,6 @@ func isSystemGoroutine(gp *g) bool {
 		pc == backgroundgcPC ||
 		pc == bgsweepPC ||
 		pc == forcegchelperPC ||
-		pc == timerprocPC
+		pc == timerprocPC ||
+		pc == gcBgMarkWorkerPC
 }

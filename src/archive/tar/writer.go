@@ -372,7 +372,7 @@ func paxHeader(msg string) string {
 // 返回ErrWriteTooLong错误。
 func (tw *Writer) Write(b []byte) (n int, err error) {
 	if tw.closed {
-		err = ErrWriteTooLong
+		err = ErrWriteAfterClose
 		return
 	}
 	overwrite := false

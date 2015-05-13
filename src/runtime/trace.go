@@ -21,7 +21,7 @@ const (
 	traceEvFrequency      = 2  // contains tracer timer frequency [frequency (ticks per second)]
 	traceEvStack          = 3  // stack [stack id, number of PCs, array of PCs]
 	traceEvGomaxprocs     = 4  // current value of GOMAXPROCS [timestamp, GOMAXPROCS, stack id]
-	traceEvProcStart      = 5  // start of P [timestamp]
+	traceEvProcStart      = 5  // start of P [timestamp, thread id]
 	traceEvProcStop       = 6  // stop of P [timestamp]
 	traceEvGCStart        = 7  // GC start [timestamp, stack id]
 	traceEvGCDone         = 8  // GC done [timestamp]
@@ -45,22 +45,28 @@ const (
 	traceEvGoBlockCond    = 26 // goroutine blocks on Cond [timestamp, stack]
 	traceEvGoBlockNet     = 27 // goroutine blocks on network [timestamp, stack]
 	traceEvGoSysCall      = 28 // syscall enter [timestamp, stack]
-	traceEvGoSysExit      = 29 // syscall exit [timestamp, goroutine id]
+	traceEvGoSysExit      = 29 // syscall exit [timestamp, goroutine id, real timestamp]
 	traceEvGoSysBlock     = 30 // syscall blocks [timestamp]
 	traceEvGoWaiting      = 31 // denotes that goroutine is blocked when tracing starts [goroutine id]
 	traceEvGoInSyscall    = 32 // denotes that goroutine is in syscall when tracing starts [goroutine id]
-	traceEvHeapAlloc      = 33 // memstats.heap_alloc change [timestamp, heap_alloc]
+	traceEvHeapAlloc      = 33 // memstats.heap_live change [timestamp, heap_alloc]
 	traceEvNextGC         = 34 // memstats.next_gc change [timestamp, next_gc]
 	traceEvTimerGoroutine = 35 // denotes timer goroutine [timer goroutine id]
-	traceEvCount          = 36
+	traceEvFutileWakeup   = 36 // denotes that the previous wakeup of this goroutine was futile [timestamp]
+	traceEvCount          = 37
 )
 
 const (
 	// Timestamps in trace are cputicks/traceTickDiv.
 	// This makes absolute values of timestamp diffs smaller,
 	// and so they are encoded in less number of bytes.
-	// 64 is somewhat arbitrary (one tick is ~20ns on a 3GHz machine).
-	traceTickDiv = 64
+	// 64 on x86 is somewhat arbitrary (one tick is ~20ns on a 3GHz machine).
+	// The suggested increment frequency for PowerPC's time base register is
+	// 512 MHz according to Power ISA v2.07 section 6.2, so we use 16 on ppc64
+	// and ppc64le.
+	// Tracing won't work reliably for architectures where cputicks is emulated
+	// by nanotime, so the value doesn't matter for those architectures.
+	traceTickDiv = 16 + 48*(goarch_386|goarch_amd64|goarch_amd64p32)
 	// Maximum number of PCs in a single stack trace.
 	// Since events contain only stack id rather than whole stack trace,
 	// we can allow quite large values here.
@@ -71,6 +77,13 @@ const (
 	traceBytesPerNumber = 10
 	// Shift of the number of arguments in the first event byte.
 	traceArgCountShift = 6
+	// Flag passed to traceGoPark to denote that the previous wakeup of this
+	// goroutine was futile. For example, a goroutine was unblocked on a mutex,
+	// but another goroutine got ahead and acquired the mutex before the first
+	// goroutine is scheduled, so the first goroutine has to block again.
+	// Such wakeups happen on buffered channels and sync.Mutex,
+	// but are generally not interesting for end user.
+	traceFutileWakeup byte = 128
 )
 
 // trace is global tracing context.
@@ -498,7 +511,7 @@ func traceEvent(ev byte, skip int, args ...uint64) {
 // traceAcquireBuffer returns trace buffer to use and, if necessary, locks it.
 func traceAcquireBuffer() (mp *m, pid int32, bufp **traceBuf) {
 	mp = acquirem()
-	if p := mp.p; p != nil {
+	if p := mp.p.ptr(); p != nil {
 		return mp, p.id, &p.tracebuf
 	}
 	lock(&trace.bufLock)
@@ -716,7 +729,7 @@ func traceGomaxprocs(procs int32) {
 }
 
 func traceProcStart() {
-	traceEvent(traceEvProcStart, -1)
+	traceEvent(traceEvProcStart, -1, uint64(getg().m.id))
 }
 
 func traceProcStop(pp *p) {
@@ -724,7 +737,7 @@ func traceProcStop(pp *p) {
 	// to handle this we temporary employ the P.
 	mp := acquirem()
 	oldp := mp.p
-	mp.p = pp
+	mp.p.set(pp)
 	traceEvent(traceEvProcStop, -1)
 	mp.p = oldp
 	releasem(mp)
@@ -775,7 +788,10 @@ func traceGoPreempt() {
 }
 
 func traceGoPark(traceEv byte, skip int, gp *g) {
-	traceEvent(traceEv, skip)
+	if traceEv&traceFutileWakeup != 0 {
+		traceEvent(traceEvFutileWakeup, -1)
+	}
+	traceEvent(traceEv & ^traceFutileWakeup, skip)
 }
 
 func traceGoUnpark(gp *g, skip int) {
@@ -786,8 +802,8 @@ func traceGoSysCall() {
 	traceEvent(traceEvGoSysCall, 4)
 }
 
-func traceGoSysExit() {
-	traceEvent(traceEvGoSysExit, -1, uint64(getg().m.curg.goid))
+func traceGoSysExit(ts int64) {
+	traceEvent(traceEvGoSysExit, -1, uint64(getg().m.curg.goid), uint64(ts)/traceTickDiv)
 }
 
 func traceGoSysBlock(pp *p) {
@@ -795,14 +811,14 @@ func traceGoSysBlock(pp *p) {
 	// to handle this we temporary employ the P.
 	mp := acquirem()
 	oldp := mp.p
-	mp.p = pp
+	mp.p.set(pp)
 	traceEvent(traceEvGoSysBlock, -1)
 	mp.p = oldp
 	releasem(mp)
 }
 
 func traceHeapAlloc() {
-	traceEvent(traceEvHeapAlloc, -1, memstats.heap_alloc)
+	traceEvent(traceEvHeapAlloc, -1, memstats.heap_live)
 }
 
 func traceNextGC() {

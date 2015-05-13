@@ -23,7 +23,7 @@ var MAXWIDTH int64 = (1 << 32) - 1
 
 /*
  * go declares several platform-specific type aliases:
- * int, uint, float, and uintptr
+ * int, uint, and uintptr
  */
 var typedefs = []gc.Typedef{
 	gc.Typedef{"int", gc.TINT, gc.TINT32},
@@ -35,7 +35,6 @@ func betypeinit() {
 	gc.Widthptr = 4
 	gc.Widthint = 4
 	gc.Widthreg = 4
-
 }
 
 func main() {
@@ -45,32 +44,42 @@ func main() {
 	gc.Thearch.Typedefs = typedefs
 	gc.Thearch.REGSP = arm.REGSP
 	gc.Thearch.REGCTXT = arm.REGCTXT
+	gc.Thearch.REGCALLX = arm.REG_R1
+	gc.Thearch.REGCALLX2 = arm.REG_R2
+	gc.Thearch.REGRETURN = arm.REG_R0
+	gc.Thearch.REGMIN = arm.REG_R0
+	gc.Thearch.REGMAX = arm.REGEXT
+	gc.Thearch.FREGMIN = arm.REG_F0
+	gc.Thearch.FREGMAX = arm.FREGEXT
 	gc.Thearch.MAXWIDTH = MAXWIDTH
-	gc.Thearch.Anyregalloc = anyregalloc
+	gc.Thearch.ReservedRegs = resvd
+
 	gc.Thearch.Betypeinit = betypeinit
-	gc.Thearch.Bgen = bgen
-	gc.Thearch.Cgen = cgen
-	gc.Thearch.Cgen_call = cgen_call
-	gc.Thearch.Cgen_callinter = cgen_callinter
-	gc.Thearch.Cgen_ret = cgen_ret
+	gc.Thearch.Cgen64 = cgen64
+	gc.Thearch.Cgen_hmul = cgen_hmul
+	gc.Thearch.Cgen_shift = cgen_shift
 	gc.Thearch.Clearfat = clearfat
+	gc.Thearch.Cmp64 = cmp64
 	gc.Thearch.Defframe = defframe
 	gc.Thearch.Excise = excise
 	gc.Thearch.Expandchecks = expandchecks
-	gc.Thearch.Gclean = gclean
-	gc.Thearch.Ginit = ginit
+	gc.Thearch.Getg = getg
 	gc.Thearch.Gins = gins
-	gc.Thearch.Ginscall = ginscall
-	gc.Thearch.Igen = igen
+	gc.Thearch.Ginscmp = ginscmp
+	gc.Thearch.Ginscon = ginscon
+	gc.Thearch.Ginsnop = ginsnop
+	gc.Thearch.Gmove = gmove
+	gc.Thearch.Cgenindex = cgenindex
 	gc.Thearch.Linkarchinit = linkarchinit
 	gc.Thearch.Peep = peep
 	gc.Thearch.Proginfo = proginfo
-	gc.Thearch.Regalloc = regalloc
-	gc.Thearch.Regfree = regfree
 	gc.Thearch.Regtyp = regtyp
 	gc.Thearch.Sameaddr = sameaddr
 	gc.Thearch.Smallindir = smallindir
 	gc.Thearch.Stackaddr = stackaddr
+	gc.Thearch.Blockcopy = blockcopy
+	gc.Thearch.Sudoaddable = sudoaddable
+	gc.Thearch.Sudoclean = sudoclean
 	gc.Thearch.Excludedregs = excludedregs
 	gc.Thearch.RtoB = RtoB
 	gc.Thearch.FtoB = RtoB

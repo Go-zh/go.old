@@ -783,7 +783,7 @@ to construct an agent noun: <code>Reader</code>,
 </div>
 
 <p>
-按照约定，只包含一个方法的接口应当以该方法的名称加上-er后缀来命名，如
+按照约定，只包含一个方法的接口应当以该方法的名称加上-er后缀或类似的修饰来构造一个施动着名词，如
 <code>Reader</code>、<code>Writer</code>、
 <code>Formatter</code>、<code>CloseNotifier</code> 等。
 </p>
@@ -1604,7 +1604,7 @@ var t interface{}
 t = functionOfSomeType()
 switch t := t.(type) {
 default:
-	fmt.Printf("unexpected type %T", t)       // %T prints whatever type t has
+	fmt.Printf("unexpected type %T\n", t)       // %T prints whatever type t has
 case bool:
 	fmt.Printf("boolean %t\n", t)             // t has type bool
 case int:
@@ -1627,7 +1627,7 @@ var t interface{}
 t = functionOfSomeType()
 switch t := t.(type) {
 default:
-	fmt.Printf("unexpected type %T", t)       // %T 输出 t 是什么类型
+	fmt.Printf("unexpected type %T\n", t)     // %T 输出 t 是什么类型
 case bool:
 	fmt.Printf("boolean %t\n", t)             // t 是 bool 类型
 case int:
@@ -2531,7 +2531,7 @@ limit of how much data to read.  Here is the signature of the
 </p>
 
 <pre>
-func (file *File) Read(buf []byte) (n int, err error)
+func (f *File) Read(buf []byte) (n int, err error)
 </pre>
 
 <div class="english">
