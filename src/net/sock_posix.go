@@ -17,8 +17,6 @@ import (
 type sockaddr interface {
 	Addr
 
-	netaddr
-
 	// family returns the platform-dependent address family
 	// identifier.
 	family() int
@@ -42,11 +40,11 @@ func socket(net string, family, sotype, proto int, ipv6only bool, laddr, raddr s
 		return nil, err
 	}
 	if err = setDefaultSockopts(s, family, sotype, ipv6only); err != nil {
-		closesocket(s)
+		closeFunc(s)
 		return nil, err
 	}
 	if fd, err = newFD(s, family, sotype, net); err != nil {
-		closesocket(s)
+		closeFunc(s)
 		return nil, err
 	}
 
@@ -165,7 +163,7 @@ func (fd *netFD) listenStream(laddr sockaddr, backlog int) error {
 			return os.NewSyscallError("bind", err)
 		}
 	}
-	if err := syscall.Listen(fd.sysfd, backlog); err != nil {
+	if err := listenFunc(fd.sysfd, backlog); err != nil {
 		return os.NewSyscallError("listen", err)
 	}
 	if err := fd.init(); err != nil {

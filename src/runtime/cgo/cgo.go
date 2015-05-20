@@ -16,8 +16,9 @@ package cgo
 
 /*
 
-#cgo darwin,!arm LDFLAGS: -lpthread
+#cgo darwin,!arm,!arm64 LDFLAGS: -lpthread
 #cgo darwin,arm LDFLAGS: -framework CoreFoundation
+#cgo darwin,arm64 LDFLAGS: -framework CoreFoundation
 #cgo dragonfly LDFLAGS: -lpthread
 #cgo freebsd LDFLAGS: -lpthread
 #cgo android LDFLAGS: -llog
@@ -27,6 +28,8 @@ package cgo
 #cgo windows LDFLAGS: -lm -mthreads
 
 #cgo CFLAGS: -Wall -Werror
+
+#cgo solaris CPPFLAGS: -D_POSIX_PTHREAD_SEMANTICS
 
 */
 import "C"

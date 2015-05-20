@@ -44,7 +44,7 @@
 //     }
 //
 // The benchmark function must run the target code b.N times.
-// During benchark execution, b.N is adjusted until the benchmark function lasts
+// During benchmark execution, b.N is adjusted until the benchmark function lasts
 // long enough to be timed reliably.  The output
 //     BenchmarkHello    10000000    282 ns/op
 // means that the loop ran 10000000 times at a speed of 282 ns per loop.
@@ -130,13 +130,17 @@
 // then the generated test will call TestMain(m) instead of running the tests
 // directly. TestMain runs in the main goroutine and can do whatever setup
 // and teardown is necessary around a call to m.Run. It should then call
-// os.Exit with the result of m.Run.
+// os.Exit with the result of m.Run. When TestMain is called, flag.Parse has
+// not been run. If TestMain depends on command-line flags, including those
+// of the testing package, it should call flag.Parse explicitly.
 //
-// The minimal implementation of TestMain is:
+// A simple implementation of TestMain is:
 //
-//	func TestMain(m *testing.M) { os.Exit(m.Run()) }
+//	func TestMain(m *testing.M) {
+//		flag.Parse()
+//		os.Exit(m.Run())
+//	}
 //
-// In effect, that is the implementation used when no TestMain is explicitly defined.
 package testing
 
 import (
@@ -338,13 +342,15 @@ func (c *common) log(s string) {
 }
 
 // Log formats its arguments using default formatting, analogous to Println,
-// and records the text in the error log. The text will be printed only if
-// the test fails or the -test.v flag is set.
+// and records the text in the error log. For tests, the text will be printed only if
+// the test fails or the -test.v flag is set. For benchmarks, the text is always
+// printed to avoid having performance depend on the value of the -test.v flag.
 func (c *common) Log(args ...interface{}) { c.log(fmt.Sprintln(args...)) }
 
 // Logf formats its arguments according to the format, analogous to Printf,
-// and records the text in the error log. The text will be printed only if
-// the test fails or the -test.v flag is set.
+// and records the text in the error log. For tests, the text will be printed only if
+// the test fails or the -test.v flag is set. For benchmarks, the text is always
+// printed to avoid having performance depend on the value of the -test.v flag.
 func (c *common) Logf(format string, args ...interface{}) { c.log(fmt.Sprintf(format, args...)) }
 
 // Error is equivalent to Log followed by Fail.
@@ -551,7 +557,7 @@ func RunTests(matchString func(pat, str string) (bool, error), tests []InternalT
 			}
 			t.self = t
 			if *chatty {
-				fmt.Printf("=== RUN %s\n", t.name)
+				fmt.Printf("=== RUN   %s\n", t.name)
 			}
 			go tRunner(t, &tests[i])
 			out := (<-t.signal).(*T)

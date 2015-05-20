@@ -68,7 +68,7 @@ const (
 	// Maximum key or value size to keep inline (instead of mallocing per element).
 	// Must fit in a uint8.
 	// Fast versions cannot handle big values - the cutoff size for
-	// fast versions in ../../cmd/gc/walk.c must be at most this value.
+	// fast versions in ../../cmd/internal/gc/walk.go must be at most this value.
 	maxKeySize   = 128
 	maxValueSize = 128
 
@@ -96,14 +96,11 @@ const (
 
 	// sentinel bucket ID for iterator checks
 	noCheck = 1<<(8*ptrSize) - 1
-
-	// trigger a garbage collection at every alloc called from this code
-	checkgc = false
 )
 
 // A header for a Go map.
 type hmap struct {
-	// Note: the format of the Hmap is encoded in ../../cmd/gc/reflect.c and
+	// Note: the format of the Hmap is encoded in ../../cmd/internal/gc/reflect.go and
 	// ../reflect/type.go.  Don't change this structure without also changing that code!
 	count int // # live cells == size of map.  Must be first (used by len() builtin)
 	flags uint8
@@ -137,11 +134,11 @@ type bmap struct {
 }
 
 // A hash iteration structure.
-// If you modify hiter, also change cmd/gc/reflect.c to indicate
+// If you modify hiter, also change cmd/internal/gc/reflect.go to indicate
 // the layout of this structure.
 type hiter struct {
-	key         unsafe.Pointer // Must be in first position.  Write nil to indicate iteration end (see cmd/gc/range.c).
-	value       unsafe.Pointer // Must be in second position (see cmd/gc/range.c).
+	key         unsafe.Pointer // Must be in first position.  Write nil to indicate iteration end (see cmd/internal/gc/range.go).
+	value       unsafe.Pointer // Must be in second position (see cmd/internal/gc/range.go).
 	t           *maptype
 	h           *hmap
 	buckets     unsafe.Pointer // bucket ptr at hash_iter initialization time
@@ -246,16 +243,10 @@ func makemap(t *maptype, hint int64, h *hmap, bucket unsafe.Pointer) *hmap {
 	// If hint is large zeroing this memory could take a while.
 	buckets := bucket
 	if B != 0 {
-		if checkgc {
-			memstats.next_gc = memstats.heap_alloc
-		}
 		buckets = newarray(t.bucket, uintptr(1)<<B)
 	}
 
 	// initialize Hmap
-	if checkgc {
-		memstats.next_gc = memstats.heap_alloc
-	}
 	if h == nil {
 		h = (*hmap)(newobject(t.hmap))
 	}
@@ -430,9 +421,6 @@ func mapassign1(t *maptype, h *hmap, key unsafe.Pointer, val unsafe.Pointer) {
 	hash := alg.hash(key, uintptr(h.hash0))
 
 	if h.buckets == nil {
-		if checkgc {
-			memstats.next_gc = memstats.heap_alloc
-		}
 		h.buckets = newarray(t.bucket, 1)
 	}
 
@@ -493,9 +481,6 @@ again:
 
 	if inserti == nil {
 		// all current buckets are full, allocate a new one.
-		if checkgc {
-			memstats.next_gc = memstats.heap_alloc
-		}
 		newb := (*bmap)(newobject(t.bucket))
 		h.setoverflow(t, b, newb)
 		inserti = &newb.tophash[0]
@@ -505,17 +490,11 @@ again:
 
 	// store new key/value at insert position
 	if t.indirectkey {
-		if checkgc {
-			memstats.next_gc = memstats.heap_alloc
-		}
 		kmem := newobject(t.key)
 		*(*unsafe.Pointer)(insertk) = kmem
 		insertk = kmem
 	}
 	if t.indirectvalue {
-		if checkgc {
-			memstats.next_gc = memstats.heap_alloc
-		}
 		vmem := newobject(t.elem)
 		*(*unsafe.Pointer)(insertv) = vmem
 		insertv = vmem
@@ -597,7 +576,7 @@ func mapiterinit(t *maptype, h *hmap, it *hiter) {
 	}
 
 	if unsafe.Sizeof(hiter{})/ptrSize != 12 {
-		throw("hash_iter size incorrect") // see ../../cmd/gc/reflect.c
+		throw("hash_iter size incorrect") // see ../../cmd/internal/gc/reflect.go
 	}
 	it.t = t
 	it.h = h
@@ -776,9 +755,6 @@ func hashGrow(t *maptype, h *hmap) {
 		throw("evacuation not done in time")
 	}
 	oldbuckets := h.buckets
-	if checkgc {
-		memstats.next_gc = memstats.heap_alloc
-	}
 	newbuckets := newarray(t.bucket, uintptr(1)<<(h.B+1))
 	flags := h.flags &^ (iterator | oldIterator)
 	if h.flags&iterator != 0 {
@@ -879,9 +855,6 @@ func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
 				if (hash & newbit) == 0 {
 					b.tophash[i] = evacuatedX
 					if xi == bucketCnt {
-						if checkgc {
-							memstats.next_gc = memstats.heap_alloc
-						}
 						newx := (*bmap)(newobject(t.bucket))
 						h.setoverflow(t, x, newx)
 						x = newx
@@ -906,9 +879,6 @@ func evacuate(t *maptype, h *hmap, oldbucket uintptr) {
 				} else {
 					b.tophash[i] = evacuatedY
 					if yi == bucketCnt {
-						if checkgc {
-							memstats.next_gc = memstats.heap_alloc
-						}
 						newy := (*bmap)(newobject(t.bucket))
 						h.setoverflow(t, y, newy)
 						y = newy

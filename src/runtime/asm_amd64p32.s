@@ -73,7 +73,7 @@ ok:
 	CALL	runtime·schedinit(SB)
 
 	// create a new goroutine to start program
-	MOVL	$runtime·main·f(SB), AX	// entry
+	MOVL	$runtime·mainPC(SB), AX	// entry
 	MOVL	$0, 0(SP)
 	MOVL	AX, 4(SP)
 	CALL	runtime·newproc(SB)
@@ -84,8 +84,8 @@ ok:
 	MOVL	$0xf1, 0xf1  // crash
 	RET
 
-DATA	runtime·main·f+0(SB)/4,$runtime·main(SB)
-GLOBL	runtime·main·f(SB),RODATA,$4
+DATA	runtime·mainPC+0(SB)/4,$runtime·main(SB)
+GLOBL	runtime·mainPC(SB),RODATA,$4
 
 TEXT runtime·breakpoint(SB),NOSPLIT,$0-0
 	INT $3
@@ -483,6 +483,9 @@ TEXT runtime·xadd64(SB), NOSPLIT, $0-24
 	MOVQ	AX, ret+16(FP)
 	RET
 
+TEXT runtime·xadduintptr(SB), NOSPLIT, $0-12
+	JMP	runtime·xadd(SB)
+
 TEXT runtime·xchg(SB), NOSPLIT, $0-12
 	MOVL	ptr+0(FP), BX
 	MOVL	new+4(FP), AX
@@ -539,6 +542,14 @@ TEXT runtime·atomicor8(SB), NOSPLIT, $0-5
 	MOVB	val+4(FP), AX
 	LOCK
 	ORB	AX, 0(BX)
+	RET
+
+// void	runtime·atomicand8(byte volatile*, byte);
+TEXT runtime·atomicand8(SB), NOSPLIT, $0-5
+	MOVL	ptr+0(FP), BX
+	MOVB	val+4(FP), AX
+	LOCK
+	ANDB	AX, 0(BX)
 	RET
 
 // void jmpdefer(fn, sp);
@@ -1087,12 +1098,6 @@ TEXT runtime·goexit(SB),NOSPLIT,$0-0
 	CALL	runtime·goexit1(SB)	// does not return
 	// traceback from goexit1 must hit code range of goexit
 	BYTE	$0x90	// NOP
-
-TEXT runtime·getg(SB),NOSPLIT,$0-4
-	get_tls(CX)
-	MOVL	g(CX), AX
-	MOVL	AX, ret+0(FP)
-	RET
 
 TEXT runtime·prefetcht0(SB),NOSPLIT,$0-4
 	MOVL	addr+0(FP), AX

@@ -60,7 +60,7 @@ func racewalk(fn *Node) {
 		racewalklist(fn.Nbody, nil)
 
 		// nothing interesting for race detector in fn->enter
-		racewalklist(fn.Exit, nil)
+		racewalklist(fn.Func.Exit, nil)
 	}
 
 	// nodpc is the PC of the caller as extracted by
@@ -72,17 +72,17 @@ func racewalk(fn *Node) {
 	nodpc.Type = Types[TUINTPTR]
 	nodpc.Xoffset = int64(-Widthptr)
 	nd := mkcall("racefuncenter", nil, nil, nodpc)
-	fn.Enter = concat(list1(nd), fn.Enter)
+	fn.Func.Enter = concat(list1(nd), fn.Func.Enter)
 	nd = mkcall("racefuncexit", nil, nil)
-	fn.Exit = list(fn.Exit, nd)
+	fn.Func.Exit = list(fn.Func.Exit, nd)
 
 	if Debug['W'] != 0 {
-		s := fmt.Sprintf("after racewalk %v", Sconv(fn.Nname.Sym, 0))
+		s := fmt.Sprintf("after racewalk %v", fn.Nname.Sym)
 		dumplist(s, fn.Nbody)
-		s = fmt.Sprintf("enter %v", Sconv(fn.Nname.Sym, 0))
-		dumplist(s, fn.Enter)
-		s = fmt.Sprintf("exit %v", Sconv(fn.Nname.Sym, 0))
-		dumplist(s, fn.Exit)
+		s = fmt.Sprintf("enter %v", fn.Nname.Sym)
+		dumplist(s, fn.Func.Enter)
+		s = fmt.Sprintf("exit %v", fn.Nname.Sym)
+		dumplist(s, fn.Func.Exit)
 	}
 }
 
@@ -137,15 +137,13 @@ func racewalknode(np **Node, init **NodeList, wr int, skip int) {
 	default:
 		Fatal("racewalk: unknown node type %v", Oconv(int(n.Op), 0))
 
-	case OAS,
-		OAS2FUNC:
+	case OAS, OASWB, OAS2FUNC:
 		racewalknode(&n.Left, init, 1, 0)
 		racewalknode(&n.Right, init, 0, 0)
 		goto ret
 
 		// can't matter
-	case OCFUNC,
-		OVARKILL:
+	case OCFUNC, OVARKILL:
 		goto ret
 
 	case OBLOCK:
@@ -158,9 +156,7 @@ func racewalknode(np **Node, init **NodeList, wr int, skip int) {
 		// x, y := f() becomes BLOCK{CALL f, AS x [SP+0], AS y [SP+n]}
 		// We don't want to instrument between the statements because it will
 		// smash the results.
-		case OCALLFUNC,
-			OCALLMETH,
-			OCALLINTER:
+		case OCALLFUNC, OCALLMETH, OCALLINTER:
 			racewalknode(&n.List.N, &n.List.N.Ninit, 0, 0)
 
 			var fini *NodeList
@@ -223,7 +219,8 @@ func racewalknode(np **Node, init **NodeList, wr int, skip int) {
 		OPLUS,
 		OREAL,
 		OIMAG,
-		OCOM:
+		OCOM,
+		OSQRT:
 		racewalknode(&n.Left, init, wr, 0)
 		goto ret
 
@@ -248,9 +245,7 @@ func racewalknode(np **Node, init **NodeList, wr int, skip int) {
 		callinstr(&n, init, wr, skip)
 		goto ret
 
-	case OSPTR,
-		OLEN,
-		OCAP:
+	case OSPTR, OLEN, OCAP:
 		racewalknode(&n.Left, init, 0, 0)
 		if Istype(n.Left.Type, TMAP) {
 			n1 := Nod(OCONVNOP, n.Left, nil)
@@ -284,8 +279,7 @@ func racewalknode(np **Node, init **NodeList, wr int, skip int) {
 		racewalknode(&n.Right, init, wr, 0)
 		goto ret
 
-	case OANDAND,
-		OOROR:
+	case OANDAND, OOROR:
 		racewalknode(&n.Left, init, wr, 0)
 
 		// walk has ensured the node has moved to a location where
@@ -308,8 +302,7 @@ func racewalknode(np **Node, init **NodeList, wr int, skip int) {
 		racewalknode(&n.Left, init, wr, 0)
 		goto ret
 
-	case ODIV,
-		OMOD:
+	case ODIV, OMOD:
 		racewalknode(&n.Left, init, wr, 0)
 		racewalknode(&n.Right, init, wr, 0)
 		goto ret
@@ -333,10 +326,7 @@ func racewalknode(np **Node, init **NodeList, wr int, skip int) {
 
 		// Seems to only lead to double instrumentation.
 	//racewalknode(&n->left, init, 0, 0);
-	case OSLICE,
-		OSLICEARR,
-		OSLICE3,
-		OSLICE3ARR:
+	case OSLICE, OSLICEARR, OSLICE3, OSLICE3ARR:
 		goto ret
 
 	case OADDR:
@@ -399,10 +389,12 @@ func racewalknode(np **Node, init **NodeList, wr int, skip int) {
 		goto ret
 
 		// impossible nodes: only appear in backend.
-	case ORROTC,
-		OEXTEND:
+	case ORROTC, OEXTEND:
 		Yyerror("racewalk: %v cannot exist now", Oconv(int(n.Op), 0))
+		goto ret
 
+	case OGETG:
+		Yyerror("racewalk: OGETG can happen only in runtime which we don't instrument")
 		goto ret
 
 		// just do generic traversal
@@ -435,9 +427,8 @@ func racewalknode(np **Node, init **NodeList, wr int, skip int) {
 		OTYPE,
 		ONONAME,
 		OLITERAL,
-		OSLICESTR,
-		// always preceded by bounds checking, avoid double instrumentation.
-		OTYPESW: // ignored by code generation, do not instrument.
+		OSLICESTR, // always preceded by bounds checking, avoid double instrumentation.
+		OTYPESW:   // ignored by code generation, do not instrument.
 		goto ret
 	}
 
@@ -504,7 +495,7 @@ func callinstr(np **Node, init **NodeList, wr int, skip int) bool {
 	if isartificial(b) {
 		return false
 	}
-	class := int(b.Class)
+	class := b.Class
 
 	// BUG: we _may_ want to instrument PAUTO sometimes
 	// e.g. if we've got a local variable/method receiver
@@ -559,8 +550,7 @@ func makeaddable(n *Node) {
 		}
 
 		// Turn T(v).Field into v.Field
-	case ODOT,
-		OXDOT:
+	case ODOT, OXDOT:
 		if n.Left.Op == OCONVNOP {
 			n.Left = n.Left.Left
 		}
@@ -621,15 +611,12 @@ func foreach(n *Node, f func(*Node, interface{}), c interface{}) {
 
 func hascallspred(n *Node, c interface{}) {
 	switch n.Op {
-	case OCALL,
-		OCALLFUNC,
-		OCALLMETH,
-		OCALLINTER:
+	case OCALL, OCALLFUNC, OCALLMETH, OCALLINTER:
 		(*c.(*int))++
 	}
 }
 
-// appendinit is like addinit in subr.c
+// appendinit is like addinit in subr.go
 // but appends rather than prepends.
 func appendinit(np **Node, init *NodeList) {
 	if init == nil {
@@ -640,8 +627,7 @@ func appendinit(np **Node, init *NodeList) {
 	switch n.Op {
 	// There may be multiple refs to this node;
 	// introduce OCONVNOP to hold init list.
-	case ONAME,
-		OLITERAL:
+	case ONAME, OLITERAL:
 		n = Nod(OCONVNOP, n, nil)
 
 		n.Type = n.Left.Type

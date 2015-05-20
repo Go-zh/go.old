@@ -107,17 +107,11 @@ func progedit(ctxt *obj.Link, p *obj.Prog) {
 	// Rewrite float constants to values stored in memory.
 	switch p.As {
 	case AMOVF:
-		if p.From.Type == obj.TYPE_FCONST && chipfloat5(ctxt, p.From.U.Dval) < 0 && (chipzero5(ctxt, p.From.U.Dval) < 0 || p.Scond&C_SCOND != C_SCOND_NONE) {
-			f32 := float32(p.From.U.Dval)
+		if p.From.Type == obj.TYPE_FCONST && chipfloat5(ctxt, p.From.Val.(float64)) < 0 && (chipzero5(ctxt, p.From.Val.(float64)) < 0 || p.Scond&C_SCOND != C_SCOND_NONE) {
+			f32 := float32(p.From.Val.(float64))
 			i32 := math.Float32bits(f32)
 			literal := fmt.Sprintf("$f32.%08x", i32)
 			s := obj.Linklookup(ctxt, literal, 0)
-			if s.Type == 0 {
-				s.Type = obj.SRODATA
-				obj.Adduint32(ctxt, s, i32)
-				s.Reachable = 0
-			}
-
 			p.From.Type = obj.TYPE_MEM
 			p.From.Sym = s
 			p.From.Name = obj.NAME_EXTERN
@@ -125,16 +119,10 @@ func progedit(ctxt *obj.Link, p *obj.Prog) {
 		}
 
 	case AMOVD:
-		if p.From.Type == obj.TYPE_FCONST && chipfloat5(ctxt, p.From.U.Dval) < 0 && (chipzero5(ctxt, p.From.U.Dval) < 0 || p.Scond&C_SCOND != C_SCOND_NONE) {
-			i64 := math.Float64bits(p.From.U.Dval)
+		if p.From.Type == obj.TYPE_FCONST && chipfloat5(ctxt, p.From.Val.(float64)) < 0 && (chipzero5(ctxt, p.From.Val.(float64)) < 0 || p.Scond&C_SCOND != C_SCOND_NONE) {
+			i64 := math.Float64bits(p.From.Val.(float64))
 			literal := fmt.Sprintf("$f64.%016x", i64)
 			s := obj.Linklookup(ctxt, literal, 0)
-			if s.Type == 0 {
-				s.Type = obj.SRODATA
-				obj.Adduint64(ctxt, s, i64)
-				s.Reachable = 0
-			}
-
 			p.From.Type = obj.TYPE_MEM
 			p.From.Sym = s
 			p.From.Name = obj.NAME_EXTERN
@@ -182,11 +170,6 @@ func linkcase(casep *obj.Prog) {
 func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 	autosize := int32(0)
 
-	if ctxt.Symmorestack[0] == nil {
-		ctxt.Symmorestack[0] = obj.Linklookup(ctxt, "runtime.morestack", 0)
-		ctxt.Symmorestack[1] = obj.Linklookup(ctxt, "runtime.morestack_noctxt", 0)
-	}
-
 	ctxt.Cursym = cursym
 
 	if cursym.Text == nil || cursym.Text.Link == nil {
@@ -201,7 +184,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 		autoffset = 0
 	}
 	cursym.Locals = autoffset
-	cursym.Args = p.To.U.Argsize
+	cursym.Args = p.To.Val.(int32)
 
 	if ctxt.Debugzerostack != 0 {
 		if autoffset != 0 && p.From3.Offset&obj.NOSPLIT == 0 {
@@ -283,10 +266,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 		case obj.ARET:
 			break
 
-		case ADIV,
-			ADIVU,
-			AMOD,
-			AMODU:
+		case ADIV, ADIVU, AMOD, AMODU:
 			q = p
 			if ctxt.Sym_div == nil {
 				initdiv(ctxt)
@@ -358,7 +338,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 			if autosize == 0 && cursym.Text.Mark&LEAF == 0 {
 				if ctxt.Debugvlog != 0 {
 					fmt.Fprintf(ctxt.Bso, "save suppressed in: %s\n", cursym.Name)
-					obj.Bflush(ctxt.Bso)
+					ctxt.Bso.Flush()
 				}
 
 				cursym.Text.Mark |= LEAF
@@ -372,7 +352,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 			}
 
 			if p.From3.Offset&obj.NOSPLIT == 0 {
-				p = stacksplit(ctxt, p, autosize, cursym.Text.From3.Offset&obj.NEEDCTXT == 0) // emit split check
+				p = stacksplit(ctxt, p, autosize) // emit split check
 			}
 
 			// MOVW.W		R14,$-autosize(SP)
@@ -524,10 +504,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 				p.Spadj = int32(p.From.Offset)
 			}
 
-		case ADIV,
-			ADIVU,
-			AMOD,
-			AMODU:
+		case ADIV, ADIVU, AMOD, AMODU:
 			if ctxt.Debugdivmod != 0 {
 				break
 			}
@@ -726,7 +703,7 @@ func softfloat(ctxt *obj.Link, cursym *obj.LSym) {
 	}
 }
 
-func stacksplit(ctxt *obj.Link, p *obj.Prog, framesize int32, noctxt bool) *obj.Prog {
+func stacksplit(ctxt *obj.Link, p *obj.Prog, framesize int32) *obj.Prog {
 	// MOVW			g_stackguard(g), R1
 	p = obj.Appendp(ctxt, p)
 
@@ -836,8 +813,10 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, framesize int32, noctxt bool) *obj.
 	p.To.Type = obj.TYPE_BRANCH
 	if ctxt.Cursym.Cfunc != 0 {
 		p.To.Sym = obj.Linklookup(ctxt, "runtime.morestackc", 0)
+	} else if ctxt.Cursym.Text.From3.Offset&obj.NEEDCTXT == 0 {
+		p.To.Sym = obj.Linklookup(ctxt, "runtime.morestack_noctxt", 0)
 	} else {
-		p.To.Sym = ctxt.Symmorestack[bool2int(noctxt)]
+		p.To.Sym = obj.Linklookup(ctxt, "runtime.morestack", 0)
 	}
 
 	// BLS	start
@@ -935,7 +914,7 @@ loop:
 	if p.Mark&FOLL != 0 {
 		i = 0
 		q = p
-		for ; i < 4; (func() { i++; q = q.Link })() {
+		for ; i < 4; i, q = i+1, q.Link {
 			if q == *last || q == nil {
 				break
 			}

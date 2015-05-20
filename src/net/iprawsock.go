@@ -23,11 +23,11 @@ func (a *IPAddr) String() string {
 	return a.IP.String()
 }
 
-func (a *IPAddr) toAddr() Addr {
-	if a == nil {
-		return nil
+func (a *IPAddr) isWildcard() bool {
+	if a == nil || a.IP == nil {
+		return true
 	}
-	return a
+	return a.IP.IsUnspecified()
 }
 
 // ResolveIPAddr parses addr as an IP address of the form "host" or
@@ -46,9 +46,9 @@ func ResolveIPAddr(net, addr string) (*IPAddr, error) {
 	default:
 		return nil, UnknownNetworkError(net)
 	}
-	a, err := resolveInternetAddr(afnet, addr, noDeadline)
+	addrs, err := internetAddrList(afnet, addr, noDeadline)
 	if err != nil {
 		return nil, err
 	}
-	return a.toAddr().(*IPAddr), nil
+	return addrs.first(isIPv4).(*IPAddr), nil
 }

@@ -12,6 +12,14 @@ import (
 	"syscall"
 )
 
+func rename(oldname, newname string) error {
+	e := syscall.Rename(oldname, newname)
+	if e != nil {
+		return &LinkError{"rename", oldname, newname, e}
+	}
+	return nil
+}
+
 // File represents an open file descriptor.
 type File struct {
 	*file
@@ -88,8 +96,8 @@ func OpenFile(name string, flag int, perm FileMode) (file *File, err error) {
 	}
 
 	// open(2) itself won't handle the sticky bit on *BSD and Solaris
-	if chmod && e == nil {
-		e = Chmod(name, perm)
+	if chmod {
+		Chmod(name, perm)
 	}
 
 	// There's a race here with fork/exec, which we are

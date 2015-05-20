@@ -28,7 +28,7 @@ func getncpu() int32 {
 
 // FreeBSD's umtx_op syscall is effectively the same as Linux's futex, and
 // thus the code is largely similar. See Linux implementation
-// and lock_futex.c for comments.
+// and lock_futex.go for comments.
 
 //go:nosplit
 func futexsleep(addr *uint32, val uint32, ns int64) {
@@ -67,6 +67,8 @@ func futexwakeup(addr *uint32, cnt uint32) {
 
 func thr_start()
 
+// May run with m.p==nil, so write barriers are not allowed.
+//go:nowritebarrier
 func newosproc(mp *m, stk unsafe.Pointer) {
 	if false {
 		print("newosproc stk=", stk, " m=", mp, " g=", mp.g0, " thr_start=", funcPC(thr_start), " id=", mp.id, "/", mp.tls[0], " ostk=", &mp, "\n")
@@ -102,7 +104,7 @@ var urandom_dev = []byte("/dev/urandom\x00")
 func getRandomData(r []byte) {
 	fd := open(&urandom_dev[0], 0 /* O_RDONLY */, 0)
 	n := read(fd, unsafe.Pointer(&r[0]), int32(len(r)))
-	close(fd)
+	closefd(fd)
 	extendRandom(r, int(n))
 }
 

@@ -7,7 +7,7 @@ package runtime
 import "unsafe"
 
 const (
-	// StackDebug == 0: no logging
+	// stackDebug == 0: no logging
 	//            == 1: logging of per-stack operations
 	//            == 2: logging of per-frame operations
 	//            == 3: logging of per-word updates
@@ -298,10 +298,9 @@ func stackfree(stk stack) {
 
 var maxstacksize uintptr = 1 << 20 // enough until runtime.main sets it for real
 
-var mapnames = []string{
-	typeDead:    "---",
-	typeScalar:  "scalar",
-	typePointer: "ptr",
+var ptrnames = []string{
+	0: "scalar",
+	1: "ptr",
 }
 
 // Stack frame layout
@@ -353,6 +352,12 @@ func adjustpointer(adjinfo *adjustinfo, vpp unsafe.Pointer) {
 	}
 }
 
+// Information from the compiler about the layout of stack frames.
+type bitvector struct {
+	n        int32 // # of bits
+	bytedata *uint8
+}
+
 type gobitvector struct {
 	n        uintptr
 	bytedata []uint8
@@ -365,8 +370,8 @@ func gobv(bv bitvector) gobitvector {
 	}
 }
 
-func ptrbits(bv *gobitvector, i uintptr) uint8 {
-	return (bv.bytedata[i/4] >> ((i & 3) * 2)) & 3
+func ptrbit(bv *gobitvector, i uintptr) uint8 {
+	return (bv.bytedata[i/8] >> (i % 8)) & 1
 }
 
 // bv describes the memory starting at address scanp.
@@ -376,21 +381,12 @@ func adjustpointers(scanp unsafe.Pointer, cbv *bitvector, adjinfo *adjustinfo, f
 	minp := adjinfo.old.lo
 	maxp := adjinfo.old.hi
 	delta := adjinfo.delta
-	num := uintptr(bv.n) / typeBitsWidth
+	num := uintptr(bv.n)
 	for i := uintptr(0); i < num; i++ {
 		if stackDebug >= 4 {
-			print("        ", add(scanp, i*ptrSize), ":", mapnames[ptrbits(&bv, i)], ":", hex(*(*uintptr)(add(scanp, i*ptrSize))), " # ", i, " ", bv.bytedata[i/4], "\n")
+			print("        ", add(scanp, i*ptrSize), ":", ptrnames[ptrbit(&bv, i)], ":", hex(*(*uintptr)(add(scanp, i*ptrSize))), " # ", i, " ", bv.bytedata[i/4], "\n")
 		}
-		switch ptrbits(&bv, i) {
-		default:
-			throw("unexpected pointer bits")
-		case typeDead:
-			if debug.gcdead != 0 {
-				*(*unsafe.Pointer)(add(scanp, i*ptrSize)) = unsafe.Pointer(uintptr(poisonStack))
-			}
-		case typeScalar:
-			// ok
-		case typePointer:
+		if ptrbit(&bv, i) == 1 {
 			p := *(*unsafe.Pointer)(add(scanp, i*ptrSize))
 			up := uintptr(p)
 			if f != nil && 0 < up && up < _PageSize && debug.invalidptr != 0 || up == poisonStack {
@@ -439,10 +435,13 @@ func adjustframe(frame *stkframe, arg unsafe.Pointer) bool {
 	// Adjust local variables if stack frame has been allocated.
 	size := frame.varp - frame.sp
 	var minsize uintptr
-	if thechar != '6' && thechar != '8' {
-		minsize = ptrSize
-	} else {
+	switch thechar {
+	case '6', '8':
 		minsize = 0
+	case '7':
+		minsize = spAlign
+	default:
+		minsize = ptrSize
 	}
 	if size > minsize {
 		var bv bitvector
@@ -458,7 +457,7 @@ func adjustframe(frame *stkframe, arg unsafe.Pointer) bool {
 			throw("bad symbol table")
 		}
 		bv = stackmapdata(stackmap, pcdata)
-		size = (uintptr(bv.n) / typeBitsWidth) * ptrSize
+		size = uintptr(bv.n) * ptrSize
 		if stackDebug >= 3 {
 			print("      locals ", pcdata, "/", stackmap.n, " ", size/ptrSize, " words ", bv.bytedata, "\n")
 		}
@@ -677,7 +676,7 @@ func newstack() {
 	// it needs a lock held by the goroutine), that small preemption turns
 	// into a real deadlock.
 	if preempt {
-		if thisg.m.locks != 0 || thisg.m.mallocing != 0 || thisg.m.preemptoff != "" || thisg.m.p.status != _Prunning {
+		if thisg.m.locks != 0 || thisg.m.mallocing != 0 || thisg.m.preemptoff != "" || thisg.m.p.ptr().status != _Prunning {
 			// Let the goroutine keep running for now.
 			// gp->preempt is set, so it will be preempted next time.
 			gp.stackguard0 = gp.stack.lo + _StackGuard
@@ -721,7 +720,7 @@ func newstack() {
 		if gp == thisg.m.g0 {
 			throw("runtime: preempt g0")
 		}
-		if thisg.m.p == nil && thisg.m.locks == 0 {
+		if thisg.m.p == 0 && thisg.m.locks == 0 {
 			throw("runtime: g is running but p is not")
 		}
 		if gp.preemptscan {

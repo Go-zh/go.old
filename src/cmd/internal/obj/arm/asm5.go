@@ -334,8 +334,7 @@ func asmoutnacl(ctxt *obj.Link, origPC int32, p *obj.Prog, o *Optab, out []uint3
 			}
 		}
 
-	case AB,
-		ABL:
+	case AB, ABL:
 		if p.To.Type != obj.TYPE_MEM {
 			if out != nil {
 				asmout(ctxt, p, o, out)
@@ -595,7 +594,7 @@ func span5(ctxt *obj.Link, cursym *obj.LSym) {
 	var i int
 	var m int
 	var o *Optab
-	for ; p != nil || ctxt.Blitrl != nil; (func() { op = p; p = p.Link })() {
+	for ; p != nil || ctxt.Blitrl != nil; op, p = p, p.Link {
 		if p == nil {
 			if checkpool(ctxt, op, 0) {
 				p = op
@@ -1116,10 +1115,10 @@ func aclass(ctxt *obj.Link, a *obj.Addr) int {
 		return C_GOK
 
 	case obj.TYPE_FCONST:
-		if chipzero5(ctxt, a.U.Dval) >= 0 {
+		if chipzero5(ctxt, a.Val.(float64)) >= 0 {
 			return C_ZFCON
 		}
-		if chipfloat5(ctxt, a.U.Dval) >= 0 {
+		if chipfloat5(ctxt, a.Val.(float64)) >= 0 {
 			return C_SFCON
 		}
 		return C_LFCON
@@ -1265,8 +1264,7 @@ func cmp(a int, b int) bool {
 	case C_HFAUTO:
 		return b == C_HAUTO || b == C_FAUTO
 
-	case C_FAUTO,
-		C_HAUTO:
+	case C_FAUTO, C_HAUTO:
 		return b == C_HFAUTO
 
 	case C_SAUTO:
@@ -1278,15 +1276,13 @@ func cmp(a int, b int) bool {
 	case C_HFOREG:
 		return b == C_HOREG || b == C_FOREG
 
-	case C_FOREG,
-		C_HOREG:
+	case C_FOREG, C_HOREG:
 		return b == C_HFOREG
 
 	case C_SROREG:
 		return cmp(C_SOREG, b) || cmp(C_ROREG, b)
 
-	case C_SOREG,
-		C_ROREG:
+	case C_SOREG, C_ROREG:
 		return b == C_SROREG || cmp(C_HFOREG, b)
 
 	case C_LOREG:
@@ -1528,7 +1524,7 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 
 	case 0: /* pseudo ops */
 		if false { /*debug['G']*/
-			fmt.Printf("%x: %s: arm %d\n", uint32(p.Pc), p.From.Sym.Name, p.From.Sym.Fnptr)
+			fmt.Printf("%x: %s: arm\n", uint32(p.Pc), p.From.Sym.Name)
 		}
 
 	case 1: /* op R,[R],R */
@@ -1677,8 +1673,6 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 				if ctxt.Flag_shared != 0 {
 					rel.Add += ctxt.Pc - p.Pcrel.Pc - 8 - int64(rel.Siz)
 				}
-				rel.Xadd = rel.Add
-				rel.Xsym = rel.Sym
 			} else if ctxt.Flag_shared != 0 {
 				rel.Type = obj.R_PCREL
 				rel.Add += ctxt.Pc - p.Pcrel.Pc - 8
@@ -1868,8 +1862,7 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 		o1 |= (uint32(p.To.Reg) & 1) << 22
 		o1 |= (uint32(p.From.Reg) & 15) << 0
 
-	case 38,
-		39:
+	case 38, 39:
 		switch o.type_ {
 		case 38: /* movm $con,oreg -> stm */
 			o1 = 0x4 << 25
@@ -2259,7 +2252,7 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 		}
 		o1 |= ((uint32(p.Scond) & C_SCOND) ^ C_SCOND_XOR) << 28
 		o1 |= (uint32(p.To.Reg) & 15) << 12
-		v := int32(chipfloat5(ctxt, p.From.U.Dval))
+		v := int32(chipfloat5(ctxt, p.From.Val.(float64)))
 		o1 |= (uint32(v) & 0xf) << 0
 		o1 |= (uint32(v) & 0xf0) << 12
 
@@ -2462,8 +2455,7 @@ func oprrr(ctxt *obj.Link, a int, sc int) uint32 {
 		ctxt.Diag(".nil/.W on dp instruction")
 	}
 	switch a {
-	case AMULU,
-		AMUL:
+	case AMULU, AMUL:
 		return o | 0x0<<21 | 0x9<<4
 	case AMULA:
 		return o | 0x1<<21 | 0x9<<4
@@ -2502,9 +2494,7 @@ func oprrr(ctxt *obj.Link, a int, sc int) uint32 {
 	case AORR:
 		return o | 0xc<<21
 
-	case AMOVB,
-		AMOVH,
-		AMOVW:
+	case AMOVB, AMOVH, AMOVW:
 		return o | 0xd<<21
 	case ABIC:
 		return o | 0xe<<21

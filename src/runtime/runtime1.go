@@ -80,7 +80,7 @@ func goenvs_unix() {
 
 	envs = make([]string, n)
 	for i := int32(0); i < n; i++ {
-		envs[i] = gostringnocopy(argv_index(argv, argc+1+i))
+		envs[i] = gostring(argv_index(argv, argc+1+i))
 	}
 }
 
@@ -316,6 +316,8 @@ var debug struct {
 	schedtrace     int32
 	wbshadow       int32
 	gccheckmark    int32
+	sbrk           int32
+	gcpacertrace   int32
 }
 
 var dbgvars = []dbgVar{
@@ -329,12 +331,11 @@ var dbgvars = []dbgVar{
 	{"schedtrace", &debug.schedtrace},
 	{"wbshadow", &debug.wbshadow},
 	{"gccheckmark", &debug.gccheckmark},
+	{"sbrk", &debug.sbrk},
+	{"gcpacertrace", &debug.gcpacertrace},
 }
 
 func parsedebugvars() {
-	// gccheckmark is enabled by default for the 1.5 dev cycle
-	debug.gccheckmark = 1
-
 	for p := gogetenv("GODEBUG"); p != ""; {
 		field := ""
 		i := index(p, ",")
@@ -422,27 +423,12 @@ func gomcache() *mcache {
 	return getg().m.mcache
 }
 
-var typelink, etypelink [0]byte
-
 //go:linkname reflect_typelinks reflect.typelinks
 //go:nosplit
-func reflect_typelinks() []*_type {
-	var ret []*_type
-	sp := (*slice)(unsafe.Pointer(&ret))
-	sp.array = (*byte)(unsafe.Pointer(&typelink))
-	sp.len = uint((uintptr(unsafe.Pointer(&etypelink)) - uintptr(unsafe.Pointer(&typelink))) / unsafe.Sizeof(ret[0]))
-	sp.cap = sp.len
+func reflect_typelinks() [][]*_type {
+	ret := [][]*_type{firstmoduledata.typelinks}
+	for datap := firstmoduledata.next; datap != nil; datap = datap.next {
+		ret = append(ret, datap.typelinks)
+	}
 	return ret
-}
-
-// TODO: move back into mgc0.c when converted to Go
-func readgogc() int32 {
-	p := gogetenv("GOGC")
-	if p == "" {
-		return 100
-	}
-	if p == "off" {
-		return -1
-	}
-	return int32(atoi(p))
 }

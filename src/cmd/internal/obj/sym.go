@@ -32,73 +32,30 @@
 package obj
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 )
-
-func yy_isalpha(c int) bool {
-	return 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z'
-}
 
 var headers = []struct {
 	name string
 	val  int
 }{
-	struct {
-		name string
-		val  int
-	}{"darwin", Hdarwin},
-	struct {
-		name string
-		val  int
-	}{"dragonfly", Hdragonfly},
-	struct {
-		name string
-		val  int
-	}{"elf", Helf},
-	struct {
-		name string
-		val  int
-	}{"freebsd", Hfreebsd},
-	struct {
-		name string
-		val  int
-	}{"linux", Hlinux},
-	struct {
-		name string
-		val  int
-	}{"android", Hlinux}, // must be after "linux" entry or else headstr(Hlinux) == "android"
-	struct {
-		name string
-		val  int
-	}{"nacl", Hnacl},
-	struct {
-		name string
-		val  int
-	}{"netbsd", Hnetbsd},
-	struct {
-		name string
-		val  int
-	}{"openbsd", Hopenbsd},
-	struct {
-		name string
-		val  int
-	}{"plan9", Hplan9},
-	struct {
-		name string
-		val  int
-	}{"solaris", Hsolaris},
-	struct {
-		name string
-		val  int
-	}{"windows", Hwindows},
-	struct {
-		name string
-		val  int
-	}{"windowsgui", Hwindows},
+	{"darwin", Hdarwin},
+	{"dragonfly", Hdragonfly},
+	{"elf", Helf},
+	{"freebsd", Hfreebsd},
+	{"linux", Hlinux},
+	{"android", Hlinux}, // must be after "linux" entry or else headstr(Hlinux) == "android"
+	{"nacl", Hnacl},
+	{"netbsd", Hnetbsd},
+	{"openbsd", Hopenbsd},
+	{"plan9", Hplan9},
+	{"solaris", Hsolaris},
+	{"windows", Hwindows},
+	{"windowsgui", Hwindows},
 }
 
 func headtype(name string) int {
@@ -110,22 +67,18 @@ func headtype(name string) int {
 	return -1
 }
 
-var headstr_buf string
-
 func Headstr(v int) string {
 	for i := 0; i < len(headers); i++ {
 		if v == headers[i].val {
 			return headers[i].name
 		}
 	}
-	headstr_buf = fmt.Sprintf("%d", v)
-	return headstr_buf
+	return strconv.Itoa(v)
 }
 
 func Linknew(arch *LinkArch) *Link {
-	linksetexp()
-
 	ctxt := new(Link)
+	ctxt.Hash = make(map[SymVer]*LSym)
 	ctxt.Arch = arch
 	ctxt.Version = HistVersion
 	ctxt.Goroot = Getgoroot()
@@ -141,8 +94,11 @@ func Linknew(arch *LinkArch) *Link {
 		buf = "/???"
 	}
 	buf = filepath.ToSlash(buf)
-
 	ctxt.Pathname = buf
+
+	ctxt.LineHist.GOROOT = ctxt.Goroot
+	ctxt.LineHist.GOROOT_FINAL = ctxt.Goroot_final
+	ctxt.LineHist.Dir = ctxt.Pathname
 
 	ctxt.Headtype = headtype(Getgoos())
 	if ctxt.Headtype < 0 {
@@ -155,8 +111,7 @@ func Linknew(arch *LinkArch) *Link {
 	default:
 		log.Fatalf("unknown thread-local storage offset for %s", Headstr(ctxt.Headtype))
 
-	case Hplan9,
-		Hwindows:
+	case Hplan9, Hwindows:
 		break
 
 		/*
@@ -196,14 +151,17 @@ func Linknew(arch *LinkArch) *Link {
 		default:
 			log.Fatalf("unknown thread-local storage offset for darwin/%s", ctxt.Arch.Name)
 
+		case '5':
+			ctxt.Tlsoffset = 0 // dummy value, not needed
+
 		case '6':
 			ctxt.Tlsoffset = 0x8a0
 
+		case '7':
+			ctxt.Tlsoffset = 0 // dummy value, not needed
+
 		case '8':
 			ctxt.Tlsoffset = 0x468
-
-		case '5':
-			ctxt.Tlsoffset = 0 // dummy value, not needed
 		}
 	}
 
@@ -220,59 +178,31 @@ func Linknew(arch *LinkArch) *Link {
 	return ctxt
 }
 
-func linknewsym(ctxt *Link, symb string, v int) *LSym {
-	s := new(LSym)
-	*s = LSym{}
-
-	s.Dynid = -1
-	s.Plt = -1
-	s.Got = -1
-	s.Name = symb
-	s.Type = 0
-	s.Version = int16(v)
-	s.Value = 0
-	s.Sig = 0
-	s.Size = 0
-	ctxt.Nsymbol++
-
-	s.Allsym = ctxt.Allsym
-	ctxt.Allsym = s
-
-	return s
-}
-
-func _lookup(ctxt *Link, symb string, v int, creat int) *LSym {
-	h := uint32(v)
-	for i := 0; i < len(symb); i++ {
-		c := int(symb[i])
-		h = h + h + h + uint32(c)
-	}
-	h &= 0xffffff
-	h %= LINKHASH
-	for s := ctxt.Hash[h]; s != nil; s = s.Hash {
-		if int(s.Version) == v && s.Name == symb {
-			return s
-		}
-	}
-	if creat == 0 {
-		return nil
+func _lookup(ctxt *Link, symb string, v int, create bool) *LSym {
+	s := ctxt.Hash[SymVer{symb, v}]
+	if s != nil || !create {
+		return s
 	}
 
-	s := linknewsym(ctxt, symb, v)
-	s.Extname = s.Name
-	s.Hash = ctxt.Hash[h]
-	ctxt.Hash[h] = s
+	s = &LSym{
+		Name:    symb,
+		Type:    0,
+		Version: int16(v),
+		Value:   0,
+		Size:    0,
+	}
+	ctxt.Hash[SymVer{symb, v}] = s
 
 	return s
 }
 
 func Linklookup(ctxt *Link, name string, v int) *LSym {
-	return _lookup(ctxt, name, v, 1)
+	return _lookup(ctxt, name, v, true)
 }
 
 // read-only lookup
 func linkrlookup(ctxt *Link, name string, v int) *LSym {
-	return _lookup(ctxt, name, v, 0)
+	return _lookup(ctxt, name, v, false)
 }
 
 func Linksymfmt(s *LSym) string {

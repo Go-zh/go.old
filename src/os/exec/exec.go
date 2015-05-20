@@ -32,6 +32,9 @@ func (e *Error) Error() string {
 }
 
 // Cmd represents an external command being prepared or run.
+//
+// A Cmd cannot be reused after calling its Run, Output or CombinedOutput
+// methods.
 type Cmd struct {
 	// Path is the path of the command to run.
 	//
@@ -80,7 +83,7 @@ type Cmd struct {
 	// new process. It does not include standard input, standard output, or
 	// standard error. If non-nil, entry i becomes file descriptor 3+i.
 	//
-	// BUG: on OS X 10.6, child processes may sometimes inherit unwanted fds.
+	// BUG(rsc): On OS X 10.6, child processes may sometimes inherit unwanted fds.
 	// http://golang.org/issue/2603
 	ExtraFiles []*os.File
 

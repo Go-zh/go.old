@@ -480,25 +480,135 @@ func Set(name, value string) error {
 	return CommandLine.Set(name, value)
 }
 
-// PrintDefaults prints, to standard error unless configured
-// otherwise, the default values of all defined flags in the set.
+// isZeroValue guesses whether the string represents the zero
+// value for a flag. It is not accurate but in practice works OK.
 
-// 除非有特别配置，否则PrintDefault会将内容输出到标准输出控制台中。
-// PrintDefault会输出集合中所有定义好的标签的默认信息
+// isZeroValue 猜测某字符串是否表示一个命令行参数的零值。它虽然不准确，不过在实践中够用了。
+func isZeroValue(value string) bool {
+	switch value {
+	case "false":
+		return true
+	case "":
+		return true
+	case "0":
+		return true
+	}
+	return false
+}
+
+// UnquoteUsage extracts a back-quoted name from the usage
+// string for a flag and returns it and the un-quoted usage.
+// Given "a `name` to show" it returns ("name", "a name to show").
+// If there are no back quotes, the name is an educated guess of the
+// type of the flag's value, or the empty string if the flag is boolean.
+
+// UnquoteUsage 从 usage 字符串中提取反引号括起的名字 name 用作命令参数，
+// 并返回该 name 以及不带引号的 usage。例如传入 "a `name` to show"，时它会返回
+// ("name", "a name to show")。若其中没有反引号，name 即为该命令参数值类型的最佳猜测，
+// 若命令参数为布尔值，则返回空字符串。
+func UnquoteUsage(flag *Flag) (name string, usage string) {
+	// Look for a back-quoted name, but avoid the strings package.
+	usage = flag.Usage
+	for i := 0; i < len(usage); i++ {
+		if usage[i] == '`' {
+			for j := i + 1; j < len(usage); j++ {
+				if usage[j] == '`' {
+					name = usage[i+1 : j]
+					usage = usage[:i] + name + usage[j+1:]
+					return name, usage
+				}
+			}
+			break // Only one back quote; use type name.
+		}
+	}
+	// No explicit name, so use type if we can find one.
+	name = "value"
+	switch flag.Value.(type) {
+	case boolFlag:
+		name = ""
+	case *durationValue:
+		name = "duration"
+	case *float64Value:
+		name = "float"
+	case *intValue, *int64Value:
+		name = "int"
+	case *stringValue:
+		name = "string"
+	case *uintValue, *uint64Value:
+		name = "uint"
+	}
+	return
+}
+
+// PrintDefaults prints to standard error the default values of all
+// defined command-line flags in the set. See the documentation for
+// the global function PrintDefaults for more information.
+
+// PrintDefaults 将设置中所有已定义的命令行标记的默认值打印到标准错误输出。有关全局函数
+// PrintDefaults 的更多信息见文档。
 func (f *FlagSet) PrintDefaults() {
 	f.VisitAll(func(flag *Flag) {
-		format := "  -%s=%s: %s\n"
-		if _, ok := flag.Value.(*stringValue); ok {
-			// put quotes on the value
-			format = "  -%s=%q: %s\n"
+		s := fmt.Sprintf("  -%s", flag.Name) // Two spaces before -; see next two comments.
+		name, usage := UnquoteUsage(flag)
+		if len(name) > 0 {
+			s += " " + name
 		}
-		fmt.Fprintf(f.out(), format, flag.Name, flag.DefValue, flag.Usage)
+		// Boolean flags of one ASCII letter are so common we
+		// treat them specially, putting their usage on the same line.
+		if len(s) <= 4 { // space, space, '-', 'x'.
+			s += "\t"
+		} else {
+			// Four spaces before the tab triggers good alignment
+			// for both 4- and 8-space tab stops.
+			s += "\n    \t"
+		}
+		s += usage
+		if !isZeroValue(flag.DefValue) {
+			if _, ok := flag.Value.(*stringValue); ok {
+				// put quotes on the value
+				s += fmt.Sprintf(" (default %q)", flag.DefValue)
+			} else {
+				s += fmt.Sprintf(" (default %v)", flag.DefValue)
+			}
+		}
+		fmt.Fprint(f.out(), s, "\n")
 	})
 }
 
-// PrintDefaults prints to standard error the default values of all defined command-line flags.
+// PrintDefaults prints, to standard error unless configured otherwise,
+// a usage message showing the default settings of all defined
+// command-line flags.
+// For an integer valued flag x, the default output has the form
+//	-x int
+//		usage-message-for-x (default 7)
+// The usage message will appear on a separate line for anything but
+// a bool flag with a one-byte name. For bool flags, the type is
+// omitted and if the flag name is one byte the usage message appears
+// on the same line. The parenthetical default is omitted if the
+// default is the zero value for the type. The listed type, here int,
+// can be changed by placing a back-quoted name in the flag's usage
+// string; the first such item in the message is taken to be a parameter
+// name to show in the message and the back quotes are stripped from
+// the message when displayed. For instance, given
+//	flag.String("I", "", "search `directory` for include files")
+// the output will be
+//	-I directory
+//		search directory for include files.
 
-// PrintDefaults打印出标准错误，就是所有命令行中定义好的标签的默认信息。
+// PrintDefaults 在没有另行设置时会将用法信息打印到标准错误输出，
+// 该信息显示了所有已定义的命令行参数。
+// 对于接受整数值的参数 x，默认的输出格式为：
+//	-x int
+//		usage-message-for-x (default 7)
+// 除了单字节名的布尔参数外，一般的用法信息会独占一行。对于布尔参数，其类型会被忽略；
+// 若参数名为单个字节，则用法信息会在同一行。若默认值为该参数类型的零值，
+// 那么括号中的默认值会被省略。已列出的类型，例如这里的 int，
+// 可替换为参数用法信息中被反引号括住的字符串；第一个这样的条目会作为形参名出现在该用法信息中，
+// 而反引号则会在显示信息时去掉。例如，给定
+//	flag.String("I", "", "search `directory` for include files")
+// 那么输出会是
+//	-I directory
+//		search directory for include files.
 func PrintDefaults() {
 	CommandLine.PrintDefaults()
 }
@@ -525,9 +635,12 @@ func defaultUsage(f *FlagSet) {
 // Usage prints to standard error a usage message documenting all defined command-line flags.
 // It is called when an error occurs while parsing flags.
 // The function is a variable that may be changed to point to a custom function.
+// By default it prints a simple header and calls PrintDefaults; for details about the
+// format of the output and how to control it, see the documentation for PrintDefaults.
 
-// Usage打印出标准的错误信息，包含所有定义过的命令行标签说明。
-// 这个函数赋值到一个变量上去，当然也可以将这个变量指向到自定义的函数。
+// Usage 将所有已定义命令行标记的用法信息文档打印到标准错误输出。它会在解析标记遇到错误时调用。
+// 该函数是个变量，因此可指向自定义的函数。它默认打印一个简单的开头并调用 PrintDefaults；
+// 关于输出格式的控制及详情，参见 PrintDefaults 的文档。
 var Usage = func() {
 	fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 	PrintDefaults()
@@ -1094,7 +1207,7 @@ func Parse() {
 
 // Parsed returns true if the command-line flags have been parsed.
 
-// Parsed 返回是否命令行标签已经被解析过。
+// Parsed 判断命令行标签是否已被解析。
 func Parsed() bool {
 	return CommandLine.Parsed()
 }

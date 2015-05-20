@@ -50,7 +50,7 @@ func getproccount() int32 {
 			}
 		}
 	}
-	close(fd)
+	closefd(fd)
 	if ncpu == 0 {
 		ncpu = 1
 	}
@@ -64,7 +64,7 @@ func getpid() uint64 {
 	fd := open(&pid[0], 0, 0)
 	if fd >= 0 {
 		read(fd, unsafe.Pointer(&b), int32(len(b)))
-		close(fd)
+		closefd(fd)
 	}
 	c := b[:]
 	for c[0] == ' ' || c[0] == '\t' {
@@ -162,10 +162,10 @@ func postnote(pid uint64, msg []byte) int {
 	}
 	len := findnull(&msg[0])
 	if write(uintptr(fd), (unsafe.Pointer)(&msg[0]), int32(len)) != int64(len) {
-		close(fd)
+		closefd(fd)
 		return -1
 	}
-	close(fd)
+	closefd(fd)
 	return 0
 }
 
@@ -177,12 +177,14 @@ func exit(e int) {
 	} else {
 		// build error string
 		var tmp [32]byte
-		status = []byte(gostringnocopy(&itoa(tmp[:len(tmp)-1], uint64(e))[0]))
+		status = append(itoa(tmp[:len(tmp)-1], uint64(e)), 0)
 	}
 	goexitsall(&status[0])
 	exits(&status[0])
 }
 
+// May run with m.p==nil, so write barriers are not allowed.
+//go:nowritebarrier
 func newosproc(mp *m, stk unsafe.Pointer) {
 	if false {
 		print("newosproc mp=", mp, " ostk=", &mp, "\n")
