@@ -40,24 +40,6 @@ import (
 
 func gentext() {}
 
-func needlib(name string) int {
-	if name[0] == '\x00' {
-		return 0
-	}
-
-	/* reuse hash code in symbol table */
-	p := fmt.Sprintf(".dynlib.%s", name)
-
-	s := ld.Linklookup(ld.Ctxt, p, 0)
-
-	if s.Type == 0 {
-		s.Type = 100 // avoid SDATA, etc.
-		return 1
-	}
-
-	return 0
-}
-
 func adddynrela(rel *ld.LSym, s *ld.LSym, r *ld.Reloc) {
 	log.Fatalf("adddynrela not implemented")
 }
@@ -291,28 +273,6 @@ func archreloc(r *ld.Reloc, s *ld.LSym, val *int64) int {
 func archrelocvariant(r *ld.Reloc, s *ld.LSym, t int64) int64 {
 	log.Fatalf("unexpected relocation variant")
 	return -1
-}
-
-func adddynsym(ctxt *ld.Link, s *ld.LSym) {
-	// TODO(minux): implement when needed.
-}
-
-func adddynlib(lib string) {
-	if needlib(lib) == 0 {
-		return
-	}
-
-	if ld.Iself {
-		s := ld.Linklookup(ld.Ctxt, ".dynstr", 0)
-		if s.Size == 0 {
-			ld.Addstring(s, "")
-		}
-		ld.Elfwritedynent(ld.Linklookup(ld.Ctxt, ".dynamic", 0), ld.DT_NEEDED, uint64(ld.Addstring(s, lib)))
-	} else if ld.HEADTYPE == obj.Hdarwin {
-		ld.Machoadddynlib(lib)
-	} else {
-		ld.Diag("adddynlib: unsupported binary format")
-	}
 }
 
 func asmb() {

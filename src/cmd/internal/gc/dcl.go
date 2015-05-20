@@ -183,7 +183,7 @@ func declare(n *Node, ctxt uint8) {
 	}
 
 	if ctxt == PEXTERN && s.Name == "init" {
-		Yyerror("cannot declare init - must be func", s)
+		Yyerror("cannot declare init - must be func")
 	}
 
 	gen := 0
@@ -830,7 +830,7 @@ func structfield(n *Node) *Type {
 	switch n.Val.Ctype {
 	case CTSTR:
 		f.Note = new(string)
-		*f.Note = n.Val.U.Sval
+		*f.Note = n.Val.U.(string)
 
 	default:
 		Yyerror("field annotation must be string")

@@ -32,7 +32,7 @@ func defframe(ptxt *obj.Prog) {
 	// iterate through declarations - they are sorted in decreasing xoffset order.
 	for l := gc.Curfn.Func.Dcl; l != nil; l = l.Next {
 		n = l.N
-		if !n.Needzero {
+		if !n.Name.Needzero {
 			continue
 		}
 		if n.Class != gc.PAUTO {
@@ -190,9 +190,9 @@ func dodiv(op int, nl *gc.Node, nr *gc.Node, res *gc.Node) {
 	check := 0
 	if gc.Issigned[t.Etype] {
 		check = 1
-		if gc.Isconst(nl, gc.CTINT) && gc.Mpgetfix(nl.Val.U.Xval) != -(1<<uint64(t.Width*8-1)) {
+		if gc.Isconst(nl, gc.CTINT) && nl.Int() != -(1<<uint64(t.Width*8-1)) {
 			check = 0
-		} else if gc.Isconst(nr, gc.CTINT) && gc.Mpgetfix(nr.Val.U.Xval) != -1 {
+		} else if gc.Isconst(nr, gc.CTINT) && nr.Int() != -1 {
 			check = 0
 		}
 	}
@@ -306,7 +306,7 @@ func dodiv(op int, nl *gc.Node, nr *gc.Node, res *gc.Node) {
  * known to be dead.
  */
 func savex(dr int, x *gc.Node, oldx *gc.Node, res *gc.Node, t *gc.Type) {
-	r := int(reg[dr])
+	r := reg[dr]
 
 	// save current ax and dx if they are live
 	// and not the destination
@@ -318,7 +318,7 @@ func savex(dr int, x *gc.Node, oldx *gc.Node, res *gc.Node, t *gc.Type) {
 		x.Type = gc.Types[gc.TINT64]
 		gmove(x, oldx)
 		x.Type = t
-		oldx.Ostk = int32(r) // squirrel away old r value
+		oldx.Etype = r // squirrel away old r value
 		reg[dr] = 1
 	}
 }
@@ -326,7 +326,7 @@ func savex(dr int, x *gc.Node, oldx *gc.Node, res *gc.Node, t *gc.Type) {
 func restx(x *gc.Node, oldx *gc.Node) {
 	if oldx.Op != 0 {
 		x.Type = gc.Types[gc.TINT64]
-		reg[x.Reg] = uint8(oldx.Ostk)
+		reg[x.Reg] = oldx.Etype
 		gmove(oldx, x)
 		gc.Regfree(oldx)
 	}
@@ -381,7 +381,7 @@ func cgen_shift(op int, bounded bool, nl *gc.Node, nr *gc.Node, res *gc.Node) {
 		var n1 gc.Node
 		gc.Regalloc(&n1, nl.Type, res)
 		gc.Cgen(nl, &n1)
-		sc := uint64(gc.Mpgetfix(nr.Val.U.Xval))
+		sc := uint64(nr.Int())
 		if sc >= uint64(nl.Type.Width*8) {
 			// large shift gets 2 shifts by width-1
 			var n3 gc.Node

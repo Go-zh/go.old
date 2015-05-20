@@ -78,10 +78,10 @@ func addrescapes(n *Node) {
 			oldfn := Curfn
 
 			Curfn = n.Curfn
-			n.Heapaddr = temp(Ptrto(n.Type))
+			n.Name.Heapaddr = temp(Ptrto(n.Type))
 			buf := fmt.Sprintf("&%v", n.Sym)
-			n.Heapaddr.Sym = Lookup(buf)
-			n.Heapaddr.Orig.Sym = n.Heapaddr.Sym
+			n.Name.Heapaddr.Sym = Lookup(buf)
+			n.Name.Heapaddr.Orig.Sym = n.Name.Heapaddr.Sym
 			n.Esc = EscHeap
 			if Debug['m'] != 0 {
 				fmt.Printf("%v: moved to heap: %v\n", n.Line(), n)
@@ -262,7 +262,7 @@ func cgen_dcl(n *Node) {
 	if n.Alloc == nil {
 		n.Alloc = callnew(n.Type)
 	}
-	Cgen_as(n.Heapaddr, n.Alloc)
+	Cgen_as(n.Name.Heapaddr, n.Alloc)
 }
 
 /*
@@ -333,21 +333,22 @@ func Clearslim(n *Node) {
 
 	switch Simtype[n.Type.Etype] {
 	case TCOMPLEX64, TCOMPLEX128:
-		z.Val.U.Cval = new(Mpcplx)
-		Mpmovecflt(&z.Val.U.Cval.Real, 0.0)
-		Mpmovecflt(&z.Val.U.Cval.Imag, 0.0)
+		z.Val.U = new(Mpcplx)
+		Mpmovecflt(&z.Val.U.(*Mpcplx).Real, 0.0)
+		Mpmovecflt(&z.Val.U.(*Mpcplx).Imag, 0.0)
 
 	case TFLOAT32, TFLOAT64:
 		var zero Mpflt
 		Mpmovecflt(&zero, 0.0)
 		z.Val.Ctype = CTFLT
-		z.Val.U.Fval = &zero
+		z.Val.U = &zero
 
 	case TPTR32, TPTR64, TCHAN, TMAP:
 		z.Val.Ctype = CTNIL
 
 	case TBOOL:
 		z.Val.Ctype = CTBOOL
+		z.Val.U = false
 
 	case TINT8,
 		TINT16,
@@ -358,8 +359,8 @@ func Clearslim(n *Node) {
 		TUINT32,
 		TUINT64:
 		z.Val.Ctype = CTINT
-		z.Val.U.Xval = new(Mpint)
-		Mpmovecfix(z.Val.U.Xval, 0)
+		z.Val.U = new(Mpint)
+		Mpmovecfix(z.Val.U.(*Mpint), 0)
 
 	default:
 		Fatal("clearslim called on type %v", n.Type)
@@ -549,122 +550,6 @@ func Cgen_As2dottype(n, res, resok *Node) {
 	Regfree(&r2)
 	Thearch.Gins(obj.AUNDEF, nil, nil)
 	Patch(q, Pc)
-}
-
-/*
- * generate:
- *	res = s[lo, hi];
- * n->left is s
- * n->list is (cap(s)-lo(TUINT), hi-lo(TUINT)[, lo*width(TUINTPTR)])
- * caller (cgen) guarantees res is an addable ONAME.
- *
- * called for OSLICE, OSLICE3, OSLICEARR, OSLICE3ARR, OSLICESTR.
- */
-func Cgen_slice(n *Node, res *Node) {
-	cap := n.List.N
-	len := n.List.Next.N
-	var offs *Node
-	if n.List.Next.Next != nil {
-		offs = n.List.Next.Next.N
-	}
-
-	// evaluate base pointer first, because it is the only
-	// possibly complex expression. once that is evaluated
-	// and stored, updating the len and cap can be done
-	// without making any calls, so without doing anything that
-	// might cause preemption or garbage collection.
-	// this makes the whole slice update atomic as far as the
-	// garbage collector can see.
-	base := temp(Types[TUINTPTR])
-
-	tmplen := temp(Types[TINT])
-	var tmpcap *Node
-	if n.Op != OSLICESTR {
-		tmpcap = temp(Types[TINT])
-	} else {
-		tmpcap = tmplen
-	}
-
-	var src Node
-	if isnil(n.Left) {
-		Tempname(&src, n.Left.Type)
-		Cgen(n.Left, &src)
-	} else {
-		src = *n.Left
-	}
-	if n.Op == OSLICE || n.Op == OSLICE3 || n.Op == OSLICESTR {
-		src.Xoffset += int64(Array_array)
-	}
-
-	if n.Op == OSLICEARR || n.Op == OSLICE3ARR {
-		if !Isptr[n.Left.Type.Etype] {
-			Fatal("slicearr is supposed to work on pointer: %v\n", Nconv(n, obj.FmtSign))
-		}
-		Cgen(&src, base)
-		Cgen_checknil(base)
-	} else {
-		src.Type = Types[Tptr]
-		Cgen(&src, base)
-	}
-
-	// committed to the update
-	Gvardef(res)
-
-	// compute len and cap.
-	// len = n-i, cap = m-i, and offs = i*width.
-	// computing offs last lets the multiply overwrite i.
-	Cgen((*Node)(len), tmplen)
-
-	if n.Op != OSLICESTR {
-		Cgen(cap, tmpcap)
-	}
-
-	// if new cap != 0 { base += add }
-	// This avoids advancing base past the end of the underlying array/string,
-	// so that it cannot point at the next object in memory.
-	// If cap == 0, the base doesn't matter except insofar as it is 0 or non-zero.
-	// In essence we are replacing x[i:j:k] where i == j == k
-	// or x[i:j] where i == j == cap(x) with x[0:0:0].
-	if offs != nil {
-		p1 := gjmp(nil)
-		p2 := gjmp(nil)
-		Patch(p1, Pc)
-
-		var con Node
-		Nodconst(&con, tmpcap.Type, 0)
-		cmp := Nod(OEQ, tmpcap, &con)
-		typecheck(&cmp, Erv)
-		Bgen(cmp, true, -1, p2)
-
-		add := Nod(OADD, base, offs)
-		typecheck(&add, Erv)
-		Cgen(add, base)
-
-		Patch(p2, Pc)
-	}
-
-	// dst.array = src.array  [ + lo *width ]
-	dst := *res
-
-	dst.Xoffset += int64(Array_array)
-	dst.Type = Types[Tptr]
-	Cgen(base, &dst)
-
-	// dst.len = hi [ - lo ]
-	dst = *res
-
-	dst.Xoffset += int64(Array_nel)
-	dst.Type = Types[Simtype[TUINT]]
-	Cgen(tmplen, &dst)
-
-	if n.Op != OSLICESTR {
-		// dst.cap = cap [ - lo ]
-		dst = *res
-
-		dst.Xoffset += int64(Array_cap)
-		dst.Type = Types[Simtype[TUINT]]
-		Cgen(tmpcap, &dst)
-	}
 }
 
 /*
@@ -1081,7 +966,7 @@ func cgen_callmeth(n *Node, proc int) {
 	l := n.Left
 
 	if l.Op != ODOTMETH {
-		Fatal("cgen_callmeth: not dotmethod: %v")
+		Fatal("cgen_callmeth: not dotmethod: %v", l)
 	}
 
 	n2 := *n
@@ -1237,7 +1122,7 @@ func componentgen_wb(nr, nl *Node, wb bool) bool {
 		nodl.Type = Ptrto(Types[TUINT8])
 		Regalloc(&nodr, Types[Tptr], nil)
 		p := Thearch.Gins(Thearch.Optoas(OAS, Types[Tptr]), nil, &nodr)
-		Datastring(nr.Val.U.Sval, &p.From)
+		Datastring(nr.Val.U.(string), &p.From)
 		p.From.Type = obj.TYPE_ADDR
 		Thearch.Gmove(&nodr, &nodl)
 		Regfree(&nodr)
@@ -1245,7 +1130,7 @@ func componentgen_wb(nr, nl *Node, wb bool) bool {
 		// length
 		nodl.Type = Types[Simtype[TUINT]]
 		nodl.Xoffset += int64(Array_nel) - int64(Array_array)
-		Nodconst(&nodr, nodl.Type, int64(len(nr.Val.U.Sval)))
+		Nodconst(&nodr, nodl.Type, int64(len(nr.Val.U.(string))))
 		Thearch.Gmove(&nodr, &nodl)
 		return true
 	}

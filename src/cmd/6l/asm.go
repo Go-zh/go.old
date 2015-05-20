@@ -44,24 +44,6 @@ func PADDR(x uint32) uint32 {
 
 var zeroes string
 
-func needlib(name string) int {
-	if name[0] == '\x00' {
-		return 0
-	}
-
-	/* reuse hash code in symbol table */
-	p := fmt.Sprintf(".elfload.%s", name)
-
-	s := ld.Linklookup(ld.Ctxt, p, 0)
-
-	if s.Type == 0 {
-		s.Type = 100 // avoid SDATA, etc.
-		return 1
-	}
-
-	return 0
-}
-
 func Addcall(ctxt *ld.Link, s *ld.LSym, t *ld.LSym) int64 {
 	s.Reachable = true
 	i := s.Size
@@ -292,7 +274,7 @@ func adddynrel(s *ld.LSym, r *ld.Reloc) {
 			break
 		}
 		if ld.Iself {
-			adddynsym(ld.Ctxt, targ)
+			ld.Adddynsym(ld.Ctxt, targ)
 			rela := ld.Linklookup(ld.Ctxt, ".rela", 0)
 			ld.Addaddrplus(ld.Ctxt, rela, s, int64(r.Off))
 			if r.Siz == 8 {
@@ -316,7 +298,7 @@ func adddynrel(s *ld.LSym, r *ld.Reloc) {
 			// just in case the C code assigns to the variable,
 			// and of course it only works for single pointers,
 			// but we only need to support cgo and that's all it needs.
-			adddynsym(ld.Ctxt, targ)
+			ld.Adddynsym(ld.Ctxt, targ)
 
 			got := ld.Linklookup(ld.Ctxt, ".got", 0)
 			s.Type = got.Type | obj.SSUB
@@ -544,7 +526,7 @@ func addpltsym(s *ld.LSym) {
 		return
 	}
 
-	adddynsym(ld.Ctxt, s)
+	ld.Adddynsym(ld.Ctxt, s)
 
 	if ld.Iself {
 		plt := ld.Linklookup(ld.Ctxt, ".plt", 0)
@@ -612,7 +594,7 @@ func addgotsym(s *ld.LSym) {
 		return
 	}
 
-	adddynsym(ld.Ctxt, s)
+	ld.Adddynsym(ld.Ctxt, s)
 	got := ld.Linklookup(ld.Ctxt, ".got", 0)
 	s.Got = int32(got.Size)
 	ld.Adduint64(ld.Ctxt, got, 0)
@@ -626,80 +608,6 @@ func addgotsym(s *ld.LSym) {
 		ld.Adduint32(ld.Ctxt, ld.Linklookup(ld.Ctxt, ".linkedit.got", 0), uint32(s.Dynid))
 	} else {
 		ld.Diag("addgotsym: unsupported binary format")
-	}
-}
-
-func adddynsym(ctxt *ld.Link, s *ld.LSym) {
-	if s.Dynid >= 0 {
-		return
-	}
-
-	if ld.Iself {
-		s.Dynid = int32(ld.Nelfsym)
-		ld.Nelfsym++
-
-		d := ld.Linklookup(ctxt, ".dynsym", 0)
-
-		name := s.Extname
-		ld.Adduint32(ctxt, d, uint32(ld.Addstring(ld.Linklookup(ctxt, ".dynstr", 0), name)))
-
-		/* type */
-		t := ld.STB_GLOBAL << 4
-
-		if s.Cgoexport != 0 && s.Type&obj.SMASK == obj.STEXT {
-			t |= ld.STT_FUNC
-		} else {
-			t |= ld.STT_OBJECT
-		}
-		ld.Adduint8(ctxt, d, uint8(t))
-
-		/* reserved */
-		ld.Adduint8(ctxt, d, 0)
-
-		/* section where symbol is defined */
-		if s.Type == obj.SDYNIMPORT {
-			ld.Adduint16(ctxt, d, ld.SHN_UNDEF)
-		} else {
-			ld.Adduint16(ctxt, d, 1)
-		}
-
-		/* value */
-		if s.Type == obj.SDYNIMPORT {
-			ld.Adduint64(ctxt, d, 0)
-		} else {
-			ld.Addaddr(ctxt, d, s)
-		}
-
-		/* size of object */
-		ld.Adduint64(ctxt, d, uint64(s.Size))
-
-		if s.Cgoexport&ld.CgoExportDynamic == 0 && s.Dynimplib != "" && needlib(s.Dynimplib) != 0 {
-			ld.Elfwritedynent(ld.Linklookup(ctxt, ".dynamic", 0), ld.DT_NEEDED, uint64(ld.Addstring(ld.Linklookup(ctxt, ".dynstr", 0), s.Dynimplib)))
-		}
-	} else if ld.HEADTYPE == obj.Hdarwin {
-		ld.Diag("adddynsym: missed symbol %s (%s)", s.Name, s.Extname)
-	} else if ld.HEADTYPE == obj.Hwindows {
-	} else // already taken care of
-	{
-		ld.Diag("adddynsym: unsupported binary format")
-	}
-}
-
-func adddynlib(lib string) {
-	if needlib(lib) == 0 {
-		return
-	}
-
-	if ld.Iself {
-		s := ld.Linklookup(ld.Ctxt, ".dynstr", 0)
-		if s.Size == 0 {
-			ld.Addstring(s, "")
-		}
-		ld.Elfwritedynent(ld.Linklookup(ld.Ctxt, ".dynamic", 0), ld.DT_NEEDED, uint64(ld.Addstring(s, lib)))
-	} else if ld.HEADTYPE == obj.Hdarwin {
-		ld.Machoadddynlib(lib)
-	} else {
-		ld.Diag("adddynlib: unsupported binary format")
 	}
 }
 

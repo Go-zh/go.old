@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -23,8 +24,11 @@ func cmdtest() {
 	var t tester
 	flag.BoolVar(&t.listMode, "list", false, "list available tests")
 	flag.BoolVar(&t.noRebuild, "no-rebuild", false, "don't rebuild std and cmd packages")
+	flag.BoolVar(&t.keepGoing, "k", false, "keep going even when error occurred")
 	flag.StringVar(&t.banner, "banner", "##### ", "banner prefix; blank means no section banners")
-	flag.StringVar(&t.runRxStr, "run", "", "run only those tests matching the regular expression; empty means to run all")
+	flag.StringVar(&t.runRxStr, "run", os.Getenv("GOTESTONLY"),
+		"run only those tests matching the regular expression; empty means to run all. "+
+			"Special exception: if the string begins with '!', the match is inverted.")
 	xflagparse(0)
 	t.run()
 }
@@ -33,8 +37,10 @@ func cmdtest() {
 type tester struct {
 	listMode  bool
 	noRebuild bool
+	keepGoing bool
 	runRxStr  string
 	runRx     *regexp.Regexp
+	runRxWant bool
 	banner    string // prefix, or "" for none
 
 	goroot     string
@@ -129,6 +135,19 @@ func (t *tester) run() {
 	}
 
 	if t.runRxStr != "" {
+		// Temporary (2015-05-14) special case for "std",
+		// which the plan9 builder was using for ages. Delete
+		// this once we update dashboard/builders.go to use a
+		// regexp instead.
+		if runtime.GOOS == "plan9" && t.runRxStr == "std" {
+			t.runRxStr = "^go_test:"
+		}
+		if t.runRxStr[0] == '!' {
+			t.runRxWant = false
+			t.runRxStr = t.runRxStr[1:]
+		} else {
+			t.runRxWant = true
+		}
 		t.runRx = regexp.MustCompile(t.runRxStr)
 	}
 
@@ -146,8 +165,9 @@ func (t *tester) run() {
 	os.Unsetenv("GOROOT_FINAL")
 
 	var lastHeading string
+	ok := true
 	for _, dt := range t.tests {
-		if t.runRx != nil && !t.runRx.MatchString(dt.name) {
+		if t.runRx != nil && (t.runRx.MatchString(dt.name) != t.runRxWant) {
 			t.partial = true
 			continue
 		}
@@ -159,10 +179,18 @@ func (t *tester) run() {
 			fmt.Printf("# go tool dist test -run=^%s$\n", dt.name)
 		}
 		if err := dt.fn(); err != nil {
-			log.Fatalf("Failed: %v", err)
+			ok = false
+			if t.keepGoing {
+				log.Printf("Failed: %v", err)
+			} else {
+				log.Fatalf("Failed: %v", err)
+			}
 		}
 	}
-	if t.partial {
+	if !ok {
+		fmt.Println("\nFAILED")
+		os.Exit(1)
+	} else if t.partial {
 		fmt.Println("\nALL TESTS PASSED (some were excluded)")
 	} else {
 		fmt.Println("\nALL TESTS PASSED")
@@ -212,13 +240,6 @@ func (t *tester) registerTests() {
 				return cmd.Run()
 			},
 		})
-	}
-
-	// Old hack for when Plan 9 on GCE was too slow.
-	// We're keeping this until test sharding (Issue 10029) is finished, though.
-	if os.Getenv("GOTESTONLY") == "std" {
-		t.partial = true
-		return
 	}
 
 	// Runtime CPU tests.
@@ -303,7 +324,7 @@ func (t *tester) registerTests() {
 			t.registerTest("testcshared", "../misc/cgo/testcshared", "./test.bash")
 		}
 		if t.supportedBuildmode("shared") {
-			t.registerTest("testshared", "../misc/cgo/testshared", "./test.bash")
+			t.registerTest("testshared", "../misc/cgo/testshared", "go", "test")
 		}
 		if t.gohostos == "linux" && t.goarch == "amd64" {
 			t.registerTest("testasan", "../misc/cgo/testasan", "go", "run", "main.go")

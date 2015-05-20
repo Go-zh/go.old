@@ -211,7 +211,7 @@ func helpgc(nproc int32) {
 // sched.stopwait to in order to request that all Gs permanently stop.
 const freezeStopWait = 0x7fffffff
 
-// Similar to stoptheworld but best-effort and can be called several times.
+// Similar to stopTheWorld but best-effort and can be called several times.
 // There is no reverse operation, used during crashing.
 // This function must not lock any mutexes.
 func freezetheworld() {
@@ -528,31 +528,68 @@ func quiesce(mastergp *g) {
 	mcall(mquiesce)
 }
 
-// Holding worldsema grants an M the right to try to stop the world.
-// The procedure is:
+// stopTheWorld stops all P's from executing goroutines, interrupting
+// all goroutines at GC safe points and records reason as the reason
+// for the stop. On return, only the current goroutine's P is running.
+// stopTheWorld must not be called from a system stack and the caller
+// must not hold worldsema. The caller must call startTheWorld when
+// other P's should resume execution.
 //
-//	semacquire(&worldsema);
-//	m.preemptoff = "reason";
-//	stoptheworld();
+// stopTheWorld is safe for multiple goroutines to call at the
+// same time. Each will execute its own stop, and the stops will
+// be serialized.
 //
-//	... do stuff ...
-//
-//	m.preemptoff = "";
-//	semrelease(&worldsema);
-//	starttheworld();
-//
+// This is also used by routines that do stack dumps. If the system is
+// in panic or being exited, this may not reliably stop all
+// goroutines.
+func stopTheWorld(reason string) {
+	semacquire(&worldsema, false)
+	getg().m.preemptoff = reason
+	systemstack(stopTheWorldWithSema)
+}
+
+// startTheWorld undoes the effects of stopTheWorld.
+func startTheWorld() {
+	systemstack(startTheWorldWithSema)
+	// worldsema must be held over startTheWorldWithSema to ensure
+	// gomaxprocs cannot change while worldsema is held.
+	semrelease(&worldsema)
+	getg().m.preemptoff = ""
+}
+
+// Holding worldsema grants an M the right to try to stop the world
+// and prevents gomaxprocs from changing concurrently.
 var worldsema uint32 = 1
 
-// This is used by the GC as well as the routines that do stack dumps. In the case
-// of GC all the routines can be reliably stopped. This is not always the case
-// when the system is in panic or being exited.
-func stoptheworld() {
+// stopTheWorldWithSema is the core implementation of stopTheWorld.
+// The caller is responsible for acquiring worldsema and disabling
+// preemption first and then should stopTheWorldWithSema on the system
+// stack:
+//
+//	semacquire(&worldsema, false)
+//	m.preemptoff = "reason"
+//	systemstack(stopTheWorldWithSema)
+//
+// When finished, the caller must either call startTheWorld or undo
+// these three operations separately:
+//
+//	m.preemptoff = ""
+//	systemstack(startTheWorldWithSema)
+//	semrelease(&worldsema)
+//
+// It is allowed to acquire worldsema once and then execute multiple
+// startTheWorldWithSema/stopTheWorldWithSema pairs.
+// Other P's are able to execute between successive calls to
+// startTheWorldWithSema and stopTheWorldWithSema.
+// Holding worldsema causes any other goroutines invoking
+// stopTheWorld to block.
+func stopTheWorldWithSema() {
 	_g_ := getg()
 
 	// If we hold a lock, then we won't be able to stop another M
 	// that is blocked trying to acquire the lock.
 	if _g_.m.locks > 0 {
-		throw("stoptheworld: holding locks")
+		throw("stopTheWorld: holding locks")
 	}
 
 	lock(&sched.lock)
@@ -599,12 +636,12 @@ func stoptheworld() {
 		}
 	}
 	if sched.stopwait != 0 {
-		throw("stoptheworld: not stopped")
+		throw("stopTheWorld: not stopped")
 	}
 	for i := 0; i < int(gomaxprocs); i++ {
 		p := allp[i]
 		if p.status != _Pgcstop {
-			throw("stoptheworld: not stopped")
+			throw("stopTheWorld: not stopped")
 		}
 	}
 }
@@ -614,7 +651,7 @@ func mhelpgc() {
 	_g_.m.helpgc = -1
 }
 
-func starttheworld() {
+func startTheWorldWithSema() {
 	_g_ := getg()
 
 	_g_.m.locks++        // disable preemption because it can be holding p in a local var
@@ -643,7 +680,7 @@ func starttheworld() {
 			mp := p.m.ptr()
 			p.m = 0
 			if mp.nextp != 0 {
-				throw("starttheworld: inconsistent mp->nextp")
+				throw("startTheWorld: inconsistent mp->nextp")
 			}
 			mp.nextp.set(p)
 			notewakeup(&mp.park)
@@ -753,10 +790,10 @@ func forEachP(fn func(*p)) {
 	_p_ := getg().m.p.ptr()
 
 	lock(&sched.lock)
-	if sched.stopwait != 0 {
-		throw("forEachP: sched.stopwait != 0")
+	if sched.safePointWait != 0 {
+		throw("forEachP: sched.safePointWait != 0")
 	}
-	sched.stopwait = gomaxprocs - 1
+	sched.safePointWait = gomaxprocs - 1
 	sched.safePointFn = fn
 
 	// Ask all Ps to run the safe point function.
@@ -776,11 +813,11 @@ func forEachP(fn func(*p)) {
 	for p := sched.pidle.ptr(); p != nil; p = p.link.ptr() {
 		if cas(&p.runSafePointFn, 1, 0) {
 			fn(p)
-			sched.stopwait--
+			sched.safePointWait--
 		}
 	}
 
-	wait := sched.stopwait > 0
+	wait := sched.safePointWait > 0
 	unlock(&sched.lock)
 
 	// Run fn for the current P.
@@ -806,15 +843,15 @@ func forEachP(fn func(*p)) {
 		for {
 			// Wait for 100us, then try to re-preempt in
 			// case of any races.
-			if notetsleep(&sched.stopnote, 100*1000) {
-				noteclear(&sched.stopnote)
+			if notetsleep(&sched.safePointNote, 100*1000) {
+				noteclear(&sched.safePointNote)
 				break
 			}
 			preemptall()
 		}
 	}
-	if sched.stopwait != 0 {
-		throw("forEachP: not stopped")
+	if sched.safePointWait != 0 {
+		throw("forEachP: not done")
 	}
 	for i := 0; i < int(gomaxprocs); i++ {
 		p := allp[i]
@@ -850,9 +887,9 @@ func runSafePointFn() {
 	}
 	sched.safePointFn(p)
 	lock(&sched.lock)
-	sched.stopwait--
-	if sched.stopwait == 0 {
-		notewakeup(&sched.stopnote)
+	sched.safePointWait--
+	if sched.safePointWait == 0 {
+		notewakeup(&sched.safePointNote)
 	}
 	unlock(&sched.lock)
 }
@@ -1225,9 +1262,9 @@ func handoffp(_p_ *p) {
 	}
 	if _p_.runSafePointFn != 0 && cas(&_p_.runSafePointFn, 1, 0) {
 		sched.safePointFn(_p_)
-		sched.stopwait--
-		if sched.stopwait == 0 {
-			notewakeup(&sched.stopnote)
+		sched.safePointWait--
+		if sched.safePointWait == 0 {
+			notewakeup(&sched.safePointNote)
 		}
 	}
 	if sched.runqsize != 0 {
@@ -1304,7 +1341,7 @@ func startlockedm(gp *g) {
 	stopm()
 }
 
-// Stops the current m for stoptheworld.
+// Stops the current m for stopTheWorld.
 // Returns when the world is restarted.
 func gcstopm() {
 	_g_ := getg()
@@ -1420,7 +1457,7 @@ top:
 		xadd(&sched.nmspinning, 1)
 	}
 	// random steal from other P's
-	for i := 0; i < int(2*gomaxprocs); i++ {
+	for i := 0; i < int(4*gomaxprocs); i++ {
 		if sched.gcwaiting != 0 {
 			goto top
 		}
@@ -1429,18 +1466,20 @@ top:
 		if _p_ == _g_.m.p.ptr() {
 			gp, _ = runqget(_p_)
 		} else {
-			gp = runqsteal(_g_.m.p.ptr(), _p_)
+			stealRunNextG := i > 2*int(gomaxprocs) // first look for ready queues with more than 1 g
+			gp = runqsteal(_g_.m.p.ptr(), _p_, stealRunNextG)
 		}
 		if gp != nil {
 			return gp, false
 		}
 	}
+
 stop:
 
-	// We have nothing to do. If we're in the GC mark phaseand can
+	// We have nothing to do. If we're in the GC mark phase and can
 	// safely scan and blacken objects, run idle-time marking
 	// rather than give up the P.
-	if _p_ := _g_.m.p.ptr(); gcBlackenEnabled != 0 && _p_.gcBgMarkWorker != nil {
+	if _p_ := _g_.m.p.ptr(); gcBlackenEnabled != 0 && _p_.gcBgMarkWorker != nil && gcMarkWorkAvailable(_p_) {
 		_p_.gcMarkWorkerMode = gcMarkWorkerIdleMode
 		gp := _p_.gcBgMarkWorker
 		casgstatus(gp, _Gwaiting, _Grunnable)
@@ -3458,23 +3497,34 @@ func runqget(_p_ *p) (gp *g, inheritTime bool) {
 	}
 }
 
-// Grabs a batch of goroutines from local runnable queue.
-// batch array must be of size len(p->runq)/2. Returns number of grabbed goroutines.
+// Grabs a batch of goroutines from _p_'s runnable queue into batch.
+// Batch is a ring buffer starting at batchHead.
+// Returns number of grabbed goroutines.
 // Can be executed by any P.
-func runqgrab(_p_ *p, batch []*g) uint32 {
+func runqgrab(_p_ *p, batch *[256]*g, batchHead uint32, stealRunNextG bool) uint32 {
 	for {
 		h := atomicload(&_p_.runqhead) // load-acquire, synchronize with other consumers
 		t := atomicload(&_p_.runqtail) // load-acquire, synchronize with the producer
 		n := t - h
 		n = n - n/2
 		if n == 0 {
-			// Try to steal from _p_.runnext.
-			if next := _p_.runnext; next != 0 {
-				if !_p_.runnext.cas(next, 0) {
-					continue
+			if stealRunNextG {
+				// Try to steal from _p_.runnext.
+				if next := _p_.runnext; next != 0 {
+					// Sleep to ensure that _p_ isn't about to run the g we
+					// are about to steal.
+					// The important use case here is when the g running on _p_
+					// ready()s another g and then almost immediately blocks.
+					// Instead of stealing runnext in this window, back off
+					// to give _p_ a chance to schedule runnext. This will avoid
+					// thrashing gs between different Ps.
+					usleep(100)
+					if !_p_.runnext.cas(next, 0) {
+						continue
+					}
+					batch[batchHead%uint32(len(batch))] = next.ptr()
+					return 1
 				}
-				batch[0] = next.ptr()
-				return 1
 			}
 			return 0
 		}
@@ -3482,7 +3532,8 @@ func runqgrab(_p_ *p, batch []*g) uint32 {
 			continue
 		}
 		for i := uint32(0); i < n; i++ {
-			batch[i] = _p_.runq[(h+i)%uint32(len(_p_.runq))]
+			g := _p_.runq[(h+i)%uint32(len(_p_.runq))]
+			batch[(batchHead+i)%uint32(len(batch))] = g
 		}
 		if cas(&_p_.runqhead, h, h+n) { // cas-release, commits consume
 			return n
@@ -3493,25 +3544,20 @@ func runqgrab(_p_ *p, batch []*g) uint32 {
 // Steal half of elements from local runnable queue of p2
 // and put onto local runnable queue of p.
 // Returns one of the stolen elements (or nil if failed).
-func runqsteal(_p_, p2 *p) *g {
-	var batch [len(_p_.runq) / 2]*g
-
-	n := runqgrab(p2, batch[:])
+func runqsteal(_p_, p2 *p, stealRunNextG bool) *g {
+	t := _p_.runqtail
+	n := runqgrab(p2, &_p_.runq, t, stealRunNextG)
 	if n == 0 {
 		return nil
 	}
 	n--
-	gp := batch[n]
+	gp := _p_.runq[(t+n)%uint32(len(_p_.runq))]
 	if n == 0 {
 		return gp
 	}
 	h := atomicload(&_p_.runqhead) // load-acquire, synchronize with consumers
-	t := _p_.runqtail
 	if t-h+n >= uint32(len(_p_.runq)) {
 		throw("runqsteal: runq overflow")
-	}
-	for i := uint32(0); i < n; i++ {
-		_p_.runq[(t+i)%uint32(len(_p_.runq))] = batch[i]
 	}
 	atomicstore(&_p_.runqtail, t+n) // store-release, makes the item available for consumption
 	return gp
@@ -3548,7 +3594,7 @@ func testSchedLocalQueueSteal() {
 			gs[j].sig = 0
 			runqput(p1, &gs[j], false)
 		}
-		gp := runqsteal(p2, p1)
+		gp := runqsteal(p2, p1, true)
 		s := 0
 		if gp != nil {
 			s++

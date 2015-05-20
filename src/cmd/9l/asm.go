@@ -38,24 +38,6 @@ import (
 	"log"
 )
 
-func needlib(name string) int {
-	if name[0] == '\x00' {
-		return 0
-	}
-
-	/* reuse hash code in symbol table */
-	p := fmt.Sprintf(".dynlib.%s", name)
-
-	s := ld.Linklookup(ld.Ctxt, p, 0)
-
-	if s.Type == 0 {
-		s.Type = 100 // avoid SDATA, etc.
-		return 1
-	}
-
-	return 0
-}
-
 func gentext() {
 	var s *ld.LSym
 	var stub *ld.LSym
@@ -240,7 +222,7 @@ func adddynrel(s *ld.LSym, r *ld.Reloc) {
 		r.Type = obj.R_ADDR
 		if targ.Type == obj.SDYNIMPORT {
 			// These happen in .toc sections
-			adddynsym(ld.Ctxt, targ)
+			ld.Adddynsym(ld.Ctxt, targ)
 
 			rela := ld.Linklookup(ld.Ctxt, ".rela", 0)
 			ld.Addaddrplus(ld.Ctxt, rela, s, int64(r.Off))
@@ -520,7 +502,7 @@ func addpltsym(ctxt *ld.Link, s *ld.LSym) {
 		return
 	}
 
-	adddynsym(ctxt, s)
+	ld.Adddynsym(ctxt, s)
 
 	if ld.Iself {
 		plt := ld.Linklookup(ctxt, ".plt", 0)
@@ -620,70 +602,6 @@ func ensureglinkresolver() *ld.LSym {
 	ld.Elfwritedynentsymplus(s, ld.DT_PPC64_GLINK, glink, glink.Size-32)
 
 	return glink
-}
-
-func adddynsym(ctxt *ld.Link, s *ld.LSym) {
-	if s.Dynid >= 0 {
-		return
-	}
-
-	if ld.Iself {
-		s.Dynid = int32(ld.Nelfsym)
-		ld.Nelfsym++
-
-		d := ld.Linklookup(ctxt, ".dynsym", 0)
-
-		name := s.Extname
-		ld.Adduint32(ctxt, d, uint32(ld.Addstring(ld.Linklookup(ctxt, ".dynstr", 0), name)))
-
-		/* type */
-		t := ld.STB_GLOBAL << 4
-
-		if s.Cgoexport != 0 && s.Type&obj.SMASK == obj.STEXT {
-			t |= ld.STT_FUNC
-		} else {
-			t |= ld.STT_OBJECT
-		}
-		ld.Adduint8(ctxt, d, uint8(t))
-
-		/* reserved */
-		ld.Adduint8(ctxt, d, 0)
-
-		/* section where symbol is defined */
-		if s.Type == obj.SDYNIMPORT {
-			ld.Adduint16(ctxt, d, ld.SHN_UNDEF)
-		} else {
-			ld.Adduint16(ctxt, d, 1)
-		}
-
-		/* value */
-		if s.Type == obj.SDYNIMPORT {
-			ld.Adduint64(ctxt, d, 0)
-		} else {
-			ld.Addaddr(ctxt, d, s)
-		}
-
-		/* size of object */
-		ld.Adduint64(ctxt, d, uint64(s.Size))
-	} else {
-		ld.Diag("adddynsym: unsupported binary format")
-	}
-}
-
-func adddynlib(lib string) {
-	if needlib(lib) == 0 {
-		return
-	}
-
-	if ld.Iself {
-		s := ld.Linklookup(ld.Ctxt, ".dynstr", 0)
-		if s.Size == 0 {
-			ld.Addstring(s, "")
-		}
-		ld.Elfwritedynent(ld.Linklookup(ld.Ctxt, ".dynamic", 0), ld.DT_NEEDED, uint64(ld.Addstring(s, lib)))
-	} else {
-		ld.Diag("adddynlib: unsupported binary format")
-	}
 }
 
 func asmb() {

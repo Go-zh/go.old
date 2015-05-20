@@ -21,6 +21,7 @@
 package gc
 
 import (
+	"fmt"
 	"strings"
 )
 %}
@@ -116,7 +117,68 @@ import (
 %left		')'
 %left		PreferToRightParen
 
-// TODO(rsc): Add %error-verbose
+%error loadsys package LIMPORT '(' LLITERAL import_package import_there ',':
+	"unexpected comma during import block"
+
+%error loadsys package LIMPORT LNAME ';':
+	"missing import path; require quoted string"
+
+%error loadsys package imports LFUNC LNAME '(' ')' '{' LIF if_header ';':
+	"missing { after if clause"
+
+%error loadsys package imports LFUNC LNAME '(' ')' '{' LSWITCH if_header ';':
+	"missing { after switch clause"
+
+%error loadsys package imports LFUNC LNAME '(' ')' '{' LFOR for_header ';':
+	"missing { after for clause"
+
+%error loadsys package imports LFUNC LNAME '(' ')' '{' LFOR ';' LBODY:
+	"missing { after for clause"
+
+%error loadsys package imports LFUNC LNAME '(' ')' ';' '{':
+	"unexpected semicolon or newline before {"
+
+%error loadsys package imports LTYPE LNAME ';':
+	"unexpected semicolon or newline in type declaration"
+
+%error loadsys package imports LCHAN '}':
+	"unexpected } in channel type"
+
+%error loadsys package imports LCHAN ')':
+	"unexpected ) in channel type"
+
+%error loadsys package imports LCHAN ',':
+	"unexpected comma in channel type"
+
+%error loadsys package imports LFUNC LNAME '(' ')' '{' if_stmt ';' LELSE:
+	"unexpected semicolon or newline before else"
+
+%error loadsys package imports LTYPE LNAME LINTERFACE '{' LNAME ',' LNAME:
+	"name list not allowed in interface type"
+
+%error loadsys package imports LFUNC LNAME '(' ')' '{' LFOR LVAR LNAME '=' LNAME:
+	"var declaration not allowed in for initializer"
+
+%error loadsys package imports LVAR LNAME '[' ']' LNAME '{':
+	"unexpected { at end of statement"
+
+%error loadsys package imports LFUNC LNAME '(' ')' '{' LVAR LNAME '[' ']' LNAME '{':
+	"unexpected { at end of statement"
+
+%error loadsys package imports LFUNC LNAME '(' ')' '{' LDEFER LNAME ';':
+	"argument to go/defer must be function call"
+
+%error loadsys package imports LVAR LNAME '=' LNAME '{' LNAME ';':
+	"need trailing comma before newline in composite literal"
+
+%error loadsys package imports LVAR LNAME '=' comptype '{' LNAME ';':
+	"need trailing comma before newline in composite literal"
+
+%error loadsys package imports LFUNC LNAME '(' ')' '{' LFUNC LNAME:
+	"nested func not allowed"
+
+%error loadsys package imports LFUNC LNAME '(' ')' '{' LIF if_header loop_body LELSE ';':
+	"else must be followed by if or statement block"
 
 %%
 file:
@@ -1130,13 +1192,13 @@ hidden_importsym:
 	{
 		var p *Pkg
 
-		if $2.U.Sval == "" {
+		if $2.U.(string) == "" {
 			p = importpkg;
 		} else {
-			if isbadimport($2.U.Sval) {
+			if isbadimport($2.U.(string)) {
 				errorexit();
 			}
-			p = mkpkg($2.U.Sval);
+			p = mkpkg($2.U.(string));
 		}
 		$$ = Pkglookup($4.Name, p);
 	}
@@ -1144,13 +1206,13 @@ hidden_importsym:
 	{
 		var p *Pkg
 
-		if $2.U.Sval == "" {
+		if $2.U.(string) == "" {
 			p = importpkg;
 		} else {
-			if isbadimport($2.U.Sval) {
+			if isbadimport($2.U.(string)) {
 				errorexit();
 			}
-			p = mkpkg($2.U.Sval);
+			p = mkpkg($2.U.(string));
 		}
 		$$ = Pkglookup("?", p);
 	}
@@ -1944,7 +2006,7 @@ oliteral:
 hidden_import:
 	LIMPORT LNAME LLITERAL ';'
 	{
-		importimport($2, $3.U.Sval);
+		importimport($2, $3.U.(string));
 	}
 |	LVAR hidden_pkg_importsym hidden_type ';'
 	{
@@ -1975,9 +2037,9 @@ hidden_import:
 		importlist = list(importlist, $2);
 
 		if Debug['E'] > 0 {
-			print("import [%q] func %lN \n", importpkg.Path, $2);
+			fmt.Printf("import [%q] func %v \n", importpkg.Path, $2)
 			if Debug['m'] > 2 && $2.Func.Inl != nil {
-				print("inl body:%+H\n", $2.Func.Inl);
+				fmt.Printf("inl body:%v\n", $2.Func.Inl)
 			}
 		}
 	}
@@ -2171,14 +2233,14 @@ hidden_literal:
 		$$ = nodlit($2);
 		switch($$.Val.Ctype){
 		case CTINT, CTRUNE:
-			mpnegfix($$.Val.U.Xval);
+			mpnegfix($$.Val.U.(*Mpint));
 			break;
 		case CTFLT:
-			mpnegflt($$.Val.U.Fval);
+			mpnegflt($$.Val.U.(*Mpflt));
 			break;
 		case CTCPLX:
-			mpnegflt(&$$.Val.U.Cval.Real);
-			mpnegflt(&$$.Val.U.Cval.Imag);
+			mpnegflt(&$$.Val.U.(*Mpcplx).Real);
+			mpnegflt(&$$.Val.U.(*Mpcplx).Imag);
 			break;
 		default:
 			Yyerror("bad negated constant");
@@ -2198,11 +2260,11 @@ hidden_constant:
 	{
 		if $2.Val.Ctype == CTRUNE && $4.Val.Ctype == CTINT {
 			$$ = $2;
-			mpaddfixfix($2.Val.U.Xval, $4.Val.U.Xval, 0);
+			mpaddfixfix($2.Val.U.(*Mpint), $4.Val.U.(*Mpint), 0);
 			break;
 		}
-		$4.Val.U.Cval.Real = $4.Val.U.Cval.Imag;
-		Mpmovecflt(&$4.Val.U.Cval.Imag, 0.0);
+		$4.Val.U.(*Mpcplx).Real = $4.Val.U.(*Mpcplx).Imag;
+		Mpmovecflt(&$4.Val.U.(*Mpcplx).Imag, 0.0);
 		$$ = nodcplxlit($2.Val, $4.Val);
 	}
 

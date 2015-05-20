@@ -944,7 +944,7 @@ func onebitwalktype1(t *Type, xoffset *int64, bv Bvec) {
 		*xoffset += t.Width
 
 	case TARRAY:
-		// The value of t->bound is -1 for slices types and >0 for
+		// The value of t->bound is -1 for slices types and >=0 for
 		// for fixed array types.  All other values are invalid.
 		if t.Bound < -1 {
 			Fatal("onebitwalktype1: invalid bound, %v", t)
@@ -1281,8 +1281,8 @@ func livenessepilogue(lv *Liveness) {
 						}
 						bvset(all, pos) // silence future warnings in this block
 						n = lv.vars[pos]
-						if !n.Needzero {
-							n.Needzero = true
+						if !n.Name.Needzero {
+							n.Name.Needzero = true
 							if debuglive >= 1 {
 								Warnl(int(p.Lineno), "%v: %v is ambiguously live", Curfn.Nname, Nconv(n, obj.FmtLong))
 							}

@@ -416,7 +416,11 @@ func loadcgo(file string, pkg string, p string) {
 				// to force a link of foo.so.
 				havedynamic = 1
 
-				Thearch.Adddynlib(lib)
+				if HEADTYPE == obj.Hdarwin {
+					Machoadddynlib(lib)
+				} else {
+					dynlib = append(dynlib, lib)
+				}
 				continue
 			}
 
@@ -532,6 +536,41 @@ func loadcgo(file string, pkg string, p string) {
 err:
 	fmt.Fprintf(os.Stderr, "%s: %s: invalid dynimport line: %s\n", os.Args[0], file, p0)
 	nerrors++
+}
+
+var seenlib = make(map[string]bool)
+
+func adddynlib(lib string) {
+	if seenlib[lib] || Linkmode == LinkExternal {
+		return
+	}
+	seenlib[lib] = true
+
+	if Iself {
+		s := Linklookup(Ctxt, ".dynstr", 0)
+		if s.Size == 0 {
+			Addstring(s, "")
+		}
+		Elfwritedynent(Linklookup(Ctxt, ".dynamic", 0), DT_NEEDED, uint64(Addstring(s, lib)))
+	} else {
+		Diag("adddynlib: unsupported binary format")
+	}
+}
+
+func Adddynsym(ctxt *Link, s *LSym) {
+	if s.Dynid >= 0 || Linkmode == LinkExternal {
+		return
+	}
+
+	if Iself {
+		Elfadddynsym(ctxt, s)
+	} else if HEADTYPE == obj.Hdarwin {
+		Diag("adddynsym: missed symbol %s (%s)", s.Name, s.Extname)
+	} else if HEADTYPE == obj.Hwindows {
+		// already taken care of
+	} else {
+		Diag("adddynsym: unsupported binary format")
+	}
 }
 
 var markq *LSym
@@ -737,8 +776,11 @@ func addexport() {
 		return
 	}
 
-	for i := 0; i < len(dynexp); i++ {
-		Thearch.Adddynsym(Ctxt, dynexp[i])
+	for _, exp := range dynexp {
+		Adddynsym(Ctxt, exp)
+	}
+	for _, lib := range dynlib {
+		adddynlib(lib)
 	}
 }
 

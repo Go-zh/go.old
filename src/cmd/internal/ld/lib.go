@@ -94,9 +94,7 @@ type Arch struct {
 	Openbsddynld     string
 	Dragonflydynld   string
 	Solarisdynld     string
-	Adddynlib        func(string)
 	Adddynrel        func(*LSym, *Reloc)
-	Adddynsym        func(*Link, *LSym)
 	Archinit         func()
 	Archreloc        func(*Reloc, *LSym, *int64) int
 	Archrelocvariant func(*Reloc, *LSym, int64) int64
@@ -180,6 +178,7 @@ var (
 	Thelinkarch        *LinkArch
 	outfile            string
 	dynexp             []*LSym
+	dynlib             []string
 	ldflag             []string
 	havedynamic        int
 	Funcalign          int
@@ -1201,7 +1200,7 @@ func ldshlibsyms(shlib string) {
 		if strings.HasPrefix(s.Name, "_") {
 			continue
 		}
-		if strings.HasPrefix(s.Name, "runtime.gcbits.0x") {
+		if strings.HasPrefix(s.Name, "runtime.gcbits.") {
 			gcmasks[s.Value] = readelfsymboldata(f, &s)
 		}
 		if s.Name == "go.link.abihashbytes" {

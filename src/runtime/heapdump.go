@@ -15,20 +15,13 @@ import "unsafe"
 
 //go:linkname runtime_debug_WriteHeapDump runtime/debug.WriteHeapDump
 func runtime_debug_WriteHeapDump(fd uintptr) {
-	semacquire(&worldsema, false)
-	gp := getg()
-	gp.m.preemptoff = "write heap dump"
-	systemstack(stoptheworld)
+	stopTheWorld("write heap dump")
 
 	systemstack(func() {
 		writeheapdump_m(fd)
 	})
 
-	gp.m.preemptoff = ""
-	gp.m.locks++
-	semrelease(&worldsema)
-	systemstack(starttheworld)
-	gp.m.locks--
+	startTheWorld()
 }
 
 const (
