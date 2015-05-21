@@ -6,7 +6,6 @@
 
 // issue 1951
 package foo
-
 import "unsafe"
+var v = unsafe.Sizeof  // ERROR "must be called"
 
-var v = unsafe.Sizeof // ERROR "must be called"
