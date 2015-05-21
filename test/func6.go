@@ -9,10 +9,8 @@
 package main
 
 func main() {
-	if func() bool { return true }() {
-	} // 6g used to say this was a syntax error
-	if (func() bool { return true })() {
-	}
-	if func() bool { return true }() {
-	}
+	if func() bool { return true }() {}  // 6g used to say this was a syntax error
+	if (func() bool { return true })() {}
+	if (func() bool { return true }()) {}
 }
+

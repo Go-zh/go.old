@@ -14,7 +14,7 @@ var minus1 = -1
 var five = 5
 var big int64 = 10 | 1<<32
 
-type block [1 << 19]byte
+type block [1<<19]byte
 
 var g1 []block
 
@@ -49,7 +49,6 @@ func bigcap() {
 }
 
 var g3 map[block]block
-
 func badmapcap() {
 	g3 = make(map[block]block, minus1)
 }
@@ -58,10 +57,9 @@ func bigmapcap() {
 	g3 = make(map[block]block, big)
 }
 
-type cblock [1<<16 - 1]byte
+type cblock [1<<16-1]byte
 
 var g4 chan cblock
-
 func badchancap() {
 	g4 = make(chan cblock, minus1)
 }

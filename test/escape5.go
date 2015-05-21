@@ -117,6 +117,7 @@ func leakrecursive2(p, q *int) (*int, *int) { // ERROR "leaking param: p" "leaki
 	return p, q
 }
 
+
 var global interface{}
 
 type T1 struct {
@@ -140,7 +141,7 @@ func f8(p *T1) (k T2) { // ERROR "leaking param: p to result k" "leaking param: 
 
 func f9() {
 	var j T1 // ERROR "moved to heap: j"
-	f8(&j)   // ERROR "&j escapes to heap"
+	f8(&j) // ERROR "&j escapes to heap"
 }
 
 func f10() {
