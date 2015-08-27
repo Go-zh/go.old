@@ -46,7 +46,7 @@ func (check *Checker) call(x *operand, e *ast.CallExpr) exprKind {
 		}
 		x.expr = e
 		// a non-constant result implies a function call
-		if x.mode != invalid && x.mode != constant {
+		if x.mode != invalid && x.mode != constant_ {
 			check.hasCallOrRecv = true
 		}
 		return predeclaredFuncs[id].kind
@@ -280,7 +280,7 @@ func (check *Checker) selector(x *operand, e *ast.SelectorExpr) {
 	// can only appear in qualified identifiers which are mapped to
 	// selector expressions.
 	if ident, ok := e.X.(*ast.Ident); ok {
-		_, obj := check.scope.LookupParent(ident.Name)
+		_, obj := check.scope.LookupParent(ident.Name, check.pos)
 		if pkg, _ := obj.(*PkgName); pkg != nil {
 			assert(pkg.pkg == check.pkg)
 			check.recordUse(ident, pkg)
@@ -302,7 +302,7 @@ func (check *Checker) selector(x *operand, e *ast.SelectorExpr) {
 			switch exp := exp.(type) {
 			case *Const:
 				assert(exp.Val() != nil)
-				x.mode = constant
+				x.mode = constant_
 				x.typ = exp.typ
 				x.val = exp.val
 			case *TypeName:

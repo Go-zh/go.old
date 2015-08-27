@@ -129,7 +129,7 @@ type PrecomputedValues struct {
 	CRTValues []CRTValue
 }
 
-// CRTValue contains the precomputed chinese remainder theorem values.
+// CRTValue contains the precomputed Chinese remainder theorem values.
 type CRTValue struct {
 	Exp   *big.Int // D mod (prime-1).
 	Coeff *big.Int // R·Coeff ≡ 1 mod Prime.
@@ -146,6 +146,10 @@ func (priv *PrivateKey) Validate() error {
 	// Check that Πprimes == n.
 	modulus := new(big.Int).Set(bigOne)
 	for _, prime := range priv.Primes {
+		// Any primes ≤ 1 will cause divide-by-zero panics later.
+		if prime.Cmp(bigOne) <= 0 {
+			return errors.New("crypto/rsa: invalid prime value")
+		}
 		modulus.Mul(modulus, prime)
 	}
 	if modulus.Cmp(priv.N) != 0 {

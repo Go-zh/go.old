@@ -51,7 +51,7 @@ packages, though, read on.
 <p>
 There are two official Go compiler tool chains.
 This document focuses on the <code>gc</code> Go
-compiler and tools (<code>6g</code>, <code>8g</code> etc.).
+compiler and tools.
 For information on how to work on <code>gccgo</code>, a more traditional
 compiler using the GCC back end, see
 <a href="/doc/install/gccgo">Setting up and using gccgo</a>.
@@ -59,27 +59,27 @@ compiler using the GCC back end, see
 </div>
 
 <p>
-官方有两个Go编译器工具链。本文档着重于 <code>gc</code> Go编译器及其工具
-（<code>6g</code>、<code>8g</code> 等）。<code>gccgo</code> 是一个更传统的的编译器，
-它使用GCC作为后端。关于如何使用它工作的信息，请访问<a href="/doc/install/gccgo">设置并使用gccgo</a>。
+官方有两个Go编译器工具链。本文档着重于 <code>gc</code> Go编译器及其工具。
+<code>gccgo</code> 是一个更传统的的编译器，它使用GCC作为后端。
+关于如何使用它工作的信息，请访问<a href="/doc/install/gccgo">设置并使用 gccgo</a>。
 </p>
 
 <div class="english">
 <p>
-The Go compilers support three instruction sets.
+The Go compilers support five instruction sets.
 There are important differences in the quality of the compilers for the different
 architectures.
 </p>
 </div>
 
 <p>
-Go编译器支持三种指令集，以下为在不同的架构上，编译器特性中重要的不同之处。
+Go编译器支持五种指令集，以下为在不同的架构上，编译器特性中重要的不同之处。
 </p>
 
 <div class="english">
 <dl>
 <dt>
-	<code>amd64</code> (a.k.a. <code>x86-64</code>); <code>6g,6l,6c,6a</code>
+	<code>amd64</code> (also known as <code>x86-64</code>)
 </dt>
 <dd>
 	A mature implementation. The compiler has an effective
@@ -87,39 +87,63 @@ Go编译器支持三种指令集，以下为在不同的架构上，编译器特
 	<code>gccgo</code> can do noticeably better sometimes).
 </dd>
 <dt>
-	<code>386</code> (a.k.a. <code>x86</code> or <code>x86-32</code>); <code>8g,8l,8c,8a</code>
+	<code>386</code> (<code>x86</code> or <code>x86-32</code>)
 </dt>
 <dd>
 	Comparable to the <code>amd64</code> port.
 </dd>
 <dt>
-	<code>arm</code> (a.k.a. <code>ARM</code>); <code>5g,5l,5c,5a</code>
+	<code>arm</code> (<code>ARM</code>)
 </dt>
 <dd>
-	Supports Linux, FreeBSD and NetBSD binaries. Less widely used than the other ports.
+	Supports Linux, FreeBSD, NetBSD and Darwin binaries. Less widely used than the other ports.
+</dd>
+<dt>
+	<code>arm64</code> (<code>AArch64</code>)
+</dt>
+<dd>
+	Supports Linux and Darwin binaries. New in 1.5 and not as well excercised as other ports.
+</dd>
+<dt>
+	<code>ppc64, ppc64le</code> (64-bit PowerPC big- and little-endian)
+</dt>
+<dd>
+	Supports Linux binaries. New in 1.5 and not as well exercised as other ports.
 </dd>
 </dl>
 </div>
 
 <dl>
 <dt>
-	<code>amd64</code>（即 <code>x86-64</code>）：<code>6g,6l,6c,6a</code>
+	<code>amd64</code>（即 <code>x86-64</code>）
 </dt>
 <dd>
 	一个成熟的实现。此编译器拥有高效的优化器（寄存优化器）并能生成高质量的代码
-	（当然，在某些事情上gccgo做得更好）。
+	（尽管在某些事情上gccgo做得更好）。
 </dd>
 <dt>
-	<code>386</code>（即 <code>x86</code> 或 <code>x86-32</code>）：<code>8g,8l,8c,8a</code>
+	<code>386</code>（<code>x86</code> 或 <code>x86-32</code>）
 </dt>
 <dd>
-	与 <code>amd64</code> 端口有可比之处。
+	类似于 <code>amd64</code> 的移植
 </dd>
 <dt>
-	<code>arm</code>（即 <code>ARM</code>）：<code>5g,5l,5c,5a</code>
+	<code>arm</code>（<code>ARM</code>）
 </dt>
 <dd>
-	只支持Linux二进制。与其他接口相比较少使用，因此并没有经过充分的测试。
+	支持 Linux、FreeBSD、NetBSD 和 Darwin 二进制。与其它移植相比应用较少。
+</dd>
+<dt>
+	<code>arm64</code>（<code>AArch64</code>）
+</dt>
+<dd>
+	支持 Linux 和 Darwin 二进制。1.5 新加入的移植，不如其它移植稳定。
+</dd>
+<dt>
+	<code>ppc64, ppc64le</code>（大、小端序的 64 位 PowerPC）
+</dt>
+<dd>
+	支持 Linux 二进制。1.5 新加入的移植，不如其它移植稳定。
 </dd>
 </dl>
 
@@ -199,6 +223,68 @@ location).
 <code>$HOME/go1.4</code>（或你指定的 <code>GOROOT_BOOTSTRAP</code> 位置）。
 </p>
 
+<div class="english">
+<p>
+If you want to install Go 1.5 on a system that is not supported by Go 1.4 (such
+as <code>linux/ppc64</code>) you can either use
+<a href="/src/bootstrap.bash">bootstrap.bash</a> on a system that can bootstrap Go
+1.5 normally, or bootstrap with gccgo 5.
+</p>
+</div>
+
+<p>
+若你想要在 Go 1.4 不支持的系统（例如 <code>linux/ppc64</code>）上安装 Go 1.5，
+那么可以在能够正常引导 Go 1.5 的系统上使用 <a href="/src/bootstrap.bash">bootstrap.bash</a>。
+如果不能，请使用 gccgo 5 来引导。
+</p>
+
+<div class="english">
+<p>
+When run as (for example)
+</p>
+</div>
+
+<p>
+例如，当以
+</p>
+
+<pre>
+$ GOOS=linux GOARCH=ppc64 ./bootstrap.bash
+</pre>
+
+<div class="english">
+<p>
+<code>bootstrap.bash</code> cross-compiles a toolchain for that <code>GOOS/GOARCH</code>
+combination, leaving the resulting tree in <code>../../go-${GOOS}-${GOARCH}-bootstrap</code>.
+That tree can be copied to a machine of the given target type
+and used as <code>GOROOT_BOOTSTRAP</code> to bootstrap a local build.
+</p>
+</div>
+
+<p>
+的形式运行 <code>bootstrap.bash</code> 时，它会根据 <code>GOOS/GOARCH</code>
+的组合编译出一套工具链，并将生成的目录树留在 <code>../../go-${GOOS}-${GOARCH}-bootstrap</code> 中。
+该目录树可以复制到给定目标类型的机器上作为 <code>GOROOT_BOOTSTRAP</code> 来引导本地的构建。
+</p>
+
+<div class="english">
+<p>
+To use gccgo, you need to arrange for <code>$GOROOT_BOOSTRAP/bin/go</code> to be
+the go tool that comes as part of gccgo 5. For example on Ubuntu Vivid:
+</p>
+</div>
+
+<p>
+要使用 gccgo，你需要将 <code>$GOROOT_BOOSTRAP/bin/go</code> 设置为 gccgo 5 的 go
+工具。以 Ubuntu Vivid 为例：
+</p>
+
+<pre>
+$ sudo apt-get install gccgo-5
+$ sudo update-alternatives --set go /usr/bin/go-5
+$ GOROOT_BOOTSTRAP=/usr ./make.bash
+</pre>
+
 
 <div class="english">
 <h2 id="git">Install Git, if needed</h2>
@@ -253,14 +339,14 @@ Go 将安装到名为 <code>go</code> 的目录。
 <pre>
 $ git clone https://go.googlesource.com/go
 $ cd go
-$ git checkout go1.4
+$ git checkout go1.5
 </pre>
 
 <div class="english">
 <h2 id="head">(Optional) Switch to the master branch</h2>
 </div>
 
-<h2 id="head">（）可选切换到 master 分支</h2>
+<h2 id="head">（可选）切换到 master 分支</h2>
 
 <div class="english">
 <p>If you intend to modify the go source code, and
@@ -597,13 +683,14 @@ New releases are announced on the
 <a href="//groups.google.com/group/golang-announce">golang-announce</a>
 mailing list.
 Each announcement mentions the latest release tag, for instance,
-<code>go1.4</code>.
+<code>go1.5</code>.
 </p>
 </div>
 
 <p>
-新的发行版将在<a href="http://groups.google.com/group/golang-announce">golang-announce</a>
-邮件列表中宣布。每次宣布都会提及最新的发型标签，例如 <code>go1.4</code>。
+新的发行版将在
+<a href="http://groups.google.com/group/golang-announce">golang-announce</a>
+邮件列表中宣布。每次宣布都会提及最新的发行标签，例如 <code>go1.5</code>。
 </p>
 
 <div class="english">
@@ -700,24 +787,24 @@ These default to the values of <code>$GOHOSTOS</code> and
 <div class="english">
 <p>
 Choices for <code>$GOOS</code> are
-<code>darwin</code> (Mac OS X 10.6 and above), <code>dragonfly</code>, <code>freebsd</code>,
+<code>darwin</code> (Mac OS X 10.7 and above and iOS), <code>dragonfly</code>, <code>freebsd</code>,
 <code>linux</code>, <code>netbsd</code>, <code>openbsd</code>,
 <code>plan9</code>, <code>solaris</code> and <code>windows</code>.
 Choices for <code>$GOARCH</code> are
 <code>amd64</code> (64-bit x86, the most mature port),
-<code>386</code> (32-bit x86), and <code>arm</code> (32-bit ARM).
+<code>386</code> (32-bit x86), <code>arm</code> (32-bit ARM), <code>arm64</code> (64-bit ARM),
+<code>ppc64le</code> (PowerPC 64-bit, little-endian), and <code>ppc64</code> (PowerPC 64-bit, big-endian).
 The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 </p>
 </div>
 
 <p>
-<code>$GOOS</code> 的选项为
-<code>darwin</code>（Mac OS X 10.6及以上）、<code>dragonfly</code>、<code>freebsd</code>、
-<code>linux</code>、<code>netbsd</code>、<code>openbsd</code>、
+<code>$GOOS</code> 的选项为 <code>darwin</code>（Mac OS X 10.7 及以上）、<code>dragonfly</code>、
+<code>freebsd</code>、<code>linux</code>、<code>netbsd</code>、<code>openbsd</code>、
 <code>plan9</code>、<code>solaris</code> 以及 <code>windows</code>。
-<code>$GOARCH</code> 的选项为
-<code>amd64</code>（64位x86，最成熟的端口）、
-<code>386</code>（32位x86）以及 <code>arm</code>（32位ARM）。
+<code>$GOARCH</code> 的选项为 <code>amd64</code>（64 位 x86，最成熟的移植）、
+<code>386</code>（32 位 x86）、<code>arm</code>（32 位 ARM）、<code>arm64</code>、(64 位 ARM）、
+<code>ppc64le</code>（64 位小端序 PowerPC）以及 <code>ppc64</code>（64 位大端序 PowerPC）。
 <code>$GOOS</code> 与 <code>$GOARCH</code> 的有效组合为：
 </p>
 
@@ -732,7 +819,10 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 <td></td><td><code>darwin</code></td> <td><code>amd64</code></td>
 </tr>
 <tr>
-<td></td><td><code>dragonfly</code></td> <td><code>386</code></td>
+<td></td><td><code>darwin</code></td> <td><code>arm</code></td>
+</tr>
+<tr>
+<td></td><td><code>darwin</code></td> <td><code>arm64</code></td>
 </tr>
 <tr>
 <td></td><td><code>dragonfly</code></td> <td><code>amd64</code></td>
@@ -756,6 +846,15 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 <td></td><td><code>linux</code></td> <td><code>arm</code></td>
 </tr>
 <tr>
+<td></td><td><code>linux</code></td> <td><code>arm64</code></td>
+</tr>
+<tr>
+<td></td><td><code>linux</code></td> <td><code>ppc64</code></td>
+</tr>
+<tr>
+<td></td><td><code>linux</code></td> <td><code>ppc64le</code></td>
+</tr>
+<tr>
 <td></td><td><code>netbsd</code></td> <td><code>386</code></td>
 </tr>
 <tr>
@@ -769,6 +868,9 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 </tr>
 <tr>
 <td></td><td><code>openbsd</code></td> <td><code>amd64</code></td>
+</tr>
+<tr>
+<td></td><td><code>openbsd</code></td> <td><code>arm</code></td>
 </tr>
 <tr>
 <td></td><td><code>plan9</code></td> <td><code>386</code></td>
@@ -786,6 +888,7 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 <td></td><td><code>windows</code></td> <td><code>amd64</code></td>
 </tr>
 </table>
+<br>
 
 <div class="english">
 <li><code>$GOHOSTOS</code> and <code>$GOHOSTARCH</code>
@@ -842,7 +945,7 @@ Go二进制文件将安装的位置。它默认为 <code>$GOROOT/bin</code> 。
 <li><code>$GO386</code> (for <code>386</code> only, default is auto-detected
 if built on either <code>386</code> or <code>amd64</code>, <code>387</code> otherwise)
 <p>
-This controls the code generated by 8g to use either the 387 floating-point unit
+This controls the code generated by gc to use either the 387 floating-point unit
 (set to <code>387</code>) or SSE2 instructions (set to <code>sse2</code>) for
 floating point computations.
 </p>
@@ -855,7 +958,7 @@ floating point computations.
 <li><code>$GO386</code>（仅用于 <code>386</code>，若为原生构建，则默认自动决定，否则为
 <code>387</code>）
 <p>
-它用于控制 8g 的代码生成，具体为387浮点运算单元（设置为 <code>387</code>），
+它用于控制 gc 生成的代码，具体为387浮点运算单元（设置为 <code>387</code>），
 或用于浮点数计算的 SSE2 指令（设置为 <code>sse2</code>）。
 </p>
 <ul>
@@ -886,7 +989,7 @@ contains further details regarding Go's ARM support.
 </div>
 
 <li><code>$GOARM</code>（仅用于 <code>arm</code>；若为原生构建，则默认自动决定，否则为
-<code>6</code>)
+<code>6</code>）
 <p>
 它设置了运行时目标的ARM浮点协助处理器架构的版本。若你在目标系统上编译，它将自动决定。
 </p>
@@ -951,5 +1054,5 @@ install, and develop the Go tree.
 </div>
 
 <p>
-再次重申一遍，构建、安装并开发Go树无需设置这些变量。
+再重申一遍：构建、安装并开发 Go 目录树无需设置这些变量。
 </p>

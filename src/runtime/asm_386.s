@@ -341,6 +341,22 @@ TEXT runtime·morestack_noctxt(SB),NOSPLIT,$0-0
 	MOVL	$0, DX
 	JMP runtime·morestack(SB)
 
+TEXT runtime·stackBarrier(SB),NOSPLIT,$0
+	// We came here via a RET to an overwritten return PC.
+	// AX may be live. Other registers are available.
+
+	// Get the original return PC, g.stkbar[g.stkbarPos].savedLRVal.
+	get_tls(CX)
+	MOVL	g(CX), CX
+	MOVL	(g_stkbar+slice_array)(CX), DX
+	MOVL	g_stkbarPos(CX), BX
+	IMULL	$stkbar__size, BX	// Too big for SIB.
+	MOVL	stkbar_savedLRVal(DX)(BX*1), BX
+	// Record that this stack barrier was hit.
+	ADDL	$1, g_stkbarPos(CX)
+	// Jump to the original return PC.
+	JMP	BX
+
 // reflectcall: call a function with the given argument list
 // func call(argtype *_type, f *FuncVal, arg *byte, argsize, retoffset uint32).
 // we don't have variable-sized frames, so we use a small number
@@ -616,6 +632,11 @@ TEXT runtime·atomicand8(SB), NOSPLIT, $0-5
 	ANDB	BX, (AX)
 	RET
 
+TEXT ·publicationBarrier(SB),NOSPLIT,$0-0
+	// Stores are already ordered on x86, so this is just a
+	// compile barrier.
+	RET
+
 // void jmpdefer(fn, sp);
 // called from deferreturn.
 // 1. pop the caller
@@ -645,25 +666,14 @@ TEXT gosave<>(SB),NOSPLIT,$0
 	POPL	AX
 	RET
 
-// asmcgocall(void(*fn)(void*), void *arg)
+// func asmcgocall(fn, arg unsafe.Pointer) int32
 // Call fn(arg) on the scheduler stack,
 // aligned appropriately for the gcc ABI.
-// See cgocall.c for more details.
-TEXT ·asmcgocall(SB),NOSPLIT,$0-8
+// See cgocall.go for more details.
+TEXT ·asmcgocall(SB),NOSPLIT,$0-12
 	MOVL	fn+0(FP), AX
 	MOVL	arg+4(FP), BX
-	CALL	asmcgocall<>(SB)
-	RET
 
-TEXT ·asmcgocall_errno(SB),NOSPLIT,$0-12
-	MOVL	fn+0(FP), AX
-	MOVL	arg+4(FP), BX
-	CALL	asmcgocall<>(SB)
-	MOVL	AX, ret+8(FP)
-	RET
-
-TEXT asmcgocall<>(SB),NOSPLIT,$0-0
-	// fn in AX, arg in BX
 	MOVL	SP, DX
 
 	// Figure out if we need to switch to m->g0 stack.
@@ -697,6 +707,8 @@ TEXT asmcgocall<>(SB),NOSPLIT,$0-0
 	SUBL	4(SP), SI
 	MOVL	DI, g(CX)
 	MOVL	SI, SP
+
+	MOVL	AX, ret+8(FP)
 	RET
 
 // cgocallback(void (*fn)(void*), void *frame, uintptr framesize)
@@ -714,7 +726,7 @@ TEXT runtime·cgocallback(SB),NOSPLIT,$12-12
 	RET
 
 // cgocallback_gofunc(FuncVal*, void *frame, uintptr framesize)
-// See cgocall.c for more details.
+// See cgocall.go for more details.
 TEXT ·cgocallback_gofunc(SB),NOSPLIT,$12-12
 	NO_LOCAL_POINTERS
 
@@ -860,16 +872,30 @@ TEXT runtime·stackcheck(SB), NOSPLIT, $0-0
 	INT	$3
 	RET
 
-TEXT runtime·getcallerpc(SB),NOSPLIT,$0-8
+TEXT runtime·getcallerpc(SB),NOSPLIT,$4-8
 	MOVL	argp+0(FP),AX		// addr of first arg
 	MOVL	-4(AX),AX		// get calling pc
+	CMPL	AX, runtime·stackBarrierPC(SB)
+	JNE	nobar
+	// Get original return PC.
+	CALL	runtime·nextBarrierPC(SB)
+	MOVL	0(SP), AX
+nobar:
 	MOVL	AX, ret+4(FP)
 	RET
 
-TEXT runtime·setcallerpc(SB),NOSPLIT,$0-8
+TEXT runtime·setcallerpc(SB),NOSPLIT,$4-8
 	MOVL	argp+0(FP),AX		// addr of first arg
 	MOVL	pc+4(FP), BX
+	MOVL	-4(AX), CX
+	CMPL	CX, runtime·stackBarrierPC(SB)
+	JEQ	setbar
 	MOVL	BX, -4(AX)		// set calling pc
+	RET
+setbar:
+	// Set the stack barrier return PC.
+	MOVL	BX, 0(SP)
+	CALL	runtime·setNextBarrierPC(SB)
 	RET
 
 TEXT runtime·getcallersp(SB), NOSPLIT, $0-8

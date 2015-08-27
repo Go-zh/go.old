@@ -12,7 +12,6 @@ const (
 	_HW_NCPU = 3
 )
 
-var sigset_none = sigset{}
 var sigset_all = sigset{[4]uint32{^uint32(0), ^uint32(0), ^uint32(0), ^uint32(0)}}
 
 func getncpu() int32 {
@@ -89,9 +88,9 @@ func newosproc(mp *m, stk unsafe.Pointer) {
 	mp.tls[0] = uintptr(mp.id) // so 386 asm can find it
 
 	var oset sigset
-	sigprocmask(&sigset_all, &oset)
+	sigprocmask(_SIG_SETMASK, &sigset_all, &oset)
 	thr_new(&param, int32(unsafe.Sizeof(param)))
-	sigprocmask(&oset, nil)
+	sigprocmask(_SIG_SETMASK, &oset, nil)
 }
 
 func osinit() {
@@ -119,6 +118,14 @@ func mpreinit(mp *m) {
 	mp.gsignal.m = mp
 }
 
+func msigsave(mp *m) {
+	smask := (*sigset)(unsafe.Pointer(&mp.sigmask))
+	if unsafe.Sizeof(*smask) > unsafe.Sizeof(mp.sigmask) {
+		throw("insufficient storage for signal mask")
+	}
+	sigprocmask(_SIG_SETMASK, nil, smask)
+}
+
 // Called to initialize a new m (including the bootstrap m).
 // Called on the new thread, can not allocate memory.
 func minit() {
@@ -131,13 +138,24 @@ func minit() {
 	}
 
 	// Initialize signal handling.
-	signalstack((*byte)(unsafe.Pointer(_g_.m.gsignal.stack.lo)), 32*1024)
-	sigprocmask(&sigset_none, nil)
+	signalstack(&_g_.m.gsignal.stack)
+
+	// restore signal mask from m.sigmask and unblock essential signals
+	nmask := *(*sigset)(unsafe.Pointer(&_g_.m.sigmask))
+	for i := range sigtable {
+		if sigtable[i].flags&_SigUnblock != 0 {
+			nmask.__bits[(i-1)/32] &^= 1 << ((uint32(i) - 1) & 31)
+		}
+	}
+	sigprocmask(_SIG_SETMASK, &nmask, nil)
 }
 
 // Called from dropm to undo the effect of an minit.
 func unminit() {
-	signalstack(nil, 0)
+	_g_ := getg()
+	smask := (*sigset)(unsafe.Pointer(&_g_.m.sigmask))
+	sigprocmask(_SIG_SETMASK, smask, nil)
+	signalstack(nil)
 }
 
 func memlimit() uintptr {
@@ -206,17 +224,26 @@ func getsig(i int32) uintptr {
 	return sa.sa_handler
 }
 
-func signalstack(p *byte, n int32) {
+func signalstack(s *stack) {
 	var st stackt
-	st.ss_sp = uintptr(unsafe.Pointer(p))
-	st.ss_size = uintptr(n)
-	st.ss_flags = 0
-	if p == nil {
+	if s == nil {
 		st.ss_flags = _SS_DISABLE
+	} else {
+		st.ss_sp = s.lo
+		st.ss_size = s.hi - s.lo
+		st.ss_flags = 0
 	}
 	sigaltstack(&st, nil)
 }
 
-func unblocksignals() {
-	sigprocmask(&sigset_none, nil)
+func updatesigmask(m [(_NSIG + 31) / 32]uint32) {
+	var mask sigset
+	copy(mask.__bits[:], m[:])
+	sigprocmask(_SIG_SETMASK, &mask, nil)
+}
+
+func unblocksig(sig int32) {
+	var mask sigset
+	mask.__bits[(sig-1)/32] |= 1 << ((uint32(sig) - 1) & 31)
+	sigprocmask(_SIG_UNBLOCK, &mask, nil)
 }

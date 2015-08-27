@@ -95,6 +95,7 @@ var commands = []*Command{
 	helpBuildmode,
 	helpFileType,
 	helpGopath,
+	helpEnvironment,
 	helpImportPath,
 	helpPackages,
 	helpTestflag,
@@ -111,6 +112,8 @@ func setExitStatus(n int) {
 	}
 	exitMu.Unlock()
 }
+
+var origEnv []string
 
 func main() {
 	_ = go11tag
@@ -142,7 +145,7 @@ func main() {
 				fmt.Fprintf(os.Stderr, "go: GOPATH entry cannot start with shell metacharacter '~': %q\n", p)
 				os.Exit(2)
 			}
-			if build.IsLocalImport(p) {
+			if !filepath.IsAbs(p) {
 				fmt.Fprintf(os.Stderr, "go: GOPATH entry is relative; must be absolute path: %q.\nRun 'go help gopath' for usage.\n", p)
 				os.Exit(2)
 			}
@@ -159,6 +162,7 @@ func main() {
 	// the same default computation of these as we do,
 	// but in practice there might be skew
 	// This makes sure we all agree.
+	origEnv = os.Environ()
 	for _, env := range mkEnv() {
 		if os.Getenv(env.name) != env.value {
 			os.Setenv(env.name, env.value)
@@ -231,12 +235,35 @@ var documentationTemplate = `// Copyright 2011 The Go Authors.  All rights reser
 package main
 `
 
+// An errWriter wraps a writer, recording whether a write error occurred.
+type errWriter struct {
+	w   io.Writer
+	err error
+}
+
+func (w *errWriter) Write(b []byte) (int, error) {
+	n, err := w.w.Write(b)
+	if err != nil {
+		w.err = err
+	}
+	return n, err
+}
+
 // tmpl executes the given template text on data, writing the result to w.
 func tmpl(w io.Writer, text string, data interface{}) {
 	t := template.New("top")
 	t.Funcs(template.FuncMap{"trim": strings.TrimSpace, "capitalize": capitalize})
 	template.Must(t.Parse(text))
-	if err := t.Execute(w, data); err != nil {
+	ew := &errWriter{w: w}
+	err := t.Execute(ew, data)
+	if ew.err != nil {
+		// I/O error writing. Ignore write on closed pipe.
+		if strings.Contains(ew.err.Error(), "pipe") {
+			os.Exit(1)
+		}
+		fatalf("writing output: %v", ew.err)
+	}
+	if err != nil {
 		panic(err)
 	}
 }
@@ -258,7 +285,9 @@ func printUsage(w io.Writer) {
 func usage() {
 	// special case "go test -h"
 	if len(os.Args) > 1 && os.Args[1] == "test" {
-		help([]string{"testflag"})
+		os.Stdout.WriteString(testUsage + "\n\n" +
+			strings.TrimSpace(testFlag1) + "\n\n" +
+			strings.TrimSpace(testFlag2) + "\n")
 		os.Exit(2)
 	}
 	printUsage(os.Stderr)
@@ -417,11 +446,10 @@ func runOut(dir string, cmdargs ...interface{}) []byte {
 // The environment is the current process's environment
 // but with an updated $PWD, so that an os.Getwd in the
 // child will be faster.
-func envForDir(dir string) []string {
-	env := os.Environ()
+func envForDir(dir string, base []string) []string {
 	// Internally we only use rooted paths, so dir is rooted.
 	// Even if dir is not rooted, no harm done.
-	return mergeEnvLists([]string{"PWD=" + dir}, env)
+	return mergeEnvLists([]string{"PWD=" + dir}, base)
 }
 
 // mergeEnvLists merges the two environment lists such that
@@ -471,6 +499,28 @@ func hasPathPrefix(s, prefix string) bool {
 			return strings.HasPrefix(s, prefix)
 		}
 		return s[len(prefix)] == '/' && s[:len(prefix)] == prefix
+	}
+}
+
+// hasFilePathPrefix reports whether the filesystem path s begins with the
+// elements in prefix.
+func hasFilePathPrefix(s, prefix string) bool {
+	sv := strings.ToUpper(filepath.VolumeName(s))
+	pv := strings.ToUpper(filepath.VolumeName(prefix))
+	s = s[len(sv):]
+	prefix = prefix[len(pv):]
+	switch {
+	default:
+		return false
+	case sv != pv:
+		return false
+	case len(s) == len(prefix):
+		return s == prefix
+	case len(s) > len(prefix):
+		if prefix != "" && prefix[len(prefix)-1] == filepath.Separator {
+			return strings.HasPrefix(s, prefix)
+		}
+		return s[len(prefix)] == filepath.Separator && s[:len(prefix)] == prefix
 	}
 }
 

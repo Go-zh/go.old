@@ -27,7 +27,7 @@ const (
 	// the following encode that the GC is scanning the stack and what to do when it is done
 	_Gscan = 0x1000 // atomicstatus&~Gscan = the non-scan state,
 	// _Gscanidle =     _Gscan + _Gidle,      // Not used. Gidle only used with newly malloced gs
-	_Gscanrunnable = _Gscan + _Grunnable //  0x1001 When scanning complets make Grunnable (it is already on run queue)
+	_Gscanrunnable = _Gscan + _Grunnable //  0x1001 When scanning completes make Grunnable (it is already on run queue)
 	_Gscanrunning  = _Gscan + _Grunning  //  0x1002 Used to tell preemption newstack routine to scan preempted stack.
 	_Gscansyscall  = _Gscan + _Gsyscall  //  0x1003 When scanning completes make it Gsyscall
 	_Gscanwaiting  = _Gscan + _Gwaiting  //  0x1004 When scanning completes make it Gwaiting
@@ -202,6 +202,12 @@ type stack struct {
 	hi uintptr
 }
 
+// stkbar records the state of a G's stack barrier.
+type stkbar struct {
+	savedLRPtr uintptr // location overwritten by stack barrier PC
+	savedLRVal uintptr // value overwritten at savedLRPtr
+}
+
 type g struct {
 	// Stack parameters.
 	// stack describes the actual stack memory: [stack.lo, stack.hi).
@@ -214,36 +220,43 @@ type g struct {
 	stackguard0 uintptr // offset known to liblink
 	stackguard1 uintptr // offset known to liblink
 
-	_panic       *_panic // innermost panic - offset known to liblink
-	_defer       *_defer // innermost defer
-	sched        gobuf
-	syscallsp    uintptr        // if status==Gsyscall, syscallsp = sched.sp to use during gc
-	syscallpc    uintptr        // if status==Gsyscall, syscallpc = sched.pc to use during gc
-	param        unsafe.Pointer // passed parameter on wakeup
-	atomicstatus uint32
-	goid         int64
-	waitsince    int64  // approx time when the g become blocked
-	waitreason   string // if status==Gwaiting
-	schedlink    guintptr
-	preempt      bool // preemption signal, duplicates stackguard0 = stackpreempt
-	paniconfault bool // panic (instead of crash) on unexpected fault address
-	preemptscan  bool // preempted g does scan for gc
-	gcworkdone   bool // debug: cleared at begining of gc work phase cycle, set by gcphasework, tested at end of cycle
-	gcscanvalid  bool // false at start of gc cycle, true if G has not run since last scan
-	throwsplit   bool // must not split stack
-	raceignore   int8 // ignore race detection events
-	m            *m   // for debuggers, but offset not hard-coded
-	lockedm      *m
-	sig          uint32
-	writebuf     []byte
-	sigcode0     uintptr
-	sigcode1     uintptr
-	sigpc        uintptr
-	gopc         uintptr // pc of go statement that created this goroutine
-	startpc      uintptr // pc of goroutine function
-	racectx      uintptr
-	waiting      *sudog // sudog structures this g is waiting on (that have a valid elem ptr)
-	readyg       *g     // scratch for readyExecute
+	_panic         *_panic // innermost panic - offset known to liblink
+	_defer         *_defer // innermost defer
+	m              *m      // current m; offset known to arm liblink
+	stackAlloc     uintptr // stack allocation is [stack.lo,stack.lo+stackAlloc)
+	sched          gobuf
+	syscallsp      uintptr        // if status==Gsyscall, syscallsp = sched.sp to use during gc
+	syscallpc      uintptr        // if status==Gsyscall, syscallpc = sched.pc to use during gc
+	stkbar         []stkbar       // stack barriers, from low to high
+	stkbarPos      uintptr        // index of lowest stack barrier not hit
+	param          unsafe.Pointer // passed parameter on wakeup
+	atomicstatus   uint32
+	stackLock      uint32 // sigprof/scang lock; TODO: fold in to atomicstatus
+	goid           int64
+	waitsince      int64  // approx time when the g become blocked
+	waitreason     string // if status==Gwaiting
+	schedlink      guintptr
+	preempt        bool   // preemption signal, duplicates stackguard0 = stackpreempt
+	paniconfault   bool   // panic (instead of crash) on unexpected fault address
+	preemptscan    bool   // preempted g does scan for gc
+	gcscandone     bool   // g has scanned stack; protected by _Gscan bit in status
+	gcscanvalid    bool   // false at start of gc cycle, true if G has not run since last scan
+	throwsplit     bool   // must not split stack
+	raceignore     int8   // ignore race detection events
+	sysblocktraced bool   // StartTrace has emitted EvGoInSyscall about this goroutine
+	sysexitticks   int64  // cputicks when syscall has returned (for tracing)
+	sysexitseq     uint64 // trace seq when syscall has returned (for tracing)
+	lockedm        *m
+	sig            uint32
+	writebuf       []byte
+	sigcode0       uintptr
+	sigcode1       uintptr
+	sigpc          uintptr
+	gopc           uintptr // pc of go statement that created this goroutine
+	startpc        uintptr // pc of goroutine function
+	racectx        uintptr
+	waiting        *sudog // sudog structures this g is waiting on (that have a valid elem ptr)
+	readyg         *g     // scratch for readyExecute
 
 	// Per-G gcController state
 	gcalloc    uintptr // bytes allocated during this GC cycle
@@ -260,12 +273,14 @@ type mscratch struct {
 }
 
 type m struct {
-	g0      *g    // goroutine with scheduling stack
-	morebuf gobuf // gobuf arg to morestack
+	g0      *g     // goroutine with scheduling stack
+	morebuf gobuf  // gobuf arg to morestack
+	divmod  uint32 // div/mod denominator for arm - known to liblink
 
 	// Fields not known to debuggers.
 	procid        uint64     // for debuggers, but offset not hard-coded
 	gsignal       *g         // signal-handling g
+	sigmask       [4]uintptr // storage for saved signal mask
 	tls           [4]uintptr // thread-local storage (for x86 extern register)
 	mstartfn      func()
 	curg          *g       // current running goroutine
@@ -310,6 +325,7 @@ type m struct {
 	waitlock      unsafe.Pointer
 	waittraceev   byte
 	waittraceskip int
+	startingtrace bool
 	syscalltick   uint32
 	//#ifdef GOOS_windows
 	thread uintptr // thread handle
@@ -319,6 +335,7 @@ type m struct {
 	libcallpc uintptr // for cpu profiler
 	libcallsp uintptr
 	libcallg  guintptr
+	syscall   libcall // stores syscall parameters on windows
 	//#endif
 	//#ifdef GOOS_solaris
 	perrno *int32 // pointer to tls errno
@@ -412,7 +429,7 @@ type schedt struct {
 
 	pidle      puintptr // idle p's
 	npidle     uint32
-	nmspinning uint32
+	nmspinning uint32 // limited to [0, 2^31-1]
 
 	// Global runnable queue.
 	runqhead guintptr
@@ -454,7 +471,7 @@ type schedt struct {
 // The m->locked word holds two pieces of state counting active calls to LockOSThread/lockOSThread.
 // The low bit (LockExternal) is a boolean reporting whether any LockOSThread call is active.
 // External locks are not recursive; a second lock is silently ignored.
-// The upper bits of m->lockedcount record the nesting depth of calls to lockOSThread
+// The upper bits of m->locked record the nesting depth of calls to lockOSThread
 // (counting up by LockInternal), popped by unlockOSThread (counting down by LockInternal).
 // Internal locks can be recursive. For instance, a lock for cgo can occur while the main
 // goroutine is holding the lock during the initialization phase.
@@ -469,19 +486,20 @@ type sigtabtt struct {
 }
 
 const (
-	_SigNotify   = 1 << 0 // let signal.Notify have signal, even if from kernel
-	_SigKill     = 1 << 1 // if signal.Notify doesn't take it, exit quietly
-	_SigThrow    = 1 << 2 // if signal.Notify doesn't take it, exit loudly
-	_SigPanic    = 1 << 3 // if the signal is from the kernel, panic
-	_SigDefault  = 1 << 4 // if the signal isn't explicitly requested, don't monitor it
-	_SigHandling = 1 << 5 // our signal handler is registered
-	_SigIgnored  = 1 << 6 // the signal was ignored before we registered for it
-	_SigGoExit   = 1 << 7 // cause all runtime procs to exit (only used on Plan 9).
-	_SigSetStack = 1 << 8 // add SA_ONSTACK to libc handler
+	_SigNotify   = 1 << iota // let signal.Notify have signal, even if from kernel
+	_SigKill                 // if signal.Notify doesn't take it, exit quietly
+	_SigThrow                // if signal.Notify doesn't take it, exit loudly
+	_SigPanic                // if the signal is from the kernel, panic
+	_SigDefault              // if the signal isn't explicitly requested, don't monitor it
+	_SigHandling             // our signal handler is registered
+	_SigIgnored              // the signal was ignored before we registered for it
+	_SigGoExit               // cause all runtime procs to exit (only used on Plan 9).
+	_SigSetStack             // add SA_ONSTACK to libc handler
+	_SigUnblock              // unblocked in minit
 )
 
 // Layout of in-memory per-function information prepared by linker
-// See http://golang.org/s/go12symtab.
+// See https://golang.org/s/go12symtab.
 // Keep in sync with linker
 // and with package debug/gosym and with symtab.go in package runtime.
 type _func struct {
@@ -627,6 +645,8 @@ var (
 	cpuid_ecx         uint32
 	cpuid_edx         uint32
 	lfenceBeforeRdtsc bool
+
+	goarm uint8 // set by cmd/link on arm systems
 )
 
 // Set by the linker so the runtime can determine the buildmode.

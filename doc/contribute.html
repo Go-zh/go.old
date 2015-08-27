@@ -47,7 +47,7 @@ see <a href="gccgo_contribute.html">Contributing to gccgo</a>.)
 <div class="english">
 <p>
 The project welcomes submissions but please let everyone know what
-you're working on if you want it to become part of the main repository.
+you're working on if you want to change or add to the Go repositories.
 </p>
 </div>
 
@@ -57,14 +57,12 @@ you're working on if you want it to become part of the main repository.
 
 <div class="english">
 <p>
-Before undertaking to write something new for the Go project, send
-mail to the <a href="https://groups.google.com/group/golang-nuts">mailing
-list</a> to discuss what you plan to do.  This gives everyone a
-chance to validate the design, helps prevent duplication of effort,
-and ensures that the idea fits inside the goals for the language
-and tools.  It also guarantees that the design is sound before code
-is written; the code review tool is not the place for high-level
-discussions.
+Before undertaking to write something new for the Go project,
+please <a href="https://golang.org/issue/new">file an issue</a>
+(or claim an <a href="https://golang.org/issues">existing issue</a>).
+Significant changes must go through the
+<a href="https://golang.org/s/proposal-process">change proposal process</a>
+before they can be accepted.
 </p>
 </div>
 
@@ -78,8 +76,19 @@ discussions.
 
 <div class="english">
 <p>
-In short, send mail before you code.
-And don't start the discussion by mailing a change list!
+This process gives everyone a chance to validate the design,
+helps prevent duplication of effort,
+and ensures that the idea fits inside the goals for the language and tools.
+It also checks that the design is sound before code is written;
+the code review tool is not the place for high-level discussions.
+</p>
+
+<p>
+When planning work, please note that the Go project follows a
+<a href="https://golang.org/wiki/Go-Release-Cycle">six-month
+development cycle</a>. The latter half of each cycle is a three-month
+feature freeze during which only bug fixes and doc updates are accepted.
+New work cannot be submitted during a feature freeze.
 </p>
 </div>
 
@@ -268,6 +277,86 @@ That is all that is required.
 现在你已经有了 Google 账户和认证标记，还需要在 Gerrit 代码审核系统上注册你的账户。
 请访问 <a href="https://golang.org/cl">golang.org/cl</a> 并使用前面的 Google 账户登录，
 这样就设置完成了。
+</p>
+
+<div class="english">
+<h3>Contributor License Agreement</h3>
+</div>
+
+<h3>贡献者许可协议</h3>
+
+<div class="english">
+<p>Gerrit serves as the gatekeeper and uses your e-mail address as the key.
+To send your first change to the Go project from a given address,
+you must have completed one of the contributor license agreements:
+</p>
+</div>
+
+<p>
+Gerrit 作为门卫，会使用你的电子邮件地址作为钥匙。为了从给定的地址向 Go
+项目发送你的第一个更改，你必须完成以下贡献者许可协议之一：
+</p>
+
+<div class="english">
+<ul>
+<li>
+If you are the copyright holder, you will need to agree to the
+<a href="https://developers.google.com/open-source/cla/individual">individual
+contributor license agreement</a>, which can be completed online.
+</li>
+<li>
+If your organization is the copyright holder, the organization
+will need to agree to the
+<a href="https://developers.google.com/open-source/cla/corporate">corporate
+contributor license agreement</a>.
+(If the copyright holder for your code has already completed the
+agreement in connection with another Google open source project,
+it does not need to be completed again.)
+</li>
+</ul>
+</div>
+
+<ul>
+<li>
+若你是版权所有者，你必须接受
+<a href="https://developers.google.com/open-source/cla/individual">
+个人贡献者许可协议</a>，这可以在线完成。
+</li>
+<li>
+若你的组织为版权所有者，该组织必须接受
+<a href="https://developers.google.com/open-source/cla/corporate">
+团体贡献者许可协议</a>。（若你的代码的版权持有者已在另一个 Google
+开源项目中完成了协议，则无需再次完成。）
+</li>
+</ul>
+
+<div class="english">
+<p>
+You can use the links above to create and sign the contributor license agreement
+or you can show your current agreements and create new ones through the Gerrit
+interface.  <a href="https://go-review.googlesource.com/login/">Log into Gerrit</a>,
+click your name in the upper-right, choose "Settings", then select "Agreements"
+from the topics on the left. If you do not have a signed agreement listed here,
+you can create one by clicking "New Contributor Agreement" and following the steps.
+</p>
+</div>
+
+<p>
+你可以通过以上链接创建并登录贡献者许可协议，也可以通过 Gerrit
+界面显示你的当前协议并创建一个新的。
+首先<a href="https://go-review.googlesource.com/login/">登录到 Gerrit</a>，
+点击右上角你的名字，选择“Setting”，接着点击左列中的“Agreements”。若你并未签署协议，
+则列表为空，此时你可以点击“New Contributor Agreement”并遵循步骤来创建一个。
+</p>
+
+<div class="english">
+<p>
+This rigmarole only needs to be done for your first submission for each email address.
+</p>
+</div>
+
+<p>
+这些琐事只需在你每个邮件地址的第一次递交时完成。
 </p>
 
 <div class="english">
@@ -750,14 +839,16 @@ Unless explicitly told otherwise, such as in the discussion leading
 up to sending in the change list, it's better not to specify a reviewer.
 All changes are automatically CC'ed to the
 <a href="https://groups.google.com/group/golang-codereviews">golang-codereviews@googlegroups.com</a>
-mailing list.
+mailing list. If this is your first ever change, there may be a moderation
+delay before it appears on the mailing list, to prevent spam.
 </p>
 </div>
 
 <p>
 除非被明确告知，例如在讨论中需要接收此更改列表的人，否则最好不要指定审核者。所有更改都会自动抄送至
 <a href="https://groups.google.com/group/golang-codereviews">golang-codereviews@googlegroups.com</a>
-邮件列表。
+邮件列表。如果这是您的第一次提交，那么在它出现在邮件列表之前可能会有适当地延迟，
+以防止垃圾邮件。
 </p>
 
 <div class="english">
@@ -1198,60 +1289,14 @@ Go 源码库中的文件不会列出作者的名字，这样既能避免混乱�
 defines who the Go contributors&mdash;the people&mdash;are;
 the <a href="/AUTHORS"><code>AUTHORS</code></a> file defines
 who &ldquo;The Go Authors&rdquo;&mdash;the copyright holders&mdash;are.
-The Go developers at Google will update these files when submitting
-your first change.
-In order for them to do that, you need to have completed one of the
-contributor license agreements:
+These files will be periodically updated based on the commit logs.
 </p>
 </div>
 
 <p>
 <a href="/CONTRIBUTORS"><code>CONTRIBUTORS</code></a> 文件定义了谁是 Go 的贡献者，
 即个人贡献者；<a href="/AUTHORS"><code>AUTHORS</code></a> 文件定义了谁是版权拥有者，
-即“Go 的作者”。Google 的 Go 开发者会在递交你的第一个更改时更新这些文件。
-为此，你必须完成贡献者许可协议之一：
-</p>
-
-<div class="english">
-<ul>
-<li>
-If you are the copyright holder, you will need to agree to the
-<a href="https://developers.google.com/open-source/cla/individual">individual
-contributor license agreement</a>, which can be completed online.
-</li>
-<li>
-If your organization is the copyright holder, the organization
-will need to agree to the
-<a href="https://developers.google.com/open-source/cla/corporate">corporate
-contributor license agreement</a>.
-(If the copyright holder for your code has already completed the
-agreement in connection with another Google open source project,
-it does not need to be completed again.)
-</li>
-</ul>
-</div>
-
-<ul>
-<li>
-若你是版权所有者，你必须接受
-<a href="https://developers.google.com/open-source/cla/individual">个人贡献者许可协议</a>，
-这可以在线完成。
-</li>
-<li>
-若你的组织为版权所有者，该组织必须接受
-<a href="https://developers.google.com/open-source/cla/corporate">团体贡献者许可协议</a>。
-若你的代码的版权持有者已在另一个 Google 开源项目中完成了协议，则无需再次完成。）
-</li>
-</ul>
-
-<div class="english">
-<p>
-This rigmarole needs to be done only for your first submission.
-</p>
-</div>
-
-<p>
-这些琐事只需在你第一次递交时完成。
+即“Go 的作者”。这些文件将会根据提交记录定期更新。
 </p>
 
 <div class="english">

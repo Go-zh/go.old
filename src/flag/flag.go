@@ -302,12 +302,16 @@ func (d *durationValue) String() string { return (*time.Duration)(d).String() }
 // If a Value has an IsBoolFlag() bool method returning true,
 // the command-line parser makes -name equivalent to -name=true
 // rather than using the next command-line argument.
+//
+// Set is called once, in command line order, for each flag present.
 
 // Value接口是定义了标签对应的具体的参数值。
 // （默认值是string类型）
 //
 // 若 Value 拥有的 IsBoolFlag() bool 方法返回 ture，则命令行解析器会使 -name
 // 等价于 -name=true，而非使用下一个命令行实参。
+//
+// Set 按命令行顺序为每一个标记调用一次。
 type Value interface {
 	String() string
 	Set(string) error
@@ -322,15 +326,18 @@ type Getter interface {
 	Get() interface{}
 }
 
-// ErrorHandling defines how to handle flag parsing errors.
+// ErrorHandling defines how FlagSet.Parse behaves if the parse fails.
 
-// ErrorHandling定义了如何处理标签解析的错误
+// ErrorHandling 定义了 FlagSet.Parse 在解析失败时的行为。
 type ErrorHandling int
 
+// These constants cause FlagSet.Parse to behave as described if the parse fails.
+
+// 这些常量描述了 FlagSet.Parse 在解析失败时的行为。
 const (
-	ContinueOnError ErrorHandling = iota
-	ExitOnError
-	PanicOnError
+	ContinueOnError ErrorHandling = iota // Return a descriptive error.
+	ExitOnError                          // Call os.Exit(2).
+	PanicOnError                         // Call panic with a descriptive error.
 )
 
 // A FlagSet represents a set of defined flags.  The zero value of a FlagSet
@@ -657,9 +664,11 @@ func (f *FlagSet) NFlag() int { return len(f.actual) }
 func NFlag() int { return len(CommandLine.actual) }
 
 // Arg returns the i'th argument.  Arg(0) is the first remaining argument
-// after flags have been processed.
+// after flags have been processed. Arg returns an empty string if the
+// requested element does not exist.
 
-// Arg返回第i个参数。当有标签被解析之后，Arg(0)就成为了保留参数。
+// Arg 返回第 i 个参数。当标记解析完毕后，Arg(0) 就成为第一个保留参数。
+// 若请求的元素不存在，Arg 则返回一个空字符串。
 func (f *FlagSet) Arg(i int) string {
 	if i < 0 || i >= len(f.args) {
 		return ""
@@ -668,9 +677,11 @@ func (f *FlagSet) Arg(i int) string {
 }
 
 // Arg returns the i'th command-line argument.  Arg(0) is the first remaining argument
-// after flags have been processed.
+// after flags have been processed. Arg returns an empty string if the
+// requested element does not exist.
 
-// Arg返回第i个命令行参数。当有标签被解析之后，Arg(0)就成为了保留参数。
+// Arg 返回第 i 个命令行参数。当标记解析完毕后，Arg(0) 就成为第一个保留参数。
+// 若请求的元素不存在，Arg 则返回一个空字符串。
 func Arg(i int) string {
 	return CommandLine.Arg(i)
 }

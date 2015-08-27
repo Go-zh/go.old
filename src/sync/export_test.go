@@ -9,3 +9,5 @@ package sync
 // 导出测试。
 var Runtime_Semacquire = runtime_Semacquire
 var Runtime_Semrelease = runtime_Semrelease
+
+const RaceEnabled = raceenabled

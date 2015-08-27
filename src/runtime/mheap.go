@@ -29,6 +29,7 @@ type mheap struct {
 	spans_mapped uintptr
 
 	// Proportional sweep
+	spanBytesAlloc    uint64  // bytes of spans allocated this cycle; updated atomically
 	pagesSwept        uint64  // pages swept this cycle; updated atomically
 	sweepPagesPerByte float64 // proportional sweep ratio; written with lock, read without
 
@@ -41,7 +42,7 @@ type mheap struct {
 	bitmap         uintptr
 	bitmap_mapped  uintptr
 	arena_start    uintptr
-	arena_used     uintptr
+	arena_used     uintptr // always mHeap_Map{Bits,Spans} before updating
 	arena_end      uintptr
 	arena_reserved bool
 
@@ -58,7 +59,7 @@ type mheap struct {
 	cachealloc            fixalloc // allocator for mcache*
 	specialfinalizeralloc fixalloc // allocator for specialfinalizer*
 	specialprofilealloc   fixalloc // allocator for specialprofile*
-	speciallock           mutex    // lock for sepcial record allocators.
+	speciallock           mutex    // lock for special record allocators.
 }
 
 var mheap_ mheap
@@ -75,6 +76,20 @@ var mheap_ mheap
 // either one of the MHeap's free lists or one of the
 // MCentral's span lists.  We use empty MSpan structures as list heads.
 
+// An MSpan representing actual memory has state _MSpanInUse,
+// _MSpanStack, or _MSpanFree. Transitions between these states are
+// constrained as follows:
+//
+// * A span may transition from free to in-use or stack during any GC
+//   phase.
+//
+// * During sweeping (gcphase == _GCoff), a span may transition from
+//   in-use to free (as a result of sweeping) or stack to free (as a
+//   result of stacks being freed).
+//
+// * During GC (gcphase != _GCoff), a span *must not* transition from
+//   stack or in-use to free. Because concurrent GC may read a pointer
+//   and then look up its span, the span state must be monotonic.
 const (
 	_MSpanInUse = iota // allocated for garbage collected heap
 	_MSpanStack        // allocated for use by stack allocator
@@ -168,7 +183,9 @@ func recordspan(vh unsafe.Pointer, p unsafe.Pointer) {
 
 // inheap reports whether b is a pointer into a (potentially dead) heap object.
 // It returns false for pointers into stack spans.
+// Non-preemptible because it is used by write barriers.
 //go:nowritebarrier
+//go:nosplit
 func inheap(b uintptr) bool {
 	if b == 0 || b < mheap_.arena_start || b >= mheap_.arena_used {
 		return false
@@ -277,10 +294,18 @@ func mHeap_Init(h *mheap, spans_size uintptr) {
 	sp.cap = int(spans_size / ptrSize)
 }
 
-func mHeap_MapSpans(h *mheap) {
+// mHeap_MapSpans makes sure that the spans are mapped
+// up to the new value of arena_used.
+//
+// It must be called with the expected new value of arena_used,
+// *before* h.arena_used has been updated.
+// Waiting to update arena_used until after the memory has been mapped
+// avoids faults when other threads try access the bitmap immediately
+// after observing the change to arena_used.
+func mHeap_MapSpans(h *mheap, arena_used uintptr) {
 	// Map spans array, PageSize at a time.
-	n := uintptr(unsafe.Pointer(h.arena_used))
-	n -= uintptr(unsafe.Pointer(h.arena_start))
+	n := arena_used
+	n -= h.arena_start
 	n = n / _PageSize * ptrSize
 	n = round(n, _PhysPageSize)
 	if h.spans_mapped >= n {
@@ -395,6 +420,8 @@ func mHeap_Alloc_m(h *mheap, npage uintptr, sizeclass int32, large bool) *mspan 
 	memstats.tinyallocs += uint64(_g_.m.mcache.local_tinyallocs)
 	_g_.m.mcache.local_tinyallocs = 0
 
+	gcController.revise()
+
 	s := mHeap_AllocSpanLocked(h, npage)
 	if s != nil {
 		// Record span info, because gc needs to be
@@ -434,6 +461,16 @@ func mHeap_Alloc_m(h *mheap, npage uintptr, sizeclass int32, large bool) *mspan 
 	if trace.enabled {
 		traceHeapAlloc()
 	}
+
+	// h_spans is accessed concurrently without synchronization
+	// from other threads. Hence, there must be a store/store
+	// barrier here to ensure the writes to h_spans above happen
+	// before the caller can publish a pointer p to an object
+	// allocated from s. As soon as this happens, the garbage
+	// collector running on another processor could read p and
+	// look up s in h_spans. The unlock acts as the barrier to
+	// order these writes. On the read side, the data dependency
+	// between p and the index in h_spans orders the reads.
 	unlock(&h.lock)
 	return s
 }
@@ -469,6 +506,8 @@ func mHeap_AllocStack(h *mheap, npage uintptr) *mspan {
 		s.ref = 0
 		memstats.stacks_inuse += uint64(s.npages << _PageShift)
 	}
+
+	// This unlock acts as a release barrier. See mHeap_Alloc_m.
 	unlock(&h.lock)
 	return s
 }
@@ -657,6 +696,7 @@ func mHeap_Free(h *mheap, s *mspan, acct int32) {
 		if acct != 0 {
 			memstats.heap_objects--
 		}
+		gcController.revise()
 		mHeap_FreeSpanLocked(h, s, true, true, 0)
 		if trace.enabled {
 			traceHeapAlloc()
@@ -796,7 +836,7 @@ func mHeap_Scavenge(k int32, now, limit uint64) {
 
 //go:linkname runtime_debug_freeOSMemory runtime/debug.freeOSMemory
 func runtime_debug_freeOSMemory() {
-	startGC(gcForceBlockMode)
+	startGC(gcForceBlockMode, false)
 	systemstack(func() { mHeap_Scavenge(-1, ^uint64(0), 0) })
 }
 

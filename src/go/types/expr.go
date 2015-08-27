@@ -9,7 +9,7 @@ package types
 import (
 	"fmt"
 	"go/ast"
-	exact "go/constant" // Renamed to reduce diffs from x/tools.  TODO: remove
+	"go/constant"
 	"go/token"
 	"math"
 )
@@ -78,7 +78,8 @@ func (check *Checker) op(m opPredicates, x *operand, op token.Token) bool {
 	return true
 }
 
-func (check *Checker) unary(x *operand, op token.Token) {
+// The unary expression e may be nil. It's passed in for better error messages only.
+func (check *Checker) unary(x *operand, e *ast.UnaryExpr, op token.Token) {
 	switch op {
 	case token.AND:
 		// spec: "As an exception to the addressability
@@ -115,16 +116,19 @@ func (check *Checker) unary(x *operand, op token.Token) {
 		return
 	}
 
-	if x.mode == constant {
+	if x.mode == constant_ {
 		typ := x.typ.Underlying().(*Basic)
 		var prec uint
 		if isUnsigned(typ) {
 			prec = uint(check.conf.sizeof(typ) * 8)
 		}
-		x.val = exact.UnaryOp(op, x.val, prec)
+		x.val = constant.UnaryOp(op, x.val, prec)
 		// Typed constants must be representable in
 		// their type after each constant operation.
 		if isTyped(typ) {
+			if e != nil {
+				x.expr = e // for better error message
+			}
 			check.representable(x, typ)
 		}
 		return
@@ -147,30 +151,30 @@ func isComparison(op token.Token) bool {
 	return false
 }
 
-func fitsFloat32(x exact.Value) bool {
-	f32, _ := exact.Float32Val(x)
+func fitsFloat32(x constant.Value) bool {
+	f32, _ := constant.Float32Val(x)
 	f := float64(f32)
 	return !math.IsInf(f, 0)
 }
 
-func roundFloat32(x exact.Value) exact.Value {
-	f32, _ := exact.Float32Val(x)
+func roundFloat32(x constant.Value) constant.Value {
+	f32, _ := constant.Float32Val(x)
 	f := float64(f32)
 	if !math.IsInf(f, 0) {
-		return exact.MakeFloat64(f)
+		return constant.MakeFloat64(f)
 	}
 	return nil
 }
 
-func fitsFloat64(x exact.Value) bool {
-	f, _ := exact.Float64Val(x)
+func fitsFloat64(x constant.Value) bool {
+	f, _ := constant.Float64Val(x)
 	return !math.IsInf(f, 0)
 }
 
-func roundFloat64(x exact.Value) exact.Value {
-	f, _ := exact.Float64Val(x)
+func roundFloat64(x constant.Value) constant.Value {
+	f, _ := constant.Float64Val(x)
 	if !math.IsInf(f, 0) {
-		return exact.MakeFloat64(f)
+		return constant.MakeFloat64(f)
 	}
 	return nil
 }
@@ -182,16 +186,16 @@ func roundFloat64(x exact.Value) exact.Value {
 // If rounded != nil, *rounded is set to the rounded value of x for
 // representable floating-point values; it is left alone otherwise.
 // It is ok to provide the addressof the first argument for rounded.
-func representableConst(x exact.Value, conf *Config, as BasicKind, rounded *exact.Value) bool {
+func representableConst(x constant.Value, conf *Config, as BasicKind, rounded *constant.Value) bool {
 	switch x.Kind() {
-	case exact.Unknown:
+	case constant.Unknown:
 		return true
 
-	case exact.Bool:
+	case constant.Bool:
 		return as == Bool || as == UntypedBool
 
-	case exact.Int:
-		if x, ok := exact.Int64Val(x); ok {
+	case constant.Int:
+		if x, ok := constant.Int64Val(x); ok {
 			switch as {
 			case Int:
 				var s = uint(conf.sizeof(Typ[as])) * 8
@@ -229,13 +233,13 @@ func representableConst(x exact.Value, conf *Config, as BasicKind, rounded *exac
 			}
 		}
 
-		n := exact.BitLen(x)
+		n := constant.BitLen(x)
 		switch as {
 		case Uint, Uintptr:
 			var s = uint(conf.sizeof(Typ[as])) * 8
-			return exact.Sign(x) >= 0 && n <= int(s)
+			return constant.Sign(x) >= 0 && n <= int(s)
 		case Uint64:
-			return exact.Sign(x) >= 0 && n <= 64
+			return constant.Sign(x) >= 0 && n <= 64
 		case Float32, Complex64:
 			if rounded == nil {
 				return fitsFloat32(x)
@@ -258,7 +262,7 @@ func representableConst(x exact.Value, conf *Config, as BasicKind, rounded *exac
 			return true
 		}
 
-	case exact.Float:
+	case constant.Float:
 		switch as {
 		case Float32, Complex64:
 			if rounded == nil {
@@ -282,33 +286,33 @@ func representableConst(x exact.Value, conf *Config, as BasicKind, rounded *exac
 			return true
 		}
 
-	case exact.Complex:
+	case constant.Complex:
 		switch as {
 		case Complex64:
 			if rounded == nil {
-				return fitsFloat32(exact.Real(x)) && fitsFloat32(exact.Imag(x))
+				return fitsFloat32(constant.Real(x)) && fitsFloat32(constant.Imag(x))
 			}
-			re := roundFloat32(exact.Real(x))
-			im := roundFloat32(exact.Imag(x))
+			re := roundFloat32(constant.Real(x))
+			im := roundFloat32(constant.Imag(x))
 			if re != nil && im != nil {
-				*rounded = exact.BinaryOp(re, token.ADD, exact.MakeImag(im))
+				*rounded = constant.BinaryOp(re, token.ADD, constant.MakeImag(im))
 				return true
 			}
 		case Complex128:
 			if rounded == nil {
-				return fitsFloat64(exact.Real(x)) && fitsFloat64(exact.Imag(x))
+				return fitsFloat64(constant.Real(x)) && fitsFloat64(constant.Imag(x))
 			}
-			re := roundFloat64(exact.Real(x))
-			im := roundFloat64(exact.Imag(x))
+			re := roundFloat64(constant.Real(x))
+			im := roundFloat64(constant.Imag(x))
 			if re != nil && im != nil {
-				*rounded = exact.BinaryOp(re, token.ADD, exact.MakeImag(im))
+				*rounded = constant.BinaryOp(re, token.ADD, constant.MakeImag(im))
 				return true
 			}
 		case UntypedComplex:
 			return true
 		}
 
-	case exact.String:
+	case constant.String:
 		return as == String || as == UntypedString
 
 	default:
@@ -320,7 +324,7 @@ func representableConst(x exact.Value, conf *Config, as BasicKind, rounded *exac
 
 // representable checks that a constant operand is representable in the given basic type.
 func (check *Checker) representable(x *operand, typ *Basic) {
-	assert(x.mode == constant)
+	assert(x.mode == constant_)
 	if !representableConst(x.val, check.conf, typ.kind, &x.val) {
 		var msg string
 		if isNumeric(x.typ) && isNumeric(typ) {
@@ -454,7 +458,7 @@ func (check *Checker) updateExprType(x ast.Expr, typ Type, final bool) {
 }
 
 // updateExprVal updates the value of x to val.
-func (check *Checker) updateExprVal(x ast.Expr, val exact.Value) {
+func (check *Checker) updateExprVal(x ast.Expr, val constant.Value) {
 	if info, ok := check.untyped[x]; ok {
 		info.val = val
 		check.untyped[x] = info
@@ -488,7 +492,7 @@ func (check *Checker) convertUntyped(x *operand, target Type) {
 	// typed target
 	switch t := target.Underlying().(type) {
 	case *Basic:
-		if x.mode == constant {
+		if x.mode == constant_ {
 			check.representable(x, t)
 			if x.mode == invalid {
 				return
@@ -595,8 +599,8 @@ func (check *Checker) comparison(x, y *operand, op token.Token) {
 		return
 	}
 
-	if x.mode == constant && y.mode == constant {
-		x.val = exact.MakeBool(exact.Compare(x.val, op, y.val))
+	if x.mode == constant_ && y.mode == constant_ {
+		x.val = constant.MakeBool(constant.Compare(x.val, op, y.val))
 		// The operands are never materialized; no need to update
 		// their types.
 	} else {
@@ -619,7 +623,7 @@ func (check *Checker) shift(x, y *operand, op token.Token) {
 
 	// The lhs must be of integer type or be representable
 	// as an integer; otherwise the shift has no chance.
-	if !isInteger(x.typ) && (!untypedx || !representableConst(x.val, nil, UntypedInt, nil)) {
+	if !x.isInteger() {
 		check.invalidOp(x.pos(), "shifted operand %s must be integer", x)
 		x.mode = invalid
 		return
@@ -643,11 +647,17 @@ func (check *Checker) shift(x, y *operand, op token.Token) {
 		return
 	}
 
-	if x.mode == constant {
-		if y.mode == constant {
+	if x.mode == constant_ {
+		if y.mode == constant_ {
+			// rhs must be an integer value
+			if !y.isInteger() {
+				check.invalidOp(y.pos(), "shift count %s must be unsigned integer", y)
+				x.mode = invalid
+				return
+			}
 			// rhs must be within reasonable bounds
 			const stupidShift = 1023 - 1 + 52 // so we can express smallestFloat64
-			s, ok := exact.Uint64Val(y.val)
+			s, ok := constant.Uint64Val(y.val)
 			if !ok || s > stupidShift {
 				check.invalidOp(y.pos(), "stupid shift count %s", y)
 				x.mode = invalid
@@ -660,7 +670,7 @@ func (check *Checker) shift(x, y *operand, op token.Token) {
 			if !isInteger(x.typ) {
 				x.typ = Typ[UntypedInt]
 			}
-			x.val = exact.Shift(x.val, op, uint(s))
+			x.val = constant.Shift(x.val, op, uint(s))
 			return
 		}
 
@@ -671,13 +681,24 @@ func (check *Checker) shift(x, y *operand, op token.Token) {
 			// constant is what it would be if the shift expression
 			// were replaced by its left operand alone.".
 			//
-			// Delay operand checking until we know the final type:
-			// The lhs expression must be in the untyped map, mark
-			// the entry as lhs shift operand.
-			info, found := check.untyped[x.expr]
-			assert(found)
-			info.isLhs = true
-			check.untyped[x.expr] = info
+			// Delay operand checking until we know the final type
+			// by marking the lhs expression as lhs shift operand.
+			//
+			// Usually (in correct programs), the lhs expression
+			// is in the untyped map. However, it is possible to
+			// create incorrect programs where the same expression
+			// is evaluated twice (via a declaration cycle) such
+			// that the lhs expression type is determined in the
+			// first round and thus deleted from the map, and then
+			// not found in the second round (double insertion of
+			// the same expr node still just leads to one entry for
+			// that node, and it can only be deleted once).
+			// Be cautious and check for presence of entry.
+			// Example: var e, f = int(1<<""[f]) // issue 11347
+			if info, found := check.untyped[x.expr]; found {
+				info.isLhs = true
+				check.untyped[x.expr] = info
+			}
 			// keep x's type
 			x.mode = value
 			return
@@ -685,7 +706,7 @@ func (check *Checker) shift(x, y *operand, op token.Token) {
 	}
 
 	// constant rhs must be >= 0
-	if y.mode == constant && exact.Sign(y.val) < 0 {
+	if y.mode == constant_ && constant.Sign(y.val) < 0 {
 		check.invalidOp(y.pos(), "shift count %s must not be negative", y)
 	}
 
@@ -715,7 +736,8 @@ var binaryOpPredicates = opPredicates{
 	token.LOR:  isBoolean,
 }
 
-func (check *Checker) binary(x *operand, lhs, rhs ast.Expr, op token.Token) {
+// The binary expression e may be nil. It's passed in for better error messages only.
+func (check *Checker) binary(x *operand, e *ast.BinaryExpr, lhs, rhs ast.Expr, op token.Token) {
 	var y operand
 
 	check.expr(x, lhs)
@@ -765,22 +787,25 @@ func (check *Checker) binary(x *operand, lhs, rhs ast.Expr, op token.Token) {
 		return
 	}
 
-	if (op == token.QUO || op == token.REM) && (x.mode == constant || isInteger(x.typ)) && y.mode == constant && exact.Sign(y.val) == 0 {
+	if (op == token.QUO || op == token.REM) && (x.mode == constant_ || isInteger(x.typ)) && y.mode == constant_ && constant.Sign(y.val) == 0 {
 		check.invalidOp(y.pos(), "division by zero")
 		x.mode = invalid
 		return
 	}
 
-	if x.mode == constant && y.mode == constant {
+	if x.mode == constant_ && y.mode == constant_ {
 		typ := x.typ.Underlying().(*Basic)
 		// force integer division of integer operands
 		if op == token.QUO && isInteger(typ) {
 			op = token.QUO_ASSIGN
 		}
-		x.val = exact.BinaryOp(x.val, op, y.val)
+		x.val = constant.BinaryOp(x.val, op, y.val)
 		// Typed constants must be representable in
 		// their type after each constant operation.
 		if isTyped(typ) {
+			if e != nil {
+				x.expr = e // for better error message
+			}
 			check.representable(x, typ)
 		}
 		return
@@ -813,12 +838,12 @@ func (check *Checker) index(index ast.Expr, max int64) (i int64, valid bool) {
 	}
 
 	// a constant index i must be in bounds
-	if x.mode == constant {
-		if exact.Sign(x.val) < 0 {
+	if x.mode == constant_ {
+		if constant.Sign(x.val) < 0 {
 			check.invalidArg(x.pos(), "index %s must not be negative", &x)
 			return
 		}
-		i, valid = exact.Int64Val(x.val)
+		i, valid = constant.Int64Val(x.val)
 		if !valid || max >= 0 && i >= max {
 			check.errorf(x.pos(), "index %s is out of bounds", &x)
 			return i, false
@@ -909,13 +934,13 @@ func (check *Checker) rawExpr(x *operand, e ast.Expr, hint Type) exprKind {
 	// convert x into a user-friendly set of values
 	// TODO(gri) this code can be simplified
 	var typ Type
-	var val exact.Value
+	var val constant.Value
 	switch x.mode {
 	case invalid:
 		typ = Typ[Invalid]
 	case novalue:
 		typ = (*Tuple)(nil)
-	case constant:
+	case constant_:
 		typ = x.typ
 		val = x.val
 	default:
@@ -1101,7 +1126,7 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 					}
 					continue
 				}
-				if x.mode == constant {
+				if x.mode == constant_ {
 					duplicate := false
 					// if the key is of interface type, the type is also significant when checking for duplicates
 					if _, ok := utyp.key.Underlying().(*Interface); ok {
@@ -1161,14 +1186,14 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 		case *Basic:
 			if isString(typ) {
 				valid = true
-				if x.mode == constant {
-					length = int64(len(exact.StringVal(x.val)))
+				if x.mode == constant_ {
+					length = int64(len(constant.StringVal(x.val)))
 				}
 				// an indexed string always yields a byte value
 				// (not a constant) even if the string and the
 				// index are constant
 				x.mode = value
-				x.typ = UniverseByte // use 'byte' name
+				x.typ = universeByte // use 'byte' name
 			}
 
 		case *Array:
@@ -1236,8 +1261,8 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 					goto Error
 				}
 				valid = true
-				if x.mode == constant {
-					length = int64(len(exact.StringVal(x.val)))
+				if x.mode == constant_ {
+					length = int64(len(constant.StringVal(x.val)))
 				}
 				// spec: "For untyped string operands the result
 				// is a non-constant value of type string."
@@ -1368,7 +1393,7 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 		if x.mode == invalid {
 			goto Error
 		}
-		check.unary(x, e.Op)
+		check.unary(x, e, e.Op)
 		if x.mode == invalid {
 			goto Error
 		}
@@ -1378,7 +1403,7 @@ func (check *Checker) exprInternal(x *operand, e ast.Expr, hint Type) exprKind {
 		}
 
 	case *ast.BinaryExpr:
-		check.binary(x, e.X, e.Y, e.Op)
+		check.binary(x, e, e.X, e.Y, e.Op)
 		if x.mode == invalid {
 			goto Error
 		}
@@ -1448,9 +1473,9 @@ func (check *Checker) expr(x *operand, e ast.Expr) {
 	x.mode = invalid
 }
 
-// exprWithHint typechecks expression e and initializes x with the expression value.
+// exprWithHint typechecks expression e and initializes x with the expression value;
+// hint is the type of a composite literal element.
 // If an error occurred, x.mode is set to invalid.
-// If hint != nil, it is the type of a composite literal element.
 //
 func (check *Checker) exprWithHint(x *operand, e ast.Expr, hint Type) {
 	assert(hint != nil)

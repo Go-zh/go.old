@@ -152,60 +152,61 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, framesize int32) *obj.Prog {
 		p.Reg = REG_R2
 	}
 
-	// BHI	done
-	p = obj.Appendp(ctxt, p)
-	q1 := p
+	// BLS	do-morestack
+	bls := obj.Appendp(ctxt, p)
+	bls.As = ABLS
+	bls.To.Type = obj.TYPE_BRANCH
 
-	p.As = ABHI
-	p.To.Type = obj.TYPE_BRANCH
+	var last *obj.Prog
+	for last = ctxt.Cursym.Text; last.Link != nil; last = last.Link {
+	}
 
 	// MOV	LR, R3
-	p = obj.Appendp(ctxt, p)
-
-	p.As = AMOVD
-	p.From.Type = obj.TYPE_REG
-	p.From.Reg = REGLINK
-	p.To.Type = obj.TYPE_REG
-	p.To.Reg = REG_R3
+	movlr := obj.Appendp(ctxt, last)
+	movlr.As = AMOVD
+	movlr.From.Type = obj.TYPE_REG
+	movlr.From.Reg = REGLINK
+	movlr.To.Type = obj.TYPE_REG
+	movlr.To.Reg = REG_R3
 	if q != nil {
-		q.Pcond = p
+		q.Pcond = movlr
 	}
+	bls.Pcond = movlr
 
-	// TODO(minux): only for debug
-	p = obj.Appendp(ctxt, p)
-	p.As = AMOVD
-	p.From.Type = obj.TYPE_CONST
-	p.From.Offset = int64(framesize)
-	p.To.Type = obj.TYPE_REG
-	p.To.Reg = REGTMP
+	debug := movlr
+	if false {
+		debug = obj.Appendp(ctxt, debug)
+		debug.As = AMOVD
+		debug.From.Type = obj.TYPE_CONST
+		debug.From.Offset = int64(framesize)
+		debug.To.Type = obj.TYPE_REG
+		debug.To.Reg = REGTMP
+	}
 
 	// BL	runtime.morestack(SB)
-	p = obj.Appendp(ctxt, p)
-
-	p.As = ABL
-	p.To.Type = obj.TYPE_BRANCH
-	if ctxt.Cursym.Cfunc != 0 {
-		p.To.Sym = obj.Linklookup(ctxt, "runtime.morestackc", 0)
-	} else if ctxt.Cursym.Text.From3.Offset&obj.NEEDCTXT == 0 {
-		p.To.Sym = obj.Linklookup(ctxt, "runtime.morestack_noctxt", 0)
-	} else {
-		p.To.Sym = obj.Linklookup(ctxt, "runtime.morestack", 0)
+	call := obj.Appendp(ctxt, debug)
+	call.As = ABL
+	call.To.Type = obj.TYPE_BRANCH
+	morestack := "runtime.morestack"
+	switch {
+	case ctxt.Cursym.Cfunc != 0:
+		morestack = "runtime.morestackc"
+	case ctxt.Cursym.Text.From3.Offset&obj.NEEDCTXT == 0:
+		morestack = "runtime.morestack_noctxt"
 	}
+	call.To.Sym = obj.Linklookup(ctxt, morestack, 0)
 
 	// B	start
-	p = obj.Appendp(ctxt, p)
+	jmp := obj.Appendp(ctxt, call)
+	jmp.As = AB
+	jmp.To.Type = obj.TYPE_BRANCH
+	jmp.Pcond = ctxt.Cursym.Text.Link
 
-	p.As = AB
-	p.To.Type = obj.TYPE_BRANCH
-	p.Pcond = ctxt.Cursym.Text.Link
+	// placeholder for bls's jump target
+	// p = obj.Appendp(ctxt, p)
+	// p.As = obj.ANOP
 
-	// placeholder for q1's jump target
-	p = obj.Appendp(ctxt, p)
-
-	p.As = obj.ANOP
-	q1.Pcond = p
-
-	return p
+	return bls
 }
 
 func progedit(ctxt *obj.Link, p *obj.Prog) {
@@ -552,7 +553,6 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 	var o int
 	var q2 *obj.Prog
 	var retjmp *obj.LSym
-	var stkadj int64
 	for p := cursym.Text; p != nil; p = p.Link {
 		o = int(p.As)
 		switch o {
@@ -566,9 +566,20 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 			if (cursym.Text.Mark&LEAF != 0) && ctxt.Autosize <= 8 {
 				ctxt.Autosize = 0
 			} else if ctxt.Autosize&(16-1) != 0 {
-				stkadj = 16 - (int64(ctxt.Autosize) & (16 - 1))
-				ctxt.Autosize += int32(stkadj)
-				cursym.Locals += int32(stkadj)
+				// The frame includes an LR.
+				// If the frame size is 8, it's only an LR,
+				// so there's no potential for breaking references to
+				// local variables by growing the frame size,
+				// because there are no local variables.
+				// But otherwise, if there is a non-empty locals section,
+				// the author of the code is responsible for making sure
+				// that the frame size is 8 mod 16.
+				if ctxt.Autosize == 8 {
+					ctxt.Autosize += 8
+					cursym.Locals += 8
+				} else {
+					ctxt.Diag("%v: unaligned frame size %d - must be 8 mod 16 (or 0)", p, ctxt.Autosize-8)
+				}
 			}
 			p.To.Offset = int64(ctxt.Autosize) - 8
 			if ctxt.Autosize == 0 && !(cursym.Text.Mark&LEAF != 0) {

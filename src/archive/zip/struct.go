@@ -103,8 +103,8 @@ type FileHeader struct {
 	ModifiedTime       uint16 // MS-DOS time // MS-DOS时间
 	ModifiedDate       uint16 // MS-DOS date // MS-DOS日期
 	CRC32              uint32
-	CompressedSize     uint32 // deprecated; use CompressedSize64 // 已弃用；请使用CompressedSize64
-	UncompressedSize   uint32 // deprecated; use UncompressedSize64 // 已弃用；请使用UncompressedSize64
+	CompressedSize     uint32 // Deprecated: Use CompressedSize64 instead. // 已弃用；请使用CompressedSize64
+	UncompressedSize   uint32 // Deprecated: Use UncompressedSize64 instead. // 已弃用；请使用UncompressedSize64
 	CompressedSize64   uint64
 	UncompressedSize64 uint64
 	Extra              []byte

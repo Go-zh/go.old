@@ -6,6 +6,8 @@
 
 package net
 
+func init() { netGo = true }
+
 type addrinfoErrno int
 
 func (eai addrinfoErrno) Error() string   { return "<nil>" }
@@ -26,4 +28,8 @@ func cgoLookupIP(name string) (addrs []IPAddr, err error, completed bool) {
 
 func cgoLookupCNAME(name string) (cname string, err error, completed bool) {
 	return "", nil, false
+}
+
+func cgoLookupPTR(addr string) (ptrs []string, err error, completed bool) {
+	return nil, nil, false
 }

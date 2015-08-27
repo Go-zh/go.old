@@ -35,7 +35,7 @@ func mkzversion(dir, file string) {
 			"const stackGuardMultiplier = %d\n"+
 			"var buildVersion = theVersion\n", goroot_final, findgoversion(), os.Getenv("GOEXPERIMENT"), stackGuardMultiplier())
 
-	writefile(out, file, 0)
+	writefile(out, file, writeSkipSame)
 }
 
 // mkzbootstrap writes cmd/internal/obj/zbootstrap.go:
@@ -56,7 +56,7 @@ func mkzversion(dir, file string) {
 // a cross-compiled compiler expects to compile for its own target
 // system. That is, if on a Mac you do:
 //
-//	GOOS=linux GOARCH=ppc64 go build cmd/9g
+//	GOOS=linux GOARCH=ppc64 go build cmd/compile
 //
 // the resulting compiler will default to generating linux/ppc64 object files.
 // This is more useful than having it default to generating objects for the
@@ -80,7 +80,7 @@ func mkzbootstrap(file string) {
 			"const goexperiment = `%s`\n",
 		goroot_final, go386, goarm, goextlinkenabled, findgoversion(), stackGuardMultiplier(), os.Getenv("GOEXPERIMENT"))
 
-	writefile(out, file, 0)
+	writefile(out, file, writeSkipSame)
 }
 
 // stackGuardMultiplier returns a multiplier to apply to the default

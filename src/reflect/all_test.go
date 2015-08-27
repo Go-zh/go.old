@@ -1382,7 +1382,7 @@ func selectWatcher() {
 	for {
 		time.Sleep(1 * time.Second)
 		selectWatch.Lock()
-		if selectWatch.info != nil && time.Since(selectWatch.now) > 1*time.Second {
+		if selectWatch.info != nil && time.Since(selectWatch.now) > 10*time.Second {
 			fmt.Fprintf(os.Stderr, "TestSelect:\n%s blocked indefinitely\n", fmtSelect(selectWatch.info))
 			panic("select stuck")
 		}
@@ -4536,6 +4536,25 @@ func verifyGCBits(t *testing.T, typ Type, bits []byte) {
 	}
 }
 
+func verifyGCBitsSlice(t *testing.T, typ Type, cap int, bits []byte) {
+	// Creating a slice causes the runtime to repeat a bitmap,
+	// which exercises a different path from making the compiler
+	// repeat a bitmap for a small array or executing a repeat in
+	// a GC program.
+	val := MakeSlice(typ, 0, cap)
+	data := NewAt(ArrayOf(cap, typ), unsafe.Pointer(val.Pointer()))
+	heapBits := GCBits(data.Interface())
+	// Repeat the bitmap for the slice size, trimming scalars in
+	// the last element.
+	bits = rep(cap, bits)
+	for len(bits) > 2 && bits[len(bits)-1] == 0 {
+		bits = bits[:len(bits)-1]
+	}
+	if !bytes.Equal(heapBits, bits) {
+		t.Errorf("heapBits incorrect for make(%v, 0, %v)\nhave %v\nwant %v", typ, cap, heapBits, bits)
+	}
+}
+
 func TestGCBits(t *testing.T) {
 	verifyGCBits(t, TypeOf((*byte)(nil)), []byte{1})
 
@@ -4552,8 +4571,12 @@ func TestGCBits(t *testing.T) {
 		uintptr
 		*byte
 	}
+	type Xbigptrscalar struct {
+		_ [100]*byte
+		_ [100]uintptr
+	}
 
-	var Tscalar, Tptr, Tscalarptr, Tptrscalar Type
+	var Tscalar, Tint64, Tptr, Tscalarptr, Tptrscalar, Tbigptrscalar Type
 	{
 		// Building blocks for types constructed by reflect.
 		// This code is in a separate block so that code below
@@ -4572,10 +4595,17 @@ func TestGCBits(t *testing.T) {
 			uintptr
 			*byte
 		}
+		type Bigptrscalar struct {
+			_ [100]*byte
+			_ [100]uintptr
+		}
+		type Int64 int64
 		Tscalar = TypeOf(Scalar{})
+		Tint64 = TypeOf(Int64(0))
 		Tptr = TypeOf(Ptr{})
 		Tscalarptr = TypeOf(Scalarptr{})
 		Tptrscalar = TypeOf(Ptrscalar{})
+		Tbigptrscalar = TypeOf(Bigptrscalar{})
 	}
 
 	empty := []byte{}
@@ -4595,49 +4625,117 @@ func TestGCBits(t *testing.T) {
 	verifyGCBits(t, ArrayOf(1, Tptrscalar), lit(1))
 	verifyGCBits(t, TypeOf([2]Xscalar{}), empty)
 	verifyGCBits(t, ArrayOf(2, Tscalar), empty)
-	verifyGCBits(t, TypeOf([100]Xscalar{}), empty)
-	verifyGCBits(t, ArrayOf(100, Tscalar), empty)
+	verifyGCBits(t, TypeOf([10000]Xscalar{}), empty)
+	verifyGCBits(t, ArrayOf(10000, Tscalar), empty)
 	verifyGCBits(t, TypeOf([2]Xptr{}), lit(1, 1))
 	verifyGCBits(t, ArrayOf(2, Tptr), lit(1, 1))
-	verifyGCBits(t, TypeOf([100]Xptr{}), rep(100, lit(1)))
-	verifyGCBits(t, ArrayOf(100, Tptr), rep(100, lit(1)))
+	verifyGCBits(t, TypeOf([10000]Xptr{}), rep(10000, lit(1)))
+	verifyGCBits(t, ArrayOf(10000, Tptr), rep(10000, lit(1)))
 	verifyGCBits(t, TypeOf([2]Xscalarptr{}), lit(0, 1, 0, 1))
 	verifyGCBits(t, ArrayOf(2, Tscalarptr), lit(0, 1, 0, 1))
-	verifyGCBits(t, TypeOf([100]Xscalarptr{}), rep(100, lit(0, 1)))
-	verifyGCBits(t, ArrayOf(100, Tscalarptr), rep(100, lit(0, 1)))
+	verifyGCBits(t, TypeOf([10000]Xscalarptr{}), rep(10000, lit(0, 1)))
+	verifyGCBits(t, ArrayOf(10000, Tscalarptr), rep(10000, lit(0, 1)))
 	verifyGCBits(t, TypeOf([2]Xptrscalar{}), lit(1, 0, 1))
 	verifyGCBits(t, ArrayOf(2, Tptrscalar), lit(1, 0, 1))
-	verifyGCBits(t, TypeOf([100]Xptrscalar{}), rep(100, lit(1, 0)))
-	verifyGCBits(t, ArrayOf(100, Tptrscalar), rep(100, lit(1, 0)))
-	verifyGCBits(t, TypeOf([1][100]Xptrscalar{}), rep(100, lit(1, 0)))
-	verifyGCBits(t, ArrayOf(1, ArrayOf(100, Tptrscalar)), rep(100, lit(1, 0)))
-	verifyGCBits(t, TypeOf([2][100]Xptrscalar{}), rep(200, lit(1, 0)))
-	verifyGCBits(t, ArrayOf(2, ArrayOf(100, Tptrscalar)), rep(200, lit(1, 0)))
+	verifyGCBits(t, TypeOf([10000]Xptrscalar{}), rep(10000, lit(1, 0)))
+	verifyGCBits(t, ArrayOf(10000, Tptrscalar), rep(10000, lit(1, 0)))
+	verifyGCBits(t, TypeOf([1][10000]Xptrscalar{}), rep(10000, lit(1, 0)))
+	verifyGCBits(t, ArrayOf(1, ArrayOf(10000, Tptrscalar)), rep(10000, lit(1, 0)))
+	verifyGCBits(t, TypeOf([2][10000]Xptrscalar{}), rep(2*10000, lit(1, 0)))
+	verifyGCBits(t, ArrayOf(2, ArrayOf(10000, Tptrscalar)), rep(2*10000, lit(1, 0)))
+	verifyGCBits(t, TypeOf([4]Xbigptrscalar{}), join(rep(3, join(rep(100, lit(1)), rep(100, lit(0)))), rep(100, lit(1))))
+	verifyGCBits(t, ArrayOf(4, Tbigptrscalar), join(rep(3, join(rep(100, lit(1)), rep(100, lit(0)))), rep(100, lit(1))))
+
+	verifyGCBitsSlice(t, TypeOf([]Xptr{}), 0, empty)
+	verifyGCBitsSlice(t, SliceOf(Tptr), 0, empty)
+	verifyGCBitsSlice(t, TypeOf([]Xptrscalar{}), 1, lit(1))
+	verifyGCBitsSlice(t, SliceOf(Tptrscalar), 1, lit(1))
+	verifyGCBitsSlice(t, TypeOf([]Xscalar{}), 2, lit(0))
+	verifyGCBitsSlice(t, SliceOf(Tscalar), 2, lit(0))
+	verifyGCBitsSlice(t, TypeOf([]Xscalar{}), 10000, lit(0))
+	verifyGCBitsSlice(t, SliceOf(Tscalar), 10000, lit(0))
+	verifyGCBitsSlice(t, TypeOf([]Xptr{}), 2, lit(1))
+	verifyGCBitsSlice(t, SliceOf(Tptr), 2, lit(1))
+	verifyGCBitsSlice(t, TypeOf([]Xptr{}), 10000, lit(1))
+	verifyGCBitsSlice(t, SliceOf(Tptr), 10000, lit(1))
+	verifyGCBitsSlice(t, TypeOf([]Xscalarptr{}), 2, lit(0, 1))
+	verifyGCBitsSlice(t, SliceOf(Tscalarptr), 2, lit(0, 1))
+	verifyGCBitsSlice(t, TypeOf([]Xscalarptr{}), 10000, lit(0, 1))
+	verifyGCBitsSlice(t, SliceOf(Tscalarptr), 10000, lit(0, 1))
+	verifyGCBitsSlice(t, TypeOf([]Xptrscalar{}), 2, lit(1, 0))
+	verifyGCBitsSlice(t, SliceOf(Tptrscalar), 2, lit(1, 0))
+	verifyGCBitsSlice(t, TypeOf([]Xptrscalar{}), 10000, lit(1, 0))
+	verifyGCBitsSlice(t, SliceOf(Tptrscalar), 10000, lit(1, 0))
+	verifyGCBitsSlice(t, TypeOf([][10000]Xptrscalar{}), 1, rep(10000, lit(1, 0)))
+	verifyGCBitsSlice(t, SliceOf(ArrayOf(10000, Tptrscalar)), 1, rep(10000, lit(1, 0)))
+	verifyGCBitsSlice(t, TypeOf([][10000]Xptrscalar{}), 2, rep(10000, lit(1, 0)))
+	verifyGCBitsSlice(t, SliceOf(ArrayOf(10000, Tptrscalar)), 2, rep(10000, lit(1, 0)))
+	verifyGCBitsSlice(t, TypeOf([]Xbigptrscalar{}), 4, join(rep(100, lit(1)), rep(100, lit(0))))
+	verifyGCBitsSlice(t, SliceOf(Tbigptrscalar), 4, join(rep(100, lit(1)), rep(100, lit(0))))
 
 	verifyGCBits(t, TypeOf((chan [100]Xscalar)(nil)), lit(1))
 	verifyGCBits(t, ChanOf(BothDir, ArrayOf(100, Tscalar)), lit(1))
 
-	verifyGCBits(t, TypeOf((func([100]Xscalarptr))(nil)), lit(1))
-	verifyGCBits(t, FuncOf([]Type{ArrayOf(100, Tscalarptr)}, nil, false), lit(1))
+	verifyGCBits(t, TypeOf((func([10000]Xscalarptr))(nil)), lit(1))
+	verifyGCBits(t, FuncOf([]Type{ArrayOf(10000, Tscalarptr)}, nil, false), lit(1))
 
-	verifyGCBits(t, TypeOf((map[[100]Xscalarptr]Xscalar)(nil)), lit(1))
-	verifyGCBits(t, MapOf(ArrayOf(100, Tscalarptr), Tscalar), lit(1))
+	verifyGCBits(t, TypeOf((map[[10000]Xscalarptr]Xscalar)(nil)), lit(1))
+	verifyGCBits(t, MapOf(ArrayOf(10000, Tscalarptr), Tscalar), lit(1))
 
-	verifyGCBits(t, TypeOf((*[100]Xscalar)(nil)), lit(1))
-	verifyGCBits(t, PtrTo(ArrayOf(100, Tscalar)), lit(1))
+	verifyGCBits(t, TypeOf((*[10000]Xscalar)(nil)), lit(1))
+	verifyGCBits(t, PtrTo(ArrayOf(10000, Tscalar)), lit(1))
 
-	verifyGCBits(t, TypeOf(([][100]Xscalar)(nil)), lit(1))
-	verifyGCBits(t, SliceOf(ArrayOf(100, Tscalar)), lit(1))
+	verifyGCBits(t, TypeOf(([][10000]Xscalar)(nil)), lit(1))
+	verifyGCBits(t, SliceOf(ArrayOf(10000, Tscalar)), lit(1))
 
 	hdr := make([]byte, 8/PtrSize)
-	verifyGCBits(t, MapBucketOf(Tscalar, Tptr), join(hdr, rep(8, lit(0)), rep(8, lit(1)), lit(1)))
-	verifyGCBits(t, MapBucketOf(Tscalarptr, Tptr), join(hdr, rep(8, lit(0, 1)), rep(8, lit(1)), lit(1)))
-	verifyGCBits(t, MapBucketOf(Tscalar, Tscalar), empty)
-	verifyGCBits(t, MapBucketOf(ArrayOf(2, Tscalarptr), ArrayOf(3, Tptrscalar)), join(hdr, rep(8*2, lit(0, 1)), rep(8*3, lit(1, 0)), lit(1)))
-	verifyGCBits(t, MapBucketOf(ArrayOf(64/PtrSize, Tscalarptr), ArrayOf(64/PtrSize, Tptrscalar)), join(hdr, rep(8*64/PtrSize, lit(0, 1)), rep(8*64/PtrSize, lit(1, 0)), lit(1)))
-	verifyGCBits(t, MapBucketOf(ArrayOf(64/PtrSize+1, Tscalarptr), ArrayOf(64/PtrSize, Tptrscalar)), join(hdr, rep(8, lit(1)), rep(8*64/PtrSize, lit(1, 0)), lit(1)))
-	verifyGCBits(t, MapBucketOf(ArrayOf(64/PtrSize, Tscalarptr), ArrayOf(64/PtrSize+1, Tptrscalar)), join(hdr, rep(8*64/PtrSize, lit(0, 1)), rep(8, lit(1)), lit(1)))
-	verifyGCBits(t, MapBucketOf(ArrayOf(64/PtrSize+1, Tscalarptr), ArrayOf(64/PtrSize+1, Tptrscalar)), join(hdr, rep(8, lit(1)), rep(8, lit(1)), lit(1)))
+
+	verifyMapBucket := func(t *testing.T, k, e Type, m interface{}, want []byte) {
+		verifyGCBits(t, MapBucketOf(k, e), want)
+		verifyGCBits(t, CachedBucketOf(TypeOf(m)), want)
+	}
+	verifyMapBucket(t,
+		Tscalar, Tptr,
+		map[Xscalar]Xptr(nil),
+		join(hdr, rep(8, lit(0)), rep(8, lit(1)), lit(1)))
+	verifyMapBucket(t,
+		Tscalarptr, Tptr,
+		map[Xscalarptr]Xptr(nil),
+		join(hdr, rep(8, lit(0, 1)), rep(8, lit(1)), lit(1)))
+	verifyMapBucket(t, Tint64, Tptr,
+		map[int64]Xptr(nil),
+		join(hdr, rep(8, rep(8/PtrSize, lit(0))), rep(8, lit(1)), naclpad(), lit(1)))
+	verifyMapBucket(t,
+		Tscalar, Tscalar,
+		map[Xscalar]Xscalar(nil),
+		empty)
+	verifyMapBucket(t,
+		ArrayOf(2, Tscalarptr), ArrayOf(3, Tptrscalar),
+		map[[2]Xscalarptr][3]Xptrscalar(nil),
+		join(hdr, rep(8*2, lit(0, 1)), rep(8*3, lit(1, 0)), lit(1)))
+	verifyMapBucket(t,
+		ArrayOf(64/PtrSize, Tscalarptr), ArrayOf(64/PtrSize, Tptrscalar),
+		map[[64 / PtrSize]Xscalarptr][64 / PtrSize]Xptrscalar(nil),
+		join(hdr, rep(8*64/PtrSize, lit(0, 1)), rep(8*64/PtrSize, lit(1, 0)), lit(1)))
+	verifyMapBucket(t,
+		ArrayOf(64/PtrSize+1, Tscalarptr), ArrayOf(64/PtrSize, Tptrscalar),
+		map[[64/PtrSize + 1]Xscalarptr][64 / PtrSize]Xptrscalar(nil),
+		join(hdr, rep(8, lit(1)), rep(8*64/PtrSize, lit(1, 0)), lit(1)))
+	verifyMapBucket(t,
+		ArrayOf(64/PtrSize, Tscalarptr), ArrayOf(64/PtrSize+1, Tptrscalar),
+		map[[64 / PtrSize]Xscalarptr][64/PtrSize + 1]Xptrscalar(nil),
+		join(hdr, rep(8*64/PtrSize, lit(0, 1)), rep(8, lit(1)), lit(1)))
+	verifyMapBucket(t,
+		ArrayOf(64/PtrSize+1, Tscalarptr), ArrayOf(64/PtrSize+1, Tptrscalar),
+		map[[64/PtrSize + 1]Xscalarptr][64/PtrSize + 1]Xptrscalar(nil),
+		join(hdr, rep(8, lit(1)), rep(8, lit(1)), lit(1)))
+}
+
+func naclpad() []byte {
+	if runtime.GOARCH == "amd64p32" {
+		return lit(0)
+	}
+	return nil
 }
 
 func rep(n int, b []byte) []byte { return bytes.Repeat(b, n) }
@@ -4663,4 +4761,17 @@ func TestTypeOfTypeOf(t *testing.T) {
 	check("MapOf", MapOf(TypeOf(T{}), TypeOf(T{})))
 	check("PtrTo", PtrTo(TypeOf(T{})))
 	check("SliceOf", SliceOf(TypeOf(T{})))
+}
+
+type XM struct{}
+
+func (*XM) String() string { return "" }
+
+func TestPtrToMethods(t *testing.T) {
+	var y struct{ XM }
+	yp := New(TypeOf(y)).Interface()
+	_, ok := yp.(fmt.Stringer)
+	if !ok {
+		t.Fatal("does not implement Stringer, but should")
+	}
 }

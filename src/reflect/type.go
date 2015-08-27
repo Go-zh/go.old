@@ -12,7 +12,7 @@
 // for that type.
 //
 // See "The Laws of Reflection" for an introduction to reflection in Go:
-// http://golang.org/doc/articles/laws_of_reflection.html
+// https://golang.org/doc/articles/laws_of_reflection.html
 package reflect
 
 import (
@@ -389,7 +389,7 @@ type Method struct {
 	// method name.  It is empty for upper case (exported) method names.
 	// The combination of PkgPath and Name uniquely identifies a method
 	// in a method set.
-	// See http://golang.org/ref/spec#Uniqueness_of_identifiers
+	// See https://golang.org/ref/spec#Uniqueness_of_identifiers
 	Name    string
 	PkgPath string
 
@@ -527,7 +527,7 @@ func (t *uncommonType) MethodByName(name string) (m Method, ok bool) {
 	return
 }
 
-// TODO(rsc): 6g supplies these, but they are not
+// TODO(rsc): gc supplies these, but they are not
 // as efficient as they could be: they have commonType
 // as the receiver instead of *rtype.
 func (t *rtype) NumMethod() int {
@@ -737,7 +737,7 @@ type StructField struct {
 	// Name is the field name.
 	// PkgPath is the package path that qualifies a lower case (unexported)
 	// field name.  It is empty for upper case (exported) field names.
-	// See http://golang.org/ref/spec#Uniqueness_of_identifiers
+	// See https://golang.org/ref/spec#Uniqueness_of_identifiers
 	Name    string
 	PkgPath string
 
@@ -1188,7 +1188,7 @@ func implements(T, V *rtype) bool {
 
 // directlyAssignable reports whether a value x of type V can be directly
 // assigned (using memmove) to a value of type T.
-// http://golang.org/doc/go_spec.html#Assignability
+// https://golang.org/doc/go_spec.html#Assignability
 // Ignoring the interface rules (implemented elsewhere)
 // and the ideal constant rules (no ideal constants at run time).
 func directlyAssignable(T, V *rtype) bool {
@@ -1705,6 +1705,18 @@ func bucketOf(ktyp, etyp *rtype) *rtype {
 	// they're guaranteed to have bitmaps instead of GC programs.
 	var gcdata *byte
 	var ptrdata uintptr
+	var overflowPad uintptr
+
+	// On NaCl, pad if needed to make overflow end at the proper struct alignment.
+	// On other systems, align > ptrSize is not possible.
+	if runtime.GOARCH == "amd64p32" && (ktyp.align > ptrSize || etyp.align > ptrSize) {
+		overflowPad = ptrSize
+	}
+	size := bucketSize*(1+ktyp.size+etyp.size) + overflowPad + ptrSize
+	if size&uintptr(ktyp.align-1) != 0 || size&uintptr(etyp.align-1) != 0 {
+		panic("reflect: bad size computation in MapOf")
+	}
+
 	if kind != kindNoPointers {
 		nptr := (bucketSize*(1+ktyp.size+etyp.size) + ptrSize) / ptrSize
 		mask := make([]byte, (nptr+7)/8)
@@ -1741,19 +1753,24 @@ func bucketOf(ktyp, etyp *rtype) *rtype {
 			}
 		}
 		base += bucketSize * etyp.size / ptrSize
+		base += overflowPad / ptrSize
 
 		word := base
 		mask[word/8] |= 1 << (word % 8)
 		gcdata = &mask[0]
 		ptrdata = (word + 1) * ptrSize
-	}
 
-	size := bucketSize*(1+ktyp.size+etyp.size) + ptrSize
-	if runtime.GOARCH == "amd64p32" {
-		size += ptrSize
+		// overflow word must be last
+		if ptrdata != size {
+			panic("reflect: bad layout computation in MapOf")
+		}
 	}
 
 	b := new(rtype)
+	b.align = ptrSize
+	if overflowPad > 0 {
+		b.align = 8
+	}
 	b.size = size
 	b.ptrdata = ptrdata
 	b.kind = kind
@@ -1796,6 +1813,9 @@ func SliceOf(t Type) Type {
 
 	return cachePut(ckey, &slice.rtype)
 }
+
+// See cmd/compile/internal/gc/reflect.go for derivation of constant.
+const maxPtrmaskBytes = 2048
 
 // ArrayOf returns the array type with the given count and element type.
 // For example, if t represents int, ArrayOf(5, t) represents [5]int.
@@ -1865,7 +1885,7 @@ func ArrayOf(count int, elem Type) Type {
 		array.gcdata = typ.gcdata
 		array.ptrdata = typ.ptrdata
 
-	case typ.kind&kindGCProg == 0 && array.size <= 16*8*ptrSize:
+	case typ.kind&kindGCProg == 0 && array.size <= maxPtrmaskBytes*8*ptrSize:
 		// Element is small with pointer mask; array is still small.
 		// Create direct pointer mask by turning each 1 bit in elem
 		// into count 1 bits in larger mask.
@@ -2070,6 +2090,10 @@ func funcLayout(t *rtype, rcvr *rtype) (frametype *rtype, argSize, retOffset uin
 
 	// build dummy rtype holding gc program
 	x := new(rtype)
+	x.align = ptrSize
+	if runtime.GOARCH == "amd64p32" {
+		x.align = 8
+	}
 	x.size = offset
 	x.ptrdata = uintptr(ptrmap.n) * ptrSize
 	if ptrmap.n > 0 {

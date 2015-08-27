@@ -7,6 +7,7 @@ package runtime_test
 import (
 	"math"
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -95,6 +96,10 @@ func TestYieldLocked(t *testing.T) {
 }
 
 func TestGoroutineParallelism(t *testing.T) {
+	if runtime.NumCPU() == 1 {
+		// Takes too long, too easy to deadlock, etc.
+		t.Skip("skipping on uniprocessor")
+	}
 	P := 4
 	N := 10
 	if testing.Short() {
@@ -104,8 +109,8 @@ func TestGoroutineParallelism(t *testing.T) {
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(P))
 	// If runtime triggers a forced GC during this test then it will deadlock,
 	// since the goroutines can't be stopped/preempted.
-	// So give this test as much time as possible.
-	runtime.GC()
+	// Disable GC for this test (see issue #10958).
+	defer debug.SetGCPercent(debug.SetGCPercent(-1))
 	for try := 0; try < N; try++ {
 		done := make(chan bool)
 		x := uint32(0)

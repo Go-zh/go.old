@@ -45,19 +45,19 @@ type ScanState interface {
 	// UnreadRune causes the next call to ReadRune to return the same rune.
 	// UnreadRune 会使 ReadRune 的下一次调用返回相同的符文。
 	UnreadRune() error
-	// SkipSpace skips space in the input. Newlines are treated as space
-	// unless the scan operation is Scanln, Fscanln or Sscanln, in which case
-	// a newline is treated as EOF.
+	// SkipSpace skips space in the input. Newlines are treated appropriately
+	// for the operation being performed; see the package documentation
+	// for more information.
 	//
-	// SkipSpace 跳过输入中的空格。换行符会被视作空格，除非该扫描操作为 Scanln、
-	// Fscanln 或 Sscanln，在这种情况下，换行符会被视作 EOF。
+	// SkipSpace 跳过输入中的空格。换行符会根据所执行的操作被恰当地处理。
+	// 更多信息见包文档。
 	SkipSpace()
 	// Token skips space in the input if skipSpace is true, then returns the
 	// run of Unicode code points c satisfying f(c).  If f is nil,
 	// !unicode.IsSpace(c) is used; that is, the token will hold non-space
-	// characters.  Newlines are treated as space unless the scan operation
-	// is Scanln, Fscanln or Sscanln, in which case a newline is treated as
-	// EOF.  The returned slice points to shared data that may be overwritten
+	// characters.  Newlines are treated appropriately for the operation being
+	// performed; see the package documentation for more information.
+	// The returned slice points to shared data that may be overwritten
 	// by the next call to Token, a call to a Scan function using the ScanState
 	// as input, or when the calling Scan method returns.
 	//
@@ -115,10 +115,14 @@ func Scanln(a ...interface{}) (n int, err error) {
 // space-separated values into successive arguments as determined by
 // the format.  It returns the number of items successfully scanned.
 // If that is less than the number of arguments, err will report why.
+// Newlines in the input must match newlines in the format.
+// The one exception: the verb %c always scans the next rune in the
+// input, even if it is a space (or tab etc.) or newline.
 
 // Scanf 扫描从标准输入中读取的文本，并将连续由空格分隔的值存储为连续的实参，
 // 其格式由 format 决定。它返回成功扫描的条目数。若返回的条目数小于实参数，
-// 则会报告错误原因 err。
+// 则会报告错误原因 err。输入中的换行符必须与 format 中的相匹配，除了一种例外：
+// %c 占位符总是扫描输入中的下一个符文，即便它是空格（或 tab 等）或换行符。
 func Scanf(format string, a ...interface{}) (n int, err error) {
 	return Fscanf(os.Stdin, format, a...)
 }
@@ -156,9 +160,10 @@ func Sscanln(str string, a ...interface{}) (n int, err error) {
 // Sscanf scans the argument string, storing successive space-separated
 // values into successive arguments as determined by the format.  It
 // returns the number of items successfully parsed.
+// Newlines in the input must match newlines in the format.
 
 // Scanf 扫描实参 string，并将连续由空格分隔的值存储为连续的实参，
-// 其格式由 format 决定。它返回成功解析的条目数。
+// 其格式由 format 决定。它返回成功解析的条目数。输入中的换行符必须与 format 中的相匹配。
 func Sscanf(str string, format string, a ...interface{}) (n int, err error) {
 	return Fscanf((*stringReader)(&str), format, a...)
 }
@@ -191,9 +196,10 @@ func Fscanln(r io.Reader, a ...interface{}) (n int, err error) {
 // Fscanf scans text read from r, storing successive space-separated
 // values into successive arguments as determined by the format.  It
 // returns the number of items successfully parsed.
+// Newlines in the input must match newlines in the format.
 
 // Fscanf 扫描从 r 中读取的文本，并将连续由空格分隔的值存储为连续的实参，
-// 其格式由 format 决定。它返回成功解析的条目数。
+// 其格式由 format 决定。它返回成功解析的条目数。输入中的换行符必须与 format 中的相匹配。
 func Fscanf(r io.Reader, format string, a ...interface{}) (n int, err error) {
 	s, old := newScanState(r, false, false)
 	n, err = s.doScanf(format, a)
@@ -474,18 +480,6 @@ var ssFree = sync.Pool{
 
 // newScanState 分配一个新的 ss 结构体或抓取一个已缓存的。
 func newScanState(r io.Reader, nlIsSpace, nlIsEnd bool) (s *ss, old ssave) {
-	// If the reader is a *ss, then we've got a recursive
-	// call to Scan, so re-use the scan state.
-	// 若读取器是一个 *ss，那么我们就得到了一个递归调用的 Scan，这样会重新使用扫描状态。
-	s, ok := r.(*ss)
-	if ok {
-		old = s.ssave
-		s.limit = s.argLimit
-		s.nlIsEnd = nlIsEnd || s.nlIsEnd
-		s.nlIsSpace = nlIsSpace
-		return
-	}
-
 	s = ssFree.Get().(*ss)
 	if rr, ok := r.(io.RuneReader); ok {
 		s.rr = rr
@@ -1057,7 +1051,6 @@ func hexDigit(d rune) (int, bool) {
 func (s *ss) hexByte() (b byte, ok bool) {
 	rune1 := s.getRune()
 	if rune1 == eof {
-		s.UnreadRune()
 		return
 	}
 	value1, ok := hexDigit(rune1)
@@ -1231,9 +1224,9 @@ func (s *ss) doScan(a []interface{}) (numProcessed int, err error) {
 		s.scanOne('v', arg)
 		numProcessed++
 	}
-	// Check for newline if required.
-	// 根据需要检查换行符。
-	if !s.nlIsSpace {
+	// Check for newline (or EOF) if required (Scanln etc.).
+	// 根据需要（Scanln 等）检查换行符（或 EOF）。
+	if s.nlIsEnd {
 		for {
 			r := s.getRune()
 			if r == '\n' || r == eof {
@@ -1249,17 +1242,19 @@ func (s *ss) doScan(a []interface{}) (numProcessed int, err error) {
 }
 
 // advance determines whether the next characters in the input match
-// those of the format.  It returns the number of bytes (sic) consumed
-// in the format. Newlines included, all runs of space characters in
-// either input or format behave as a single space. This routine also
-// handles the %% case.  If the return value is zero, either format
-// starts with a % (with no following %) or the input is empty.
-// If it is negative, the input did not match the string.
+// those of the format. It returns the number of bytes (sic) consumed
+// in the format. All runs of space characters in either input or
+// format behave as a single space. Newlines are special, though:
+// newlines in the format must match those in the input and vice versa.
+// This routine also handles the %% case. If the return value is zero,
+// either format starts with a % (with no following %) or the input
+// is empty. If it is negative, the input did not match the string.
 
 // advance 判断输入中的下一个字符是否匹配那些格式 format。
-// 它返回该格式（原文）中消耗的字节数。包括换行符，在输入或格式中的连续空白字符
-// 都视为单个空格。此程序也处理 %% 的情况。若返回值为零，那么不是格式起始于
-// %（没有后跟 %）就是输入为空。若它是复数，则输入不匹配该字符串。
+// 它返回该格式（原文）中消耗的字节数。在输入或格式中的连续空白字符都视为单个空格。
+// 换行符则比较特殊，尽管：“format 中的换行符必须与输入中的相同，反之亦然。”
+// 此程序也处理 %% 的情况。若返回值为零，那么不是格式起始于
+// %（没有后跟 %）就是输入为空。若它是负数，则输入不匹配该字符串。
 func (s *ss) advance(format string) (i int) {
 	for i < len(format) {
 		fmtc, w := utf8.DecodeRuneInString(format[i:])
@@ -1272,27 +1267,47 @@ func (s *ss) advance(format string) (i int) {
 			i += w // skip the first % // 跳过第一个 %
 		}
 		sawSpace := false
+		wasNewline := false
+		// Skip spaces in format but absorb at most one newline.
 		for isSpace(fmtc) && i < len(format) {
+			if fmtc == '\n' {
+				if wasNewline { // Already saw one; stop here.
+					break
+				}
+				wasNewline = true
+			}
 			sawSpace = true
 			i += w
 			fmtc, w = utf8.DecodeRuneInString(format[i:])
 		}
 		if sawSpace {
-			// There was space in the format, so there should be space (EOF)
+			// There was space in the format, so there should be space
 			// in the input.
 			// 格式中有空格，因此输入中也应该有空格（EOF）
 			inputc := s.getRune()
-			if inputc == eof || inputc == '\n' {
-				// If we've reached a newline, stop now; don't read ahead.
-				// 若我们遇到换行符，就立即停止，不继续读取。
+			if inputc == eof {
 				return
 			}
 			if !isSpace(inputc) {
-				// Space in format but not in input: error
-				// 格式中有空格但输入中没有：错误
+				// Space in format but not in input.
+				// 格式中有空格但输入中没有。
 				s.errorString("expected space in input to match format")
 			}
-			s.skipSpace(true)
+			// Skip spaces but stop at newline.
+			for inputc != '\n' && isSpace(inputc) {
+				inputc = s.getRune()
+			}
+			if inputc == '\n' {
+				if !wasNewline {
+					s.errorString("newline in input does not match format")
+				}
+				// We've reached a newline, stop now; don't read further.
+				return
+			}
+			s.UnreadRune()
+			if wasNewline {
+				s.errorString("newline in format does not match input")
+			}
 			continue
 		}
 		inputc := s.mustReadRune()
@@ -1342,13 +1357,17 @@ func (s *ss) doScanf(format string, a []interface{}) (numProcessed int, err erro
 		if !widPresent {
 			s.maxWid = hugeWid
 		}
+
+		c, w := utf8.DecodeRuneInString(format[i:])
+		i += w
+
+		if c != 'c' {
+			s.SkipSpace()
+		}
 		s.argLimit = s.limit
 		if f := s.count + s.maxWid; f < s.argLimit {
 			s.argLimit = f
 		}
-
-		c, w := utf8.DecodeRuneInString(format[i:])
-		i += w
 
 		if numProcessed >= len(a) { // out of operands // 超过操作数
 			s.errorString("too few operands for format %" + format[i-w:])

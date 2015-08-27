@@ -2615,20 +2615,20 @@ resulting slice is returned.  The function uses the fact that
 
 <div class="english">
 <pre>
-func Append(slice, data[]byte) []byte {
-	l := len(slice)
-	if l + len(data) &gt; cap(slice) {  // reallocate
-		// Allocate double what's needed, for future growth.
-		newSlice := make([]byte, (l+len(data))*2)
-		// The copy function is predeclared and works for any slice type.
-		copy(newSlice, slice)
-		slice = newSlice
-	}
-	slice = slice[0:l+len(data)]
-	for i, c := range data {
-		slice[l+i] = c
-	}
-	return slice
+func Append(slice, data []byte) []byte {
+    l := len(slice)
+    if l + len(data) &gt; cap(slice) {  // reallocate
+        // Allocate double what's needed, for future growth.
+        newSlice := make([]byte, (l+len(data))*2)
+        // The copy function is predeclared and works for any slice type.
+        copy(newSlice, slice)
+        slice = newSlice
+    }
+    slice = slice[0:l+len(data)]
+    for i, c := range data {
+        slice[l+i] = c
+    }
+    return slice
 }
 </pre>
 </div>
@@ -6025,7 +6025,7 @@ req := req
 
 <div class="english">
 <p>
-but it's a legal and idiomatic in Go to do this.
+but it's legal and idiomatic in Go to do this.
 You get a fresh version of the variable with the same name, deliberately
 shadowing the loop variable locally but unique to each goroutine.
 </p>
@@ -6279,68 +6279,87 @@ launching all the goroutines.
 
 <div class="english">
 <pre>
-const NCPU = 4  // number of CPU cores
+const numCPU = 4 // number of CPU cores
 
 func (v Vector) DoAll(u Vector) {
-	c := make(chan int, NCPU)  // Buffering optional but sensible.
-	for i := 0; i &lt; NCPU; i++ {
-		go v.DoSome(i*len(v)/NCPU, (i+1)*len(v)/NCPU, u, c)
-	}
-	// Drain the channel.
-	for i := 0; i &lt; NCPU; i++ {
-		&lt;-c    // wait for one task to complete
-	}
-	// All done.
+    c := make(chan int, numCPU)  // Buffering optional but sensible.
+    for i := 0; i &lt; numCPU; i++ {
+        go v.DoSome(i*len(v)/numCPU, (i+1)*len(v)/numCPU, u, c)
+    }
+    // Drain the channel.
+    for i := 0; i &lt; numCPU; i++ {
+        &lt;-c    // wait for one task to complete
+    }
+    // All done.
 }
 </pre>
 </div>
 
 <pre>
-const NCPU = 4  // CPU核心数
+const numCPU = 4  // CPU核心数
 
 func (v Vector) DoAll(u Vector) {
-	c := make(chan int, NCPU)  // 缓冲区是可选的，但明显用上更好
-	for i := 0; i &lt; NCPU; i++ {
-		go v.DoSome(i*len(v)/NCPU, (i+1)*len(v)/NCPU, u, c)
+	c := make(chan int, numCPU)  // 缓冲区是可选的，但明显用上更好
+	for i := 0; i &lt; numCPU; i++ {
+		go v.DoSome(i*len(v)/numCPU, (i+1)*len(v)/numCPU, u, c)
 	}
 	// 排空信道。
-	for i := 0; i &lt; NCPU; i++ {
+	for i := 0; i &lt; numCPU; i++ {
 		&lt;-c    // 等待任务完成
 	}
 	// 一切完成。
-}
 </pre>
 
 <div class="english">
 <p>
-The current implementation of the Go runtime
-will not parallelize this code by default.
-It dedicates only a single core to user-level processing.  An
-arbitrary number of goroutines can be blocked in system calls, but
-by default only one can be executing user-level code at any time.
-It should be smarter and one day it will be smarter, but until it
-is if you want CPU parallelism you must tell the run-time
-how many goroutines you want executing code simultaneously.  There
-are two related ways to do this.  Either run your job with environment
-variable <code>GOMAXPROCS</code> set to the number of cores to use
-or import the <code>runtime</code> package and call
-<code>runtime.GOMAXPROCS(NCPU)</code>.
-A helpful value might be <code>runtime.NumCPU()</code>, which reports the number
-of logical CPUs on the local machine.
-Again, this requirement is expected to be retired as the scheduling and run-time improve.
+Rather than create a constant value for numCPU, we can ask the runtime what
+value is appropriate.
+The function <code><a href="/pkg/runtime#NumCPU">runtime.NumCPU</a></code>
+returns the number of hardware CPU cores in the machine, so we could write
 </p>
 </div>
 
 <p>
-目前Go运行时的实现默认并不会并行执行代码，它只为用户层代码提供单一的处理核心。
-任意数量的Go程都可能在系统调用中被阻塞，而在任意时刻默认只有一个会执行用户层代码。
-它应当变得更智能，而且它将来肯定会变得更智能。但现在，若你希望CPU并行执行，
-就必须告诉运行时你希望同时有多少Go程能执行代码。有两种途径可意识形态，要么
-在运行你的工作时将 <code>GOMAXPROCS</code> 环境变量设为你要使用的核心数，
-要么导入 <code>runtime</code> 包并调用 <code>runtime.GOMAXPROCS(NCPU)</code>。
-<code>runtime.NumCPU()</code> 的值可能很有用，它会返回当前机器的逻辑CPU核心数。
-当然，随着调度算法和运行时的改进，将来会不再需要这种方法。
+除了为 numCPU 创建一个常量值外，我们还可以让运行时选择一个合适的值。
+<code><a href="/pkg/runtime#NumCPU">runtime.NumCPU</a></code>
+函数会返回此机器上的硬件 CPU 核心数，所以我们可以这样写：
 </p>
+
+<pre>
+var numCPU = runtime.NumCPU()
+</pre>
+
+<div class="english">
+<p>
+There is also a function
+<code><a href="/pkg/runtime#GOMAXPROCS">runtime.GOMAXPROCS</a></code>,
+which reports (or sets)
+the user-specified number of cores that a Go program can have running
+simultaneously.
+It defaults to the value of <code>runtime.NumCPU</code> but can be
+overridden by setting the similarly named shell environment variable
+or by calling the function with a positive number.  Calling it with
+zero just queries the value.
+Therefore if we want to honor the user's resource request, we should write
+</p>
+</div>
+
+<p>
+There is also a function
+<code><a href="/pkg/runtime#GOMAXPROCS">runtime.GOMAXPROCS</a></code>,
+which reports (or sets)
+the user-specified number of cores that a Go program can have running
+simultaneously.
+还有个 <code><a href="/pkg/runtime#GOMAXPROCS">runtime.GOMAXPROCS</a></code>
+函数能报告（或设置）用户定义的，Go 程序能够同时运行的核心数。它的默认值为
+<code>runtime.NumCPU</code>，不过可以通过设置同名的 Shell
+环境变量或以一个正整数调用该函数来覆盖它。通过零调用它只会查询该值。
+因此如果我们希望遵守用户的资源请求，那么应该写：
+</p>
+
+<pre>
+var numCPU = runtime.GOMAXPROCS(0)
+</pre>
 
 <div class="english">
 <p>

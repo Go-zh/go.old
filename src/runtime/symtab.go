@@ -98,6 +98,8 @@ func moduledataverify() {
 	}
 }
 
+const debugPcln = false
+
 func moduledataverify1(datap *moduledata) {
 	// See golang.org/s/go12symtab for header: 0xfffffffb,
 	// two zero bytes, a byte giving the PC quantum,
@@ -125,6 +127,30 @@ func moduledataverify1(datap *moduledata) {
 				print("\t", hex(datap.ftab[j].entry), " ", funcname((*_func)(unsafe.Pointer(&datap.pclntable[datap.ftab[j].funcoff]))), "\n")
 			}
 			throw("invalid runtime symbol table")
+		}
+
+		if debugPcln || nftab-i < 5 {
+			// Check a PC near but not at the very end.
+			// The very end might be just padding that is not covered by the tables.
+			// No architecture rounds function entries to more than 16 bytes,
+			// but if one came along we'd need to subtract more here.
+			// But don't use the next PC if it corresponds to a foreign object chunk
+			// (no pcln table, f2.pcln == 0). That chunk might have an alignment
+			// more than 16 bytes.
+			f := (*_func)(unsafe.Pointer(&datap.pclntable[datap.ftab[i].funcoff]))
+			end := f.entry
+			if i+1 < nftab {
+				f2 := (*_func)(unsafe.Pointer(&datap.pclntable[datap.ftab[i+1].funcoff]))
+				if f2.pcln != 0 {
+					end = f2.entry - 16
+					if end < f.entry {
+						end = f.entry
+					}
+				}
+			}
+			pcvalue(f, f.pcfile, end, true)
+			pcvalue(f, f.pcln, end, true)
+			pcvalue(f, f.pcsp, end, true)
 		}
 	}
 
@@ -206,6 +232,13 @@ func pcvalue(f *_func, off int32, targetpc uintptr, strict bool) int32 {
 		return -1
 	}
 	datap := findmoduledatap(f.entry) // inefficient
+	if datap == nil {
+		if strict && panicking == 0 {
+			print("runtime: no module data for ", hex(f.entry), "\n")
+			throw("no module data")
+		}
+		return -1
+	}
 	p := datap.pclntable[off:]
 	pc := f.entry
 	val := int32(-1)
@@ -249,6 +282,9 @@ func cfuncname(f *_func) *byte {
 		return nil
 	}
 	datap := findmoduledatap(f.entry) // inefficient
+	if datap == nil {
+		return nil
+	}
 	return (*byte)(unsafe.Pointer(&datap.pclntable[f.nameoff]))
 }
 
@@ -258,6 +294,9 @@ func funcname(f *_func) string {
 
 func funcline1(f *_func, targetpc uintptr, strict bool) (file string, line int32) {
 	datap := findmoduledatap(f.entry) // inefficient
+	if datap == nil {
+		return "?", 0
+	}
 	fileno := int(pcvalue(f, f.pcfile, targetpc, strict))
 	line = pcvalue(f, f.pcln, targetpc, strict)
 	if fileno == -1 || line == -1 || fileno >= len(datap.filetab) {
@@ -275,7 +314,7 @@ func funcline(f *_func, targetpc uintptr) (file string, line int32) {
 func funcspdelta(f *_func, targetpc uintptr) int32 {
 	x := pcvalue(f, f.pcsp, targetpc, true)
 	if x&(ptrSize-1) != 0 {
-		print("invalid spdelta ", hex(f.entry), " ", hex(targetpc), " ", hex(f.pcsp), " ", x, "\n")
+		print("invalid spdelta ", funcname(f), " ", hex(f.entry), " ", hex(targetpc), " ", hex(f.pcsp), " ", x, "\n")
 	}
 	return x
 }

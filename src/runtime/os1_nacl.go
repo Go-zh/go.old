@@ -15,6 +15,9 @@ func mpreinit(mp *m) {
 
 func sigtramp()
 
+func msigsave(mp *m) {
+}
+
 // Called to initialize a new m (including the bootstrap m).
 // Called on the new thread, can not allocate memory.
 func minit() {
@@ -166,6 +169,10 @@ func badsignal2() {
 }
 
 var badsignal1 = []byte("runtime: signal received on thread not created by Go.\n")
+
+func raisebadsignal(sig int32) {
+	badsignal2()
+}
 
 func madvise(addr unsafe.Pointer, n uintptr, flags int32) {}
 func munmap(addr unsafe.Pointer, n uintptr)               {}

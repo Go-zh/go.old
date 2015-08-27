@@ -1,39 +1,14 @@
 <!--{
 	"Title": "Go编程语言规范",
-	"Subtitle": "版本：2014年12月26日 || 译者：Oling Cat",
+	"Subtitle": "版本：2015年8月5日  译者：Oling Cat",
 	"Path": "/ref/spec"
 }-->
 
 <!--{
 	"Title": "The Go Programming Language Specification",
-	"Subtitle": "Version of May 18, 2015",
+	"Subtitle": "Version of August 5, 2015",
 	"Path": "/ref/spec"
 }-->
-
-<!--
-TODO
-[ ] need language about function/method calls and parameter passing rules
-[ ] last paragraph of #Assignments (constant promotion) should be elsewhere
-    and mention assignment to empty interface.
-[ ] need to say something about "scope" of selectors?
-[ ] clarify what a field name is in struct declarations
-    (struct{T} vs struct {T T} vs struct {t T})
-[ ] need explicit language about the result type of operations
-[ ] should probably write something about evaluation order of statements even
-	though obvious
-[ ] in Selectors section, clarify what receiver value is passed in method invocations
--->
-
-<!--
-TODO
-[ ] 需要描述关于函数/方法的调用规则
-[ ] #赋值（即常量推广）的最后一段应放到别处，并加上对空接口赋值的说明
-[ ] 需要说明选择器的“作用域”？
-[ ] 阐明结构体声明中的字段名是什么（struct{T} vs. struct {T T} vs. struct {t T}）
-[ ] 关于操作符的结果类型需要详尽的语言描述
-[ ] 或许该写一些关于语句求值顺序的东西，尽管它很明显
-[ ] 在“选择器”一节中，阐明在方法调用中传递的是接收者的什么值
--->
 
 <div class="english">
 <h2 id="Introduction">Introduction</h2>
@@ -326,47 +301,50 @@ hex_digit     = "0" … "9" | "A" … "F" | "a" … "f" .
 
 <div class="english">
 <p>
-There are two forms of comments:
+Comments serve as program documentation. There are two forms:
 </p>
 </div>
 
 <p>
-注释有两种形式：
+注释会作为程序文档，它们有两种形式：
 </p>
 
 <div class="english">
 <ol>
 <li>
 <i>Line comments</i> start with the character sequence <code>//</code>
-and stop at the end of the line. A line comment acts like a newline.
+and stop at the end of the line.
 </li>
 <li>
 <i>General comments</i> start with the character sequence <code>/*</code>
-and continue through the character sequence <code>*/</code>. A general
-comment containing one or more newlines acts like a newline, otherwise it acts
-like a space.
+and stop with the first subsequent character sequence <code>*/</code>.
 </li>
 </ol>
 </div>
 
 <ol>
 <li>
-<b>行注释</b>以 <code>//</code> 开始，至行尾结束。一条行注释视为一个换行符。
+<b>行注释</b>以字符序列 <code>//</code> 开始，至行尾结束。
 </li>
 <li>
-<b>块注释</b> 以 <code>/*</code> 开始，至 <code>*/</code> 结束。
-块注释在包含多行时视为一个换行符，否则视为一个空格。
+<b>块注释</b>以字符序列 <code>/*</code> 开始，至其后的第一处字符序列
+<code>*/</code> 结束。
 </li>
 </ol>
 
 <div class="english">
 <p>
-Comments do not nest.
+A comment cannot start inside a <a href="#Rune_literals">rune</a> or
+<a href="#String_literals">string literal</a>, or inside a comment.
+A general comment containing no newlines acts like a space.
+Any other comment acts like a newline.
 </p>
 </div>
 
 <p>
-注释不可嵌套。
+注释不能从 <a href="#Rune_literals">符文</a> 或
+<a href="#String_literals">字符串字面</a> 中开始，也不能在其它注释中。
+不包含换行符的块注释视作一个空格，其余任何注释均视做一个换行符。
 </p>
 
 
@@ -410,11 +388,8 @@ using the following two rules:
 
 <ol>
 <li>
-<p>
 When the input is broken into tokens, a semicolon is automatically inserted
-into the token stream at the end of a non-blank line if the line's final
-token is
-</p>
+into the token stream immediately after a line's final token if that token is
 <ul>
 	<li>an
 	    <a href="#Identifiers">identifier</a>
@@ -591,9 +566,10 @@ imaginary_lit = (decimals | float_lit) "i" .
 <p>
 A rune literal represents a <a href="#Constants">rune constant</a>,
 an integer value identifying a Unicode code point.
-A rune literal is expressed as one or more characters enclosed in single quotes.
-Within the quotes, any character may appear except single
-quote and newline. A single quoted character represents the Unicode value
+A rune literal is expressed as one or more characters enclosed in single quotes,
+as in <code>'x'</code> or <code>'\n'</code>.
+Within the quotes, any character may appear except newline and unescaped single
+quote. A single quoted character represents the Unicode value
 of the character itself,
 while multi-character sequences beginning with a backslash encode
 values in various formats.
@@ -667,6 +643,7 @@ escaped_char     = `\` ( "a" | "b" | "f" | "n" | "r" | "t" | "v" | `\` | "'" | `
 '\xff'
 '\u12e4'
 '\U00101234'
+'\''         // rune literal containing single quote character
 'aa'         // illegal: too many characters
 '\xa'        // illegal: too few hexadecimal digits
 '\0'         // illegal: too few octal digits
@@ -683,8 +660,8 @@ obtained from concatenating a sequence of characters. There are two forms:
 raw string literals and interpreted string literals.
 </p>
 <p>
-Raw string literals are character sequences between back quotes
-<code>``</code>.  Within the quotes, any character is legal except
+Raw string literals are character sequences between back quotes, as in
+<code>`foo`</code>.  Within the quotes, any character may appear except
 back quote. The value of a raw string literal is the
 string composed of the uninterpreted (implicitly UTF-8-encoded) characters
 between the quotes;
@@ -695,8 +672,9 @@ are discarded from the raw string value.
 </p>
 <p>
 Interpreted string literals are character sequences between double
-quotes <code>&quot;&quot;</code>. The text between the quotes,
-which may not contain newlines, forms the
+quotes, as in <code>&quot;bar&quot;</code>.
+Within the quotes, any character may appear except newline and unescaped double quote.
+The text between the quotes forms the
 value of the literal, with backslash escapes interpreted as they
 are in <a href="#Rune_literals">rune literals</a> (except that <code>\'</code> is illegal and
 <code>\"</code> is legal), with the same restrictions.
@@ -718,17 +696,17 @@ interpreted_string_lit = `"` { unicode_value | byte_value } `"` .
 </pre>
 
 <pre>
-`abc`  // same as "abc"
+`abc`                // same as "abc"
 `\n
-\n`    // same as "\\n\n\\n"
+\n`                  // same as "\\n\n\\n"
 "\n"
-""
+"\""                 // same as `"`
 "Hello, world!\n"
 "日本語"
 "\u65e5本\U00008a9e"
 "\xff\u00FF"
-"\uD800"       // illegal: surrogate half
-"\U00110000"   // illegal: invalid Unicode code point
+"\uD800"             // illegal: surrogate half
+"\U00110000"         // illegal: invalid Unicode code point
 </pre>
 
 <p>
@@ -2152,7 +2130,7 @@ const (
 )
 
 func (tz TimeZone) String() string {
-	return fmt.Sprintf("GMT+%dh", tz)
+	return fmt.Sprintf("GMT%+dh", tz)
 }
 </pre>
 
@@ -2240,12 +2218,12 @@ _, y, _ := coord(p)  // coord() returns three values; only interested in y coord
 </pre>
 
 <p>
-Unlike regular variable declarations, a short variable declaration may redeclare variables provided they
-were originally declared earlier in the same block with the same type, and at
-least one of the non-<a href="#Blank_identifier">blank</a> variables is new.  As a consequence, redeclaration
-can only appear in a multi-variable short declaration.
-Redeclaration does not introduce a new
-variable; it just assigns a new value to the original.
+Unlike regular variable declarations, a short variable declaration may <i>redeclare</i>
+variables provided they were originally declared earlier in the same block
+(or the parameter lists if the block is the function body) with the same type, 
+and at least one of the non-<a href="#Blank_identifier">blank</a> variables is new.
+As a consequence, redeclaration can only appear in a multi-variable short declaration.
+Redeclaration does not introduce a new variable; it just assigns a new value to the original.
 </p>
 
 <pre>
@@ -2284,13 +2262,13 @@ a <a href="#Terminating_statements">terminating statement</a>.
 </p>
 
 <pre>
-func findMarker(c &lt;-chan int) int {
-	for i := range c {
-		if x := &lt;-c; isMarker(x) {
-			return x
+func IndexRune(s string, r rune) int {
+	for i, c := range s {
+		if c == r {
+			return i
 		}
 	}
-	// invalid: missing return statement.
+	// invalid: missing return statement
 }
 </pre>
 
@@ -2324,14 +2302,15 @@ Receiver     = Parameters .
 </pre>
 
 <p>
-The receiver is specified via an extra parameter section preceeding the method
+The receiver is specified via an extra parameter section preceding the method
 name. That parameter section must declare a single parameter, the receiver.
 Its type must be of the form <code>T</code> or <code>*T</code> (possibly using
 parentheses) where <code>T</code> is a type name. The type denoted by <code>T</code> is called
 the receiver <i>base type</i>; it must not be a pointer or interface type and
 it must be declared in the same package as the method.
 The method is said to be <i>bound</i> to the base type and the method name
-is visible only within selectors for that type.
+is visible only within <a href="#Selectors">selectors</a> for type <code>T</code>
+or <code>*T</code>.
 </p>
 
 <p>
@@ -2832,9 +2811,10 @@ p.x          // (*(*p).T0).x
 
 q.x          // (*(*q).T0).x        (*q).x is a valid field selector
 
-p.M2()       // p.M2()              M2 expects *T2 receiver
+p.M0()       // ((*p).T0).M0()      M0 expects *T0 receiver
 p.M1()       // ((*p).T1).M1()      M1 expects T1 receiver
-p.M0()       // ((&(*p).T0)).M0()   M0 expects *T0 receiver, see section on Calls
+p.M2()       // p.M2()              M2 expects *T2 receiver
+t.M2()       // (&amp;t).M2()           M2 expects *T2 receiver, see section on Calls
 </pre>
 
 <p>
@@ -3553,7 +3533,7 @@ to the type of the other operand.
 The right operand in a shift expression must have unsigned integer type
 or be an untyped constant that can be converted to unsigned integer type.
 If the left operand of a non-constant shift expression is an untyped constant,
-the type of the constant is what it would be if the shift expression were
+it is first converted to the type it would assume if the shift expression were
 replaced by its left operand alone.
 </p>
 
@@ -3573,7 +3553,8 @@ var v float32 = 1&lt;&lt;s   // illegal: 1 has type float32, cannot shift
 var w int64 = 1.0&lt;&lt;33  // 1.0&lt;&lt;33 is a constant shift expression
 </pre>
 
-<h3 id="Operator_precedence">Operator precedence</h3>
+
+<h4 id="Operator_precedence">Operator precedence</h4>
 <p>
 Unary operators have the highest precedence.
 As the  <code>++</code> and <code>--</code> operators form
@@ -3615,9 +3596,9 @@ x == y+1 &amp;&amp; &lt;-chanPtr &gt; 0
 <p>
 Arithmetic operators apply to numeric values and yield a result of the same
 type as the first operand. The four standard arithmetic operators (<code>+</code>,
-<code>-</code>,  <code>*</code>, <code>/</code>) apply to integer,
-floating-point, and complex types; <code>+</code> also applies
-to strings. All other arithmetic operators apply to integers only.
+<code>-</code>, <code>*</code>, <code>/</code>) apply to integer,
+floating-point, and complex types; <code>+</code> also applies to strings.
+The bitwise logical and shift operators apply to integers only.
 </p>
 
 <pre class="grammar">
@@ -3636,19 +3617,9 @@ to strings. All other arithmetic operators apply to integers only.
 &gt;&gt;   right shift            integer &gt;&gt; unsigned integer
 </pre>
 
-<p>
-Strings can be concatenated using the <code>+</code> operator
-or the <code>+=</code> assignment operator:
-</p>
 
-<pre>
-s := "hi" + string(c)
-s += " and good bye"
-</pre>
+<h4 id="Integer_operators">Integer operators</h4>
 
-<p>
-String addition creates a new string by concatenating the operands.
-</p>
 <p>
 For two integer values <code>x</code> and <code>y</code>, the integer quotient
 <code>q = x / y</code> and remainder <code>r = x % y</code> satisfy the following
@@ -3725,16 +3696,8 @@ follows:
                                       and  m = -1 for signed x
 </pre>
 
-<p>
-For floating-point and complex numbers,
-<code>+x</code> is the same as <code>x</code>,
-while <code>-x</code> is the negation of <code>x</code>.
-The result of a floating-point or complex division by zero is not specified beyond the
-IEEE-754 standard; whether a <a href="#Run_time_panics">run-time panic</a>
-occurs is implementation-specific.
-</p>
 
-<h3 id="Integer_overflow">Integer overflow</h3>
+<h4 id="Integer_overflow">Integer overflow</h4>
 
 <p>
 For unsigned integer values, the operations <code>+</code>,
@@ -3752,6 +3715,35 @@ by the signed integer representation, the operation, and its operands.
 No exception is raised as a result of overflow. A
 compiler may not optimize code under the assumption that overflow does
 not occur. For instance, it may not assume that <code>x &lt; x + 1</code> is always true.
+</p>
+
+
+<h4 id="Floating_point_operators">Floating-point operators</h4>
+
+<p>
+For floating-point and complex numbers,
+<code>+x</code> is the same as <code>x</code>,
+while <code>-x</code> is the negation of <code>x</code>.
+The result of a floating-point or complex division by zero is not specified beyond the
+IEEE-754 standard; whether a <a href="#Run_time_panics">run-time panic</a>
+occurs is implementation-specific.
+</p>
+
+
+<h4 id="String_concatenation">String concatenation</h4>
+
+<p>
+Strings can be concatenated using the <code>+</code> operator
+or the <code>+=</code> assignment operator:
+</p>
+
+<pre>
+s := "hi" + string(c)
+s += " and good bye"
+</pre>
+
+<p>
+String addition creates a new string by concatenating the operands.
 </p>
 
 
@@ -4317,7 +4309,7 @@ the implementation restriction in the section
 on <a href="#Constants">constants</a>.  This rounding may cause a
 floating-point constant expression to be invalid in an integer
 context, even if it would be integral when calculated using infinite
-precision.
+precision, and vice versa.
 </p>
 
 
@@ -4622,7 +4614,7 @@ a[i] = 23
 An <i>assignment operation</i> <code>x</code> <i>op</i><code>=</code>
 <code>y</code> where <i>op</i> is a binary arithmetic operation is equivalent
 to <code>x</code> <code>=</code> <code>x</code> <i>op</i>
-<code>y</code> but evaluates <code>x</code>
+<code>(y)</code> but evaluates <code>x</code>
 only once.  The <i>op</i><code>=</code> construct is a single token.
 In assignment operations, both the left- and right-hand expression lists
 must contain exactly one single-valued expression, and the left-hand
@@ -4784,6 +4776,7 @@ In an expression switch, the cases contain expressions that are compared
 against the value of the switch expression.
 In a type switch, the cases contain types that are compared against the
 type of a specially annotated switch expression.
+The switch expression is evaluated exactly once in a switch statement.
 </p>
 
 <h4 id="Expression_switches">Expression switches</h4>
@@ -4811,6 +4804,27 @@ ExprSwitchCase = "case" ExpressionList | "default" .
 </pre>
 
 <p>
+If the switch expression evaluates to an untyped constant, it is first
+<a href="#Conversions">converted</a> to its <a href="#Constants">default type</a>;
+if it is an untyped boolean value, it is first converted to type <code>bool</code>.
+The predeclared untyped value <code>nil</code> cannot be used as a switch expression.
+</p>
+
+<p>
+If a case expression is untyped, it is first <a href="#Conversions">converted</a>
+to the type of the switch expression.
+For each (possibly converted) case expression <code>x</code> and the value <code>t</code>
+of the switch expression, <code>x == t</code> must be a valid <a href="#Comparison_operators">comparison</a>.
+</p>
+
+<p>
+In other words, the switch expression is treated as if it were used to declare and
+initialize a temporary variable <code>t</code> without explicit type; it is that
+value of <code>t</code> against which each case expression <code>x</code> is tested
+for equality.
+</p>
+
+<p>
 In a case or default clause, the last non-empty statement
 may be a (possibly <a href="#Labeled_statements">labeled</a>)
 <a href="#Fallthrough_statements">"fallthrough" statement</a> to
@@ -4822,7 +4836,7 @@ but the last clause of an expression switch.
 </p>
 
 <p>
-The expression may be preceded by a simple statement, which
+The switch expression may be preceded by a simple statement, which
 executes before the expression is evaluated.
 </p>
 
@@ -4844,6 +4858,13 @@ case x &lt; z: f2()
 case x == 4: f3()
 }
 </pre>
+
+<p>
+Implementation restriction: A compiler may disallow multiple case
+expressions evaluating to the same constant.
+For instance, the current compilers disallow duplicate integer,
+floating point, or string constants in case expressions.
+</p>
 
 <h4 id="Type_switches">Type switches</h4>
 
@@ -5879,11 +5900,28 @@ The type of the arguments and return value correspond.
 For <code>complex</code>, the two arguments must be of the same
 floating-point type and the return type is the complex type
 with the corresponding floating-point constituents:
-<code>complex64</code> for <code>float32</code>,
-<code>complex128</code> for <code>float64</code>.
-The <code>real</code> and <code>imag</code> functions
-together form the inverse, so for a complex value <code>z</code>,
-<code>z</code> <code>==</code> <code>complex(real(z),</code> <code>imag(z))</code>.
+<code>complex64</code> for <code>float32</code> arguments, and
+<code>complex128</code> for <code>float64</code> arguments.
+If one of the arguments evaluates to an untyped constant, it is first
+<a href="#Conversions">converted</a> to the type of the other argument.
+If both arguments evaluate to untyped constants, they must be non-complex
+numbers or their imaginary parts must be zero, and the return value of
+the function is an untyped complex constant.
+</p>
+
+<p>
+For <code>real</code> and <code>imag</code>, the argument must be
+of complex type, and the return type is the corresponding floating-point
+type: <code>float32</code> for a <code>complex64</code> argument, and
+<code>float64</code> for a <code>complex128</code> argument.
+If the argument evaluates to an untyped constant, it must be a number,
+and the return value of the function is an untyped floating-point constant.
+</p>
+
+<p>
+The <code>real</code> and <code>imag</code> functions together form the inverse of
+<code>complex</code>, so for a value <code>z</code> of a complex type <code>Z</code>,
+<code>z&nbsp;==&nbsp;Z(complex(real(z),&nbsp;imag(z)))</code>.
 </p>
 
 <p>
@@ -5893,11 +5931,15 @@ value is a constant.
 
 <pre>
 var a = complex(2, -2)             // complex128
-var b = complex(1.0, -1.4)         // complex128
+const b = complex(1.0, -1.4)       // untyped complex constant 1 - 1.4i
 x := float32(math.Cos(math.Pi/2))  // float32
 var c64 = complex(5, -x)           // complex64
-var im = imag(b)                   // float64
+const s uint = complex(1, 0)       // untyped complex constant 1 + 0i can be converted to uint
+_ = complex(1, 2&lt;&lt;s)               // illegal: 2 has floating-point type, cannot shift
 var rl = real(c64)                 // float32
+var im = imag(a)                   // float64
+const c = imag(b)                  // untyped constant -1.4
+_ = imag(3 &lt;&lt; s)                   // illegal: 3 has complex type, cannot shift
 </pre>
 
 <h3 id="Handling_panics">Handling panics</h3>

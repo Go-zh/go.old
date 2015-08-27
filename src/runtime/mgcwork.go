@@ -7,7 +7,7 @@ package runtime
 import "unsafe"
 
 const (
-	_Debugwbufs  = true    // if true check wbufs consistency
+	_Debugwbufs  = false   // if true check wbufs consistency
 	_WorkbufSize = 1 * 256 // in bytes - if small wbufs are passed to GC in a timely fashion.
 )
 
@@ -153,10 +153,18 @@ func (ww *gcWork) get() uintptr {
 }
 
 // dispose returns any cached pointers to the global queue.
+// The buffers are being put on the full queue so that the
+// write barriers will not simply reacquire them before the
+// GC can inspect them. This helps reduce the mutator's
+// ability to hide pointers during the concurrent mark phase.
+//
 //go:nowritebarrier
 func (w *gcWork) dispose() {
 	if wbuf := w.wbuf; wbuf != 0 {
-		putpartial(wbuf.ptr(), 167)
+		if wbuf.ptr().nobj == 0 {
+			throw("dispose: workbuf is empty")
+		}
+		putfull(wbuf.ptr(), 166)
 		w.wbuf = 0
 	}
 	if w.bytesMarked != 0 {
@@ -240,7 +248,7 @@ func (b *workbuf) logput(entry int) {
 		return
 	}
 	if !b.inuse {
-		println("runtime:logput fails log entry=", entry,
+		println("runtime: logput fails log entry=", entry,
 			"b.log[0]=", b.log[0], "b.log[1]=", b.log[1],
 			"b.log[2]=", b.log[2], "b.log[3]=", b.log[3])
 		throw("logput: put not legal")
@@ -308,7 +316,7 @@ func putfull(b *workbuf, entry int) {
 
 // getpartialorempty tries to return a partially empty
 // and if none are available returns an empty one.
-// entry is used to provide a brief histoy of ownership
+// entry is used to provide a brief history of ownership
 // using entry + xxx00000 to
 // indicating that two line numbers in the call chain.
 //go:nowritebarrier
@@ -328,7 +336,7 @@ func getpartialorempty(entry int) *workbuf {
 // putpartial puts empty buffers on the work.empty queue,
 // full buffers on the work.full queue and
 // others on the work.partial queue.
-// entry is used to provide a brief histoy of ownership
+// entry is used to provide a brief history of ownership
 // using entry + xxx00000 to
 // indicating that two call chain line numbers.
 //go:nowritebarrier
@@ -388,10 +396,18 @@ func getfull(entry int) *workbuf {
 		return b
 	}
 
-	xadd(&work.nwait, +1)
+	incnwait := xadd(&work.nwait, +1)
+	if incnwait > work.nproc {
+		println("runtime: work.nwait=", incnwait, "work.nproc=", work.nproc)
+		throw("work.nwait > work.nproc")
+	}
 	for i := 0; ; i++ {
 		if work.full != 0 || work.partial != 0 {
-			xadd(&work.nwait, -1)
+			decnwait := xadd(&work.nwait, -1)
+			if decnwait == work.nproc {
+				println("runtime: work.nwait=", decnwait, "work.nproc=", work.nproc)
+				throw("work.nwait > work.nproc")
+			}
 			b = (*workbuf)(lfstackpop(&work.full))
 			if b == nil {
 				b = (*workbuf)(lfstackpop(&work.partial))
@@ -401,7 +417,11 @@ func getfull(entry int) *workbuf {
 				b.checknonempty()
 				return b
 			}
-			xadd(&work.nwait, +1)
+			incnwait := xadd(&work.nwait, +1)
+			if incnwait > work.nproc {
+				println("runtime: work.nwait=", incnwait, "work.nproc=", work.nproc)
+				throw("work.nwait > work.nproc")
+			}
 		}
 		if work.nwait == work.nproc {
 			return nil

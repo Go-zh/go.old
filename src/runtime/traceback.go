@@ -47,6 +47,7 @@ var (
 	gcBgMarkWorkerPC     uintptr
 	systemstack_switchPC uintptr
 	systemstackPC        uintptr
+	stackBarrierPC       uintptr
 
 	gogoPC uintptr
 
@@ -73,6 +74,7 @@ func tracebackinit() {
 	gcBgMarkWorkerPC = funcPC(gcBgMarkWorker)
 	systemstack_switchPC = funcPC(systemstack_switch)
 	systemstackPC = funcPC(systemstack)
+	stackBarrierPC = funcPC(stackBarrier)
 
 	// used by sigprof handler
 	gogoPC = funcPC(gogo)
@@ -135,6 +137,11 @@ func gentraceback(pc0, sp0, lr0 uintptr, gp *g, skip int, pcbuf *uintptr, max in
 		throw("gentraceback cannot trace user goroutine on its own stack")
 	}
 	gotraceback := gotraceback(nil)
+
+	// Fix up returns to the stack barrier by fetching the
+	// original return PC from gp.stkbar.
+	stkbar := gp.stkbar[gp.stkbarPos:]
+
 	if pc0 == ^uintptr(0) && sp0 == ^uintptr(0) { // Signal to fetch saved values from gp.
 		if gp.syscallsp != 0 {
 			pc0 = gp.syscallpc
@@ -207,6 +214,7 @@ func gentraceback(pc0, sp0, lr0 uintptr, gp *g, skip int, pcbuf *uintptr, max in
 			sp := frame.sp
 			if flags&_TraceJumpStack != 0 && f.entry == systemstackPC && gp == g.m.g0 && gp.m.curg != nil {
 				sp = gp.m.curg.sched.sp
+				stkbar = gp.m.curg.stkbar[gp.m.curg.stkbarPos:]
 			}
 			frame.fp = sp + uintptr(funcspdelta(f, frame.pc))
 			if !usesLR {
@@ -230,14 +238,28 @@ func gentraceback(pc0, sp0, lr0 uintptr, gp *g, skip int, pcbuf *uintptr, max in
 			}
 			frame.lr = 0
 		} else {
+			var lrPtr uintptr
 			if usesLR {
 				if n == 0 && frame.sp < frame.fp || frame.lr == 0 {
-					frame.lr = *(*uintptr)(unsafe.Pointer(frame.sp))
+					lrPtr = frame.sp
+					frame.lr = *(*uintptr)(unsafe.Pointer(lrPtr))
 				}
 			} else {
 				if frame.lr == 0 {
-					frame.lr = uintptr(*(*uintreg)(unsafe.Pointer(frame.fp - regSize)))
+					lrPtr = frame.fp - regSize
+					frame.lr = uintptr(*(*uintreg)(unsafe.Pointer(lrPtr)))
 				}
+			}
+			if frame.lr == stackBarrierPC {
+				// Recover original PC.
+				if stkbar[0].savedLRPtr != lrPtr {
+					print("found next stack barrier at ", hex(lrPtr), "; expected ")
+					gcPrintStkbars(stkbar)
+					print("\n")
+					throw("missed stack barrier")
+				}
+				frame.lr = stkbar[0].savedLRVal
+				stkbar = stkbar[1:]
 			}
 			flr = findfunc(frame.lr)
 			if flr == nil {
@@ -450,6 +472,13 @@ func gentraceback(pc0, sp0, lr0 uintptr, gp *g, skip int, pcbuf *uintptr, max in
 		throw("traceback has leftover defers")
 	}
 
+	if callback != nil && n < max && len(stkbar) > 0 {
+		print("runtime: g", gp.goid, ": leftover stack barriers ")
+		gcPrintStkbars(stkbar)
+		print("\n")
+		throw("traceback has leftover stack barriers")
+	}
+
 	return n
 }
 
@@ -531,9 +560,10 @@ func traceback1(pc, sp, lr uintptr, gp *g, flags uint) {
 func callers(skip int, pcbuf []uintptr) int {
 	sp := getcallersp(unsafe.Pointer(&skip))
 	pc := uintptr(getcallerpc(unsafe.Pointer(&skip)))
+	gp := getg()
 	var n int
 	systemstack(func() {
-		n = gentraceback(pc, sp, 0, getg(), skip, &pcbuf[0], len(pcbuf), nil, nil, 0)
+		n = gentraceback(pc, sp, 0, gp, skip, &pcbuf[0], len(pcbuf), nil, nil, 0)
 	})
 	return n
 }

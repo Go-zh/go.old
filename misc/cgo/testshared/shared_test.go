@@ -8,16 +8,19 @@ import (
 	"bufio"
 	"bytes"
 	"debug/elf"
+	"encoding/binary"
 	"errors"
 	"flag"
 	"fmt"
 	"go/build"
+	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -47,10 +50,17 @@ func goCmd(t *testing.T, args ...string) {
 	}
 	newargs = append(newargs, args[1:]...)
 	c := exec.Command("go", newargs...)
+	var output []byte
+	var err error
 	if testing.Verbose() {
 		fmt.Printf("+ go %s\n", strings.Join(newargs, " "))
+		c.Stdout = os.Stdout
+		c.Stderr = os.Stderr
+		err = c.Run()
+	} else {
+		output, err = c.CombinedOutput()
 	}
-	if output, err := c.CombinedOutput(); err != nil {
+	if err != nil {
 		if t != nil {
 			t.Errorf("executing %s failed %v:\n%s", strings.Join(c.Args, " "), err, output)
 		} else {
@@ -133,6 +143,10 @@ func testMain(m *testing.M) (int, error) {
 }
 
 func TestMain(m *testing.M) {
+	// Some of the tests install binaries into a custom GOPATH.
+	// That won't work if GOBIN is set.
+	os.Unsetenv("GOBIN")
+
 	flag.Parse()
 	exitCode, err := testMain(m)
 	if err != nil {
@@ -169,6 +183,89 @@ func TestShlibnameFiles(t *testing.T) {
 	}
 }
 
+// Is a given offset into the file contained in a loaded segment?
+func isOffsetLoaded(f *elf.File, offset uint64) bool {
+	for _, prog := range f.Progs {
+		if prog.Type == elf.PT_LOAD {
+			if prog.Off <= offset && offset < prog.Off+prog.Filesz {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func rnd(v int32, r int32) int32 {
+	if r <= 0 {
+		return v
+	}
+	v += r - 1
+	c := v % r
+	if c < 0 {
+		c += r
+	}
+	v -= c
+	return v
+}
+
+func readwithpad(r io.Reader, sz int32) ([]byte, error) {
+	data := make([]byte, rnd(sz, 4))
+	_, err := io.ReadFull(r, data)
+	if err != nil {
+		return nil, err
+	}
+	data = data[:sz]
+	return data, nil
+}
+
+type note struct {
+	name    string
+	tag     int32
+	desc    string
+	section *elf.Section
+}
+
+// Read all notes from f. As ELF section names are not supposed to be special, one
+// looks for a particular note by scanning all SHT_NOTE sections looking for a note
+// with a particular "name" and "tag".
+func readNotes(f *elf.File) ([]*note, error) {
+	var notes []*note
+	for _, sect := range f.Sections {
+		if sect.Type != elf.SHT_NOTE {
+			continue
+		}
+		r := sect.Open()
+		for {
+			var namesize, descsize, tag int32
+			err := binary.Read(r, f.ByteOrder, &namesize)
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				return nil, fmt.Errorf("read namesize failed:", err)
+			}
+			err = binary.Read(r, f.ByteOrder, &descsize)
+			if err != nil {
+				return nil, fmt.Errorf("read descsize failed:", err)
+			}
+			err = binary.Read(r, f.ByteOrder, &tag)
+			if err != nil {
+				return nil, fmt.Errorf("read type failed:", err)
+			}
+			name, err := readwithpad(r, namesize)
+			if err != nil {
+				return nil, fmt.Errorf("read name failed:", err)
+			}
+			desc, err := readwithpad(r, descsize)
+			if err != nil {
+				return nil, fmt.Errorf("read desc failed:", err)
+			}
+			notes = append(notes, &note{name: string(name), tag: tag, desc: string(desc), section: sect})
+		}
+	}
+	return notes, nil
+}
+
 func dynStrings(path string, flag elf.DynTag) []string {
 	f, err := elf.Open(path)
 	defer f.Close()
@@ -182,13 +279,17 @@ func dynStrings(path string, flag elf.DynTag) []string {
 	return dynstrings
 }
 
-func AssertIsLinkedTo(t *testing.T, path, lib string) {
+func AssertIsLinkedToRegexp(t *testing.T, path string, re *regexp.Regexp) {
 	for _, dynstring := range dynStrings(path, elf.DT_NEEDED) {
-		if dynstring == lib {
+		if re.MatchString(dynstring) {
 			return
 		}
 	}
-	t.Errorf("%s is not linked to %s", path, lib)
+	t.Errorf("%s is not linked to anything matching %v", path, re)
+}
+
+func AssertIsLinkedTo(t *testing.T, path, lib string) {
+	AssertIsLinkedToRegexp(t, path, regexp.MustCompile(regexp.QuoteMeta(lib)))
 }
 
 func AssertHasRPath(t *testing.T, path, dir string) {
@@ -212,9 +313,16 @@ func TestTrivialExecutable(t *testing.T) {
 	AssertHasRPath(t, "./bin/trivial", gorootInstallDir)
 }
 
+// Build an executable that uses cgo linked against the shared runtime and check it
+// runs.
+func TestCgoExecutable(t *testing.T) {
+	goCmd(t, "install", "-linkshared", "execgo")
+	run(t, "cgo executable", "./bin/execgo")
+}
+
 // Build a GOPATH package into a shared library that links against the goroot runtime
 // and an executable that links against both.
-func TestGOPathShlib(t *testing.T) {
+func TestGopathShlib(t *testing.T) {
 	goCmd(t, "install", "-buildmode=shared", "-linkshared", "dep")
 	AssertIsLinkedTo(t, filepath.Join(gopathInstallDir, "libdep.so"), soname)
 	goCmd(t, "install", "-linkshared", "exe")
@@ -226,9 +334,207 @@ func TestGOPathShlib(t *testing.T) {
 	run(t, "executable linked to GOPATH library", "./bin/exe")
 }
 
+// The shared library contains a note listing the packages it contains in a section
+// that is not mapped into memory.
+func testPkgListNote(t *testing.T, f *elf.File, note *note) {
+	if note.section.Flags != 0 {
+		t.Errorf("package list section has flags %v", note.section.Flags)
+	}
+	if isOffsetLoaded(f, note.section.Offset) {
+		t.Errorf("package list section contained in PT_LOAD segment")
+	}
+	if note.desc != "dep\n" {
+		t.Errorf("incorrect package list %q", note.desc)
+	}
+}
+
+// The shared library contains a note containing the ABI hash that is mapped into
+// memory and there is a local symbol called go.link.abihashbytes that points 16
+// bytes into it.
+func testABIHashNote(t *testing.T, f *elf.File, note *note) {
+	if note.section.Flags != elf.SHF_ALLOC {
+		t.Errorf("abi hash section has flags %v", note.section.Flags)
+	}
+	if !isOffsetLoaded(f, note.section.Offset) {
+		t.Errorf("abihash section not contained in PT_LOAD segment")
+	}
+	var hashbytes elf.Symbol
+	symbols, err := f.Symbols()
+	if err != nil {
+		t.Errorf("error reading symbols %v", err)
+		return
+	}
+	for _, sym := range symbols {
+		if sym.Name == "go.link.abihashbytes" {
+			hashbytes = sym
+		}
+	}
+	if hashbytes.Name == "" {
+		t.Errorf("no symbol called go.link.abihashbytes")
+		return
+	}
+	if elf.ST_BIND(hashbytes.Info) != elf.STB_LOCAL {
+		t.Errorf("%s has incorrect binding %v", hashbytes.Name, elf.ST_BIND(hashbytes.Info))
+	}
+	if f.Sections[hashbytes.Section] != note.section {
+		t.Errorf("%s has incorrect section %v", hashbytes.Name, f.Sections[hashbytes.Section].Name)
+	}
+	if hashbytes.Value-note.section.Addr != 16 {
+		t.Errorf("%s has incorrect offset into section %d", hashbytes.Name, hashbytes.Value-note.section.Addr)
+	}
+}
+
+// A Go shared library contains a note indicating which other Go shared libraries it
+// was linked against in an unmapped section.
+func testDepsNote(t *testing.T, f *elf.File, note *note) {
+	if note.section.Flags != 0 {
+		t.Errorf("package list section has flags %v", note.section.Flags)
+	}
+	if isOffsetLoaded(f, note.section.Offset) {
+		t.Errorf("package list section contained in PT_LOAD segment")
+	}
+	// libdep.so just links against the lib containing the runtime.
+	if note.desc != soname {
+		t.Errorf("incorrect dependency list %q", note.desc)
+	}
+}
+
+// The shared library contains notes with defined contents; see above.
+func TestNotes(t *testing.T) {
+	goCmd(t, "install", "-buildmode=shared", "-linkshared", "dep")
+	f, err := elf.Open(filepath.Join(gopathInstallDir, "libdep.so"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	notes, err := readNotes(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkgListNoteFound := false
+	abiHashNoteFound := false
+	depsNoteFound := false
+	for _, note := range notes {
+		if note.name != "Go\x00\x00" {
+			continue
+		}
+		switch note.tag {
+		case 1: // ELF_NOTE_GOPKGLIST_TAG
+			if pkgListNoteFound {
+				t.Error("multiple package list notes")
+			}
+			testPkgListNote(t, f, note)
+			pkgListNoteFound = true
+		case 2: // ELF_NOTE_GOABIHASH_TAG
+			if abiHashNoteFound {
+				t.Error("multiple abi hash notes")
+			}
+			testABIHashNote(t, f, note)
+			abiHashNoteFound = true
+		case 3: // ELF_NOTE_GODEPS_TAG
+			if depsNoteFound {
+				t.Error("multiple abi hash notes")
+			}
+			testDepsNote(t, f, note)
+			depsNoteFound = true
+		}
+	}
+	if !pkgListNoteFound {
+		t.Error("package list note not found")
+	}
+	if !abiHashNoteFound {
+		t.Error("abi hash note not found")
+	}
+	if !depsNoteFound {
+		t.Error("deps note not found")
+	}
+}
+
+// Build a GOPATH package (dep) into a shared library that links against the goroot
+// runtime, another package (dep2) that links against the first, and and an
+// executable that links against dep2.
+func TestTwoGopathShlibs(t *testing.T) {
+	goCmd(t, "install", "-buildmode=shared", "-linkshared", "dep")
+	goCmd(t, "install", "-buildmode=shared", "-linkshared", "dep2")
+	goCmd(t, "install", "-linkshared", "exe2")
+	run(t, "executable linked to GOPATH library", "./bin/exe2")
+}
+
+// Build a GOPATH package into a shared library with gccgo and an executable that
+// links against it.
+func TestGoPathShlibGccgo(t *testing.T) {
+	gccgoName := os.Getenv("GCCGO")
+	if gccgoName == "" {
+		gccgoName = "gccgo"
+	}
+	_, err := exec.LookPath(gccgoName)
+	if err != nil {
+		t.Skip("gccgo not found")
+	}
+
+	libgoRE := regexp.MustCompile("libgo.so.[0-9]+")
+
+	gccgoContext := build.Default
+	gccgoContext.InstallSuffix = suffix + "_fPIC"
+	gccgoContext.Compiler = "gccgo"
+	gccgoContext.GOPATH = os.Getenv("GOPATH")
+	depP, err := gccgoContext.Import("dep", ".", build.ImportComment)
+	if err != nil {
+		t.Fatalf("import failed: %v", err)
+	}
+	gccgoInstallDir := filepath.Join(depP.PkgTargetRoot, "shlibs")
+	goCmd(t, "install", "-compiler=gccgo", "-buildmode=shared", "-linkshared", "dep")
+	AssertIsLinkedToRegexp(t, filepath.Join(gccgoInstallDir, "libdep.so"), libgoRE)
+	goCmd(t, "install", "-compiler=gccgo", "-linkshared", "exe")
+	AssertIsLinkedToRegexp(t, "./bin/exe", libgoRE)
+	AssertIsLinkedTo(t, "./bin/exe", "libdep.so")
+	AssertHasRPath(t, "./bin/exe", gccgoInstallDir)
+	// And check it runs.
+	run(t, "gccgo-built", "./bin/exe")
+}
+
+// The gccgo version of TestTwoGopathShlibs: build a GOPATH package into a shared
+// library with gccgo, another GOPATH package that depends on the first and an
+// executable that links the second library.
+func TestTwoGopathShlibsGccgo(t *testing.T) {
+	gccgoName := os.Getenv("GCCGO")
+	if gccgoName == "" {
+		gccgoName = "gccgo"
+	}
+	_, err := exec.LookPath(gccgoName)
+	if err != nil {
+		t.Skip("gccgo not found")
+	}
+
+	libgoRE := regexp.MustCompile("libgo.so.[0-9]+")
+
+	gccgoContext := build.Default
+	gccgoContext.InstallSuffix = suffix + "_fPIC"
+	gccgoContext.Compiler = "gccgo"
+	gccgoContext.GOPATH = os.Getenv("GOPATH")
+	depP, err := gccgoContext.Import("dep", ".", build.ImportComment)
+	if err != nil {
+		t.Fatalf("import failed: %v", err)
+	}
+	gccgoInstallDir := filepath.Join(depP.PkgTargetRoot, "shlibs")
+	goCmd(t, "install", "-compiler=gccgo", "-buildmode=shared", "-linkshared", "dep")
+	goCmd(t, "install", "-compiler=gccgo", "-buildmode=shared", "-linkshared", "dep2")
+	goCmd(t, "install", "-compiler=gccgo", "-linkshared", "exe2")
+
+	AssertIsLinkedToRegexp(t, filepath.Join(gccgoInstallDir, "libdep.so"), libgoRE)
+	AssertIsLinkedToRegexp(t, filepath.Join(gccgoInstallDir, "libdep2.so"), libgoRE)
+	AssertIsLinkedTo(t, filepath.Join(gccgoInstallDir, "libdep2.so"), "libdep.so")
+	AssertIsLinkedToRegexp(t, "./bin/exe2", libgoRE)
+	AssertIsLinkedTo(t, "./bin/exe2", "libdep2")
+	AssertIsLinkedTo(t, "./bin/exe2", "libdep.so")
+
+	// And check it runs.
+	run(t, "gccgo-built", "./bin/exe2")
+}
+
 // Testing rebuilding of shared libraries when they are stale is a bit more
 // complicated that it seems like it should be. First, we make everything "old": but
-// only a few seconds old, or it might be older than 6g (or the runtime source) and
+// only a few seconds old, or it might be older than gc (or the runtime source) and
 // everything will get rebuilt. Then define a timestamp slightly newer than this
 // time, which is what we set the mtime to of a file to cause it to be seen as new,
 // and finally another slightly even newer one that we can compare files against to
@@ -331,6 +637,7 @@ func TestABIChecking(t *testing.T) {
 	// This assumes adding an exported function breaks ABI, which is not true in
 	// some senses but suffices for the narrow definition of ABI compatiblity the
 	// toolchain uses today.
+	resetFileStamps()
 	appendFile("src/dep/dep.go", "func ABIBreak() {}\n")
 	goCmd(t, "install", "-buildmode=shared", "-linkshared", "dep")
 	c := exec.Command("./bin/exe")
@@ -360,6 +667,7 @@ func TestABIChecking(t *testing.T) {
 
 	// If we make a change which does not break ABI (such as adding an unexported
 	// function) and rebuild libdep.so, exe still works.
+	resetFileStamps()
 	appendFile("src/dep/dep.go", "func noABIBreak() {}\n")
 	goCmd(t, "install", "-buildmode=shared", "-linkshared", "dep")
 	run(t, "after non-ABI breaking change", "./bin/exe")

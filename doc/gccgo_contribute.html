@@ -64,7 +64,9 @@ contribution rules</a>.
 <div class="english">
 <p>
 The master sources for the gccgo frontend may be found at
-<a href="//code.google.com/p/gofrontend">http://code.google.com/p/gofrontend</a>.
+<a href="http://go.googlesource.com/gofrontend">http://go.googlesource.com/gofrontend</a>.
+They are mirrored
+at <a href="http://github.com/golang/gofrontend">http://github.com/golang/gofrontend</a>.
 The master sources are not buildable by themselves, but only in
 conjunction with GCC (in the future, other compilers may be
 supported).  Changes made to the gccgo frontend are also applied to
@@ -81,9 +83,8 @@ in the GCC repository.
 </div>
 
 <p>
-gccgo前端的主源码可从<a href="http://code.google.com/p/gofrontend">
-http://code.google.com/p/gofrontend</a>找到。主源码不可通过其本身构建，
-只能与GCC结合使用（将来或许会支持其它编译器）。
+gccgo前端的主源码可从<a href="http://go.googlesource.com/gofrontend">http://go.googlesource.com/gofrontend</a>找到。还有份镜像在<a href="http://github.com/golang/gofrontend">http://github.com/golang/gofrontend</a>上。
+主源码不可通过其本身构建，只能与GCC结合使用（将来或许会支持其它编译器）。
 对gccgo前端的更改也可应用于托管在 <code>gcc.gnu.org</code> 上的GCC源码库中，
 <code>go</code> 目录镜像到了GCC仓库的 <code>gcc/go/gofrontend</code>
 目录，而 <code>gofrontend</code> <code>libgo</code> 目录镜像到了GCC仓库的
@@ -107,30 +108,19 @@ them.
 
 <div class="english">
 <p>
-The gccgo frontend is written in C++.  It follows the GNU coding
-standards to the extent that they apply to C++.  In writing code for
-the frontend, follow the formatting of the surrounding code.  Although
-the frontend is currently tied to the rest of the GCC codebase, we
-plan to make it more independent.  Eventually all GCC-specific code
-will migrate out of the frontend proper and into GCC proper.  In the
-GCC sources this will generally mean moving code
-from <code>gcc/go/gofrontend</code> to <code>gcc/go</code>.
+The gccgo frontend is written in C++.
+It follows the GNU and GCC coding standards for C++.
+In writing code for the frontend, follow the formatting of the
+surrounding code.
+Almost all GCC-specific code is not in the frontend proper and is
+instead in the GCC sources in the <code>gcc/go</code> directory.
 </p>
 </div>
 
 <p>
-The gccgo frontend is written in C++.  It follows the GNU coding
-standards to the extent that they apply to C++.  In writing code for
-the frontend, follow the formatting of the surrounding code.  Although
-the frontend is currently tied to the rest of the GCC codebase, we
-plan to make it more independent.  Eventually all GCC-specific code
-will migrate out of the frontend proper and into GCC proper.  In the
-GCC sources this will generally mean moving code
-from <code>gcc/go/gofrontend</code> to <code>gcc/go</code>.
 gccgo前端使用C++编写。它遵循适用于C++的GNU编码标准范围。在为该前端编写代码时，
-需遵循外围代码的格式。尽管该前端当前依赖于GCC代码库，但我们计划使它更独立。
-最终，所有GCC特有的代码将完全移出该前端并进入GCC中。在GCC源中，这通常意味着将代码从
-<code>gcc/go/gofrontend</code> 移动到 <code>gcc/go</code> 中。
+需遵循外围代码的格式。几乎所有 GCC 专用的代码都不在该前端里，而是在 GCC 源码的
+<code>gcc/go</code> 目录中。
 </p>
 
 <div class="english">

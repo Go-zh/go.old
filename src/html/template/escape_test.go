@@ -1557,6 +1557,18 @@ func TestEnsurePipelineContains(t *testing.T) {
 			".X | urlquery | html | print 2 | .f 3",
 			[]string{"urlquery", "html"},
 		},
+		{
+			// covering issue 10801
+			"{{.X | js.x }}",
+			".X | js.x | urlquery | html",
+			[]string{"urlquery", "html"},
+		},
+		{
+			// covering issue 10801
+			"{{.X | (print 12 | js).x }}",
+			".X | (print 12 | js).x | urlquery | html",
+			[]string{"urlquery", "html"},
+		},
 	}
 	for i, test := range tests {
 		tmpl := template.Must(template.New("test").Parse(test.input))
@@ -1570,6 +1582,28 @@ func TestEnsurePipelineContains(t *testing.T) {
 		got := pipe.String()
 		if got != test.output {
 			t.Errorf("#%d: %s, %v: want\n\t%s\ngot\n\t%s", i, test.input, test.ids, test.output, got)
+		}
+	}
+}
+
+func TestEscapeMalformedPipelines(t *testing.T) {
+	tests := []string{
+		"{{ 0 | $ }}",
+		"{{ 0 | $ | urlquery }}",
+		"{{ 0 | $ | urlquery | html }}",
+		"{{ 0 | (nil) }}",
+		"{{ 0 | (nil) | html }}",
+		"{{ 0 | (nil) | html | urlquery }}",
+	}
+	for _, test := range tests {
+		var b bytes.Buffer
+		tmpl, err := New("test").Parse(test)
+		if err != nil {
+			t.Errorf("failed to parse set: %q", err)
+		}
+		err = tmpl.Execute(&b, nil)
+		if err == nil {
+			t.Errorf("Expected error for %q", test)
 		}
 	}
 }

@@ -18,7 +18,7 @@
 /*
  * void crosscall1(void (*fn)(void), void (*setg_gcc)(void *g), void *g)
  *
- * Calling into the 7g tool chain, where all registers are caller save.
+ * Calling into the gc tool chain, where all registers are caller save.
  * Called from standard ARM EABI, where x19-x29 are callee-save, so they
  * must be saved explicitly, along with x30 (LR).
  */
@@ -47,10 +47,6 @@ EXT(crosscall1):
 	ldp x19, x20, [sp], #16
 	ret
 
-.globl EXT(__stack_chk_fail_local)
-EXT(__stack_chk_fail_local):
-1:
-	b 1b
 
 #ifdef __ELF__
 .section .note.GNU-stack,"",%progbits

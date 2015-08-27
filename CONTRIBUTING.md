@@ -43,6 +43,13 @@ The gophers there will answer or ask you to file an issue if you've tripped over
 里提问，那里的 Gopher 们会回答你。若你遇到的是 Bug，他们自会建议你在问题跟踪器里提交一个问题。
 
 <!--
+Sensitive security-related issues should be reported to [security@golang.org](mailto:security@golang.org).
+-->
+
+安全相关的敏感问题请向 [security@golang.org](mailto:security@golang.org) 报告。
+
+<!--
+
 ## Contributing code
 
 Please read the [Contribution Guidelines](https://golang.org/doc/contribute.html)

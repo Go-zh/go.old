@@ -24,6 +24,7 @@ var upperTest = []rune{
 	0x181,
 	0x376,
 	0x3cf,
+	0x13bd,
 	0x1f2a,
 	0x2102,
 	0x2c00,
@@ -46,6 +47,7 @@ var notupperTest = []rune{
 	0x377,
 	0x387,
 	0x2150,
+	0xab7d,
 	0xffff,
 	0x10000,
 }
@@ -200,6 +202,15 @@ var caseTest = []caseT{
 	{UpperCase, 0x0148, 0x0147},
 	{LowerCase, 0x0148, 0x0148},
 	{TitleCase, 0x0148, 0x0147},
+
+	// Lowercase lower than uppercase.
+	// AB78;CHEROKEE SMALL LETTER GE;Ll;0;L;;;;;N;;;13A8;;13A8
+	{UpperCase, 0xab78, 0x13a8},
+	{LowerCase, 0xab78, 0xab78},
+	{TitleCase, 0xab78, 0x13a8},
+	{UpperCase, 0x13a8, 0x13a8},
+	{LowerCase, 0x13a8, 0xab78},
+	{TitleCase, 0x13a8, 0x13a8},
 
 	// Last block in the 5.1.0 table
 	// 5.1.0表的最后一块
@@ -423,6 +434,9 @@ var simpleFoldTests = []string{
 	// 扩展的特殊写法：有大/小写但没有写法转换。
 	"İ",
 	"ı",
+
+	// Upper comes before lower (Cherokee).
+	"\u13b0\uab80",
 }
 
 func TestSimpleFold(t *testing.T) {

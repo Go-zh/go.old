@@ -44,13 +44,10 @@ func mkEnv() []envVar {
 		{"GORACE", os.Getenv("GORACE")},
 		{"GOROOT", goroot},
 		{"GOTOOLDIR", toolDir},
+		{"GO15VENDOREXPERIMENT", os.Getenv("GO15VENDOREXPERIMENT")},
 
 		// disable escape codes in clang errors
 		{"TERM", "dumb"},
-	}
-
-	if archCharErr == nil {
-		env = append(env, envVar{"GOCHAR", archChar()})
 	}
 
 	if goos != "plan9" {

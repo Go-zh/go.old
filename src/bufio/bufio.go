@@ -461,7 +461,6 @@ func (b *Reader) ReadBytes(delim byte) (line []byte, err error) {
 	// accumulating full buffers.
 	var frag []byte
 	var full [][]byte
-	err = nil
 
 	for {
 		var e error

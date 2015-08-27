@@ -347,9 +347,9 @@ func (g *Generator) errorf(format string, args ...interface{}) {
 func (g *Generator) expandVar(word string) string {
 	switch word {
 	case "GOARCH":
-		return runtime.GOARCH
+		return buildContext.GOARCH
 	case "GOOS":
-		return runtime.GOOS
+		return buildContext.GOOS
 	case "GOFILE":
 		return g.file
 	case "GOLINE":
@@ -402,7 +402,7 @@ func (g *Generator) exec(words []string) {
 		"GOFILE=" + g.file,
 		"GOPACKAGE=" + g.pkg,
 	}
-	cmd.Env = mergeEnvLists(env, os.Environ())
+	cmd.Env = mergeEnvLists(env, origEnv)
 	err := cmd.Run()
 	if err != nil {
 		g.errorf("running %q: %s", words[0], err)

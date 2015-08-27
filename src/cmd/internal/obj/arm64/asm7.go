@@ -699,16 +699,16 @@ func flushpool(ctxt *obj.Link, p *obj.Prog, skip int) {
 		} else if p.Pc+int64(pool.size)-int64(pool.start) < 1024*1024 {
 			return
 		}
+
+		// The line number for constant pool entries doesn't really matter.
+		// We set it to the line number of the preceding instruction so that
+		// there are no deltas to encode in the pc-line tables.
+		for q := ctxt.Blitrl; q != nil; q = q.Link {
+			q.Lineno = p.Lineno
+		}
+
 		ctxt.Elitrl.Link = p.Link
 		p.Link = ctxt.Blitrl
-
-		// BUG(minux): how to correctly handle line number for constant pool entries?
-		// for now, we set line number to the last instruction preceding them at least
-		// this won't bloat the .debug_line tables
-		for ctxt.Blitrl != nil {
-			ctxt.Blitrl.Lineno = p.Lineno
-			ctxt.Blitrl = ctxt.Blitrl.Link
-		}
 
 		ctxt.Blitrl = nil /* BUG: should refer back to values until out-of-range */
 		ctxt.Elitrl = nil
@@ -2040,7 +2040,7 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 		rt := int(p.To.Reg)
 		var r int
 		var ra int
-		if p.From3.Type == obj.TYPE_REG {
+		if p.From3Type() == obj.TYPE_REG {
 			r = int(p.From3.Reg)
 			ra = int(p.Reg)
 			if ra == 0 {
@@ -2091,7 +2091,7 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 		r := int(p.Reg)
 		var rf int
 		if r != 0 {
-			if p.From3.Type == obj.TYPE_NONE {
+			if p.From3Type() == obj.TYPE_NONE {
 				/* CINC/CINV/CNEG */
 				rf = r
 
@@ -2101,7 +2101,7 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 			}
 		} else {
 			/* CSET */
-			if p.From3.Type != obj.TYPE_NONE {
+			if p.From3Type() != obj.TYPE_NONE {
 				ctxt.Diag("invalid combination\n%v", p)
 			}
 			rf = REGZERO
@@ -2348,7 +2348,7 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 			ctxt.Diag("requires uimm16\n%v", p)
 		}
 		s := 0
-		if p.From3.Type != obj.TYPE_NONE {
+		if p.From3Type() != obj.TYPE_NONE {
 			if p.From3.Type != obj.TYPE_CONST {
 				ctxt.Diag("missing bit position\n%v", p)
 			}
@@ -2656,8 +2656,9 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 			ctxt.Diag("implausible condition\n%v", p)
 		}
 		rf := int(p.Reg)
-		if p.From3.Reg < REG_F0 || p.From3.Reg > REG_F31 {
+		if p.From3 == nil || p.From3.Reg < REG_F0 || p.From3.Reg > REG_F31 {
 			ctxt.Diag("illegal FCCMP\n%v", p)
+			break
 		}
 		rt := int(p.From3.Reg)
 		o1 |= uint32(rf&31)<<16 | uint32(cond)<<12 | uint32(rt&31)<<5 | uint32(nzcv)
@@ -2677,8 +2678,8 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 	case 59: /* stxr/stlxr */
 		o1 = opstore(ctxt, int(p.As))
 
-		if p.To2.Type != obj.TYPE_NONE {
-			o1 |= uint32(p.To2.Reg&31) << 16
+		if p.RegTo2 != obj.REG_NONE {
+			o1 |= uint32(p.RegTo2&31) << 16
 		} else {
 			o1 |= 0x1F << 16
 		}

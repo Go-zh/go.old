@@ -27,6 +27,9 @@ import "unsafe"
 // slot is the destination (dst) in go code
 // ptr is the value that goes into the slot (src) in the go code
 //
+//
+// Dealing with memory ordering:
+//
 // Dijkstra pointed out that maintaining the no black to white
 // pointers means that white to white pointers not need
 // to be noted by the write barrier. Furthermore if either
@@ -54,16 +57,36 @@ import "unsafe"
 // Peterson/Dekker algorithms for mutual exclusion). Rather than require memory
 // barriers, which will slow down both the mutator and the GC, we always grey
 // the ptr object regardless of the slot's color.
+//
+// Another place where we intentionally omit memory barriers is when
+// accessing mheap_.arena_used to check if a pointer points into the
+// heap. On relaxed memory machines, it's possible for a mutator to
+// extend the size of the heap by updating arena_used, allocate an
+// object from this new region, and publish a pointer to that object,
+// but for tracing running on another processor to observe the pointer
+// but use the old value of arena_used. In this case, tracing will not
+// mark the object, even though it's reachable. However, the mutator
+// is guaranteed to execute a write barrier when it publishes the
+// pointer, so it will take care of marking the object. A general
+// consequence of this is that the garbage collector may cache the
+// value of mheap_.arena_used. (See issue #9984.)
+//
+//
+// Stack writes:
+//
+// The compiler omits write barriers for writes to the current frame,
+// but if a stack pointer has been passed down the call stack, the
+// compiler will generate a write barrier for writes through that
+// pointer (because it doesn't know it's not a heap pointer).
+//
+// One might be tempted to ignore the write barrier if slot points
+// into to the stack. Don't do it! Mark termination only re-scans
+// frames that have potentially been active since the concurrent scan,
+// so it depends on write barriers to track changes to pointers in
+// stack frames that have not been active.
 //go:nowritebarrier
 func gcmarkwb_m(slot *uintptr, ptr uintptr) {
-	switch gcphase {
-	default:
-		throw("gcphasework in bad gcphase")
-
-	case _GCoff, _GCquiesce, _GCstw, _GCsweep, _GCscan:
-		// ok
-
-	case _GCmark, _GCmarktermination:
+	if writeBarrierEnabled {
 		if ptr != 0 && inheap(ptr) {
 			shade(ptr)
 		}
@@ -195,7 +218,7 @@ func callwritebarrier(typ *_type, frame unsafe.Pointer, framesize, retoffset uin
 	if !writeBarrierEnabled || typ == nil || typ.kind&kindNoPointers != 0 || framesize-retoffset < ptrSize || !inheap(uintptr(frame)) {
 		return
 	}
-	heapBitsBulkBarrier(uintptr(add(frame, retoffset)), framesize)
+	heapBitsBulkBarrier(uintptr(add(frame, retoffset)), framesize-retoffset)
 }
 
 //go:nosplit

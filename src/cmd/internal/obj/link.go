@@ -146,7 +146,6 @@ import "encoding/binary"
 type Addr struct {
 	Type   int16
 	Reg    int16
-	Reg2   int16 // RHS of register pair. AX:DX (386)
 	Index  int16
 	Scale  int16 // Sometimes holds a register.
 	Name   int8
@@ -201,45 +200,58 @@ const (
 // TODO(rsc): Describe prog.
 // TODO(rsc): Describe TEXT/GLOBL flag in from3, DATA width in from3.
 type Prog struct {
-	Ctxt     *Link
-	Link     *Prog
-	From     Addr
-	From3    Addr
-	To       Addr
-	To2      Addr
-	Opt      interface{}
-	Forwd    *Prog
-	Pcond    *Prog
-	Comefrom *Prog
-	Pcrel    *Prog
-	Pc       int64
-	Lineno   int32
-	Spadj    int32
-	As       int16
-	Reg      int16
-	Mark     uint16
-	Optab    uint16
-	Scond    uint8
-	Back     uint8
-	Ft       uint8
-	F3t      uint8
-	Tt       uint8
-	Isize    uint8
-	Printed  uint8
-	Width    int8
-	Mode     int8
+	Ctxt   *Link
+	Link   *Prog
+	From   Addr
+	From3  *Addr // optional
+	To     Addr
+	Opt    interface{}
+	Forwd  *Prog
+	Pcond  *Prog
+	Rel    *Prog // Source of forward jumps on x86; pcrel on arm
+	Pc     int64
+	Lineno int32
+	Spadj  int32
+	As     int16
+	Reg    int16
+	RegTo2 int16 // 2nd register output operand
+	Mark   uint16
+	Optab  uint16
+	Scond  uint8
+	Back   uint8
+	Ft     uint8
+	Tt     uint8
+	Isize  uint8
+	Mode   int8
 
 	Info ProgInfo
+}
+
+// From3Type returns From3.Type, or TYPE_NONE when From3 is nil.
+func (p *Prog) From3Type() int16 {
+	if p.From3 == nil {
+		return TYPE_NONE
+	}
+	return p.From3.Type
+}
+
+// From3Offset returns From3.Offset, or 0 when From3 is nil.
+func (p *Prog) From3Offset() int64 {
+	if p.From3 == nil {
+		return 0
+	}
+	return p.From3.Offset
 }
 
 // ProgInfo holds information about the instruction for use
 // by clients such as the compiler. The exact meaning of this
 // data is up to the client and is not interpreted by the cmd/internal/obj/... packages.
 type ProgInfo struct {
-	Flags    uint32 // flag bits
-	Reguse   uint64 // registers implicitly used by this instruction
-	Regset   uint64 // registers implicitly set by this instruction
-	Regindex uint64 // registers used by addressing mode
+	Flags    uint32   // flag bits
+	Reguse   uint64   // registers implicitly used by this instruction
+	Regset   uint64   // registers implicitly set by this instruction
+	Regindex uint64   // registers used by addressing mode
+	_        struct{} // to prevent unkeyed literals
 }
 
 // Prog.as opcodes.
@@ -326,6 +338,7 @@ const (
 	SSTRING
 	SGOSTRING
 	SGOFUNC
+	SGCBITS
 	SRODATA
 	SFUNCTAB
 	STYPELINK
@@ -354,9 +367,10 @@ const (
 	SCONST
 	SDYNIMPORT
 	SHOSTOBJ
-	SSUB    = 1 << 8
-	SMASK   = SSUB - 1
-	SHIDDEN = 1 << 9
+	SSUB       = 1 << 8
+	SMASK      = SSUB - 1
+	SHIDDEN    = 1 << 9
+	SCONTAINER = 1 << 10 // has a sub-symbol
 )
 
 type Reloc struct {
@@ -452,7 +466,6 @@ type Link struct {
 	Arch               *LinkArch
 	Debugasm           int32
 	Debugvlog          int32
-	Debugzerostack     int32
 	Debugdivmod        int32
 	Debugpcln          int32
 	Flag_shared        int32

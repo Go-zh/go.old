@@ -74,19 +74,21 @@ func lookupIP(host string) (addrs []IPAddr, err error) {
 }
 
 func lookupPort(network, service string) (int, error) {
-	port, err, ok := cgoLookupPort(network, service)
-	if !ok {
-		port, err = goLookupPort(network, service)
+	if systemConf().canUseCgo() {
+		if port, err, ok := cgoLookupPort(network, service); ok {
+			return port, err
+		}
 	}
-	return port, err
+	return goLookupPort(network, service)
 }
 
 func lookupCNAME(name string) (string, error) {
-	cname, err, ok := cgoLookupCNAME(name)
-	if !ok {
-		cname, err = goLookupCNAME(name)
+	if systemConf().canUseCgo() {
+		if cname, err, ok := cgoLookupCNAME(name); ok {
+			return cname, err
+		}
 	}
-	return cname, err
+	return goLookupCNAME(name)
 }
 
 func lookupSRV(service, proto, name string) (string, []*SRV, error) {
@@ -148,21 +150,10 @@ func lookupTXT(name string) ([]string, error) {
 }
 
 func lookupAddr(addr string) ([]string, error) {
-	names := lookupStaticAddr(addr)
-	if len(names) > 0 {
-		return names, nil
+	if systemConf().canUseCgo() {
+		if ptrs, err, ok := cgoLookupPTR(addr); ok {
+			return ptrs, err
+		}
 	}
-	arpa, err := reverseaddr(addr)
-	if err != nil {
-		return nil, err
-	}
-	_, rrs, err := lookup(arpa, dnsTypePTR)
-	if err != nil {
-		return nil, err
-	}
-	ptrs := make([]string, len(rrs))
-	for i, rr := range rrs {
-		ptrs[i] = rr.(*dnsRR_PTR).Ptr
-	}
-	return ptrs, nil
+	return goLookupPTR(addr)
 }

@@ -13,7 +13,7 @@ import (
 
 // common holds the information shared by related templates.
 type common struct {
-	tmpl   map[string]*Template
+	tmpl   map[string]*Template // Map from name to defined templates.
 	option option
 	// We use two maps, one for parsing and one for execution.
 	// This separation makes the API cleaner since it doesn't
@@ -34,11 +34,13 @@ type Template struct {
 	rightDelim string
 }
 
-// New allocates a new template with the given name.
+// New allocates a new, undefined template with the given name.
 func New(name string) *Template {
-	return &Template{
+	t := &Template{
 		name: name,
 	}
+	t.init()
+	return t
 }
 
 // Name returns the name of the template.
@@ -46,25 +48,28 @@ func (t *Template) Name() string {
 	return t.name
 }
 
-// New allocates a new template associated with the given one and with the same
+// New allocates a new, undefined template associated with the given one and with the same
 // delimiters. The association, which is transitive, allows one template to
 // invoke another with a {{template}} action.
 func (t *Template) New(name string) *Template {
 	t.init()
-	return &Template{
+	nt := &Template{
 		name:       name,
 		common:     t.common,
 		leftDelim:  t.leftDelim,
 		rightDelim: t.rightDelim,
 	}
+	return nt
 }
 
+// init guarantees that t has a valid common structure.
 func (t *Template) init() {
 	if t.common == nil {
-		t.common = new(common)
-		t.tmpl = make(map[string]*Template)
-		t.parseFuncs = make(FuncMap)
-		t.execFuncs = make(map[string]reflect.Value)
+		c := new(common)
+		c.tmpl = make(map[string]*Template)
+		c.parseFuncs = make(FuncMap)
+		c.execFuncs = make(map[string]reflect.Value)
+		t.common = c
 	}
 }
 
@@ -77,9 +82,12 @@ func (t *Template) init() {
 func (t *Template) Clone() (*Template, error) {
 	nt := t.copy(nil)
 	nt.init()
-	nt.tmpl[t.name] = nt
+	if t.common == nil {
+		return nt, nil
+	}
 	for k, v := range t.tmpl {
-		if k == t.name { // Already installed.
+		if k == t.name {
+			nt.tmpl[t.name] = nt
 			continue
 		}
 		// The associated templates share nt's common structure.
@@ -107,20 +115,27 @@ func (t *Template) copy(c *common) *Template {
 	return nt
 }
 
-// AddParseTree creates a new template with the name and parse tree
-// and associates it with t.
+// AddParseTree adds parse tree for template with given name and associates it with t.
+// If the template does not already exist, it will create a new one.
+// It is an error to reuse a name except to overwrite an empty template.
 func (t *Template) AddParseTree(name string, tree *parse.Tree) (*Template, error) {
-	if t.common != nil && t.tmpl[name] != nil {
-		return nil, fmt.Errorf("template: redefinition of template %q", name)
+	t.init()
+	// If the name is the name of this template, overwrite this template.
+	// The associate method checks it's not a redefinition.
+	nt := t
+	if name != t.name {
+		nt = t.New(name)
 	}
-	nt := t.New(name)
-	nt.Tree = tree
-	t.tmpl[name] = nt
+	// Even if nt == t, we need to install it in the common.tmpl map.
+	if replace, err := t.associate(nt, tree); err != nil {
+		return nil, err
+	} else if replace {
+		nt.Tree = tree
+	}
 	return nt, nil
 }
 
-// Templates returns a slice of the templates associated with t, including t
-// itself.
+// Templates returns a slice of defined templates associated with t.
 func (t *Template) Templates() []*Template {
 	if t.common == nil {
 		return nil
@@ -139,6 +154,7 @@ func (t *Template) Templates() []*Template {
 // corresponding default: {{ or }}.
 // The return value is the template, so calls can be chained.
 func (t *Template) Delims(left, right string) *Template {
+	t.init()
 	t.leftDelim = left
 	t.rightDelim = right
 	return t
@@ -157,8 +173,8 @@ func (t *Template) Funcs(funcMap FuncMap) *Template {
 	return t
 }
 
-// Lookup returns the template with the given name that is associated with t,
-// or nil if there is no such template.
+// Lookup returns the template with the given name that is associated with t.
+// It returns nil if there is no such template or the template has no definition.
 func (t *Template) Lookup(name string) *Template {
 	if t.common == nil {
 		return nil
@@ -166,7 +182,7 @@ func (t *Template) Lookup(name string) *Template {
 	return t.tmpl[name]
 }
 
-// Parse parses a string into a template. Nested template definitions will be
+// Parse defines the template by parsing the text. Nested template definitions will be
 // associated with the top-level template t. Parse may be called multiple times
 // to parse definitions of templates to associate with t. It is an error if a
 // resulting template is non-empty (contains content other than template
@@ -183,20 +199,9 @@ func (t *Template) Parse(text string) (*Template, error) {
 	}
 	// Add the newly parsed trees, including the one for t, into our common structure.
 	for name, tree := range trees {
-		// If the name we parsed is the name of this template, overwrite this template.
-		// The associate method checks it's not a redefinition.
-		tmpl := t
-		if name != t.name {
-			tmpl = t.New(name)
-		}
-		// Even if t == tmpl, we need to install it in the common.tmpl map.
-		if replace, err := t.associate(tmpl, tree); err != nil {
+		if _, err := t.AddParseTree(name, tree); err != nil {
 			return nil, err
-		} else if replace {
-			tmpl.Tree = tree
 		}
-		tmpl.leftDelim = t.leftDelim
-		tmpl.rightDelim = t.rightDelim
 	}
 	return t, nil
 }

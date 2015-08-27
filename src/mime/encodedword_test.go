@@ -6,52 +6,11 @@ package mime
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"strings"
 	"testing"
 )
-
-func ExampleEncodeWord() {
-	fmt.Println(QEncoding.Encode("utf-8", "¡Hola, señor!"))
-	fmt.Println(QEncoding.Encode("utf-8", "Hello!"))
-	fmt.Println(BEncoding.Encode("UTF-8", "¡Hola, señor!"))
-	fmt.Println(QEncoding.Encode("ISO-8859-1", "Caf\xE9"))
-	// Output:
-	// =?utf-8?q?=C2=A1Hola,_se=C3=B1or!?=
-	// Hello!
-	// =?UTF-8?b?wqFIb2xhLCBzZcOxb3Ih?=
-	// =?ISO-8859-1?q?Caf=E9?=
-}
-
-func ExampleDecodeWord() {
-	dec := new(WordDecoder)
-	header, err := dec.DecodeHeader("=?utf-8?q?=C2=A1Hola,_se=C3=B1or!?=")
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(header)
-	// Output: ¡Hola, señor!
-}
-
-func ExampleDecodeHeader() {
-	dec := new(WordDecoder)
-	header, err := dec.DecodeHeader("=?utf-8?q?=C3=89ric?= <eric@example.org>, =?utf-8?q?Ana=C3=AFs?= <anais@example.org>")
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(header)
-
-	header, err = dec.DecodeHeader("=?utf-8?q?=C2=A1Hola,?= =?utf-8?q?_se=C3=B1or!?=")
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(header)
-	// Output:
-	// Éric <eric@example.org>, Anaïs <anais@example.org>
-	// ¡Hola, señor!
-}
 
 func TestEncodeWord(t *testing.T) {
 	utf8, iso88591 := "utf-8", "iso-8859-1"

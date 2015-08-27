@@ -178,7 +178,7 @@ func testExtDis(
 	t.Logf("%d test cases, %d expected mismatches, %d failures; %.0f cases/second", totalTests, totalSkips, totalErrors, float64(totalTests)/time.Since(start).Seconds())
 
 	if err := <-errc; err != nil {
-		t.Fatal("external disassembler: %v", err)
+		t.Fatalf("external disassembler: %v", err)
 	}
 
 }
@@ -216,7 +216,7 @@ func writeInst(generate func(func([]byte))) (file string, f *os.File, size int, 
 
 var zeros = []byte{0, 0, 0, 0}
 
-// pad pads the code sequenc with pops.
+// pad pads the code sequence with pops.
 func pad(enc []byte) []byte {
 	if len(enc) < 4 {
 		enc = append(enc[:len(enc):len(enc)], zeros[:4-len(enc)]...)

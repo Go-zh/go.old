@@ -160,7 +160,7 @@ func linkcase(casep *obj.Prog) {
 	for p := casep; p != nil; p = p.Link {
 		if p.As == ABCASE {
 			for ; p != nil && p.As == ABCASE; p = p.Link {
-				p.Pcrel = casep
+				p.Rel = casep
 			}
 			break
 		}
@@ -185,65 +185,6 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 	}
 	cursym.Locals = autoffset
 	cursym.Args = p.To.Val.(int32)
-
-	if ctxt.Debugzerostack != 0 {
-		if autoffset != 0 && p.From3.Offset&obj.NOSPLIT == 0 {
-			// MOVW $4(R13), R1
-			p = obj.Appendp(ctxt, p)
-
-			p.As = AMOVW
-			p.From.Type = obj.TYPE_ADDR
-			p.From.Reg = REG_R13
-			p.From.Offset = 4
-			p.To.Type = obj.TYPE_REG
-			p.To.Reg = REG_R1
-
-			// MOVW $n(R13), R2
-			p = obj.Appendp(ctxt, p)
-
-			p.As = AMOVW
-			p.From.Type = obj.TYPE_ADDR
-			p.From.Reg = REG_R13
-			p.From.Offset = 4 + int64(autoffset)
-			p.To.Type = obj.TYPE_REG
-			p.To.Reg = REG_R2
-
-			// MOVW $0, R3
-			p = obj.Appendp(ctxt, p)
-
-			p.As = AMOVW
-			p.From.Type = obj.TYPE_CONST
-			p.From.Offset = 0
-			p.To.Type = obj.TYPE_REG
-			p.To.Reg = REG_R3
-
-			// L:
-			//	MOVW.nil R3, 0(R1) +4
-			//	CMP R1, R2
-			//	BNE L
-			pl := obj.Appendp(ctxt, p)
-			p := pl
-
-			p.As = AMOVW
-			p.From.Type = obj.TYPE_REG
-			p.From.Reg = REG_R3
-			p.To.Type = obj.TYPE_MEM
-			p.To.Reg = REG_R1
-			p.To.Offset = 4
-			p.Scond |= C_PBIT
-
-			p = obj.Appendp(ctxt, p)
-			p.As = ACMP
-			p.From.Type = obj.TYPE_REG
-			p.From.Reg = REG_R1
-			p.Reg = REG_R2
-
-			p = obj.Appendp(ctxt, p)
-			p.As = ABNE
-			p.To.Type = obj.TYPE_BRANCH
-			p.Pcond = pl
-		}
-	}
 
 	/*
 	 * find leaf subroutines
@@ -505,6 +446,9 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 			}
 
 		case ADIV, ADIVU, AMOD, AMODU:
+			if cursym.Text.From3.Offset&obj.NOSPLIT != 0 {
+				ctxt.Diag("cannot divide in NOSPLIT function")
+			}
 			if ctxt.Debugdivmod != 0 {
 				break
 			}
@@ -514,22 +458,35 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 			if p.To.Type != obj.TYPE_REG {
 				break
 			}
-			q1 = p
 
-			/* MOV a,4(SP) */
+			// Make copy because we overwrite p below.
+			q1 := *p
+			if q1.Reg == REGTMP || q1.Reg == 0 && q1.To.Reg == REGTMP {
+				ctxt.Diag("div already using REGTMP: %v", p)
+			}
+
+			/* MOV m(g),REGTMP */
+			p.As = AMOVW
+			p.Lineno = q1.Lineno
+			p.From.Type = obj.TYPE_MEM
+			p.From.Reg = REGG
+			p.From.Offset = 6 * 4 // offset of g.m
+			p.Reg = 0
+			p.To.Type = obj.TYPE_REG
+			p.To.Reg = REGTMP
+
+			/* MOV a,m_divmod(REGTMP) */
 			p = obj.Appendp(ctxt, p)
-
 			p.As = AMOVW
 			p.Lineno = q1.Lineno
 			p.From.Type = obj.TYPE_REG
 			p.From.Reg = q1.From.Reg
 			p.To.Type = obj.TYPE_MEM
-			p.To.Reg = REGSP
-			p.To.Offset = 4
+			p.To.Reg = REGTMP
+			p.To.Offset = 8 * 4 // offset of m.divmod
 
 			/* MOV b,REGTMP */
 			p = obj.Appendp(ctxt, p)
-
 			p.As = AMOVW
 			p.Lineno = q1.Lineno
 			p.From.Type = obj.TYPE_REG
@@ -543,7 +500,6 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 
 			/* CALL appropriate */
 			p = obj.Appendp(ctxt, p)
-
 			p.As = ABL
 			p.Lineno = q1.Lineno
 			p.To.Type = obj.TYPE_BRANCH
@@ -563,7 +519,6 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 
 			/* MOV REGTMP, b */
 			p = obj.Appendp(ctxt, p)
-
 			p.As = AMOVW
 			p.Lineno = q1.Lineno
 			p.From.Type = obj.TYPE_REG
@@ -571,44 +526,6 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 			p.From.Offset = 0
 			p.To.Type = obj.TYPE_REG
 			p.To.Reg = q1.To.Reg
-
-			/* ADD $8,SP */
-			p = obj.Appendp(ctxt, p)
-
-			p.As = AADD
-			p.Lineno = q1.Lineno
-			p.From.Type = obj.TYPE_CONST
-			p.From.Reg = 0
-			p.From.Offset = 8
-			p.Reg = 0
-			p.To.Type = obj.TYPE_REG
-			p.To.Reg = REGSP
-			p.Spadj = -8
-
-			/* Keep saved LR at 0(SP) after SP change. */
-			/* MOVW 0(SP), REGTMP; MOVW REGTMP, -8!(SP) */
-			/* TODO: Remove SP adjustments; see issue 6699. */
-			q1.As = AMOVW
-
-			q1.From.Type = obj.TYPE_MEM
-			q1.From.Reg = REGSP
-			q1.From.Offset = 0
-			q1.Reg = 0
-			q1.To.Type = obj.TYPE_REG
-			q1.To.Reg = REGTMP
-
-			/* SUB $8,SP */
-			q1 = obj.Appendp(ctxt, q1)
-
-			q1.As = AMOVW
-			q1.From.Type = obj.TYPE_REG
-			q1.From.Reg = REGTMP
-			q1.Reg = 0
-			q1.To.Type = obj.TYPE_MEM
-			q1.To.Reg = REGSP
-			q1.To.Offset = -8
-			q1.Scond |= C_WBIT
-			q1.Spadj = 8
 
 		case AMOVW:
 			if (p.Scond&C_WBIT != 0) && p.To.Type == obj.TYPE_MEM && p.To.Reg == REGSP {
@@ -795,38 +712,45 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, framesize int32) *obj.Prog {
 		p.Scond = C_SCOND_NE
 	}
 
-	// MOVW.LS	R14, R3
-	p = obj.Appendp(ctxt, p)
+	// BLS call-to-morestack
+	bls := obj.Appendp(ctxt, p)
+	bls.As = ABLS
+	bls.To.Type = obj.TYPE_BRANCH
 
-	p.As = AMOVW
-	p.Scond = C_SCOND_LS
-	p.From.Type = obj.TYPE_REG
-	p.From.Reg = REGLINK
-	p.To.Type = obj.TYPE_REG
-	p.To.Reg = REG_R3
-
-	// BL.LS		runtime.morestack(SB) // modifies LR, returns with LO still asserted
-	p = obj.Appendp(ctxt, p)
-
-	p.As = ABL
-	p.Scond = C_SCOND_LS
-	p.To.Type = obj.TYPE_BRANCH
-	if ctxt.Cursym.Cfunc != 0 {
-		p.To.Sym = obj.Linklookup(ctxt, "runtime.morestackc", 0)
-	} else if ctxt.Cursym.Text.From3.Offset&obj.NEEDCTXT == 0 {
-		p.To.Sym = obj.Linklookup(ctxt, "runtime.morestack_noctxt", 0)
-	} else {
-		p.To.Sym = obj.Linklookup(ctxt, "runtime.morestack", 0)
+	var last *obj.Prog
+	for last = ctxt.Cursym.Text; last.Link != nil; last = last.Link {
 	}
 
-	// BLS	start
-	p = obj.Appendp(ctxt, p)
+	// MOVW	LR, R3
+	movw := obj.Appendp(ctxt, last)
+	movw.As = AMOVW
+	movw.From.Type = obj.TYPE_REG
+	movw.From.Reg = REGLINK
+	movw.To.Type = obj.TYPE_REG
+	movw.To.Reg = REG_R3
 
-	p.As = ABLS
-	p.To.Type = obj.TYPE_BRANCH
-	p.Pcond = ctxt.Cursym.Text.Link
+	bls.Pcond = movw
 
-	return p
+	// BL runtime.morestack
+	call := obj.Appendp(ctxt, movw)
+	call.As = obj.ACALL
+	call.To.Type = obj.TYPE_BRANCH
+	morestack := "runtime.morestack"
+	switch {
+	case ctxt.Cursym.Cfunc != 0:
+		morestack = "runtime.morestackc"
+	case ctxt.Cursym.Text.From3.Offset&obj.NEEDCTXT == 0:
+		morestack = "runtime.morestack_noctxt"
+	}
+	call.To.Sym = obj.Linklookup(ctxt, morestack, 0)
+
+	// B start
+	b := obj.Appendp(ctxt, call)
+	b.As = obj.AJMP
+	b.To.Type = obj.TYPE_BRANCH
+	b.Pcond = ctxt.Cursym.Text.Link
+
+	return bls
 }
 
 func initdiv(ctxt *obj.Link) {

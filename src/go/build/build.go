@@ -256,6 +256,7 @@ func (ctxt *Context) SrcDirs() []string {
 // if set, or else the compiled code's GOARCH, GOOS, and GOROOT.
 var Default Context = defaultContext()
 
+// Also known to cmd/dist/build.go.
 var cgoEnabled = map[string]bool{
 	"darwin/386":      true,
 	"darwin/amd64":    true,
@@ -264,6 +265,7 @@ var cgoEnabled = map[string]bool{
 	"dragonfly/amd64": true,
 	"freebsd/386":     true,
 	"freebsd/amd64":   true,
+	"freebsd/arm":     true,
 	"linux/386":       true,
 	"linux/amd64":     true,
 	"linux/arm":       true,
@@ -492,9 +494,13 @@ func (ctxt *Context) Import(path string, srcDir string, mode ImportMode) (*Packa
 			p.Dir = ctxt.joinPath(srcDir, path)
 		}
 		// Determine canonical import path, if any.
+		// Exclude results where the import path would include /testdata/.
+		inTestdata := func(sub string) bool {
+			return strings.Contains(sub, "/testdata/") || strings.HasSuffix(sub, "/testdata") || strings.HasPrefix(sub, "testdata/") || sub == "testdata"
+		}
 		if ctxt.GOROOT != "" {
 			root := ctxt.joinPath(ctxt.GOROOT, "src")
-			if sub, ok := ctxt.hasSubdir(root, p.Dir); ok {
+			if sub, ok := ctxt.hasSubdir(root, p.Dir); ok && !inTestdata(sub) {
 				p.Goroot = true
 				p.ImportPath = sub
 				p.Root = ctxt.GOROOT
@@ -504,7 +510,7 @@ func (ctxt *Context) Import(path string, srcDir string, mode ImportMode) (*Packa
 		all := ctxt.gopath()
 		for i, root := range all {
 			rootsrc := ctxt.joinPath(root, "src")
-			if sub, ok := ctxt.hasSubdir(rootsrc, p.Dir); ok {
+			if sub, ok := ctxt.hasSubdir(rootsrc, p.Dir); ok && !inTestdata(sub) {
 				// We found a potential import path for dir,
 				// but check that using it wouldn't find something
 				// else first.
@@ -963,7 +969,7 @@ func (ctxt *Context) matchFile(dir, name string, returnImports bool, allTags map
 	}
 
 	if strings.HasSuffix(filename, ".go") {
-		data, err = readImports(f, false)
+		data, err = readImports(f, false, nil)
 	} else {
 		data, err = readComments(f)
 	}
@@ -1391,20 +1397,11 @@ func IsLocalImport(path string) bool {
 		strings.HasPrefix(path, "./") || strings.HasPrefix(path, "../")
 }
 
-// ArchChar returns the architecture character for the given goarch.
-// For example, ArchChar("amd64") returns "6".
+// ArchChar returns "?" and an error.
+// In earlier versions of Go, the returned string was used to derive
+// the compiler and linker tool names, the default object file suffix,
+// and the default linker output name. As of Go 1.5, those strings
+// no longer vary by architecture; they are compile, link, .o, and a.out, respectively.
 func ArchChar(goarch string) (string, error) {
-	switch goarch {
-	case "386":
-		return "8", nil
-	case "amd64", "amd64p32":
-		return "6", nil
-	case "arm":
-		return "5", nil
-	case "arm64":
-		return "7", nil
-	case "ppc64", "ppc64le":
-		return "9", nil
-	}
-	return "", errors.New("unsupported GOARCH " + goarch)
+	return "?", errors.New("architecture letter no longer used")
 }

@@ -275,13 +275,11 @@ func Jn(n int, x float64) float64 {
 				for i := n - 1; i > 0; i-- {
 					di := float64(i + i)
 					a, b = b, b*di/x-a
-					di -= 2
 				}
 			} else {
 				for i := n - 1; i > 0; i-- {
 					di := float64(i + i)
 					a, b = b, b*di/x-a
-					di -= 2
 					// scale b to avoid spurious overflow
 					// 变换 b 以避免假溢出
 					if b > 1e100 {

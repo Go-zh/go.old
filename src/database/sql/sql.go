@@ -6,16 +6,15 @@
 // databases.
 //
 // The sql package must be used in conjunction with a database driver.
-// See http://golang.org/s/sqldrivers for a list of drivers.
+// See https://golang.org/s/sqldrivers for a list of drivers.
 //
 // For more usage examples, see the wiki page at
-// http://golang.org/s/sqlwiki.
 
 // sql 包提供了通用的SQL（或类SQL）数据库接口.
 //
-// sql 包必须与数据库驱动结合使用。驱动列表见 http://golang.org/s/sqldrivers。
+// sql 包必须与数据库驱动结合使用。驱动列表见 https://golang.org/s/sqldrivers。
 //
-// 更多使用范例见 http://golang.org/s/sqlwiki 的维基页面。
+// 更多使用范例见 https://golang.org/s/sqlwiki 的维基页面。
 package sql
 
 import (
@@ -29,7 +28,10 @@ import (
 	"sync/atomic"
 )
 
-var drivers = make(map[string]driver.Driver)
+var (
+	driversMu sync.Mutex
+	drivers   = make(map[string]driver.Driver)
+)
 
 // Register makes a database driver available by the provided name.
 // If Register is called twice with the same name or if driver is nil,
@@ -38,6 +40,8 @@ var drivers = make(map[string]driver.Driver)
 // Register使得数据库驱动可以使用事先定义好的名字使用。
 // 如果使用同样的名字注册，或者是注册的的sql驱动是空的，Register会panic。
 func Register(name string, driver driver.Driver) {
+	driversMu.Lock()
+	defer driversMu.Unlock()
 	if driver == nil {
 		panic("sql: Register driver is nil")
 	}
@@ -48,12 +52,16 @@ func Register(name string, driver driver.Driver) {
 }
 
 func unregisterAllDrivers() {
+	driversMu.Lock()
+	defer driversMu.Unlock()
 	// For tests.
 	drivers = make(map[string]driver.Driver)
 }
 
 // Drivers returns a sorted list of the names of the registered drivers.
 func Drivers() []string {
+	driversMu.Lock()
+	defer driversMu.Unlock()
 	var list []string
 	for name := range drivers {
 		list = append(list, name)
@@ -521,7 +529,7 @@ var connectionRequestQueueSize = 1000000
 //
 // Most users will open a database via a driver-specific connection
 // helper function that returns a *DB. No database drivers are included
-// in the Go standard library. See http://golang.org/s/sqldrivers for
+// in the Go standard library. See https://golang.org/s/sqldrivers for
 // a list of third-party drivers.
 //
 // Open may just validate its arguments without creating a connection
@@ -540,7 +548,9 @@ var connectionRequestQueueSize = 1000000
 //
 // TODO：待译
 func Open(driverName, dataSourceName string) (*DB, error) {
+	driversMu.Lock()
 	driveri, ok := drivers[driverName]
+	driversMu.Unlock()
 	if !ok {
 		return nil, fmt.Errorf("sql: unknown driver %q (forgotten import?)", driverName)
 	}
@@ -926,9 +936,12 @@ const maxBadConnRetries = 2
 // Prepare creates a prepared statement for later queries or executions.
 // Multiple queries or executions may be run concurrently from the
 // returned statement.
+// The caller must call the statement's Close method
+// when the statement is no longer needed.
 
 // Prepare 为以后的查询或执行操作事先创建了语句。
 // 多个查询或执行操作可在返回的语句中并发地运行。
+// 当不再需要该语句时，调用者必须调用其 Close 方法。
 func (db *DB) Prepare(query string) (*Stmt, error) {
 	var stmt *Stmt
 	var err error
@@ -1176,12 +1189,19 @@ func (db *DB) Driver() driver.Driver {
 //
 // After a call to Commit or Rollback, all operations on the
 // transaction fail with ErrTxDone.
+//
+// The statements prepared for a transaction by calling
+// the transaction's Prepare or Stmt methods are closed
+// by the call to Commit or Rollback.
 
 // Tx代表运行中的数据库事务。
 //
 // 必须调用Commit或者Rollback来结束事务。
 //
 // 在调用 Commit 或者 Rollback 之后，所有对事务的后续操作就会返回 ErrTxDone。
+//
+// 该语句通过调用事务的 Prepare 或 Stmt 方法来准备，调用事务的 Commit 或 Rollback
+// 方法来结束。
 type Tx struct {
 	db *DB
 
@@ -1334,6 +1354,9 @@ func (tx *Tx) Prepare(query string) (*Stmt, error) {
 //  tx, err := db.Begin()
 //  ...
 //  res, err := tx.Stmt(updateMoney).Exec(123.45, 98293203)
+//
+// The returned statement operates within the transaction and can no longer
+// be used once the transaction has been committed or rolled back.
 
 // Stmt从一个已有的声明中返回指定事务的声明。
 //
@@ -1343,6 +1366,8 @@ func (tx *Tx) Prepare(query string) (*Stmt, error) {
 //  tx, err := db.Begin()
 //  ...
 //  res, err := tx.Stmt(updateMoney).Exec(123.45, 98293203)
+//
+// 返回的语句用于在事务中进行操作。一旦该事务被提交或回滚，该语句便不再使用。
 func (tx *Tx) Stmt(stmt *Stmt) *Stmt {
 	// TODO(bradfitz): optimize this. Currently this re-prepares
 	// each time.  This is fine for now to illustrate the API but
@@ -1444,9 +1469,10 @@ type connStmt struct {
 	si driver.Stmt
 }
 
-// Stmt is a prepared statement. Stmt is safe for concurrent use by multiple goroutines.
+// Stmt is a prepared statement.
+// A Stmt is safe for concurrent use by multiple goroutines.
 
-// Stmt是定义好的声明。多个goroutine并发使用Stmt是安全的。
+// Stmt 是定义好的声明。多个 goroutine 并发使用一个 Stmt 是安全的。
 type Stmt struct {
 	// Immutable:
 

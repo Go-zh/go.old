@@ -177,7 +177,7 @@ func testExtDis(
 	t.Logf("%d test cases, %d expected mismatches, %d failures; %.0f cases/second", totalTests, totalSkips, totalErrors, float64(totalTests)/time.Since(start).Seconds())
 
 	if err := <-errc; err != nil {
-		t.Fatal("external disassembler: %v", err)
+		t.Fatalf("external disassembler: %v", err)
 	}
 
 }
@@ -225,7 +225,7 @@ var pops = []byte{
 	0x5f, 0x5f, 0x5f, 0x5f, 0x5f, 0x5f, 0x5f, 0x5f,
 }
 
-// pad pads the code sequenc with pops.
+// pad pads the code sequence with pops.
 func pad(enc []byte) []byte {
 	return append(enc[:len(enc):len(enc)], pops...)
 }

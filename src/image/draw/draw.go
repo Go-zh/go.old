@@ -5,12 +5,12 @@
 // Package draw provides image composition functions.
 //
 // See "The Go image/draw package" for an introduction to this package:
-// http://golang.org/doc/articles/image_draw.html
+// https://golang.org/doc/articles/image_draw.html
 
 // draw 包提供组装图片的方法.
 //
 // 参考 "The Go image/draw package" 获取这个包的简介：
-// http://golang.org/doc/articles/image_draw.html
+// https://golang.org/doc/articles/image_draw.html
 package draw
 
 import (
@@ -203,6 +203,7 @@ func DrawMask(dst Image, r image.Rectangle, src image.Image, sp image.Point, mas
 	case *image.Paletted:
 		if op == Src && mask == nil && !processBackward(dst, r, src, sp) {
 			drawPaletted(dst0, r, src, sp, false)
+			return
 		}
 	}
 

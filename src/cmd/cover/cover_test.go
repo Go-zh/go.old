@@ -7,11 +7,11 @@ package main_test
 import (
 	"bytes"
 	"fmt"
+	"internal/testenv"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"testing"
 )
 
@@ -41,15 +41,8 @@ var debug = false // Keeps the rewritten files around if set.
 //	go run ./testdata/main.go ./testdata/test.go
 //
 func TestCover(t *testing.T) {
-	switch runtime.GOOS {
-	case "nacl":
-		t.Skipf("skipping; %v/%v no support for forking", runtime.GOOS, runtime.GOARCH)
-	case "darwin", "android":
-		switch runtime.GOARCH {
-		case "arm", "arm64":
-			t.Skipf("skipping; %v/%v no support for forking", runtime.GOOS, runtime.GOARCH)
-		}
-	}
+	testenv.MustHaveGoBuild(t)
+
 	// Read in the test file (testTest) and write it, with LINEs specified, to coverInput.
 	file, err := ioutil.ReadFile(testTest)
 	if err != nil {
@@ -59,7 +52,9 @@ func TestCover(t *testing.T) {
 	for i, line := range lines {
 		lines[i] = bytes.Replace(line, []byte("LINE"), []byte(fmt.Sprint(i+1)), -1)
 	}
-	err = ioutil.WriteFile(coverInput, bytes.Join(lines, []byte("\n")), 0666)
+	if err := ioutil.WriteFile(coverInput, bytes.Join(lines, []byte("\n")), 0666); err != nil {
+		t.Fatal(err)
+	}
 
 	// defer removal of test_line.go
 	if !debug {

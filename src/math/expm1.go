@@ -257,13 +257,11 @@ func expm1(x float64) float64 {
 	// filter out huge argument
 	// 过滤出大的实参
 	if absx >= Ln2X56 { // if |x| >= 56 * ln2
-		if absx >= Othreshold { // if |x| >= 709.78...
-			// 溢出
-			return Inf(1) // overflow
-		}
 		if sign {
-			// x < -56*ln2，返回 -1.0
-			return -1 // x < -56*ln2, return -1.0
+			return -1 // x < -56*ln2, return -1
+		}
+		if absx >= Othreshold { // if |x| >= 709.78...
+			return Inf(1)
 		}
 	}
 

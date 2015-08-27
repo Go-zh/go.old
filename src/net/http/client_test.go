@@ -258,7 +258,7 @@ func TestClientRedirects(t *testing.T) {
 		t.Errorf("with redirects forbidden, expected a *url.Error with our 'no redirects allowed' error inside; got %#v (%q)", err, err)
 	}
 	if res == nil {
-		t.Fatalf("Expected a non-nil Response on CheckRedirect failure (http://golang.org/issue/3795)")
+		t.Fatalf("Expected a non-nil Response on CheckRedirect failure (https://golang.org/issue/3795)")
 	}
 	res.Body.Close()
 	if res.Header.Get("Location") == "" {
@@ -427,7 +427,7 @@ func TestJarCalls(t *testing.T) {
 	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
 		pathSuffix := r.RequestURI[1:]
 		if r.RequestURI == "/nosetcookie" {
-			return // dont set cookies for this path
+			return // don't set cookies for this path
 		}
 		SetCookie(w, &Cookie{Name: "name" + pathSuffix, Value: "val" + pathSuffix})
 		if r.RequestURI == "/" {
@@ -739,7 +739,7 @@ func TestResponseSetsTLSConnectionState(t *testing.T) {
 	}
 }
 
-// Verify Response.ContentLength is populated. http://golang.org/issue/4126
+// Verify Response.ContentLength is populated. https://golang.org/issue/4126
 func TestClientHeadContentLength(t *testing.T) {
 	defer afterTest(t)
 	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
@@ -841,6 +841,47 @@ func TestBasicAuth(t *testing.T) {
 	} else {
 		t.Errorf("Invalid auth %q", auth)
 	}
+}
+
+func TestBasicAuthHeadersPreserved(t *testing.T) {
+	defer afterTest(t)
+	tr := &recordingTransport{}
+	client := &Client{Transport: tr}
+
+	// If Authorization header is provided, username in URL should not override it
+	url := "http://My%20User@dummy.faketld/"
+	req, err := NewRequest("GET", url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.SetBasicAuth("My User", "My Pass")
+	expected := "My User:My Pass"
+	client.Do(req)
+
+	if tr.req.Method != "GET" {
+		t.Errorf("got method %q, want %q", tr.req.Method, "GET")
+	}
+	if tr.req.URL.String() != url {
+		t.Errorf("got URL %q, want %q", tr.req.URL.String(), url)
+	}
+	if tr.req.Header == nil {
+		t.Fatalf("expected non-nil request Header")
+	}
+	auth := tr.req.Header.Get("Authorization")
+	if strings.HasPrefix(auth, "Basic ") {
+		encoded := auth[6:]
+		decoded, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := string(decoded)
+		if expected != s {
+			t.Errorf("Invalid Authorization header. Got %q, wanted %q", s, expected)
+		}
+	} else {
+		t.Errorf("Invalid auth %q", auth)
+	}
+
 }
 
 func TestClientTimeout(t *testing.T) {

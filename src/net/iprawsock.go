@@ -17,10 +17,11 @@ func (a *IPAddr) String() string {
 	if a == nil {
 		return "<nil>"
 	}
+	ip := ipEmptyString(a.IP)
 	if a.Zone != "" {
-		return a.IP.String() + "%" + a.Zone
+		return ip + "%" + a.Zone
 	}
-	return a.IP.String()
+	return ip
 }
 
 func (a *IPAddr) isWildcard() bool {
@@ -28,6 +29,13 @@ func (a *IPAddr) isWildcard() bool {
 		return true
 	}
 	return a.IP.IsUnspecified()
+}
+
+func (a *IPAddr) opAddr() Addr {
+	if a == nil {
+		return nil
+	}
+	return a
 }
 
 // ResolveIPAddr parses addr as an IP address of the form "host" or

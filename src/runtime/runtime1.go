@@ -299,43 +299,48 @@ type dbgVar struct {
 	value *int32
 }
 
-// TODO(rsc): Make GC respect debug.invalidptr.
-
 // Holds variables parsed from GODEBUG env var,
 // except for "memprofilerate" since there is an
 // existing int var for that value, which may
 // already have an initial value.
 var debug struct {
-	allocfreetrace int32
-	efence         int32
-	gcdead         int32
-	gctrace        int32
-	invalidptr     int32
-	scavenge       int32
-	scheddetail    int32
-	schedtrace     int32
-	wbshadow       int32
-	gccheckmark    int32
-	sbrk           int32
-	gcpacertrace   int32
+	allocfreetrace    int32
+	efence            int32
+	gccheckmark       int32
+	gcpacertrace      int32
+	gcshrinkstackoff  int32
+	gcstackbarrieroff int32
+	gcstoptheworld    int32
+	gctrace           int32
+	invalidptr        int32
+	sbrk              int32
+	scavenge          int32
+	scheddetail       int32
+	schedtrace        int32
+	wbshadow          int32
 }
 
 var dbgvars = []dbgVar{
 	{"allocfreetrace", &debug.allocfreetrace},
 	{"efence", &debug.efence},
-	{"gcdead", &debug.gcdead},
+	{"gccheckmark", &debug.gccheckmark},
+	{"gcpacertrace", &debug.gcpacertrace},
+	{"gcshrinkstackoff", &debug.gcshrinkstackoff},
+	{"gcstackbarrieroff", &debug.gcstackbarrieroff},
+	{"gcstoptheworld", &debug.gcstoptheworld},
 	{"gctrace", &debug.gctrace},
 	{"invalidptr", &debug.invalidptr},
+	{"sbrk", &debug.sbrk},
 	{"scavenge", &debug.scavenge},
 	{"scheddetail", &debug.scheddetail},
 	{"schedtrace", &debug.schedtrace},
 	{"wbshadow", &debug.wbshadow},
-	{"gccheckmark", &debug.gccheckmark},
-	{"sbrk", &debug.sbrk},
-	{"gcpacertrace", &debug.gcpacertrace},
 }
 
 func parsedebugvars() {
+	// defaults
+	debug.invalidptr = 1
+
 	for p := gogetenv("GODEBUG"); p != ""; {
 		field := ""
 		i := index(p, ",")
@@ -371,6 +376,11 @@ func parsedebugvars() {
 		traceback_cache = 2<<1 | 1
 	default:
 		traceback_cache = uint32(atoi(p)) << 1
+	}
+	// when C owns the process, simply exit'ing the process on fatal errors
+	// and panics is surprising. Be louder and abort instead.
+	if islibrary || isarchive {
+		traceback_cache |= 1
 	}
 }
 

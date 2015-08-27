@@ -630,15 +630,17 @@ func (z *Int) binaryGCD(a, b *Int) *Int {
 	// 通过欧几里得迭代来确认 u 和 v 的大小大致相同。
 	switch {
 	case len(a.abs) > len(b.abs):
-		u.Set(b)
+		// must set v before u since u may be alias for a or b (was issue #11284)
 		v.Rem(a, b)
+		u.Set(b)
 	case len(a.abs) < len(b.abs):
-		u.Set(a)
 		v.Rem(b, a)
-	default:
 		u.Set(a)
+	default:
 		v.Set(b)
+		u.Set(a)
 	}
+	// a, b must not be used anymore (may be aliases with u)
 
 	// v might be 0 now
 	// v 现在可能为 0

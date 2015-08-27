@@ -71,7 +71,7 @@ var ErrNoProgress = errors.New("multiple Read calls return no data or error")
 // An instance of this general case is that a Reader returning
 // a non-zero number of bytes at the end of the input stream may
 // return either err == EOF or err == nil.  The next Read should
-// return 0, EOF regardless.
+// return 0, EOF.
 //
 // Callers should always process the n > 0 bytes returned before
 // considering the error err.  Doing so correctly handles I/O errors
@@ -415,11 +415,11 @@ type stringWriter interface {
 	WriteString(s string) (n int, err error)
 }
 
-// WriteString writes the contents of the string s to w, which accepts an array of bytes.
-// If w already implements a WriteString method, it is invoked directly.
+// WriteString writes the contents of the string s to w, which accepts a slice of bytes.
+// If w implements a WriteString method, it is invoked directly.
 
-// WriteString 将字符串 s 的内容写入 w 中，它接受一个字节数组。
-// 若 w 已经实现了 WriteString 方法，就可以直接调用它。
+// WriteString 将字符串 s 的内容写入 w 中，它接受一个字节切片。
+// 若 w 实现了 WriteString 方法，就可以直接调用它。
 func WriteString(w Writer, s string) (n int, err error) {
 	if sw, ok := w.(stringWriter); ok {
 		return sw.WriteString(s)

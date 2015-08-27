@@ -173,14 +173,32 @@ type Address struct {
 
 // 解析一个单独的RFC 5322地址，例如 “Barry Gibbs <bg@example.com>”
 func ParseAddress(address string) (*Address, error) {
-	return newAddrParser(address).parseAddress()
+	return (&addrParser{s: address}).parseAddress()
 }
 
 // ParseAddressList parses the given string as a list of addresses.
 
 // ParseAddressList解析给的一列地址字符串
 func ParseAddressList(list string) ([]*Address, error) {
-	return newAddrParser(list).parseAddressList()
+	return (&addrParser{s: list}).parseAddressList()
+}
+
+// An AddressParser is an RFC 5322 address parser.
+type AddressParser struct {
+	// WordDecoder optionally specifies a decoder for RFC 2047 encoded-words.
+	WordDecoder *mime.WordDecoder
+}
+
+// Parse parses a single RFC 5322 address of the
+// form "Gogh Fir <gf@example.com>" or "foo@example.com".
+func (p *AddressParser) Parse(address string) (*Address, error) {
+	return (&addrParser{s: address, dec: p.WordDecoder}).parseAddress()
+}
+
+// ParseList parses the given string as a list of comma-separated addresses
+// of the form "Gogh Fir <gf@example.com>" or "foo@example.com".
+func (p *AddressParser) ParseList(list string) ([]*Address, error) {
+	return (&addrParser{s: list, dec: p.WordDecoder}).parseAddressList()
 }
 
 // String formats the address as a valid RFC 5322 address.
@@ -190,10 +208,49 @@ func ParseAddressList(list string) ([]*Address, error) {
 // String格式化一个可视的RFC 5322地址。
 // 如果地址名字包含非ASCII字符串，名字就会按照RFC 2047来解析。
 func (a *Address) String() string {
-	s := "<" + a.Address + ">"
+
+	// Format address local@domain
+	at := strings.LastIndex(a.Address, "@")
+	var local, domain string
+	if at < 0 {
+		// This is a malformed address ("@" is required in addr-spec);
+		// treat the whole address as local-part.
+		local = a.Address
+	} else {
+		local, domain = a.Address[:at], a.Address[at+1:]
+	}
+
+	// Add quotes if needed
+	// TODO: rendering quoted local part and rendering printable name
+	//       should be merged in helper function.
+	quoteLocal := false
+	for i := 0; i < len(local); i++ {
+		ch := local[i]
+		if isAtext(ch, false) {
+			continue
+		}
+		if ch == '.' {
+			// Dots are okay if they are surrounded by atext.
+			// We only need to check that the previous byte is
+			// not a dot, and this isn't the end of the string.
+			if i > 0 && local[i-1] != '.' && i < len(local)-1 {
+				continue
+			}
+		}
+		quoteLocal = true
+		break
+	}
+	if quoteLocal {
+		local = quoteString(local)
+
+	}
+
+	s := "<" + local + "@" + domain + ">"
+
 	if a.Name == "" {
 		return s
 	}
+
 	// If every character is printable ASCII, quoting is simple.
 	allPrintable := true
 	for i := 0; i < len(a.Name); i++ {
@@ -220,11 +277,9 @@ func (a *Address) String() string {
 	return mime.QEncoding.Encode("utf-8", a.Name) + " " + s
 }
 
-type addrParser []byte
-
-func newAddrParser(s string) *addrParser {
-	p := addrParser(s)
-	return &p
+type addrParser struct {
+	s   string
+	dec *mime.WordDecoder // may be nil
 }
 
 func (p *addrParser) parseAddressList() ([]*Address, error) {
@@ -252,7 +307,7 @@ func (p *addrParser) parseAddressList() ([]*Address, error) {
 
 // parseAddress在p开始的时候解析单个RFC 5322地址。
 func (p *addrParser) parseAddress() (addr *Address, err error) {
-	debug.Printf("parseAddress: %q", *p)
+	debug.Printf("parseAddress: %q", p.s)
 	p.skipSpace()
 	if p.empty() {
 		return nil, errors.New("mail: no address")
@@ -271,7 +326,7 @@ func (p *addrParser) parseAddress() (addr *Address, err error) {
 		}, err
 	}
 	debug.Printf("parseAddress: not an addr-spec: %v", err)
-	debug.Printf("parseAddress: state is now %q", *p)
+	debug.Printf("parseAddress: state is now %q", p.s)
 
 	// display-name
 	var displayName string
@@ -307,7 +362,7 @@ func (p *addrParser) parseAddress() (addr *Address, err error) {
 
 // consumeAddrSpec在p开始的时候解析单个RFC 5322 addr-spec。
 func (p *addrParser) consumeAddrSpec() (spec string, err error) {
-	debug.Printf("consumeAddrSpec: %q", *p)
+	debug.Printf("consumeAddrSpec: %q", p.s)
 
 	orig := *p
 	defer func() {
@@ -329,7 +384,7 @@ func (p *addrParser) consumeAddrSpec() (spec string, err error) {
 	} else {
 		// dot-atom
 		debug.Printf("consumeAddrSpec: parsing dot-atom")
-		localPart, err = p.consumeAtom(true)
+		localPart, err = p.consumeAtom(true, false)
 	}
 	if err != nil {
 		debug.Printf("consumeAddrSpec: failed: %v", err)
@@ -347,7 +402,7 @@ func (p *addrParser) consumeAddrSpec() (spec string, err error) {
 		return "", errors.New("mail: no domain in addr-spec")
 	}
 	// TODO(dsymonds): Handle domain-literal
-	domain, err = p.consumeAtom(true)
+	domain, err = p.consumeAtom(true, false)
 	if err != nil {
 		return "", err
 	}
@@ -359,7 +414,7 @@ func (p *addrParser) consumeAddrSpec() (spec string, err error) {
 
 // consumePhrase在p开始的时候解析RFC phrase。
 func (p *addrParser) consumePhrase() (phrase string, err error) {
-	debug.Printf("consumePhrase: [%s]", *p)
+	debug.Printf("consumePhrase: [%s]", p.s)
 	// phrase = 1*word
 	var words []string
 	for {
@@ -376,11 +431,11 @@ func (p *addrParser) consumePhrase() (phrase string, err error) {
 			// atom
 			// We actually parse dot-atom here to be more permissive
 			// than what RFC 5322 specifies.
-			word, err = p.consumeAtom(true)
+			word, err = p.consumeAtom(true, true)
 		}
 
 		if err == nil {
-			word, err = decodeRFC2047Word(word)
+			word, err = p.decodeRFC2047Word(word)
 		}
 
 		if err != nil {
@@ -410,16 +465,16 @@ Loop:
 		if i >= p.len() {
 			return "", errors.New("mail: unclosed quoted-string")
 		}
-		switch c := (*p)[i]; {
+		switch c := p.s[i]; {
 		case c == '"':
 			break Loop
 		case c == '\\':
 			if i+1 == p.len() {
 				return "", errors.New("mail: unclosed quoted-string")
 			}
-			qsb = append(qsb, (*p)[i+1])
+			qsb = append(qsb, p.s[i+1])
 			i += 2
-		case isQtext(c), c == ' ' || c == '\t':
+		case isQtext(c), c == ' ':
 			// qtext (printable US-ASCII excluding " and \), or
 			// FWS (almost; we're ignoring CRLF)
 			qsb = append(qsb, c)
@@ -428,23 +483,41 @@ Loop:
 			return "", fmt.Errorf("mail: bad character in quoted-string: %q", c)
 		}
 	}
-	*p = (*p)[i+1:]
+	p.s = p.s[i+1:]
+	if len(qsb) == 0 {
+		return "", errors.New("mail: empty quoted-string")
+	}
 	return string(qsb), nil
 }
 
 // consumeAtom parses an RFC 5322 atom at the start of p.
 // If dot is true, consumeAtom parses an RFC 5322 dot-atom instead.
+// If permissive is true, consumeAtom will not fail on
+// leading/trailing/double dots in the atom (see golang.org/issue/4938).
 
-// consumeAtom在p开始的时候解析RFC 5322原子操作。
-// 如果有点的话，consumeAtom就按照RFC 5322解析。
-func (p *addrParser) consumeAtom(dot bool) (atom string, err error) {
+// consumeAtom 在 p 开始的时候解析 RFC 5322 原子。
+// 若 dot 为 true，consumeAtom 就解析 RFC 5322 点号原子（dot-atom）。
+// 若 permissive 为 true，consumeAtom 在按照原子解析前导/后续/双点号时就不会失败
+// （见 golang.org/issue/4938）。
+func (p *addrParser) consumeAtom(dot bool, permissive bool) (atom string, err error) {
 	if !isAtext(p.peek(), false) {
 		return "", errors.New("mail: invalid string")
 	}
 	i := 1
-	for ; i < p.len() && isAtext((*p)[i], dot); i++ {
+	for ; i < p.len() && isAtext(p.s[i], dot); i++ {
 	}
-	atom, *p = string((*p)[:i]), (*p)[i:]
+	atom, p.s = string(p.s[:i]), p.s[i:]
+	if !permissive {
+		if strings.HasPrefix(atom, ".") {
+			return "", errors.New("mail: leading dot in atom")
+		}
+		if strings.Contains(atom, "..") {
+			return "", errors.New("mail: double dot in atom")
+		}
+		if strings.HasSuffix(atom, ".") {
+			return "", errors.New("mail: trailing dot in atom")
+		}
+	}
 	return atom, nil
 }
 
@@ -452,7 +525,7 @@ func (p *addrParser) consume(c byte) bool {
 	if p.empty() || p.peek() != c {
 		return false
 	}
-	*p = (*p)[1:]
+	p.s = p.s[1:]
 	return true
 }
 
@@ -460,11 +533,11 @@ func (p *addrParser) consume(c byte) bool {
 
 // skipSpace跳过开头的空格和tab字符。
 func (p *addrParser) skipSpace() {
-	*p = bytes.TrimLeft(*p, " \t")
+	p.s = strings.TrimLeft(p.s, " \t")
 }
 
 func (p *addrParser) peek() byte {
-	return (*p)[0]
+	return p.s[0]
 }
 
 func (p *addrParser) empty() bool {
@@ -472,10 +545,14 @@ func (p *addrParser) empty() bool {
 }
 
 func (p *addrParser) len() int {
-	return len(*p)
+	return len(p.s)
 }
 
-func decodeRFC2047Word(s string) (string, error) {
+func (p *addrParser) decodeRFC2047Word(s string) (string, error) {
+	if p.dec != nil {
+		return p.dec.DecodeHeader(s)
+	}
+
 	dec, err := rfc2047Decoder.Decode(s)
 	if err == nil {
 		return dec, nil
@@ -527,6 +604,23 @@ func isQtext(c byte) bool {
 		return false
 	}
 	return '!' <= c && c <= '~'
+}
+
+// quoteString renders a string as a RFC5322 quoted-string.
+func quoteString(s string) string {
+	var buf bytes.Buffer
+	buf.WriteByte('"')
+	for _, c := range s {
+		ch := byte(c)
+		if isQtext(ch) || isWSP(ch) {
+			buf.WriteByte(ch)
+		} else if isVchar(ch) {
+			buf.WriteByte('\\')
+			buf.WriteByte(ch)
+		}
+	}
+	buf.WriteByte('"')
+	return buf.String()
 }
 
 // isVchar reports whether c is an RFC 5322 VCHAR character.

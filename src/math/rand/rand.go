@@ -9,12 +9,17 @@
 // sequence of values each time a program is run. Use the Seed function to
 // initialize the default Source if different behavior is required for each run.
 // The default Source is safe for concurrent use by multiple goroutines.
+//
+// For random numbers suitable for security-sensitive work, see the crypto/rand
+// package.
 
 // rand 包实现了伪随机数生成器.
 //
 // 随机数由一个 Source 生成。像 Float64 和 Int 这样的顶级函数使用默认共享的 Source，
 // 它会在每次程序运行时产生一系列确定的值。若每次运行都需要不同的行为，需使用 Seed
 // 函数来初始化默认的 Source。对于多Go程并发来说，默认的 Source 是安全的。
+//
+// 对于适用于安全性要求较高的随机数，见 crypto/rand 包。
 package rand
 
 import "sync"

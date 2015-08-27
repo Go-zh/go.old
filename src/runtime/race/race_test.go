@@ -40,7 +40,7 @@ var (
 
 const (
 	visibleLen = 40
-	testPrefix = "=== RUN Test"
+	testPrefix = "=== RUN   Test"
 )
 
 func TestRace(t *testing.T) {
@@ -67,6 +67,9 @@ func TestRace(t *testing.T) {
 		}
 	}
 
+	if totalTests == 0 {
+		t.Fatalf("failed to parse test output")
+	}
 	fmt.Printf("\nPassed %d of %d tests (%.02f%%, %d+, %d-)\n",
 		passedTests, totalTests, 100*float64(passedTests)/float64(totalTests), falsePos, falseNeg)
 	fmt.Printf("%d expected failures (%d has not fail)\n", failingPos+failingNeg, failingNeg)
@@ -185,5 +188,14 @@ func TestIssue8102(t *testing.T) {
 		if t != nil {
 			break
 		}
+	}
+}
+
+func TestIssue9137(t *testing.T) {
+	a := []string{"a"}
+	i := 0
+	a[i], a[len(a)-1], a = a[len(a)-1], "", a[:len(a)-1]
+	if len(a) != 0 || a[:1][0] != "" {
+		t.Errorf("mangled a: %q %q", a, a[:1])
 	}
 }

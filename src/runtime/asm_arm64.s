@@ -307,6 +307,23 @@ TEXT runtime·morestack_noctxt(SB),NOSPLIT,$-4-0
 	MOVW	$0, R26
 	B runtime·morestack(SB)
 
+TEXT runtime·stackBarrier(SB),NOSPLIT,$0
+	// We came here via a RET to an overwritten LR.
+	// R0 may be live (see return0). Other registers are available.
+
+	// Get the original return PC, g.stkbar[g.stkbarPos].savedLRVal.
+	MOVD	(g_stkbar+slice_array)(g), R4
+	MOVD	g_stkbarPos(g), R5
+	MOVD	$stkbar__size, R6
+	MUL	R5, R6
+	ADD	R4, R6
+	MOVD	stkbar_savedLRVal(R6), R6
+	// Record that this stack barrier was hit.
+	ADD	$1, R5
+	MOVD	R5, g_stkbarPos(g)
+	// Jump to the original return PC.
+	B	(R6)
+
 // reflectcall: call a function with the given argument list
 // func call(argtype *_type, f *FuncVal, arg *byte, argsize, retoffset uint32).
 // we don't have variable-sized frames, so we use a small number
@@ -407,33 +424,35 @@ end:						\
 	BL	runtime·callwritebarrier(SB);	\
 	RET
 
-CALLFN(·call16, 16)
-CALLFN(·call32, 32)
-CALLFN(·call64, 64)
-CALLFN(·call128, 128)
-CALLFN(·call256, 256)
-CALLFN(·call512, 512)
-CALLFN(·call1024, 1024)
-CALLFN(·call2048, 2048)
-CALLFN(·call4096, 4096)
-CALLFN(·call8192, 8192)
-CALLFN(·call16384, 16384)
-CALLFN(·call32768, 32768)
-CALLFN(·call65536, 65536)
-CALLFN(·call131072, 131072)
-CALLFN(·call262144, 262144)
-CALLFN(·call524288, 524288)
-CALLFN(·call1048576, 1048576)
-CALLFN(·call2097152, 2097152)
-CALLFN(·call4194304, 4194304)
-CALLFN(·call8388608, 8388608)
-CALLFN(·call16777216, 16777216)
-CALLFN(·call33554432, 33554432)
-CALLFN(·call67108864, 67108864)
-CALLFN(·call134217728, 134217728)
-CALLFN(·call268435456, 268435456)
-CALLFN(·call536870912, 536870912)
-CALLFN(·call1073741824, 1073741824)
+// These have 8 added to make the overall frame size a multiple of 16,
+// as required by the ABI. (There is another +8 for the saved LR.)
+CALLFN(·call16, 24 )
+CALLFN(·call32, 40 )
+CALLFN(·call64, 72 )
+CALLFN(·call128, 136 )
+CALLFN(·call256, 264 )
+CALLFN(·call512, 520 )
+CALLFN(·call1024, 1032 )
+CALLFN(·call2048, 2056 )
+CALLFN(·call4096, 4104 )
+CALLFN(·call8192, 8200 )
+CALLFN(·call16384, 16392 )
+CALLFN(·call32768, 32776 )
+CALLFN(·call65536, 65544 )
+CALLFN(·call131072, 131080 )
+CALLFN(·call262144, 262152 )
+CALLFN(·call524288, 524296 )
+CALLFN(·call1048576, 1048584 )
+CALLFN(·call2097152, 2097160 )
+CALLFN(·call4194304, 4194312 )
+CALLFN(·call8388608, 8388616 )
+CALLFN(·call16777216, 16777224 )
+CALLFN(·call33554432, 33554440 )
+CALLFN(·call67108864, 67108872 )
+CALLFN(·call134217728, 134217736 )
+CALLFN(·call268435456, 268435464 )
+CALLFN(·call536870912, 536870920 )
+CALLFN(·call1073741824, 1073741832 )
 
 // bool cas(uint32 *ptr, uint32 old, uint32 new)
 // Atomically:
@@ -528,25 +547,14 @@ TEXT gosave<>(SB),NOSPLIT,$-8
 	MOVD	$0, (g_sched+gobuf_ctxt)(g)
 	RET
 
-// asmcgocall(void(*fn)(void*), void *arg)
+// func asmcgocall(fn, arg unsafe.Pointer) int32
 // Call fn(arg) on the scheduler stack,
 // aligned appropriately for the gcc ABI.
 // See cgocall.go for more details.
-TEXT ·asmcgocall(SB),NOSPLIT,$0-16
+TEXT ·asmcgocall(SB),NOSPLIT,$0-20
 	MOVD	fn+0(FP), R1
 	MOVD	arg+8(FP), R0
-	BL	asmcgocall<>(SB)
-	RET
 
-TEXT ·asmcgocall_errno(SB),NOSPLIT,$0-20
-	MOVD	fn+0(FP), R1
-	MOVD	arg+8(FP), R0
-	BL	asmcgocall<>(SB)
-	MOVW	R0, ret+16(FP)
-	RET
-
-// asmcgocall common code. fn in R1, arg in R0. returns errno in R0.
-TEXT asmcgocall<>(SB),NOSPLIT,$0-0
 	MOVD	RSP, R2		// save original stack pointer
 	MOVD	g, R4
 
@@ -587,6 +595,8 @@ g0:
 	SUB	R6, R5
 	MOVD	R9, R0
 	MOVD	R5, RSP
+
+	MOVW	R0, ret+16(FP)
 	RET
 
 // cgocallback(void (*fn)(void*), void *frame, uintptr framesize)
@@ -605,7 +615,7 @@ TEXT runtime·cgocallback(SB),NOSPLIT,$24-24
 
 // cgocallback_gofunc(FuncVal*, void *frame, uintptr framesize)
 // See cgocall.go for more details.
-TEXT ·cgocallback_gofunc(SB),NOSPLIT,$16-24
+TEXT ·cgocallback_gofunc(SB),NOSPLIT,$24-24
 	NO_LOCAL_POINTERS
 
 	// Load g from thread-local storage.
@@ -713,7 +723,7 @@ droppedm:
 
 // Called from cgo wrappers, this function returns g->m->curg.stack.hi.
 // Must obey the gcc calling convention.
-TEXT _cgo_topofstack(SB),NOSPLIT,$16
+TEXT _cgo_topofstack(SB),NOSPLIT,$24
 	// g (R28) and REGTMP (R27)  might be clobbered by load_g. They
 	// are callee-save in the gcc calling convention, so save them.
 	MOVD	R27, savedR27-8(SP)
@@ -743,14 +753,30 @@ TEXT setg_gcc<>(SB),NOSPLIT,$8
 	MOVD	savedR27-8(SP), R27
 	RET
 
-TEXT runtime·getcallerpc(SB),NOSPLIT,$-8-16
-	MOVD	0(RSP), R0
+TEXT runtime·getcallerpc(SB),NOSPLIT,$8-16
+	MOVD	16(RSP), R0		// LR saved by caller
+	MOVD	runtime·stackBarrierPC(SB), R1
+	CMP	R0, R1
+	BNE	nobar
+	// Get original return PC.
+	BL	runtime·nextBarrierPC(SB)
+	MOVD	8(RSP), R0
+nobar:
 	MOVD	R0, ret+8(FP)
 	RET
 
-TEXT runtime·setcallerpc(SB),NOSPLIT,$-8-16
+TEXT runtime·setcallerpc(SB),NOSPLIT,$8-16
 	MOVD	pc+8(FP), R0
-	MOVD	R0, 0(RSP)		// set calling pc
+	MOVD	16(RSP), R1
+	MOVD	runtime·stackBarrierPC(SB), R2
+	CMP	R1, R2
+	BEQ	setbar
+	MOVD	R0, 16(RSP)		// set LR in caller
+	RET
+setbar:
+	// Set the stack barrier return PC.
+	MOVD	R0, 8(RSP)
+	BL	runtime·setNextBarrierPC(SB)
 	RET
 
 TEXT runtime·getcallersp(SB),NOSPLIT,$0-16
@@ -844,6 +870,8 @@ TEXT bytes·Compare(SB),NOSPLIT,$-4-56
 // On exit:
 // R4, R5, and R6 are clobbered
 TEXT runtime·cmpbody<>(SB),NOSPLIT,$-4-0
+	CMP	R2, R3
+	BEQ	samebytes // same starting pointers; compare lengths
 	CMP	R0, R1
 	CSEL    LT, R1, R0, R6 // R6 is min(R0, R1)
 

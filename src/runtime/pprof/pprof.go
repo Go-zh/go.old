@@ -24,7 +24,7 @@ import (
 )
 
 // BUG(rsc): Profiles are incomplete and inaccurate on NetBSD and OS X.
-// See http://golang.org/issue/6047 for details.
+// See https://golang.org/issue/6047 for details.
 
 // BUG(rsc): OS X Snow Leopard 64位内核有一个bug会妨碍CPU分析为该系统提供准确的结果。
 
@@ -45,6 +45,13 @@ import (
 //
 // These predefined profiles maintain themselves and panic on an explicit
 // Add or Remove method call.
+//
+// The heap profile reports statistics as of the most recently completed
+// garbage collection; it elides more recent allocation to avoid skewing
+// the profile away from live data and toward garbage.
+// If there has been no garbage collection at all, the heap profile reports
+// all known allocations. This exception helps mainly in programs running
+// without garbage collection enabled, usually for debugging purposes.
 //
 // The CPU profile is not available as a Profile.  It has a special API,
 // the StartCPUProfile and StopCPUProfile functions, because it streams
@@ -738,33 +745,6 @@ func StopCPUProfile() {
 	cpu.profiling = false
 	runtime.SetCPUProfileRate(0)
 	<-cpu.done
-}
-
-// TODO(rsc): Decide if StartTrace belongs in this package.
-// See golang.org/issue/9710.
-// StartTrace enables tracing for the current process.
-// While tracing, the trace will be buffered and written to w.
-// StartTrace returns an error if profiling is tracing enabled.
-func StartTrace(w io.Writer) error {
-	if err := runtime.StartTrace(); err != nil {
-		return err
-	}
-	go func() {
-		for {
-			data := runtime.ReadTrace()
-			if data == nil {
-				break
-			}
-			w.Write(data)
-		}
-	}()
-	return nil
-}
-
-// StopTrace stops the current tracing, if any.
-// StopTrace only returns after all the writes for the trace have completed.
-func StopTrace() {
-	runtime.StopTrace()
 }
 
 type byCycles []runtime.BlockProfileRecord
