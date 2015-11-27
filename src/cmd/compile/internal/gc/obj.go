@@ -10,9 +10,7 @@ import (
 	"strconv"
 )
 
-/*
- * architecture-independent object file output
- */
+// architecture-independent object file output
 const (
 	ArhdrSize = 60
 )
@@ -72,10 +70,7 @@ func dumpobj() {
 
 	fmt.Fprintf(bout, "\n!\n")
 
-	var externs *NodeList
-	if externdcl != nil {
-		externs = externdcl.End
-	}
+	externs := len(externdcl)
 
 	dumpglobls()
 	dumptypestructs()
@@ -83,14 +78,11 @@ func dumpobj() {
 	// Dump extra globals.
 	tmp := externdcl
 
-	if externs != nil {
-		externdcl = externs.Next
+	if externdcl != nil {
+		externdcl = externdcl[externs:]
 	}
 	dumpglobls()
 	externdcl = tmp
-
-	zero := Pkglookup("zerovalue", Runtimepkg)
-	ggloblsym(zero, int32(zerosize), obj.DUPOK|obj.RODATA)
 
 	dumpdata()
 	obj.Writeobjdirect(Ctxt, bout)
@@ -110,17 +102,14 @@ func dumpobj() {
 }
 
 func dumpglobls() {
-	var n *Node
-
 	// add globals
-	for l := externdcl; l != nil; l = l.Next {
-		n = l.N
+	for _, n := range externdcl {
 		if n.Op != ONAME {
 			continue
 		}
 
 		if n.Type == nil {
-			Fatal("external %v nil type\n", n)
+			Fatalf("external %v nil type\n", n)
 		}
 		if n.Class == PFUNC {
 			continue
@@ -129,12 +118,10 @@ func dumpglobls() {
 			continue
 		}
 		dowidth(n.Type)
-
 		ggloblnod(n)
 	}
 
-	for l := funcsyms; l != nil; l = l.Next {
-		n = l.N
+	for _, n := range funcsyms {
 		dsymptr(n.Sym, 0, n.Sym.Def.Func.Shortname.Sym, 0)
 		ggloblsym(n.Sym, int32(Widthptr), obj.DUPOK|obj.RODATA)
 	}
@@ -188,10 +175,6 @@ func duint16(s *Sym, off int, v uint16) int {
 
 func duint32(s *Sym, off int, v uint32) int {
 	return duintxx(s, off, uint64(v), 4)
-}
-
-func duint64(s *Sym, off int, v uint64) int {
-	return duintxx(s, off, v, 8)
 }
 
 func duintptr(s *Sym, off int, v uint64) int {
@@ -279,31 +262,12 @@ func slicebytes(nam *Node, s string, len int) {
 	ggloblsym(sym, int32(off), obj.NOPTR|obj.LOCAL)
 
 	if nam.Op != ONAME {
-		Fatal("slicebytes %v", nam)
+		Fatalf("slicebytes %v", nam)
 	}
 	off = int(nam.Xoffset)
 	off = dsymptr(nam.Sym, off, sym, 0)
 	off = duintxx(nam.Sym, off, uint64(len), Widthint)
 	duintxx(nam.Sym, off, uint64(len), Widthint)
-}
-
-func dstringptr(s *Sym, off int, str string) int {
-	off = int(Rnd(int64(off), int64(Widthptr)))
-	p := Thearch.Gins(obj.ADATA, nil, nil)
-	p.From.Type = obj.TYPE_MEM
-	p.From.Name = obj.NAME_EXTERN
-	p.From.Sym = Linksym(s)
-	p.From.Offset = int64(off)
-	p.From3 = new(obj.Addr)
-	p.From3.Type = obj.TYPE_CONST
-	p.From3.Offset = int64(Widthptr)
-
-	Datastring(str+"\x00", &p.To) // TODO(rsc): Remove NUL
-	p.To.Type = obj.TYPE_ADDR
-	p.To.Etype = Simtype[TINT]
-	off += Widthptr
-
-	return off
 }
 
 func Datastring(s string, a *obj.Addr) {
@@ -313,7 +277,7 @@ func Datastring(s string, a *obj.Addr) {
 	a.Sym = Linksym(symdata)
 	a.Node = symdata.Def
 	a.Offset = 0
-	a.Etype = Simtype[TINT]
+	a.Etype = uint8(Simtype[TINT])
 }
 
 func datagostring(sval string, a *obj.Addr) {
@@ -323,7 +287,7 @@ func datagostring(sval string, a *obj.Addr) {
 	a.Sym = Linksym(symhdr)
 	a.Node = symhdr.Def
 	a.Offset = 0
-	a.Etype = TSTRING
+	a.Etype = uint8(TSTRING)
 }
 
 func dgostringptr(s *Sym, off int, str string) int {
@@ -348,7 +312,7 @@ func dgostrlitptr(s *Sym, off int, lit *string) int {
 	p.From3.Offset = int64(Widthptr)
 	datagostring(*lit, &p.To)
 	p.To.Type = obj.TYPE_ADDR
-	p.To.Etype = Simtype[TINT]
+	p.To.Etype = uint8(Simtype[TINT])
 	off += Widthptr
 
 	return off
@@ -409,8 +373,8 @@ func gdata(nam *Node, nr *Node, wid int) {
 }
 
 func gdatacomplex(nam *Node, cval *Mpcplx) {
-	w := cplxsubtype(int(nam.Type.Etype))
-	w = int(Types[w].Width)
+	cst := cplxsubtype(nam.Type.Etype)
+	w := int(Types[cst].Width)
 
 	p := Thearch.Gins(obj.ADATA, nam, nil)
 	p.From3 = new(obj.Addr)

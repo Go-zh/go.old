@@ -40,15 +40,20 @@ func reverseaddr(addr string) (arpa string, err error) {
 func answer(name, server string, dns *dnsMsg, qtype uint16) (cname string, addrs []dnsRR, err error) {
 	addrs = make([]dnsRR, 0, len(dns.answer))
 
-	if dns.rcode == dnsRcodeNameError && dns.recursion_available {
+	if dns.rcode == dnsRcodeNameError {
 		return "", nil, &DNSError{Err: errNoSuchHost.Error(), Name: name, Server: server}
 	}
 	if dns.rcode != dnsRcodeSuccess {
 		// None of the error codes make sense
 		// for the query we sent.  If we didn't get
 		// a name error and we didn't get success,
-		// the server is behaving incorrectly.
-		return "", nil, &DNSError{Err: "server misbehaving", Name: name, Server: server}
+		// the server is behaving incorrectly or
+		// having temporary trouble.
+		err := &DNSError{Err: "server misbehaving", Name: name, Server: server}
+		if dns.rcode == dnsRcodeServerFailure {
+			err.IsTemporary = true
+		}
+		return "", nil, err
 	}
 
 	// Look for the name.

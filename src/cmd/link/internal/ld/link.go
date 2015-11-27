@@ -63,11 +63,11 @@ type LSym struct {
 	Got         int32
 	Align       int32
 	Elfsym      int32
+	LocalElfsym int32
 	Args        int32
 	Locals      int32
 	Value       int64
 	Size        int64
-	Hash        *LSym
 	Allsym      *LSym
 	Next        *LSym
 	Sub         *LSym
@@ -93,6 +93,16 @@ func (s *LSym) String() string {
 	return fmt.Sprintf("%s<%d>", s.Name, s.Version)
 }
 
+func (s *LSym) ElfsymForReloc() int32 {
+	// If putelfsym created a local version of this symbol, use that in all
+	// relocations.
+	if s.LocalElfsym != 0 {
+		return s.LocalElfsym
+	} else {
+		return s.Elfsym
+	}
+}
+
 type Reloc struct {
 	Off     int32
 	Siz     uint8
@@ -114,38 +124,57 @@ type Auto struct {
 }
 
 type Shlib struct {
-	Path string
-	Hash []byte
-	Deps []string
-	File *elf.File
+	Path             string
+	Hash             []byte
+	Deps             []string
+	File             *elf.File
+	gcdata_addresses map[*LSym]uint64
 }
 
 type Link struct {
-	Thechar   int32
-	Thestring string
-	Goarm     int32
-	Headtype  int
-	Arch      *LinkArch
-	Debugasm  int32
-	Debugvlog int32
-	Bso       *obj.Biobuf
-	Windows   int32
-	Goroot    string
-	Hash      map[symVer]*LSym
-	Allsym    *LSym
-	Nsymbol   int32
-	Tlsg      *LSym
-	Libdir    []string
-	Library   []*Library
-	Shlibs    []Shlib
-	Tlsoffset int
-	Diag      func(string, ...interface{})
-	Cursym    *LSym
-	Version   int
-	Textp     *LSym
-	Etextp    *LSym
-	Nhistfile int32
-	Filesyms  *LSym
+	Thechar    int32
+	Thestring  string
+	Goarm      int32
+	Headtype   int
+	Arch       *LinkArch
+	Debugasm   int32
+	Debugvlog  int32
+	Bso        *obj.Biobuf
+	Windows    int32
+	Goroot     string
+	Hash       map[symVer]*LSym
+	Allsym     *LSym
+	Nsymbol    int32
+	Tlsg       *LSym
+	Libdir     []string
+	Library    []*Library
+	Shlibs     []Shlib
+	Tlsoffset  int
+	Diag       func(string, ...interface{})
+	Cursym     *LSym
+	Version    int
+	Textp      *LSym
+	Etextp     *LSym
+	Nhistfile  int32
+	Filesyms   *LSym
+	Moduledata *LSym
+}
+
+// The smallest possible offset from the hardware stack pointer to a local
+// variable on the stack. Architectures that use a link register save its value
+// on the stack in the function prologue and so always have a pointer between
+// the hardware stack pointer and the local variable area.
+func (ctxt *Link) FixedFrameSize() int64 {
+	switch ctxt.Arch.Thechar {
+	case '6', '8':
+		return 0
+	case '9':
+		// PIC code on ppc64le requires 32 bytes of stack, and it's easier to
+		// just use that much stack always on ppc64x.
+		return int64(4 * ctxt.Arch.Ptrsize)
+	default:
+		return int64(ctxt.Arch.Ptrsize)
+	}
 }
 
 type LinkArch struct {
@@ -206,10 +235,6 @@ const (
 	RV_POWER_DS
 	RV_CHECK_OVERFLOW = 1 << 8
 	RV_TYPE_MASK      = RV_CHECK_OVERFLOW - 1
-)
-
-const (
-	LINKHASH = 100003
 )
 
 // Pcdata iterator.

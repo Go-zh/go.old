@@ -130,23 +130,122 @@ func progedit(ctxt *obj.Link, p *obj.Prog) {
 		}
 	}
 
-	if ctxt.Flag_shared != 0 {
-		// Shared libraries use R_ARM_TLS_IE32 instead of
-		// R_ARM_TLS_LE32, replacing the link time constant TLS offset in
-		// runtime.tlsg with an address to a GOT entry containing the
-		// offset. Rewrite $runtime.tlsg(SB) to runtime.tlsg(SB) to
-		// compensate.
-		if ctxt.Tlsg == nil {
-			ctxt.Tlsg = obj.Linklookup(ctxt, "runtime.tlsg", 0)
-		}
+	if ctxt.Flag_dynlink {
+		rewriteToUseGot(ctxt, p)
+	}
+}
 
-		if p.From.Type == obj.TYPE_ADDR && p.From.Name == obj.NAME_EXTERN && p.From.Sym == ctxt.Tlsg {
-			p.From.Type = obj.TYPE_MEM
+// Rewrite p, if necessary, to access global data via the global offset table.
+func rewriteToUseGot(ctxt *obj.Link, p *obj.Prog) {
+	if p.As == obj.ADUFFCOPY || p.As == obj.ADUFFZERO {
+		//     ADUFFxxx $offset
+		// becomes
+		//     MOVW runtime.duffxxx@GOT, R9
+		//     ADD $offset, R9
+		//     CALL (R9)
+		var sym *obj.LSym
+		if p.As == obj.ADUFFZERO {
+			sym = obj.Linklookup(ctxt, "runtime.duffzero", 0)
+		} else {
+			sym = obj.Linklookup(ctxt, "runtime.duffcopy", 0)
 		}
-		if p.To.Type == obj.TYPE_ADDR && p.To.Name == obj.NAME_EXTERN && p.To.Sym == ctxt.Tlsg {
-			p.To.Type = obj.TYPE_MEM
+		offset := p.To.Offset
+		p.As = AMOVW
+		p.From.Type = obj.TYPE_MEM
+		p.From.Name = obj.NAME_GOTREF
+		p.From.Sym = sym
+		p.To.Type = obj.TYPE_REG
+		p.To.Reg = REG_R9
+		p.To.Name = obj.NAME_NONE
+		p.To.Offset = 0
+		p.To.Sym = nil
+		p1 := obj.Appendp(ctxt, p)
+		p1.As = AADD
+		p1.From.Type = obj.TYPE_CONST
+		p1.From.Offset = offset
+		p1.To.Type = obj.TYPE_REG
+		p1.To.Reg = REG_R9
+		p2 := obj.Appendp(ctxt, p1)
+		p2.As = obj.ACALL
+		p2.To.Type = obj.TYPE_MEM
+		p2.To.Reg = REG_R9
+		return
+	}
+
+	// We only care about global data: NAME_EXTERN means a global
+	// symbol in the Go sense, and p.Sym.Local is true for a few
+	// internally defined symbols.
+	if p.From.Type == obj.TYPE_ADDR && p.From.Name == obj.NAME_EXTERN && !p.From.Sym.Local {
+		// MOVW $sym, Rx becomes MOVW sym@GOT, Rx
+		// MOVW $sym+<off>, Rx becomes MOVW sym@GOT, Rx; ADD <off>, Rx
+		if p.As != AMOVW {
+			ctxt.Diag("do not know how to handle TYPE_ADDR in %v with -dynlink", p)
+		}
+		if p.To.Type != obj.TYPE_REG {
+			ctxt.Diag("do not know how to handle LEAQ-type insn to non-register in %v with -dynlink", p)
+		}
+		p.From.Type = obj.TYPE_MEM
+		p.From.Name = obj.NAME_GOTREF
+		if p.From.Offset != 0 {
+			q := obj.Appendp(ctxt, p)
+			q.As = AADD
+			q.From.Type = obj.TYPE_CONST
+			q.From.Offset = p.From.Offset
+			q.To = p.To
+			p.From.Offset = 0
 		}
 	}
+	if p.From3 != nil && p.From3.Name == obj.NAME_EXTERN {
+		ctxt.Diag("don't know how to handle %v with -dynlink", p)
+	}
+	var source *obj.Addr
+	// MOVx sym, Ry becomes MOVW sym@GOT, R9; MOVx (R9), Ry
+	// MOVx Ry, sym becomes MOVW sym@GOT, R9; MOVx Ry, (R9)
+	// An addition may be inserted between the two MOVs if there is an offset.
+	if p.From.Name == obj.NAME_EXTERN && !p.From.Sym.Local {
+		if p.To.Name == obj.NAME_EXTERN && !p.To.Sym.Local {
+			ctxt.Diag("cannot handle NAME_EXTERN on both sides in %v with -dynlink", p)
+		}
+		source = &p.From
+	} else if p.To.Name == obj.NAME_EXTERN && !p.To.Sym.Local {
+		source = &p.To
+	} else {
+		return
+	}
+	if p.As == obj.ATEXT || p.As == obj.AFUNCDATA || p.As == obj.ACALL || p.As == obj.ARET || p.As == obj.AJMP {
+		return
+	}
+	if source.Sym.Type == obj.STLSBSS {
+		return
+	}
+	if source.Type != obj.TYPE_MEM {
+		ctxt.Diag("don't know how to handle %v with -dynlink", p)
+	}
+	p1 := obj.Appendp(ctxt, p)
+	p2 := obj.Appendp(ctxt, p1)
+
+	p1.As = AMOVW
+	p1.From.Type = obj.TYPE_MEM
+	p1.From.Sym = source.Sym
+	p1.From.Name = obj.NAME_GOTREF
+	p1.To.Type = obj.TYPE_REG
+	p1.To.Reg = REG_R9
+
+	p2.As = p.As
+	p2.From = p.From
+	p2.To = p.To
+	if p.From.Name == obj.NAME_EXTERN {
+		p2.From.Reg = REG_R9
+		p2.From.Name = obj.NAME_NONE
+		p2.From.Sym = nil
+	} else if p.To.Name == obj.NAME_EXTERN {
+		p2.To.Reg = REG_R9
+		p2.To.Name = obj.NAME_NONE
+		p2.To.Sym = nil
+	} else {
+		return
+	}
+	obj.Nopout(p)
 }
 
 // Prog.mark
@@ -155,17 +254,6 @@ const (
 	LABEL = 1 << 1
 	LEAF  = 1 << 2
 )
-
-func linkcase(casep *obj.Prog) {
-	for p := casep; p != nil; p = p.Link {
-		if p.As == ABCASE {
-			for ; p != nil && p.As == ABCASE; p = p.Link {
-				p.Rel = casep
-			}
-			break
-		}
-	}
-}
 
 func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 	autosize := int32(0)
@@ -196,11 +284,6 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 	var q *obj.Prog
 	for p := cursym.Text; p != nil; p = p.Link {
 		switch p.As {
-		case ACASE:
-			if ctxt.Flag_shared != 0 {
-				linkcase(p)
-			}
-
 		case obj.ATEXT:
 			p.Mark |= LEAF
 
@@ -230,8 +313,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 			cursym.Text.Mark &^= LEAF
 			fallthrough
 
-		case ABCASE,
-			AB,
+		case AB,
 			ABEQ,
 			ABNE,
 			ABCS,
@@ -914,7 +996,7 @@ loop:
 	if p.Pcond != nil {
 		if a != ABL && a != ABX && p.Link != nil {
 			q = obj.Brchain(ctxt, p.Link)
-			if a != obj.ATEXT && a != ABCASE {
+			if a != obj.ATEXT {
 				if q != nil && (q.Mark&FOLL != 0) {
 					p.As = int16(relinv(a))
 					p.Link = p.Pcond

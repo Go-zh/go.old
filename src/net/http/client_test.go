@@ -642,14 +642,18 @@ func newTLSTransport(t *testing.T, ts *httptest.Server) *Transport {
 
 func TestClientWithCorrectTLSServerName(t *testing.T) {
 	defer afterTest(t)
+
+	const serverName = "example.com"
 	ts := httptest.NewTLSServer(HandlerFunc(func(w ResponseWriter, r *Request) {
-		if r.TLS.ServerName != "127.0.0.1" {
-			t.Errorf("expected client to set ServerName 127.0.0.1, got: %q", r.TLS.ServerName)
+		if r.TLS.ServerName != serverName {
+			t.Errorf("expected client to set ServerName %q, got: %q", serverName, r.TLS.ServerName)
 		}
 	}))
 	defer ts.Close()
 
-	c := &Client{Transport: newTLSTransport(t, ts)}
+	trans := newTLSTransport(t, ts)
+	trans.TLSClientConfig.ServerName = serverName
+	c := &Client{Transport: trans}
 	if _, err := c.Get(ts.URL); err != nil {
 		t.Fatalf("expected successful TLS connection, got error: %v", err)
 	}
@@ -736,6 +740,20 @@ func TestResponseSetsTLSConnectionState(t *testing.T) {
 	}
 	if got, want := res.TLS.CipherSuite, tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA; got != want {
 		t.Errorf("TLS Cipher Suite = %d; want %d", got, want)
+	}
+}
+
+// Check that an HTTPS client can interpret a particular TLS error
+// to determine that the server is speaking HTTP.
+// See golang.org/issue/11111.
+func TestHTTPSClientDetectsHTTPServer(t *testing.T) {
+	defer afterTest(t)
+	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {}))
+	defer ts.Close()
+
+	_, err := Get(strings.Replace(ts.URL, "http", "https", 1))
+	if got := err.Error(); !strings.Contains(got, "HTTP response to HTTPS client") {
+		t.Fatalf("error = %q; want error indicating HTTP response to HTTPS request", got)
 	}
 }
 
@@ -983,13 +1001,12 @@ func TestClientTimeout_Headers(t *testing.T) {
 	if err == nil {
 		t.Fatal("got response from Get; expected error")
 	}
-	ue, ok := err.(*url.Error)
-	if !ok {
+	if _, ok := err.(*url.Error); !ok {
 		t.Fatalf("Got error of type %T; want *url.Error", err)
 	}
-	ne, ok := ue.Err.(net.Error)
+	ne, ok := err.(net.Error)
 	if !ok {
-		t.Fatalf("Got url.Error.Err of type %T; want some net.Error", err)
+		t.Fatalf("Got error of type %T; want some net.Error", err)
 	}
 	if !ne.Timeout() {
 		t.Error("net.Error.Timeout = false; want true")

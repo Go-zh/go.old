@@ -174,8 +174,8 @@ func sqrt(x float64) float64 {
 	// normalize x
 	// 规范化 x
 	exp := int((ix >> shift) & mask)
-	if exp == 0 { // 次规范化 x
-		for ix&1<<shift == 0 {
+	if exp == 0 { // subnormal x // 次规范化 x
+		for ix&(1<<shift) == 0 {
 			ix <<= 1
 			exp--
 		}

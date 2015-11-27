@@ -53,6 +53,7 @@ func runtime_AfterFork()
 // For the same reason compiler does not race instrument it.
 // The calls to RawSyscall are okay because they are assembly
 // functions that do not grow the stack.
+//go:norace
 func forkAndExecInChild(argv0 *byte, argv, envv []*byte, chroot, dir *byte, attr *ProcAttr, sys *SysProcAttr, pipe int) (pid int, err Errno) {
 	// Declare all variables at top in case any
 	// declarations require heap allocation (e.g., err1).
@@ -191,13 +192,12 @@ func forkAndExecInChild(argv0 *byte, argv, envv []*byte, chroot, dir *byte, attr
 	// User and groups
 	if cred := sys.Credential; cred != nil {
 		ngroups := uintptr(len(cred.Groups))
-		var groups unsafe.Pointer
 		if ngroups > 0 {
-			groups = unsafe.Pointer(&cred.Groups[0])
-		}
-		_, _, err1 = RawSyscall(SYS_SETGROUPS, ngroups, uintptr(groups), 0)
-		if err1 != 0 {
-			goto childerror
+			groups := unsafe.Pointer(&cred.Groups[0])
+			_, _, err1 = RawSyscall(SYS_SETGROUPS, ngroups, uintptr(groups), 0)
+			if err1 != 0 {
+				goto childerror
+			}
 		}
 		_, _, err1 = RawSyscall(SYS_SETGID, uintptr(cred.Gid), 0, 0)
 		if err1 != 0 {

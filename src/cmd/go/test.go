@@ -13,7 +13,6 @@ import (
 	"go/doc"
 	"go/parser"
 	"go/token"
-	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -328,7 +327,7 @@ func runTest(cmd *Command, args []string) {
 
 	findExecCmd() // initialize cached result
 
-	raceInit()
+	instrumentInit()
 	buildModeInit()
 	pkgs := packagesForBuild(pkgArgs)
 	if len(pkgs) == 0 {
@@ -396,7 +395,7 @@ func runTest(cmd *Command, args []string) {
 		if deps["C"] {
 			delete(deps, "C")
 			deps["runtime/cgo"] = true
-			if goos == runtime.GOOS && goarch == runtime.GOARCH && !buildRace {
+			if goos == runtime.GOOS && goarch == runtime.GOARCH && !buildRace && !buildMSan {
 				deps["cmd/cgo"] = true
 			}
 		}
@@ -439,7 +438,7 @@ func runTest(cmd *Command, args []string) {
 		}
 		for _, p := range testCoverPkgs {
 			if !used[p.ImportPath] {
-				log.Printf("warning: no packages being tested depend on %s", p.ImportPath)
+				fmt.Fprintf(os.Stderr, "warning: no packages being tested depend on %s\n", p.ImportPath)
 			}
 		}
 
@@ -543,6 +542,9 @@ func runTest(cmd *Command, args []string) {
 		extraOpts := ""
 		if buildRace {
 			extraOpts = "-race "
+		}
+		if buildMSan {
+			extraOpts = "-msan "
 		}
 		fmt.Fprintf(os.Stderr, "installing these packages with 'go test %s-i%s' will speed future tests.\n\n", extraOpts, args)
 	}
@@ -817,10 +819,12 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 		}
 	}
 
-	// writeTestmain writes _testmain.go. This must happen after recompileForTest,
-	// because recompileForTest modifies XXX.
-	if err := writeTestmain(filepath.Join(testDir, "_testmain.go"), t); err != nil {
-		return nil, nil, nil, err
+	if !buildN {
+		// writeTestmain writes _testmain.go. This must happen after recompileForTest,
+		// because recompileForTest modifies XXX.
+		if err := writeTestmain(filepath.Join(testDir, "_testmain.go"), t); err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
 	computeStale(pmain)

@@ -23,7 +23,8 @@ tail:
 	CMPQ	BX, $4
 	JBE	_3or4
 	CMPQ	BX, $8
-	JBE	_5through8
+	JB	_5through7
+	JE	_8
 	CMPQ	BX, $16
 	JBE	_9through16
 	PXOR	X0, X0
@@ -35,8 +36,10 @@ tail:
 	JBE	_65through128
 	CMPQ	BX, $256
 	JBE	_129through256
+	CMPB	runtime·support_avx2(SB), $1
+	JE loop_preheader_avx2
 	// TODO: use branch table and BSR to make this just a single dispatch
-	// TODO: for really big clears, use MOVNTDQ.
+	// TODO: for really big clears, use MOVNTDQ, even without AVX2.
 
 loop:
 	MOVOU	X0, 0(DI)
@@ -61,6 +64,57 @@ loop:
 	JAE	loop
 	JMP	tail
 
+loop_preheader_avx2:
+	VPXOR X0, X0, X0
+	// For smaller sizes MOVNTDQ may be faster or slower depending on hardware.
+	// For larger sizes it is always faster, even on dual Xeons with 30M cache.
+	// TODO take into account actual LLC size. E. g. glibc uses LLC size/2.
+	CMPQ    BX, $0x2000000
+	JAE     loop_preheader_avx2_huge
+loop_avx2:
+	MOVHDU	X0, 0(DI)
+	MOVHDU	X0, 32(DI)
+	MOVHDU	X0, 64(DI)
+	MOVHDU	X0, 96(DI)
+	SUBQ	$128, BX
+	ADDQ	$128, DI
+	CMPQ	BX, $128
+	JAE	loop_avx2
+	MOVHDU  X0, -32(DI)(BX*1)
+	MOVHDU  X0, -64(DI)(BX*1)
+	MOVHDU  X0, -96(DI)(BX*1)
+	MOVHDU  X0, -128(DI)(BX*1)
+	VZEROUPPER
+	RET
+loop_preheader_avx2_huge:
+	// Align to 32 byte boundary
+	MOVHDU  X0, 0(DI)
+	MOVQ	DI, SI
+	ADDQ	$32, DI
+	ANDQ	$~31, DI
+	SUBQ	DI, SI
+	ADDQ	SI, BX
+loop_avx2_huge:
+	MOVNTHD	X0, 0(DI)
+	MOVNTHD	X0, 32(DI)
+	MOVNTHD	X0, 64(DI)
+	MOVNTHD	X0, 96(DI)
+	SUBQ	$128, BX
+	ADDQ	$128, DI
+	CMPQ	BX, $128
+	JAE	loop_avx2_huge
+	// In the desciption of MOVNTDQ in [1]
+	// "... fencing operation implemented with the SFENCE or MFENCE instruction
+	// should be used in conjunction with MOVNTDQ instructions..."
+	// [1] 64-ia-32-architectures-software-developer-manual-325462.pdf
+	SFENCE
+	MOVHDU  X0, -32(DI)(BX*1)
+	MOVHDU  X0, -64(DI)(BX*1)
+	MOVHDU  X0, -96(DI)(BX*1)
+	MOVHDU  X0, -128(DI)(BX*1)
+	VZEROUPPER
+	RET
+
 _1or2:
 	MOVB	AX, (DI)
 	MOVB	AX, -1(DI)(BX*1)
@@ -71,9 +125,13 @@ _3or4:
 	MOVW	AX, (DI)
 	MOVW	AX, -2(DI)(BX*1)
 	RET
-_5through8:
+_5through7:
 	MOVL	AX, (DI)
 	MOVL	AX, -4(DI)(BX*1)
+	RET
+_8:
+	// We need a separate case for 8 to make sure we clear pointers atomically.
+	MOVQ	AX, (DI)
 	RET
 _9through16:
 	MOVQ	AX, (DI)

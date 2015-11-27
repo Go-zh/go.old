@@ -6,7 +6,11 @@
 
 package runtime
 
-import "unsafe"
+import (
+	"runtime/internal/atomic"
+	"runtime/internal/sys"
+	"unsafe"
+)
 
 var Fadd64 = fadd64
 var Fsub64 = fsub64
@@ -22,9 +26,11 @@ var Sqrt = sqrt
 var Entersyscall = entersyscall
 var Exitsyscall = exitsyscall
 var LockedOSThread = lockedOSThread
-var Xadduintptr = xadduintptr
+var Xadduintptr = atomic.Xadduintptr
 
 var FuncPC = funcPC
+
+var Fastlog2 = fastlog2
 
 type LFNode struct {
 	Next    uint64
@@ -110,7 +116,7 @@ func GostringW(w []uint16) (s string) {
 var Gostringnocopy = gostringnocopy
 var Maxstring = &maxstring
 
-type Uintreg uintreg
+type Uintreg sys.Uintreg
 
 var Open = open
 var Close = closefd
@@ -120,21 +126,21 @@ var Write = write
 func Envs() []string     { return envs }
 func SetEnvs(e []string) { envs = e }
 
-var BigEndian = _BigEndian
+var BigEndian = sys.BigEndian
 
 // For benchmarking.
 
 func BenchSetType(n int, x interface{}) {
-	e := *(*eface)(unsafe.Pointer(&x))
+	e := *efaceOf(&x)
 	t := e._type
 	var size uintptr
 	var p unsafe.Pointer
 	switch t.kind & kindMask {
-	case _KindPtr:
+	case kindPtr:
 		t = (*ptrtype)(unsafe.Pointer(t)).elem
 		size = t.size
 		p = e.data
-	case _KindSlice:
+	case kindSlice:
 		slice := *(*struct {
 			ptr      unsafe.Pointer
 			len, cap uintptr
@@ -151,7 +157,9 @@ func BenchSetType(n int, x interface{}) {
 	})
 }
 
-const PtrSize = ptrSize
+const PtrSize = sys.PtrSize
 
 var TestingAssertE2I2GC = &testingAssertE2I2GC
 var TestingAssertE2T2GC = &testingAssertE2T2GC
+
+var ForceGCPeriod = &forcegcperiod

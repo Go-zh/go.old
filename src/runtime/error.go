@@ -4,8 +4,6 @@
 
 package runtime
 
-import "unsafe"
-
 // The Error interface identifies a run time error.
 
 // Error 接口用于标识运行时错误。
@@ -67,7 +65,7 @@ type stringer interface {
 }
 
 func typestring(x interface{}) string {
-	e := (*eface)(unsafe.Pointer(&x))
+	e := efaceOf(&x)
 	return *e._type._string
 }
 

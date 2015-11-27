@@ -4,7 +4,10 @@
 
 package runtime
 
-import "unsafe"
+import (
+	"runtime/internal/atomic"
+	"unsafe"
+)
 
 // GOMAXPROCS sets the maximum number of CPUs that can be executing
 // simultaneously and returns the previous setting.  If n < 1, it does not
@@ -47,7 +50,7 @@ func NumCPU() int {
 // NumCgoCall 返回由当前进程创建的cgo调用数。
 func NumCgoCall() int64 {
 	var n int64
-	for mp := (*m)(atomicloadp(unsafe.Pointer(&allm))); mp != nil; mp = mp.alllink {
+	for mp := (*m)(atomic.Loadp(unsafe.Pointer(&allm))); mp != nil; mp = mp.alllink {
 		n += int64(mp.ncgocall)
 	}
 	return n

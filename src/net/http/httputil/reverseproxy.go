@@ -61,6 +61,18 @@ type ReverseProxy struct {
 	// If nil, logging goes to os.Stderr via the log package's
 	// standard logger.
 	ErrorLog *log.Logger
+
+	// BufferPool optionally specifies a buffer pool to
+	// get byte slices for use by io.CopyBuffer when
+	// copying HTTP response bodies.
+	BufferPool BufferPool
+}
+
+// A BufferPool is an interface for getting and returning temporary
+// byte slices for use by io.CopyBuffer.
+type BufferPool interface {
+	Get() []byte
+	Put([]byte)
 }
 
 func singleJoiningSlash(a, b string) string {
@@ -75,14 +87,19 @@ func singleJoiningSlash(a, b string) string {
 	return a + b
 }
 
-// NewSingleHostReverseProxy returns a new ReverseProxy that rewrites
+// NewSingleHostReverseProxy returns a new ReverseProxy that routes
 // URLs to the scheme, host, and base path provided in target. If the
 // target's path is "/base" and the incoming request was for "/dir",
 // the target request will be for /base/dir.
+// NewSingleHostReverseProxy does not rewrite the Host header.
+// To rewrite Host headers, use ReverseProxy directly with a custom
+// Director policy.
 
 // NewSingleHostReverseProxy返回一个新的ReverseProxy，它会重写URL的scheme，host
 // 和基本的目标路径。如果目标路径是“/base”并且进入的请求的路径是“/dir”，
 // 那么最终请求的目标路径就会变成/base/dir。
+// NewSingleHostReverseProxy 不会重写 Host header。要重写 Host header 请直接使用
+// ReverseProxy 自定的 Director 政策。
 func NewSingleHostReverseProxy(target *url.URL) *ReverseProxy {
 	targetQuery := target.RawQuery
 	director := func(req *http.Request) {
@@ -124,7 +141,7 @@ type requestCanceler interface {
 }
 
 type runOnFirstRead struct {
-	io.Reader
+	io.Reader // optional; nil means empty body
 
 	fn func() // Run before first Read, then set to nil
 }
@@ -133,6 +150,9 @@ func (c *runOnFirstRead) Read(bs []byte) (int, error) {
 	if c.fn != nil {
 		c.fn()
 		c.fn = nil
+	}
+	if c.Reader == nil {
+		return 0, io.EOF
 	}
 	return c.Reader.Read(bs)
 }
@@ -258,7 +278,14 @@ func (p *ReverseProxy) copyResponse(dst io.Writer, src io.Reader) {
 		}
 	}
 
-	io.Copy(dst, src)
+	var buf []byte
+	if p.BufferPool != nil {
+		buf = p.BufferPool.Get()
+	}
+	io.CopyBuffer(dst, src, buf)
+	if p.BufferPool != nil {
+		p.BufferPool.Put(buf)
+	}
 }
 
 func (p *ReverseProxy) logf(format string, args ...interface{}) {

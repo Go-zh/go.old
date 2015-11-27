@@ -1713,6 +1713,67 @@ syntax tree example is also doable, although not as elegantly.
 </p>
 
 <div class="english">
+<h3 id="covariant_types">
+Why does Go not have covariant result types?</h3>
+</div>
+
+<h3 id="协变类型">
+为什么 Go 没有协变结果类型？</h3>
+
+<div class="english">
+<p>
+Covariant result types would mean that an interface like
+</p>
+</div>
+
+<p>
+协变结果类型意味着像
+</p>
+
+<pre>
+type Copyable interface {
+	Copy() interface{}
+}
+</pre>
+
+<div class="english">
+<p>
+would be satisfied by the method
+</p>
+</div>
+
+<p>
+这类的接口会被方法
+</p>
+
+<pre>
+func (v Value) Copy() Value
+</pre>
+
+<div class="english">
+<p>
+because <code>Value</code> implements the empty interface.
+In Go method types must match exactly, so <code>Value</code> does not
+implement <code>Copyable</code>.
+Go separates the notion of what a
+type does&mdash;its methods&mdash;from the type's implementation.
+If two methods return different types, they are not doing the same thing.
+Programmers who want covariant result types are often trying to
+express a type heirarchy through interfaces.
+In Go it's more natural to have a clean separation between interface
+and implementation.
+</p>
+</div>
+
+<p>
+所满足，这是因为 <code>Value</code> 实现了空接口。Go 的方法类型必须精确匹配，因此
+<code>Value</code> 不能实现 <code>Copyable</code>。Go
+将类型所做的事（即它的方法）和该类型的实现分离开来。如果两个方法返回不同的类型，
+那么它们做的事情并不相同。想要协变结果类型的程序员通常可通过接口表达类型层次来达到目的。
+在 Go 中清楚地区分开接口和实现会更加自然。
+</p>
+
+<div class="english">
 <h2 id="values">Values</h2>
 </div>
 

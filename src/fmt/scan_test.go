@@ -266,6 +266,7 @@ var scanfTests = []ScanfTest{
 	// 字符串
 	{"%s", "using-%s\n", &stringVal, "using-%s"},
 	{"%x", "7573696e672d2578\n", &stringVal, "using-%x"},
+	{"%X", "7573696E672D2558\n", &stringVal, "using-%X"},
 	{"%q", `"quoted\twith\\do\u0075bl\x65s"` + "\n", &stringVal, "quoted\twith\\doubles"},
 	{"%q", "`quoted with backs`\n", &stringVal, "quoted with backs"},
 
@@ -273,6 +274,7 @@ var scanfTests = []ScanfTest{
 	// 字节切片
 	{"%s", "bytes-%s\n", &bytesVal, []byte("bytes-%s")},
 	{"%x", "62797465732d2578\n", &bytesVal, []byte("bytes-%x")},
+	{"%X", "62797465732D2558\n", &bytesVal, []byte("bytes-%X")},
 	{"%q", `"bytes\rwith\vdo\u0075bl\x65s"` + "\n", &bytesVal, []byte("bytes\rwith\vdoubles")},
 	{"%q", "`bytes with backs`\n", &bytesVal, []byte("bytes with backs")},
 
@@ -305,6 +307,7 @@ var scanfTests = []ScanfTest{
 	// 有趣的格式
 	{"here is\tthe value:%d", "here is   the\tvalue:118\n", &intVal, 118},
 	{"%% %%:%d", "% %:119\n", &intVal, 119},
+	{"%d%%", "42%", &intVal, 42}, // %% at end of string.
 
 	// Corner cases
 	// 极端情况
@@ -375,6 +378,8 @@ var multiTests = []ScanfMultiTest{
 	{"%d %d", "23 18 27", args(&i, &j, &k), args(23, 18), "too many operands"},
 	{"%c", "\u0100", args(&int8Val), nil, "overflow"},
 	{"X%d", "10X", args(&intVal), nil, "input does not match format"},
+	{"%d%", "42%", args(&intVal), args(42), "missing verb: % at end of format string"},
+	{"%d% ", "42%", args(&intVal), args(42), "too few operands for format '% '"}, // Slightly odd error, but correct.
 
 	// Bad UTF-8: should see every byte.
 	// 错误的UTF-8：应检查所有的字节。
@@ -1164,14 +1169,22 @@ func TestScanfNewlineMatchFormat(t *testing.T) {
 		count  int
 		ok     bool
 	}{
-		{"newline in both", "1\n2", "%d\n%d\n", 2, true},
+		{"newline in both", "1\n2", "%d\n%d", 2, true},
 		{"newline in input", "1\n2", "%d %d", 1, false},
+		{"extra newline in format", "1\n2", "%d\n%d\n", 2, false},
+		{"newline-newline in both", "1\n\n2", "%d\n\n%d", 2, true},
+		{"newline-newline in format", "1\n2", "%d\n\n%d", 1, false},
+		{"newline-newline in input", "1\n\n2", "%d\n%d", 1, false},
 		{"space-newline in input", "1 \n2", "%d %d", 1, false},
 		{"newline in format", "1 2", "%d\n%d", 1, false},
 		{"space-newline in format", "1 2", "%d \n%d", 1, false},
 		{"space-newline in both", "1 \n2", "%d \n%d", 2, true},
 		{"extra space in format", "1\n2", "%d\n %d", 2, true},
 		{"two extra spaces in format", "1\n2", "%d \n %d", 2, true},
+		{"newline start in both", "\n1 2", "\n%d %d", 2, true},
+		{"newline start in format", "1 2", "\n%d %d", 0, false},
+		{"newline start in input", "\n1 2", "%d %d", 0, false},
+		{"space-newline start in input", " \n1 2", "\n%d %d", 2, true},
 	}
 	for _, test := range tests {
 		n, err := Sscanf(test.text, test.format, &a, &b)

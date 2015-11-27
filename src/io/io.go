@@ -144,14 +144,14 @@ type Closer interface {
 // Seeker is the interface that wraps the basic Seek method.
 //
 // Seek sets the offset for the next Read or Write to offset,
-// interpreted according to whence: 0 means relative to the origin of
+// interpreted according to whence: 0 means relative to the start of
 // the file, 1 means relative to the current offset, and 2 means
-// relative to the end.  Seek returns the new offset and an error, if
-// any.
+// relative to the end. Seek returns the new offset relative to the
+// start of the file and an error, if any.
 //
-// Seeking to a negative offset is an error. Seeking to any positive
-// offset is legal, but the behavior of subsequent I/O operations on
-// the underlying object is implementation-dependent.
+// Seeking to an offset before the start of the file is an error.
+// Seeking to any positive offset is legal, but the behavior of subsequent
+// I/O operations on the underlying object is implementation-dependent.
 
 // Seeker 接口包装了基本的 Seek 方法。
 //
@@ -159,8 +159,8 @@ type Closer interface {
 // 0 表示相对于文件的起始处，1 表示相对于当前的偏移，而 2 表示相对于其结尾处。
 // Seek 返回新的偏移量和一个错误，如果有的话。
 //
-// 对负数偏移量进行 Seek 会产生错误。对任何正数偏移量进行 Seek 是合法的，但对底层类型的后续
-// I/O 操作行为则取决于具体实现。
+// 从文件开头向前 Seek 偏移量会产生错误。对任何正数偏移量进行 Seek
+// 都是合法的，但对底层对象的后续 I/O 操作行为则取决于具体实现。
 type Seeker interface {
 	Seek(offset int64, whence int) (int64, error)
 }
@@ -344,11 +344,10 @@ type WriterAt interface {
 // ByteReader is the interface that wraps the ReadByte method.
 //
 // ReadByte reads and returns the next byte from the input.
-// If no byte is available, err will be set.
 
 // ByteReader 接口包装了 ReadByte 方法。
 //
-// ReadByte 从输入中读取并返回下一个字节。若没有字节可用，就会置为 err。
+// ReadByte 从输入中读取并返回下一个字节。
 type ByteReader interface {
 	ReadByte() (c byte, err error)
 }

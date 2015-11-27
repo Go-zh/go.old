@@ -5,6 +5,7 @@
 package runtime
 
 import (
+	"runtime/internal/atomic"
 	"unsafe"
 )
 
@@ -86,6 +87,9 @@ func slicebytetostring(buf *tmpBuf, b []byte) string {
 			getcallerpc(unsafe.Pointer(&b)),
 			funcPC(slicebytetostring))
 	}
+	if msanenabled && l > 0 {
+		msanread(unsafe.Pointer(&b[0]), uintptr(l))
+	}
 	s, c := rawstringtmp(buf, l)
 	copy(c, b)
 	return s
@@ -94,7 +98,7 @@ func slicebytetostring(buf *tmpBuf, b []byte) string {
 // stringDataOnStack reports whether the string's data is
 // stored on the current goroutine's stack.
 func stringDataOnStack(s string) bool {
-	ptr := uintptr((*stringStruct)(unsafe.Pointer(&s)).str)
+	ptr := uintptr(stringStructOf(&s).str)
 	stk := getg().stack
 	return stk.lo <= ptr && ptr < stk.hi
 }
@@ -126,6 +130,9 @@ func slicebytetostringtmp(b []byte) string {
 			getcallerpc(unsafe.Pointer(&b)),
 			funcPC(slicebytetostringtmp))
 	}
+	if msanenabled && len(b) > 0 {
+		msanread(unsafe.Pointer(&b[0]), uintptr(len(b)))
+	}
 	return *(*string)(unsafe.Pointer(&b))
 }
 
@@ -147,7 +154,7 @@ func stringtoslicebytetmp(s string) []byte {
 	// The only such case today is:
 	// for i, c := range []byte(str)
 
-	str := (*stringStruct)(unsafe.Pointer(&s))
+	str := stringStructOf(&s)
 	ret := slice{array: unsafe.Pointer(str.str), len: str.len, cap: str.len}
 	return *(*[]byte)(unsafe.Pointer(&ret))
 }
@@ -185,6 +192,9 @@ func slicerunetostring(buf *tmpBuf, a []rune) string {
 			getcallerpc(unsafe.Pointer(&a)),
 			funcPC(slicerunetostring))
 	}
+	if msanenabled && len(a) > 0 {
+		msanread(unsafe.Pointer(&a[0]), uintptr(len(a))*unsafe.Sizeof(a[0]))
+	}
 	var dum [4]byte
 	size1 := 0
 	for _, r := range a {
@@ -205,6 +215,16 @@ func slicerunetostring(buf *tmpBuf, a []rune) string {
 type stringStruct struct {
 	str unsafe.Pointer
 	len int
+}
+
+// Variant with *byte pointer type for DWARF debugging.
+type stringStructDWARF struct {
+	str *byte
+	len int
+}
+
+func stringStructOf(sp *string) *stringStruct {
+	return (*stringStruct)(unsafe.Pointer(sp))
 }
 
 func intstring(buf *[4]byte, v int64) string {
@@ -263,14 +283,14 @@ func stringiter2(s string, k int) (int, rune) {
 func rawstring(size int) (s string, b []byte) {
 	p := mallocgc(uintptr(size), nil, flagNoScan|flagNoZero)
 
-	(*stringStruct)(unsafe.Pointer(&s)).str = p
-	(*stringStruct)(unsafe.Pointer(&s)).len = size
+	stringStructOf(&s).str = p
+	stringStructOf(&s).len = size
 
 	*(*slice)(unsafe.Pointer(&b)) = slice{p, size, size}
 
 	for {
 		ms := maxstring
-		if uintptr(size) <= uintptr(ms) || casuintptr((*uintptr)(unsafe.Pointer(&maxstring)), uintptr(ms), uintptr(size)) {
+		if uintptr(size) <= uintptr(ms) || atomic.Casuintptr((*uintptr)(unsafe.Pointer(&maxstring)), uintptr(ms), uintptr(size)) {
 			return
 		}
 	}
@@ -359,4 +379,64 @@ func atoi(s string) int {
 		s = s[1:]
 	}
 	return n
+}
+
+//go:nosplit
+func findnull(s *byte) int {
+	if s == nil {
+		return 0
+	}
+	p := (*[_MaxMem/2 - 1]byte)(unsafe.Pointer(s))
+	l := 0
+	for p[l] != 0 {
+		l++
+	}
+	return l
+}
+
+func findnullw(s *uint16) int {
+	if s == nil {
+		return 0
+	}
+	p := (*[_MaxMem/2/2 - 1]uint16)(unsafe.Pointer(s))
+	l := 0
+	for p[l] != 0 {
+		l++
+	}
+	return l
+}
+
+var maxstring uintptr = 256 // a hint for print
+
+//go:nosplit
+func gostringnocopy(str *byte) string {
+	ss := stringStruct{str: unsafe.Pointer(str), len: findnull(str)}
+	s := *(*string)(unsafe.Pointer(&ss))
+	for {
+		ms := maxstring
+		if uintptr(len(s)) <= ms || atomic.Casuintptr(&maxstring, ms, uintptr(len(s))) {
+			break
+		}
+	}
+	return s
+}
+
+func gostringw(strw *uint16) string {
+	var buf [8]byte
+	str := (*[_MaxMem/2/2 - 1]uint16)(unsafe.Pointer(strw))
+	n1 := 0
+	for i := 0; str[i] != 0; i++ {
+		n1 += runetochar(buf[:], rune(str[i]))
+	}
+	s, b := rawstring(n1 + 4)
+	n2 := 0
+	for i := 0; str[i] != 0; i++ {
+		// check for race
+		if n2 >= n1 {
+			break
+		}
+		n2 += runetochar(b[n2:], rune(str[i]))
+	}
+	b[n2] = 0 // for luck
+	return s[:n2]
 }

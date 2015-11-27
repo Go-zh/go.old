@@ -6,6 +6,8 @@
 
 package runtime
 
+import "runtime/internal/sys"
+
 const (
 	_SIG_DFL uintptr = 0
 	_SIG_IGN uintptr = 1
@@ -16,7 +18,7 @@ const (
 // handle a particular signal (e.g., signal occurred on a non-Go thread).
 // See sigfwdgo() for more information on when the signals are forwarded.
 //
-// Signal forwarding is currently available only on Linux.
+// Signal forwarding is currently available only on Darwin and Linux.
 var fwdSig [_NSIG]uintptr
 
 // sigmask represents a general signal mask compatible with the GOOS
@@ -185,7 +187,7 @@ func crash() {
 		// this means the OS X core file will be >128 GB and even on a zippy
 		// workstation can take OS X well over an hour to write (uninterruptible).
 		// Save users from making that mistake.
-		if ptrSize == 8 {
+		if sys.PtrSize == 8 {
 			return
 		}
 	}
@@ -195,7 +197,7 @@ func crash() {
 	raise(_SIGABRT)
 }
 
-// createSigM starts one global, sleeping thread to make sure at least one thread
+// ensureSigM starts one global, sleeping thread to make sure at least one thread
 // is available to catch signals enabled for os/signal.
 func ensureSigM() {
 	if maskUpdatedChan != nil {

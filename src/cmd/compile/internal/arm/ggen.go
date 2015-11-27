@@ -34,10 +34,10 @@ func defframe(ptxt *obj.Prog) {
 			continue
 		}
 		if n.Class != gc.PAUTO {
-			gc.Fatal("needzero class %d", n.Class)
+			gc.Fatalf("needzero class %d", n.Class)
 		}
 		if n.Type.Width%int64(gc.Widthptr) != 0 || n.Xoffset%int64(gc.Widthptr) != 0 || n.Type.Width == 0 {
-			gc.Fatal("var %v has size %d offset %d", gc.Nconv(n, obj.FmtLong), int(n.Type.Width), int(n.Xoffset))
+			gc.Fatalf("var %v has size %d offset %d", gc.Nconv(n, obj.FmtLong), int(n.Type.Width), int(n.Xoffset))
 		}
 		if lo != hi && n.Xoffset+n.Type.Width >= lo-int64(2*gc.Widthptr) {
 			// merge with range we already have
@@ -120,9 +120,7 @@ func appendpp(p *obj.Prog, as int, ftype int, freg int, foffset int32, ttype int
  */
 func cgen_hmul(nl *gc.Node, nr *gc.Node, res *gc.Node) {
 	if nl.Ullman < nr.Ullman {
-		tmp := nl
-		nl = nr
-		nr = tmp
+		nl, nr = nr, nl
 	}
 
 	t := nl.Type
@@ -162,7 +160,7 @@ func cgen_hmul(nl *gc.Node, nr *gc.Node, res *gc.Node) {
 		p.To.Offset = int64(n2.Reg)
 
 	default:
-		gc.Fatal("cgen_hmul %v", t)
+		gc.Fatalf("cgen_hmul %v", t)
 	}
 
 	gc.Cgen(&n1, res)
@@ -175,9 +173,9 @@ func cgen_hmul(nl *gc.Node, nr *gc.Node, res *gc.Node) {
  *	res = nl << nr
  *	res = nl >> nr
  */
-func cgen_shift(op int, bounded bool, nl *gc.Node, nr *gc.Node, res *gc.Node) {
+func cgen_shift(op gc.Op, bounded bool, nl *gc.Node, nr *gc.Node, res *gc.Node) {
 	if nl.Type.Width > 4 {
-		gc.Fatal("cgen_shift %v", nl.Type)
+		gc.Fatalf("cgen_shift %v", nl.Type)
 	}
 
 	w := int(nl.Type.Width * 8)
@@ -429,7 +427,7 @@ func expandchecks(firstp *obj.Prog) {
 			gc.Warnl(int(p.Lineno), "generated nil check")
 		}
 		if p.From.Type != obj.TYPE_REG {
-			gc.Fatal("invalid nil check %v", p)
+			gc.Fatalf("invalid nil check %v", p)
 		}
 		reg = int(p.From.Reg)
 
@@ -479,7 +477,7 @@ func ginscon(as int, c int64, n *gc.Node) {
 	gc.Regfree(&n2)
 }
 
-func ginscmp(op int, t *gc.Type, n1, n2 *gc.Node, likely int) *obj.Prog {
+func ginscmp(op gc.Op, t *gc.Type, n1, n2 *gc.Node, likely int) *obj.Prog {
 	if gc.Isint[t.Etype] && n1.Op == gc.OLITERAL && n1.Int() == 0 && n2.Op != gc.OLITERAL {
 		op = gc.Brrev(op)
 		n1, n2 = n2, n1

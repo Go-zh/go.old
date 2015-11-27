@@ -147,7 +147,6 @@ func OPBIT(x uint32) uint32 {
 const (
 	LFROM = 1 << 0
 	LTO   = 1 << 1
-	LPOOL = 1 << 2
 )
 
 var optab = []Optab{
@@ -271,6 +270,9 @@ var optab = []Optab{
 	{AMOVH, C_ADDR, C_NONE, C_REG, 65, 12, 0, 0, 0},
 	{AMOVW, C_ADDR, C_NONE, C_REG, 65, 12, 0, 0, 0},
 	{AMOVD, C_ADDR, C_NONE, C_REG, 65, 12, 0, 0, 0},
+	{AMOVD, C_GOTADDR, C_NONE, C_REG, 71, 8, 0, 0, 0},
+	{AMOVD, C_TLS_LE, C_NONE, C_REG, 69, 4, 0, 0, 0},
+	{AMOVD, C_TLS_IE, C_NONE, C_REG, 70, 8, 0, 0, 0},
 	{AMUL, C_REG, C_REG, C_REG, 15, 4, 0, 0, 0},
 	{AMUL, C_REG, C_NONE, C_REG, 15, 4, 0, 0, 0},
 	{AMADD, C_REG, C_REG, C_REG, 15, 4, 0, 0, 0},
@@ -468,8 +470,6 @@ var optab = []Optab{
 	{AFCCMPS, C_COND, C_REG, C_VCON, 57, 4, 0, 0, 0},
 	{AFCSELD, C_COND, C_REG, C_FREG, 18, 4, 0, 0, 0},
 	{AFCVTSD, C_FREG, C_NONE, C_FREG, 29, 4, 0, 0, 0},
-	{ACASE, C_REG, C_NONE, C_REG, 62, 4 * 4, 0, 0, 0},
-	{ABCASE, C_NONE, C_NONE, C_SBRA, 63, 4, 0, 0, 0},
 	{ACLREX, C_NONE, C_NONE, C_VCON, 38, 4, 0, 0, 0},
 	{ACLREX, C_NONE, C_NONE, C_NONE, 38, 4, 0, 0, 0},
 	{ACBZ, C_REG, C_NONE, C_SBRA, 39, 4, 0, 0, 0},
@@ -536,9 +536,9 @@ func span7(ctxt *obj.Link, cursym *obj.LSym) {
 		buildop(ctxt)
 	}
 
-	bflag := 0
-	c := int32(0)
-	p.Pc = int64(c)
+	bflag := 1
+	c := int64(0)
+	p.Pc = c
 	var m int
 	var o *Optab
 	for p = p.Link; p != nil; p = p.Link {
@@ -546,7 +546,7 @@ func span7(ctxt *obj.Link, cursym *obj.LSym) {
 		if p.As == ADWORD && (c&7) != 0 {
 			c += 4
 		}
-		p.Pc = int64(c)
+		p.Pc = c
 		o = oplook(ctxt, p)
 		m = int(o.size)
 		if m == 0 {
@@ -568,13 +568,13 @@ func span7(ctxt *obj.Link, cursym *obj.LSym) {
 		if p.As == AB || p.As == obj.ARET || p.As == AERET { /* TODO: other unconditional operations */
 			checkpool(ctxt, p, 0)
 		}
-		c += int32(m)
+		c += int64(m)
 		if ctxt.Blitrl != nil {
 			checkpool(ctxt, p, 1)
 		}
 	}
 
-	cursym.Size = int64(c)
+	cursym.Size = c
 
 	/*
 	 * if any procedure is large enough to
@@ -583,38 +583,38 @@ func span7(ctxt *obj.Link, cursym *obj.LSym) {
 	 * around jmps to fix. this is rare.
 	 */
 	for bflag != 0 {
+		if ctxt.Debugvlog != 0 {
+			fmt.Fprintf(ctxt.Bso, "%5.2f span1\n", obj.Cputime())
+		}
 		bflag = 0
 		c = 0
-		for p = cursym.Text; p != nil; p = p.Link {
+		for p = cursym.Text.Link; p != nil; p = p.Link {
 			if p.As == ADWORD && (c&7) != 0 {
 				c += 4
 			}
-			p.Pc = int64(c)
+			p.Pc = c
 			o = oplook(ctxt, p)
 
-			/* very large branches
-			if(o->type == 6 && p->cond) {
-				otxt = p->cond->pc - c;
-				if(otxt < 0)
-					otxt = -otxt;
-				if(otxt >= (1L<<17) - 10) {
-					q = ctxt->arch->prg();
-					q->link = p->link;
-					p->link = q;
-					q->as = AB;
-					q->to.type = obj.TYPE_BRANCH;
-					q->cond = p->cond;
-					p->cond = q;
-					q = ctxt->arch->prg();
-					q->link = p->link;
-					p->link = q;
-					q->as = AB;
-					q->to.type = obj.TYPE_BRANCH;
-					q->cond = q->link->link;
-					bflag = 1;
+			/* very large branches */
+			if o.type_ == 7 && p.Pcond != nil {
+				otxt := p.Pcond.Pc - c
+				if otxt <= -(1<<18)+10 || otxt >= (1<<18)-10 {
+					q := ctxt.NewProg()
+					q.Link = p.Link
+					p.Link = q
+					q.As = AB
+					q.To.Type = obj.TYPE_BRANCH
+					q.Pcond = p.Pcond
+					p.Pcond = q
+					q = ctxt.NewProg()
+					q.Link = p.Link
+					p.Link = q
+					q.As = AB
+					q.To.Type = obj.TYPE_BRANCH
+					q.Pcond = q.Link.Link
+					bflag = 1
 				}
 			}
-			*/
 			m = int(o.size)
 
 			if m == 0 {
@@ -624,19 +624,16 @@ func span7(ctxt *obj.Link, cursym *obj.LSym) {
 				continue
 			}
 
-			c += int32(m)
+			c += int64(m)
 		}
 	}
 
 	c += -c & (FuncAlign - 1)
-	cursym.Size = int64(c)
+	cursym.Size = c
 
 	/*
 	 * lay out the code, emitting code and data relocations.
 	 */
-	if ctxt.Tlsg == nil {
-		ctxt.Tlsg = obj.Linklookup(ctxt, "runtime.tlsg", 0)
-	}
 	obj.Symgrow(ctxt, cursym, cursym.Size)
 	bp := cursym.P
 	psz := int32(0)
@@ -676,7 +673,7 @@ func span7(ctxt *obj.Link, cursym *obj.LSym) {
  * drop the pool now, and branch round it.
  */
 func checkpool(ctxt *obj.Link, p *obj.Prog, skip int) {
-	if pool.size >= 0xffff0 || !(ispcdisp(int32(p.Pc+4+int64(pool.size)-int64(pool.start)+8)) != 0) {
+	if pool.size >= 0xffff0 || !ispcdisp(int32(p.Pc+4+int64(pool.size)-int64(pool.start)+8)) {
 		flushpool(ctxt, p, skip)
 	} else if p.Link == nil {
 		flushpool(ctxt, p, 2)
@@ -829,27 +826,27 @@ func regoff(ctxt *obj.Link, a *obj.Addr) uint32 {
 	return uint32(ctxt.Instoffset)
 }
 
-func ispcdisp(v int32) int {
+func ispcdisp(v int32) bool {
 	/* pc-relative addressing will reach? */
-	return obj.Bool2int(v >= -0xfffff && v <= 0xfffff && (v&3) == 0)
+	return v >= -0xfffff && v <= 0xfffff && (v&3) == 0
 }
 
-func isaddcon(v int64) int {
+func isaddcon(v int64) bool {
 	/* uimm12 or uimm24? */
 	if v < 0 {
-		return 0
+		return false
 	}
 	if (v & 0xFFF) == 0 {
 		v >>= 12
 	}
-	return obj.Bool2int(v <= 0xFFF)
+	return v <= 0xFFF
 }
 
-func isbitcon(v uint64) int {
+func isbitcon(v uint64) bool {
 	/*  fancy bimm32 or bimm64? */
 	// TODO(aram):
-	return 0
-	// return obj.Bool2int(findmask(v) != nil || (v>>32) == 0 && findmask(v|(v<<32)) != nil)
+	return false
+	// return findmask(v) != nil || (v>>32) == 0 && findmask(v|(v<<32)) != nil
 }
 
 func autoclass(l int64) int {
@@ -974,9 +971,19 @@ func aclass(ctxt *obj.Link, a *obj.Addr) int {
 			}
 			ctxt.Instoffset = a.Offset
 			if a.Sym != nil { // use relocation
+				if a.Sym.Type == obj.STLSBSS {
+					if ctxt.Flag_shared != 0 {
+						return C_TLS_IE
+					} else {
+						return C_TLS_LE
+					}
+				}
 				return C_ADDR
 			}
 			return C_LEXT
+
+		case obj.NAME_GOTREF:
+			return C_GOTADDR
 
 		case obj.NAME_AUTO:
 			ctxt.Instoffset = int64(ctxt.Autosize) + a.Offset
@@ -1010,11 +1017,11 @@ func aclass(ctxt *obj.Link, a *obj.Addr) int {
 			if v == 0 {
 				return C_ZCON
 			}
-			if isaddcon(v) != 0 {
+			if isaddcon(v) {
 				if v <= 0xFFF {
 					return C_ADDCON0
 				}
-				if isbitcon(uint64(v)) != 0 {
+				if isbitcon(uint64(v)) {
 					return C_ABCON
 				}
 				return C_ADDCON
@@ -1022,7 +1029,7 @@ func aclass(ctxt *obj.Link, a *obj.Addr) int {
 
 			t := movcon(v)
 			if t >= 0 {
-				if isbitcon(uint64(v)) != 0 {
+				if isbitcon(uint64(v)) {
 					return C_MBCON
 				}
 				return C_MOVCON
@@ -1030,13 +1037,13 @@ func aclass(ctxt *obj.Link, a *obj.Addr) int {
 
 			t = movcon(^v)
 			if t >= 0 {
-				if isbitcon(uint64(v)) != 0 {
+				if isbitcon(uint64(v)) {
 					return C_MBCON
 				}
 				return C_MOVCON
 			}
 
-			if isbitcon(uint64(v)) != 0 {
+			if isbitcon(uint64(v)) {
 				return C_BITCON
 			}
 
@@ -1047,9 +1054,11 @@ func aclass(ctxt *obj.Link, a *obj.Addr) int {
 
 		case obj.NAME_EXTERN,
 			obj.NAME_STATIC:
-			s := a.Sym
-			if s == nil {
+			if a.Sym == nil {
 				break
+			}
+			if a.Sym.Type == obj.STLSBSS {
+				ctxt.Diag("taking address of TLS variable is not supported")
 			}
 			ctxt.Instoffset = a.Offset
 			return C_VCONADDR
@@ -1065,7 +1074,7 @@ func aclass(ctxt *obj.Link, a *obj.Addr) int {
 		return C_GOK
 
 	aconsize:
-		if isaddcon(ctxt.Instoffset) != 0 {
+		if isaddcon(ctxt.Instoffset) {
 			return C_AACON
 		}
 		return C_LACON
@@ -1570,8 +1579,6 @@ func buildop(ctxt *obj.Link) {
 			ADWORD,
 			obj.ARET,
 			obj.ATEXT,
-			ACASE,
-			ABCASE,
 			ASTP,
 			ALDP:
 			break
@@ -1801,7 +1808,6 @@ func SYSARG4(op1 int, Cn int, Cm int, op2 int) int {
 }
 
 func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
-	var lastcase *obj.Prog
 	o1 := uint32(0)
 	o2 := uint32(0)
 	o3 := uint32(0)
@@ -1899,7 +1905,7 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 		rel.Off = int32(ctxt.Pc)
 		rel.Siz = 4
 		rel.Sym = p.To.Sym
-		rel.Add = int64(o1) | (p.To.Offset>>2)&0x3ffffff
+		rel.Add = p.To.Offset
 		rel.Type = obj.R_CALLARM64
 
 	case 6: /* b ,O(R); bl ,O(R) */
@@ -2188,14 +2194,14 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 	case 24: /* mov/mvn Rs,Rd -> add $0,Rs,Rd or orr Rs,ZR,Rd */
 		rf := int(p.From.Reg)
 		rt := int(p.To.Reg)
-		s := obj.Bool2int(rf == REGSP || rt == REGSP)
+		s := rf == REGSP || rt == REGSP
 		if p.As == AMVN || p.As == AMVNW {
-			if s != 0 {
+			if s {
 				ctxt.Diag("illegal SP reference\n%v", p)
 			}
 			o1 = oprrr(ctxt, int(p.As))
 			o1 |= (uint32(rf&31) << 16) | (REGZERO & 31 << 5) | uint32(rt&31)
-		} else if s != 0 {
+		} else if s {
 			o1 = opirr(ctxt, int(p.As))
 			o1 |= (uint32(rf&31) << 5) | uint32(rt&31)
 		} else {
@@ -2699,28 +2705,6 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 
 		o1 = ADR(0, uint32(d), uint32(p.To.Reg))
 
-	case 62: /* case Rv, Rt -> adr tab, Rt; movw Rt[R<<2], Rl; add Rt, Rl; br (Rl) */
-		// adr 4(pc), Rt
-		o1 = ADR(0, 4*4, uint32(p.To.Reg))
-		// movw Rt[Rv<<2], REGTMP
-		o2 = (2 << 30) | (7 << 27) | (2 << 22) | (1 << 21) | (3 << 13) | (1 << 12) | (2 << 10) | (uint32(p.From.Reg&31) << 16) | (uint32(p.To.Reg&31) << 5) | REGTMP&31
-		// add Rt, REGTMP
-		o3 = oprrr(ctxt, AADD) | (uint32(p.To.Reg) << 16) | (REGTMP << 5) | REGTMP
-		// br (REGTMP)
-		o4 = (0x6b << 25) | (0x1F << 16) | (REGTMP & 31 << 5)
-		lastcase = p
-
-	case 63: /* bcase */
-		if lastcase == nil {
-			ctxt.Diag("missing CASE\n%v", p)
-			break
-		}
-
-		if p.Pcond != nil {
-			o1 = uint32(p.Pcond.Pc - (lastcase.Pc + 4*4))
-			ctxt.Diag("FIXME: some relocation needed in bcase\n%v", p)
-		}
-
 		/* reloc ops */
 	case 64: /* movT R,addr -> adrp + add + movT R, (REGTMP) */
 		o1 = ADR(1, 0, REGTMP)
@@ -2783,6 +2767,41 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 		rel.Sym = p.From.Sym
 		rel.Add = p.From.Offset
 		rel.Type = obj.R_ADDRARM64
+
+	case 69: /* LE model movd $tlsvar, reg -> movz reg, 0 + reloc */
+		o1 = opirr(ctxt, AMOVZ)
+		o1 |= uint32(p.To.Reg & 31)
+		rel := obj.Addrel(ctxt.Cursym)
+		rel.Off = int32(ctxt.Pc)
+		rel.Siz = 4
+		rel.Sym = p.From.Sym
+		rel.Type = obj.R_ARM64_TLS_LE
+		if p.From.Offset != 0 {
+			ctxt.Diag("invalid offset on MOVW $tlsvar")
+		}
+
+	case 70: /* IE model movd $tlsvar, reg -> adrp REGTMP, 0; ldr reg, [REGTMP, #0] + relocs */
+		o1 = ADR(1, 0, REGTMP)
+		o2 = olsr12u(ctxt, int32(opldr12(ctxt, AMOVD)), 0, REGTMP, int(p.To.Reg))
+		rel := obj.Addrel(ctxt.Cursym)
+		rel.Off = int32(ctxt.Pc)
+		rel.Siz = 8
+		rel.Sym = p.From.Sym
+		rel.Add = 0
+		rel.Type = obj.R_ARM64_TLS_IE
+		if p.From.Offset != 0 {
+			ctxt.Diag("invalid offset on MOVW $tlsvar")
+		}
+
+	case 71: /* movd sym@GOT, reg -> adrp REGTMP, #0; ldr reg, [REGTMP, #0] + relocs */
+		o1 = ADR(1, 0, REGTMP)
+		o2 = olsr12u(ctxt, int32(opldr12(ctxt, AMOVD)), 0, REGTMP, int(p.To.Reg))
+		rel := obj.Addrel(ctxt.Cursym)
+		rel.Off = int32(ctxt.Pc)
+		rel.Siz = 8
+		rel.Sym = p.From.Sym
+		rel.Add = 0
+		rel.Type = obj.R_ARM64_GOTPCREL
 
 	// This is supposed to be something that stops execution.
 	// It's not supposed to be reached, ever, but if it is, we'd

@@ -6,6 +6,8 @@ package runtime
 
 import "unsafe"
 
+type mOS struct{}
+
 //go:noescape
 func futex(addr unsafe.Pointer, op int32, val uint32, ts, addr2 unsafe.Pointer, val3 uint32) int32
 
@@ -17,9 +19,6 @@ func rt_sigaction(sig uintptr, new, old *sigactiont, size uintptr) int32
 
 //go:noescape
 func sigaltstack(new, old *sigaltstackt)
-
-//go:noescape
-func sigfwd(fn uintptr, sig uint32, info *siginfo, ctx unsafe.Pointer)
 
 //go:noescape
 func setitimer(mode int32, new, old *itimerval)

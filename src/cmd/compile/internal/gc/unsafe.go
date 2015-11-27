@@ -6,13 +6,11 @@ package gc
 
 import "cmd/internal/obj"
 
-/*
- * look for
- *	unsafe.Sizeof
- *	unsafe.Offsetof
- *	unsafe.Alignof
- * rewrite with a constant
- */
+// look for
+//	unsafe.Sizeof
+//	unsafe.Offsetof
+//	unsafe.Alignof
+// rewrite with a constant
 func unsafenmagic(nn *Node) *Node {
 	fn := nn.Left
 	args := nn.List
@@ -89,7 +87,7 @@ func unsafenmagic(nn *Node) *Node {
 
 			default:
 				Dump("unsafenmagic", r)
-				Fatal("impossible %v node after dot insertion", Oconv(int(r1.Op), obj.FmtSharp))
+				Fatalf("impossible %v node after dot insertion", Oconv(int(r1.Op), obj.FmtSharp))
 				goto bad
 			}
 		}

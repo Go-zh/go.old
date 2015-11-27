@@ -47,7 +47,7 @@ func decode_inuxi(p []byte, sz int) uint64 {
 // commonsize returns the size of the common prefix for all type
 // structures (runtime._type).
 func commonsize() int {
-	return 8*Thearch.Ptrsize + 8
+	return 7*Thearch.Ptrsize + 8
 }
 
 // Type.commonType.kind
@@ -110,6 +110,14 @@ func decodetype_gcprog(s *LSym) []byte {
 }
 
 func decodetype_gcprog_shlib(s *LSym) uint64 {
+	if Thearch.Thechar == '7' {
+		for _, shlib := range Ctxt.Shlibs {
+			if shlib.Path == s.File {
+				return shlib.gcdata_addresses[s]
+			}
+		}
+		return 0
+	}
 	return decode_inuxi(s.P[2*int32(Thearch.Ptrsize)+8+1*int32(Thearch.Ptrsize):], Thearch.Ptrsize)
 }
 

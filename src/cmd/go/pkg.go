@@ -250,11 +250,13 @@ func reloadPackage(arg string, stk *importStack) *Package {
 	return loadPackage(arg, stk)
 }
 
-// The Go 1.5 vendoring experiment is enabled by setting GO15VENDOREXPERIMENT=1.
+// The Go 1.5 vendoring experiment was enabled by setting GO15VENDOREXPERIMENT=1.
+// In Go 1.6 this is on by default and is disabled by setting GO15VENDOREXPERIMENT=0.
+// In Go 1.7 the variable will stop having any effect.
 // The variable is obnoxiously long so that years from now when people find it in
 // their profiles and wonder what it does, there is some chance that a web search
 // might answer the question.
-var go15VendorExperiment = os.Getenv("GO15VENDOREXPERIMENT") == "1"
+var go15VendorExperiment = os.Getenv("GO15VENDOREXPERIMENT") != "0"
 
 // dirToImportPath returns the pseudo-import path we use for a package
 // outside the Go path.  It begins with _/ and then contains the full path
@@ -368,7 +370,8 @@ func loadImport(path, srcDir string, parent *Package, stk *importStack, importPo
 	if gobin != "" {
 		bp.BinDir = gobin
 	}
-	if err == nil && !isLocal && bp.ImportComment != "" && bp.ImportComment != path && (!go15VendorExperiment || !strings.Contains(path, "/vendor/")) {
+	if err == nil && !isLocal && bp.ImportComment != "" && bp.ImportComment != path &&
+		(!go15VendorExperiment || (!strings.Contains(path, "/vendor/") && !strings.HasPrefix(path, "vendor/"))) {
 		err = fmt.Errorf("code in directory %s expects import %q", bp.Dir, bp.ImportComment)
 	}
 	p.load(stk, bp, err)
@@ -707,6 +710,7 @@ func expandScanner(err error) error {
 
 var raceExclude = map[string]bool{
 	"runtime/race": true,
+	"runtime/msan": true,
 	"runtime/cgo":  true,
 	"cmd/cgo":      true,
 	"syscall":      true,
@@ -720,6 +724,7 @@ var cgoExclude = map[string]bool{
 var cgoSyscallExclude = map[string]bool{
 	"runtime/cgo":  true,
 	"runtime/race": true,
+	"runtime/msan": true,
 }
 
 // load populates p using information from bp, err, which should
@@ -820,20 +825,25 @@ func (p *Package) load(stk *importStack, bp *build.Package, err error) *Package 
 		importPaths = append(importPaths, "syscall")
 	}
 
-	// Currently build mode c-shared, or -linkshared, forces
+	// Currently build modes c-shared, pie, and -linkshared force
 	// external linking mode, and external linking mode forces an
 	// import of runtime/cgo.
-	if p.Name == "main" && !p.Goroot && (buildBuildmode == "c-shared" || buildLinkshared) {
+	if p.Name == "main" && !p.Goroot && (buildBuildmode == "c-shared" || buildBuildmode == "pie" || buildLinkshared) {
 		importPaths = append(importPaths, "runtime/cgo")
 	}
 
-	// Everything depends on runtime, except runtime and unsafe.
-	if !p.Standard || (p.ImportPath != "runtime" && p.ImportPath != "unsafe") {
+	// Everything depends on runtime, except runtime, its internal
+	// subpackages, and unsafe.
+	if !p.Standard || (p.ImportPath != "runtime" && !strings.HasPrefix(p.ImportPath, "runtime/internal/") && p.ImportPath != "unsafe") {
 		importPaths = append(importPaths, "runtime")
 		// When race detection enabled everything depends on runtime/race.
 		// Exclude certain packages to avoid circular dependencies.
 		if buildRace && (!p.Standard || !raceExclude[p.ImportPath]) {
 			importPaths = append(importPaths, "runtime/race")
+		}
+		// MSan uses runtime/msan.
+		if buildMSan && (!p.Standard || !raceExclude[p.ImportPath]) {
+			importPaths = append(importPaths, "runtime/msan")
 		}
 		// On ARM with GOARM=5, everything depends on math for the link.
 		if p.Name == "main" && goarch == "arm" {
@@ -1601,15 +1611,24 @@ func packagesAndErrors(args []string) []*Package {
 	}
 
 	args = importPaths(args)
-	var pkgs []*Package
-	var stk importStack
-	var set = make(map[string]bool)
+	var (
+		pkgs    []*Package
+		stk     importStack
+		seenArg = make(map[string]bool)
+		seenPkg = make(map[*Package]bool)
+	)
 
 	for _, arg := range args {
-		if !set[arg] {
-			pkgs = append(pkgs, loadPackage(arg, &stk))
-			set[arg] = true
+		if seenArg[arg] {
+			continue
 		}
+		seenArg[arg] = true
+		pkg := loadPackage(arg, &stk)
+		if seenPkg[pkg] {
+			continue
+		}
+		seenPkg[pkg] = true
+		pkgs = append(pkgs, pkg)
 	}
 	computeStale(pkgs...)
 
@@ -1780,7 +1799,16 @@ var (
 	goBuildEnd    = []byte("\"\n \xff")
 
 	elfPrefix = []byte("\x7fELF")
+
+	machoPrefixes = [][]byte{
+		{0xfe, 0xed, 0xfa, 0xce},
+		{0xfe, 0xed, 0xfa, 0xcf},
+		{0xce, 0xfa, 0xed, 0xfe},
+		{0xcf, 0xfa, 0xed, 0xfe},
+	}
 )
+
+var BuildIDReadSize = 32 * 1024 // changed for testing
 
 // ReadBuildIDFromBinary reads the build ID from a binary.
 //
@@ -1796,10 +1824,11 @@ func ReadBuildIDFromBinary(filename string) (id string, err error) {
 		return "", &os.PathError{Op: "parse", Path: filename, Err: errBuildIDUnknown}
 	}
 
-	// Read the first 16 kB of the binary file.
+	// Read the first 32 kB of the binary file.
 	// That should be enough to find the build ID.
 	// In ELF files, the build ID is in the leading headers,
-	// which are typically less than 4 kB, not to mention 16 kB.
+	// which are typically less than 4 kB, not to mention 32 kB.
+	// In Mach-O files, there's no limit, so we have to parse the file.
 	// On other systems, we're trying to read enough that
 	// we get the beginning of the text segment in the read.
 	// The offset where the text segment begins in a hello
@@ -1807,7 +1836,6 @@ func ReadBuildIDFromBinary(filename string) (id string, err error) {
 	//
 	//	Plan 9: 0x20
 	//	Windows: 0x600
-	//	Mach-O: 0x2000
 	//
 	f, err := os.Open(filename)
 	if err != nil {
@@ -1815,7 +1843,7 @@ func ReadBuildIDFromBinary(filename string) (id string, err error) {
 	}
 	defer f.Close()
 
-	data := make([]byte, 16*1024)
+	data := make([]byte, BuildIDReadSize)
 	_, err = io.ReadFull(f, data)
 	if err == io.ErrUnexpectedEOF {
 		err = nil
@@ -1827,7 +1855,17 @@ func ReadBuildIDFromBinary(filename string) (id string, err error) {
 	if bytes.HasPrefix(data, elfPrefix) {
 		return readELFGoBuildID(filename, f, data)
 	}
+	for _, m := range machoPrefixes {
+		if bytes.HasPrefix(data, m) {
+			return readMachoGoBuildID(filename, f, data)
+		}
+	}
 
+	return readRawGoBuildID(filename, data)
+}
+
+// readRawGoBuildID finds the raw build ID stored in text segment data.
+func readRawGoBuildID(filename string, data []byte) (id string, err error) {
 	i := bytes.Index(data, goBuildPrefix)
 	if i < 0 {
 		// Missing. Treat as successful but build ID empty.

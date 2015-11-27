@@ -356,6 +356,44 @@ func TestStatementQueryRow(t *testing.T) {
 	}
 }
 
+type stubDriverStmt struct {
+	err error
+}
+
+func (s stubDriverStmt) Close() error {
+	return s.err
+}
+
+func (s stubDriverStmt) NumInput() int {
+	return -1
+}
+
+func (s stubDriverStmt) Exec(args []driver.Value) (driver.Result, error) {
+	return nil, nil
+}
+
+func (s stubDriverStmt) Query(args []driver.Value) (driver.Rows, error) {
+	return nil, nil
+}
+
+// golang.org/issue/12798
+func TestStatementClose(t *testing.T) {
+	want := errors.New("STMT ERROR")
+
+	tests := []struct {
+		stmt *Stmt
+		msg  string
+	}{
+		{&Stmt{stickyErr: want}, "stickyErr not propagated"},
+		{&Stmt{tx: &Tx{}, txsi: &driverStmt{&sync.Mutex{}, stubDriverStmt{want}}}, "driverStmt.Close() error not propagated"},
+	}
+	for _, test := range tests {
+		if err := test.stmt.Close(); err != want {
+			t.Errorf("%s. Got stmt.Close() = %v, want = %v", test.msg, err, want)
+		}
+	}
+}
+
 // golang.org/issue/3734
 func TestStatementQueryRowConcurrent(t *testing.T) {
 	db := newTestDB(t, "people")
@@ -1121,6 +1159,67 @@ func TestMaxOpenConnsOnBusy(t *testing.T) {
 	}
 }
 
+// Issue 10886: tests that all connection attempts return when more than
+// DB.maxOpen connections are in flight and the first DB.maxOpen fail.
+func TestPendingConnsAfterErr(t *testing.T) {
+	const (
+		maxOpen = 2
+		tryOpen = maxOpen*2 + 2
+	)
+
+	db := newTestDB(t, "people")
+	defer closeDB(t, db)
+	defer func() {
+		for k, v := range db.lastPut {
+			t.Logf("%p: %v", k, v)
+		}
+	}()
+
+	db.SetMaxOpenConns(maxOpen)
+	db.SetMaxIdleConns(0)
+
+	errOffline := errors.New("db offline")
+	defer func() { setHookOpenErr(nil) }()
+
+	errs := make(chan error, tryOpen)
+
+	unblock := make(chan struct{})
+	setHookOpenErr(func() error {
+		<-unblock // block until all connections are in flight
+		return errOffline
+	})
+
+	var opening sync.WaitGroup
+	opening.Add(tryOpen)
+	for i := 0; i < tryOpen; i++ {
+		go func() {
+			opening.Done() // signal one connection is in flight
+			_, err := db.Exec("INSERT|people|name=Julia,age=19")
+			errs <- err
+		}()
+	}
+
+	opening.Wait()                    // wait for all workers to begin running
+	time.Sleep(10 * time.Millisecond) // make extra sure all workers are blocked
+	close(unblock)                    // let all workers proceed
+
+	const timeout = 100 * time.Millisecond
+	to := time.NewTimer(timeout)
+	defer to.Stop()
+
+	// check that all connections fail without deadlock
+	for i := 0; i < tryOpen; i++ {
+		select {
+		case err := <-errs:
+			if got, want := err, errOffline; got != want {
+				t.Errorf("unexpected err: got %v, want %v", got, want)
+			}
+		case <-to.C:
+			t.Fatalf("orphaned connection request(s), still waiting after %v", timeout)
+		}
+	}
+}
+
 func TestSingleOpenConn(t *testing.T) {
 	db := newTestDB(t, "people")
 	defer closeDB(t, db)
@@ -1562,6 +1661,77 @@ func TestErrBadConnReconnect(t *testing.T) {
 	}
 	simulateBadConn("stmt.Query prepare", &hookPrepareBadConn, stmtQuery)
 	simulateBadConn("stmt.Query exec", &hookQueryBadConn, stmtQuery)
+}
+
+// golang.org/issue/11264
+func TestTxEndBadConn(t *testing.T) {
+	db := newTestDB(t, "foo")
+	defer closeDB(t, db)
+	db.SetMaxIdleConns(0)
+	exec(t, db, "CREATE|t1|name=string,age=int32,dead=bool")
+	db.SetMaxIdleConns(1)
+
+	simulateBadConn := func(name string, hook *func() bool, op func() error) {
+		broken := false
+		numOpen := db.numOpen
+
+		*hook = func() bool {
+			if !broken {
+				broken = true
+			}
+			return broken
+		}
+
+		if err := op(); err != driver.ErrBadConn {
+			t.Errorf(name+": %v", err)
+			return
+		}
+
+		if !broken {
+			t.Error(name + ": Failed to simulate broken connection")
+		}
+		*hook = nil
+
+		if numOpen != db.numOpen {
+			t.Errorf(name+": leaked %d connection(s)!", db.numOpen-numOpen)
+		}
+	}
+
+	// db.Exec
+	dbExec := func(endTx func(tx *Tx) error) func() error {
+		return func() error {
+			tx, err := db.Begin()
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec("INSERT|t1|name=?,age=?,dead=?", "Gordon", 3, true)
+			if err != nil {
+				return err
+			}
+			return endTx(tx)
+		}
+	}
+	simulateBadConn("db.Tx.Exec commit", &hookCommitBadConn, dbExec((*Tx).Commit))
+	simulateBadConn("db.Tx.Exec rollback", &hookRollbackBadConn, dbExec((*Tx).Rollback))
+
+	// db.Query
+	dbQuery := func(endTx func(tx *Tx) error) func() error {
+		return func() error {
+			tx, err := db.Begin()
+			if err != nil {
+				return err
+			}
+			rows, err := tx.Query("SELECT|t1|age,name|")
+			if err == nil {
+				err = rows.Close()
+			} else {
+				return err
+			}
+			return endTx(tx)
+		}
+	}
+	simulateBadConn("db.Tx.Query commit", &hookCommitBadConn, dbQuery((*Tx).Commit))
+	simulateBadConn("db.Tx.Query rollback", &hookRollbackBadConn, dbQuery((*Tx).Rollback))
 }
 
 type concurrentTest interface {

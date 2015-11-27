@@ -145,6 +145,12 @@ Go编译器支持五种指令集，以下为在不同的架构上，编译器特
 <dd>
 	支持 Linux 二进制。1.5 新加入的移植，不如其它移植稳定。
 </dd>
+<dt>
+	<code>mips64, mips64le</code> (64-bit MIPS big- and little-endian)
+</dt>
+<dd>
+	Supports Linux binaries. New in 1.6 and not as well excercised as other ports.
+</dd>
 </dl>
 
 <div class="english">
@@ -226,7 +232,7 @@ location).
 <div class="english">
 <p>
 If you want to install Go 1.5 on a system that is not supported by Go 1.4 (such
-as <code>linux/ppc64</code>) you can either use
+as <code>linux/ppc64</code> and <code>linux/mips64le</code>) you can either use
 <a href="/src/bootstrap.bash">bootstrap.bash</a> on a system that can bootstrap Go
 1.5 normally, or bootstrap with gccgo 5.
 </p>
@@ -339,7 +345,7 @@ Go 将安装到名为 <code>go</code> 的目录。
 <pre>
 $ git clone https://go.googlesource.com/go
 $ cd go
-$ git checkout go1.5
+$ git checkout go1.5.1
 </pre>
 
 <div class="english">
@@ -683,7 +689,7 @@ New releases are announced on the
 <a href="//groups.google.com/group/golang-announce">golang-announce</a>
 mailing list.
 Each announcement mentions the latest release tag, for instance,
-<code>go1.5</code>.
+<code>go1.5.1</code>.
 </p>
 </div>
 
@@ -793,7 +799,8 @@ Choices for <code>$GOOS</code> are
 Choices for <code>$GOARCH</code> are
 <code>amd64</code> (64-bit x86, the most mature port),
 <code>386</code> (32-bit x86), <code>arm</code> (32-bit ARM), <code>arm64</code> (64-bit ARM),
-<code>ppc64le</code> (PowerPC 64-bit, little-endian), and <code>ppc64</code> (PowerPC 64-bit, big-endian).
+<code>ppc64le</code> (PowerPC 64-bit, little-endian), <code>ppc64</code> (PowerPC 64-bit, big-endian),
+<code>mips64le</code> (MIPS 64-bit, little-endian), and <code>mips64</code> (MIPS 64-bit, big-endian).
 The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 </p>
 </div>
@@ -853,6 +860,12 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 </tr>
 <tr>
 <td></td><td><code>linux</code></td> <td><code>ppc64le</code></td>
+</tr>
+<tr>
+<td></td><td><code>linux</code></td> <td><code>mips64</code></td>
+</tr>
+<tr>
+<td></td><td><code>linux</code></td> <td><code>mips64le</code></td>
 </tr>
 <tr>
 <td></td><td><code>netbsd</code></td> <td><code>386</code></td>

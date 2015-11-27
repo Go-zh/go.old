@@ -123,7 +123,17 @@ func lookupIPDeadline(host string, deadline time.Time) (addrs []IPAddr, err erro
 
 // LookupPort looks up the port for the given network and service.
 func LookupPort(network, service string) (port int, err error) {
-	return lookupPort(network, service)
+	port, _, ok := dtoi(service, 0)
+	if !ok && port != big && port != -big {
+		port, err = lookupPort(network, service)
+		if err != nil {
+			return 0, err
+		}
+	}
+	if 0 > port || port > 65535 {
+		return 0, &AddrError{Err: "invalid port", Addr: service}
+	}
+	return port, nil
 }
 
 // LookupCNAME returns the canonical DNS host for the given name.

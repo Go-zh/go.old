@@ -10,11 +10,24 @@ import (
 	"strings"
 )
 
+// IntLiteral returns the Node's literal value as an interger.
+func (n *Node) IntLiteral() (x int64, ok bool) {
+	switch {
+	case n == nil:
+		return
+	case Isconst(n, CTINT):
+		return n.Int(), true
+	case Isconst(n, CTBOOL):
+		return int64(obj.Bool2int(n.Bool())), true
+	}
+	return
+}
+
 // Int returns n as an int.
 // n must be an integer constant.
 func (n *Node) Int() int64 {
 	if !Isconst(n, CTINT) {
-		Fatal("Int(%v)", n)
+		Fatalf("Int(%v)", n)
 	}
 	return Mpgetfix(n.Val().U.(*Mpint))
 }
@@ -23,7 +36,7 @@ func (n *Node) Int() int64 {
 // n must be an integer constant.
 func (n *Node) SetInt(i int64) {
 	if !Isconst(n, CTINT) {
-		Fatal("SetInt(%v)", n)
+		Fatalf("SetInt(%v)", n)
 	}
 	Mpmovecfix(n.Val().U.(*Mpint), i)
 }
@@ -32,7 +45,7 @@ func (n *Node) SetInt(i int64) {
 // n must be an integer constant.
 func (n *Node) SetBigInt(x *big.Int) {
 	if !Isconst(n, CTINT) {
-		Fatal("SetBigInt(%v)", n)
+		Fatalf("SetBigInt(%v)", n)
 	}
 	n.Val().U.(*Mpint).Val.Set(x)
 }
@@ -41,15 +54,13 @@ func (n *Node) SetBigInt(x *big.Int) {
 // n must be an boolean constant.
 func (n *Node) Bool() bool {
 	if !Isconst(n, CTBOOL) {
-		Fatal("Int(%v)", n)
+		Fatalf("Int(%v)", n)
 	}
 	return n.Val().U.(bool)
 }
 
-/*
- * truncate float literal fv to 32-bit or 64-bit precision
- * according to type; return truncated value.
- */
+// truncate float literal fv to 32-bit or 64-bit precision
+// according to type; return truncated value.
 func truncfltlit(oldv *Mpflt, t *Type) *Mpflt {
 	if t == nil {
 		return oldv
@@ -77,19 +88,15 @@ func truncfltlit(oldv *Mpflt, t *Type) *Mpflt {
 	return fv
 }
 
-/*
- * convert n, if literal, to type t.
- * implicit conversion.
- */
+// convert n, if literal, to type t.
+// implicit conversion.
 func Convlit(np **Node, t *Type) {
 	convlit1(np, t, false)
 }
 
-/*
- * convert n, if literal, to type t.
- * return a new node if necessary
- * (if n is a named constant, can't edit n->type directly).
- */
+// convert n, if literal, to type t.
+// return a new node if necessary
+//(if n is a named constant, can't edit n->type directly).
 func convlit1(np **Node, t *Type, explicit bool) {
 	n := *np
 	if n == nil || t == nil || n.Type == nil || isideal(t) || n.Type == t {
@@ -242,7 +249,7 @@ func convlit1(np **Node, t *Type, explicit bool) {
 		if n.Type.Etype == TUNSAFEPTR && t.Etype != TUINTPTR {
 			goto bad
 		}
-		ct := int(n.Val().Ctype())
+		ct := n.Val().Ctype()
 		if Isint[et] {
 			switch ct {
 			default:
@@ -252,7 +259,6 @@ func convlit1(np **Node, t *Type, explicit bool) {
 				n.SetVal(toint(n.Val()))
 				fallthrough
 
-				// flowthrough
 			case CTINT:
 				overflow(n.Val(), t)
 			}
@@ -265,7 +271,6 @@ func convlit1(np **Node, t *Type, explicit bool) {
 				n.SetVal(toflt(n.Val()))
 				fallthrough
 
-				// flowthrough
 			case CTFLT:
 				n.SetVal(Val{truncfltlit(n.Val().U.(*Mpflt), t)})
 			}
@@ -276,6 +281,7 @@ func convlit1(np **Node, t *Type, explicit bool) {
 
 			case CTFLT, CTINT, CTRUNE:
 				n.SetVal(tocplx(n.Val()))
+				fallthrough
 
 			case CTCPLX:
 				overflow(n.Val(), t)
@@ -292,7 +298,7 @@ func convlit1(np **Node, t *Type, explicit bool) {
 
 bad:
 	if n.Diag == 0 {
-		if t.Broke == 0 {
+		if !t.Broke {
 			Yyerror("cannot convert %v to type %v", n, t)
 		}
 		n.Diag = 1
@@ -396,7 +402,7 @@ func doesoverflow(v Val, t *Type) bool {
 	switch v.Ctype() {
 	case CTINT, CTRUNE:
 		if !Isint[t.Etype] {
-			Fatal("overflow: %v integer constant", t)
+			Fatalf("overflow: %v integer constant", t)
 		}
 		if Mpcmpfixfix(v.U.(*Mpint), Minintval[t.Etype]) < 0 || Mpcmpfixfix(v.U.(*Mpint), Maxintval[t.Etype]) > 0 {
 			return true
@@ -404,7 +410,7 @@ func doesoverflow(v Val, t *Type) bool {
 
 	case CTFLT:
 		if !Isfloat[t.Etype] {
-			Fatal("overflow: %v floating-point constant", t)
+			Fatalf("overflow: %v floating-point constant", t)
 		}
 		if mpcmpfltflt(v.U.(*Mpflt), minfltval[t.Etype]) <= 0 || mpcmpfltflt(v.U.(*Mpflt), maxfltval[t.Etype]) >= 0 {
 			return true
@@ -412,7 +418,7 @@ func doesoverflow(v Val, t *Type) bool {
 
 	case CTCPLX:
 		if !Iscomplex[t.Etype] {
-			Fatal("overflow: %v complex constant", t)
+			Fatalf("overflow: %v complex constant", t)
 		}
 		if mpcmpfltflt(&v.U.(*Mpcplx).Real, minfltval[t.Etype]) <= 0 || mpcmpfltflt(&v.U.(*Mpcplx).Real, maxfltval[t.Etype]) >= 0 || mpcmpfltflt(&v.U.(*Mpcplx).Imag, minfltval[t.Etype]) <= 0 || mpcmpfltflt(&v.U.(*Mpcplx).Imag, maxfltval[t.Etype]) >= 0 {
 			return true
@@ -434,19 +440,8 @@ func overflow(v Val, t *Type) {
 		return
 	}
 
-	if !doesoverflow(v, t) {
-		return
-	}
-
-	switch v.Ctype() {
-	case CTINT, CTRUNE:
-		Yyerror("constant %v overflows %v", v.U.(*Mpint), t)
-
-	case CTFLT:
-		Yyerror("constant %v overflows %v", Fconv(v.U.(*Mpflt), obj.FmtSharp), t)
-
-	case CTCPLX:
-		Yyerror("constant %v overflows %v", Fconv(v.U.(*Mpflt), obj.FmtSharp), t)
+	if doesoverflow(v, t) {
+		Yyerror("constant %s overflows %v", Vconv(v, 0), t)
 	}
 }
 
@@ -472,14 +467,14 @@ func tostr(v Val) Val {
 	return v
 }
 
-func consttype(n *Node) int {
+func consttype(n *Node) Ctype {
 	if n == nil || n.Op != OLITERAL {
 		return -1
 	}
-	return int(n.Val().Ctype())
+	return n.Val().Ctype()
 }
 
-func Isconst(n *Node, ct int) bool {
+func Isconst(n *Node, ct Ctype) bool {
 	t := consttype(n)
 
 	// If the caller is asking for CTINT, allow CTRUNE too.
@@ -499,9 +494,7 @@ func saveorig(n *Node) *Node {
 	return n.Orig
 }
 
-/*
- * if n is constant, rewrite as OLITERAL node.
- */
+// if n is constant, rewrite as OLITERAL node.
 func evconst(n *Node) {
 	// pick off just the opcodes that can be
 	// constant evaluated.
@@ -594,6 +587,42 @@ func evconst(n *Node) {
 		wl = TIDEAL
 	}
 
+	// avoid constant conversions in switches below
+	const (
+		CTINT_         = uint32(CTINT)
+		CTRUNE_        = uint32(CTRUNE)
+		CTFLT_         = uint32(CTFLT)
+		CTCPLX_        = uint32(CTCPLX)
+		CTSTR_         = uint32(CTSTR)
+		CTBOOL_        = uint32(CTBOOL)
+		CTNIL_         = uint32(CTNIL)
+		OCONV_         = uint32(OCONV) << 16
+		OARRAYBYTESTR_ = uint32(OARRAYBYTESTR) << 16
+		OPLUS_         = uint32(OPLUS) << 16
+		OMINUS_        = uint32(OMINUS) << 16
+		OCOM_          = uint32(OCOM) << 16
+		ONOT_          = uint32(ONOT) << 16
+		OLSH_          = uint32(OLSH) << 16
+		ORSH_          = uint32(ORSH) << 16
+		OADD_          = uint32(OADD) << 16
+		OSUB_          = uint32(OSUB) << 16
+		OMUL_          = uint32(OMUL) << 16
+		ODIV_          = uint32(ODIV) << 16
+		OMOD_          = uint32(OMOD) << 16
+		OOR_           = uint32(OOR) << 16
+		OAND_          = uint32(OAND) << 16
+		OANDNOT_       = uint32(OANDNOT) << 16
+		OXOR_          = uint32(OXOR) << 16
+		OEQ_           = uint32(OEQ) << 16
+		ONE_           = uint32(ONE) << 16
+		OLT_           = uint32(OLT) << 16
+		OLE_           = uint32(OLE) << 16
+		OGE_           = uint32(OGE) << 16
+		OGT_           = uint32(OGT) << 16
+		OOROR_         = uint32(OOROR) << 16
+		OANDAND_       = uint32(OANDAND) << 16
+	)
+
 	nr := n.Right
 	var rv Val
 	var lno int
@@ -615,11 +644,10 @@ func evconst(n *Node) {
 				Yyerror("illegal constant expression %v %v", Oconv(int(n.Op), 0), nl.Type)
 				n.Diag = 1
 			}
-
 			return
 
-		case OCONV<<16 | CTNIL,
-			OARRAYBYTESTR<<16 | CTNIL:
+		case OCONV_ | CTNIL_,
+			OARRAYBYTESTR_ | CTNIL_:
 			if n.Type.Etype == TSTRING {
 				v = tostr(v)
 				nl.Type = n.Type
@@ -628,24 +656,24 @@ func evconst(n *Node) {
 			fallthrough
 
 			// fall through
-		case OCONV<<16 | CTINT,
-			OCONV<<16 | CTRUNE,
-			OCONV<<16 | CTFLT,
-			OCONV<<16 | CTSTR:
+		case OCONV_ | CTINT_,
+			OCONV_ | CTRUNE_,
+			OCONV_ | CTFLT_,
+			OCONV_ | CTSTR_:
 			convlit1(&nl, n.Type, true)
 
 			v = nl.Val()
 
-		case OPLUS<<16 | CTINT,
-			OPLUS<<16 | CTRUNE:
+		case OPLUS_ | CTINT_,
+			OPLUS_ | CTRUNE_:
 			break
 
-		case OMINUS<<16 | CTINT,
-			OMINUS<<16 | CTRUNE:
+		case OMINUS_ | CTINT_,
+			OMINUS_ | CTRUNE_:
 			mpnegfix(v.U.(*Mpint))
 
-		case OCOM<<16 | CTINT,
-			OCOM<<16 | CTRUNE:
+		case OCOM_ | CTINT_,
+			OCOM_ | CTRUNE_:
 			et := Txxx
 			if nl.Type != nil {
 				et = int(nl.Type.Etype)
@@ -671,20 +699,20 @@ func evconst(n *Node) {
 
 			mpxorfixfix(v.U.(*Mpint), &b)
 
-		case OPLUS<<16 | CTFLT:
+		case OPLUS_ | CTFLT_:
 			break
 
-		case OMINUS<<16 | CTFLT:
+		case OMINUS_ | CTFLT_:
 			mpnegflt(v.U.(*Mpflt))
 
-		case OPLUS<<16 | CTCPLX:
+		case OPLUS_ | CTCPLX_:
 			break
 
-		case OMINUS<<16 | CTCPLX:
+		case OMINUS_ | CTCPLX_:
 			mpnegflt(&v.U.(*Mpcplx).Real)
 			mpnegflt(&v.U.(*Mpcplx).Imag)
 
-		case ONOT<<16 | CTBOOL:
+		case ONOT_ | CTBOOL_:
 			if !v.U.(bool) {
 				goto settrue
 			}
@@ -787,7 +815,7 @@ func evconst(n *Node) {
 		if (v.Ctype() == 0 || rv.Ctype() == 0) && nerrors > 0 {
 			return
 		}
-		Fatal("constant type mismatch %v(%d) %v(%d)", nl.Type, v.Ctype(), nr.Type, rv.Ctype())
+		Fatalf("constant type mismatch %v(%d) %v(%d)", nl.Type, v.Ctype(), nr.Type, rv.Ctype())
 	}
 
 	// run op
@@ -795,20 +823,20 @@ func evconst(n *Node) {
 	default:
 		goto illegal
 
-	case OADD<<16 | CTINT,
-		OADD<<16 | CTRUNE:
+	case OADD_ | CTINT_,
+		OADD_ | CTRUNE_:
 		mpaddfixfix(v.U.(*Mpint), rv.U.(*Mpint), 0)
 
-	case OSUB<<16 | CTINT,
-		OSUB<<16 | CTRUNE:
+	case OSUB_ | CTINT_,
+		OSUB_ | CTRUNE_:
 		mpsubfixfix(v.U.(*Mpint), rv.U.(*Mpint))
 
-	case OMUL<<16 | CTINT,
-		OMUL<<16 | CTRUNE:
+	case OMUL_ | CTINT_,
+		OMUL_ | CTRUNE_:
 		mpmulfixfix(v.U.(*Mpint), rv.U.(*Mpint))
 
-	case ODIV<<16 | CTINT,
-		ODIV<<16 | CTRUNE:
+	case ODIV_ | CTINT_,
+		ODIV_ | CTRUNE_:
 		if mpcmpfixc(rv.U.(*Mpint), 0) == 0 {
 			Yyerror("division by zero")
 			mpsetovf(v.U.(*Mpint))
@@ -817,8 +845,8 @@ func evconst(n *Node) {
 
 		mpdivfixfix(v.U.(*Mpint), rv.U.(*Mpint))
 
-	case OMOD<<16 | CTINT,
-		OMOD<<16 | CTRUNE:
+	case OMOD_ | CTINT_,
+		OMOD_ | CTRUNE_:
 		if mpcmpfixc(rv.U.(*Mpint), 0) == 0 {
 			Yyerror("division by zero")
 			mpsetovf(v.U.(*Mpint))
@@ -827,40 +855,40 @@ func evconst(n *Node) {
 
 		mpmodfixfix(v.U.(*Mpint), rv.U.(*Mpint))
 
-	case OLSH<<16 | CTINT,
-		OLSH<<16 | CTRUNE:
+	case OLSH_ | CTINT_,
+		OLSH_ | CTRUNE_:
 		mplshfixfix(v.U.(*Mpint), rv.U.(*Mpint))
 
-	case ORSH<<16 | CTINT,
-		ORSH<<16 | CTRUNE:
+	case ORSH_ | CTINT_,
+		ORSH_ | CTRUNE_:
 		mprshfixfix(v.U.(*Mpint), rv.U.(*Mpint))
 
-	case OOR<<16 | CTINT,
-		OOR<<16 | CTRUNE:
+	case OOR_ | CTINT_,
+		OOR_ | CTRUNE_:
 		mporfixfix(v.U.(*Mpint), rv.U.(*Mpint))
 
-	case OAND<<16 | CTINT,
-		OAND<<16 | CTRUNE:
+	case OAND_ | CTINT_,
+		OAND_ | CTRUNE_:
 		mpandfixfix(v.U.(*Mpint), rv.U.(*Mpint))
 
-	case OANDNOT<<16 | CTINT,
-		OANDNOT<<16 | CTRUNE:
+	case OANDNOT_ | CTINT_,
+		OANDNOT_ | CTRUNE_:
 		mpandnotfixfix(v.U.(*Mpint), rv.U.(*Mpint))
 
-	case OXOR<<16 | CTINT,
-		OXOR<<16 | CTRUNE:
+	case OXOR_ | CTINT_,
+		OXOR_ | CTRUNE_:
 		mpxorfixfix(v.U.(*Mpint), rv.U.(*Mpint))
 
-	case OADD<<16 | CTFLT:
+	case OADD_ | CTFLT_:
 		mpaddfltflt(v.U.(*Mpflt), rv.U.(*Mpflt))
 
-	case OSUB<<16 | CTFLT:
+	case OSUB_ | CTFLT_:
 		mpsubfltflt(v.U.(*Mpflt), rv.U.(*Mpflt))
 
-	case OMUL<<16 | CTFLT:
+	case OMUL_ | CTFLT_:
 		mpmulfltflt(v.U.(*Mpflt), rv.U.(*Mpflt))
 
-	case ODIV<<16 | CTFLT:
+	case ODIV_ | CTFLT_:
 		if mpcmpfltc(rv.U.(*Mpflt), 0) == 0 {
 			Yyerror("division by zero")
 			Mpmovecflt(v.U.(*Mpflt), 1.0)
@@ -871,7 +899,7 @@ func evconst(n *Node) {
 
 		// The default case above would print 'ideal % ideal',
 	// which is not quite an ideal error.
-	case OMOD<<16 | CTFLT:
+	case OMOD_ | CTFLT_:
 		if n.Diag == 0 {
 			Yyerror("illegal constant expression: floating-point %% operation")
 			n.Diag = 1
@@ -879,18 +907,18 @@ func evconst(n *Node) {
 
 		return
 
-	case OADD<<16 | CTCPLX:
+	case OADD_ | CTCPLX_:
 		mpaddfltflt(&v.U.(*Mpcplx).Real, &rv.U.(*Mpcplx).Real)
 		mpaddfltflt(&v.U.(*Mpcplx).Imag, &rv.U.(*Mpcplx).Imag)
 
-	case OSUB<<16 | CTCPLX:
+	case OSUB_ | CTCPLX_:
 		mpsubfltflt(&v.U.(*Mpcplx).Real, &rv.U.(*Mpcplx).Real)
 		mpsubfltflt(&v.U.(*Mpcplx).Imag, &rv.U.(*Mpcplx).Imag)
 
-	case OMUL<<16 | CTCPLX:
+	case OMUL_ | CTCPLX_:
 		cmplxmpy(v.U.(*Mpcplx), rv.U.(*Mpcplx))
 
-	case ODIV<<16 | CTCPLX:
+	case ODIV_ | CTCPLX_:
 		if mpcmpfltc(&rv.U.(*Mpcplx).Real, 0) == 0 && mpcmpfltc(&rv.U.(*Mpcplx).Imag, 0) == 0 {
 			Yyerror("complex division by zero")
 			Mpmovecflt(&rv.U.(*Mpcplx).Real, 1.0)
@@ -900,157 +928,157 @@ func evconst(n *Node) {
 
 		cmplxdiv(v.U.(*Mpcplx), rv.U.(*Mpcplx))
 
-	case OEQ<<16 | CTNIL:
+	case OEQ_ | CTNIL_:
 		goto settrue
 
-	case ONE<<16 | CTNIL:
+	case ONE_ | CTNIL_:
 		goto setfalse
 
-	case OEQ<<16 | CTINT,
-		OEQ<<16 | CTRUNE:
+	case OEQ_ | CTINT_,
+		OEQ_ | CTRUNE_:
 		if Mpcmpfixfix(v.U.(*Mpint), rv.U.(*Mpint)) == 0 {
 			goto settrue
 		}
 		goto setfalse
 
-	case ONE<<16 | CTINT,
-		ONE<<16 | CTRUNE:
+	case ONE_ | CTINT_,
+		ONE_ | CTRUNE_:
 		if Mpcmpfixfix(v.U.(*Mpint), rv.U.(*Mpint)) != 0 {
 			goto settrue
 		}
 		goto setfalse
 
-	case OLT<<16 | CTINT,
-		OLT<<16 | CTRUNE:
+	case OLT_ | CTINT_,
+		OLT_ | CTRUNE_:
 		if Mpcmpfixfix(v.U.(*Mpint), rv.U.(*Mpint)) < 0 {
 			goto settrue
 		}
 		goto setfalse
 
-	case OLE<<16 | CTINT,
-		OLE<<16 | CTRUNE:
+	case OLE_ | CTINT_,
+		OLE_ | CTRUNE_:
 		if Mpcmpfixfix(v.U.(*Mpint), rv.U.(*Mpint)) <= 0 {
 			goto settrue
 		}
 		goto setfalse
 
-	case OGE<<16 | CTINT,
-		OGE<<16 | CTRUNE:
+	case OGE_ | CTINT_,
+		OGE_ | CTRUNE_:
 		if Mpcmpfixfix(v.U.(*Mpint), rv.U.(*Mpint)) >= 0 {
 			goto settrue
 		}
 		goto setfalse
 
-	case OGT<<16 | CTINT,
-		OGT<<16 | CTRUNE:
+	case OGT_ | CTINT_,
+		OGT_ | CTRUNE_:
 		if Mpcmpfixfix(v.U.(*Mpint), rv.U.(*Mpint)) > 0 {
 			goto settrue
 		}
 		goto setfalse
 
-	case OEQ<<16 | CTFLT:
+	case OEQ_ | CTFLT_:
 		if mpcmpfltflt(v.U.(*Mpflt), rv.U.(*Mpflt)) == 0 {
 			goto settrue
 		}
 		goto setfalse
 
-	case ONE<<16 | CTFLT:
+	case ONE_ | CTFLT_:
 		if mpcmpfltflt(v.U.(*Mpflt), rv.U.(*Mpflt)) != 0 {
 			goto settrue
 		}
 		goto setfalse
 
-	case OLT<<16 | CTFLT:
+	case OLT_ | CTFLT_:
 		if mpcmpfltflt(v.U.(*Mpflt), rv.U.(*Mpflt)) < 0 {
 			goto settrue
 		}
 		goto setfalse
 
-	case OLE<<16 | CTFLT:
+	case OLE_ | CTFLT_:
 		if mpcmpfltflt(v.U.(*Mpflt), rv.U.(*Mpflt)) <= 0 {
 			goto settrue
 		}
 		goto setfalse
 
-	case OGE<<16 | CTFLT:
+	case OGE_ | CTFLT_:
 		if mpcmpfltflt(v.U.(*Mpflt), rv.U.(*Mpflt)) >= 0 {
 			goto settrue
 		}
 		goto setfalse
 
-	case OGT<<16 | CTFLT:
+	case OGT_ | CTFLT_:
 		if mpcmpfltflt(v.U.(*Mpflt), rv.U.(*Mpflt)) > 0 {
 			goto settrue
 		}
 		goto setfalse
 
-	case OEQ<<16 | CTCPLX:
+	case OEQ_ | CTCPLX_:
 		if mpcmpfltflt(&v.U.(*Mpcplx).Real, &rv.U.(*Mpcplx).Real) == 0 && mpcmpfltflt(&v.U.(*Mpcplx).Imag, &rv.U.(*Mpcplx).Imag) == 0 {
 			goto settrue
 		}
 		goto setfalse
 
-	case ONE<<16 | CTCPLX:
+	case ONE_ | CTCPLX_:
 		if mpcmpfltflt(&v.U.(*Mpcplx).Real, &rv.U.(*Mpcplx).Real) != 0 || mpcmpfltflt(&v.U.(*Mpcplx).Imag, &rv.U.(*Mpcplx).Imag) != 0 {
 			goto settrue
 		}
 		goto setfalse
 
-	case OEQ<<16 | CTSTR:
-		if cmpslit(nl, nr) == 0 {
+	case OEQ_ | CTSTR_:
+		if strlit(nl) == strlit(nr) {
 			goto settrue
 		}
 		goto setfalse
 
-	case ONE<<16 | CTSTR:
-		if cmpslit(nl, nr) != 0 {
+	case ONE_ | CTSTR_:
+		if strlit(nl) != strlit(nr) {
 			goto settrue
 		}
 		goto setfalse
 
-	case OLT<<16 | CTSTR:
-		if cmpslit(nl, nr) < 0 {
+	case OLT_ | CTSTR_:
+		if strlit(nl) < strlit(nr) {
 			goto settrue
 		}
 		goto setfalse
 
-	case OLE<<16 | CTSTR:
-		if cmpslit(nl, nr) <= 0 {
+	case OLE_ | CTSTR_:
+		if strlit(nl) <= strlit(nr) {
 			goto settrue
 		}
 		goto setfalse
 
-	case OGE<<16 | CTSTR:
-		if cmpslit(nl, nr) >= 0 {
+	case OGE_ | CTSTR_:
+		if strlit(nl) >= strlit(nr) {
 			goto settrue
 		}
 		goto setfalse
 
-	case OGT<<16 | CTSTR:
-		if cmpslit(nl, nr) > 0 {
+	case OGT_ | CTSTR_:
+		if strlit(nl) > strlit(nr) {
 			goto settrue
 		}
 		goto setfalse
 
-	case OOROR<<16 | CTBOOL:
+	case OOROR_ | CTBOOL_:
 		if v.U.(bool) || rv.U.(bool) {
 			goto settrue
 		}
 		goto setfalse
 
-	case OANDAND<<16 | CTBOOL:
+	case OANDAND_ | CTBOOL_:
 		if v.U.(bool) && rv.U.(bool) {
 			goto settrue
 		}
 		goto setfalse
 
-	case OEQ<<16 | CTBOOL:
+	case OEQ_ | CTBOOL_:
 		if v.U.(bool) == rv.U.(bool) {
 			goto settrue
 		}
 		goto setfalse
 
-	case ONE<<16 | CTBOOL:
+	case ONE_ | CTBOOL_:
 		if v.U.(bool) != rv.U.(bool) {
 			goto settrue
 		}
@@ -1097,8 +1125,6 @@ illegal:
 		Yyerror("illegal constant expression: %v %v %v", nl.Type, Oconv(int(n.Op), 0), nr.Type)
 		n.Diag = 1
 	}
-
-	return
 }
 
 func nodlit(v Val) *Node {
@@ -1106,7 +1132,7 @@ func nodlit(v Val) *Node {
 	n.SetVal(v)
 	switch v.Ctype() {
 	default:
-		Fatal("nodlit ctype %d", v.Ctype())
+		Fatalf("nodlit ctype %d", v.Ctype())
 
 	case CTSTR:
 		n.Type = idealstring
@@ -1134,7 +1160,7 @@ func nodcplxlit(r Val, i Val) *Node {
 	n.SetVal(Val{c})
 
 	if r.Ctype() != CTFLT || i.Ctype() != CTFLT {
-		Fatal("nodcplxlit ctype %d/%d", r.Ctype(), i.Ctype())
+		Fatalf("nodcplxlit ctype %d/%d", r.Ctype(), i.Ctype())
 	}
 
 	mpmovefltflt(&c.Real, r.U.(*Mpflt))
@@ -1144,7 +1170,7 @@ func nodcplxlit(r Val, i Val) *Node {
 
 // idealkind returns a constant kind like consttype
 // but for an arbitrary "ideal" (untyped constant) expression.
-func idealkind(n *Node) int {
+func idealkind(n *Node) Ctype {
 	if n == nil || !isideal(n.Type) {
 		return CTxxx
 	}
@@ -1154,7 +1180,7 @@ func idealkind(n *Node) int {
 		return CTxxx
 
 	case OLITERAL:
-		return int(n.Val().Ctype())
+		return n.Val().Ctype()
 
 		// numeric kinds.
 	case OADD,
@@ -1249,7 +1275,7 @@ func defaultlit(np **Node, t *Type) {
 		Yyerror("defaultlit: unknown literal: %v", n)
 
 	case CTxxx:
-		Fatal("defaultlit: idealkind is CTxxx: %v", Nconv(n, obj.FmtSign))
+		Fatalf("defaultlit: idealkind is CTxxx: %v", Nconv(n, obj.FmtSign))
 
 	case CTBOOL:
 		t1 := Types[TBOOL]
@@ -1279,31 +1305,37 @@ func defaultlit(np **Node, t *Type) {
 	return
 
 num:
+	// Note: n.Val().Ctype() can be CTxxx (not a constant) here
+	// in the case of an untyped non-constant value, like 1<<i.
+	v1 := n.Val()
 	if t != nil {
 		if Isint[t.Etype] {
 			t1 = t
-			n.SetVal(toint(n.Val()))
+			v1 = toint(n.Val())
 		} else if Isfloat[t.Etype] {
 			t1 = t
-			n.SetVal(toflt(n.Val()))
+			v1 = toflt(n.Val())
 		} else if Iscomplex[t.Etype] {
 			t1 = t
-			n.SetVal(tocplx(n.Val()))
+			v1 = tocplx(n.Val())
+		}
+		if n.Val().Ctype() != CTxxx {
+			n.SetVal(v1)
 		}
 	}
 
-	overflow(n.Val(), t1)
+	if n.Val().Ctype() != CTxxx {
+		overflow(n.Val(), t1)
+	}
 	Convlit(np, t1)
 	lineno = int32(lno)
 	return
 }
 
-/*
- * defaultlit on both nodes simultaneously;
- * if they're both ideal going in they better
- * get the same type going out.
- * force means must assign concrete (non-ideal) type.
- */
+// defaultlit on both nodes simultaneously;
+// if they're both ideal going in they better
+// get the same type going out.
+// force means must assign concrete (non-ideal) type.
 func defaultlit2(lp **Node, rp **Node, force int) {
 	l := *lp
 	r := *rp
@@ -1352,8 +1384,9 @@ func defaultlit2(lp **Node, rp **Node, force int) {
 	Convlit(rp, Types[TINT])
 }
 
-func cmpslit(l, r *Node) int {
-	return stringsCompare(l.Val().U.(string), r.Val().U.(string))
+// strlit returns the value of a literal string Node as a string.
+func strlit(n *Node) string {
+	return n.Val().U.(string)
 }
 
 func Smallintconst(n *Node) bool {
@@ -1403,11 +1436,9 @@ func nonnegconst(n *Node) int {
 	return -1
 }
 
-/*
- * convert x to type et and back to int64
- * for sign extension and truncation.
- */
-func iconv(x int64, et int) int64 {
+// convert x to type et and back to int64
+// for sign extension and truncation.
+func iconv(x int64, et EType) int64 {
 	switch et {
 	case TINT8:
 		x = int64(int8(x))
@@ -1450,7 +1481,7 @@ func (n *Node) Convconst(con *Node, t *Type) {
 		var i int64
 		switch n.Val().Ctype() {
 		default:
-			Fatal("convconst ctype=%d %v", n.Val().Ctype(), Tconv(t, obj.FmtLong))
+			Fatalf("convconst ctype=%d %v", n.Val().Ctype(), Tconv(t, obj.FmtLong))
 
 		case CTINT, CTRUNE:
 			i = Mpgetfix(n.Val().U.(*Mpint))
@@ -1470,7 +1501,7 @@ func (n *Node) Convconst(con *Node, t *Type) {
 	if Isfloat[tt] {
 		con.SetVal(toflt(con.Val()))
 		if con.Val().Ctype() != CTFLT {
-			Fatal("convconst ctype=%d %v", con.Val().Ctype(), t)
+			Fatalf("convconst ctype=%d %v", con.Val().Ctype(), t)
 		}
 		if tt == TFLOAT32 {
 			con.SetVal(Val{truncfltlit(con.Val().U.(*Mpflt), t)})
@@ -1487,7 +1518,7 @@ func (n *Node) Convconst(con *Node, t *Type) {
 		return
 	}
 
-	Fatal("convconst %v constant", Tconv(t, obj.FmtLong))
+	Fatalf("convconst %v constant", Tconv(t, obj.FmtLong))
 }
 
 // complex multiply v *= rv

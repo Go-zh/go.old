@@ -645,7 +645,7 @@ func (s *ss) okVerb(verb rune, okVerbs, typ string) bool {
 			return true
 		}
 	}
-	s.errorString("bad verb %" + string(verb) + " for " + typ)
+	s.errorString("bad verb '%" + string(verb) + "' for " + typ)
 	return false
 }
 
@@ -960,7 +960,7 @@ func (s *ss) scanComplex(verb rune, n int) complex128 {
 // convertString 返回由下一次输入的字符表示的字符串。
 // 输入的格式由占位符 verb 决定。
 func (s *ss) convertString(verb rune) (str string) {
-	if !s.okVerb(verb, "svqx", "string") {
+	if !s.okVerb(verb, "svqxX", "string") {
 		return ""
 	}
 	s.skipSpace(false)
@@ -968,7 +968,7 @@ func (s *ss) convertString(verb rune) (str string) {
 	switch verb {
 	case 'q':
 		str = s.quotedString()
-	case 'x':
+	case 'x', 'X':
 		str = s.hexString()
 	default:
 		str = string(s.token(true, notSpace)) // %s and %v just return the next word // %s 和 %v 只返回下一个单词
@@ -1259,6 +1259,10 @@ func (s *ss) advance(format string) (i int) {
 	for i < len(format) {
 		fmtc, w := utf8.DecodeRuneInString(format[i:])
 		if fmtc == '%' {
+			// % at end of string is an error.
+			if i+w == len(format) {
+				s.errorString("missing verb: % at end of format string")
+			}
 			// %% acts like a real percent
 			nextc, _ := utf8.DecodeRuneInString(format[i+w:]) // will not match % if string is empty // 若字符串为空则不会匹配 %
 			if nextc != '%' {
@@ -1286,6 +1290,10 @@ func (s *ss) advance(format string) (i int) {
 			// 格式中有空格，因此输入中也应该有空格（EOF）
 			inputc := s.getRune()
 			if inputc == eof {
+				if wasNewline {
+					// Newlines are mandatory.
+					return -1
+				}
 				return
 			}
 			if !isSpace(inputc) {
@@ -1331,19 +1339,19 @@ func (s *ss) doScanf(format string, a []interface{}) (numProcessed int, err erro
 	// We process one item per non-trivial format
 	// 我们为每个非平凡的格式处理一个条目
 	for i := 0; i <= end; {
-		w := s.advance(format[i:])
-		if w > 0 {
+		switch w := s.advance(format[i:]); {
+		case w > 0:
 			i += w
 			continue
+		case w < 0:
+			// Can't advance format. Why not?
+			s.errorString("input does not match format")
 		}
-		// Either we failed to advance, we have a percent character, or we ran out of input.
-		// 我们要么无法继续，要么有一个百分号，或用尽输入。
+
+		// Either we have a percent character, or we ran out of input.
+		// 要么有百分号，要么用尽了输入。
+
 		if format[i] != '%' {
-			// Can't advance format.  Why not?
-			// 不能继续格式化。为啥？因为输入不匹配格式。
-			if w < 0 {
-				s.errorString("input does not match format")
-			}
 			// Otherwise at EOF; "too many operands" error handled below
 			// 否则就是遇到了 EOF；以下为“太多操作数”的错误处理
 			break
@@ -1370,7 +1378,7 @@ func (s *ss) doScanf(format string, a []interface{}) (numProcessed int, err erro
 		}
 
 		if numProcessed >= len(a) { // out of operands // 超过操作数
-			s.errorString("too few operands for format %" + format[i-w:])
+			s.errorString("too few operands for format '%" + format[i-w:] + "'")
 			break
 		}
 		arg := a[numProcessed]

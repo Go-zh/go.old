@@ -9,9 +9,7 @@ import (
 	"fmt"
 )
 
-/*
- * function literals aka closures
- */
+// function literals aka closures
 func closurehdr(ntype *Node) {
 	var name *Node
 	var a *Node
@@ -87,7 +85,7 @@ func typecheckclosure(func_ *Node, top int) {
 		if !n.Name.Captured {
 			n.Name.Captured = true
 			if n.Name.Decldepth == 0 {
-				Fatal("typecheckclosure: var %v does not have decldepth assigned", Nconv(n, obj.FmtShort))
+				Fatalf("typecheckclosure: var %v does not have decldepth assigned", Nconv(n, obj.FmtShort))
 			}
 
 			// Ignore assignments to the variable in straightline code
@@ -172,17 +170,15 @@ func closurename(n *Node) *Sym {
 		n.Func.Outerfunc.Func.Closgen++
 		gen = n.Func.Outerfunc.Func.Closgen
 	} else {
-		Fatal("closurename called for %v", Nconv(n, obj.FmtShort))
+		Fatalf("closurename called for %v", Nconv(n, obj.FmtShort))
 	}
 	n.Sym = Lookupf("%s.%s%d", outer, prefix, gen)
 	return n.Sym
 }
 
 func makeclosure(func_ *Node) *Node {
-	/*
-	 * wrap body in external function
-	 * that begins by reading closure parameters.
-	 */
+	// wrap body in external function
+	// that begins by reading closure parameters.
 	xtype := Nod(OTFUNC, nil, nil)
 
 	xtype.List = func_.List
@@ -204,7 +200,7 @@ func makeclosure(func_ *Node) *Node {
 	xfunc.Nbody = func_.Nbody
 	xfunc.Func.Dcl = concat(func_.Func.Dcl, xfunc.Func.Dcl)
 	if xfunc.Nbody == nil {
-		Fatal("empty body - won't generate any code")
+		Fatalf("empty body - won't generate any code")
 	}
 	typecheck(&xfunc, Etop)
 
@@ -322,7 +318,7 @@ func transformclosure(xfunc *Node) {
 				continue
 			}
 			fld = typ(TFIELD)
-			fld.Funarg = 1
+			fld.Funarg = true
 			if v.Name.Byval {
 				// If v is captured by value, we merely downgrade it to PPARAM.
 				v.Class = PPARAM
@@ -355,7 +351,7 @@ func transformclosure(xfunc *Node) {
 
 		// Recalculate param offsets.
 		if f.Type.Width > 0 {
-			Fatal("transformclosure: width is already calculated")
+			Fatalf("transformclosure: width is already calculated")
 		}
 		dowidth(f.Type)
 		xfunc.Type = f.Type // update type of ODCLFUNC
@@ -491,7 +487,7 @@ func typecheckpartialcall(fn *Node, sym *Node) {
 		break
 
 	default:
-		Fatal("invalid typecheckpartialcall")
+		Fatalf("invalid typecheckpartialcall")
 	}
 
 	// Create top-level function.
@@ -518,7 +514,7 @@ func makepartialcall(fn *Node, t0 *Type, meth *Node) *Node {
 		basetype = basetype.Type
 	}
 	if basetype.Etype != TINTER && basetype.Sym == nil {
-		Fatal("missing base type for %v", rcvrtype)
+		Fatalf("missing base type for %v", rcvrtype)
 	}
 
 	var spkg *Pkg

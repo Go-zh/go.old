@@ -8,6 +8,7 @@ package asm
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strconv"
@@ -37,6 +38,8 @@ type Parser struct {
 	firstProg     *obj.Prog
 	lastProg      *obj.Prog
 	dataAddr      map[string]int64 // Most recent address for DATA for this symbol.
+	isJump        bool             // Instruction being assembled is a jump.
+	errorWriter   io.Writer
 }
 
 type Patch struct {
@@ -46,11 +49,12 @@ type Patch struct {
 
 func NewParser(ctxt *obj.Link, ar *arch.Arch, lexer lex.TokenReader) *Parser {
 	return &Parser{
-		ctxt:     ctxt,
-		arch:     ar,
-		lex:      lexer,
-		labels:   make(map[string]*obj.Prog),
-		dataAddr: make(map[string]int64),
+		ctxt:        ctxt,
+		arch:        ar,
+		lex:         lexer,
+		labels:      make(map[string]*obj.Prog),
+		dataAddr:    make(map[string]int64),
+		errorWriter: os.Stderr,
 	}
 }
 
@@ -67,10 +71,12 @@ func (p *Parser) errorf(format string, args ...interface{}) {
 		return
 	}
 	p.errorLine = p.histLineNum
-	// Put file and line information on head of message.
-	format = "%s:%d: " + format + "\n"
-	args = append([]interface{}{p.lex.File(), p.lineNum}, args...)
-	fmt.Fprintf(os.Stderr, format, args...)
+	if p.lex != nil {
+		// Put file and line information on head of message.
+		format = "%s:%d: " + format + "\n"
+		args = append([]interface{}{p.lex.File(), p.lineNum}, args...)
+	}
+	fmt.Fprintf(p.errorWriter, format, args...)
 	p.errorCount++
 	if p.errorCount > 10 {
 		log.Fatal("too many errors")
@@ -150,6 +156,7 @@ func (p *Parser) line() bool {
 					// Remember this location so we can swap the operands below.
 					if colon >= 0 {
 						p.errorf("invalid ':' in operand")
+						return true
 					}
 					colon = len(operands)
 				}
@@ -191,15 +198,15 @@ func (p *Parser) line() bool {
 
 func (p *Parser) instruction(op int, word, cond string, operands [][]lex.Token) {
 	p.addr = p.addr[0:0]
-	isJump := p.arch.IsJump(word)
+	p.isJump = p.arch.IsJump(word)
 	for _, op := range operands {
 		addr := p.address(op)
-		if !isJump && addr.Reg < 0 { // Jumps refer to PC, a pseudo.
+		if !p.isJump && addr.Reg < 0 { // Jumps refer to PC, a pseudo.
 			p.errorf("illegal use of pseudo-register in %s", word)
 		}
 		p.addr = append(p.addr, addr)
 	}
-	if isJump {
+	if p.isJump {
 		p.asmJump(op, cond, p.addr)
 		return
 	}
@@ -333,8 +340,13 @@ func (p *Parser) operand(a *obj.Addr) bool {
 	case scanner.Int, scanner.Float, scanner.String, scanner.Char, '+', '-', '~':
 		haveConstant = true
 	case '(':
-		// Could be parenthesized expression or (R).
-		rname := p.next().String()
+		// Could be parenthesized expression or (R). Must be something, though.
+		tok := p.next()
+		if tok.ScanToken == scanner.EOF {
+			p.errorf("missing right parenthesis")
+			return false
+		}
+		rname := tok.String()
 		p.back()
 		haveConstant = !p.atStartOfRegister(rname)
 		if !haveConstant {
@@ -356,6 +368,7 @@ func (p *Parser) operand(a *obj.Addr) bool {
 		if p.have(scanner.String) {
 			if prefix != '$' {
 				p.errorf("string constant must be an immediate")
+				return false
 			}
 			str, err := strconv.Unquote(p.get(scanner.String).String())
 			if err != nil {
@@ -563,12 +576,14 @@ func (p *Parser) symbolReference(a *obj.Addr, name string, prefix rune) {
 	}
 	a.Sym = obj.Linklookup(p.ctxt, name, isStatic)
 	if p.peek() == scanner.EOF {
-		if prefix != 0 {
-			p.errorf("illegal addressing mode for symbol %s", name)
+		if prefix == 0 && p.isJump {
+			// Symbols without prefix or suffix are jump labels.
+			return
 		}
+		p.errorf("illegal or missing addressing mode for symbol %s", name)
 		return
 	}
-	// Expect (SB) or (FP), (PC), (SB), or (SP)
+	// Expect (SB), (FP), (PC), or (SP)
 	p.get('(')
 	reg := p.get(scanner.Ident).String()
 	p.get(')')
@@ -697,12 +712,19 @@ func (p *Parser) registerIndirect(a *obj.Addr, prefix rune) {
 // The opening bracket has been consumed.
 func (p *Parser) registerList(a *obj.Addr) {
 	// One range per loop.
+	const maxReg = 16
 	var bits uint16
+ListLoop:
 	for {
 		tok := p.next()
-		if tok.ScanToken == ']' {
-			break
+		switch tok.ScanToken {
+		case ']':
+			break ListLoop
+		case scanner.EOF:
+			p.errorf("missing ']' in register list")
+			return
 		}
+		// Parse the upper and lower bounds.
 		lo := p.registerNumber(tok.String())
 		hi := lo
 		if p.peek() == '-' {
@@ -712,7 +734,8 @@ func (p *Parser) registerList(a *obj.Addr) {
 		if hi < lo {
 			lo, hi = hi, lo
 		}
-		for lo <= hi {
+		// Check there are no duplicates in the register list.
+		for i := 0; lo <= hi && i < maxReg; i++ {
 			if bits&(1<<lo) != 0 {
 				p.errorf("register R%d already in list", lo)
 			}
@@ -734,12 +757,19 @@ func (p *Parser) registerNumber(name string) uint16 {
 	}
 	if name[0] != 'R' {
 		p.errorf("expected g or R0 through R15; found %s", name)
+		return 0
 	}
 	r, ok := p.registerReference(name)
 	if !ok {
 		return 0
 	}
-	return uint16(r - p.arch.Register["R0"])
+	reg := r - p.arch.Register["R0"]
+	if reg < 0 {
+		// Could happen for an architecture having other registers prefixed by R
+		p.errorf("expected g or R0 through R15; found %s", name)
+		return 0
+	}
+	return uint16(reg)
 }
 
 // Note: There are two changes in the expression handling here
@@ -932,7 +962,11 @@ func (p *Parser) next() lex.Token {
 }
 
 func (p *Parser) back() {
-	p.inputPos--
+	if p.inputPos == 0 {
+		p.errorf("internal error: backing up before BOL")
+	} else {
+		p.inputPos--
+	}
 }
 
 func (p *Parser) peek() lex.ScanToken {

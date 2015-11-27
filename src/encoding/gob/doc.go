@@ -82,6 +82,12 @@ slice has capacity the slice will be extended in place; if not, a new array is
 allocated. Regardless, the length of the resulting slice reports the number of
 elements decoded.
 
+In general, if allocation is required, the decoder will allocate memory. If not,
+it will update the destination variables with values read from the stream. It does
+not initialize them first, so if the destination is a compound value such as a
+map, struct, or slice, the decoded values will be merged elementwise into the
+existing variables.
+
 Functions and channels will not be sent in a gob. Attempting to encode such a value
 at the top level will fail. A struct field of chan or func type is treated exactly
 like an unexported field and is ignored.
@@ -134,7 +140,8 @@ Strings and slices of bytes are sent as an unsigned count followed by that many
 uninterpreted bytes of the value.
 
 All other slices and arrays are sent as an unsigned count followed by that many
-elements using the standard gob encoding for their type, recursively.
+elements using the standard gob encoding for their type, recursively. In slices
+and arrays, elements with the zero value are transmitted.
 
 Maps are sent as an unsigned count followed by that many key, element
 pairs. Empty but non-nil maps are sent, so if the receiver has not allocated

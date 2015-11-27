@@ -88,7 +88,7 @@ func Noreturn(p *obj.Prog) bool {
 // longer and more difficult to follow during debugging.
 // Remove them.
 
-/* what instruction does a JMP to p eventually land on? */
+// what instruction does a JMP to p eventually land on?
 func chasejmp(p *obj.Prog, jmploop *int) *obj.Prog {
 	n := 0
 	for p != nil && p.As == obj.AJMP && p.To.Type == obj.TYPE_BRANCH {
@@ -104,14 +104,12 @@ func chasejmp(p *obj.Prog, jmploop *int) *obj.Prog {
 	return p
 }
 
-/*
- * reuse reg pointer for mark/sweep state.
- * leave reg==nil at end because alive==nil.
- */
+// reuse reg pointer for mark/sweep state.
+// leave reg==nil at end because alive==nil.
 var alive interface{} = nil
 var dead interface{} = 1
 
-/* mark all code reachable from firstp as alive */
+// mark all code reachable from firstp as alive
 func mark(firstp *obj.Prog) {
 	for p := firstp; p != nil; p = p.Link {
 		if p.Opt != dead {
@@ -306,11 +304,11 @@ func Flowstart(firstp *obj.Prog, newData func() interface{}) *Graph {
 
 		if p.To.Type == obj.TYPE_BRANCH {
 			if p.To.Val == nil {
-				Fatal("pnil %v", p)
+				Fatalf("pnil %v", p)
 			}
 			f1 = p.To.Val.(*obj.Prog).Opt.(*Flow)
 			if f1 == nil {
-				Fatal("fnil %v / %v", p, p.To.Val.(*obj.Prog))
+				Fatalf("fnil %v / %v", p, p.To.Val.(*obj.Prog))
 			}
 			if f1 == f {
 				//fatal("self loop %v", p);
@@ -335,21 +333,19 @@ func Flowend(graph *Graph) {
 	}
 }
 
-/*
- * find looping structure
- *
- * 1) find reverse postordering
- * 2) find approximate dominators,
- *	the actual dominators if the flow graph is reducible
- *	otherwise, dominators plus some other non-dominators.
- *	See Matthew S. Hecht and Jeffrey D. Ullman,
- *	"Analysis of a Simple Algorithm for Global Data Flow Problems",
- *	Conf.  Record of ACM Symp. on Principles of Prog. Langs, Boston, Massachusetts,
- *	Oct. 1-3, 1973, pp.  207-217.
- * 3) find all nodes with a predecessor dominated by the current node.
- *	such a node is a loop head.
- *	recursively, all preds with a greater rpo number are in the loop
- */
+// find looping structure
+//
+// 1) find reverse postordering
+// 2) find approximate dominators,
+//	the actual dominators if the flow graph is reducible
+//	otherwise, dominators plus some other non-dominators.
+//	See Matthew S. Hecht and Jeffrey D. Ullman,
+//	"Analysis of a Simple Algorithm for Global Data Flow Problems",
+//	Conf.  Record of ACM Symp. on Principles of Prog. Langs, Boston, Massachusetts,
+//	Oct. 1-3, 1973, pp.  207-217.
+// 3) find all nodes with a predecessor dominated by the current node.
+//	such a node is a loop head.
+//	recursively, all preds with a greater rpo number are in the loop
 func postorder(r *Flow, rpo2r []*Flow, n int32) int32 {
 	r.Rpo = 1
 	r1 := r.S1
@@ -380,7 +376,7 @@ func rpolca(idom []int32, rpo1 int32, rpo2 int32) int32 {
 		for rpo1 < rpo2 {
 			t = idom[rpo2]
 			if t >= rpo2 {
-				Fatal("bad idom")
+				Fatalf("bad idom")
 			}
 			rpo2 = t
 		}
@@ -435,7 +431,7 @@ func flowrpo(g *Graph) {
 	d := postorder(g.Start, rpo2r, 0)
 	nr := int32(g.Num)
 	if d > nr {
-		Fatal("too many reg nodes %d %d", d, nr)
+		Fatalf("too many reg nodes %d %d", d, nr)
 	}
 	nr = d
 	var r1 *Flow
@@ -523,20 +519,15 @@ type TempVar struct {
 	merge   *TempVar // merge var with this one
 	start   int64    // smallest Prog.pc in live range
 	end     int64    // largest Prog.pc in live range
-	addr    uint8    // address taken - no accurate end
-	removed uint8    // removed from program
+	addr    bool     // address taken - no accurate end
+	removed bool     // removed from program
 }
 
+// startcmp sorts TempVars by start, then id, then symbol name.
 type startcmp []*TempVar
 
-func (x startcmp) Len() int {
-	return len(x)
-}
-
-func (x startcmp) Swap(i, j int) {
-	x[i], x[j] = x[j], x[i]
-}
-
+func (x startcmp) Len() int      { return len(x) }
+func (x startcmp) Swap(i, j int) { x[i], x[j] = x[j], x[i] }
 func (x startcmp) Less(i, j int) bool {
 	a := x[i]
 	b := x[j]
@@ -556,7 +547,7 @@ func (x startcmp) Less(i, j int) bool {
 		return int(a.def.Id-b.def.Id) < 0
 	}
 	if a.node != b.node {
-		return stringsCompare(a.node.Sym.Name, b.node.Sym.Name) < 0
+		return a.node.Sym.Name < b.node.Sym.Name
 	}
 	return false
 }
@@ -577,22 +568,11 @@ func mergetemp(firstp *obj.Prog) {
 	}
 
 	// Build list of all mergeable variables.
-	nvar := 0
+	var vars []*TempVar
 	for l := Curfn.Func.Dcl; l != nil; l = l.Next {
-		if canmerge(l.N) {
-			nvar++
-		}
-	}
-
-	var_ := make([]TempVar, nvar)
-	nvar = 0
-	var n *Node
-	var v *TempVar
-	for l := Curfn.Func.Dcl; l != nil; l = l.Next {
-		n = l.N
-		if canmerge(n) {
-			v = &var_[nvar]
-			nvar++
+		if n := l.N; canmerge(n) {
+			v := &TempVar{}
+			vars = append(vars, v)
 			n.SetOpt(v)
 			v.node = n
 		}
@@ -605,10 +585,10 @@ func mergetemp(firstp *obj.Prog) {
 	for f := g.Start; f != nil; f = f.Link {
 		p := f.Prog
 		if p.From.Node != nil && ((p.From.Node).(*Node)).Opt() != nil && p.To.Node != nil && ((p.To.Node).(*Node)).Opt() != nil {
-			Fatal("double node %v", p)
+			Fatalf("double node %v", p)
 		}
-		v = nil
-		n, _ = p.From.Node.(*Node)
+		var v *TempVar
+		n, _ := p.From.Node.(*Node)
 		if n != nil {
 			v, _ = n.Opt().(*TempVar)
 		}
@@ -625,7 +605,7 @@ func mergetemp(firstp *obj.Prog) {
 			f.Data = v.use
 			v.use = f
 			if n == p.From.Node && (p.Info.Flags&LeftAddr != 0) {
-				v.addr = 1
+				v.addr = true
 			}
 		}
 	}
@@ -637,9 +617,8 @@ func mergetemp(firstp *obj.Prog) {
 	nkill := 0
 
 	// Special case.
-	for i := 0; i < len(var_); i++ {
-		v = &var_[i]
-		if v.addr != 0 {
+	for _, v := range vars {
+		if v.addr {
 			continue
 		}
 
@@ -650,12 +629,12 @@ func mergetemp(firstp *obj.Prog) {
 			if p.To.Node == v.node && (p.Info.Flags&RightWrite != 0) && p.Info.Flags&RightRead == 0 {
 				p.As = obj.ANOP
 				p.To = obj.Addr{}
-				v.removed = 1
+				v.removed = true
 				if debugmerge > 0 && Debug['v'] != 0 {
 					fmt.Printf("drop write-only %v\n", v.node.Sym)
 				}
 			} else {
-				Fatal("temp used and not set: %v", p)
+				Fatalf("temp used and not set: %v", p)
 			}
 			nkill++
 			continue
@@ -673,7 +652,7 @@ func mergetemp(firstp *obj.Prog) {
 			if p.From.Node == v.node && p1.To.Node == v.node && (p.Info.Flags&Move != 0) && (p.Info.Flags|p1.Info.Flags)&(LeftAddr|RightAddr) == 0 && p.Info.Flags&SizeAny == p1.Info.Flags&SizeAny {
 				p1.From = p.From
 				Thearch.Excise(f)
-				v.removed = 1
+				v.removed = true
 				if debugmerge > 0 && Debug['v'] != 0 {
 					fmt.Printf("drop immediate-use %v\n", v.node.Sym)
 				}
@@ -687,29 +666,25 @@ func mergetemp(firstp *obj.Prog) {
 	// Traverse live range of each variable to set start, end.
 	// Each flood uses a new value of gen so that we don't have
 	// to clear all the r->active words after each variable.
-	gen := int32(0)
+	gen := uint32(0)
 
-	for i := 0; i < len(var_); i++ {
-		v = &var_[i]
+	for _, v := range vars {
 		gen++
 		for f := v.use; f != nil; f = f.Data.(*Flow) {
-			mergewalk(v, f, uint32(gen))
+			mergewalk(v, f, gen)
 		}
-		if v.addr != 0 {
+		if v.addr {
 			gen++
 			for f := v.use; f != nil; f = f.Data.(*Flow) {
-				varkillwalk(v, f, uint32(gen))
+				varkillwalk(v, f, gen)
 			}
 		}
 	}
 
 	// Sort variables by start.
-	bystart := make([]*TempVar, len(var_))
-
-	for i := 0; i < len(var_); i++ {
-		bystart[i] = &var_[i]
-	}
-	sort.Sort(startcmp(bystart[:len(var_)]))
+	bystart := make([]*TempVar, len(vars))
+	copy(bystart, vars)
+	sort.Sort(startcmp(bystart))
 
 	// List of in-use variables, sorted by end, so that the ones that
 	// will last the longest are the earliest ones in the array.
@@ -717,40 +692,35 @@ func mergetemp(firstp *obj.Prog) {
 	// In theory we should use a sorted tree so that insertions are
 	// guaranteed O(log n) and then the loop is guaranteed O(n log n).
 	// In practice, it doesn't really matter.
-	inuse := make([]*TempVar, len(var_))
+	inuse := make([]*TempVar, len(bystart))
 
 	ninuse := 0
-	nfree := len(var_)
-	var t *Type
-	var v1 *TempVar
-	var j int
-	for i := 0; i < len(var_); i++ {
-		v = bystart[i]
+	nfree := len(bystart)
+	for _, v := range bystart {
 		if debugmerge > 0 && Debug['v'] != 0 {
-			fmt.Printf("consider %v: removed=%d\n", Nconv(v.node, obj.FmtSharp), v.removed)
+			fmt.Printf("consider %v: removed=%t\n", Nconv(v.node, obj.FmtSharp), v.removed)
 		}
 
-		if v.removed != 0 {
+		if v.removed {
 			continue
 		}
 
 		// Expire no longer in use.
 		for ninuse > 0 && inuse[ninuse-1].end < v.start {
 			ninuse--
-			v1 = inuse[ninuse]
 			nfree--
-			inuse[nfree] = v1
+			inuse[nfree] = inuse[ninuse]
 		}
 
 		if debugmerge > 0 && Debug['v'] != 0 {
-			fmt.Printf("consider %v: removed=%d nfree=%d nvar=%d\n", Nconv(v.node, obj.FmtSharp), v.removed, nfree, len(var_))
+			fmt.Printf("consider %v: removed=%t nfree=%d nvar=%d\n", Nconv(v.node, obj.FmtSharp), v.removed, nfree, len(bystart))
 		}
 
 		// Find old temp to reuse if possible.
-		t = v.node.Type
+		t := v.node.Type
 
-		for j = nfree; j < len(var_); j++ {
-			v1 = inuse[j]
+		for j := nfree; j < len(inuse); j++ {
+			v1 := inuse[j]
 			if debugmerge > 0 && Debug['v'] != 0 {
 				fmt.Printf("consider %v: maybe %v: type=%v,%v addrtaken=%v,%v\n", Nconv(v.node, obj.FmtSharp), Nconv(v1.node, obj.FmtSharp), t, v1.node.Type, v.node.Addrtaken, v1.node.Addrtaken)
 			}
@@ -774,7 +744,7 @@ func mergetemp(firstp *obj.Prog) {
 		}
 
 		// Sort v into inuse.
-		j = ninuse
+		j := ninuse
 		ninuse++
 
 		for j > 0 && inuse[j-1].end < v.end {
@@ -786,16 +756,14 @@ func mergetemp(firstp *obj.Prog) {
 	}
 
 	if debugmerge > 0 && Debug['v'] != 0 {
-		fmt.Printf("%v [%d - %d]\n", Curfn.Func.Nname.Sym, len(var_), nkill)
-		var v *TempVar
-		for i := 0; i < len(var_); i++ {
-			v = &var_[i]
+		fmt.Printf("%v [%d - %d]\n", Curfn.Func.Nname.Sym, len(vars), nkill)
+		for _, v := range vars {
 			fmt.Printf("var %v %v %d-%d", Nconv(v.node, obj.FmtSharp), v.node.Type, v.start, v.end)
-			if v.addr != 0 {
-				fmt.Printf(" addr=1")
+			if v.addr {
+				fmt.Printf(" addr=true")
 			}
-			if v.removed != 0 {
-				fmt.Printf(" dead=1")
+			if v.removed {
+				fmt.Printf(" removed=true")
 			}
 			if v.merge != nil {
 				fmt.Printf(" merge %v", Nconv(v.merge.node, obj.FmtSharp))
@@ -814,16 +782,16 @@ func mergetemp(firstp *obj.Prog) {
 	// Update node references to use merged temporaries.
 	for f := g.Start; f != nil; f = f.Link {
 		p := f.Prog
-		n, _ = p.From.Node.(*Node)
+		n, _ := p.From.Node.(*Node)
 		if n != nil {
-			v, _ = n.Opt().(*TempVar)
+			v, _ := n.Opt().(*TempVar)
 			if v != nil && v.merge != nil {
 				p.From.Node = v.merge.node
 			}
 		}
 		n, _ = p.To.Node.(*Node)
 		if n != nil {
-			v, _ = n.Opt().(*TempVar)
+			v, _ := n.Opt().(*TempVar)
 			if v != nil && v.merge != nil {
 				p.To.Node = v.merge.node
 			}
@@ -831,17 +799,16 @@ func mergetemp(firstp *obj.Prog) {
 	}
 
 	// Delete merged nodes from declaration list.
-	var l *NodeList
 	for lp := &Curfn.Func.Dcl; ; {
-		l = *lp
+		l := *lp
 		if l == nil {
 			break
 		}
 
 		Curfn.Func.Dcl.End = l
-		n = l.N
-		v, _ = n.Opt().(*TempVar)
-		if v != nil && (v.merge != nil || v.removed != 0) {
+		n := l.N
+		v, _ := n.Opt().(*TempVar)
+		if v != nil && (v.merge != nil || v.removed) {
 			*lp = l.Next
 			continue
 		}
@@ -850,8 +817,8 @@ func mergetemp(firstp *obj.Prog) {
 	}
 
 	// Clear aux structures.
-	for i := 0; i < len(var_); i++ {
-		var_[i].node.SetOpt(nil)
+	for _, v := range vars {
+		v.node.SetOpt(nil)
 	}
 
 	Flowend(g)
@@ -932,7 +899,7 @@ func nilopt(firstp *obj.Prog) {
 		return
 	}
 
-	if Debug_checknil > 1 { /* || strcmp(curfn->nname->sym->name, "f1") == 0 */
+	if Debug_checknil > 1 { // || strcmp(curfn->nname->sym->name, "f1") == 0
 		Dumpit("nilopt", g.Start, 0)
 	}
 

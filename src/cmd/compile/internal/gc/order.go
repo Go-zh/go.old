@@ -182,7 +182,7 @@ func ordersafeexpr(n *Node, order *Order) *Node {
 		return a
 	}
 
-	Fatal("ordersafeexpr %v", Oconv(int(n.Op), 0))
+	Fatalf("ordersafeexpr %v", Oconv(int(n.Op), 0))
 	return nil // not reached
 }
 
@@ -336,8 +336,8 @@ func ismulticall(l *NodeList) bool {
 // Copyret emits t1, t2, ... = n, where n is a function call,
 // and then returns the list t1, t2, ....
 func copyret(n *Node, order *Order) *NodeList {
-	if n.Type.Etype != TSTRUCT || n.Type.Funarg == 0 {
-		Fatal("copyret %v %d", n.Type, n.Left.Type.Outtuple)
+	if n.Type.Etype != TSTRUCT || !n.Type.Funarg {
+		Fatalf("copyret %v %d", n.Type, n.Left.Type.Outtuple)
 	}
 
 	var l1 *NodeList
@@ -396,19 +396,19 @@ func ordercall(n *Node, order *Order) {
 // contain m or k. They are usually unnecessary, but in the unnecessary
 // cases they are also typically registerizable, so not much harm done.
 // And this only applies to the multiple-assignment form.
-// We could do a more precise analysis if needed, like in walk.c.
+// We could do a more precise analysis if needed, like in walk.go.
 //
 // Ordermapassign also inserts these temporaries if needed for
 // calling writebarrierfat with a pointer to n->right.
 func ordermapassign(n *Node, order *Order) {
 	switch n.Op {
 	default:
-		Fatal("ordermapassign %v", Oconv(int(n.Op), 0))
+		Fatalf("ordermapassign %v", Oconv(int(n.Op), 0))
 
 	case OAS:
 		order.out = list(order.out, n)
 
-		// We call writebarrierfat only for values > 4 pointers long. See walk.c.
+		// We call writebarrierfat only for values > 4 pointers long. See walk.go.
 		if (n.Left.Op == OINDEXMAP || (needwritebarrier(n.Left, n.Right) && n.Left.Type.Width > int64(4*Widthptr))) && !isaddrokay(n.Right) {
 			m := n.Left
 			n.Left = ordertemp(m.Type, order, false)
@@ -434,7 +434,7 @@ func ordermapassign(n *Node, order *Order) {
 				a = Nod(OAS, m, l.N)
 				typecheck(&a, Etop)
 				post = list(post, a)
-			} else if flag_race != 0 && n.Op == OAS2FUNC && !isblank(l.N) {
+			} else if instrumenting && n.Op == OAS2FUNC && !isblank(l.N) {
 				m = l.N
 				l.N = ordertemp(m.Type, order, false)
 				a = Nod(OAS, m, l.N)
@@ -462,7 +462,7 @@ func orderstmt(n *Node, order *Order) {
 
 	switch n.Op {
 	default:
-		Fatal("orderstmt %v", Oconv(int(n.Op), 0))
+		Fatalf("orderstmt %v", Oconv(int(n.Op), 0))
 
 	case OVARKILL:
 		order.out = list(order.out, n)
@@ -509,7 +509,8 @@ func orderstmt(n *Node, order *Order) {
 			tmp1.Etype = 0 // now an rvalue not an lvalue
 		}
 		tmp1 = ordercopyexpr(tmp1, n.Left.Type, order, 0)
-		n.Right = Nod(int(n.Etype), tmp1, n.Right)
+		// TODO(marvin): Fix Node.EType type union.
+		n.Right = Nod(Op(n.Etype), tmp1, n.Right)
 		typecheck(&n.Right, Erv)
 		orderexpr(&n.Right, order, nil)
 		n.Etype = 0
@@ -704,7 +705,7 @@ func orderstmt(n *Node, order *Order) {
 		orderexpr(&n.Right, order, nil)
 		switch n.Type.Etype {
 		default:
-			Fatal("orderstmt range %v", n.Type)
+			Fatalf("orderstmt range %v", n.Type)
 
 			// Mark []byte(str) range expression to reuse string backing storage.
 		// It is safe because the storage cannot be mutated.
@@ -756,7 +757,7 @@ func orderstmt(n *Node, order *Order) {
 		ordercallargs(&n.List, order)
 		order.out = list(order.out, n)
 
-		// Special: clean case temporaries in each block entry.
+	// Special: clean case temporaries in each block entry.
 	// Select must enter one of its blocks, so there is no
 	// need for a cleaning at the end.
 	// Doubly special: evaluation order for select is stricter
@@ -773,7 +774,7 @@ func orderstmt(n *Node, order *Order) {
 		var r *Node
 		for l := n.List; l != nil; l = l.Next {
 			if l.N.Op != OXCASE {
-				Fatal("order select case %v", Oconv(int(l.N.Op), 0))
+				Fatalf("order select case %v", Oconv(int(l.N.Op), 0))
 			}
 			r = l.N.Left
 			setlineno(l.N)
@@ -781,7 +782,7 @@ func orderstmt(n *Node, order *Order) {
 			// Append any new body prologue to ninit.
 			// The next loop will insert ninit into nbody.
 			if l.N.Ninit != nil {
-				Fatal("order select ninit")
+				Fatalf("order select ninit")
 			}
 			if r != nil {
 				switch r.Op {
@@ -927,7 +928,7 @@ func orderstmt(n *Node, order *Order) {
 		orderexpr(&n.Left, order, nil)
 		for l := n.List; l != nil; l = l.Next {
 			if l.N.Op != OXCASE {
-				Fatal("order switch case %v", Oconv(int(l.N.Op), 0))
+				Fatalf("order switch case %v", Oconv(int(l.N.Op), 0))
 			}
 			orderexprlistinplace(l.N.List, order)
 			orderblock(&l.N.Nbody)
@@ -1091,9 +1092,12 @@ func orderexpr(np **Node, order *Order, lhs *Node) {
 		OMAKESLICE,
 		ONEW,
 		OREAL,
-		ORECOVER:
+		ORECOVER,
+		OSTRARRAYBYTE,
+		OSTRARRAYBYTETMP,
+		OSTRARRAYRUNE:
 		ordercall(n, order)
-		if lhs == nil || lhs.Op != ONAME || flag_race != 0 {
+		if lhs == nil || lhs.Op != ONAME || instrumenting {
 			n = ordercopyexpr(n, n.Type, order, 0)
 		}
 
@@ -1153,7 +1157,7 @@ func orderexpr(np **Node, order *Order, lhs *Node) {
 		// TODO(rsc): The Isfat is for consistency with componentgen and walkexpr.
 		// It needs to be removed in all three places.
 		// That would allow inlining x.(struct{*int}) the same as x.(*int).
-		if !isdirectiface(n.Type) || Isfat(n.Type) || flag_race != 0 {
+		if !isdirectiface(n.Type) || Isfat(n.Type) || instrumenting {
 			n = ordercopyexpr(n, n.Type, order, 1)
 		}
 

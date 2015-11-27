@@ -6,14 +6,13 @@ package runtime
 
 import "unsafe"
 
+type mOS struct{}
+
 //go:noescape
 func thr_new(param *thrparam, size int32)
 
 //go:noescape
 func sigaltstack(new, old *stackt)
-
-//go:noescape
-func sigfwd(fn uintptr, sig uint32, info *siginfo, ctx unsafe.Pointer)
 
 //go:noescape
 func sigaction(sig int32, new, old *sigactiont)

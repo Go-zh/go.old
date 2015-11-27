@@ -5,12 +5,27 @@
 package gc
 
 import (
+	"bytes"
 	"cmd/internal/obj"
 	"fmt"
 	"sort"
 	"unicode"
 	"unicode/utf8"
 )
+
+var (
+	newexport    int // if set, use new export format
+	Debug_export int // if set, print debugging information about export data
+	exportsize   int
+)
+
+func exportf(format string, args ...interface{}) {
+	n, _ := fmt.Fprintf(bout, format, args...)
+	exportsize += n
+	if Debug_export != 0 {
+		fmt.Printf(format, args...)
+	}
+}
 
 var asmlist *NodeList
 
@@ -31,12 +46,12 @@ func exportsym(n *Node) {
 	if Debug['E'] != 0 {
 		fmt.Printf("export symbol %v\n", n.Sym)
 	}
-	exportlist = list(exportlist, n)
+	exportlist = append(exportlist, n)
 }
 
 func exportname(s string) bool {
-	if s[0] < utf8.RuneSelf {
-		return 'A' <= s[0] && s[0] <= 'Z'
+	if r := s[0]; r < utf8.RuneSelf {
+		return 'A' <= r && r <= 'Z'
 	}
 	r, _ := utf8.DecodeRuneInString(s)
 	return unicode.IsUpper(r)
@@ -57,7 +72,7 @@ func exportedsym(sym *Sym) bool {
 	return sym.Pkg == localpkg && exportname(sym.Name)
 }
 
-func autoexport(n *Node, ctxt uint8) {
+func autoexport(n *Node, ctxt Class) {
 	if n == nil || n.Sym == nil {
 		return
 	}
@@ -79,15 +94,15 @@ func autoexport(n *Node, ctxt uint8) {
 }
 
 func dumppkg(p *Pkg) {
-	if p == nil || p == localpkg || p.Exported != 0 || p == builtinpkg {
+	if p == nil || p == localpkg || p.Exported || p == builtinpkg {
 		return
 	}
-	p.Exported = 1
+	p.Exported = true
 	suffix := ""
-	if p.Direct == 0 {
+	if !p.Direct {
 		suffix = " // indirect"
 	}
-	fmt.Fprintf(bout, "\timport %s %q%s\n", p.Name, p.Path, suffix)
+	exportf("\timport %s %q%s\n", p.Name, p.Path, suffix)
 }
 
 // Look for anything we need for the inline body
@@ -124,11 +139,11 @@ func reexportdep(n *Node) {
 				if Debug['E'] != 0 {
 					fmt.Printf("reexport name %v\n", n.Sym)
 				}
-				exportlist = list(exportlist, n)
+				exportlist = append(exportlist, n)
 			}
 		}
 
-		// Local variables in the bodies need their type.
+	// Local variables in the bodies need their type.
 	case ODCL:
 		t := n.Left.Type
 
@@ -140,7 +155,7 @@ func reexportdep(n *Node) {
 				if Debug['E'] != 0 {
 					fmt.Printf("reexport type %v from declaration\n", t.Sym)
 				}
-				exportlist = list(exportlist, t.Sym.Def)
+				exportlist = append(exportlist, t.Sym.Def)
 			}
 		}
 
@@ -154,7 +169,7 @@ func reexportdep(n *Node) {
 				if Debug['E'] != 0 {
 					fmt.Printf("reexport literal type %v\n", t.Sym)
 				}
-				exportlist = list(exportlist, t.Sym.Def)
+				exportlist = append(exportlist, t.Sym.Def)
 			}
 		}
 		fallthrough
@@ -164,10 +179,10 @@ func reexportdep(n *Node) {
 			if Debug['E'] != 0 {
 				fmt.Printf("reexport literal/type %v\n", n.Sym)
 			}
-			exportlist = list(exportlist, n)
+			exportlist = append(exportlist, n)
 		}
 
-		// for operations that need a type when rendered, put the type on the export list.
+	// for operations that need a type when rendered, put the type on the export list.
 	case OCONV,
 		OCONVIFACE,
 		OCONVNOP,
@@ -193,7 +208,7 @@ func reexportdep(n *Node) {
 			if Debug['E'] != 0 {
 				fmt.Printf("reexport type for expression %v\n", t.Sym)
 			}
-			exportlist = list(exportlist, t.Sym.Def)
+			exportlist = append(exportlist, t.Sym.Def)
 		}
 	}
 
@@ -209,16 +224,16 @@ func dumpexportconst(s *Sym) {
 	n := s.Def
 	typecheck(&n, Erv)
 	if n == nil || n.Op != OLITERAL {
-		Fatal("dumpexportconst: oconst nil: %v", s)
+		Fatalf("dumpexportconst: oconst nil: %v", s)
 	}
 
 	t := n.Type // may or may not be specified
 	dumpexporttype(t)
 
 	if t != nil && !isideal(t) {
-		fmt.Fprintf(bout, "\tconst %v %v = %v\n", Sconv(s, obj.FmtSharp), Tconv(t, obj.FmtSharp), Vconv(n.Val(), obj.FmtSharp))
+		exportf("\tconst %v %v = %v\n", Sconv(s, obj.FmtSharp), Tconv(t, obj.FmtSharp), Vconv(n.Val(), obj.FmtSharp))
 	} else {
-		fmt.Fprintf(bout, "\tconst %v = %v\n", Sconv(s, obj.FmtSharp), Vconv(n.Val(), obj.FmtSharp))
+		exportf("\tconst %v = %v\n", Sconv(s, obj.FmtSharp), Vconv(n.Val(), obj.FmtSharp))
 	}
 }
 
@@ -242,41 +257,32 @@ func dumpexportvar(s *Sym) {
 			}
 
 			// NOTE: The space after %#S here is necessary for ld's export data parser.
-			fmt.Fprintf(bout, "\tfunc %v %v { %v }\n", Sconv(s, obj.FmtSharp), Tconv(t, obj.FmtShort|obj.FmtSharp), Hconv(n.Func.Inl, obj.FmtSharp))
+			exportf("\tfunc %v %v { %v }\n", Sconv(s, obj.FmtSharp), Tconv(t, obj.FmtShort|obj.FmtSharp), Hconv(n.Func.Inl, obj.FmtSharp))
 
 			reexportdeplist(n.Func.Inl)
 		} else {
-			fmt.Fprintf(bout, "\tfunc %v %v\n", Sconv(s, obj.FmtSharp), Tconv(t, obj.FmtShort|obj.FmtSharp))
+			exportf("\tfunc %v %v\n", Sconv(s, obj.FmtSharp), Tconv(t, obj.FmtShort|obj.FmtSharp))
 		}
 	} else {
-		fmt.Fprintf(bout, "\tvar %v %v\n", Sconv(s, obj.FmtSharp), Tconv(t, obj.FmtSharp))
+		exportf("\tvar %v %v\n", Sconv(s, obj.FmtSharp), Tconv(t, obj.FmtSharp))
 	}
 }
 
+// methodbyname sorts types by symbol name.
 type methodbyname []*Type
 
-func (x methodbyname) Len() int {
-	return len(x)
-}
-
-func (x methodbyname) Swap(i, j int) {
-	x[i], x[j] = x[j], x[i]
-}
-
-func (x methodbyname) Less(i, j int) bool {
-	a := x[i]
-	b := x[j]
-	return stringsCompare(a.Sym.Name, b.Sym.Name) < 0
-}
+func (x methodbyname) Len() int           { return len(x) }
+func (x methodbyname) Swap(i, j int)      { x[i], x[j] = x[j], x[i] }
+func (x methodbyname) Less(i, j int) bool { return x[i].Sym.Name < x[j].Sym.Name }
 
 func dumpexporttype(t *Type) {
 	if t == nil {
 		return
 	}
-	if t.Printed != 0 || t == Types[t.Etype] || t == bytetype || t == runetype || t == errortype {
+	if t.Printed || t == Types[t.Etype] || t == bytetype || t == runetype || t == errortype {
 		return
 	}
-	t.Printed = 1
+	t.Printed = true
 
 	if t.Sym != nil && t.Etype != TFIELD {
 		dumppkg(t.Sym.Pkg)
@@ -289,26 +295,17 @@ func dumpexporttype(t *Type) {
 		return
 	}
 
-	n := 0
+	var m []*Type
 	for f := t.Method; f != nil; f = f.Down {
 		dumpexporttype(f)
-		n++
+		m = append(m, f)
 	}
+	sort.Sort(methodbyname(m))
 
-	m := make([]*Type, n)
-	i := 0
-	for f := t.Method; f != nil; f = f.Down {
-		m[i] = f
-		i++
-	}
-	sort.Sort(methodbyname(m[:n]))
-
-	fmt.Fprintf(bout, "\ttype %v %v\n", Sconv(t.Sym, obj.FmtSharp), Tconv(t, obj.FmtSharp|obj.FmtLong))
-	var f *Type
-	for i := 0; i < n; i++ {
-		f = m[i]
+	exportf("\ttype %v %v\n", Sconv(t.Sym, obj.FmtSharp), Tconv(t, obj.FmtSharp|obj.FmtLong))
+	for _, f := range m {
 		if f.Nointerface {
-			fmt.Fprintf(bout, "\t//go:nointerface\n")
+			exportf("\t//go:nointerface\n")
 		}
 		if f.Type.Nname != nil && f.Type.Nname.Func.Inl != nil { // nname was set by caninl
 
@@ -317,10 +314,10 @@ func dumpexporttype(t *Type) {
 			if Debug['l'] < 2 {
 				typecheckinl(f.Type.Nname)
 			}
-			fmt.Fprintf(bout, "\tfunc (%v) %v %v { %v }\n", Tconv(getthisx(f.Type).Type, obj.FmtSharp), Sconv(f.Sym, obj.FmtShort|obj.FmtByte|obj.FmtSharp), Tconv(f.Type, obj.FmtShort|obj.FmtSharp), Hconv(f.Type.Nname.Func.Inl, obj.FmtSharp))
+			exportf("\tfunc (%v) %v %v { %v }\n", Tconv(getthisx(f.Type).Type, obj.FmtSharp), Sconv(f.Sym, obj.FmtShort|obj.FmtByte|obj.FmtSharp), Tconv(f.Type, obj.FmtShort|obj.FmtSharp), Hconv(f.Type.Nname.Func.Inl, obj.FmtSharp))
 			reexportdeplist(f.Type.Nname.Func.Inl)
 		} else {
-			fmt.Fprintf(bout, "\tfunc (%v) %v %v\n", Tconv(getthisx(f.Type).Type, obj.FmtSharp), Sconv(f.Sym, obj.FmtShort|obj.FmtByte|obj.FmtSharp), Tconv(f.Type, obj.FmtShort|obj.FmtSharp))
+			exportf("\tfunc (%v) %v %v\n", Tconv(getthisx(f.Type).Type, obj.FmtSharp), Sconv(f.Sym, obj.FmtShort|obj.FmtByte|obj.FmtSharp), Tconv(f.Type, obj.FmtShort|obj.FmtSharp))
 		}
 	}
 }
@@ -359,41 +356,86 @@ func dumpsym(s *Sym) {
 }
 
 func dumpexport() {
-	lno := lineno
-
 	if buildid != "" {
-		fmt.Fprintf(bout, "build id %q\n", buildid)
+		exportf("build id %q\n", buildid)
 	}
-	fmt.Fprintf(bout, "\n$$\npackage %s", localpkg.Name)
-	if safemode != 0 {
-		fmt.Fprintf(bout, " safe")
-	}
-	fmt.Fprintf(bout, "\n")
 
-	for _, p := range pkgs {
-		if p.Direct != 0 {
-			dumppkg(p)
+	size := 0 // size of export section without enclosing markers
+	if forceNewExport || newexport != 0 {
+		// binary export
+		// The linker also looks for the $$ marker - use char after $$ to distinguish format.
+		exportf("\n$$B\n")        // indicate binary format
+		const verifyExport = true // enable to check format changes
+		if verifyExport {
+			// save a copy of the export data
+			var copy bytes.Buffer
+			bcopy := obj.Binitw(&copy)
+			size = Export(bcopy, Debug_export != 0)
+			bcopy.Flush() // flushing to bytes.Buffer cannot fail
+			if n, err := bout.Write(copy.Bytes()); n != size || err != nil {
+				Fatalf("error writing export data: got %d bytes, want %d bytes, err = %v", n, size, err)
+			}
+			// export data must contain no '$' so that we can find the end by searching for "$$"
+			if bytes.IndexByte(copy.Bytes(), '$') >= 0 {
+				Fatalf("export data contains $")
+			}
+
+			// verify that we can read the copied export data back in
+			// (use empty package map to avoid collisions)
+			savedPkgMap := pkgMap
+			savedPkgs := pkgs
+			pkgMap = make(map[string]*Pkg)
+			pkgs = nil
+			importpkg = mkpkg("")
+			Import(obj.Binitr(&copy)) // must not die
+			importpkg = nil
+			pkgs = savedPkgs
+			pkgMap = savedPkgMap
+		} else {
+			size = Export(bout, Debug_export != 0)
 		}
+		exportf("\n$$\n")
+	} else {
+		// textual export
+		lno := lineno
+
+		exportf("\n$$\n") // indicate textual format
+		exportsize = 0
+		exportf("package %s", localpkg.Name)
+		if safemode != 0 {
+			exportf(" safe")
+		}
+		exportf("\n")
+
+		for _, p := range pkgs {
+			if p.Direct {
+				dumppkg(p)
+			}
+		}
+
+		// exportlist grows during iteration - cannot use range
+		for len(exportlist) > 0 {
+			n := exportlist[0]
+			exportlist = exportlist[1:]
+			lineno = n.Lineno
+			dumpsym(n.Sym)
+		}
+
+		size = exportsize
+		exportf("\n$$\n")
+		lineno = lno
 	}
 
-	for l := exportlist; l != nil; l = l.Next {
-		lineno = l.N.Lineno
-		dumpsym(l.N.Sym)
+	if Debug_export != 0 {
+		fmt.Printf("export data size = %d bytes\n", size)
 	}
-
-	fmt.Fprintf(bout, "\n$$\n")
-	lineno = lno
 }
 
-/*
- * import
- */
+// import
 
-/*
- * return the sym for ss, which should match lexical
- */
-func importsym(s *Sym, op int) *Sym {
-	if s.Def != nil && int(s.Def.Op) != op {
+// return the sym for ss, which should match lexical
+func importsym(s *Sym, op Op) *Sym {
+	if s.Def != nil && s.Def.Op != op {
 		pkgstr := fmt.Sprintf("during import %q", importpkg.Path)
 		redeclare(s, pkgstr)
 	}
@@ -410,9 +452,7 @@ func importsym(s *Sym, op int) *Sym {
 	return s
 }
 
-/*
- * return the type pkg.name, forward declaring if needed
- */
+// return the type pkg.name, forward declaring if needed
 func pkgtype(s *Sym) *Type {
 	importsym(s, OTYPE)
 	if s.Def == nil || s.Def.Op != OTYPE {
@@ -529,7 +569,7 @@ func dumpasmhdr() {
 
 	b, err := obj.Bopenw(asmhdr)
 	if err != nil {
-		Fatal("%v", err)
+		Fatalf("%v", err)
 	}
 	fmt.Fprintf(b, "// generated by %cg -asmhdr from package %s\n\n", Thearch.Thechar, localpkg.Name)
 	var n *Node
@@ -545,7 +585,7 @@ func dumpasmhdr() {
 
 		case OTYPE:
 			t = n.Type
-			if t.Etype != TSTRUCT || t.Map != nil || t.Funarg != 0 {
+			if t.Etype != TSTRUCT || t.Map != nil || t.Funarg {
 				break
 			}
 			fmt.Fprintf(b, "#define %s__size %d\n", t.Sym.Name, int(t.Width))

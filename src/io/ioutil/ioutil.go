@@ -125,9 +125,9 @@ func (f byName) Less(i, j int) bool { return f[i].Name() < f[j].Name() }
 func (f byName) Swap(i, j int)      { f[i], f[j] = f[j], f[i] }
 
 // ReadDir reads the directory named by dirname and returns
-// a list of sorted directory entries.
+// a list of directory entries sorted by filename.
 
-// ReadDir 读取名为 dirname 的目录并返回一个已排序的目录项列表。
+// ReadDir 读取名为 dirname 的目录并返回一个按文件名排序的目录项列表。
 func ReadDir(dirname string) ([]os.FileInfo, error) {
 	f, err := os.Open(dirname)
 	if err != nil {

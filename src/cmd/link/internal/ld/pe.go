@@ -684,21 +684,11 @@ func addimports(datsect *IMAGE_SECTION_HEADER) {
 	Cseek(endoff)
 }
 
-type pescmp []*LSym
+type byExtname []*LSym
 
-func (x pescmp) Len() int {
-	return len(x)
-}
-
-func (x pescmp) Swap(i, j int) {
-	x[i], x[j] = x[j], x[i]
-}
-
-func (x pescmp) Less(i, j int) bool {
-	s1 := x[i]
-	s2 := x[j]
-	return stringsCompare(s1.Extname, s2.Extname) < 0
-}
+func (s byExtname) Len() int           { return len(s) }
+func (s byExtname) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s byExtname) Less(i, j int) bool { return s[i].Extname < s[j].Extname }
 
 func initdynexport() {
 	nexport = 0
@@ -715,7 +705,7 @@ func initdynexport() {
 		nexport++
 	}
 
-	sort.Sort(pescmp(dexport[:nexport]))
+	sort.Sort(byExtname(dexport[:nexport]))
 }
 
 func addexports() {
@@ -1107,6 +1097,11 @@ func Asmbpe() {
 
 	t := addpesection(".text", int(Segtext.Length), int(Segtext.Length))
 	t.Characteristics = IMAGE_SCN_CNT_CODE | IMAGE_SCN_CNT_INITIALIZED_DATA | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ
+	if Linkmode == LinkExternal {
+		// some data symbols (e.g. masks) end up in the .text section, and they normally
+		// expect larger alignment requirement than the default text section alignment.
+		t.Characteristics |= IMAGE_SCN_ALIGN_32BYTES
+	}
 	chksectseg(t, &Segtext)
 	textsect = pensect
 

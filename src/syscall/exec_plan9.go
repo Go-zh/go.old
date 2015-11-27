@@ -173,6 +173,7 @@ func init() {
 // no rescheduling, no malloc calls, and no new stack segments.
 // The calls to RawSyscall are okay because they are assembly
 // functions that do not grow the stack.
+//go:norace
 func forkAndExecInChild(argv0 *byte, argv []*byte, envv []envItem, dir *byte, attr *ProcAttr, fdsToClose []int, pipe int, rflag int) (pid int, err error) {
 	// Declare all variables at top in case any
 	// declarations require heap allocation (e.g., errbuf).
@@ -218,10 +219,7 @@ func forkAndExecInChild(argv0 *byte, argv []*byte, envv []envItem, dir *byte, at
 
 	// Close fds we don't need.
 	for i = 0; i < len(fdsToClose); i++ {
-		r1, _, _ = RawSyscall(SYS_CLOSE, uintptr(fdsToClose[i]), 0, 0)
-		if int32(r1) == -1 {
-			goto childerror
-		}
+		RawSyscall(SYS_CLOSE, uintptr(fdsToClose[i]), 0, 0)
 	}
 
 	if envv != nil {

@@ -756,15 +756,18 @@ func (server *Server) readRequestHeader(codec ServerCodec) (service *service, mt
 }
 
 // Accept accepts connections on the listener and serves requests
-// for each incoming connection.  Accept blocks; the caller typically
-// invokes it in a go statement.
+// for each incoming connection. Accept blocks until the listener
+// returns a non-nil error. The caller typically invokes Accept in a
+// go statement.
 
-// Accept接收连接，为每个连接监听和服务请求。Accept是阻塞的，调用者一般在go语句中使用它。
+// Accept 接收连接，为每个连接监听和服务请求。Accept 阻塞到监听器返回一个非 nil  错误为止。
+// 调用者一般在 go 语句中使用它。
 func (server *Server) Accept(lis net.Listener) {
 	for {
 		conn, err := lis.Accept()
 		if err != nil {
-			log.Fatal("rpc.Serve: accept:", err.Error()) // TODO(r): exit?
+			log.Print("rpc.Serve: accept:", err.Error())
+			return
 		}
 		go server.ServeConn(conn)
 	}

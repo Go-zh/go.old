@@ -42,13 +42,13 @@ type Node struct {
 
 	Esc uint16 // EscXXX
 
-	Op          uint8
+	Op          Op
 	Nointerface bool
 	Ullman      uint8 // sethi/ullman number
 	Addable     bool  // addressable
-	Etype       uint8 // op for OASOP, etype for OTYPE, exclam for export, 6g saved reg
+	Etype       EType // op for OASOP, etype for OTYPE, exclam for export, 6g saved reg
 	Bounded     bool  // bounds check unnecessary
-	Class       uint8 // PPARAM, PAUTO, PEXTERN, etc
+	Class       Class // PPARAM, PAUTO, PEXTERN, etc
 	Embedded    uint8 // ODCLFIELD embedded type
 	Colas       bool  // OAS resulting from :=
 	Diag        uint8 // already printed error about this
@@ -81,7 +81,7 @@ func (n *Node) SetVal(v Val) {
 	if n.hasVal == -1 {
 		Debug['h'] = 1
 		Dump("have Opt", n)
-		Fatal("have Opt")
+		Fatalf("have Opt")
 	}
 	n.hasVal = +1
 	n.E = v.U
@@ -104,7 +104,7 @@ func (n *Node) SetOpt(x interface{}) {
 	if n.hasVal == +1 {
 		Debug['h'] = 1
 		Dump("have Val", n)
-		Fatal("have Val")
+		Fatalf("have Val")
 	}
 	n.hasVal = -1
 	n.E = x
@@ -169,18 +169,24 @@ type Func struct {
 
 	Endlineno int32
 
-	Norace         bool // func must not have race detector annotations
-	Nosplit        bool // func should not execute on separate stack
-	Nowritebarrier bool // emit compiler error instead of write barrier
-	Dupok          bool // duplicate definitions ok
-	Wrapper        bool // is method wrapper
-	Needctxt       bool // function uses context register (has closure variables)
-	Systemstack    bool // must run on system stack
+	Norace            bool // func must not have race detector annotations
+	Nosplit           bool // func should not execute on separate stack
+	Noinline          bool // func should not be inlined
+	Nowritebarrier    bool // emit compiler error instead of write barrier
+	Nowritebarrierrec bool // error on write barrier in this or recursive callees
+	Dupok             bool // duplicate definitions ok
+	Wrapper           bool // is method wrapper
+	Needctxt          bool // function uses context register (has closure variables)
+	Systemstack       bool // must run on system stack
+
+	WBLineno int32 // line number of first write barrier
 }
+
+type Op uint8
 
 // Node ops.
 const (
-	OXXX = iota
+	OXXX = Op(iota)
 
 	// names
 	ONAME    // var, const or func name
@@ -409,9 +415,10 @@ func list(l *NodeList, n *Node) *NodeList {
 	return concat(l, list1(n))
 }
 
-// listsort sorts *l in place according to the 3-way comparison function f.
+// listsort sorts *l in place according to the comparison function lt.
+// The algorithm expects lt(a, b) to be equivalent to a < b.
 // The algorithm is mergesort, so it is guaranteed to be O(n log n).
-func listsort(l **NodeList, f func(*Node, *Node) int) {
+func listsort(l **NodeList, lt func(*Node, *Node) bool) {
 	if *l == nil || (*l).Next == nil {
 		return
 	}
@@ -436,10 +443,10 @@ func listsort(l **NodeList, f func(*Node, *Node) int) {
 	(*l).End = l1
 
 	l1 = *l
-	listsort(&l1, f)
-	listsort(&l2, f)
+	listsort(&l1, lt)
+	listsort(&l2, lt)
 
-	if f(l1.N, l2.N) < 0 {
+	if lt(l1.N, l2.N) {
 		*l = l1
 	} else {
 		*l = l2
@@ -451,7 +458,7 @@ func listsort(l **NodeList, f func(*Node, *Node) int) {
 
 	var le *NodeList
 	for (l1 != nil) && (l2 != nil) {
-		for (l1.Next != nil) && f(l1.Next.N, l2.N) < 0 {
+		for (l1.Next != nil) && lt(l1.Next.N, l2.N) {
 			l1 = l1.Next
 		}
 

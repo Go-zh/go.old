@@ -11,7 +11,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -52,6 +51,10 @@ func Bopenr(name string) (*Biobuf, error) {
 
 func Binitw(w io.Writer) *Biobuf {
 	return &Biobuf{w: bufio.NewWriter(w)}
+}
+
+func Binitr(r io.Reader) *Biobuf {
+	return &Biobuf{r: bufio.NewReader(r)}
 }
 
 func (b *Biobuf) Write(p []byte) (int, error) {
@@ -166,17 +169,6 @@ func Brdstr(b *Biobuf, delim int, cut int) string {
 	return s
 }
 
-func Access(name string, mode int) int {
-	if mode != 0 {
-		panic("bad access")
-	}
-	_, err := os.Stat(name)
-	if err != nil {
-		return -1
-	}
-	return 0
-}
-
 func Blinelen(b *Biobuf) int {
 	return b.linelen
 }
@@ -212,10 +204,14 @@ func Getgoos() string {
 	return envOr("GOOS", defaultGOOS)
 }
 
-func Getgoarm() string {
+func Getgoarm() int32 {
 	switch v := envOr("GOARM", defaultGOARM); v {
-	case "5", "6", "7":
-		return v
+	case "5":
+		return 5
+	case "6":
+		return 6
+	case "7":
+		return 7
 	}
 	// Fail here, rather than validate at multiple call sites.
 	log.Fatalf("Invalid GOARM value. Must be 5, 6, or 7.")
@@ -233,11 +229,6 @@ func Getgoextlinkenabled() string {
 
 func Getgoversion() string {
 	return version
-}
-
-func Atoi(s string) int {
-	i, _ := strconv.Atoi(s)
-	return i
 }
 
 func (p *Prog) Line() string {
@@ -470,13 +461,25 @@ func Mconv(a *Addr) string {
 		}
 
 	case NAME_EXTERN:
-		str = fmt.Sprintf("%s%s(SB)", a.Sym.Name, offConv(a.Offset))
+		if a.Sym != nil {
+			str = fmt.Sprintf("%s%s(SB)", a.Sym.Name, offConv(a.Offset))
+		} else {
+			str = fmt.Sprintf("%s(SB)", offConv(a.Offset))
+		}
 
 	case NAME_GOTREF:
-		str = fmt.Sprintf("%s%s@GOT(SB)", a.Sym.Name, offConv(a.Offset))
+		if a.Sym != nil {
+			str = fmt.Sprintf("%s%s@GOT(SB)", a.Sym.Name, offConv(a.Offset))
+		} else {
+			str = fmt.Sprintf("%s@GOT(SB)", offConv(a.Offset))
+		}
 
 	case NAME_STATIC:
-		str = fmt.Sprintf("%s<>%s(SB)", a.Sym.Name, offConv(a.Offset))
+		if a.Sym != nil {
+			str = fmt.Sprintf("%s<>%s(SB)", a.Sym.Name, offConv(a.Offset))
+		} else {
+			str = fmt.Sprintf("<>%s(SB)", offConv(a.Offset))
+		}
 
 	case NAME_AUTO:
 		if a.Sym != nil {
@@ -521,11 +524,12 @@ var regSpace []regSet
 const (
 	// Because of masking operations in the encodings, each register
 	// space should start at 0 modulo some power of 2.
-	RBase386   = 1 * 1024
-	RBaseAMD64 = 2 * 1024
-	RBaseARM   = 3 * 1024
-	RBasePPC64 = 4 * 1024 // range [4k, 8k)
-	RBaseARM64 = 8 * 1024 // range [8k, 12k)
+	RBase386    = 1 * 1024
+	RBaseAMD64  = 2 * 1024
+	RBaseARM    = 3 * 1024
+	RBasePPC64  = 4 * 1024  // range [4k, 8k)
+	RBaseARM64  = 8 * 1024  // range [8k, 13k)
+	RBaseMIPS64 = 13 * 1024 // range [13k, 16k)
 )
 
 // RegisterRegister binds a pretty-printer (Rconv) for register
@@ -585,6 +589,7 @@ const (
 	ABaseAMD64
 	ABasePPC64
 	ABaseARM64
+	ABaseMIPS64
 	AMask = 1<<12 - 1 // AND with this to use the opcode as an array index.
 )
 

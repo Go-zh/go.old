@@ -108,6 +108,13 @@ func (p *Package) writeDefs() {
 		fmt.Fprint(fgo2, goProlog)
 	}
 
+	for i, t := range p.CgoChecks {
+		n := p.unsafeCheckPointerNameIndex(i)
+		fmt.Fprintf(fgo2, "\nfunc %s(p interface{}, args ...interface{}) %s {\n", n, t)
+		fmt.Fprintf(fgo2, "\treturn _cgoCheckPointer(p, args...).(%s)\n", t)
+		fmt.Fprintf(fgo2, "}\n")
+	}
+
 	gccgoSymbolPrefix := p.gccgoSymbolPrefix()
 
 	cVars := make(map[string]bool)
@@ -693,7 +700,7 @@ func (p *Package) writeExports(fgo2, fm, fgcc, fgcch io.Writer) {
 		}
 		fntype := fn.Type
 		forFieldList(fntype.Params,
-			func(i int, atype ast.Expr) {
+			func(i int, aname string, atype ast.Expr) {
 				t := p.cgoType(atype)
 				if off%t.Align != 0 {
 					pad := t.Align - off%t.Align
@@ -711,7 +718,7 @@ func (p *Package) writeExports(fgo2, fm, fgcc, fgcch io.Writer) {
 			npad++
 		}
 		forFieldList(fntype.Results,
-			func(i int, atype ast.Expr) {
+			func(i int, aname string, atype ast.Expr) {
 				t := p.cgoType(atype)
 				if off%t.Align != 0 {
 					pad := t.Align - off%t.Align
@@ -744,8 +751,12 @@ func (p *Package) writeExports(fgo2, fm, fgcc, fgcch io.Writer) {
 			fmt.Fprintf(fgcch, "\n/* Return type for %s */\n", exp.ExpName)
 			fmt.Fprintf(fgcch, "struct %s_return {\n", exp.ExpName)
 			forFieldList(fntype.Results,
-				func(i int, atype ast.Expr) {
-					fmt.Fprintf(fgcch, "\t%s r%d;\n", p.cgoType(atype).C, i)
+				func(i int, aname string, atype ast.Expr) {
+					fmt.Fprintf(fgcch, "\t%s r%d;", p.cgoType(atype).C, i)
+					if len(aname) > 0 {
+						fmt.Fprintf(fgcch, " /* %s */", aname)
+					}
+					fmt.Fprint(fgcch, "\n")
 				})
 			fmt.Fprintf(fgcch, "};\n")
 			gccResult = "struct " + exp.ExpName + "_return"
@@ -758,7 +769,7 @@ func (p *Package) writeExports(fgo2, fm, fgcc, fgcch io.Writer) {
 			s += " recv"
 		}
 		forFieldList(fntype.Params,
-			func(i int, atype ast.Expr) {
+			func(i int, aname string, atype ast.Expr) {
 				if i > 0 || fn.Recv != nil {
 					s += ", "
 				}
@@ -783,7 +794,7 @@ func (p *Package) writeExports(fgo2, fm, fgcc, fgcch io.Writer) {
 			fmt.Fprintf(fgcc, "\ta.recv = recv;\n")
 		}
 		forFieldList(fntype.Params,
-			func(i int, atype ast.Expr) {
+			func(i int, aname string, atype ast.Expr) {
 				fmt.Fprintf(fgcc, "\ta.p%d = p%d;\n", i, i)
 			})
 		fmt.Fprintf(fgcc, "\tcrosscall2(_cgoexp%s_%s, &a, %d);\n", cPrefix, exp.ExpName, off)
@@ -792,7 +803,7 @@ func (p *Package) writeExports(fgo2, fm, fgcc, fgcch io.Writer) {
 				fmt.Fprintf(fgcc, "\treturn a.r0;\n")
 			} else {
 				forFieldList(fntype.Results,
-					func(i int, atype ast.Expr) {
+					func(i int, aname string, atype ast.Expr) {
 						fmt.Fprintf(fgcc, "\tr.r%d = a.r%d;\n", i, i)
 					})
 				fmt.Fprintf(fgcc, "\treturn r;\n")
@@ -800,17 +811,18 @@ func (p *Package) writeExports(fgo2, fm, fgcc, fgcch io.Writer) {
 		}
 		fmt.Fprintf(fgcc, "}\n")
 
-		// Build the wrapper function compiled by gc.
-		goname := exp.Func.Name.Name
+		// Build the wrapper function compiled by cmd/compile.
+		goname := "_cgoexpwrap" + cPrefix + "_"
 		if fn.Recv != nil {
-			goname = "_cgoexpwrap" + cPrefix + "_" + fn.Recv.List[0].Names[0].Name + "_" + goname
+			goname += fn.Recv.List[0].Names[0].Name + "_"
 		}
-		fmt.Fprintf(fgo2, "//go:cgo_export_dynamic %s\n", goname)
+		goname += exp.Func.Name.Name
+		fmt.Fprintf(fgo2, "//go:cgo_export_dynamic %s\n", exp.ExpName)
 		fmt.Fprintf(fgo2, "//go:linkname _cgoexp%s_%s _cgoexp%s_%s\n", cPrefix, exp.ExpName, cPrefix, exp.ExpName)
 		fmt.Fprintf(fgo2, "//go:cgo_export_static _cgoexp%s_%s\n", cPrefix, exp.ExpName)
 		fmt.Fprintf(fgo2, "//go:nosplit\n") // no split stack, so no use of m or g
 		fmt.Fprintf(fgo2, "//go:norace\n")  // must not have race detector calls inserted
-		fmt.Fprintf(fgo2, "func _cgoexp%s_%s(a unsafe.Pointer, n int32) {", cPrefix, exp.ExpName)
+		fmt.Fprintf(fgo2, "func _cgoexp%s_%s(a unsafe.Pointer, n int32) {\n", cPrefix, exp.ExpName)
 		fmt.Fprintf(fgo2, "\tfn := %s\n", goname)
 		// The indirect here is converting from a Go function pointer to a C function pointer.
 		fmt.Fprintf(fgo2, "\t_cgo_runtime_cgocallback(**(**unsafe.Pointer)(unsafe.Pointer(&fn)), a, uintptr(n));\n")
@@ -818,44 +830,75 @@ func (p *Package) writeExports(fgo2, fm, fgcc, fgcch io.Writer) {
 
 		fmt.Fprintf(fm, "int _cgoexp%s_%s;\n", cPrefix, exp.ExpName)
 
-		// Calling a function with a receiver from C requires
-		// a Go wrapper function.
+		// This code uses printer.Fprint, not conf.Fprint,
+		// because we don't want //line comments in the middle
+		// of the function types.
+		fmt.Fprintf(fgo2, "\n")
+		fmt.Fprintf(fgo2, "func %s(", goname)
+		comma := false
 		if fn.Recv != nil {
-			fmt.Fprintf(fgo2, "func %s(recv ", goname)
-			conf.Fprint(fgo2, fset, fn.Recv.List[0].Type)
-			forFieldList(fntype.Params,
-				func(i int, atype ast.Expr) {
-					fmt.Fprintf(fgo2, ", p%d ", i)
-					conf.Fprint(fgo2, fset, atype)
-				})
-			fmt.Fprintf(fgo2, ")")
-			if gccResult != "void" {
-				fmt.Fprint(fgo2, " (")
-				forFieldList(fntype.Results,
-					func(i int, atype ast.Expr) {
-						if i > 0 {
-							fmt.Fprint(fgo2, ", ")
-						}
-						conf.Fprint(fgo2, fset, atype)
-					})
-				fmt.Fprint(fgo2, ")")
-			}
-			fmt.Fprint(fgo2, " {\n")
-			fmt.Fprint(fgo2, "\t")
-			if gccResult != "void" {
-				fmt.Fprint(fgo2, "return ")
-			}
-			fmt.Fprintf(fgo2, "recv.%s(", exp.Func.Name)
-			forFieldList(fntype.Params,
-				func(i int, atype ast.Expr) {
+			fmt.Fprintf(fgo2, "recv ")
+			printer.Fprint(fgo2, fset, fn.Recv.List[0].Type)
+			comma = true
+		}
+		forFieldList(fntype.Params,
+			func(i int, aname string, atype ast.Expr) {
+				if comma {
+					fmt.Fprintf(fgo2, ", ")
+				}
+				fmt.Fprintf(fgo2, "p%d ", i)
+				printer.Fprint(fgo2, fset, atype)
+				comma = true
+			})
+		fmt.Fprintf(fgo2, ")")
+		if gccResult != "void" {
+			fmt.Fprint(fgo2, " (")
+			forFieldList(fntype.Results,
+				func(i int, aname string, atype ast.Expr) {
 					if i > 0 {
 						fmt.Fprint(fgo2, ", ")
 					}
-					fmt.Fprintf(fgo2, "p%d", i)
+					fmt.Fprintf(fgo2, "r%d ", i)
+					printer.Fprint(fgo2, fset, atype)
 				})
-			fmt.Fprint(fgo2, ")\n")
-			fmt.Fprint(fgo2, "}\n")
+			fmt.Fprint(fgo2, ")")
 		}
+		fmt.Fprint(fgo2, " {\n")
+		if gccResult == "void" {
+			fmt.Fprint(fgo2, "\t")
+		} else {
+			// Verify that any results don't contain any
+			// Go pointers.
+			addedDefer := false
+			forFieldList(fntype.Results,
+				func(i int, aname string, atype ast.Expr) {
+					if !p.hasPointer(nil, atype, false) {
+						return
+					}
+					if !addedDefer {
+						fmt.Fprint(fgo2, "\tdefer func() {\n")
+						addedDefer = true
+					}
+					fmt.Fprintf(fgo2, "\t\t_cgoCheckResult(r%d)\n", i)
+				})
+			if addedDefer {
+				fmt.Fprint(fgo2, "\t}()\n")
+			}
+			fmt.Fprint(fgo2, "\treturn ")
+		}
+		if fn.Recv != nil {
+			fmt.Fprintf(fgo2, "recv.")
+		}
+		fmt.Fprintf(fgo2, "%s(", exp.Func.Name)
+		forFieldList(fntype.Params,
+			func(i int, aname string, atype ast.Expr) {
+				if i > 0 {
+					fmt.Fprint(fgo2, ", ")
+				}
+				fmt.Fprintf(fgo2, "p%d", i)
+			})
+		fmt.Fprint(fgo2, ")\n")
+		fmt.Fprint(fgo2, "}\n")
 	}
 
 	fmt.Fprintf(fgcch, "%s", gccExportHeaderEpilog)
@@ -879,13 +922,13 @@ func (p *Package) writeGccgoExports(fgo2, fm, fgcc, fgcch io.Writer) {
 		cdeclBuf := new(bytes.Buffer)
 		resultCount := 0
 		forFieldList(fntype.Results,
-			func(i int, atype ast.Expr) { resultCount++ })
+			func(i int, aname string, atype ast.Expr) { resultCount++ })
 		switch resultCount {
 		case 0:
 			fmt.Fprintf(cdeclBuf, "void")
 		case 1:
 			forFieldList(fntype.Results,
-				func(i int, atype ast.Expr) {
+				func(i int, aname string, atype ast.Expr) {
 					t := p.cgoType(atype)
 					fmt.Fprintf(cdeclBuf, "%s", t.C)
 				})
@@ -894,9 +937,13 @@ func (p *Package) writeGccgoExports(fgo2, fm, fgcc, fgcch io.Writer) {
 			fmt.Fprintf(fgcch, "\n/* Return type for %s */\n", exp.ExpName)
 			fmt.Fprintf(fgcch, "struct %s_result {\n", exp.ExpName)
 			forFieldList(fntype.Results,
-				func(i int, atype ast.Expr) {
+				func(i int, aname string, atype ast.Expr) {
 					t := p.cgoType(atype)
-					fmt.Fprintf(fgcch, "\t%s r%d;\n", t.C, i)
+					fmt.Fprintf(fgcch, "\t%s r%d;", t.C, i)
+					if len(aname) > 0 {
+						fmt.Fprintf(fgcch, " /* %s */", aname)
+					}
+					fmt.Fprint(fgcch, "\n")
 				})
 			fmt.Fprintf(fgcch, "};\n")
 			fmt.Fprintf(cdeclBuf, "struct %s_result", exp.ExpName)
@@ -911,7 +958,7 @@ func (p *Package) writeGccgoExports(fgo2, fm, fgcc, fgcch io.Writer) {
 		}
 		// Function parameters.
 		forFieldList(fntype.Params,
-			func(i int, atype ast.Expr) {
+			func(i int, aname string, atype ast.Expr) {
 				if i > 0 || fn.Recv != nil {
 					fmt.Fprintf(cdeclBuf, ", ")
 				}
@@ -925,23 +972,15 @@ func (p *Package) writeGccgoExports(fgo2, fm, fgcc, fgcch io.Writer) {
 			fmt.Fprintf(fgcch, "\n%s", exp.Doc)
 		}
 
+		fmt.Fprintf(fgcch, "extern %s %s %s;\n", cRet, exp.ExpName, cParams)
+
 		// We need to use a name that will be exported by the
 		// Go code; otherwise gccgo will make it static and we
 		// will not be able to link against it from the C
 		// code.
 		goName := "Cgoexp_" + exp.ExpName
-		fmt.Fprintf(fgcch, `extern %s %s %s __asm__("%s.%s");`, cRet, goName, cParams, gccgoSymbolPrefix, goName)
-		fmt.Fprint(fgcch, "\n")
-
-		// Use a #define so that the C code that includes
-		// cgo_export.h will be able to refer to the Go
-		// function using the expected name.
-		fmt.Fprintf(fgcch, "#define %s %s\n", exp.ExpName, goName)
-
-		// Use a #undef in _cgo_export.c so that we ignore the
-		// #define from cgo_export.h, since here we are
-		// defining the real function.
-		fmt.Fprintf(fgcc, "#undef %s\n", exp.ExpName)
+		fmt.Fprintf(fgcc, `extern %s %s %s __asm__("%s.%s");`, cRet, goName, cParams, gccgoSymbolPrefix, goName)
+		fmt.Fprint(fgcc, "\n")
 
 		fmt.Fprint(fgcc, "\n")
 		fmt.Fprintf(fgcc, "%s %s %s {\n", cRet, exp.ExpName, cParams)
@@ -956,7 +995,7 @@ func (p *Package) writeGccgoExports(fgo2, fm, fgcc, fgcch io.Writer) {
 			fmt.Fprint(fgcc, "recv")
 		}
 		forFieldList(fntype.Params,
-			func(i int, atype ast.Expr) {
+			func(i int, aname string, atype ast.Expr) {
 				if i > 0 || fn.Recv != nil {
 					fmt.Fprintf(fgcc, ", ")
 				}
@@ -982,7 +1021,7 @@ func (p *Package) writeGccgoExports(fgo2, fm, fgcc, fgcch io.Writer) {
 			printer.Fprint(fgo2, fset, fn.Recv.List[0].Type)
 		}
 		forFieldList(fntype.Params,
-			func(i int, atype ast.Expr) {
+			func(i int, aname string, atype ast.Expr) {
 				if i > 0 || fn.Recv != nil {
 					fmt.Fprintf(fgo2, ", ")
 				}
@@ -993,7 +1032,7 @@ func (p *Package) writeGccgoExports(fgo2, fm, fgcc, fgcch io.Writer) {
 		if resultCount > 0 {
 			fmt.Fprintf(fgo2, " (")
 			forFieldList(fntype.Results,
-				func(i int, atype ast.Expr) {
+				func(i int, aname string, atype ast.Expr) {
 					if i > 0 {
 						fmt.Fprint(fgo2, ", ")
 					}
@@ -1013,7 +1052,7 @@ func (p *Package) writeGccgoExports(fgo2, fm, fgcc, fgcch io.Writer) {
 		}
 		fmt.Fprintf(fgo2, "%s(", exp.Func.Name)
 		forFieldList(fntype.Params,
-			func(i int, atype ast.Expr) {
+			func(i int, aname string, atype ast.Expr) {
 				if i > 0 {
 					fmt.Fprint(fgo2, ", ")
 				}
@@ -1071,19 +1110,19 @@ func (p *Package) gccgoSymbolPrefix() string {
 }
 
 // Call a function for each entry in an ast.FieldList, passing the
-// index into the list and the type.
-func forFieldList(fl *ast.FieldList, fn func(int, ast.Expr)) {
+// index into the list, the name if any, and the type.
+func forFieldList(fl *ast.FieldList, fn func(int, string, ast.Expr)) {
 	if fl == nil {
 		return
 	}
 	i := 0
 	for _, r := range fl.List {
 		if r.Names == nil {
-			fn(i, r.Type)
+			fn(i, "", r.Type)
 			i++
 		} else {
-			for range r.Names {
-				fn(i, r.Type)
+			for _, n := range r.Names {
+				fn(i, n.Name, r.Type)
 				i++
 			}
 		}
@@ -1193,9 +1232,11 @@ func (p *Package) cgoType(e ast.Expr) *Type {
 }
 
 const gccProlog = `
-// Usual nonsense: if x and y are not equal, the type will be invalid
-// (have a negative array count) and an inscrutable error will come
-// out of the compiler and hopefully mention "name".
+/*
+  If x and y are not equal, the type will be invalid
+  (have a negative array count) and an inscrutable error will come
+  out of the compiler and hopefully mention "name".
+*/
 #define __cgo_compile_assert_eq(x, y, name) typedef char name[(x-y)*(x-y)*-2+1];
 
 // Check at compile time that the sizes we use match our expectations.
@@ -1239,6 +1280,12 @@ func _cgo_runtime_cmalloc(uintptr) unsafe.Pointer
 
 //go:linkname _cgo_runtime_cgocallback runtime.cgocallback
 func _cgo_runtime_cgocallback(unsafe.Pointer, unsafe.Pointer, uintptr)
+
+//go:linkname _cgoCheckPointer runtime.cgoCheckPointer
+func _cgoCheckPointer(interface{}, ...interface{}) interface{}
+
+//go:linkname _cgoCheckResult runtime.cgoCheckResult
+func _cgoCheckResult(interface{})
 `
 
 const goStringDef = `
@@ -1376,8 +1423,10 @@ typedef double GoFloat64;
 typedef __complex float GoComplex64;
 typedef __complex double GoComplex128;
 
-// static assertion to make sure the file is being used on architecture
-// at least with matching size of GoInt.
+/*
+  static assertion to make sure the file is being used on architecture
+  at least with matching size of GoInt.
+*/
 typedef char _check_for_GOINTBITS_bit_pointer_matching_GoInt[sizeof(void*)==GOINTBITS/8 ? 1:-1];
 
 typedef struct { char *p; GoInt n; } GoString;

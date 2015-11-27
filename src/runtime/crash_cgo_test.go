@@ -40,8 +40,13 @@ func TestCgoCallbackGC(t *testing.T) {
 	if runtime.GOOS == "plan9" || runtime.GOOS == "windows" {
 		t.Skipf("no pthreads on %s", runtime.GOOS)
 	}
-	if testing.Short() && runtime.GOOS == "dragonfly" {
-		t.Skip("see golang.org/issue/11990")
+	if testing.Short() {
+		switch {
+		case runtime.GOOS == "dragonfly":
+			t.Skip("see golang.org/issue/11990")
+		case runtime.GOOS == "linux" && runtime.GOARCH == "arm":
+			t.Skip("too slow for arm builders")
+		}
 	}
 	got := executeTest(t, cgoCallbackGCSource, nil)
 	want := "OK\n"
@@ -84,7 +89,7 @@ func TestCgoExternalThreadSIGPROF(t *testing.T) {
 			}
 		}
 	}
-	if runtime.GOARCH == "ppc64" || runtime.GOARCH == "ppc64le" {
+	if runtime.GOARCH == "ppc64" {
 		// TODO(austin) External linking not implemented on
 		// ppc64 (issue #8912)
 		t.Skipf("no external linking on ppc64")
@@ -222,7 +227,10 @@ static void *thr(void *arg) {
 
 static void foo() {
     pthread_t th;
-    pthread_create(&th, 0, thr, 0);
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, 256 << 10);
+    pthread_create(&th, &attr, thr, 0);
     pthread_join(th, 0);
 }
 */

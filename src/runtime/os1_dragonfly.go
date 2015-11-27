@@ -74,7 +74,7 @@ func lwp_start(uintptr)
 //go:nowritebarrier
 func newosproc(mp *m, stk unsafe.Pointer) {
 	if false {
-		print("newosproc stk=", stk, " m=", mp, " g=", mp.g0, " lwp_start=", funcPC(lwp_start), " id=", mp.id, "/", mp.tls[0], " ostk=", &mp, "\n")
+		print("newosproc stk=", stk, " m=", mp, " g=", mp.g0, " lwp_start=", funcPC(lwp_start), " id=", mp.id, " ostk=", &mp, "\n")
 	}
 
 	var oset sigset
@@ -87,8 +87,6 @@ func newosproc(mp *m, stk unsafe.Pointer) {
 		tid1:       unsafe.Pointer(&mp.procid),
 		tid2:       nil,
 	}
-
-	mp.tls[0] = uintptr(mp.id) // XXX so 386 asm can find it
 
 	lwp_create(&params)
 	sigprocmask(_SIG_SETMASK, &oset, nil)
@@ -119,12 +117,19 @@ func mpreinit(mp *m) {
 	mp.gsignal.m = mp
 }
 
+//go:nosplit
 func msigsave(mp *m) {
-	smask := (*sigset)(unsafe.Pointer(&mp.sigmask))
-	if unsafe.Sizeof(*smask) > unsafe.Sizeof(mp.sigmask) {
-		throw("insufficient storage for signal mask")
-	}
-	sigprocmask(_SIG_SETMASK, nil, smask)
+	sigprocmask(_SIG_SETMASK, nil, &mp.sigmask)
+}
+
+//go:nosplit
+func msigrestore(mp *m) {
+	sigprocmask(_SIG_SETMASK, &mp.sigmask, nil)
+}
+
+//go:nosplit
+func sigblock() {
+	sigprocmask(_SIG_SETMASK, &sigset_all, nil)
 }
 
 // Called to initialize a new m (including the bootstrap m).
@@ -139,7 +144,7 @@ func minit() {
 	signalstack(&_g_.m.gsignal.stack)
 
 	// restore signal mask from m.sigmask and unblock essential signals
-	nmask := *(*sigset)(unsafe.Pointer(&_g_.m.sigmask))
+	nmask := _g_.m.sigmask
 	for i := range sigtable {
 		if sigtable[i].flags&_SigUnblock != 0 {
 			nmask.__bits[(i-1)/32] &^= 1 << ((uint32(i) - 1) & 31)
@@ -150,9 +155,6 @@ func minit() {
 
 // Called from dropm to undo the effect of an minit.
 func unminit() {
-	_g_ := getg()
-	smask := (*sigset)(unsafe.Pointer(&_g_.m.sigmask))
-	sigprocmask(_SIG_SETMASK, smask, nil)
 	signalstack(nil)
 }
 
@@ -222,6 +224,7 @@ func getsig(i int32) uintptr {
 	return sa.sa_sigaction
 }
 
+//go:nosplit
 func signalstack(s *stack) {
 	var st sigaltstackt
 	if s == nil {

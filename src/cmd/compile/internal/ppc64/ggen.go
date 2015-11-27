@@ -36,10 +36,10 @@ func defframe(ptxt *obj.Prog) {
 			continue
 		}
 		if n.Class != gc.PAUTO {
-			gc.Fatal("needzero class %d", n.Class)
+			gc.Fatalf("needzero class %d", n.Class)
 		}
 		if n.Type.Width%int64(gc.Widthptr) != 0 || n.Xoffset%int64(gc.Widthptr) != 0 || n.Type.Width == 0 {
-			gc.Fatal("var %v has size %d offset %d", gc.Nconv(n, obj.FmtLong), int(n.Type.Width), int(n.Xoffset))
+			gc.Fatalf("var %v has size %d offset %d", gc.Nconv(n, obj.FmtLong), int(n.Type.Width), int(n.Xoffset))
 		}
 
 		if lo != hi && n.Xoffset+n.Type.Width >= lo-int64(2*gc.Widthreg) {
@@ -69,13 +69,10 @@ func zerorange(p *obj.Prog, frame int64, lo int64, hi int64) *obj.Prog {
 	}
 	if cnt < int64(4*gc.Widthptr) {
 		for i := int64(0); i < cnt; i += int64(gc.Widthptr) {
-			p = appendpp(p, ppc64.AMOVD, obj.TYPE_REG, ppc64.REGZERO, 0, obj.TYPE_MEM, ppc64.REGSP, 8+frame+lo+i)
+			p = appendpp(p, ppc64.AMOVD, obj.TYPE_REG, ppc64.REGZERO, 0, obj.TYPE_MEM, ppc64.REGSP, gc.Ctxt.FixedFrameSize()+frame+lo+i)
 		}
-		// TODO(dfc): https://golang.org/issue/12108
-		// If DUFFZERO is used inside a tail call (see genwrapper) it will
-		// overwrite the link register.
-	} else if false && cnt <= int64(128*gc.Widthptr) {
-		p = appendpp(p, ppc64.AADD, obj.TYPE_CONST, 0, 8+frame+lo-8, obj.TYPE_REG, ppc64.REGRT1, 0)
+	} else if cnt <= int64(128*gc.Widthptr) {
+		p = appendpp(p, ppc64.AADD, obj.TYPE_CONST, 0, gc.Ctxt.FixedFrameSize()+frame+lo-8, obj.TYPE_REG, ppc64.REGRT1, 0)
 		p.Reg = ppc64.REGSP
 		p = appendpp(p, obj.ADUFFZERO, obj.TYPE_NONE, 0, 0, obj.TYPE_MEM, 0, 0)
 		f := gc.Sysfunc("duffzero")
@@ -83,7 +80,7 @@ func zerorange(p *obj.Prog, frame int64, lo int64, hi int64) *obj.Prog {
 		gc.Afunclit(&p.To, f)
 		p.To.Offset = 4 * (128 - cnt/int64(gc.Widthptr))
 	} else {
-		p = appendpp(p, ppc64.AMOVD, obj.TYPE_CONST, 0, 8+frame+lo-8, obj.TYPE_REG, ppc64.REGTMP, 0)
+		p = appendpp(p, ppc64.AMOVD, obj.TYPE_CONST, 0, gc.Ctxt.FixedFrameSize()+frame+lo-8, obj.TYPE_REG, ppc64.REGTMP, 0)
 		p = appendpp(p, ppc64.AADD, obj.TYPE_REG, ppc64.REGTMP, 0, obj.TYPE_REG, ppc64.REGRT1, 0)
 		p.Reg = ppc64.REGSP
 		p = appendpp(p, ppc64.AMOVD, obj.TYPE_CONST, 0, cnt, obj.TYPE_REG, ppc64.REGTMP, 0)
@@ -130,7 +127,7 @@ var panicdiv *gc.Node
  *	res = nl % nr
  * according to op.
  */
-func dodiv(op int, nl *gc.Node, nr *gc.Node, res *gc.Node) {
+func dodiv(op gc.Op, nl *gc.Node, nr *gc.Node, res *gc.Node) {
 	// Have to be careful about handling
 	// most negative int divided by -1 correctly.
 	// The hardware will generate undefined result.
@@ -141,13 +138,13 @@ func dodiv(op int, nl *gc.Node, nr *gc.Node, res *gc.Node) {
 	t := nl.Type
 
 	t0 := t
-	check := 0
+	check := false
 	if gc.Issigned[t.Etype] {
-		check = 1
+		check = true
 		if gc.Isconst(nl, gc.CTINT) && nl.Int() != -(1<<uint64(t.Width*8-1)) {
-			check = 0
+			check = false
 		} else if gc.Isconst(nr, gc.CTINT) && nr.Int() != -1 {
-			check = 0
+			check = false
 		}
 	}
 
@@ -157,7 +154,7 @@ func dodiv(op int, nl *gc.Node, nr *gc.Node, res *gc.Node) {
 		} else {
 			t = gc.Types[gc.TUINT64]
 		}
-		check = 0
+		check = false
 	}
 
 	a := optoas(gc.ODIV, t)
@@ -198,7 +195,7 @@ func dodiv(op int, nl *gc.Node, nr *gc.Node, res *gc.Node) {
 	gc.Patch(p1, gc.Pc)
 
 	var p2 *obj.Prog
-	if check != 0 {
+	if check {
 		var nm1 gc.Node
 		gc.Nodconst(&nm1, t, -1)
 		gins(optoas(gc.OCMP, t), &tr, &nm1)
@@ -242,7 +239,7 @@ func dodiv(op int, nl *gc.Node, nr *gc.Node, res *gc.Node) {
 	}
 
 	gc.Regfree(&tl)
-	if check != 0 {
+	if check {
 		gc.Patch(p2, gc.Pc)
 	}
 }
@@ -254,9 +251,7 @@ func dodiv(op int, nl *gc.Node, nr *gc.Node, res *gc.Node) {
 func cgen_hmul(nl *gc.Node, nr *gc.Node, res *gc.Node) {
 	// largest ullman on left.
 	if nl.Ullman < nr.Ullman {
-		tmp := (*gc.Node)(nl)
-		nl = nr
-		nr = tmp
+		nl, nr = nr, nl
 	}
 
 	t := (*gc.Type)(nl.Type)
@@ -291,7 +286,7 @@ func cgen_hmul(nl *gc.Node, nr *gc.Node, res *gc.Node) {
 		}
 
 	default:
-		gc.Fatal("cgen_hmul %v", t)
+		gc.Fatalf("cgen_hmul %v", t)
 	}
 
 	gc.Cgen(&n1, res)
@@ -304,7 +299,7 @@ func cgen_hmul(nl *gc.Node, nr *gc.Node, res *gc.Node) {
  *	res = nl << nr
  *	res = nl >> nr
  */
-func cgen_shift(op int, bounded bool, nl *gc.Node, nr *gc.Node, res *gc.Node) {
+func cgen_shift(op gc.Op, bounded bool, nl *gc.Node, nr *gc.Node, res *gc.Node) {
 	a := int(optoas(op, nl.Type))
 
 	if nr.Op == gc.OLITERAL {
@@ -411,7 +406,7 @@ func clearfat(nl *gc.Node) {
 	q := uint64(w / 8) // dwords
 
 	if gc.Reginuse(ppc64.REGRT1) {
-		gc.Fatal("%v in use during clearfat", obj.Rconv(ppc64.REGRT1))
+		gc.Fatalf("%v in use during clearfat", obj.Rconv(ppc64.REGRT1))
 	}
 
 	var r0 gc.Node
@@ -445,10 +440,7 @@ func clearfat(nl *gc.Node) {
 
 		// The loop leaves R3 on the last zeroed dword
 		boff = 8
-		// TODO(dfc): https://golang.org/issue/12108
-		// If DUFFZERO is used inside a tail call (see genwrapper) it will
-		// overwrite the link register.
-	} else if false && q >= 4 {
+	} else if q >= 4 {
 		p := gins(ppc64.ASUB, nil, &dst)
 		p.From.Type = obj.TYPE_CONST
 		p.From.Offset = 8
@@ -499,7 +491,7 @@ func expandchecks(firstp *obj.Prog) {
 			gc.Warnl(int(p.Lineno), "generated nil check")
 		}
 		if p.From.Type != obj.TYPE_REG {
-			gc.Fatal("invalid nil check %v\n", p)
+			gc.Fatalf("invalid nil check %v\n", p)
 		}
 
 		/*

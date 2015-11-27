@@ -4,13 +4,16 @@
 
 package runtime
 
-import "unsafe"
+import (
+	"runtime/internal/atomic"
+	"unsafe"
+)
 
 // These functions cannot have go:noescape annotations,
 // because while ptr does not escape, new does.
 // If new is marked as not escaping, the compiler will make incorrect
 // escape analysis decisions about the pointer value being stored.
-// Instead, these are wrappers around the actual atomics (xchgp1 and so on)
+// Instead, these are wrappers around the actual atomics (casp1 and so on)
 // that use noescape to convey which arguments do not escape.
 //
 // Additionally, these functions must update the shadow heap for
@@ -18,20 +21,13 @@ import "unsafe"
 
 //go:nosplit
 func atomicstorep(ptr unsafe.Pointer, new unsafe.Pointer) {
-	atomicstorep1(noescape(ptr), new)
+	atomic.Storep1(noescape(ptr), new)
 	writebarrierptr_nostore((*uintptr)(ptr), uintptr(new))
-}
-
-//go:nosplit
-func xchgp(ptr unsafe.Pointer, new unsafe.Pointer) unsafe.Pointer {
-	old := xchgp1(noescape(ptr), new)
-	writebarrierptr_nostore((*uintptr)(ptr), uintptr(new))
-	return old
 }
 
 //go:nosplit
 func casp(ptr *unsafe.Pointer, old, new unsafe.Pointer) bool {
-	if !casp1((*unsafe.Pointer)(noescape(unsafe.Pointer(ptr))), noescape(old), new) {
+	if !atomic.Casp1((*unsafe.Pointer)(noescape(unsafe.Pointer(ptr))), noescape(old), new) {
 		return false
 	}
 	writebarrierptr_nostore((*uintptr)(unsafe.Pointer(ptr)), uintptr(new))
@@ -49,7 +45,7 @@ func sync_atomic_StoreUintptr(ptr *uintptr, new uintptr)
 //go:nosplit
 func sync_atomic_StorePointer(ptr *unsafe.Pointer, new unsafe.Pointer) {
 	sync_atomic_StoreUintptr((*uintptr)(unsafe.Pointer(ptr)), uintptr(new))
-	atomicstorep1(noescape(unsafe.Pointer(ptr)), new)
+	atomic.Storep1(noescape(unsafe.Pointer(ptr)), new)
 	writebarrierptr_nostore((*uintptr)(unsafe.Pointer(ptr)), uintptr(new))
 }
 

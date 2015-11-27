@@ -2,47 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package big implements multi-precision arithmetic (big numbers).
-// The following numeric types are supported:
-//
-//   Int    signed integers
-//   Rat    rational numbers
-//   Float  floating-point numbers
-//
-// Methods are typically of the form:
-//
-//   func (z *T) Unary(x *T) *T        // z = op x
-//   func (z *T) Binary(x, y *T) *T    // z = x op y
-//   func (x *T) M() T1                // v = x.M()
-//
-// with T one of Int, Rat, or Float. For unary and binary operations, the
-// result is the receiver (usually named z in that case); if it is one of
-// the operands x or y it may be overwritten (and its memory reused).
-// To enable chaining of operations, the result is also returned. Methods
-// returning a result other than *Int, *Rat, or *Float take an operand as
-// the receiver (usually named x in that case).
-//
+// This file implements unsigned multi-precision integers (natural
+// numbers). They are the building blocks for the implementation
+// of signed integers, rationals, and floating-point numbers.
 
-// big 包实现了（大数的）高精度运算.
-// 它支持以下数值类型：
-//
-//	- Int	带符号整数
-//	- Rat	有理数
-//
-// 典型的方法形式如下：
-//
-//	func (z *Int) Op(x, y *Int) *Int	（*Rat 同理）
-//
-// 它实现了像 z = x Op y 这样的操作，并将其结果作为接收者；若接收者为操作数之一，
-// 其值可能会被覆盖（而内存则会被重用）。为保留操作，其结果也会被返回。若该方法返回除
-// *Int 或 *Rat 之外的结果，其中一个操作数将被作为接收者。
+// 此文件实现了无符号高精度整数（自然数）的操作。它们是用于实现带符号整数、
+// 有理数和浮点数的基础构件。
+
 package big
-
-// This file contains operations on unsigned multi-precision integers.
-// These are the building blocks for the operations on signed integers
-// and rationals.
-
-// 此文件包含了对无符号高精度整数的操作。以下为用于带符号整数和有理数操作的基础构建。
 
 import "math/rand"
 
@@ -1187,9 +1154,12 @@ func (z nat) expNNMontgomery(x, y, m nat) nat {
 	return zz.norm()
 }
 
-// probablyPrime performs reps Miller-Rabin tests to check whether n is prime.
-// If it returns true, n is prime with probability 1 - 1/4^reps.
-// If it returns false, n is not prime.
+// probablyPrime performs n Miller-Rabin tests to check whether x is prime.
+// If x is prime, it returns true.
+// If x is not prime, it returns false with probability at least 1 - ¼ⁿ.
+//
+// It is not suitable for judging primes that an adversary may have crafted
+// to fool this test.
 func (n nat) probablyPrime(reps int) bool {
 	if len(n) == 0 {
 		return false

@@ -135,11 +135,12 @@ var progtable = [x86.ALAST]obj.ProgInfo{
 	x86.AMOVL:      {Flags: gc.SizeL | gc.LeftRead | gc.RightWrite | gc.Move},
 	x86.AMOVQ:      {Flags: gc.SizeQ | gc.LeftRead | gc.RightWrite | gc.Move},
 	x86.AMOVW:      {Flags: gc.SizeW | gc.LeftRead | gc.RightWrite | gc.Move},
+	x86.AMOVUPS:    {Flags: gc.LeftRead | gc.RightWrite | gc.Move},
 	x86.AMOVSB:     {Flags: gc.OK, Reguse: DI | SI, Regset: DI | SI},
 	x86.AMOVSL:     {Flags: gc.OK, Reguse: DI | SI, Regset: DI | SI},
 	x86.AMOVSQ:     {Flags: gc.OK, Reguse: DI | SI, Regset: DI | SI},
 	x86.AMOVSW:     {Flags: gc.OK, Reguse: DI | SI, Regset: DI | SI},
-	obj.ADUFFCOPY:  {Flags: gc.OK, Reguse: DI | SI, Regset: DI | SI | CX},
+	obj.ADUFFCOPY:  {Flags: gc.OK, Reguse: DI | SI, Regset: DI | SI | X0},
 	x86.AMOVSD:     {Flags: gc.SizeD | gc.LeftRead | gc.RightWrite | gc.Move},
 	x86.AMOVSS:     {Flags: gc.SizeF | gc.LeftRead | gc.RightWrite | gc.Move},
 
@@ -225,7 +226,7 @@ var progtable = [x86.ALAST]obj.ProgInfo{
 	x86.ASTOSL:    {Flags: gc.OK, Reguse: AX | DI, Regset: DI},
 	x86.ASTOSQ:    {Flags: gc.OK, Reguse: AX | DI, Regset: DI},
 	x86.ASTOSW:    {Flags: gc.OK, Reguse: AX | DI, Regset: DI},
-	obj.ADUFFZERO: {Flags: gc.OK, Reguse: AX | DI, Regset: DI},
+	obj.ADUFFZERO: {Flags: gc.OK, Reguse: X0 | DI, Regset: DI},
 	x86.ASUBB:     {Flags: gc.SizeB | gc.LeftRead | RightRdwr | gc.SetCarry},
 	x86.ASUBL:     {Flags: gc.SizeL | gc.LeftRead | RightRdwr | gc.SetCarry},
 	x86.ASUBQ:     {Flags: gc.SizeQ | gc.LeftRead | RightRdwr | gc.SetCarry},
@@ -246,6 +247,7 @@ var progtable = [x86.ALAST]obj.ProgInfo{
 	x86.AXORL:     {Flags: gc.SizeL | gc.LeftRead | RightRdwr | gc.SetCarry},
 	x86.AXORQ:     {Flags: gc.SizeQ | gc.LeftRead | RightRdwr | gc.SetCarry},
 	x86.AXORW:     {Flags: gc.SizeW | gc.LeftRead | RightRdwr | gc.SetCarry},
+	x86.AXORPS:    {Flags: gc.LeftRead | RightRdwr},
 }
 
 func progflags(p *obj.Prog) uint32 {
@@ -264,7 +266,7 @@ func proginfo(p *obj.Prog) {
 	info := &p.Info
 	*info = progtable[p.As]
 	if info.Flags == 0 {
-		gc.Fatal("unknown instruction %v", p)
+		gc.Fatalf("unknown instruction %v", p)
 	}
 
 	if (info.Flags&gc.ShiftCX != 0) && p.From.Type != obj.TYPE_CONST {

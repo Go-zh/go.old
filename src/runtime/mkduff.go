@@ -37,6 +37,7 @@ func main() {
 	gen("arm", notags, zeroARM, copyARM)
 	gen("arm64", notags, zeroARM64, copyARM64)
 	gen("ppc64x", tagsPPC64x, zeroPPC64x, copyPPC64x)
+	gen("mips64x", tagsMIPS64x, zeroMIPS64x, copyMIPS64x)
 }
 
 func gen(arch string, tags, zero, copy func(io.Writer)) {
@@ -60,20 +61,17 @@ func gen(arch string, tags, zero, copy func(io.Writer)) {
 func notags(w io.Writer) { fmt.Fprintln(w) }
 
 func zeroAMD64(w io.Writer) {
-	// AX: zero
+	// X0: zero
 	// DI: ptr to memory to be zeroed
 	// DI is updated as a side effect.
 	fmt.Fprintln(w, "TEXT runtime·duffzero(SB), NOSPLIT, $0-0")
-	for i := 0; i < 31; i++ {
-		fmt.Fprintln(w, "\tMOVQ\tAX,(DI)")
-		fmt.Fprintln(w, "\tMOVQ\tAX,8(DI)")
-		fmt.Fprintln(w, "\tMOVQ\tAX,16(DI)")
-		fmt.Fprintln(w, "\tMOVQ\tAX,24(DI)")
-		fmt.Fprintln(w, "\tADDQ\t$32,DI")
+	for i := 0; i < 16; i++ {
+		fmt.Fprintln(w, "\tMOVUPS\tX0,(DI)")
+		fmt.Fprintln(w, "\tMOVUPS\tX0,16(DI)")
+		fmt.Fprintln(w, "\tMOVUPS\tX0,32(DI)")
+		fmt.Fprintln(w, "\tMOVUPS\tX0,48(DI)")
+		fmt.Fprintln(w, "\tADDQ\t$64,DI")
 		fmt.Fprintln(w)
-	}
-	for i := 0; i < 4; i++ {
-		fmt.Fprintln(w, "\tSTOSQ")
 	}
 	fmt.Fprintln(w, "\tRET")
 }
@@ -87,11 +85,11 @@ func copyAMD64(w io.Writer) {
 	// for some reason that is 3.5x slower than this code.
 	// The STOSQ in duffzero seem fine, though.
 	fmt.Fprintln(w, "TEXT runtime·duffcopy(SB), NOSPLIT, $0-0")
-	for i := 0; i < 128; i++ {
-		fmt.Fprintln(w, "\tMOVQ\t(SI), CX")
-		fmt.Fprintln(w, "\tADDQ\t$8, SI")
-		fmt.Fprintln(w, "\tMOVQ\tCX, (DI)")
-		fmt.Fprintln(w, "\tADDQ\t$8, DI")
+	for i := 0; i < 64; i++ {
+		fmt.Fprintln(w, "\tMOVUPS\t(SI), X0")
+		fmt.Fprintln(w, "\tADDQ\t$16, SI")
+		fmt.Fprintln(w, "\tMOVUPS\tX0, (DI)")
+		fmt.Fprintln(w, "\tADDQ\t$16, DI")
 		fmt.Fprintln(w)
 	}
 	fmt.Fprintln(w, "\tRET")
@@ -176,13 +174,35 @@ func zeroPPC64x(w io.Writer) {
 	// R0: always zero
 	// R3 (aka REGRT1): ptr to memory to be zeroed - 8
 	// On return, R3 points to the last zeroed dword.
-	fmt.Fprintln(w, "TEXT runtime·duffzero(SB), NOSPLIT, $-8-0")
+	fmt.Fprintln(w, "TEXT runtime·duffzero(SB), NOSPLIT|NOFRAME, $0-0")
 	for i := 0; i < 128; i++ {
 		fmt.Fprintln(w, "\tMOVDU\tR0, 8(R3)")
 	}
-	fmt.Fprintln(w, "\tRETURN")
+	fmt.Fprintln(w, "\tRET")
 }
 
 func copyPPC64x(w io.Writer) {
+	fmt.Fprintln(w, "// TODO: Implement runtime·duffcopy.")
+}
+
+func tagsMIPS64x(w io.Writer) {
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "// +build mips64 mips64le")
+	fmt.Fprintln(w)
+}
+
+func zeroMIPS64x(w io.Writer) {
+	// R0: always zero
+	// R1 (aka REGRT1): ptr to memory to be zeroed - 8
+	// On return, R1 points to the last zeroed dword.
+	fmt.Fprintln(w, "TEXT runtime·duffzero(SB), NOSPLIT, $-8-0")
+	for i := 0; i < 128; i++ {
+		fmt.Fprintln(w, "\tMOVV\tR0, 8(R1)")
+		fmt.Fprintln(w, "\tADDV\t$8, R1")
+	}
+	fmt.Fprintln(w, "\tRET")
+}
+
+func copyMIPS64x(w io.Writer) {
 	fmt.Fprintln(w, "// TODO: Implement runtime·duffcopy.")
 }

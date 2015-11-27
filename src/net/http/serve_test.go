@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"reflect"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -755,34 +756,106 @@ func TestSetsRemoteAddr(t *testing.T) {
 	}
 }
 
-func TestChunkedResponseHeaders(t *testing.T) {
-	defer afterTest(t)
-	log.SetOutput(ioutil.Discard) // is noisy otherwise
-	defer log.SetOutput(os.Stderr)
-
-	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
-		w.Header().Set("Content-Length", "intentional gibberish") // we check that this is deleted
-		w.(Flusher).Flush()
-		fmt.Fprintf(w, "I am a chunked response.")
-	}))
-	defer ts.Close()
-
-	res, err := Get(ts.URL)
-	if err != nil {
-		t.Fatalf("Get error: %v", err)
-	}
-	defer res.Body.Close()
-	if g, e := res.ContentLength, int64(-1); g != e {
-		t.Errorf("expected ContentLength of %d; got %d", e, g)
-	}
-	if g, e := res.TransferEncoding, []string{"chunked"}; !reflect.DeepEqual(g, e) {
-		t.Errorf("expected TransferEncoding of %v; got %v", e, g)
-	}
-	if _, haveCL := res.Header["Content-Length"]; haveCL {
-		t.Errorf("Unexpected Content-Length")
-	}
+type blockingRemoteAddrListener struct {
+	net.Listener
+	conns chan<- net.Conn
 }
 
+func (l *blockingRemoteAddrListener) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	brac := &blockingRemoteAddrConn{
+		Conn:  c,
+		addrs: make(chan net.Addr, 1),
+	}
+	l.conns <- brac
+	return brac, nil
+}
+
+type blockingRemoteAddrConn struct {
+	net.Conn
+	addrs chan net.Addr
+}
+
+func (c *blockingRemoteAddrConn) RemoteAddr() net.Addr {
+	return <-c.addrs
+}
+
+// Issue 12943
+func TestServerAllowsBlockingRemoteAddr(t *testing.T) {
+	defer afterTest(t)
+	ts := httptest.NewUnstartedServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+		fmt.Fprintf(w, "RA:%s", r.RemoteAddr)
+	}))
+	conns := make(chan net.Conn)
+	ts.Listener = &blockingRemoteAddrListener{
+		Listener: ts.Listener,
+		conns:    conns,
+	}
+	ts.Start()
+	defer ts.Close()
+
+	tr := &Transport{DisableKeepAlives: true}
+	defer tr.CloseIdleConnections()
+	c := &Client{Transport: tr, Timeout: time.Second}
+
+	fetch := func(response chan string) {
+		resp, err := c.Get(ts.URL)
+		if err != nil {
+			t.Error(err)
+			response <- ""
+			return
+		}
+		defer resp.Body.Close()
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Error(err)
+			response <- ""
+			return
+		}
+		response <- string(body)
+	}
+
+	// Start a request. The server will block on getting conn.RemoteAddr.
+	response1c := make(chan string, 1)
+	go fetch(response1c)
+
+	// Wait for the server to accept it; grab the connection.
+	conn1 := <-conns
+
+	// Start another request and grab its connection
+	response2c := make(chan string, 1)
+	go fetch(response2c)
+	var conn2 net.Conn
+
+	select {
+	case conn2 = <-conns:
+	case <-time.After(time.Second):
+		t.Fatal("Second Accept didn't happen")
+	}
+
+	// Send a response on connection 2.
+	conn2.(*blockingRemoteAddrConn).addrs <- &net.TCPAddr{
+		IP: net.ParseIP("12.12.12.12"), Port: 12}
+
+	// ... and see it
+	response2 := <-response2c
+	if g, e := response2, "RA:12.12.12.12:12"; g != e {
+		t.Fatalf("response 2 addr = %q; want %q", g, e)
+	}
+
+	// Finish the first response.
+	conn1.(*blockingRemoteAddrConn).addrs <- &net.TCPAddr{
+		IP: net.ParseIP("21.21.21.21"), Port: 21}
+
+	// ... and see it
+	response1 := <-response1c
+	if g, e := response1, "RA:21.21.21.21:21"; g != e {
+		t.Fatalf("response 1 addr = %q; want %q", g, e)
+	}
+}
 func TestIdentityResponseHeaders(t *testing.T) {
 	defer afterTest(t)
 	log.SetOutput(ioutil.Discard) // is noisy otherwise
@@ -809,35 +882,6 @@ func TestIdentityResponseHeaders(t *testing.T) {
 	}
 	if !res.Close {
 		t.Errorf("expected Connection: close; got %v", res.Close)
-	}
-}
-
-// Test304Responses verifies that 304s don't declare that they're
-// chunking in their response headers and aren't allowed to produce
-// output.
-func Test304Responses(t *testing.T) {
-	defer afterTest(t)
-	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
-		w.WriteHeader(StatusNotModified)
-		_, err := w.Write([]byte("illegal body"))
-		if err != ErrBodyNotAllowed {
-			t.Errorf("on Write, expected ErrBodyNotAllowed, got %v", err)
-		}
-	}))
-	defer ts.Close()
-	res, err := Get(ts.URL)
-	if err != nil {
-		t.Error(err)
-	}
-	if len(res.TransferEncoding) > 0 {
-		t.Errorf("expected no TransferEncoding; got %v", res.TransferEncoding)
-	}
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		t.Error(err)
-	}
-	if len(body) > 0 {
-		t.Errorf("got unexpected body %q", string(body))
 	}
 }
 
@@ -965,6 +1009,79 @@ func TestTLSServer(t *testing.T) {
 			t.Errorf("expected X-TLS-HandshakeComplete header")
 		}
 	})
+}
+
+func TestAutomaticHTTP2_Serve(t *testing.T) {
+	defer afterTest(t)
+	ln := newLocalListener(t)
+	ln.Close() // immediately (not a defer!)
+	var s Server
+	if err := s.Serve(ln); err == nil {
+		t.Fatal("expected an error")
+	}
+	on := s.TLSNextProto["h2"] != nil
+	if !on {
+		t.Errorf("http2 wasn't automatically enabled")
+	}
+}
+
+func TestAutomaticHTTP2_ListenAndServe(t *testing.T) {
+	defer afterTest(t)
+	defer SetTestHookServerServe(nil)
+	cert, err := tls.X509KeyPair(internal.LocalhostCert, internal.LocalhostKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ok bool
+	var s *Server
+	const maxTries = 5
+	var ln net.Listener
+Try:
+	for try := 0; try < maxTries; try++ {
+		ln = newLocalListener(t)
+		addr := ln.Addr().String()
+		ln.Close()
+		t.Logf("Got %v", addr)
+		lnc := make(chan net.Listener, 1)
+		SetTestHookServerServe(func(s *Server, ln net.Listener) {
+			lnc <- ln
+		})
+		s = &Server{
+			Addr: addr,
+			TLSConfig: &tls.Config{
+				Certificates: []tls.Certificate{cert},
+			},
+		}
+		errc := make(chan error, 1)
+		go func() { errc <- s.ListenAndServeTLS("", "") }()
+		select {
+		case err := <-errc:
+			t.Logf("On try #%v: %v", try+1, err)
+			continue
+		case ln = <-lnc:
+			ok = true
+			t.Logf("Listening on %v", ln.Addr().String())
+			break Try
+		}
+	}
+	if !ok {
+		t.Fatal("Failed to start up after %d tries", maxTries)
+	}
+	defer ln.Close()
+	c, err := tls.Dial("tcp", ln.Addr().String(), &tls.Config{
+		InsecureSkipVerify: true,
+		NextProtos:         []string{"h2", "http/1.1"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	if got, want := c.ConnectionState().NegotiatedProtocol, "h2"; got != want {
+		t.Errorf("NegotiatedProtocol = %q; want %q", got, want)
+	}
+	if got, want := c.ConnectionState().NegotiatedProtocolIsMutual, true; got != want {
+		t.Errorf("NegotiatedProtocolIsMutual = %v; want %v", got, want)
+	}
 }
 
 type serverExpectTest struct {
@@ -2230,7 +2347,7 @@ func TestHeaderToWire(t *testing.T) {
 					return errors.New("no content-length")
 				}
 				if !strings.Contains(got, "Content-Type: text/plain") {
-					return errors.New("no content-length")
+					return errors.New("no content-type")
 				}
 				return nil
 			},
@@ -2369,7 +2486,7 @@ func TestHeaderToWire(t *testing.T) {
 				if !strings.Contains(got, "404") {
 					return errors.New("wrong status")
 				}
-				if strings.Contains(got, "Some-Header") {
+				if strings.Contains(got, "Too-Late") {
 					return errors.New("shouldn't have seen Too-Late")
 				}
 				return nil
@@ -2863,6 +2980,7 @@ func TestServerConnState(t *testing.T) {
 		if _, err := io.WriteString(c, "BOGUS REQUEST\r\n\r\n"); err != nil {
 			t.Fatal(err)
 		}
+		c.Read(make([]byte, 1)) // block until server hangs up on us
 		c.Close()
 	}
 
@@ -2896,9 +3014,14 @@ func TestServerConnState(t *testing.T) {
 	}
 	logString := func(m map[int][]ConnState) string {
 		var b bytes.Buffer
-		for id, l := range m {
+		var keys []int
+		for id := range m {
+			keys = append(keys, id)
+		}
+		sort.Ints(keys)
+		for _, id := range keys {
 			fmt.Fprintf(&b, "Conn %d: ", id)
-			for _, s := range l {
+			for _, s := range m[id] {
 				fmt.Fprintf(&b, "%s ", s)
 			}
 			b.WriteString("\n")
@@ -3257,6 +3380,31 @@ func TestHandlerFinishSkipBigContentLengthRead(t *testing.T) {
 
 	if afterHandlerLen != inHandlerLen {
 		t.Errorf("unexpected implicit read. Read buffer went from %d -> %d", inHandlerLen, afterHandlerLen)
+	}
+}
+
+func TestHandlerSetsBodyNil(t *testing.T) {
+	defer afterTest(t)
+	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+		r.Body = nil
+		fmt.Fprintf(w, "%v", r.RemoteAddr)
+	}))
+	defer ts.Close()
+	get := func() string {
+		res, err := Get(ts.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		slurp, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(slurp)
+	}
+	a, b := get(), get()
+	if a != b {
+		t.Errorf("Failed to reuse connections between requests: %v vs %v", a, b)
 	}
 }
 
@@ -3684,4 +3832,36 @@ Host: golang.org
 		Serve(ln, h)
 		<-conn.closec
 	}
+}
+
+func BenchmarkCloseNotifier(b *testing.B) {
+	b.ReportAllocs()
+	b.StopTimer()
+	sawClose := make(chan bool)
+	ts := httptest.NewServer(HandlerFunc(func(rw ResponseWriter, req *Request) {
+		<-rw.(CloseNotifier).CloseNotify()
+		sawClose <- true
+	}))
+	defer ts.Close()
+	tot := time.NewTimer(5 * time.Second)
+	defer tot.Stop()
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		conn, err := net.Dial("tcp", ts.Listener.Addr().String())
+		if err != nil {
+			b.Fatalf("error dialing: %v", err)
+		}
+		_, err = fmt.Fprintf(conn, "GET / HTTP/1.1\r\nConnection: keep-alive\r\nHost: foo\r\n\r\n")
+		if err != nil {
+			b.Fatal(err)
+		}
+		conn.Close()
+		tot.Reset(5 * time.Second)
+		select {
+		case <-sawClose:
+		case <-tot.C:
+			b.Fatal("timeout")
+		}
+	}
+	b.StopTimer()
 }

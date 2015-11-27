@@ -93,9 +93,6 @@ func (f *File) Read(b []byte) (n int, err error) {
 		return 0, ErrInvalid
 	}
 	n, e := f.read(b)
-	if n < 0 {
-		n = 0
-	}
 	if n == 0 && len(b) > 0 && e == nil {
 		return 0, io.EOF
 	}
@@ -176,6 +173,7 @@ func (f *File) WriteAt(b []byte, off int64) (n int, err error) {
 // according to whence: 0 means relative to the origin of the file, 1 means
 // relative to the current offset, and 2 means relative to the end.
 // It returns the new offset and an error, if any.
+// The behavior of Seek on a file opened with O_APPEND is not specified.
 func (f *File) Seek(offset int64, whence int) (ret int64, err error) {
 	if f == nil {
 		return 0, ErrInvalid

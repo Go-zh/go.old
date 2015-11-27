@@ -823,6 +823,10 @@ func copyu(p *obj.Prog, v *obj.Addr, s *obj.Addr) int {
 		return 2
 	}
 
+	if (p.Info.Reguse|p.Info.Regset)&FtoB(int(v.Reg)) != 0 {
+		return 2
+	}
+
 	if p.Info.Flags&gc.LeftAddr != 0 {
 		if copyas(&p.From, v) {
 			return 2
@@ -873,10 +877,10 @@ func copyu(p *obj.Prog, v *obj.Addr, s *obj.Addr) int {
  */
 func copyas(a *obj.Addr, v *obj.Addr) bool {
 	if x86.REG_AL <= a.Reg && a.Reg <= x86.REG_R15B {
-		gc.Fatal("use of byte register")
+		gc.Fatalf("use of byte register")
 	}
 	if x86.REG_AL <= v.Reg && v.Reg <= x86.REG_R15B {
-		gc.Fatal("use of byte register")
+		gc.Fatalf("use of byte register")
 	}
 
 	if a.Type != v.Type || a.Name != v.Name || a.Reg != v.Reg {

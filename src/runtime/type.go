@@ -8,8 +8,8 @@ package runtime
 
 import "unsafe"
 
-// Needs to be in sync with ../cmd/internal/ld/decodesym.go:/^func.commonsize,
-// ../cmd/internal/gc/reflect.go:/^func.dcommontype and
+// Needs to be in sync with ../cmd/compile/internal/ld/decodesym.go:/^func.commonsize,
+// ../cmd/compile/internal/gc/reflect.go:/^func.dcommontype and
 // ../reflect/type.go:/^type.rtype.
 type _type struct {
 	size       uintptr
@@ -27,7 +27,6 @@ type _type struct {
 	_string *string
 	x       *uncommontype
 	ptrto   *_type
-	zero    *byte // ptr to the zero value for this type
 }
 
 type method struct {
@@ -68,6 +67,14 @@ type maptype struct {
 	indirectvalue bool   // store ptr to value instead of value itself
 	bucketsize    uint16 // size of bucket
 	reflexivekey  bool   // true if k==k for all keys
+	needkeyupdate bool   // true if we need to update key on an overwrite
+}
+
+type arraytype struct {
+	typ   _type
+	elem  *_type
+	slice *_type
+	len   uintptr
 }
 
 type chantype struct {
@@ -84,11 +91,24 @@ type slicetype struct {
 type functype struct {
 	typ       _type
 	dotdotdot bool
-	in        slice
-	out       slice
+	in        []*_type
+	out       []*_type
 }
 
 type ptrtype struct {
 	typ  _type
 	elem *_type
+}
+
+type structfield struct {
+	name    *string
+	pkgpath *string
+	typ     *_type
+	tag     *string
+	offset  uintptr
+}
+
+type structtype struct {
+	typ    _type
+	fields []structfield
 }

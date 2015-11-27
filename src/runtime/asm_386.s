@@ -45,7 +45,8 @@ notintel:
 
 	MOVL	$1, AX
 	CPUID
-	MOVL	CX, runtime·cpuid_ecx(SB)
+	MOVL	CX, AX // Move to global variable clobbers CX when generating PIC
+	MOVL	AX, runtime·cpuid_ecx(SB)
 	MOVL	DX, runtime·cpuid_edx(SB)
 nocpuinfo:	
 
@@ -67,13 +68,15 @@ nocpuinfo:
 	MOVL	AX, g_stackguard0(CX)
 	MOVL	AX, g_stackguard1(CX)
 
+#ifndef GOOS_windows
 	// skip runtime·ldt0setup(SB) and tls test after _cgo_init for non-windows
-	CMPL runtime·iswindows(SB), $0
-	JEQ ok
+	JMP ok
+#endif
 needtls:
+#ifdef GOOS_plan9
 	// skip runtime·ldt0setup(SB) and tls test on Plan 9 in all cases
-	CMPL	runtime·isplan9(SB), $1
-	JEQ	ok
+	JMP	ok
+#endif
 
 	// set up %gs
 	CALL	runtime·ldt0setup(SB)
@@ -81,21 +84,21 @@ needtls:
 	// store through it, to make sure it works
 	get_tls(BX)
 	MOVL	$0x123, g(BX)
-	MOVL	runtime·tls0(SB), AX
+	MOVL	runtime·m0+m_tls(SB), AX
 	CMPL	AX, $0x123
 	JEQ	ok
 	MOVL	AX, 0	// abort
 ok:
 	// set up m and g "registers"
 	get_tls(BX)
-	LEAL	runtime·g0(SB), CX
-	MOVL	CX, g(BX)
+	LEAL	runtime·g0(SB), DX
+	MOVL	DX, g(BX)
 	LEAL	runtime·m0(SB), AX
 
 	// save m->g0 = g0
-	MOVL	CX, m_g0(AX)
+	MOVL	DX, m_g0(AX)
 	// save g0->m = m0
-	MOVL	AX, g_m(CX)
+	MOVL	AX, g_m(DX)
 
 	CALL	runtime·emptyfunc(SB)	// fault if stack check is wrong
 
@@ -185,9 +188,9 @@ TEXT runtime·gogo(SB), NOSPLIT, $0-4
 // to keep running g.
 TEXT runtime·mcall(SB), NOSPLIT, $0-4
 	MOVL	fn+0(FP), DI
-	
-	get_tls(CX)
-	MOVL	g(CX), AX	// save state in g->sched
+
+	get_tls(DX)
+	MOVL	g(DX), AX	// save state in g->sched
 	MOVL	0(SP), BX	// caller's PC
 	MOVL	BX, (g_sched+gobuf_pc)(AX)
 	LEAL	fn+0(FP), BX	// caller's SP
@@ -195,14 +198,14 @@ TEXT runtime·mcall(SB), NOSPLIT, $0-4
 	MOVL	AX, (g_sched+gobuf_g)(AX)
 
 	// switch to m->g0 & its stack, call fn
-	MOVL	g(CX), BX
+	MOVL	g(DX), BX
 	MOVL	g_m(BX), BX
 	MOVL	m_g0(BX), SI
 	CMPL	SI, AX	// if g == m->g0 call badmcall
 	JNE	3(PC)
 	MOVL	$runtime·badmcall(SB), AX
 	JMP	AX
-	MOVL	SI, g(CX)	// g = m->g0
+	MOVL	SI, g(DX)	// g = m->g0
 	MOVL	(g_sched+gobuf_sp)(SI), SP	// sp = m->g0->sched.sp
 	PUSHL	AX
 	MOVL	DI, DX
@@ -253,6 +256,7 @@ switch:
 	MOVL	AX, (g_sched+gobuf_g)(AX)
 
 	// switch to g0
+	get_tls(CX)
 	MOVL	DX, g(CX)
 	MOVL	(g_sched+gobuf_sp)(DX), BX
 	// make it look like mstart called systemstack on g0, to stop traceback
@@ -467,169 +471,12 @@ CALLFN(·call268435456, 268435456)
 CALLFN(·call536870912, 536870912)
 CALLFN(·call1073741824, 1073741824)
 
-// bool cas(int32 *val, int32 old, int32 new)
-// Atomically:
-//	if(*val == old){
-//		*val = new;
-//		return 1;
-//	}else
-//		return 0;
-TEXT runtime·cas(SB), NOSPLIT, $0-13
-	MOVL	ptr+0(FP), BX
-	MOVL	old+4(FP), AX
-	MOVL	new+8(FP), CX
-	LOCK
-	CMPXCHGL	CX, 0(BX)
-	SETEQ	ret+12(FP)
-	RET
-
-TEXT runtime·casuintptr(SB), NOSPLIT, $0-13
-	JMP	runtime·cas(SB)
-
-TEXT runtime·atomicloaduintptr(SB), NOSPLIT, $0-8
-	JMP	runtime·atomicload(SB)
-
-TEXT runtime·atomicloaduint(SB), NOSPLIT, $0-8
-	JMP	runtime·atomicload(SB)
-
-TEXT runtime·atomicstoreuintptr(SB), NOSPLIT, $0-8
-	JMP	runtime·atomicstore(SB)
-
-// bool runtime·cas64(uint64 *val, uint64 old, uint64 new)
-// Atomically:
-//	if(*val == *old){
-//		*val = new;
-//		return 1;
-//	} else {
-//		return 0;
-//	}
-TEXT runtime·cas64(SB), NOSPLIT, $0-21
-	MOVL	ptr+0(FP), BP
-	MOVL	old_lo+4(FP), AX
-	MOVL	old_hi+8(FP), DX
-	MOVL	new_lo+12(FP), BX
-	MOVL	new_hi+16(FP), CX
-	LOCK
-	CMPXCHG8B	0(BP)
-	SETEQ	ret+20(FP)
-	RET
-
-// bool casp(void **p, void *old, void *new)
-// Atomically:
-//	if(*p == old){
-//		*p = new;
-//		return 1;
-//	}else
-//		return 0;
-TEXT runtime·casp1(SB), NOSPLIT, $0-13
-	MOVL	ptr+0(FP), BX
-	MOVL	old+4(FP), AX
-	MOVL	new+8(FP), CX
-	LOCK
-	CMPXCHGL	CX, 0(BX)
-	SETEQ	ret+12(FP)
-	RET
-
-// uint32 xadd(uint32 volatile *val, int32 delta)
-// Atomically:
-//	*val += delta;
-//	return *val;
-TEXT runtime·xadd(SB), NOSPLIT, $0-12
-	MOVL	ptr+0(FP), BX
-	MOVL	delta+4(FP), AX
-	MOVL	AX, CX
-	LOCK
-	XADDL	AX, 0(BX)
-	ADDL	CX, AX
-	MOVL	AX, ret+8(FP)
-	RET
-
-TEXT runtime·xchg(SB), NOSPLIT, $0-12
-	MOVL	ptr+0(FP), BX
-	MOVL	new+4(FP), AX
-	XCHGL	AX, 0(BX)
-	MOVL	AX, ret+8(FP)
-	RET
-
-TEXT runtime·xchgp1(SB), NOSPLIT, $0-12
-	MOVL	ptr+0(FP), BX
-	MOVL	new+4(FP), AX
-	XCHGL	AX, 0(BX)
-	MOVL	AX, ret+8(FP)
-	RET
-
-TEXT runtime·xchguintptr(SB), NOSPLIT, $0-12
-	JMP	runtime·xchg(SB)
-
 TEXT runtime·procyield(SB),NOSPLIT,$0-0
 	MOVL	cycles+0(FP), AX
 again:
 	PAUSE
 	SUBL	$1, AX
 	JNZ	again
-	RET
-
-TEXT runtime·atomicstorep1(SB), NOSPLIT, $0-8
-	MOVL	ptr+0(FP), BX
-	MOVL	val+4(FP), AX
-	XCHGL	AX, 0(BX)
-	RET
-
-TEXT runtime·atomicstore(SB), NOSPLIT, $0-8
-	MOVL	ptr+0(FP), BX
-	MOVL	val+4(FP), AX
-	XCHGL	AX, 0(BX)
-	RET
-
-// uint64 atomicload64(uint64 volatile* addr);
-TEXT runtime·atomicload64(SB), NOSPLIT, $0-12
-	MOVL	ptr+0(FP), AX
-	TESTL	$7, AX
-	JZ	2(PC)
-	MOVL	0, AX // crash with nil ptr deref
-	LEAL	ret_lo+4(FP), BX
-	// MOVQ (%EAX), %MM0
-	BYTE $0x0f; BYTE $0x6f; BYTE $0x00
-	// MOVQ %MM0, 0(%EBX)
-	BYTE $0x0f; BYTE $0x7f; BYTE $0x03
-	// EMMS
-	BYTE $0x0F; BYTE $0x77
-	RET
-
-// void runtime·atomicstore64(uint64 volatile* addr, uint64 v);
-TEXT runtime·atomicstore64(SB), NOSPLIT, $0-12
-	MOVL	ptr+0(FP), AX
-	TESTL	$7, AX
-	JZ	2(PC)
-	MOVL	0, AX // crash with nil ptr deref
-	// MOVQ and EMMS were introduced on the Pentium MMX.
-	// MOVQ 0x8(%ESP), %MM0
-	BYTE $0x0f; BYTE $0x6f; BYTE $0x44; BYTE $0x24; BYTE $0x08
-	// MOVQ %MM0, (%EAX)
-	BYTE $0x0f; BYTE $0x7f; BYTE $0x00 
-	// EMMS
-	BYTE $0x0F; BYTE $0x77
-	// This is essentially a no-op, but it provides required memory fencing.
-	// It can be replaced with MFENCE, but MFENCE was introduced only on the Pentium4 (SSE2).
-	MOVL	$0, AX
-	LOCK
-	XADDL	AX, (SP)
-	RET
-
-// void	runtime·atomicor8(byte volatile*, byte);
-TEXT runtime·atomicor8(SB), NOSPLIT, $0-5
-	MOVL	ptr+0(FP), AX
-	MOVB	val+4(FP), BX
-	LOCK
-	ORB	BX, (AX)
-	RET
-
-// void	runtime·atomicand8(byte volatile*, byte);
-TEXT runtime·atomicand8(SB), NOSPLIT, $0-5
-	MOVL	ptr+0(FP), AX
-	MOVB	val+4(FP), BX
-	LOCK
-	ANDB	BX, (AX)
 	RET
 
 TEXT ·publicationBarrier(SB),NOSPLIT,$0-0
@@ -685,11 +532,13 @@ TEXT ·asmcgocall(SB),NOSPLIT,$0-12
 	MOVL	m_g0(BP), SI
 	MOVL	g(CX), DI
 	CMPL	SI, DI
-	JEQ	4(PC)
+	JEQ	noswitch
 	CALL	gosave<>(SB)
+	get_tls(CX)
 	MOVL	SI, g(CX)
 	MOVL	(g_sched+gobuf_sp)(SI), SP
 
+noswitch:
 	// Now on a scheduling stack (a pthread-created stack).
 	SUBL	$32, SP
 	ANDL	$~15, SP	// alignment, perhaps unnecessary
@@ -887,8 +736,8 @@ nobar:
 TEXT runtime·setcallerpc(SB),NOSPLIT,$4-8
 	MOVL	argp+0(FP),AX		// addr of first arg
 	MOVL	pc+4(FP), BX
-	MOVL	-4(AX), CX
-	CMPL	CX, runtime·stackBarrierPC(SB)
+	MOVL	-4(AX), DX
+	CMPL	DX, runtime·stackBarrierPC(SB)
 	JEQ	setbar
 	MOVL	BX, -4(AX)		// set calling pc
 	RET
@@ -920,11 +769,11 @@ done:
 	RET
 
 TEXT runtime·ldt0setup(SB),NOSPLIT,$16-0
-	// set up ldt 7 to point at tls0
+	// set up ldt 7 to point at m0.tls
 	// ldt 1 would be fine on Linux, but on OS X, 7 is as low as we can go.
 	// the entry number is just a hint.  setldt will set up GS with what it used.
 	MOVL	$7, 0(SP)
-	LEAL	runtime·tls0(SB), AX
+	LEAL	runtime·m0+m_tls(SB), AX
 	MOVL	AX, 4(SP)
 	MOVL	$32, 8(SP)	// sizeof(tls array)
 	CALL	runtime·setldt(SB)
@@ -956,36 +805,39 @@ TEXT runtime·memhash_varlen(SB),NOSPLIT,$16-12
 // hash function using AES hardware instructions
 TEXT runtime·aeshash(SB),NOSPLIT,$0-16
 	MOVL	p+0(FP), AX	// ptr to data
-	MOVL	s+8(FP), CX	// size
+	MOVL	s+8(FP), BX	// size
 	LEAL	ret+12(FP), DX
 	JMP	runtime·aeshashbody(SB)
 
 TEXT runtime·aeshashstr(SB),NOSPLIT,$0-12
 	MOVL	p+0(FP), AX	// ptr to string object
-	MOVL	4(AX), CX	// length of string
+	MOVL	4(AX), BX	// length of string
 	MOVL	(AX), AX	// string data
 	LEAL	ret+8(FP), DX
 	JMP	runtime·aeshashbody(SB)
 
 // AX: data
-// CX: length
+// BX: length
 // DX: address to put return value
 TEXT runtime·aeshashbody(SB),NOSPLIT,$0-0
-	MOVL	h+4(FP), X6	// seed to low 64 bits of xmm6
-	PINSRD	$2, CX, X6	// size to high 64 bits of xmm6
-	PSHUFHW	$0, X6, X6	// replace size with its low 2 bytes repeated 4 times
-	MOVO	runtime·aeskeysched(SB), X7
-	CMPL	CX, $16
+	MOVL	h+4(FP), X0	            // 32 bits of per-table hash seed
+	PINSRW	$4, BX, X0	            // 16 bits of length
+	PSHUFHW	$0, X0, X0	            // replace size with its low 2 bytes repeated 4 times
+	MOVO	X0, X1                      // save unscrambled seed
+	PXOR	runtime·aeskeysched(SB), X0 // xor in per-process seed
+	AESENC	X0, X0                      // scramble seed
+
+	CMPL	BX, $16
 	JB	aes0to15
 	JE	aes16
-	CMPL	CX, $32
+	CMPL	BX, $32
 	JBE	aes17to32
-	CMPL	CX, $64
+	CMPL	BX, $64
 	JBE	aes33to64
 	JMP	aes65plus
 	
 aes0to15:
-	TESTL	CX, CX
+	TESTL	BX, BX
 	JE	aes0
 
 	ADDL	$16, AX
@@ -994,140 +846,158 @@ aes0to15:
 
 	// 16 bytes loaded at this address won't cross
 	// a page boundary, so we can load it directly.
-	MOVOU	-16(AX), X0
-	ADDL	CX, CX
-	PAND	masks<>(SB)(CX*8), X0
+	MOVOU	-16(AX), X1
+	ADDL	BX, BX
+	PAND	masks<>(SB)(BX*8), X1
 
-	// scramble 3 times
-	AESENC	X6, X0
-	AESENC	X7, X0
-	AESENC	X7, X0
-	MOVL	X0, (DX)
+final1:	
+	AESENC	X0, X1  // scramble input, xor in seed
+	AESENC	X1, X1  // scramble combo 2 times
+	AESENC	X1, X1
+	MOVL	X1, (DX)
 	RET
 
 endofpage:
 	// address ends in 1111xxxx.  Might be up against
 	// a page boundary, so load ending at last byte.
 	// Then shift bytes down using pshufb.
-	MOVOU	-32(AX)(CX*1), X0
-	ADDL	CX, CX
-	PSHUFB	shifts<>(SB)(CX*8), X0
-	AESENC	X6, X0
-	AESENC	X7, X0
-	AESENC	X7, X0
-	MOVL	X0, (DX)
-	RET
+	MOVOU	-32(AX)(BX*1), X1
+	ADDL	BX, BX
+	PSHUFB	shifts<>(SB)(BX*8), X1
+	JMP	final1
 
 aes0:
-	// return input seed
-	MOVL	h+4(FP), AX
-	MOVL	AX, (DX)
+	// Return scrambled input seed
+	AESENC	X0, X0
+	MOVL	X0, (DX)
 	RET
 
 aes16:
-	MOVOU	(AX), X0
-	AESENC	X6, X0
-	AESENC	X7, X0
-	AESENC	X7, X0
-	MOVL	X0, (DX)
-	RET
-
+	MOVOU	(AX), X1
+	JMP	final1
 
 aes17to32:
+	// make second starting seed
+	PXOR	runtime·aeskeysched+16(SB), X1
+	AESENC	X1, X1
+	
 	// load data to be hashed
-	MOVOU	(AX), X0
-	MOVOU	-16(AX)(CX*1), X1
+	MOVOU	(AX), X2
+	MOVOU	-16(AX)(BX*1), X3
 
 	// scramble 3 times
-	AESENC	X6, X0
-	AESENC	runtime·aeskeysched+16(SB), X1
-	AESENC	X7, X0
-	AESENC	X7, X1
-	AESENC	X7, X0
-	AESENC	X7, X1
+	AESENC	X0, X2
+	AESENC	X1, X3
+	AESENC	X2, X2
+	AESENC	X3, X3
+	AESENC	X2, X2
+	AESENC	X3, X3
 
 	// combine results
-	PXOR	X1, X0
-	MOVL	X0, (DX)
+	PXOR	X3, X2
+	MOVL	X2, (DX)
 	RET
 
 aes33to64:
-	MOVOU	(AX), X0
-	MOVOU	16(AX), X1
-	MOVOU	-32(AX)(CX*1), X2
-	MOVOU	-16(AX)(CX*1), X3
+	// make 3 more starting seeds
+	MOVO	X1, X2
+	MOVO	X1, X3
+	PXOR	runtime·aeskeysched+16(SB), X1
+	PXOR	runtime·aeskeysched+32(SB), X2
+	PXOR	runtime·aeskeysched+48(SB), X3
+	AESENC	X1, X1
+	AESENC	X2, X2
+	AESENC	X3, X3
 	
-	AESENC	X6, X0
-	AESENC	runtime·aeskeysched+16(SB), X1
-	AESENC	runtime·aeskeysched+32(SB), X2
-	AESENC	runtime·aeskeysched+48(SB), X3
-	AESENC	X7, X0
-	AESENC	X7, X1
-	AESENC	X7, X2
-	AESENC	X7, X3
-	AESENC	X7, X0
-	AESENC	X7, X1
-	AESENC	X7, X2
-	AESENC	X7, X3
+	MOVOU	(AX), X4
+	MOVOU	16(AX), X5
+	MOVOU	-32(AX)(BX*1), X6
+	MOVOU	-16(AX)(BX*1), X7
+	
+	AESENC	X0, X4
+	AESENC	X1, X5
+	AESENC	X2, X6
+	AESENC	X3, X7
+	
+	AESENC	X4, X4
+	AESENC	X5, X5
+	AESENC	X6, X6
+	AESENC	X7, X7
+	
+	AESENC	X4, X4
+	AESENC	X5, X5
+	AESENC	X6, X6
+	AESENC	X7, X7
 
-	PXOR	X2, X0
-	PXOR	X3, X1
-	PXOR	X1, X0
-	MOVL	X0, (DX)
+	PXOR	X6, X4
+	PXOR	X7, X5
+	PXOR	X5, X4
+	MOVL	X4, (DX)
 	RET
 
 aes65plus:
+	// make 3 more starting seeds
+	MOVO	X1, X2
+	MOVO	X1, X3
+	PXOR	runtime·aeskeysched+16(SB), X1
+	PXOR	runtime·aeskeysched+32(SB), X2
+	PXOR	runtime·aeskeysched+48(SB), X3
+	AESENC	X1, X1
+	AESENC	X2, X2
+	AESENC	X3, X3
+	
 	// start with last (possibly overlapping) block
-	MOVOU	-64(AX)(CX*1), X0
-	MOVOU	-48(AX)(CX*1), X1
-	MOVOU	-32(AX)(CX*1), X2
-	MOVOU	-16(AX)(CX*1), X3
+	MOVOU	-64(AX)(BX*1), X4
+	MOVOU	-48(AX)(BX*1), X5
+	MOVOU	-32(AX)(BX*1), X6
+	MOVOU	-16(AX)(BX*1), X7
 
 	// scramble state once
-	AESENC	X6, X0
-	AESENC	runtime·aeskeysched+16(SB), X1
-	AESENC	runtime·aeskeysched+32(SB), X2
-	AESENC	runtime·aeskeysched+48(SB), X3
+	AESENC	X0, X4
+	AESENC	X1, X5
+	AESENC	X2, X6
+	AESENC	X3, X7
 
 	// compute number of remaining 64-byte blocks
-	DECL	CX
-	SHRL	$6, CX
+	DECL	BX
+	SHRL	$6, BX
 	
 aesloop:
 	// scramble state, xor in a block
-	MOVOU	(AX), X4
-	MOVOU	16(AX), X5
-	AESENC	X4, X0
-	AESENC	X5, X1
-	MOVOU	32(AX), X4
-	MOVOU	48(AX), X5
-	AESENC	X4, X2
-	AESENC	X5, X3
+	MOVOU	(AX), X0
+	MOVOU	16(AX), X1
+	MOVOU	32(AX), X2
+	MOVOU	48(AX), X3
+	AESENC	X0, X4
+	AESENC	X1, X5
+	AESENC	X2, X6
+	AESENC	X3, X7
 
 	// scramble state
-	AESENC	X7, X0
-	AESENC	X7, X1
-	AESENC	X7, X2
-	AESENC	X7, X3
+	AESENC	X4, X4
+	AESENC	X5, X5
+	AESENC	X6, X6
+	AESENC	X7, X7
 
 	ADDL	$64, AX
-	DECL	CX
+	DECL	BX
 	JNE	aesloop
 
 	// 2 more scrambles to finish
-	AESENC	X7, X0
-	AESENC	X7, X1
-	AESENC	X7, X2
-	AESENC	X7, X3
-	AESENC	X7, X0
-	AESENC	X7, X1
-	AESENC	X7, X2
-	AESENC	X7, X3
+	AESENC	X4, X4
+	AESENC	X5, X5
+	AESENC	X6, X6
+	AESENC	X7, X7
+	
+	AESENC	X4, X4
+	AESENC	X5, X5
+	AESENC	X6, X6
+	AESENC	X7, X7
 
-	PXOR	X2, X0
-	PXOR	X3, X1
-	PXOR	X1, X0
-	MOVL	X0, (DX)
+	PXOR	X6, X4
+	PXOR	X7, X5
+	PXOR	X5, X4
+	MOVL	X4, (DX)
 	RET
 
 TEXT runtime·aeshash32(SB),NOSPLIT,$0-12
@@ -1317,6 +1187,15 @@ DATA shifts<>+0xf8(SB)/4, $0x0c0b0a09
 DATA shifts<>+0xfc(SB)/4, $0xff0f0e0d
 
 GLOBL shifts<>(SB),RODATA,$256
+
+TEXT ·checkASM(SB),NOSPLIT,$0-1
+	// check that masks<>(SB) and shifts<>(SB) are aligned to 16-byte
+	MOVL	$masks<>(SB), AX
+	MOVL	$shifts<>(SB), BX
+	ORL	BX, AX
+	TESTL	$15, AX
+	SETEQ	ret+0(FP)
+	RET
 
 TEXT runtime·memeq(SB),NOSPLIT,$0-13
 	MOVL	a+0(FP), SI
@@ -1664,23 +1543,26 @@ TEXT runtime·goexit(SB),NOSPLIT,$0-0
 	// traceback from goexit1 must hit code range of goexit
 	BYTE	$0x90	// NOP
 
+// Prefetching doesn't seem to help.
 TEXT runtime·prefetcht0(SB),NOSPLIT,$0-4
-	MOVL	addr+0(FP), AX
-	PREFETCHT0	(AX)
 	RET
 
 TEXT runtime·prefetcht1(SB),NOSPLIT,$0-4
-	MOVL	addr+0(FP), AX
-	PREFETCHT1	(AX)
 	RET
 
-
 TEXT runtime·prefetcht2(SB),NOSPLIT,$0-4
-	MOVL	addr+0(FP), AX
-	PREFETCHT2	(AX)
 	RET
 
 TEXT runtime·prefetchnta(SB),NOSPLIT,$0-4
-	MOVL	addr+0(FP), AX
-	PREFETCHNTA	(AX)
 	RET
+
+// Add a module's moduledata to the linked list of moduledata objects.  This
+// is called from .init_array by a function generated in the linker and so
+// follows the platform ABI wrt register preservation -- it only touches AX,
+// CX (implicitly) and DX, but it does not follow the ABI wrt arguments:
+// instead the pointer to the moduledata is passed in AX.
+TEXT runtime·addmoduledata(SB),NOSPLIT,$0-0
+       MOVL    runtime·lastmoduledatap(SB), DX
+       MOVL    AX, moduledata_next(DX)
+       MOVL    AX, runtime·lastmoduledatap(SB)
+       RET

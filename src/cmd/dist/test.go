@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -350,7 +351,7 @@ func (t *tester) registerTests() {
 		name:    testName,
 		heading: "GOMAXPROCS=2 runtime -cpu=1,2,4",
 		fn: func() error {
-			cmd := t.dirCmd("src", "go", "test", "-short", t.timeout(300), t.tags(), "runtime", "-cpu=1,2,4")
+			cmd := t.dirCmd("src", "go", "test", "-short", t.timeout(300), t.tags(), "-cpu=1,2,4", "runtime")
 			// We set GOMAXPROCS=2 in addition to -cpu=1,2,4 in order to test runtime bootstrap code,
 			// creation of first goroutines and first garbage collections in the parallel setting.
 			cmd.Env = mergeEnvLists([]string{"GOMAXPROCS=2"}, os.Environ())
@@ -358,12 +359,43 @@ func (t *tester) registerTests() {
 		},
 	})
 
+	// Test that internal linking of standard packages does not
+	// require libgcc.  This ensures that we can install a Go
+	// release on a system that does not have a C compiler
+	// installed and still build Go programs (that don't use cgo).
+	for _, pkg := range cgoPackages {
+
+		// Internal linking is not currently supported on Dragonfly.
+		if t.goos == "dragonfly" {
+			break
+		}
+
+		// ARM libgcc may be Thumb, which internal linking does not support.
+		if t.goarch == "arm" {
+			break
+		}
+
+		// Darwin ARM64 fails with internal linking.
+		if t.goos == "darwin" && t.goarch == "arm64" {
+			break
+		}
+
+		pkg := pkg
+		t.tests = append(t.tests, distTest{
+			name:    "nolibgcc:" + pkg,
+			heading: "Testing without libgcc.",
+			fn: func() error {
+				return t.dirCmd("src", "go", "test", "-short", "-ldflags=-linkmode=internal -libgcc=none", t.tags(), pkg).Run()
+			},
+		})
+	}
+
 	// sync tests
 	t.tests = append(t.tests, distTest{
 		name:    "sync_cpu",
 		heading: "sync -cpu=10",
 		fn: func() error {
-			return t.dirCmd("src", "go", "test", "sync", "-short", t.timeout(120), t.tags(), "-cpu=10").Run()
+			return t.dirCmd("src", "go", "test", "-short", t.timeout(120), t.tags(), "-cpu=10", "sync").Run()
 		},
 	})
 
@@ -438,6 +470,9 @@ func (t *tester) registerTests() {
 		if t.gohostos == "linux" && t.goarch == "amd64" {
 			t.registerTest("testasan", "../misc/cgo/testasan", "go", "run", "main.go")
 		}
+		if t.gohostos == "linux" && t.goarch == "amd64" {
+			t.registerTest("testsanitizers", "../misc/cgo/testsanitizers", "./test.bash")
+		}
 		if t.hasBash() && t.goos != "android" && !t.iOS() && t.gohostos != "windows" {
 			t.registerTest("cgo_errors", "../misc/cgo/errors", "./test.bash")
 		}
@@ -449,10 +484,22 @@ func (t *tester) registerTests() {
 		t.registerTest("doc_progs", "../doc/progs", "time", "go", "run", "run.go")
 		t.registerTest("wiki", "../doc/articles/wiki", "./test.bash")
 		t.registerTest("codewalk", "../doc/codewalk", "time", "./run")
-		t.registerTest("shootout", "../test/bench/shootout", "time", "./timing.sh", "-test")
+		for _, name := range t.shootoutTests() {
+			if name == "spectralnorm" {
+				switch os.Getenv("GO_BUILDER_NAME") {
+				case "linux-arm-arm5", "linux-mips64-minux":
+					// Heavy on floating point and takes over 20 minutes with
+					// softfloat on arm5 builder and over 33 minutes on MIPS64
+					// builder with kernel FPU emulator.
+					// Disabled per Issue 12688.
+					continue
+				}
+			}
+			t.registerTest("shootout:"+name, "../test/bench/shootout", "time", "./timing.sh", "-test", name)
+		}
 	}
 	if t.goos != "android" && !t.iOS() {
-		t.registerTest("bench_go1", "../test/bench/go1", "go", "test")
+		t.registerTest("bench_go1", "../test/bench/go1", "go", "test", t.timeout(600))
 	}
 	if t.goos != "android" && !t.iOS() {
 		const nShards = 5
@@ -536,7 +583,7 @@ func (t *tester) extLink() bool {
 		"darwin-arm", "darwin-arm64",
 		"dragonfly-386", "dragonfly-amd64",
 		"freebsd-386", "freebsd-amd64", "freebsd-arm",
-		"linux-386", "linux-amd64", "linux-arm", "linux-arm64",
+		"linux-386", "linux-amd64", "linux-arm", "linux-arm64", "linux-ppc64le",
 		"netbsd-386", "netbsd-amd64",
 		"openbsd-386", "openbsd-amd64",
 		"windows-386", "windows-amd64":
@@ -562,21 +609,22 @@ func (t *tester) supportedBuildmode(mode string) bool {
 			return false
 		}
 		switch pair {
-		case "darwin-amd64", "darwin-arm", "darwin-arm64",
+		case "darwin-386", "darwin-amd64", "darwin-arm", "darwin-arm64",
 			"linux-amd64", "linux-386":
 			return true
 		}
 		return false
 	case "c-shared":
-		// TODO(hyangah): add linux-386.
 		switch pair {
-		case "linux-amd64", "darwin-amd64", "android-arm":
+		case "linux-386", "linux-amd64", "linux-arm", "linux-arm64",
+			"darwin-amd64",
+			"android-arm", "android-386":
 			return true
 		}
 		return false
 	case "shared":
 		switch pair {
-		case "linux-amd64":
+		case "linux-386", "linux-amd64", "linux-arm", "linux-arm64", "linux-ppc64le":
 			return true
 		}
 		return false
@@ -730,8 +778,12 @@ func (t *tester) cgoTestSOSupported() bool {
 		// No exec facility on Android or iOS.
 		return false
 	}
-	if t.goarch == "ppc64le" || t.goarch == "ppc64" {
+	if t.goarch == "ppc64" {
 		// External linking not implemented on ppc64 (issue #8912).
+		return false
+	}
+	if t.goarch == "mips64le" || t.goarch == "mips64" {
+		// External linking not implemented on mips64.
 		return false
 	}
 	return true
@@ -847,6 +899,18 @@ func (t *tester) testDirTest(shard, shards int) error {
 	).Run()
 }
 
+func (t *tester) shootoutTests() []string {
+	sh, err := ioutil.ReadFile(filepath.Join(t.goroot, "test", "bench", "shootout", "timing.sh"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?m)^\s+run="([\w+ ]+)"\s*$`).FindSubmatch(sh)
+	if m == nil {
+		log.Fatal("failed to find run=\"...\" line in test/bench/shootout/timing.sh")
+	}
+	return strings.Fields(string(m[1]))
+}
+
 // mergeEnvLists merges the two environment lists such that
 // variables with the same name in "in" replace those in "out".
 // out may be mutated.
@@ -863,4 +927,11 @@ NextVar:
 		out = append(out, inkv)
 	}
 	return out
+}
+
+// cgoPackages is the standard packages that use cgo.
+var cgoPackages = []string{
+	"crypto/x509",
+	"net",
+	"os/user",
 }

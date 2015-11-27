@@ -12,8 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -23,7 +23,6 @@ var (
 	ErrWriteTooLong    = errors.New("archive/tar: write too long")
 	ErrFieldTooLong    = errors.New("archive/tar: header field too long")
 	ErrWriteAfterClose = errors.New("archive/tar: write after close")
-	errNameTooLong     = errors.New("archive/tar: name too long")
 	errInvalidHeader   = errors.New("archive/tar: header field too long or contains invalid values")
 )
 
@@ -228,26 +227,14 @@ func (tw *Writer) writeHeader(hdr *Header, allowPax bool) error {
 	_, paxPathUsed := paxHeaders[paxPath]
 	// try to use a ustar header when only the name is too long
 	if !tw.preferPax && len(paxHeaders) == 1 && paxPathUsed {
-		suffix := hdr.Name
-		prefix := ""
-		if len(hdr.Name) > fileNameSize && isASCII(hdr.Name) {
-			var err error
-			prefix, suffix, err = tw.splitUSTARLongName(hdr.Name)
-			if err == nil {
-				// ok we can use a ustar long name instead of pax, now correct the fields
+		prefix, suffix, ok := splitUSTARPath(hdr.Name)
+		if ok {
+			// Since we can encode in USTAR format, disable PAX header.
+			delete(paxHeaders, paxPath)
 
-				// remove the path field from the pax header. this will suppress the pax header
-				delete(paxHeaders, paxPath)
-
-				// update the path fields
-				tw.cString(pathHeaderBytes, suffix, false, paxNone, nil)
-				tw.cString(prefixHeaderBytes, prefix, false, paxNone, nil)
-
-				// Use the ustar magic if we used ustar long names.
-				if len(prefix) > 0 && !tw.usedBinary {
-					copy(header[257:265], []byte("ustar\x00"))
-				}
-			}
+			// Update the path fields
+			tw.cString(pathHeaderBytes, suffix, false, paxNone, nil)
+			tw.cString(prefixHeaderBytes, prefix, false, paxNone, nil)
 		}
 	}
 
@@ -283,28 +270,25 @@ func (tw *Writer) writeHeader(hdr *Header, allowPax bool) error {
 	return tw.err
 }
 
-// writeUSTARLongName splits a USTAR long name hdr.Name.
-// name must be < 256 characters. errNameTooLong is returned
-// if hdr.Name can't be split. The splitting heuristic
-// is compatible with gnu tar.
-func (tw *Writer) splitUSTARLongName(name string) (prefix, suffix string, err error) {
+// splitUSTARPath splits a path according to USTAR prefix and suffix rules.
+// If the path is not splittable, then it will return ("", "", false).
+func splitUSTARPath(name string) (prefix, suffix string, ok bool) {
 	length := len(name)
-	if length > fileNamePrefixSize+1 {
+	if length <= fileNameSize || !isASCII(name) {
+		return "", "", false
+	} else if length > fileNamePrefixSize+1 {
 		length = fileNamePrefixSize + 1
 	} else if name[length-1] == '/' {
 		length--
 	}
+
 	i := strings.LastIndex(name[:length], "/")
-	// nlen contains the resulting length in the name field.
-	// plen contains the resulting length in the prefix field.
-	nlen := len(name) - i - 1
-	plen := i
+	nlen := len(name) - i - 1 // nlen is length of suffix
+	plen := i                 // plen is length of prefix
 	if i <= 0 || nlen > fileNameSize || nlen == 0 || plen > fileNamePrefixSize {
-		err = errNameTooLong
-		return
+		return "", "", false
 	}
-	prefix, suffix = name[:i], name[i+1:]
-	return
+	return name[:i], name[i+1:], true
 }
 
 // writePaxHeader writes an extended pax header to the
@@ -317,11 +301,11 @@ func (tw *Writer) writePAXHeader(hdr *Header, paxHeaders map[string]string) erro
 	// succeed, and seems harmless enough.
 	ext.ModTime = hdr.ModTime
 	// The spec asks that we namespace our pseudo files
-	// with the current pid.
-	pid := os.Getpid()
+	// with the current pid.  However, this results in differing outputs
+	// for identical inputs.  As such, the constant 0 is now used instead.
+	// golang.org/issue/12358
 	dir, file := path.Split(hdr.Name)
-	fullName := path.Join(dir,
-		fmt.Sprintf("PaxHeaders.%d", pid), file)
+	fullName := path.Join(dir, "PaxHeaders.0", file)
 
 	ascii := toASCII(fullName)
 	if len(ascii) > 100 {
@@ -331,8 +315,15 @@ func (tw *Writer) writePAXHeader(hdr *Header, paxHeaders map[string]string) erro
 	// Construct the body
 	var buf bytes.Buffer
 
-	for k, v := range paxHeaders {
-		fmt.Fprint(&buf, paxHeader(k+"="+v))
+	// Keys are sorted before writing to body to allow deterministic output.
+	var keys []string
+	for k := range paxHeaders {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		fmt.Fprint(&buf, paxHeader(k+"="+paxHeaders[k]))
 	}
 
 	ext.Size = int64(len(buf.Bytes()))

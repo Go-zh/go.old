@@ -64,8 +64,8 @@ func (b neverEnding) Read(p []byte) (n int, err error) {
 // headers that the standard http.Transport adds,
 // such as User-Agent.
 
-// DumpRequestOut和DumpRequest一样，但是包含了header，这个header有标准的http.Transport，
-// 比如User-Agent。
+// DumpRequestOut 和 DumpRequest 一样，但是它用于传出客户端请求。它包含任何标准
+// http.Transport 添加的 header，例如 User-Agent。
 func DumpRequestOut(req *http.Request, body bool) ([]byte, error) {
 	save := req.Body
 	dummyBody := false
@@ -189,8 +189,10 @@ func dumpAsReceived(req *http.Request, w io.Writer) error {
 	return nil
 }
 
-// DumpRequest returns the as-received wire representation of req,
-// optionally including the request body, for debugging.
+// DumpRequest returns the as-received wire representation of req, optionally
+// including the request body, for debugging. It is for use in servers; use
+// DumpRequestOut for client requests.
+//
 // DumpRequest is semantically a no-op, but in order to
 // dump the body, it reads the body data into memory and
 // changes req.Body to refer to the in-memory copy.

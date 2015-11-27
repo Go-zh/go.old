@@ -21,6 +21,13 @@ const (
 	constThree = 3 // Comment on line with constThree.
 )
 
+// Const block where first entry is unexported.
+const (
+	constFour = iota
+	ConstFive
+	ConstSix
+)
+
 // Variables
 
 // Comment about exported variable.
@@ -37,6 +44,13 @@ var (
 	varThree = 3 // Comment on line with varThree.
 )
 
+// Var block where first entry is unexported.
+var (
+	varFour = 4
+	VarFive = 5
+	varSix  = 6
+)
+
 // Comment about exported function.
 func ExportedFunc(a int) bool
 
@@ -46,7 +60,7 @@ func internalFunc(a int) bool
 // Comment about exported type.
 type ExportedType struct {
 	// Comment before exported field.
-	ExportedField   int
+	ExportedField   int // Comment on line with exported field.
 	unexportedField int // Comment on line with unexported field.
 }
 
@@ -72,6 +86,13 @@ func ExportedTypeConstructor() *ExportedType {
 }
 
 const unexportedTypedConstant ExportedType = 1 // In a separate section to test -u.
+
+// Comment about exported interface.
+type ExportedInterface interface {
+	// Comment before exported method.
+	ExportedMethod()   // Comment on line with exported method.
+	unexportedMethod() // Comment on line with unexported method.
+}
 
 // Comment about unexported type.
 type unexportedType int

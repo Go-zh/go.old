@@ -34,15 +34,20 @@ var MAXWIDTH int64 = 1 << 50
  * int, uint, and uintptr
  */
 var typedefs = []gc.Typedef{
-	gc.Typedef{"int", gc.TINT, gc.TINT64},
-	gc.Typedef{"uint", gc.TUINT, gc.TUINT64},
-	gc.Typedef{"uintptr", gc.TUINTPTR, gc.TUINT64},
+	{"int", gc.TINT, gc.TINT64},
+	{"uint", gc.TUINT, gc.TUINT64},
+	{"uintptr", gc.TUINTPTR, gc.TUINT64},
 }
 
 func betypeinit() {
 	gc.Widthptr = 8
 	gc.Widthint = 8
 	gc.Widthreg = 8
+
+	if gc.Ctxt.Flag_shared != 0 {
+		gc.Thearch.ReservedRegs = append(gc.Thearch.ReservedRegs, ppc64.REG_R2)
+		gc.Thearch.ReservedRegs = append(gc.Thearch.ReservedRegs, ppc64.REG_R12)
+	}
 }
 
 func Main() {

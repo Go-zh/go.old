@@ -19,20 +19,47 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"unsafe"
 )
 
+// Pass a func value from nestedCall to goCallback using an integer token.
+var callbackMutex sync.Mutex
+var callbackToken int
+var callbackFuncs = make(map[int]func())
+
 // nestedCall calls into C, back into Go, and finally to f.
 func nestedCall(f func()) {
-	// NOTE: Depends on representation of f.
 	// callback(x) calls goCallback(x)
-	C.callback(*(*unsafe.Pointer)(unsafe.Pointer(&f)))
+	callbackMutex.Lock()
+	callbackToken++
+	i := callbackToken
+	callbackFuncs[i] = f
+	callbackMutex.Unlock()
+
+	// Pass the address of i because the C function was written to
+	// take a pointer.  We could pass an int if we felt like
+	// rewriting the C code.
+	C.callback(unsafe.Pointer(&i))
+
+	callbackMutex.Lock()
+	delete(callbackFuncs, i)
+	callbackMutex.Unlock()
 }
 
 //export goCallback
 func goCallback(p unsafe.Pointer) {
-	(*(*func())(unsafe.Pointer(&p)))()
+	i := *(*int)(p)
+
+	callbackMutex.Lock()
+	f := callbackFuncs[i]
+	callbackMutex.Unlock()
+
+	if f == nil {
+		panic("missing callback function")
+	}
+	f()
 }
 
 func testCallback(t *testing.T) {
@@ -151,7 +178,6 @@ func testCallbackCallers(t *testing.T) {
 	pc := make([]uintptr, 100)
 	n := 0
 	name := []string{
-		"test.goCallback",
 		"runtime.call16",
 		"runtime.cgocallbackg1",
 		"runtime.cgocallbackg",
@@ -166,10 +192,10 @@ func testCallbackCallers(t *testing.T) {
 		"runtime.goexit",
 	}
 	if unsafe.Sizeof((*byte)(nil)) == 8 {
-		name[1] = "runtime.call32"
+		name[0] = "runtime.call32"
 	}
 	nestedCall(func() {
-		n = runtime.Callers(2, pc)
+		n = runtime.Callers(4, pc)
 	})
 	if n != len(name) {
 		t.Errorf("expected %d frames, got %d", len(name), n)
@@ -177,7 +203,7 @@ func testCallbackCallers(t *testing.T) {
 	for i := 0; i < n; i++ {
 		f := runtime.FuncForPC(pc[i])
 		if f == nil {
-			t.Fatalf("expected non-nil Func for pc %p", pc[i])
+			t.Fatalf("expected non-nil Func for pc %d", pc[i])
 		}
 		fname := f.Name()
 		// Remove the prepended pathname from automatically

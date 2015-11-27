@@ -354,7 +354,7 @@ const defaultUserAgent = "Go-http-client/1.1"
 // hasn't been set to "identity", Write adds "Transfer-Encoding:
 // chunked" to the header. Body is closed after it is sent.
 func (r *Request) Write(w io.Writer) error {
-	return r.write(w, false, nil)
+	return r.write(w, false, nil, nil)
 }
 
 // WriteProxy is like Write but writes the request in the form
@@ -364,11 +364,12 @@ func (r *Request) Write(w io.Writer) error {
 // In either case, WriteProxy also writes a Host header, using
 // either r.Host or r.URL.Host.
 func (r *Request) WriteProxy(w io.Writer) error {
-	return r.write(w, true, nil)
+	return r.write(w, true, nil, nil)
 }
 
 // extraHeaders may be nil
-func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header) error {
+// waitForContinue may be nil
+func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, waitForContinue func() bool) error {
 	// Find the target host. Prefer the Host: header, but if that
 	// is not given, use the host from the request URL.
 	//
@@ -458,6 +459,21 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header) err
 		return err
 	}
 
+	// Flush and wait for 100-continue if expected.
+	if waitForContinue != nil {
+		if bw, ok := w.(*bufio.Writer); ok {
+			err = bw.Flush()
+			if err != nil {
+				return err
+			}
+		}
+
+		if !waitForContinue() {
+			req.closeBody()
+			return nil
+		}
+	}
+
 	// Write body and trailer
 	err = tw.WriteBody(w)
 	if err != nil {
@@ -531,6 +547,23 @@ func ParseHTTPVersion(vers string) (major, minor int, ok bool) {
 	return major, minor, true
 }
 
+func validMethod(method string) bool {
+	/*
+	     Method         = "OPTIONS"                ; Section 9.2
+	                    | "GET"                    ; Section 9.3
+	                    | "HEAD"                   ; Section 9.4
+	                    | "POST"                   ; Section 9.5
+	                    | "PUT"                    ; Section 9.6
+	                    | "DELETE"                 ; Section 9.7
+	                    | "TRACE"                  ; Section 9.8
+	                    | "CONNECT"                ; Section 9.9
+	                    | extension-method
+	   extension-method = token
+	     token          = 1*<any CHAR except CTLs or separators>
+	*/
+	return len(method) > 0 && strings.IndexFunc(method, isNotToken) == -1
+}
+
 // NewRequest returns a new Request given a method, URL, and optional body.
 //
 // If the provided body is also an io.Closer, the returned
@@ -544,6 +577,9 @@ func ParseHTTPVersion(vers string) (major, minor int, ok bool) {
 // type's documentation for the difference between inbound and outbound
 // request fields.
 func NewRequest(method, urlStr string, body io.Reader) (*Request, error) {
+	if !validMethod(method) {
+		return nil, fmt.Errorf("net/http: invalid method %q", method)
+	}
 	u, err := url.Parse(urlStr)
 	if err != nil {
 		return nil, err

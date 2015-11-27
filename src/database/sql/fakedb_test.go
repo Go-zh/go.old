@@ -153,12 +153,32 @@ func TestDrivers(t *testing.T) {
 	}
 }
 
+// hook to simulate connection failures
+var hookOpenErr struct {
+	sync.Mutex
+	fn func() error
+}
+
+func setHookOpenErr(fn func() error) {
+	hookOpenErr.Lock()
+	defer hookOpenErr.Unlock()
+	hookOpenErr.fn = fn
+}
+
 // Supports dsn forms:
 //    <dbname>
 //    <dbname>;<opts>  (only currently supported option is `badConn`,
 //                      which causes driver.ErrBadConn to be returned on
 //                      every other conn.Begin())
 func (d *fakeDriver) Open(dsn string) (driver.Conn, error) {
+	hookOpenErr.Lock()
+	fn := hookOpenErr.fn
+	hookOpenErr.Unlock()
+	if fn != nil {
+		if err := fn(); err != nil {
+			return nil, err
+		}
+	}
 	parts := strings.Split(dsn, ";")
 	if len(parts) < 1 {
 		return nil, errors.New("fakedb: no database name")
@@ -699,13 +719,25 @@ func (s *fakeStmt) NumInput() int {
 	return s.placeholders
 }
 
+// hook to simulate broken connections
+var hookCommitBadConn func() bool
+
 func (tx *fakeTx) Commit() error {
 	tx.c.currTx = nil
+	if hookCommitBadConn != nil && hookCommitBadConn() {
+		return driver.ErrBadConn
+	}
 	return nil
 }
 
+// hook to simulate broken connections
+var hookRollbackBadConn func() bool
+
 func (tx *fakeTx) Rollback() error {
 	tx.c.currTx = nil
+	if hookRollbackBadConn != nil && hookRollbackBadConn() {
+		return driver.ErrBadConn
+	}
 	return nil
 }
 

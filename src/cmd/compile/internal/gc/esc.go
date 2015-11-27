@@ -7,6 +7,7 @@ package gc
 import (
 	"cmd/internal/obj"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -34,10 +35,10 @@ import (
 // when analyzing a set of mutually recursive functions.
 
 type bottomUpVisitor struct {
-	analyze  func(*NodeList, bool)
+	analyze  func([]*Node, bool)
 	visitgen uint32
 	nodeID   map[*Node]uint32
-	stack    *NodeList
+	stack    []*Node
 }
 
 // visitBottomUp invokes analyze on the ODCLFUNC nodes listed in list.
@@ -53,7 +54,7 @@ type bottomUpVisitor struct {
 // If recursive is false, the list consists of only a single function and its closures.
 // If recursive is true, the list may still contain only a single function,
 // if that function is itself recursive.
-func visitBottomUp(list *NodeList, analyze func(list *NodeList, recursive bool)) {
+func visitBottomUp(list *NodeList, analyze func(list []*Node, recursive bool)) {
 	var v bottomUpVisitor
 	v.analyze = analyze
 	v.nodeID = make(map[*Node]uint32)
@@ -76,10 +77,7 @@ func (v *bottomUpVisitor) visit(n *Node) uint32 {
 	v.visitgen++
 	min := v.visitgen
 
-	l := new(NodeList)
-	l.Next = v.stack
-	l.N = n
-	v.stack = l
+	v.stack = append(v.stack, n)
 	min = v.visitcodelist(n.Nbody, min)
 	if (min == id || min == id+1) && n.Func.FCurfn == nil {
 		// This node is the root of a strongly connected component.
@@ -93,17 +91,19 @@ func (v *bottomUpVisitor) visit(n *Node) uint32 {
 		// Remove connected component from stack.
 		// Mark walkgen so that future visits return a large number
 		// so as not to affect the caller's min.
-		block := v.stack
 
-		var l *NodeList
-		for l = v.stack; l.N != n; l = l.Next {
-			v.nodeID[l.N] = ^uint32(0)
+		var i int
+		for i = len(v.stack) - 1; i >= 0; i-- {
+			x := v.stack[i]
+			if x == n {
+				break
+			}
+			v.nodeID[x] = ^uint32(0)
 		}
 		v.nodeID[n] = ^uint32(0)
-		v.stack = l.Next
-		l.Next = nil
-
+		block := v.stack[i:]
 		// Run escape analysis on this set of functions.
+		v.stack = v.stack[:i]
 		v.analyze(block, recursive)
 	}
 
@@ -249,17 +249,6 @@ func satInc8(x int8) int8 {
 	return x + 1
 }
 
-func satAdd8(x, y int8) int8 {
-	z := x + y
-	if x^y < 0 || x^z >= 0 {
-		return z
-	}
-	if x < 0 {
-		return -128
-	}
-	return 127
-}
-
 func min8(a, b int8) int8 {
 	if a < b {
 		return a
@@ -323,7 +312,7 @@ func (e *EscState) nodeEscState(n *Node) *NodeEscState {
 		return nE
 	}
 	if n.Opt() != nil {
-		Fatal("nodeEscState: opt in use (%T)", n.Opt())
+		Fatalf("nodeEscState: opt in use (%T)", n.Opt())
 	}
 	nE := new(NodeEscState)
 	nE.Curfn = Curfn
@@ -334,7 +323,7 @@ func (e *EscState) nodeEscState(n *Node) *NodeEscState {
 
 func (e *EscState) track(n *Node) {
 	if Curfn == nil {
-		Fatal("EscState.track: Curfn nil")
+		Fatalf("EscState.track: Curfn nil")
 	}
 	n.Esc = EscNone // until proven otherwise
 	nE := e.nodeEscState(n)
@@ -368,7 +357,7 @@ func escMax(e, etype uint16) uint16 {
 	if e&EscMask >= EscScope {
 		// normalize
 		if e&^EscMask != 0 {
-			Fatal("Escape information had unexpected return encoding bits (w/ EscScope, EscHeap, EscNever), e&EscMask=%v", e&EscMask)
+			Fatalf("Escape information had unexpected return encoding bits (w/ EscScope, EscHeap, EscNever), e&EscMask=%v", e&EscMask)
 		}
 	}
 	if e&EscMask > etype {
@@ -386,10 +375,9 @@ func escMax(e, etype uint16) uint16 {
 // something whose address is returned -- but that implies stored into the heap,
 // hence EscHeap, which means that the details are not currently relevant. )
 const (
-	bitsPerOutputInTag = 3                                         // For each output, the number of bits for a tag
-	bitsMaskForTag     = uint16(1<<bitsPerOutputInTag) - 1         // The bit mask to extract a single tag.
-	outputsPerTag      = (16 - EscReturnBits) / bitsPerOutputInTag // The number of outputs that can be tagged.
-	maxEncodedLevel    = int(bitsMaskForTag - 1)                   // The largest level that can be stored in a tag.
+	bitsPerOutputInTag = 3                                 // For each output, the number of bits for a tag
+	bitsMaskForTag     = uint16(1<<bitsPerOutputInTag) - 1 // The bit mask to extract a single tag.
+	maxEncodedLevel    = int(bitsMaskForTag - 1)           // The largest level that can be stored in a tag.
 )
 
 type EscState struct {
@@ -425,7 +413,7 @@ func (e *EscState) curfnSym(n *Node) *Sym {
 	return funcSym(nE.Curfn)
 }
 
-func escAnalyze(all *NodeList, recursive bool) {
+func escAnalyze(all []*Node, recursive bool) {
 	var es EscState
 	e := &es
 	e.theSink.Op = ONAME
@@ -435,16 +423,16 @@ func escAnalyze(all *NodeList, recursive bool) {
 	e.nodeEscState(&e.theSink).Escloopdepth = -1
 	e.recursive = recursive
 
-	for l := all; l != nil; l = l.Next {
-		if l.N.Op == ODCLFUNC {
-			l.N.Esc = EscFuncPlanned
+	for i := len(all) - 1; i >= 0; i-- {
+		if n := all[i]; n.Op == ODCLFUNC {
+			n.Esc = EscFuncPlanned
 		}
 	}
 
 	// flow-analyze functions
-	for l := all; l != nil; l = l.Next {
-		if l.N.Op == ODCLFUNC {
-			escfunc(e, l.N)
+	for i := len(all) - 1; i >= 0; i-- {
+		if n := all[i]; n.Op == ODCLFUNC {
+			escfunc(e, n)
 		}
 	}
 
@@ -457,9 +445,9 @@ func escAnalyze(all *NodeList, recursive bool) {
 	}
 
 	// for all top level functions, tag the typenodes corresponding to the param nodes
-	for l := all; l != nil; l = l.Next {
-		if l.N.Op == ODCLFUNC {
-			esctag(e, l.N)
+	for i := len(all) - 1; i >= 0; i-- {
+		if n := all[i]; n.Op == ODCLFUNC {
+			esctag(e, n)
 		}
 	}
 
@@ -478,7 +466,7 @@ func escAnalyze(all *NodeList, recursive bool) {
 func escfunc(e *EscState, func_ *Node) {
 	//	print("escfunc %N %s\n", func->nname, e->recursive?"(recursive)":"");
 	if func_.Esc != 1 {
-		Fatal("repeat escfunc %v", func_.Func.Nname)
+		Fatalf("repeat escfunc %v", func_.Func.Nname)
 	}
 	func_.Esc = EscFuncStarted
 
@@ -549,7 +537,7 @@ func escloopdepth(e *EscState, n *Node) {
 	switch n.Op {
 	case OLABEL:
 		if n.Left == nil || n.Left.Sym == nil {
-			Fatal("esc:label without label: %v", Nconv(n, obj.FmtSign))
+			Fatalf("esc:label without label: %v", Nconv(n, obj.FmtSign))
 		}
 
 		// Walk will complain about this label being already defined, but that's not until
@@ -560,7 +548,7 @@ func escloopdepth(e *EscState, n *Node) {
 
 	case OGOTO:
 		if n.Left == nil || n.Left.Sym == nil {
-			Fatal("esc:goto without label: %v", Nconv(n, obj.FmtSign))
+			Fatalf("esc:goto without label: %v", Nconv(n, obj.FmtSign))
 		}
 
 		// If we come past one that's uninitialized, this must be a (harmless) forward jump
@@ -663,10 +651,15 @@ func esc(e *EscState, n *Node, up *Node) {
 
 		n.Left.Sym.Label = nil
 
-		// Everything but fixed array is a dereference.
 	case ORANGE:
 		if n.List != nil && n.List.Next != nil {
-			if Isfixedarray(n.Type) {
+			// Everything but fixed array is a dereference.
+
+			// If fixed array is really the address of fixed array,
+			// it is also a dereference, because it is implicitly
+			// dereferenced (see #12588)
+			if Isfixedarray(n.Type) &&
+				!(Isptr[n.Right.Type.Etype] && Eqtype(n.Right.Type.Type, n.Type)) {
 				escassign(e, n.List.Next.N, n.Right)
 			} else {
 				escassignDereference(e, n.List.Next.N, n.Right)
@@ -766,7 +759,7 @@ func esc(e *EscState, n *Node, up *Node) {
 			escassign(e, ll.N, lr.N)
 		}
 		if lr != nil || ll != nil {
-			Fatal("esc oas2func")
+			Fatalf("esc oas2func")
 		}
 
 	case ORETURN:
@@ -787,7 +780,7 @@ func esc(e *EscState, n *Node, up *Node) {
 		}
 
 		if ll != nil {
-			Fatal("esc return list")
+			Fatalf("esc return list")
 		}
 
 		// Argument could leak through recover.
@@ -863,7 +856,7 @@ func esc(e *EscState, n *Node, up *Node) {
 		var v *Node
 		for ll := n.Func.Cvars; ll != nil; ll = ll.Next {
 			v = ll.N
-			if v.Op == OXXX { // unnamed out argument; see dcl.c:/^funcargs
+			if v.Op == OXXX { // unnamed out argument; see dcl.go:/^funcargs
 				continue
 			}
 			a = v.Name.Param.Closure
@@ -949,7 +942,7 @@ func escassign(e *EscState, dst *Node, src *Node) {
 	switch dst.Op {
 	default:
 		Dump("dst", dst)
-		Fatal("escassign: unexpected dst")
+		Fatalf("escassign: unexpected dst")
 
 	case OARRAYLIT,
 		OCLOSURE,
@@ -959,6 +952,7 @@ func escassign(e *EscState, dst *Node, src *Node) {
 		OMAPLIT,
 		OSTRUCTLIT,
 		OPTRLIT,
+		ODDDARG,
 		OCALLPART:
 		break
 
@@ -1112,7 +1106,7 @@ func mktag(mask int) *string {
 		break
 
 	default:
-		Fatal("escape mktag")
+		Fatalf("escape mktag")
 	}
 
 	if mask < len(tags) && tags[mask] != "" {
@@ -1131,7 +1125,8 @@ func parsetag(note *string) uint16 {
 	if note == nil || !strings.HasPrefix(*note, "esc:") {
 		return EscUnknown
 	}
-	em := uint16(atoi((*note)[4:]))
+	n, _ := strconv.ParseInt((*note)[4:], 0, 0)
+	em := uint16(n)
 	if em == 0 {
 		return EscNone
 	}
@@ -1239,7 +1234,7 @@ func escassignfromtag(e *EscState, note *string, dsts *NodeList, src *Node) uint
 	// so there is no need to check here.
 
 	if em != 0 && dsts == nil {
-		Fatal("corrupt esc tag %q or messed up escretval list\n", note)
+		Fatalf("corrupt esc tag %q or messed up escretval list\n", note)
 	}
 	return em0
 }
@@ -1334,7 +1329,7 @@ func esccall(e *EscState, n *Node, up *Node) {
 	var fn *Node
 	switch n.Op {
 	default:
-		Fatal("esccall")
+		Fatalf("esccall")
 
 	case OCALLFUNC:
 		fn = n.Left
@@ -1357,7 +1352,7 @@ func esccall(e *EscState, n *Node, up *Node) {
 	ll := n.List
 	if n.List != nil && n.List.Next == nil {
 		a := n.List.N
-		if a.Type.Etype == TSTRUCT && a.Type.Funarg != 0 { // f(g()).
+		if a.Type.Etype == TSTRUCT && a.Type.Funarg { // f(g()).
 			ll = e.nodeEscState(a).Escretval
 		}
 	}
@@ -1394,7 +1389,7 @@ func esccall(e *EscState, n *Node, up *Node) {
 		// function in same mutually recursive group.  Incorporate into flow graph.
 		//		print("esc local fn: %N\n", fn->ntype);
 		if fn.Name.Defn.Esc == EscFuncUnknown || nE.Escretval != nil {
-			Fatal("graph inconsistency")
+			Fatalf("graph inconsistency")
 		}
 
 		// set up out list on this call node
@@ -1443,7 +1438,7 @@ func esccall(e *EscState, n *Node, up *Node) {
 
 	// Imported or completely analyzed function.  Use the escape tags.
 	if nE.Escretval != nil {
-		Fatal("esc already decorated call %v\n", Nconv(n, obj.FmtSign))
+		Fatalf("esc already decorated call %v\n", Nconv(n, obj.FmtSign))
 	}
 
 	if Debug['m'] > 2 {
@@ -1464,8 +1459,9 @@ func esccall(e *EscState, n *Node, up *Node) {
 		}
 	}
 
+	var src *Node
 	for t := getinargx(fntype).Type; ll != nil; ll = ll.Next {
-		src := ll.N
+		src = ll.N
 		if t.Isddd && !n.Isddd {
 			// Introduce ODDDARG node to represent ... allocation.
 			src = Nod(ODDDARG, nil, nil)
@@ -1506,17 +1502,17 @@ func esccall(e *EscState, n *Node, up *Node) {
 		}
 
 		if src != ll.N {
+			// This occurs when function parameter type Isddd and n not Isddd
 			break
 		}
 		t = t.Down
 	}
 
-	// "..." arguments are untracked
 	for ; ll != nil; ll = ll.Next {
-		escassign(e, &e.theSink, ll.N)
 		if Debug['m'] > 2 {
-			fmt.Printf("%v::esccall:: ... <- %v, untracked\n", Ctxt.Line(int(lineno)), Nconv(ll.N, obj.FmtShort))
+			fmt.Printf("%v::esccall:: ... <- %v\n", Ctxt.Line(int(lineno)), Nconv(ll.N, obj.FmtShort))
 		}
+		escassign(e, src, ll.N) // args to slice
 	}
 }
 
@@ -1702,6 +1698,16 @@ func escwalk(e *EscState, level Level, dst *Node, src *Node) {
 	case OAPPEND:
 		escwalk(e, level, dst, src.List.N)
 
+	case ODDDARG:
+		if leaks {
+			src.Esc = EscHeap
+			if Debug['m'] != 0 {
+				Warnl(int(src.Lineno), "%v escapes to heap", Nconv(src, obj.FmtShort))
+			}
+		}
+		// similar to a slice arraylit and its args.
+		level = level.dec()
+
 	case OARRAYLIT:
 		if Isfixedarray(src.Type) {
 			break
@@ -1712,8 +1718,7 @@ func escwalk(e *EscState, level Level, dst *Node, src *Node) {
 
 		fallthrough
 
-	case ODDDARG,
-		OMAKECHAN,
+	case OMAKECHAN,
 		OMAKEMAP,
 		OMAKESLICE,
 		OARRAYRUNESTR,
