@@ -1,4 +1,4 @@
-// Copyright 2010 The Go Authors.  All rights reserved.
+// Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -22,7 +22,7 @@ func msigsave(mp *m) {
 }
 
 //go:nosplit
-func msigrestore(mp *m) {
+func msigrestore(sigmask sigset) {
 }
 
 //go:nosplit
@@ -30,7 +30,7 @@ func sigblock() {
 }
 
 // Called to initialize a new m (including the bootstrap m).
-// Called on the new thread, can not allocate memory.
+// Called on the new thread, cannot allocate memory.
 func minit() {
 	_g_ := getg()
 
@@ -67,7 +67,7 @@ func goenvs() {
 	goenvs_unix()
 }
 
-func initsig() {
+func initsig(preinit bool) {
 }
 
 //go:nosplit
@@ -172,7 +172,23 @@ func memlimit() uintptr {
 	return 0
 }
 
-// This runs on a foreign stack, without an m or a g.  No stack split.
+// This runs on a foreign stack, without an m or a g. No stack split.
+//go:nosplit
+//go:norace
+//go:nowritebarrierrec
+func badsignal(sig uintptr) {
+	cgocallback(unsafe.Pointer(funcPC(badsignalgo)), noescape(unsafe.Pointer(&sig)), unsafe.Sizeof(sig))
+}
+
+func badsignalgo(sig uintptr) {
+	if !sigsend(uint32(sig)) {
+		// A foreign thread received the signal sig, and the
+		// Go code does not want to handle it.
+		raisebadsignal(int32(sig))
+	}
+}
+
+// This runs on a foreign stack, without an m or a g. No stack split.
 //go:nosplit
 func badsignal2() {
 	write(2, unsafe.Pointer(&badsignal1[0]), int32(len(badsignal1)))

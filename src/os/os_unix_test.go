@@ -18,16 +18,16 @@ func init() {
 }
 
 func checkUidGid(t *testing.T, path string, uid, gid int) {
-	dir, err := Stat(path)
+	dir, err := Lstat(path)
 	if err != nil {
-		t.Fatalf("Stat %q (looking for uid/gid %d/%d): %s", path, uid, gid, err)
+		t.Fatalf("Lstat %q (looking for uid/gid %d/%d): %s", path, uid, gid, err)
 	}
 	sys := dir.Sys().(*syscall.Stat_t)
 	if int(sys.Uid) != uid {
-		t.Errorf("Stat %q: uid %d want %d", path, sys.Uid, uid)
+		t.Errorf("Lstat %q: uid %d want %d", path, sys.Uid, uid)
 	}
 	if int(sys.Gid) != gid {
-		t.Errorf("Stat %q: gid %d want %d", path, sys.Gid, gid)
+		t.Errorf("Lstat %q: gid %d want %d", path, sys.Gid, gid)
 	}
 }
 
@@ -39,7 +39,7 @@ func TestChown(t *testing.T) {
 	}
 	// Use TempDir() to make sure we're on a local file system,
 	// so that the group ids returned by Getgroups will be allowed
-	// on the file.  On NFS, the Getgroups groups are
+	// on the file. On NFS, the Getgroups groups are
 	// basically useless.
 	f := newFile("TestChown", t)
 	defer Remove(f.Name())
@@ -50,7 +50,7 @@ func TestChown(t *testing.T) {
 	}
 
 	// Can't change uid unless root, but can try
-	// changing the group id.  First try our current group.
+	// changing the group id. First try our current group.
 	gid := Getgid()
 	t.Log("gid:", gid)
 	if err = Chown(f.Name(), -1, gid); err != nil {
@@ -86,7 +86,7 @@ func TestFileChown(t *testing.T) {
 	}
 	// Use TempDir() to make sure we're on a local file system,
 	// so that the group ids returned by Getgroups will be allowed
-	// on the file.  On NFS, the Getgroups groups are
+	// on the file. On NFS, the Getgroups groups are
 	// basically useless.
 	f := newFile("TestFileChown", t)
 	defer Remove(f.Name())
@@ -97,7 +97,7 @@ func TestFileChown(t *testing.T) {
 	}
 
 	// Can't change uid unless root, but can try
-	// changing the group id.  First try our current group.
+	// changing the group id. First try our current group.
 	gid := Getgid()
 	t.Log("gid:", gid)
 	if err = f.Chown(-1, gid); err != nil {
@@ -133,7 +133,7 @@ func TestLchown(t *testing.T) {
 	}
 	// Use TempDir() to make sure we're on a local file system,
 	// so that the group ids returned by Getgroups will be allowed
-	// on the file.  On NFS, the Getgroups groups are
+	// on the file. On NFS, the Getgroups groups are
 	// basically useless.
 	f := newFile("TestLchown", t)
 	defer Remove(f.Name())
@@ -144,19 +144,13 @@ func TestLchown(t *testing.T) {
 	}
 
 	linkname := f.Name() + "2"
-	if err := Link(f.Name(), linkname); err != nil {
+	if err := Symlink(f.Name(), linkname); err != nil {
 		t.Fatalf("link %s -> %s: %v", f.Name(), linkname, err)
 	}
 	defer Remove(linkname)
 
-	f2, err := Open(linkname)
-	if err != nil {
-		t.Fatalf("open %s: %v", linkname, err)
-	}
-	defer f2.Close()
-
 	// Can't change uid unless root, but can try
-	// changing the group id.  First try our current group.
+	// changing the group id. First try our current group.
 	gid := Getgid()
 	t.Log("gid:", gid)
 	if err = Lchown(linkname, -1, gid); err != nil {
@@ -177,10 +171,7 @@ func TestLchown(t *testing.T) {
 		}
 		checkUidGid(t, linkname, int(sys.Uid), g)
 
-		// change back to gid to test fd.Chown
-		if err = f2.Chown(-1, gid); err != nil {
-			t.Fatalf("fchown %s -1 %d: %s", linkname, gid, err)
-		}
-		checkUidGid(t, linkname, int(sys.Uid), gid)
+		// Check that link target's gid is unchanged.
+		checkUidGid(t, f.Name(), int(sys.Uid), int(sys.Gid))
 	}
 }

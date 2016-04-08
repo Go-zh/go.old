@@ -66,7 +66,7 @@ It is a comma-separated list of name=val pairs setting these named variables:
 	length of the pause. Setting gctrace=2 emits the same summary but also
 	repeats each collection. The format of this line is subject to change.
 	Currently, it is:
-		gc # @#s #%: #+...+# ms clock, #+...+# ms cpu, #->#-># MB, # MB goal, # P
+		gc # @#s #%: #+#+# ms clock, #+#/#/#+# ms cpu, #->#-># MB, # MB goal, # P
 	where the fields are as follows:
 		gc #        the GC number, incremented at each GC
 		@#s         time in seconds since program start
@@ -75,9 +75,9 @@ It is a comma-separated list of name=val pairs setting these named variables:
 		#->#-># MB  heap size at GC start, at GC end, and live heap
 		# MB goal   goal heap size
 		# P         number of processors used
-	The phases are stop-the-world (STW) sweep termination, scan,
-	synchronize Ps, mark, and STW mark termination. The CPU times
-	for mark are broken down in to assist time (GC performed in
+	The phases are stop-the-world (STW) sweep termination, concurrent
+	mark and scan, and STW mark termination. The CPU times
+	for mark/scan are broken down in to assist time (GC performed in
 	line with allocation), background GC time, and idle GC time.
 	If the line ends with "(forced)", this GC was forced by a
 	runtime.GC() call and all phases are STW.
@@ -105,6 +105,9 @@ It is a comma-separated list of name=val pairs setting these named variables:
 	schedtrace: setting schedtrace=X causes the scheduler to emit a single line to standard
 	error every X milliseconds, summarizing the scheduler state.
 
+The net and net/http packages also refer to debugging variables in GODEBUG.
+See the documentation for those packages for details.
+
 The GOMAXPROCS variable limits the number of operating system threads that
 can execute user-level Go code simultaneously. There is no limit to the number of threads
 that can be blocked in system calls on behalf of Go code; those do not count against
@@ -127,6 +130,10 @@ manner instead of exiting. For example, on Unix systems, the crash raises
 SIGABRT to trigger a core dump.
 For historical reasons, the GOTRACEBACK settings 0, 1, and 2 are synonyms for
 none, all, and system, respectively.
+The runtime/debug package's SetTraceback function allows increasing the
+amount of output at run time, but it cannot reduce the amount below that
+specified by the environment variable.
+See https://golang.org/pkg/runtime/debug/#SetTraceback.
 
 The GOARCH, GOOS, GOPATH, and GOROOT environment variables complete
 the set of Go environment variables. They influence the building of Go programs
@@ -177,11 +184,11 @@ package runtime
 import "runtime/internal/sys"
 
 // Caller reports file and line number information about function invocations on
-// the calling goroutine's stack.  The argument skip is the number of stack frames
+// the calling goroutine's stack. The argument skip is the number of stack frames
 // to ascend, with 0 identifying the caller of Caller.  (For historical reasons the
 // meaning of skip differs between Caller and Callers.) The return values report the
 // program counter, file name, and line number within the file of the corresponding
-// call.  The boolean ok is false if it was not possible to recover the information.
+// call. The boolean ok is false if it was not possible to recover the information.
 
 // Caller 报告关于调用Go程的栈上的函数调用的文件和行号信息。
 // 实参 skip 为占用的栈帧数，若为0则表示 Caller 的调用者。（由于历史原因，skip
@@ -219,19 +226,16 @@ func Caller(skip int) (pc uintptr, file string, line int, ok bool) {
 }
 
 // Callers fills the slice pc with the return program counters of function invocations
-// on the calling goroutine's stack.  The argument skip is the number of stack frames
+// on the calling goroutine's stack. The argument skip is the number of stack frames
 // to skip before recording in pc, with 0 identifying the frame for Callers itself and
 // 1 identifying the caller of Callers.
 // It returns the number of entries written to pc.
 //
 // Note that since each slice entry pc[i] is a return program counter,
 // looking up the file and line for pc[i] (for example, using (*Func).FileLine)
-// will return the file and line number of the instruction immediately
+// will normally return the file and line number of the instruction immediately
 // following the call.
-// To look up the file and line number of the call itself, use pc[i]-1.
-// As an exception to this rule, if pc[i-1] corresponds to the function
-// runtime.sigpanic, then pc[i] is the program counter of a faulting
-// instruction and should be used without any subtraction.
+// To easily look up file/line information for the call sequence, use Frames.
 
 // Callers 把调用它的Go程栈上函数请求的返回程序计数器填充到切片 pc 中。
 // 实参 skip 为开始在 pc 中记录之前所要跳过的栈帧数，若为 0 则表示 Callers 自身的栈帧，
@@ -239,11 +243,10 @@ func Caller(skip int) (pc uintptr, file string, line int, ok bool) {
 //
 // 注意，由于每个切片项 pc[i] 都是一个返回程序计数器，因此查找 pc[i] 的文件和行（例如，使用
 // (*Func).FileLine）将会在该调用之后立即返回该指令所在的文件和行号。
-// 要查找该调用本身所在的文件和行号，请使用 pc[i]-1。此规则的一个例外是，若 pc[i-1]
-// 对应于函数 runtime.sigpanic，那么 pc[i] 就是失败指令的程序计数器，因此应当不通过任何减法来使用。
+// 要想在调用序列中方便地查看文件/行号信息，请使用 Frames。
 func Callers(skip int, pc []uintptr) int {
 	// runtime.callers uses pc.array==nil as a signal
-	// to print a stack trace.  Pick off 0-length pc here
+	// to print a stack trace. Pick off 0-length pc here
 	// so that we don't let a nil pc slice get to it.
 	if len(pc) == 0 {
 		return 0
@@ -283,8 +286,8 @@ func Version() string {
 const GOOS string = sys.TheGoos
 
 // GOARCH is the running program's architecture target:
-// 386, amd64, or arm.
+// 386, amd64, arm, or s390x.
 
 // GOARCH 为所运行程序的目标架构：
-// 386、amd64 或 arm。
+// 386、amd64、arm 或 s390x。
 const GOARCH string = sys.TheGoarch

@@ -16,6 +16,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -55,6 +56,15 @@ type Conn struct {
 	rawInput *block       // raw input, right off the wire
 	input    *block       // application data waiting to be read
 	hand     bytes.Buffer // handshake data waiting to be read
+
+	// bytesSent counts the number of bytes of application data that have
+	// been sent.
+	bytesSent int64
+
+	// activeCall is an atomic int32; the low bit is whether Close has
+	// been called. the rest of the bits are the number of goroutines
+	// in Conn.Write.
+	activeCall int32
 
 	tmp [16]byte
 }
@@ -162,13 +172,6 @@ func (hc *halfConn) incSeq() {
 	// Instead, must renegotiate before it does.
 	// Not likely enough to bother.
 	panic("TLS: sequence number wraparound")
-}
-
-// resetSeq resets the sequence number to zero.
-func (hc *halfConn) resetSeq() {
-	for i := range hc.seq {
-		hc.seq[i] = 0
-	}
 }
 
 // removePadding returns an unpadded slice, in constant time, which is a prefix
@@ -688,12 +691,14 @@ func (c *Conn) sendAlertLocked(err alert) error {
 		c.tmp[0] = alertLevelError
 	}
 	c.tmp[1] = byte(err)
-	c.writeRecord(recordTypeAlert, c.tmp[0:2])
-	// closeNotify is a special case in that it isn't an error:
-	if err != alertCloseNotify {
-		return c.out.setErrorLocked(&net.OpError{Op: "local error", Err: err})
+
+	_, writeErr := c.writeRecord(recordTypeAlert, c.tmp[0:2])
+	if err == alertCloseNotify {
+		// closeNotify is a special case in that it isn't an error.
+		return writeErr
 	}
-	return nil
+
+	return c.out.setErrorLocked(&net.OpError{Op: "local error", Err: err})
 }
 
 // sendAlert sends a TLS alert message.
@@ -704,16 +709,85 @@ func (c *Conn) sendAlert(err alert) error {
 	return c.sendAlertLocked(err)
 }
 
+const (
+	// tcpMSSEstimate is a conservative estimate of the TCP maximum segment
+	// size (MSS). A constant is used, rather than querying the kernel for
+	// the actual MSS, to avoid complexity. The value here is the IPv6
+	// minimum MTU (1280 bytes) minus the overhead of an IPv6 header (40
+	// bytes) and a TCP header with timestamps (32 bytes).
+	tcpMSSEstimate = 1208
+
+	// recordSizeBoostThreshold is the number of bytes of application data
+	// sent after which the TLS record size will be increased to the
+	// maximum.
+	recordSizeBoostThreshold = 1 * 1024 * 1024
+)
+
+// maxPayloadSizeForWrite returns the maximum TLS payload size to use for the
+// next application data record. There is the following trade-off:
+//
+//   - For latency-sensitive applications, such as web browsing, each TLS
+//     record should fit in one TCP segment.
+//   - For throughput-sensitive applications, such as large file transfers,
+//     larger TLS records better amortize framing and encryption overheads.
+//
+// A simple heuristic that works well in practice is to use small records for
+// the first 1MB of data, then use larger records for subsequent data, and
+// reset back to smaller records after the connection becomes idle. See "High
+// Performance Web Networking", Chapter 4, or:
+// https://www.igvita.com/2013/10/24/optimizing-tls-record-size-and-buffering-latency/
+//
+// In the interests of simplicity and determinism, this code does not attempt
+// to reset the record size once the connection is idle, however.
+//
+// c.out.Mutex <= L.
+func (c *Conn) maxPayloadSizeForWrite(typ recordType, explicitIVLen int) int {
+	if c.config.DynamicRecordSizingDisabled || typ != recordTypeApplicationData {
+		return maxPlaintext
+	}
+
+	if c.bytesSent >= recordSizeBoostThreshold {
+		return maxPlaintext
+	}
+
+	// Subtract TLS overheads to get the maximum payload size.
+	macSize := 0
+	if c.out.mac != nil {
+		macSize = c.out.mac.Size()
+	}
+
+	payloadBytes := tcpMSSEstimate - recordHeaderLen - explicitIVLen
+	if c.out.cipher != nil {
+		switch ciph := c.out.cipher.(type) {
+		case cipher.Stream:
+			payloadBytes -= macSize
+		case cipher.AEAD:
+			payloadBytes -= ciph.Overhead()
+		case cbcMode:
+			blockSize := ciph.BlockSize()
+			// The payload must fit in a multiple of blockSize, with
+			// room for at least one padding byte.
+			payloadBytes = (payloadBytes & ^(blockSize - 1)) - 1
+			// The MAC is appended before padding so affects the
+			// payload size directly.
+			payloadBytes -= macSize
+		default:
+			panic("unknown cipher type")
+		}
+	}
+
+	return payloadBytes
+}
+
 // writeRecord writes a TLS record with the given type and payload
 // to the connection and updates the record layer state.
 // c.out.Mutex <= L.
-func (c *Conn) writeRecord(typ recordType, data []byte) (n int, err error) {
+func (c *Conn) writeRecord(typ recordType, data []byte) (int, error) {
 	b := c.out.newBlock()
+	defer c.out.freeBlock(b)
+
+	var n int
 	for len(data) > 0 {
-		m := len(data)
-		if m > maxPlaintext {
-			m = maxPlaintext
-		}
 		explicitIVLen := 0
 		explicitIVIsSeq := false
 
@@ -736,6 +810,10 @@ func (c *Conn) writeRecord(typ recordType, data []byte) (n int, err error) {
 				explicitIVIsSeq = true
 			}
 		}
+		m := len(data)
+		if maxPayload := c.maxPayloadSizeForWrite(typ, explicitIVLen); m > maxPayload {
+			m = maxPayload
+		}
 		b.resize(recordHeaderLen + explicitIVLen + m)
 		b.data[0] = byte(typ)
 		vers := c.vers
@@ -753,34 +831,28 @@ func (c *Conn) writeRecord(typ recordType, data []byte) (n int, err error) {
 			if explicitIVIsSeq {
 				copy(explicitIV, c.out.seq[:])
 			} else {
-				if _, err = io.ReadFull(c.config.rand(), explicitIV); err != nil {
-					break
+				if _, err := io.ReadFull(c.config.rand(), explicitIV); err != nil {
+					return n, err
 				}
 			}
 		}
 		copy(b.data[recordHeaderLen+explicitIVLen:], data)
 		c.out.encrypt(b, explicitIVLen)
-		_, err = c.conn.Write(b.data)
-		if err != nil {
-			break
+		if _, err := c.conn.Write(b.data); err != nil {
+			return n, err
 		}
+		c.bytesSent += int64(m)
 		n += m
 		data = data[m:]
 	}
-	c.out.freeBlock(b)
 
 	if typ == recordTypeChangeCipherSpec {
-		err = c.out.changeCipherSpec()
-		if err != nil {
-			// Cannot call sendAlert directly,
-			// because we already hold c.out.Mutex.
-			c.tmp[0] = alertLevelError
-			c.tmp[1] = byte(err.(alert))
-			c.writeRecord(recordTypeAlert, c.tmp[0:2])
-			return n, c.out.setErrorLocked(&net.OpError{Op: "local error", Err: err})
+		if err := c.out.changeCipherSpec(); err != nil {
+			return n, c.sendAlertLocked(err.(alert))
 		}
 	}
-	return
+
+	return n, nil
 }
 
 // readHandshake reads the next handshake message from
@@ -799,7 +871,8 @@ func (c *Conn) readHandshake() (interface{}, error) {
 	data := c.hand.Bytes()
 	n := int(data[1])<<16 | int(data[2])<<8 | int(data[3])
 	if n > maxHandshake {
-		return nil, c.in.setErrorLocked(c.sendAlert(alertInternalError))
+		c.sendAlertLocked(alertInternalError)
+		return nil, c.in.setErrorLocked(fmt.Errorf("tls: handshake message of length %d bytes exceeds maximum of %d bytes", n, maxHandshake))
 	}
 	for c.hand.Len() < 4+n {
 		if err := c.in.err; err != nil {
@@ -855,8 +928,22 @@ func (c *Conn) readHandshake() (interface{}, error) {
 	return m, nil
 }
 
+var errClosed = errors.New("crypto/tls: use of closed connection")
+
 // Write writes data to the connection.
 func (c *Conn) Write(b []byte) (int, error) {
+	// interlock with Close below
+	for {
+		x := atomic.LoadInt32(&c.activeCall)
+		if x&1 != 0 {
+			return 0, errClosed
+		}
+		if atomic.CompareAndSwapInt32(&c.activeCall, x, x+2) {
+			defer atomic.AddInt32(&c.activeCall, -2)
+			break
+		}
+	}
+
 	if err := c.Handshake(); err != nil {
 		return 0, err
 	}
@@ -960,6 +1047,27 @@ func (c *Conn) Read(b []byte) (n int, err error) {
 
 // Close closes the connection.
 func (c *Conn) Close() error {
+	// Interlock with Conn.Write above.
+	var x int32
+	for {
+		x = atomic.LoadInt32(&c.activeCall)
+		if x&1 != 0 {
+			return errClosed
+		}
+		if atomic.CompareAndSwapInt32(&c.activeCall, x, x|1) {
+			break
+		}
+	}
+	if x != 0 {
+		// io.Writer and io.Closer should not be used concurrently.
+		// If Close is called while a Write is currently in-flight,
+		// interpret that as a sign that this Close is really just
+		// being used to break the Write and/or clean up resources and
+		// avoid sending the alertCloseNotify, which may block
+		// waiting on handshakeMutex or the c.out mutex.
+		return c.conn.Close()
+	}
+
 	var alertErr error
 
 	c.handshakeMutex.Lock()
@@ -1032,7 +1140,7 @@ func (c *Conn) OCSPResponse() []byte {
 }
 
 // VerifyHostname checks that the peer certificate chain is valid for
-// connecting to host.  If so, it returns nil; if not, it returns an error
+// connecting to host. If so, it returns nil; if not, it returns an error
 // describing the problem.
 func (c *Conn) VerifyHostname(host string) error {
 	c.handshakeMutex.Lock()

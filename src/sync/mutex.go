@@ -3,8 +3,8 @@
 // license that can be found in the LICENSE file.
 
 // Package sync provides basic synchronization primitives such as mutual
-// exclusion locks.  Other than the Once and WaitGroup types, most are intended
-// for use by low-level library routines.  Higher-level synchronization is
+// exclusion locks. Other than the Once and WaitGroup types, most are intended
+// for use by low-level library routines. Higher-level synchronization is
 // better done via channels and communication.
 //
 // Values containing the types defined in this package should not be copied.
@@ -17,6 +17,7 @@
 package sync
 
 import (
+	"internal/race"
 	"sync/atomic"
 	"unsafe"
 )
@@ -56,8 +57,8 @@ func (m *Mutex) Lock() {
 	// Fast path: grab unlocked mutex.
 	// 快速通道：抢占锁定的互斥体。
 	if atomic.CompareAndSwapInt32(&m.state, 0, mutexLocked) {
-		if raceenabled {
-			raceAcquire(unsafe.Pointer(m))
+		if race.Enabled {
+			race.Acquire(unsafe.Pointer(m))
 		}
 		return
 	}
@@ -102,8 +103,8 @@ func (m *Mutex) Lock() {
 		}
 	}
 
-	if raceenabled {
-		raceAcquire(unsafe.Pointer(m))
+	if race.Enabled {
+		race.Acquire(unsafe.Pointer(m))
 	}
 }
 
@@ -120,9 +121,9 @@ func (m *Mutex) Lock() {
 // 已锁定的 Mutex 并不与特定的Go程相关联，这样便可让一个Go程锁定
 // Mutex，然后安排其它Go程来解锁。
 func (m *Mutex) Unlock() {
-	if raceenabled {
+	if race.Enabled {
 		_ = m.state
-		raceRelease(unsafe.Pointer(m))
+		race.Release(unsafe.Pointer(m))
 	}
 
 	// Fast path: drop lock bit.

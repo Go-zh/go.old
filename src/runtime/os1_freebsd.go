@@ -126,8 +126,8 @@ func msigsave(mp *m) {
 }
 
 //go:nosplit
-func msigrestore(mp *m) {
-	sigprocmask(_SIG_SETMASK, &mp.sigmask, nil)
+func msigrestore(sigmask sigset) {
+	sigprocmask(_SIG_SETMASK, &sigmask, nil)
 }
 
 //go:nosplit
@@ -136,7 +136,7 @@ func sigblock() {
 }
 
 // Called to initialize a new m (including the bootstrap m).
-// Called on the new thread, can not allocate memory.
+// Called on the new thread, cannot allocate memory.
 func minit() {
 	_g_ := getg()
 
@@ -147,7 +147,21 @@ func minit() {
 	}
 
 	// Initialize signal handling.
-	signalstack(&_g_.m.gsignal.stack)
+	var st stackt
+	sigaltstack(nil, &st)
+	if st.ss_flags&_SS_DISABLE != 0 {
+		signalstack(&_g_.m.gsignal.stack)
+		_g_.m.newSigstack = true
+	} else {
+		// Use existing signal stack.
+		stsp := uintptr(unsafe.Pointer(st.ss_sp))
+		_g_.m.gsignal.stack.lo = stsp
+		_g_.m.gsignal.stack.hi = stsp + st.ss_size
+		_g_.m.gsignal.stackguard0 = stsp + _StackGuard
+		_g_.m.gsignal.stackguard1 = stsp + _StackGuard
+		_g_.m.gsignal.stackAlloc = st.ss_size
+		_g_.m.newSigstack = false
+	}
 
 	// restore signal mask from m.sigmask and unblock essential signals
 	nmask := _g_.m.sigmask
@@ -162,7 +176,9 @@ func minit() {
 // Called from dropm to undo the effect of an minit.
 //go:nosplit
 func unminit() {
-	signalstack(nil)
+	if getg().m.newSigstack {
+		signalstack(nil)
+	}
 }
 
 func memlimit() uintptr {
@@ -185,7 +201,7 @@ func memlimit() uintptr {
 			return 0;
 
 		// If there's not at least 16 MB left, we're probably
-		// not going to be able to do much.  Treat as no limit.
+		// not going to be able to do much. Treat as no limit.
 		rl.rlim_cur -= used;
 		if(rl.rlim_cur < (16<<20))
 			return 0;
@@ -204,6 +220,8 @@ type sigactiont struct {
 	sa_mask    sigset
 }
 
+//go:nosplit
+//go:nowritebarrierrec
 func setsig(i int32, fn uintptr, restart bool) {
 	var sa sigactiont
 	sa.sa_flags = _SA_SIGINFO | _SA_ONSTACK
@@ -218,10 +236,14 @@ func setsig(i int32, fn uintptr, restart bool) {
 	sigaction(i, &sa, nil)
 }
 
+//go:nosplit
+//go:nowritebarrierrec
 func setsigstack(i int32) {
 	throw("setsigstack")
 }
 
+//go:nosplit
+//go:nowritebarrierrec
 func getsig(i int32) uintptr {
 	var sa sigactiont
 	sigaction(i, nil, &sa)
@@ -244,6 +266,8 @@ func signalstack(s *stack) {
 	sigaltstack(&st, nil)
 }
 
+//go:nosplit
+//go:nowritebarrierrec
 func updatesigmask(m [(_NSIG + 31) / 32]uint32) {
 	var mask sigset
 	copy(mask.__bits[:], m[:])

@@ -27,7 +27,7 @@ The document is not comprehensive.
 
 <p>
 The assembler is based on the input style of the Plan 9 assemblers, which is documented in detail
-<a href="http://plan9.bell-labs.com/sys/doc/asm.html">elsewhere</a>.
+<a href="https://9p.io/sys/doc/asm.html">elsewhere</a>.
 If you plan to write assembly language, you should read that document although much of it is Plan 9-specific.
 The current document provides a summary of the syntax and the differences with
 what is explained in that document, and
@@ -46,7 +46,7 @@ describes the peculiarities that apply when writing assembly code to interact wi
 The most important thing to know about Go's assembler is that it is not a direct representation of the underlying machine.
 Some of the details map precisely to the machine, but some do not.
 This is because the compiler suite (see
-<a href="http://plan9.bell-labs.com/sys/doc/compiler.html">this description</a>)
+<a href="https://9p.io/sys/doc/compiler.html">this description</a>)
 needs no assembler pass in the usual pipeline.
 Instead, the compiler operates on a kind of semi-abstract instruction set,
 and instruction selection occurs partly after code generation.
@@ -270,7 +270,7 @@ This form is used to name global functions and data.
 Adding <code>&lt;&gt;</code> to the name, as in <span style="white-space: nowrap"><code>foo&lt;&gt;(SB)</code></span>, makes the name
 visible only in the current source file, like a top-level <code>static</code> declaration in a C file.
 Adding an offset to the name refers to that offset from the symbol's address, so
-<code>a+4(SB)</code> is four bytes past the start of <code>foo</code>.
+<code>foo+4(SB)</code> is four bytes past the start of <code>foo</code>.
 </p>
 </div>
 
@@ -663,6 +663,13 @@ the stack pointer may change during any function call:
 even pointers to stack data must not be kept in local variables.
 </p>
 
+<p>
+Assembly functions should always be given Go prototypes,
+both to provide pointer information for the arguments and results
+and to let <code>go</code> <code>vet</code> check that
+the offsets being used to access them are correct.
+</p>
+
 <h2 id="architectures">Architecture-specific details</h2>
 
 <p>
@@ -766,6 +773,15 @@ These modes accept only 1, 2, 4, and 8 as scale factors.
 </li>
 
 </ul>
+
+<p>
+When using the compiler and assembler's
+<code>-dynlink</code> or <code>-shared</code> modes,
+any load or store of a fixed memory location such as a global variable
+must be assumed to overwrite <code>CX</code>.
+Therefore, to be safe for use with these modes,
+assembly sources should typically avoid CX except between memory references.
+</p>
 
 <h3 id="amd64">64-bit Intel 386 (a.k.a. amd64)</h3>
 

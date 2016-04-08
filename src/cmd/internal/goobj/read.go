@@ -1,4 +1,4 @@
-// Copyright 2013 The Go Authors.  All rights reserved.
+// Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -43,6 +43,7 @@ const (
 	SRODATA    SymKind = obj.SRODATA
 	SFUNCTAB   SymKind = obj.SFUNCTAB
 	STYPELINK  SymKind = obj.STYPELINK
+	SITABLINK  SymKind = obj.SITABLINK
 	SSYMTAB    SymKind = obj.SSYMTAB // TODO: move to unmapped section
 	SPCLNTAB   SymKind = obj.SPCLNTAB
 	SELFROSECT SymKind = obj.SELFROSECT
@@ -106,6 +107,7 @@ var symKindStrings = []string{
 	STLSBSS:           "STLSBSS",
 	STYPE:             "STYPE",
 	STYPELINK:         "STYPELINK",
+	SITABLINK:         "SITABLINK",
 	SWINDOWS:          "SWINDOWS",
 	SXREF:             "SXREF",
 }
@@ -215,6 +217,7 @@ type FuncData struct {
 type Package struct {
 	ImportPath string   // import path denoting this package
 	Imports    []string // packages imported by this package
+	SymRefs    []SymID  // list of symbol names and versions referred to by this pack
 	Syms       []*Sym   // symbols defined by this package
 	MaxVersion int      // maximum Version in any SymID in Syms
 }
@@ -235,15 +238,16 @@ var (
 
 // An objReader is an object file reader.
 type objReader struct {
-	p         *Package
-	b         *bufio.Reader
-	f         io.ReadSeeker
-	err       error
-	offset    int64
-	limit     int64
-	tmp       [256]byte
-	pkg       string
-	pkgprefix string
+	p          *Package
+	b          *bufio.Reader
+	f          io.ReadSeeker
+	err        error
+	offset     int64
+	dataOffset int64
+	limit      int64
+	tmp        [256]byte
+	pkg        string
+	pkgprefix  string
 }
 
 // importPathToPrefix returns the prefix that will be used in the
@@ -390,6 +394,11 @@ func (r *objReader) readString() string {
 
 // readSymID reads a SymID from the input file.
 func (r *objReader) readSymID() SymID {
+	i := r.readInt()
+	return r.p.SymRefs[i]
+}
+
+func (r *objReader) readRef() {
 	name, vers := r.readString(), r.readInt()
 
 	// In a symbol name in an object file, "". denotes the
@@ -404,15 +413,14 @@ func (r *objReader) readSymID() SymID {
 	if vers != 0 {
 		vers = r.p.MaxVersion
 	}
-
-	return SymID{name, vers}
+	r.p.SymRefs = append(r.p.SymRefs, SymID{name, vers})
 }
 
 // readData reads a data reference from the input file.
 func (r *objReader) readData() Data {
 	n := r.readInt()
-	d := Data{Offset: r.offset, Size: int64(n)}
-	r.skip(int64(n))
+	d := Data{Offset: r.dataOffset, Size: int64(n)}
+	r.dataOffset += int64(n)
 	return d
 }
 
@@ -530,7 +538,7 @@ func (r *objReader) parseArchive() error {
 			return errCorruptArchive
 		}
 		switch name {
-		case "__.SYMDEF", "__.GOSYMDEF", "__.PKGDEF":
+		case "__.PKGDEF":
 			r.skip(size)
 		default:
 			oldLimit := r.limit
@@ -593,6 +601,28 @@ func (r *objReader) parseObject(prefix []byte) error {
 		r.p.Imports = append(r.p.Imports, s)
 	}
 
+	r.p.SymRefs = []SymID{{"", 0}}
+	for {
+		if b := r.readByte(); b != 0xfe {
+			if b != 0xff {
+				return r.error(errCorruptObject)
+			}
+			break
+		}
+
+		r.readRef()
+	}
+
+	dataLength := r.readInt()
+	r.readInt() // n relocations - ignore
+	r.readInt() // n pcdata - ignore
+	r.readInt() // n autom - ignore
+	r.readInt() // n funcdata - ignore
+	r.readInt() // n files - ignore
+
+	r.dataOffset = r.offset
+	r.skip(int64(dataLength))
+
 	// Symbols.
 	for {
 		if b := r.readByte(); b != 0xfe {
@@ -618,9 +648,7 @@ func (r *objReader) parseObject(prefix []byte) error {
 			rel.Size = r.readInt()
 			rel.Type = r.readInt()
 			rel.Add = r.readInt()
-			r.readInt() // Xadd - ignored
 			rel.Sym = r.readSymID()
-			r.readSymID() // Xsym - ignored
 		}
 
 		if s.Kind == STEXT {

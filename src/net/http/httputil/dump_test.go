@@ -5,6 +5,7 @@
 package httputil
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -135,6 +136,14 @@ var dumpTests = []dumpTest{
 			"Accept-Encoding: gzip\r\n\r\n" +
 			strings.Repeat("a", 8193),
 	},
+
+	{
+		Req: *mustReadRequest("GET http://foo.com/ HTTP/1.1\r\n" +
+			"User-Agent: blah\r\n\r\n"),
+		NoBody: true,
+		WantDump: "GET http://foo.com/ HTTP/1.1\r\n" +
+			"User-Agent: blah\r\n\r\n",
+	},
 }
 
 func TestDumpRequest(t *testing.T) {
@@ -211,6 +220,14 @@ func mustNewRequest(method, url string, body io.Reader) *http.Request {
 	return req
 }
 
+func mustReadRequest(s string) *http.Request {
+	req, err := http.ReadRequest(bufio.NewReader(strings.NewReader(s)))
+	if err != nil {
+		panic(err)
+	}
+	return req
+}
+
 var dumpResTests = []struct {
 	res  *http.Response
 	body bool
@@ -270,6 +287,27 @@ Transfer-Encoding: chunked
 3
 foo
 0`,
+	},
+	{
+		res: &http.Response{
+			Status:        "200 OK",
+			StatusCode:    200,
+			Proto:         "HTTP/1.1",
+			ProtoMajor:    1,
+			ProtoMinor:    1,
+			ContentLength: 0,
+			Header: http.Header{
+				// To verify if headers are not filtered out.
+				"Foo1": []string{"Bar1"},
+				"Foo2": []string{"Bar2"},
+			},
+			Body: nil,
+		},
+		body: false, // to verify we see 0, not empty.
+		want: `HTTP/1.1 200 OK
+Foo1: Bar1
+Foo2: Bar2
+Content-Length: 0`,
 	},
 }
 

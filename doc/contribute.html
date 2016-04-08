@@ -155,22 +155,22 @@ no matter who makes the change.
 A custom git command called <code>git-codereview</code>,
 discussed below, helps manage the code review process through a Google-hosted
 <a href="https://go-review.googlesource.com/">instance</a> of the code review
-system called <a href="https://code.google.com/p/gerrit/">Gerrit</a>.
+system called <a href="https://www.gerritcodereview.com/">Gerrit</a>.
 </p>
 </div>
 
 <p>
 无论谁对 Go 进行更改，在它被递交前都必须进行审核（在特殊情况下，比如修复一个构建，可在递交后进行审核）。
 稍后我们会讨论名为 <code>git-codereview</code> 的定制 git 命令，它能通过
-<a href="https://code.google.com/p/gerrit/">Gerrit</a> 代码审核系统的 Google 托管的
+<a href="https://www.gerritcodereview.com/">Gerrit</a> 代码审核系统的 Google 托管的
 <a href="https://go-review.googlesource.com/">实例</a> 来帮助管理代码审核流程。
 </p>
 
 <div class="english">
-<h3>Set up authentication for code review</h3>
+<h3 id="auth">Set up authentication for code review</h3>
 </div>
 
-<h3>设置代码审核认证</h3>
+<h3 id="认证">设置代码审核认证</h3>
 
 <div class="english">
 <p>
@@ -256,10 +256,10 @@ and Git is configured to use this file.
 </p>
 
 <div class="english">
-<h3>Register with Gerrit</h3>
+<h3 id="gerrit">Register with Gerrit</h3>
 </div>
 
-<h3>注册 Gerrit</h3>
+<h3 id="注册 Gerrit">注册 Gerrit</h3>
 
 <div class="english">
 <p>
@@ -280,10 +280,10 @@ That is all that is required.
 </p>
 
 <div class="english">
-<h3>Contributor License Agreement</h3>
+<h3 id="cla">Contributor License Agreement</h3>
 </div>
 
-<h3>贡献者许可协议</h3>
+<h3 id="协议">贡献者许可协议</h3>
 
 <div class="english">
 <p>Gerrit serves as the gatekeeper and uses your e-mail address as the key.
@@ -360,10 +360,25 @@ This rigmarole only needs to be done for your first submission for each email ad
 </p>
 
 <div class="english">
-<h3>Install the git-codereview command</h3>
+<p>
+If the copyright holder for the code you are submitting changes—for example,
+if you start contributing code on behalf of a new company—please send email
+to let us know, so that we can make sure an appropriate agreement is completed
+and update the <code>AUTHORS</code> file.
+</p>
 </div>
 
-<h3>安装 git-codereview 命令</h3>
+<p>
+若你提交的代码的版权所有者进行了变更（例如，如果你以新的公司的名义开始贡献），
+请通过邮件告知我们，这样我们可以确认有关协议是否已经完成并更新 <code>AUTHORS</code>
+文件。
+</p>
+
+<div class="english">
+<h3 id="git-codereview">Install the git-codereview command</h3>
+</div>
+
+<h3 id="git-cr">安装 git-codereview 命令</h3>
 
 <div class="english">
 <p>
@@ -407,9 +422,13 @@ prints help text, not an error.
 
 <div class="english">
 <p>
-Note to Git aficionados: The <code>git-codereview</code> command is not required to
+<b>Note to Git aficionados:</b>
+The <code>git-codereview</code> command is not required to
 upload and manage Gerrit code reviews. For those who prefer plain Git, the text
-below gives the Git equivalent of each git-codereview command. If you do use plain
+below gives the Git equivalent of each git-codereview command.
+</p>
+
+<p>If you do use plain
 Git, note that you still need the commit hooks that the git-codereview command
 configures; those hooks add a Gerrit <code>Change-Id</code> line to the commit
 message and check that all Go source files have been formatted with gofmt. Even
@@ -428,10 +447,24 @@ Gerrit <code>Change-Id</code>，并检查所有的 Go 源文件是否已被 gofm
 </p>
 
 <div class="english">
-<h3>Set up git aliases</h3>
+<p>
+The workflow described below assumes a single change per branch.
+It is also possible to prepare a sequence of (usually related) changes in a single branch.
+See the <a href="https://golang.org/x/review/git-codereview">git-codereview documentation</a> for details.
+</p>
 </div>
 
-<h3>设置 Git 别名</h3>
+<p>
+下面描述的工作流假定每个更改占一个分支。一个分支上也可以准备一系列（相关的）更改。
+详情见<a href="https://golang.org/x/review/git-codereview">git-codereview
+文档</a>。
+</p>
+
+<div class="english">
+<h3 id="git-config">Set up git aliases</h3>
+</div>
+
+<h3 id="git-config">设置 Git 别名</h3>
 
 <div class="english">
 <p>
@@ -499,10 +532,10 @@ Git 配置文件中（一般为你的 home 目录中的 <code>.gitconfig</code> 
 </pre>
 
 <div class="english">
-<h3>Understanding the git-codereview command</h3>
+<h3 id="help">Understanding the git-codereview command</h3>
 </div>
 
-<h3>了解 git-codereview 命令</h3>
+<h3 id="help">了解 git-codereview 命令</h3>
 
 <div class="english">
 <p>After installing the <code>git-codereview</code> command, you can run</p>
@@ -529,10 +562,10 @@ You can also read the <a href="https://godoc.org/golang.org/x/review/git-coderev
 </p>
 
 <div class="english">
-<h3>Switch to the master branch</h3>
+<h3 id="master">Switch to the master branch</h3>
 </div>
 
-<h3>切换到 master 分支</h3>
+<h3 id="master">切换到 master 分支</h3>
 
 <div class="english">
 <p>
@@ -568,10 +601,10 @@ $ git sync
 </p>
 
 <div class="english">
-<h3>Make a change</h3>
+<h3 id="change">Make a change</h3>
 </div>
 
-<h3>进行更改</h3>
+<h3 id="change">进行更改</h3>
 
 <div class="english">
 <p>
@@ -797,10 +830,10 @@ runs <code>git</code> <code>commit</code> <code>--amend</code>.)
 </p>
 
 <div class="english">
-<h3>Mail the change for review</h3>
+<h3 id="mail">Mail the change for review</h3>
 </div>
 
-<h3>为审核邮寄更改</h3>
+<h3 id="mail">为审核邮寄更改</h3>
 
 <div class="english">
 <p>
@@ -894,10 +927,10 @@ remote:   https://go-review.googlesource.com/99999 math: improved Sin, Cos and T
 </pre>
 
 <div class="english">
-<h3>Reviewing code</h3>
+<h3 id="review">Reviewing code</h3>
 </div>
 
-<h3>审核代码</h3>
+<h3 id="review">Reviewing code</h3>
 
 <div class="english">
 <p>
@@ -919,10 +952,10 @@ You must reply through the web interface.
 </p>
 
 <div class="english">
-<h3>Revise and upload</h3>
+<h3 id="revise">Revise and upload</h3>
 </div>
 
-<h3>修订并上传</h3>
+<h3 id="revise">修订并上传</h3>
 
 <div class="english">
 <p>
@@ -978,10 +1011,10 @@ You can see a list of your pending changes by running <code>git</code>
 </p>
 
 <div class="english">
-<h3>Synchronize your client</h3>
+<h3 id="sync">Synchronize your client</h3>
 </div>
 
-<h3>同步客户端</h3>
+<h3 id="sync">同步客户端</h3>
 
 <div class="english">
 <p>
@@ -1172,10 +1205,10 @@ restore the change commit.
 </p>
 
 <div class="english">
-<h3>Reviewing code by others</h3>
+<h3 id="download">Reviewing code by others</h3>
 </div>
 
-<h3>由他人审核</h3>
+<h3 id="download">由他人审核</h3>
 
 <div class="english">
 <p>
@@ -1206,10 +1239,10 @@ To revert, change back to the branch you were working in.
 </p>
 
 <div class="english">
-<h3>Submit the change after the review</h3>
+<h3 id="submit">Submit the change after the review</h3>
 </div>
 
-<h3>审核后递交更改</h3>
+<h3 id="submit">审核后递交更改</h3>
 
 <div class="english">
 <p>
@@ -1244,10 +1277,10 @@ the submit operation.
 </p>
 
 <div class="english">
-<h3>More information</h3>
+<h3 id="more">More information</h3>
 </div>
 
-<h3>更多信息</h3>
+<h3 id="more">更多信息</h3>
 
 <div class="english">
 <p>
@@ -1308,7 +1341,7 @@ These files will be periodically updated based on the commit logs.
 </p>
 
 <pre>
-// Copyright 2015 The Go Authors. All rights reserved.
+// Copyright 2016 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 </pre>

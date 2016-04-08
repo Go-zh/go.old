@@ -91,9 +91,12 @@ second:
 	case *os.SyscallError:
 		nestedErr = err.Err
 		goto third
+	case *os.PathError: // for Plan 9
+		nestedErr = err.Err
+		goto third
 	}
 	switch nestedErr {
-	case errClosing, errMissingAddress:
+	case errCanceled, errClosing, errMissingAddress, errNoSuitableAddress:
 		return nil
 	}
 	return fmt.Errorf("unexpected type on 2nd nested level: %T", nestedErr)
@@ -413,7 +416,7 @@ second:
 		goto third
 	}
 	switch nestedErr {
-	case errClosing, errTimeout, ErrWriteToConnected, io.ErrUnexpectedEOF:
+	case errCanceled, errClosing, errMissingAddress, errTimeout, ErrWriteToConnected, io.ErrUnexpectedEOF:
 		return nil
 	}
 	return fmt.Errorf("unexpected type on 2nd nested level: %T", nestedErr)
@@ -541,6 +544,9 @@ second:
 	}
 	switch err := nestedErr.(type) {
 	case *os.SyscallError:
+		nestedErr = err.Err
+		goto third
+	case *os.PathError: // for Plan 9
 		nestedErr = err.Err
 		goto third
 	}

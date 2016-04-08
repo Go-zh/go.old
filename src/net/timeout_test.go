@@ -6,6 +6,7 @@ package net
 
 import (
 	"fmt"
+	"internal/testenv"
 	"io"
 	"io/ioutil"
 	"net/internal/socktest"
@@ -26,6 +27,8 @@ var dialTimeoutTests = []struct {
 	{-5 * time.Second, 0, -5 * time.Second, 100 * time.Millisecond},
 	{0, -5 * time.Second, -5 * time.Second, 100 * time.Millisecond},
 	{-5 * time.Second, 5 * time.Second, -5 * time.Second, 100 * time.Millisecond}, // timeout over deadline
+	{-1 << 63, 0, time.Second, 100 * time.Millisecond},
+	{0, -1 << 63, time.Second, 100 * time.Millisecond},
 
 	{50 * time.Millisecond, 0, 100 * time.Millisecond, time.Second},
 	{0, 50 * time.Millisecond, 100 * time.Millisecond, time.Second},
@@ -33,6 +36,7 @@ var dialTimeoutTests = []struct {
 }
 
 func TestDialTimeout(t *testing.T) {
+	// Cannot use t.Parallel - modifies global hooks.
 	origTestHookDialChannel := testHookDialChannel
 	defer func() { testHookDialChannel = origTestHookDialChannel }()
 	defer sw.Set(socktest.FilterConnect, nil)
@@ -98,6 +102,57 @@ func TestDialTimeout(t *testing.T) {
 	}
 }
 
+var dialTimeoutMaxDurationTests = []struct {
+	timeout time.Duration
+	delta   time.Duration // for deadline
+}{
+	// Large timeouts that will overflow an int64 unix nanos.
+	{1<<63 - 1, 0},
+	{0, 1<<63 - 1},
+}
+
+func TestDialTimeoutMaxDuration(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "openbsd" {
+		testenv.SkipFlaky(t, 15157)
+	}
+
+	ln, err := newLocalListener("tcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	for i, tt := range dialTimeoutMaxDurationTests {
+		ch := make(chan error)
+		max := time.NewTimer(100 * time.Millisecond)
+		defer max.Stop()
+		go func() {
+			d := Dialer{Timeout: tt.timeout}
+			if tt.delta != 0 {
+				d.Deadline = time.Now().Add(tt.delta)
+			}
+			c, err := d.Dial(ln.Addr().Network(), ln.Addr().String())
+			if err == nil {
+				c.Close()
+			}
+			ch <- err
+		}()
+
+		select {
+		case <-max.C:
+			t.Fatalf("#%d: Dial didn't return in an expected time", i)
+		case err := <-ch:
+			if perr := parseDialError(err); perr != nil {
+				t.Error(perr)
+			}
+			if err != nil {
+				t.Errorf("#%d: %v", i, err)
+			}
+		}
+	}
+}
+
 var acceptTimeoutTests = []struct {
 	timeout time.Duration
 	xerrs   [2]error // expected errors in transition
@@ -110,6 +165,8 @@ var acceptTimeoutTests = []struct {
 }
 
 func TestAcceptTimeout(t *testing.T) {
+	t.Parallel()
+
 	switch runtime.GOOS {
 	case "plan9":
 		t.Skipf("not supported on %s", runtime.GOOS)
@@ -161,6 +218,8 @@ func TestAcceptTimeout(t *testing.T) {
 }
 
 func TestAcceptTimeoutMustReturn(t *testing.T) {
+	t.Parallel()
+
 	switch runtime.GOOS {
 	case "plan9":
 		t.Skipf("not supported on %s", runtime.GOOS)
@@ -205,6 +264,8 @@ func TestAcceptTimeoutMustReturn(t *testing.T) {
 }
 
 func TestAcceptTimeoutMustNotReturn(t *testing.T) {
+	t.Parallel()
+
 	switch runtime.GOOS {
 	case "plan9":
 		t.Skipf("not supported on %s", runtime.GOOS)
@@ -254,6 +315,8 @@ var readTimeoutTests = []struct {
 }
 
 func TestReadTimeout(t *testing.T) {
+	t.Parallel()
+
 	switch runtime.GOOS {
 	case "plan9":
 		t.Skipf("not supported on %s", runtime.GOOS)
@@ -313,6 +376,8 @@ func TestReadTimeout(t *testing.T) {
 }
 
 func TestReadTimeoutMustNotReturn(t *testing.T) {
+	t.Parallel()
+
 	switch runtime.GOOS {
 	case "plan9":
 		t.Skipf("not supported on %s", runtime.GOOS)
@@ -454,6 +519,8 @@ var writeTimeoutTests = []struct {
 }
 
 func TestWriteTimeout(t *testing.T) {
+	t.Parallel()
+
 	switch runtime.GOOS {
 	case "plan9":
 		t.Skipf("not supported on %s", runtime.GOOS)
@@ -500,6 +567,8 @@ func TestWriteTimeout(t *testing.T) {
 }
 
 func TestWriteTimeoutMustNotReturn(t *testing.T) {
+	t.Parallel()
+
 	switch runtime.GOOS {
 	case "plan9":
 		t.Skipf("not supported on %s", runtime.GOOS)
@@ -569,6 +638,8 @@ var writeToTimeoutTests = []struct {
 }
 
 func TestWriteToTimeout(t *testing.T) {
+	t.Parallel()
+
 	switch runtime.GOOS {
 	case "nacl", "plan9":
 		t.Skipf("not supported on %s", runtime.GOOS)
@@ -620,6 +691,8 @@ func TestWriteToTimeout(t *testing.T) {
 }
 
 func TestReadTimeoutFluctuation(t *testing.T) {
+	t.Parallel()
+
 	switch runtime.GOOS {
 	case "plan9":
 		t.Skipf("not supported on %s", runtime.GOOS)
@@ -656,6 +729,8 @@ func TestReadTimeoutFluctuation(t *testing.T) {
 }
 
 func TestReadFromTimeoutFluctuation(t *testing.T) {
+	t.Parallel()
+
 	switch runtime.GOOS {
 	case "plan9":
 		t.Skipf("not supported on %s", runtime.GOOS)
@@ -692,6 +767,8 @@ func TestReadFromTimeoutFluctuation(t *testing.T) {
 }
 
 func TestWriteTimeoutFluctuation(t *testing.T) {
+	t.Parallel()
+
 	switch runtime.GOOS {
 	case "plan9":
 		t.Skipf("not supported on %s", runtime.GOOS)
@@ -731,12 +808,27 @@ func TestWriteTimeoutFluctuation(t *testing.T) {
 	}
 }
 
+func TestVariousDeadlines(t *testing.T) {
+	t.Parallel()
+	testVariousDeadlines(t)
+}
+
 func TestVariousDeadlines1Proc(t *testing.T) {
-	testVariousDeadlines(t, 1)
+	// Cannot use t.Parallel - modifies global GOMAXPROCS.
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
+	testVariousDeadlines(t)
 }
 
 func TestVariousDeadlines4Proc(t *testing.T) {
-	testVariousDeadlines(t, 4)
+	// Cannot use t.Parallel - modifies global GOMAXPROCS.
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(4))
+	testVariousDeadlines(t)
 }
 
 type neverEnding byte
@@ -748,13 +840,11 @@ func (b neverEnding) Read(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func testVariousDeadlines(t *testing.T, maxProcs int) {
+func testVariousDeadlines(t *testing.T) {
 	switch runtime.GOOS {
 	case "plan9":
 		t.Skipf("not supported on %s", runtime.GOOS)
 	}
-
-	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(maxProcs))
 
 	type result struct {
 		n   int64
@@ -869,6 +959,8 @@ func testVariousDeadlines(t *testing.T, maxProcs int) {
 // TestReadWriteProlongedTimeout tests concurrent deadline
 // modification. Known to cause data races in the past.
 func TestReadWriteProlongedTimeout(t *testing.T) {
+	t.Parallel()
+
 	switch runtime.GOOS {
 	case "plan9":
 		t.Skipf("not supported on %s", runtime.GOOS)
@@ -947,6 +1039,8 @@ func TestReadWriteProlongedTimeout(t *testing.T) {
 }
 
 func TestReadWriteDeadlineRace(t *testing.T) {
+	t.Parallel()
+
 	switch runtime.GOOS {
 	case "nacl", "plan9":
 		t.Skipf("not supported on %s", runtime.GOOS)
@@ -956,7 +1050,6 @@ func TestReadWriteDeadlineRace(t *testing.T) {
 	if testing.Short() {
 		N = 50
 	}
-	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(4))
 
 	ln, err := newLocalListener("tcp")
 	if err != nil {

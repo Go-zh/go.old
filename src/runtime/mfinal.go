@@ -1,4 +1,4 @@
-// Copyright 2009 The Go Authors.  All rights reserved.
+// Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -166,7 +166,7 @@ func runfinq() {
 			for i := fb.cnt; i > 0; i-- {
 				f := &fb.fin[i-1]
 
-				framesz := unsafe.Sizeof((interface{})(nil)) + uintptr(f.nret)
+				framesz := unsafe.Sizeof((interface{})(nil)) + f.nret
 				if framecap < framesz {
 					// The frame does not contain pointers interesting for GC,
 					// all not yet finalized objects are stored in finq.
@@ -216,20 +216,20 @@ func runfinq() {
 	}
 }
 
-// SetFinalizer sets the finalizer associated with x to f.
-// When the garbage collector finds an unreachable block
+// SetFinalizer sets the finalizer associated with obj to the provided
+// finalizer function. When the garbage collector finds an unreachable block
 // with an associated finalizer, it clears the association and runs
-// f(x) in a separate goroutine.  This makes x reachable again, but
-// now without an associated finalizer.  Assuming that SetFinalizer
+// finalizer(obj) in a separate goroutine. This makes obj reachable again,
+// but now without an associated finalizer. Assuming that SetFinalizer
 // is not called again, the next time the garbage collector sees
-// that x is unreachable, it will free x.
+// that obj is unreachable, it will free obj.
 //
-// SetFinalizer(x, nil) clears any finalizer associated with x.
+// SetFinalizer(obj, nil) clears any finalizer associated with obj.
 //
-// The argument x must be a pointer to an object allocated by
+// The argument obj must be a pointer to an object allocated by
 // calling new or by taking the address of a composite literal.
-// The argument f must be a function that takes a single argument
-// to which x's type can be assigned, and can have arbitrary ignored return
+// The argument finalizer must be a function that takes a single argument
+// to which obj's type can be assigned, and can have arbitrary ignored return
 // values. If either of these is not true, SetFinalizer aborts the
 // program.
 //
@@ -241,8 +241,8 @@ func runfinq() {
 // is not guaranteed to run, because there is no ordering that
 // respects the dependencies.
 //
-// The finalizer for x is scheduled to run at some arbitrary time after
-// x becomes unreachable.
+// The finalizer for obj is scheduled to run at some arbitrary time after
+// obj becomes unreachable.
 // There is no guarantee that finalizers will run before a program exits,
 // so typically they are useful only for releasing non-memory resources
 // associated with an object during a long-running program.
@@ -252,7 +252,7 @@ func runfinq() {
 // to depend on a finalizer to flush an in-memory I/O buffer such as a
 // bufio.Writer, because the buffer would not be flushed at program exit.
 //
-// It is not guaranteed that a finalizer will run if the size of *x is
+// It is not guaranteed that a finalizer will run if the size of *obj is
 // zero bytes.
 //
 // It is not guaranteed that a finalizer will run for objects allocated
@@ -299,7 +299,7 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 		throw("runtime.SetFinalizer: first argument is nil")
 	}
 	if etyp.kind&kindMask != kindPtr {
-		throw("runtime.SetFinalizer: first argument is " + *etyp._string + ", not pointer")
+		throw("runtime.SetFinalizer: first argument is " + etyp._string + ", not pointer")
 	}
 	ot := (*ptrtype)(unsafe.Pointer(etyp))
 	if ot.elem == nil {
@@ -353,19 +353,22 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 	}
 
 	if ftyp.kind&kindMask != kindFunc {
-		throw("runtime.SetFinalizer: second argument is " + *ftyp._string + ", not a function")
+		throw("runtime.SetFinalizer: second argument is " + ftyp._string + ", not a function")
 	}
 	ft := (*functype)(unsafe.Pointer(ftyp))
-	if ft.dotdotdot || len(ft.in) != 1 {
-		throw("runtime.SetFinalizer: cannot pass " + *etyp._string + " to finalizer " + *ftyp._string)
+	if ft.dotdotdot() {
+		throw("runtime.SetFinalizer: cannot pass " + etyp._string + " to finalizer " + ftyp._string + " because dotdotdot")
 	}
-	fint := ft.in[0]
+	if ft.dotdotdot() || ft.inCount != 1 {
+		throw("runtime.SetFinalizer: cannot pass " + etyp._string + " to finalizer " + ftyp._string)
+	}
+	fint := ft.in()[0]
 	switch {
 	case fint == etyp:
 		// ok - same type
 		goto okarg
 	case fint.kind&kindMask == kindPtr:
-		if (fint.x == nil || fint.x.name == nil || etyp.x == nil || etyp.x.name == nil) && (*ptrtype)(unsafe.Pointer(fint)).elem == ot.elem {
+		if (fint.uncommon() == nil || etyp.uncommon() == nil) && (*ptrtype)(unsafe.Pointer(fint)).elem == ot.elem {
 			// ok - not same type, but both pointers,
 			// one or the other is unnamed, and same element type, so assignable.
 			goto okarg
@@ -380,11 +383,11 @@ func SetFinalizer(obj interface{}, finalizer interface{}) {
 			goto okarg
 		}
 	}
-	throw("runtime.SetFinalizer: cannot pass " + *etyp._string + " to finalizer " + *ftyp._string)
+	throw("runtime.SetFinalizer: cannot pass " + etyp._string + " to finalizer " + ftyp._string)
 okarg:
 	// compute size needed for return parameters
 	nret := uintptr(0)
-	for _, t := range ft.out {
+	for _, t := range ft.out() {
 		nret = round(nret, uintptr(t.align)) + uintptr(t.size)
 	}
 	nret = round(nret, sys.PtrSize)
@@ -399,8 +402,8 @@ okarg:
 	})
 }
 
-// Look up pointer v in heap.  Return the span containing the object,
-// the start of the object, and the size of the object.  If the object
+// Look up pointer v in heap. Return the span containing the object,
+// the start of the object, and the size of the object. If the object
 // does not exist, return nil, nil, 0.
 func findObject(v unsafe.Pointer) (s *mspan, x unsafe.Pointer, n uintptr) {
 	c := gomcache()
@@ -432,7 +435,7 @@ func findObject(v unsafe.Pointer) (s *mspan, x unsafe.Pointer, n uintptr) {
 		return
 	}
 
-	n = uintptr(s.elemsize)
+	n = s.elemsize
 	if s.sizeclass != 0 {
 		x = add(x, (uintptr(v)-uintptr(x))/n*n)
 	}

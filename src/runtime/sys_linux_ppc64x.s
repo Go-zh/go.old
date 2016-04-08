@@ -153,6 +153,7 @@ TEXT runtime·mincore(SB),NOSPLIT|NOFRAME,$0-28
 	MOVD	n+8(FP), R4
 	MOVD	dst+16(FP), R5
 	SYSCALL	$SYS_mincore
+	NEG	R3		// caller expects negative errno
 	MOVW	R3, ret+24(FP)
 	RET
 
@@ -241,6 +242,21 @@ TEXT runtime·_sigtramp(SB),NOSPLIT,$64
 	BL	(CTR)
 	MOVD	24(R1), R2
 	RET
+
+#ifdef GOARCH_ppc64le
+// ppc64le doesn't need function descriptors
+TEXT runtime·cgoSigtramp(SB),NOSPLIT,$0
+#else
+// function descriptor for the real sigtramp
+TEXT runtime·cgoSigtramp(SB),NOSPLIT|NOFRAME,$0
+	DWORD	$runtime·_cgoSigtramp(SB)
+	DWORD	$0
+	DWORD	$0
+TEXT runtime·_cgoSigtramp(SB),NOSPLIT,$0
+#endif
+	MOVD	$runtime·sigtramp(SB), R12
+	MOVD	R12, CTR
+	JMP	(CTR)
 
 TEXT runtime·mmap(SB),NOSPLIT|NOFRAME,$0
 	MOVD	addr+0(FP), R3

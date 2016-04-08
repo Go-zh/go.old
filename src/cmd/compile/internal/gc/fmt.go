@@ -13,6 +13,24 @@ import (
 	"unicode/utf8"
 )
 
+// A FmtFlag value is a set of flags (or 0).
+// They control how the Xconv functions format their values.
+// See the respective function's documentation for details.
+type FmtFlag int
+
+const (
+	FmtWidth    FmtFlag = 1 << iota
+	FmtLeft             // "-"
+	FmtSharp            // "#"
+	FmtSign             // "+"
+	FmtUnsigned         // "u"
+	FmtShort            // "h"
+	FmtLong             // "l"
+	FmtComma            // ","
+	FmtByte             // "hh"
+	FmtBody             // for printing export bodies
+)
+
 //
 // Format conversions
 //	%L int		Line numbers
@@ -43,7 +61,7 @@ import (
 //			'h' (only in +/debug mode) suppress recursion
 //			'l' (only in Error mode) print "foo (type Bar)"
 //
-//	%H NodeList*	NodeLists
+//	%H Nodes	Nodes
 //		Flags: those of %N
 //			','  separate items with ',' instead of ';'
 //
@@ -63,11 +81,13 @@ var fmtmode int = FErr
 
 var fmtpkgpfx int // %uT stickyness
 
+var fmtbody bool
+
 //
 // E.g. for %S:	%+S %#S %-S	print an identifier properly qualified for debug/export/internal mode.
 //
 // The mode flags  +, - and # are sticky, meaning they persist through
-// recursions of %N, %T and %S, but not the h and l flags.  The u flag is
+// recursions of %N, %T and %S, but not the h and l flags. The u flag is
 // sticky only on %T recursions and only used in %-/Sym mode.
 
 //
@@ -87,18 +107,23 @@ var fmtpkgpfx int // %uT stickyness
 //	%-uT		type identifiers with package name instead of prefix (typesym, dcommontype, typehash)
 //
 
-func setfmode(flags *int) int {
-	fm := fmtmode
-	if *flags&obj.FmtSign != 0 {
+func setfmode(flags *FmtFlag) (fm int, fb bool) {
+	fm = fmtmode
+	fb = fmtbody
+	if *flags&FmtSign != 0 {
 		fmtmode = FDbg
-	} else if *flags&obj.FmtSharp != 0 {
+	} else if *flags&FmtSharp != 0 {
 		fmtmode = FExp
-	} else if *flags&obj.FmtLeft != 0 {
+	} else if *flags&FmtLeft != 0 {
 		fmtmode = FTypeId
 	}
 
-	*flags &^= (obj.FmtSharp | obj.FmtLeft | obj.FmtSign)
-	return fm
+	if *flags&FmtBody != 0 {
+		fmtbody = true
+	}
+
+	*flags &^= (FmtSharp | FmtLeft | FmtSign | FmtBody)
+	return
 }
 
 // Fmt "%L": Linenumbers
@@ -164,17 +189,18 @@ var goopnames = []string{
 	OSUB:      "-",
 	OSWITCH:   "switch",
 	OXOR:      "^",
+	OXFALL:    "fallthrough",
 }
 
 // Fmt "%O":  Node opcodes
-func Oconv(o int, flag int) string {
-	if (flag&obj.FmtSharp != 0) || fmtmode != FDbg {
-		if o >= 0 && o < len(goopnames) && goopnames[o] != "" {
+func Oconv(o Op, flag FmtFlag) string {
+	if (flag&FmtSharp != 0) || fmtmode != FDbg {
+		if o >= 0 && int(o) < len(goopnames) && goopnames[o] != "" {
 			return goopnames[o]
 		}
 	}
 
-	if o >= 0 && o < len(opnames) && opnames[o] != "" {
+	if o >= 0 && int(o) < len(opnames) && opnames[o] != "" {
 		return opnames[o]
 	}
 
@@ -192,10 +218,10 @@ var classnames = []string{
 }
 
 // Fmt "%J": Node details.
-func Jconv(n *Node, flag int) string {
+func Jconv(n *Node, flag FmtFlag) string {
 	var buf bytes.Buffer
 
-	c := flag & obj.FmtShort
+	c := flag & FmtShort
 
 	if c == 0 && n.Ullman != 0 {
 		fmt.Fprintf(&buf, " u(%d)", n.Ullman)
@@ -301,16 +327,16 @@ func Jconv(n *Node, flag int) string {
 }
 
 // Fmt "%V": Values
-func Vconv(v Val, flag int) string {
+func Vconv(v Val, flag FmtFlag) string {
 	switch v.Ctype() {
 	case CTINT:
-		if (flag&obj.FmtSharp != 0) || fmtmode == FExp {
-			return Bconv(v.U.(*Mpint), obj.FmtSharp)
+		if (flag&FmtSharp != 0) || fmtmode == FExp {
+			return Bconv(v.U.(*Mpint), FmtSharp)
 		}
 		return Bconv(v.U.(*Mpint), 0)
 
 	case CTRUNE:
-		x := Mpgetfix(v.U.(*Mpint))
+		x := v.U.(*Mpint).Int64()
 		if ' ' <= x && x < 0x80 && x != '\\' && x != '\'' {
 			return fmt.Sprintf("'%c'", int(x))
 		}
@@ -323,25 +349,25 @@ func Vconv(v Val, flag int) string {
 		return fmt.Sprintf("('\\x00' + %v)", v.U.(*Mpint))
 
 	case CTFLT:
-		if (flag&obj.FmtSharp != 0) || fmtmode == FExp {
+		if (flag&FmtSharp != 0) || fmtmode == FExp {
 			return Fconv(v.U.(*Mpflt), 0)
 		}
-		return Fconv(v.U.(*Mpflt), obj.FmtSharp)
+		return Fconv(v.U.(*Mpflt), FmtSharp)
 
 	case CTCPLX:
-		if (flag&obj.FmtSharp != 0) || fmtmode == FExp {
+		if (flag&FmtSharp != 0) || fmtmode == FExp {
 			return fmt.Sprintf("(%v+%vi)", &v.U.(*Mpcplx).Real, &v.U.(*Mpcplx).Imag)
 		}
-		if mpcmpfltc(&v.U.(*Mpcplx).Real, 0) == 0 {
-			return fmt.Sprintf("%vi", Fconv(&v.U.(*Mpcplx).Imag, obj.FmtSharp))
+		if v.U.(*Mpcplx).Real.CmpFloat64(0) == 0 {
+			return fmt.Sprintf("%vi", Fconv(&v.U.(*Mpcplx).Imag, FmtSharp))
 		}
-		if mpcmpfltc(&v.U.(*Mpcplx).Imag, 0) == 0 {
-			return Fconv(&v.U.(*Mpcplx).Real, obj.FmtSharp)
+		if v.U.(*Mpcplx).Imag.CmpFloat64(0) == 0 {
+			return Fconv(&v.U.(*Mpcplx).Real, FmtSharp)
 		}
-		if mpcmpfltc(&v.U.(*Mpcplx).Imag, 0) < 0 {
-			return fmt.Sprintf("(%v%vi)", Fconv(&v.U.(*Mpcplx).Real, obj.FmtSharp), Fconv(&v.U.(*Mpcplx).Imag, obj.FmtSharp))
+		if v.U.(*Mpcplx).Imag.CmpFloat64(0) < 0 {
+			return fmt.Sprintf("(%v%vi)", Fconv(&v.U.(*Mpcplx).Real, FmtSharp), Fconv(&v.U.(*Mpcplx).Imag, FmtSharp))
 		}
-		return fmt.Sprintf("(%v+%vi)", Fconv(&v.U.(*Mpcplx).Real, obj.FmtSharp), Fconv(&v.U.(*Mpcplx).Imag, obj.FmtSharp))
+		return fmt.Sprintf("(%v+%vi)", Fconv(&v.U.(*Mpcplx).Real, FmtSharp), Fconv(&v.U.(*Mpcplx).Imag, FmtSharp))
 
 	case CTSTR:
 		return strconv.Quote(v.U.(string))
@@ -369,6 +395,7 @@ s%^	........*\]%&~%g
 s%~	%%g
 */
 var etnames = []string{
+	Txxx:        "Txxx",
 	TINT:        "INT",
 	TUINT:       "UINT",
 	TINT8:       "INT8",
@@ -394,9 +421,16 @@ var etnames = []string{
 	TMAP:        "MAP",
 	TINTER:      "INTER",
 	TFORW:       "FORW",
-	TFIELD:      "FIELD",
 	TSTRING:     "STRING",
+	TUNSAFEPTR:  "TUNSAFEPTR",
 	TANY:        "ANY",
+	TIDEAL:      "TIDEAL",
+	TNIL:        "TNIL",
+	TBLANK:      "TBLANK",
+	TFUNCARGS:   "TFUNCARGS",
+	TCHANARGS:   "TCHANARGS",
+	TINTERMETH:  "TINTERMETH",
+	TDDDFIELD:   "TDDDFIELD",
 }
 
 // Fmt "%E": etype
@@ -407,12 +441,16 @@ func Econv(et EType) string {
 	return fmt.Sprintf("E-%d", et)
 }
 
+func (e EType) String() string {
+	return Econv(e)
+}
+
 // Fmt "%S": syms
-func symfmt(s *Sym, flag int) string {
-	if s.Pkg != nil && flag&obj.FmtShort == 0 {
+func symfmt(s *Sym, flag FmtFlag) string {
+	if s.Pkg != nil && flag&FmtShort == 0 {
 		switch fmtmode {
 		case FErr: // This is for the user
-			if s.Pkg == localpkg {
+			if s.Pkg == builtinpkg || s.Pkg == localpkg {
 				return s.Name
 			}
 
@@ -420,16 +458,16 @@ func symfmt(s *Sym, flag int) string {
 			if s.Pkg.Name != "" && numImport[s.Pkg.Name] > 1 {
 				return fmt.Sprintf("%q.%s", s.Pkg.Path, s.Name)
 			}
-			return fmt.Sprintf("%s.%s", s.Pkg.Name, s.Name)
+			return s.Pkg.Name + "." + s.Name
 
 		case FDbg:
-			return fmt.Sprintf("%s.%s", s.Pkg.Name, s.Name)
+			return s.Pkg.Name + "." + s.Name
 
 		case FTypeId:
-			if flag&obj.FmtUnsigned != 0 {
-				return fmt.Sprintf("%s.%s", s.Pkg.Name, s.Name) // dcommontype, typehash
+			if flag&FmtUnsigned != 0 {
+				return s.Pkg.Name + "." + s.Name // dcommontype, typehash
 			}
-			return fmt.Sprintf("%s.%s", s.Pkg.Prefix, s.Name) // (methodsym), typesym, weaksym
+			return s.Pkg.Prefix + "." + s.Name // (methodsym), typesym, weaksym
 
 		case FExp:
 			if s.Name != "" && s.Name[0] == '.' {
@@ -441,7 +479,7 @@ func symfmt(s *Sym, flag int) string {
 		}
 	}
 
-	if flag&obj.FmtByte != 0 {
+	if flag&FmtByte != 0 {
 		// FmtByte (hh) implies FmtShort (h)
 		// skip leading "type." in method name
 		p := s.Name
@@ -484,7 +522,7 @@ var basicnames = []string{
 	TBLANK:      "blank",
 }
 
-func typefmt(t *Type, flag int) string {
+func typefmt(t *Type, flag FmtFlag) string {
 	if t == nil {
 		return "<T>"
 	}
@@ -492,7 +530,7 @@ func typefmt(t *Type, flag int) string {
 	if t == bytetype || t == runetype {
 		// in %-T mode collapse rune and byte with their originals.
 		if fmtmode != FTypeId {
-			return Sconv(t.Sym, obj.FmtShort)
+			return Sconv(t.Sym, FmtShort)
 		}
 		t = Types[t.Etype]
 	}
@@ -502,18 +540,18 @@ func typefmt(t *Type, flag int) string {
 	}
 
 	// Unless the 'l' flag was specified, if the type has a name, just print that name.
-	if flag&obj.FmtLong == 0 && t.Sym != nil && t.Etype != TFIELD && t != Types[t.Etype] {
+	if flag&FmtLong == 0 && t.Sym != nil && t != Types[t.Etype] {
 		switch fmtmode {
 		case FTypeId:
-			if flag&obj.FmtShort != 0 {
+			if flag&FmtShort != 0 {
 				if t.Vargen != 0 {
-					return fmt.Sprintf("%v·%d", Sconv(t.Sym, obj.FmtShort), t.Vargen)
+					return fmt.Sprintf("%v·%d", Sconv(t.Sym, FmtShort), t.Vargen)
 				}
-				return Sconv(t.Sym, obj.FmtShort)
+				return Sconv(t.Sym, FmtShort)
 			}
 
-			if flag&obj.FmtUnsigned != 0 {
-				return Sconv(t.Sym, obj.FmtUnsigned)
+			if flag&FmtUnsigned != 0 {
+				return Sconv(t.Sym, FmtUnsigned)
 			}
 			fallthrough
 
@@ -543,53 +581,58 @@ func typefmt(t *Type, flag int) string {
 
 	switch t.Etype {
 	case TPTR32, TPTR64:
-		if fmtmode == FTypeId && (flag&obj.FmtShort != 0) {
-			return fmt.Sprintf("*%v", Tconv(t.Type, obj.FmtShort))
+		if fmtmode == FTypeId && (flag&FmtShort != 0) {
+			return "*" + Tconv(t.Elem(), FmtShort)
 		}
-		return fmt.Sprintf("*%v", t.Type)
+		return "*" + t.Elem().String()
 
 	case TARRAY:
-		if t.Bound >= 0 {
-			return fmt.Sprintf("[%d]%v", t.Bound, t.Type)
+		if t.IsArray() {
+			return fmt.Sprintf("[%d]%v", t.NumElem(), t.Elem())
 		}
-		if t.Bound == -100 {
-			return fmt.Sprintf("[...]%v", t.Type)
+		if t.isDDDArray() {
+			return "[...]" + t.Elem().String()
 		}
-		return fmt.Sprintf("[]%v", t.Type)
+		return "[]" + t.Elem().String()
 
 	case TCHAN:
-		switch t.Chan {
+		switch t.ChanDir() {
 		case Crecv:
-			return fmt.Sprintf("<-chan %v", t.Type)
+			return "<-chan " + t.Elem().String()
 
 		case Csend:
-			return fmt.Sprintf("chan<- %v", t.Type)
+			return "chan<- " + t.Elem().String()
 		}
 
-		if t.Type != nil && t.Type.Etype == TCHAN && t.Type.Sym == nil && t.Type.Chan == Crecv {
-			return fmt.Sprintf("chan (%v)", t.Type)
+		if t.Elem() != nil && t.Elem().IsChan() && t.Elem().Sym == nil && t.Elem().ChanDir() == Crecv {
+			return "chan (" + t.Elem().String() + ")"
 		}
-		return fmt.Sprintf("chan %v", t.Type)
+		return "chan " + t.Elem().String()
 
 	case TMAP:
-		return fmt.Sprintf("map[%v]%v", t.Down, t.Type)
+		return "map[" + t.Key().String() + "]" + t.Val().String()
 
 	case TINTER:
 		var buf bytes.Buffer
 		buf.WriteString("interface {")
-		for t1 := t.Type; t1 != nil; t1 = t1.Down {
-			buf.WriteString(" ")
-			if exportname(t1.Sym.Name) {
-				buf.WriteString(Sconv(t1.Sym, obj.FmtShort))
-			} else {
-				buf.WriteString(Sconv(t1.Sym, obj.FmtUnsigned))
-			}
-			buf.WriteString(Tconv(t1.Type, obj.FmtShort))
-			if t1.Down != nil {
+		for i, f := range t.Fields().Slice() {
+			if i != 0 {
 				buf.WriteString(";")
 			}
+			buf.WriteString(" ")
+			switch {
+			case f.Sym == nil:
+				// Check first that a symbol is defined for this type.
+				// Wrong interface definitions may have types lacking a symbol.
+				break
+			case exportname(f.Sym.Name):
+				buf.WriteString(Sconv(f.Sym, FmtShort))
+			default:
+				buf.WriteString(Sconv(f.Sym, FmtUnsigned))
+			}
+			buf.WriteString(Tconv(f.Type, FmtShort))
 		}
-		if t.Type != nil {
+		if t.NumFields() != 0 {
 			buf.WriteString(" ")
 		}
 		buf.WriteString("}")
@@ -597,153 +640,89 @@ func typefmt(t *Type, flag int) string {
 
 	case TFUNC:
 		var buf bytes.Buffer
-		if flag&obj.FmtShort != 0 {
+		if flag&FmtShort != 0 {
 			// no leading func
 		} else {
-			if t.Thistuple != 0 {
+			if t.Recv() != nil {
 				buf.WriteString("method")
-				buf.WriteString(Tconv(getthisx(t), 0))
+				buf.WriteString(Tconv(t.Recvs(), 0))
 				buf.WriteString(" ")
 			}
 			buf.WriteString("func")
 		}
-		buf.WriteString(Tconv(getinargx(t), 0))
+		buf.WriteString(Tconv(t.Params(), 0))
 
-		switch t.Outtuple {
+		switch t.Results().NumFields() {
 		case 0:
 			break
 
 		case 1:
 			if fmtmode != FExp {
 				buf.WriteString(" ")
-				buf.WriteString(Tconv(getoutargx(t).Type.Type, 0)) // struct->field->field's type
+				buf.WriteString(Tconv(t.Results().Field(0).Type, 0)) // struct->field->field's type
 				break
 			}
 			fallthrough
 
 		default:
 			buf.WriteString(" ")
-			buf.WriteString(Tconv(getoutargx(t), 0))
+			buf.WriteString(Tconv(t.Results(), 0))
 		}
 		return buf.String()
 
 	case TSTRUCT:
-		if t.Map != nil {
+		if m := t.StructType().Map; m != nil {
+			mt := m.MapType()
 			// Format the bucket struct for map[x]y as map.bucket[x]y.
 			// This avoids a recursive print that generates very long names.
-			if t.Map.Bucket == t {
-				return fmt.Sprintf("map.bucket[%v]%v", t.Map.Down, t.Map.Type)
+			if mt.Bucket == t {
+				return "map.bucket[" + m.Key().String() + "]" + m.Val().String()
 			}
 
-			if t.Map.Hmap == t {
-				return fmt.Sprintf("map.hdr[%v]%v", t.Map.Down, t.Map.Type)
+			if mt.Hmap == t {
+				return "map.hdr[" + m.Key().String() + "]" + m.Val().String()
 			}
 
-			if t.Map.Hiter == t {
-				return fmt.Sprintf("map.iter[%v]%v", t.Map.Down, t.Map.Type)
+			if mt.Hiter == t {
+				return "map.iter[" + m.Key().String() + "]" + m.Val().String()
 			}
 
 			Yyerror("unknown internal map type")
 		}
 
 		var buf bytes.Buffer
-		if t.Funarg {
+		if t.IsFuncArgStruct() {
 			buf.WriteString("(")
+			var flag1 FmtFlag
 			if fmtmode == FTypeId || fmtmode == FErr { // no argument names on function signature, and no "noescape"/"nosplit" tags
-				for t1 := t.Type; t1 != nil; t1 = t1.Down {
-					buf.WriteString(Tconv(t1, obj.FmtShort))
-					if t1.Down != nil {
-						buf.WriteString(", ")
-					}
+				flag1 = FmtShort
+			}
+			for i, f := range t.Fields().Slice() {
+				if i != 0 {
+					buf.WriteString(", ")
 				}
-			} else {
-				for t1 := t.Type; t1 != nil; t1 = t1.Down {
-					buf.WriteString(Tconv(t1, 0))
-					if t1.Down != nil {
-						buf.WriteString(", ")
-					}
-				}
+				buf.WriteString(Fldconv(f, flag1))
 			}
 			buf.WriteString(")")
 		} else {
 			buf.WriteString("struct {")
-			for t1 := t.Type; t1 != nil; t1 = t1.Down {
-				buf.WriteString(" ")
-				buf.WriteString(Tconv(t1, obj.FmtLong))
-				if t1.Down != nil {
+			for i, f := range t.Fields().Slice() {
+				if i != 0 {
 					buf.WriteString(";")
 				}
+				buf.WriteString(" ")
+				buf.WriteString(Fldconv(f, FmtLong))
 			}
-			if t.Type != nil {
+			if t.NumFields() != 0 {
 				buf.WriteString(" ")
 			}
 			buf.WriteString("}")
 		}
 		return buf.String()
 
-	case TFIELD:
-		var name string
-		if flag&obj.FmtShort == 0 {
-			s := t.Sym
-
-			// Take the name from the original, lest we substituted it with ~r%d or ~b%d.
-			// ~r%d is a (formerly) unnamed result.
-			if (fmtmode == FErr || fmtmode == FExp) && t.Nname != nil {
-				if t.Nname.Orig != nil {
-					s = t.Nname.Orig.Sym
-					if s != nil && s.Name[0] == '~' {
-						if s.Name[1] == 'r' { // originally an unnamed result
-							s = nil
-						} else if s.Name[1] == 'b' { // originally the blank identifier _
-							s = Lookup("_")
-						}
-					}
-				} else {
-					s = nil
-				}
-			}
-
-			if s != nil && t.Embedded == 0 {
-				if t.Funarg {
-					name = Nconv(t.Nname, 0)
-				} else if flag&obj.FmtLong != 0 {
-					name = Sconv(s, obj.FmtShort|obj.FmtByte) // qualify non-exported names (used on structs, not on funarg)
-				} else {
-					name = Sconv(s, 0)
-				}
-			} else if fmtmode == FExp {
-				// TODO(rsc) this breaks on the eliding of unused arguments in the backend
-				// when this is fixed, the special case in dcl.go checkarglist can go.
-				//if(t->funarg)
-				//	fmtstrcpy(fp, "_ ");
-				//else
-				if t.Embedded != 0 && s.Pkg != nil && len(s.Pkg.Path) > 0 {
-					name = fmt.Sprintf("@%q.?", s.Pkg.Path)
-				} else {
-					name = "?"
-				}
-			}
-		}
-
-		var typ string
-		if t.Isddd {
-			typ = "..." + Tconv(t.Type.Type, 0)
-		} else {
-			typ = Tconv(t.Type, 0)
-		}
-
-		str := typ
-		if name != "" {
-			str = name + " " + typ
-		}
-		if flag&obj.FmtShort == 0 && t.Note != nil {
-			str += " " + strconv.Quote(*t.Note)
-		}
-		return str
-
 	case TFORW:
 		if t.Sym != nil {
-			return fmt.Sprintf("undefined %v", t.Sym)
+			return "undefined " + t.Sym.String()
 		}
 		return "undefined"
 
@@ -752,6 +731,12 @@ func typefmt(t *Type, flag int) string {
 			return "@\"unsafe\".Pointer"
 		}
 		return "unsafe.Pointer"
+
+	case TDDDFIELD:
+		if fmtmode == FExp {
+			Fatalf("cannot use TDDDFIELD with old exporter")
+		}
+		return fmt.Sprintf("%v <%v> %v", Econv(t.Etype), t.Sym, t.DDDField())
 	}
 
 	if fmtmode == FExp {
@@ -759,7 +744,7 @@ func typefmt(t *Type, flag int) string {
 	}
 
 	// Don't know how to handle - fall back to detailed prints.
-	return fmt.Sprintf("%v <%v> %v", Econv(t.Etype), t.Sym, t.Type)
+	return fmt.Sprintf("%v <%v> %v", Econv(t.Etype), t.Sym, t.Elem())
 }
 
 // Statements which may be rendered with a simplestmt as init.
@@ -777,14 +762,14 @@ func stmtfmt(n *Node) string {
 
 	// some statements allow for an init, but at most one,
 	// but we may have an arbitrary number added, eg by typecheck
-	// and inlining.  If it doesn't fit the syntax, emit an enclosing
+	// and inlining. If it doesn't fit the syntax, emit an enclosing
 	// block starting with the init statements.
 
 	// if we can just say "for" n->ninit; ... then do so
-	simpleinit := n.Ninit != nil && n.Ninit.Next == nil && n.Ninit.N.Ninit == nil && stmtwithinit(n.Op)
+	simpleinit := n.Ninit.Len() == 1 && n.Ninit.First().Ninit.Len() == 0 && stmtwithinit(n.Op)
 
 	// otherwise, print the inits as separate statements
-	complexinit := n.Ninit != nil && !simpleinit && (fmtmode != FErr)
+	complexinit := n.Ninit.Len() != 0 && !simpleinit && (fmtmode != FErr)
 
 	// but if it was for if/for/switch, put in an extra surrounding block to limit the scope
 	extrablock := complexinit && stmtwithinit(n.Op)
@@ -817,7 +802,7 @@ func stmtfmt(n *Node) string {
 		}
 
 	// Don't export "v = <N>" initializing statements, hope they're always
-	// preceded by the DCL which will be re-parsed and typecheck to reproduce
+	// preceded by the DCL which will be re-parsed and typechecked to reproduce
 	// the "v = <N>" again.
 	case OAS, OASWB:
 		if fmtmode == FExp && n.Right == nil {
@@ -840,20 +825,20 @@ func stmtfmt(n *Node) string {
 			break
 		}
 
-		f += fmt.Sprintf("%v %v= %v", n.Left, Oconv(int(n.Etype), obj.FmtSharp), n.Right)
+		f += fmt.Sprintf("%v %v= %v", n.Left, Oconv(Op(n.Etype), FmtSharp), n.Right)
 
 	case OAS2:
 		if n.Colas && !complexinit {
-			f += fmt.Sprintf("%v := %v", Hconv(n.List, obj.FmtComma), Hconv(n.Rlist, obj.FmtComma))
+			f += fmt.Sprintf("%v := %v", Hconv(n.List, FmtComma), Hconv(n.Rlist, FmtComma))
 			break
 		}
 		fallthrough
 
 	case OAS2DOTTYPE, OAS2FUNC, OAS2MAPR, OAS2RECV:
-		f += fmt.Sprintf("%v = %v", Hconv(n.List, obj.FmtComma), Hconv(n.Rlist, obj.FmtComma))
+		f += fmt.Sprintf("%v = %v", Hconv(n.List, FmtComma), Hconv(n.Rlist, FmtComma))
 
 	case ORETURN:
-		f += fmt.Sprintf("return %v", Hconv(n.List, obj.FmtComma))
+		f += fmt.Sprintf("return %v", Hconv(n.List, FmtComma))
 
 	case ORETJMP:
 		f += fmt.Sprintf("retjmp %v", n.Sym)
@@ -866,11 +851,11 @@ func stmtfmt(n *Node) string {
 
 	case OIF:
 		if simpleinit {
-			f += fmt.Sprintf("if %v; %v { %v }", n.Ninit.N, n.Left, n.Nbody)
+			f += fmt.Sprintf("if %v; %v { %v }", n.Ninit.First(), n.Left, n.Nbody)
 		} else {
 			f += fmt.Sprintf("if %v { %v }", n.Left, n.Nbody)
 		}
-		if n.Rlist != nil {
+		if n.Rlist.Len() != 0 {
 			f += fmt.Sprintf(" else { %v }", n.Rlist)
 		}
 
@@ -882,7 +867,7 @@ func stmtfmt(n *Node) string {
 
 		f += "for"
 		if simpleinit {
-			f += fmt.Sprintf(" %v;", n.Ninit.N)
+			f += fmt.Sprintf(" %v;", n.Ninit.First())
 		} else if n.Right != nil {
 			f += " ;"
 		}
@@ -905,32 +890,32 @@ func stmtfmt(n *Node) string {
 			break
 		}
 
-		if n.List == nil {
+		if n.List.Len() == 0 {
 			f += fmt.Sprintf("for range %v { %v }", n.Right, n.Nbody)
 			break
 		}
 
-		f += fmt.Sprintf("for %v = range %v { %v }", Hconv(n.List, obj.FmtComma), n.Right, n.Nbody)
+		f += fmt.Sprintf("for %v = range %v { %v }", Hconv(n.List, FmtComma), n.Right, n.Nbody)
 
 	case OSELECT, OSWITCH:
 		if fmtmode == FErr {
-			f += fmt.Sprintf("%v statement", Oconv(int(n.Op), 0))
+			f += fmt.Sprintf("%v statement", Oconv(n.Op, 0))
 			break
 		}
 
-		f += Oconv(int(n.Op), obj.FmtSharp)
+		f += Oconv(n.Op, FmtSharp)
 		if simpleinit {
-			f += fmt.Sprintf(" %v;", n.Ninit.N)
+			f += fmt.Sprintf(" %v;", n.Ninit.First())
 		}
 		if n.Left != nil {
-			f += Nconv(n.Left, 0)
+			f += fmt.Sprintf(" %s ", Nconv(n.Left, 0))
 		}
 
 		f += fmt.Sprintf(" { %v }", n.List)
 
 	case OCASE, OXCASE:
-		if n.List != nil {
-			f += fmt.Sprintf("case %v: %v", Hconv(n.List, obj.FmtComma), n.Nbody)
+		if n.List.Len() != 0 {
+			f += fmt.Sprintf("case %v: %v", Hconv(n.List, FmtComma), n.Nbody)
 		} else {
 			f += fmt.Sprintf("default: %v", n.Nbody)
 		}
@@ -941,9 +926,9 @@ func stmtfmt(n *Node) string {
 		OFALL,
 		OXFALL:
 		if n.Left != nil {
-			f += fmt.Sprintf("%v %v", Oconv(int(n.Op), obj.FmtSharp), n.Left)
+			f += fmt.Sprintf("%v %v", Oconv(n.Op, FmtSharp), n.Left)
 		} else {
-			f += Oconv(int(n.Op), obj.FmtSharp)
+			f += Oconv(n.Op, FmtSharp)
 		}
 
 	case OEMPTY:
@@ -1115,10 +1100,10 @@ func exprfmt(n *Node, prec int) string {
 		if n.Val().Ctype() == CTNIL && n.Orig != nil && n.Orig != n {
 			return exprfmt(n.Orig, prec)
 		}
-		if n.Type != nil && n.Type != Types[n.Type.Etype] && n.Type != idealbool && n.Type != idealstring {
+		if n.Type != nil && n.Type.Etype != TIDEAL && n.Type.Etype != TNIL && n.Type != idealbool && n.Type != idealstring {
 			// Need parens when type begins with what might
 			// be misinterpreted as a unary operator: * or <-.
-			if Isptr[n.Type.Etype] || (n.Type.Etype == TCHAN && n.Type.Chan == Crecv) {
+			if n.Type.IsPtr() || (n.Type.IsChan() && n.Type.ChanDir() == Crecv) {
 				return fmt.Sprintf("(%v)(%v)", n.Type, Vconv(n.Val(), 0))
 			} else {
 				return fmt.Sprintf("%v(%v)", n.Type, Vconv(n.Val(), 0))
@@ -1141,10 +1126,10 @@ func exprfmt(n *Node, prec int) string {
 		// but for export, this should be rendered as (*pkg.T).meth.
 		// These nodes have the special property that they are names with a left OTYPE and a right ONAME.
 		if fmtmode == FExp && n.Left != nil && n.Left.Op == OTYPE && n.Right != nil && n.Right.Op == ONAME {
-			if Isptr[n.Left.Type.Etype] {
-				return fmt.Sprintf("(%v).%v", n.Left.Type, Sconv(n.Right.Sym, obj.FmtShort|obj.FmtByte))
+			if n.Left.Type.IsPtr() {
+				return fmt.Sprintf("(%v).%v", n.Left.Type, Sconv(n.Right.Sym, FmtShort|FmtByte))
 			} else {
-				return fmt.Sprintf("%v.%v", n.Left.Type, Sconv(n.Right.Sym, obj.FmtShort|obj.FmtByte))
+				return fmt.Sprintf("%v.%v", n.Left.Type, Sconv(n.Right.Sym, FmtShort|FmtByte))
 			}
 		}
 		fallthrough
@@ -1162,15 +1147,13 @@ func exprfmt(n *Node, prec int) string {
 		if n.Left != nil {
 			return fmt.Sprintf("[]%v", n.Left)
 		}
-		var f string
-		f += fmt.Sprintf("[]%v", n.Right)
-		return f // happens before typecheck
+		return fmt.Sprintf("[]%v", n.Right) // happens before typecheck
 
 	case OTMAP:
 		return fmt.Sprintf("map[%v]%v", n.Left, n.Right)
 
 	case OTCHAN:
-		switch n.Etype {
+		switch ChanDir(n.Etype) {
 		case Crecv:
 			return fmt.Sprintf("<-chan %v", n.Left)
 
@@ -1178,7 +1161,7 @@ func exprfmt(n *Node, prec int) string {
 			return fmt.Sprintf("chan<- %v", n.Left)
 
 		default:
-			if n.Left != nil && n.Left.Op == OTCHAN && n.Left.Sym == nil && n.Left.Etype == Crecv {
+			if n.Left != nil && n.Left.Op == OTCHAN && n.Left.Sym == nil && ChanDir(n.Left.Etype) == Crecv {
 				return fmt.Sprintf("chan (%v)", n.Left)
 			} else {
 				return fmt.Sprintf("chan %v", n.Left)
@@ -1198,17 +1181,17 @@ func exprfmt(n *Node, prec int) string {
 		if fmtmode == FErr {
 			return "func literal"
 		}
-		if n.Nbody != nil {
+		if len(n.Nbody.Slice()) != 0 {
 			return fmt.Sprintf("%v { %v }", n.Type, n.Nbody)
 		}
 		return fmt.Sprintf("%v { %v }", n.Type, n.Name.Param.Closure.Nbody)
 
 	case OCOMPLIT:
-		ptrlit := n.Right != nil && n.Right.Implicit && n.Right.Type != nil && Isptr[n.Right.Type.Etype]
+		ptrlit := n.Right != nil && n.Right.Implicit && n.Right.Type != nil && n.Right.Type.IsPtr()
 		if fmtmode == FErr {
 			if n.Right != nil && n.Right.Type != nil && !n.Implicit {
 				if ptrlit {
-					return fmt.Sprintf("&%v literal", n.Right.Type.Type)
+					return fmt.Sprintf("&%v literal", n.Right.Type.Elem())
 				} else {
 					return fmt.Sprintf("%v literal", n.Right.Type)
 				}
@@ -1219,10 +1202,10 @@ func exprfmt(n *Node, prec int) string {
 
 		if fmtmode == FExp && ptrlit {
 			// typecheck has overwritten OIND by OTYPE with pointer type.
-			return fmt.Sprintf("(&%v{ %v })", n.Right.Type.Type, Hconv(n.List, obj.FmtComma))
+			return fmt.Sprintf("(&%v{ %v })", n.Right.Type.Elem(), Hconv(n.List, FmtComma))
 		}
 
-		return fmt.Sprintf("(%v{ %v })", n.Right, Hconv(n.List, obj.FmtComma))
+		return fmt.Sprintf("(%v{ %v })", n.Right, Hconv(n.List, FmtComma))
 
 	case OPTRLIT:
 		if fmtmode == FExp && n.Left.Implicit {
@@ -1238,10 +1221,10 @@ func exprfmt(n *Node, prec int) string {
 			} else {
 				f += fmt.Sprintf("(%v{", n.Type)
 			}
-			for l := n.List; l != nil; l = l.Next {
-				f += fmt.Sprintf(" %v:%v", Sconv(l.N.Left.Sym, obj.FmtShort|obj.FmtByte), l.N.Right)
+			for i1, n1 := range n.List.Slice() {
+				f += fmt.Sprintf(" %v:%v", Sconv(n1.Left.Sym, FmtShort|FmtByte), n1.Right)
 
-				if l.Next != nil {
+				if i1+1 < n.List.Len() {
 					f += ","
 				} else {
 					f += " "
@@ -1262,15 +1245,15 @@ func exprfmt(n *Node, prec int) string {
 			return fmt.Sprintf("%v literal", n.Type)
 		}
 		if fmtmode == FExp && n.Implicit {
-			return fmt.Sprintf("{ %v }", Hconv(n.List, obj.FmtComma))
+			return fmt.Sprintf("{ %v }", Hconv(n.List, FmtComma))
 		}
-		return fmt.Sprintf("(%v{ %v })", n.Type, Hconv(n.List, obj.FmtComma))
+		return fmt.Sprintf("(%v{ %v })", n.Type, Hconv(n.List, FmtComma))
 
 	case OKEY:
 		if n.Left != nil && n.Right != nil {
-			if fmtmode == FExp && n.Left.Type != nil && n.Left.Type.Etype == TFIELD {
+			if fmtmode == FExp && n.Left.Type == structkey {
 				// requires special handling of field names
-				return fmt.Sprintf("%v:%v", Sconv(n.Left.Sym, obj.FmtShort|obj.FmtByte), n.Right)
+				return fmt.Sprintf("%v:%v", Sconv(n.Left.Sym, FmtShort|FmtByte), n.Right)
 			} else {
 				return fmt.Sprintf("%v:%v", n.Left, n.Right)
 			}
@@ -1284,19 +1267,24 @@ func exprfmt(n *Node, prec int) string {
 		}
 		return ":"
 
-	case OXDOT,
-		ODOT,
-		ODOTPTR,
-		ODOTINTER,
-		ODOTMETH,
-		OCALLPART:
+	case OCALLPART:
 		var f string
 		f += exprfmt(n.Left, nprec)
 		if n.Right == nil || n.Right.Sym == nil {
 			f += ".<nil>"
 			return f
 		}
-		f += fmt.Sprintf(".%v", Sconv(n.Right.Sym, obj.FmtShort|obj.FmtByte))
+		f += fmt.Sprintf(".%v", Sconv(n.Right.Sym, FmtShort|FmtByte))
+		return f
+
+	case OXDOT, ODOT, ODOTPTR, ODOTINTER, ODOTMETH:
+		var f string
+		f += exprfmt(n.Left, nprec)
+		if n.Sym == nil {
+			f += ".<nil>"
+			return f
+		}
+		f += fmt.Sprintf(".%v", Sconv(n.Sym, FmtShort|FmtByte))
 		return f
 
 	case ODOTTYPE, ODOTTYPE2:
@@ -1322,7 +1310,7 @@ func exprfmt(n *Node, prec int) string {
 		return f
 
 	case OCOPY, OCOMPLEX:
-		return fmt.Sprintf("%v(%v, %v)", Oconv(int(n.Op), obj.FmtSharp), n.Left, n.Right)
+		return fmt.Sprintf("%v(%v, %v)", Oconv(n.Op, FmtSharp), n.Left, n.Right)
 
 	case OCONV,
 		OCONVIFACE,
@@ -1338,7 +1326,7 @@ func exprfmt(n *Node, prec int) string {
 		if n.Left != nil {
 			return fmt.Sprintf("%v(%v)", n.Type, n.Left)
 		}
-		return fmt.Sprintf("%v(%v)", n.Type, Hconv(n.List, obj.FmtComma))
+		return fmt.Sprintf("%v(%v)", n.Type, Hconv(n.List, FmtComma))
 
 	case OREAL,
 		OIMAG,
@@ -1354,31 +1342,31 @@ func exprfmt(n *Node, prec int) string {
 		OPRINT,
 		OPRINTN:
 		if n.Left != nil {
-			return fmt.Sprintf("%v(%v)", Oconv(int(n.Op), obj.FmtSharp), n.Left)
+			return fmt.Sprintf("%v(%v)", Oconv(n.Op, FmtSharp), n.Left)
 		}
 		if n.Isddd {
-			return fmt.Sprintf("%v(%v...)", Oconv(int(n.Op), obj.FmtSharp), Hconv(n.List, obj.FmtComma))
+			return fmt.Sprintf("%v(%v...)", Oconv(n.Op, FmtSharp), Hconv(n.List, FmtComma))
 		}
-		return fmt.Sprintf("%v(%v)", Oconv(int(n.Op), obj.FmtSharp), Hconv(n.List, obj.FmtComma))
+		return fmt.Sprintf("%v(%v)", Oconv(n.Op, FmtSharp), Hconv(n.List, FmtComma))
 
 	case OCALL, OCALLFUNC, OCALLINTER, OCALLMETH, OGETG:
 		var f string
 		f += exprfmt(n.Left, nprec)
 		if n.Isddd {
-			f += fmt.Sprintf("(%v...)", Hconv(n.List, obj.FmtComma))
+			f += fmt.Sprintf("(%v...)", Hconv(n.List, FmtComma))
 			return f
 		}
-		f += fmt.Sprintf("(%v)", Hconv(n.List, obj.FmtComma))
+		f += fmt.Sprintf("(%v)", Hconv(n.List, FmtComma))
 		return f
 
 	case OMAKEMAP, OMAKECHAN, OMAKESLICE:
-		if n.List != nil { // pre-typecheck
-			return fmt.Sprintf("make(%v, %v)", n.Type, Hconv(n.List, obj.FmtComma))
+		if n.List.Len() != 0 { // pre-typecheck
+			return fmt.Sprintf("make(%v, %v)", n.Type, Hconv(n.List, FmtComma))
 		}
 		if n.Right != nil {
 			return fmt.Sprintf("make(%v, %v, %v)", n.Type, n.Left, n.Right)
 		}
-		if n.Left != nil && (n.Op == OMAKESLICE || !isideal(n.Left.Type)) {
+		if n.Left != nil && (n.Op == OMAKESLICE || !n.Left.Type.IsUntyped()) {
 			return fmt.Sprintf("make(%v, %v)", n.Type, n.Left)
 		}
 		return fmt.Sprintf("make(%v)", n.Type)
@@ -1393,9 +1381,9 @@ func exprfmt(n *Node, prec int) string {
 		ORECV:
 		var f string
 		if n.Left.Op == n.Op {
-			f += fmt.Sprintf("%v ", Oconv(int(n.Op), obj.FmtSharp))
+			f += fmt.Sprintf("%v ", Oconv(n.Op, FmtSharp))
 		} else {
-			f += Oconv(int(n.Op), obj.FmtSharp)
+			f += Oconv(n.Op, FmtSharp)
 		}
 		f += exprfmt(n.Left, nprec+1)
 		return f
@@ -1424,17 +1412,19 @@ func exprfmt(n *Node, prec int) string {
 		var f string
 		f += exprfmt(n.Left, nprec)
 
-		f += fmt.Sprintf(" %v ", Oconv(int(n.Op), obj.FmtSharp))
+		f += fmt.Sprintf(" %v ", Oconv(n.Op, FmtSharp))
 		f += exprfmt(n.Right, nprec+1)
 		return f
 
 	case OADDSTR:
 		var f string
-		for l := n.List; l != nil; l = l.Next {
-			if l != n.List {
+		i := 0
+		for _, n1 := range n.List.Slice() {
+			if i != 0 {
 				f += " + "
 			}
-			f += exprfmt(l.N, nprec)
+			f += exprfmt(n1, nprec)
+			i++
 		}
 
 		return f
@@ -1443,15 +1433,22 @@ func exprfmt(n *Node, prec int) string {
 		var f string
 		f += exprfmt(n.Left, nprec)
 		// TODO(marvin): Fix Node.EType type union.
-		f += fmt.Sprintf(" %v ", Oconv(int(n.Etype), obj.FmtSharp))
+		f += fmt.Sprintf(" %v ", Oconv(Op(n.Etype), FmtSharp))
 		f += exprfmt(n.Right, nprec+1)
 		return f
+
+	case ODCLCONST:
+		// if exporting, DCLCONST should just be removed as its usage
+		// has already been replaced with literals
+		if fmtbody {
+			return ""
+		}
 	}
 
-	return fmt.Sprintf("<node %v>", Oconv(int(n.Op), 0))
+	return fmt.Sprintf("<node %v>", Oconv(n.Op, 0))
 }
 
-func nodefmt(n *Node, flag int) string {
+func nodefmt(n *Node, flag FmtFlag) string {
 	t := n.Type
 
 	// we almost always want the original, except in export mode for literals
@@ -1461,7 +1458,7 @@ func nodefmt(n *Node, flag int) string {
 		n = n.Orig
 	}
 
-	if flag&obj.FmtLong != 0 && t != nil {
+	if flag&FmtLong != 0 && t != nil {
 		if t.Etype == TNIL {
 			return "nil"
 		} else {
@@ -1487,12 +1484,12 @@ func indent(buf *bytes.Buffer) {
 	}
 }
 
-func nodedump(n *Node, flag int) string {
+func nodedump(n *Node, flag FmtFlag) string {
 	if n == nil {
 		return ""
 	}
 
-	recur := flag&obj.FmtShort == 0
+	recur := flag&FmtShort == 0
 
 	var buf bytes.Buffer
 	if recur {
@@ -1502,41 +1499,41 @@ func nodedump(n *Node, flag int) string {
 			return buf.String()
 		}
 
-		if n.Ninit != nil {
-			fmt.Fprintf(&buf, "%v-init%v", Oconv(int(n.Op), 0), n.Ninit)
+		if n.Ninit.Len() != 0 {
+			fmt.Fprintf(&buf, "%v-init%v", Oconv(n.Op, 0), n.Ninit)
 			indent(&buf)
 		}
 	}
 
 	switch n.Op {
 	default:
-		fmt.Fprintf(&buf, "%v%v", Oconv(int(n.Op), 0), Jconv(n, 0))
+		fmt.Fprintf(&buf, "%v%v", Oconv(n.Op, 0), Jconv(n, 0))
 
 	case OREGISTER, OINDREG:
-		fmt.Fprintf(&buf, "%v-%v%v", Oconv(int(n.Op), 0), obj.Rconv(int(n.Reg)), Jconv(n, 0))
+		fmt.Fprintf(&buf, "%v-%v%v", Oconv(n.Op, 0), obj.Rconv(int(n.Reg)), Jconv(n, 0))
 
 	case OLITERAL:
-		fmt.Fprintf(&buf, "%v-%v%v", Oconv(int(n.Op), 0), Vconv(n.Val(), 0), Jconv(n, 0))
+		fmt.Fprintf(&buf, "%v-%v%v", Oconv(n.Op, 0), Vconv(n.Val(), 0), Jconv(n, 0))
 
 	case ONAME, ONONAME:
 		if n.Sym != nil {
-			fmt.Fprintf(&buf, "%v-%v%v", Oconv(int(n.Op), 0), n.Sym, Jconv(n, 0))
+			fmt.Fprintf(&buf, "%v-%v%v", Oconv(n.Op, 0), n.Sym, Jconv(n, 0))
 		} else {
-			fmt.Fprintf(&buf, "%v%v", Oconv(int(n.Op), 0), Jconv(n, 0))
+			fmt.Fprintf(&buf, "%v%v", Oconv(n.Op, 0), Jconv(n, 0))
 		}
-		if recur && n.Type == nil && n.Name.Param.Ntype != nil {
+		if recur && n.Type == nil && n.Name != nil && n.Name.Param != nil && n.Name.Param.Ntype != nil {
 			indent(&buf)
-			fmt.Fprintf(&buf, "%v-ntype%v", Oconv(int(n.Op), 0), n.Name.Param.Ntype)
+			fmt.Fprintf(&buf, "%v-ntype%v", Oconv(n.Op, 0), n.Name.Param.Ntype)
 		}
 
 	case OASOP:
-		fmt.Fprintf(&buf, "%v-%v%v", Oconv(int(n.Op), 0), Oconv(int(n.Etype), 0), Jconv(n, 0))
+		fmt.Fprintf(&buf, "%v-%v%v", Oconv(n.Op, 0), Oconv(Op(n.Etype), 0), Jconv(n, 0))
 
 	case OTYPE:
-		fmt.Fprintf(&buf, "%v %v%v type=%v", Oconv(int(n.Op), 0), n.Sym, Jconv(n, 0), n.Type)
+		fmt.Fprintf(&buf, "%v %v%v type=%v", Oconv(n.Op, 0), n.Sym, Jconv(n, 0), n.Type)
 		if recur && n.Type == nil && n.Name.Param.Ntype != nil {
 			indent(&buf)
-			fmt.Fprintf(&buf, "%v-ntype%v", Oconv(int(n.Op), 0), n.Name.Param.Ntype)
+			fmt.Fprintf(&buf, "%v-ntype%v", Oconv(n.Op, 0), n.Name.Param.Ntype)
 		}
 	}
 
@@ -1555,19 +1552,19 @@ func nodedump(n *Node, flag int) string {
 		if n.Right != nil {
 			buf.WriteString(Nconv(n.Right, 0))
 		}
-		if n.List != nil {
+		if n.List.Len() != 0 {
 			indent(&buf)
-			fmt.Fprintf(&buf, "%v-list%v", Oconv(int(n.Op), 0), n.List)
+			fmt.Fprintf(&buf, "%v-list%v", Oconv(n.Op, 0), n.List)
 		}
 
-		if n.Rlist != nil {
+		if n.Rlist.Len() != 0 {
 			indent(&buf)
-			fmt.Fprintf(&buf, "%v-rlist%v", Oconv(int(n.Op), 0), n.Rlist)
+			fmt.Fprintf(&buf, "%v-rlist%v", Oconv(n.Op, 0), n.Rlist)
 		}
 
-		if n.Nbody != nil {
+		if len(n.Nbody.Slice()) != 0 {
 			indent(&buf)
-			fmt.Fprintf(&buf, "%v-body%v", Oconv(int(n.Op), 0), n.Nbody)
+			fmt.Fprintf(&buf, "%v-body%v", Oconv(n.Op, 0), n.Nbody)
 		}
 	}
 
@@ -1580,8 +1577,8 @@ func (s *Sym) String() string {
 
 // Fmt "%S": syms
 // Flags:  "%hS" suppresses qualifying with package
-func Sconv(s *Sym, flag int) string {
-	if flag&obj.FmtLong != 0 {
+func Sconv(s *Sym, flag FmtFlag) string {
+	if flag&FmtLong != 0 {
 		panic("linksymfmt")
 	}
 
@@ -1594,10 +1591,11 @@ func Sconv(s *Sym, flag int) string {
 	}
 
 	sf := flag
-	sm := setfmode(&flag)
+	sm, sb := setfmode(&flag)
 	str := symfmt(s, flag)
 	flag = sf
 	fmtmode = sm
+	fmtbody = sb
 	return str
 }
 
@@ -1605,11 +1603,95 @@ func (t *Type) String() string {
 	return Tconv(t, 0)
 }
 
+func Fldconv(f *Field, flag FmtFlag) string {
+	if f == nil {
+		return "<T>"
+	}
+
+	sf := flag
+	sm, sb := setfmode(&flag)
+
+	if fmtmode == FTypeId && (sf&FmtUnsigned != 0) {
+		fmtpkgpfx++
+	}
+	if fmtpkgpfx != 0 {
+		flag |= FmtUnsigned
+	}
+
+	var name string
+	if flag&FmtShort == 0 {
+		s := f.Sym
+
+		// Take the name from the original, lest we substituted it with ~r%d or ~b%d.
+		// ~r%d is a (formerly) unnamed result.
+		if (fmtmode == FErr || fmtmode == FExp) && f.Nname != nil {
+			if f.Nname.Orig != nil {
+				s = f.Nname.Orig.Sym
+				if s != nil && s.Name[0] == '~' {
+					if s.Name[1] == 'r' { // originally an unnamed result
+						s = nil
+					} else if s.Name[1] == 'b' { // originally the blank identifier _
+						s = Lookup("_")
+					}
+				}
+			} else {
+				s = nil
+			}
+		}
+
+		if s != nil && f.Embedded == 0 {
+			if f.Funarg {
+				name = Nconv(f.Nname, 0)
+			} else if flag&FmtLong != 0 {
+				name = Sconv(s, FmtShort|FmtByte) // qualify non-exported names (used on structs, not on funarg)
+			} else {
+				name = Sconv(s, 0)
+			}
+		} else if fmtmode == FExp {
+			if f.Embedded != 0 && s.Pkg != nil && len(s.Pkg.Path) > 0 {
+				name = fmt.Sprintf("@%q.?", s.Pkg.Path)
+			} else {
+				name = "?"
+			}
+		}
+	}
+
+	var typ string
+	if f.Isddd {
+		typ = "..." + Tconv(f.Type.Elem(), 0)
+	} else {
+		typ = Tconv(f.Type, 0)
+	}
+
+	str := typ
+	if name != "" {
+		str = name + " " + typ
+	}
+
+	// The fmtbody flag is intended to suppress escape analysis annotations
+	// when printing a function type used in a function body.
+	// (The escape analysis tags do not apply to func vars.)
+	// But it must not suppress struct field tags.
+	// See golang.org/issue/13777 and golang.org/issue/14331.
+	if flag&FmtShort == 0 && (!fmtbody || !f.Funarg) && f.Note != nil {
+		str += " " + strconv.Quote(*f.Note)
+	}
+
+	if fmtmode == FTypeId && (sf&FmtUnsigned != 0) {
+		fmtpkgpfx--
+	}
+
+	flag = sf
+	fmtbody = sb
+	fmtmode = sm
+	return str
+}
+
 // Fmt "%T": types.
 // Flags: 'l' print definition, not name
 //	  'h' omit 'func' and receiver from function types, short type names
 //	  'u' package name, not prefix (FTypeId mode, sticky)
-func Tconv(t *Type, flag int) string {
+func Tconv(t *Type, flag FmtFlag) string {
 	if t == nil {
 		return "<T>"
 	}
@@ -1620,22 +1702,23 @@ func Tconv(t *Type, flag int) string {
 
 	t.Trecur++
 	sf := flag
-	sm := setfmode(&flag)
+	sm, sb := setfmode(&flag)
 
-	if fmtmode == FTypeId && (sf&obj.FmtUnsigned != 0) {
+	if fmtmode == FTypeId && (sf&FmtUnsigned != 0) {
 		fmtpkgpfx++
 	}
 	if fmtpkgpfx != 0 {
-		flag |= obj.FmtUnsigned
+		flag |= FmtUnsigned
 	}
 
 	str := typefmt(t, flag)
 
-	if fmtmode == FTypeId && (sf&obj.FmtUnsigned != 0) {
+	if fmtmode == FTypeId && (sf&FmtUnsigned != 0) {
 		fmtpkgpfx--
 	}
 
 	flag = sf
+	fmtbody = sb
 	fmtmode = sm
 	t.Trecur--
 	return str
@@ -1648,12 +1731,12 @@ func (n *Node) String() string {
 // Fmt '%N': Nodes.
 // Flags: 'l' suffix with "(type %T)" where possible
 //	  '+h' in debug mode, don't recurse, no multiline output
-func Nconv(n *Node, flag int) string {
+func Nconv(n *Node, flag FmtFlag) string {
 	if n == nil {
 		return "<N>"
 	}
 	sf := flag
-	sm := setfmode(&flag)
+	sm, sb := setfmode(&flag)
 
 	var str string
 	switch fmtmode {
@@ -1670,47 +1753,49 @@ func Nconv(n *Node, flag int) string {
 	}
 
 	flag = sf
+	fmtbody = sb
 	fmtmode = sm
 	return str
 }
 
-func (l *NodeList) String() string {
-	return Hconv(l, 0)
+func (n Nodes) String() string {
+	return Hconv(n, 0)
 }
 
-// Fmt '%H': NodeList.
+// Fmt '%H': Nodes.
 // Flags: all those of %N plus ',': separate with comma's instead of semicolons.
-func Hconv(l *NodeList, flag int) string {
-	if l == nil && fmtmode == FDbg {
+func Hconv(l Nodes, flag FmtFlag) string {
+	if l.Len() == 0 && fmtmode == FDbg {
 		return "<nil>"
 	}
 
 	sf := flag
-	sm := setfmode(&flag)
+	sm, sb := setfmode(&flag)
 	sep := "; "
 	if fmtmode == FDbg {
 		sep = "\n"
-	} else if flag&obj.FmtComma != 0 {
+	} else if flag&FmtComma != 0 {
 		sep = ", "
 	}
 
 	var buf bytes.Buffer
-	for ; l != nil; l = l.Next {
-		buf.WriteString(Nconv(l.N, 0))
-		if l.Next != nil {
+	for i, n := range l.Slice() {
+		buf.WriteString(Nconv(n, 0))
+		if i+1 < l.Len() {
 			buf.WriteString(sep)
 		}
 	}
 
 	flag = sf
+	fmtbody = sb
 	fmtmode = sm
 	return buf.String()
 }
 
-func dumplist(s string, l *NodeList) {
-	fmt.Printf("%s%v\n", s, Hconv(l, obj.FmtSign))
+func dumplist(s string, l Nodes) {
+	fmt.Printf("%s%v\n", s, Hconv(l, FmtSign))
 }
 
 func Dump(s string, n *Node) {
-	fmt.Printf("%s [%p]%v\n", s, n, Nconv(n, obj.FmtSign))
+	fmt.Printf("%s [%p]%v\n", s, n, Nconv(n, FmtSign))
 }

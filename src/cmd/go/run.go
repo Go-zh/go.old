@@ -1,4 +1,4 @@
-// Copyright 2011 The Go Authors.  All rights reserved.
+// Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -89,8 +89,18 @@ func runRun(cmd *Command, args []string) {
 		fatalf("%s", p.Error)
 	}
 	p.omitDWARF = true
-	for _, err := range p.DepsErrors {
-		errorf("%s", err)
+	if len(p.DepsErrors) > 0 {
+		// Since these are errors in dependencies,
+		// the same error might show up multiple times,
+		// once in each package that depends on it.
+		// Only print each once.
+		printed := map[*PackageError]bool{}
+		for _, err := range p.DepsErrors {
+			if !printed[err] {
+				printed[err] = true
+				errorf("%s", err)
+			}
+		}
 	}
 	exitIfErrors()
 	if p.Name != "main" {
@@ -118,7 +128,7 @@ func runRun(cmd *Command, args []string) {
 }
 
 // runProgram is the action for running a binary that has already
-// been compiled.  We ignore exit status.
+// been compiled. We ignore exit status.
 func (b *builder) runProgram(a *action) error {
 	cmdline := stringList(findExecCmd(), a.deps[0].target, a.args)
 	if buildN || buildX {

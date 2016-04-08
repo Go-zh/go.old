@@ -213,7 +213,7 @@ func enumerateValues(t *testing.T, k registry.Key) {
 		}
 	}
 	for n, v := range haveNames {
-		t.Errorf("value %s (%v) is found while enumerating, but has not been cretaed", n, v)
+		t.Errorf("value %s (%v) is found while enumerating, but has not been created", n, v)
 	}
 }
 
@@ -335,7 +335,7 @@ func testGetValue(t *testing.T, k registry.Key, test ValueTest, size int) {
 	// read data with short buffer
 	gotsize, gottype, err = k.GetValue(test.Name, make([]byte, size-1))
 	if err == nil {
-		t.Errorf("GetValue(%s, [%d]byte) should fail, but suceeded", test.Name, size-1)
+		t.Errorf("GetValue(%s, [%d]byte) should fail, but succeeded", test.Name, size-1)
 		return
 	}
 	if err != registry.ErrShortBuffer {
@@ -697,17 +697,19 @@ func TestGetMUIStringValue(t *testing.T) {
 	}
 	defer timezoneK.Close()
 
-	var tests = []struct {
-		key  registry.Key
+	type testType struct {
 		name string
 		want string
-	}{
-		{key: timezoneK, name: "MUI_Std", want: syscall.UTF16ToString(dtzi.StandardName[:])},
-		{key: timezoneK, name: "MUI_Dlt", want: syscall.UTF16ToString(dtzi.DaylightName[:])},
+	}
+	var tests = []testType{
+		{"MUI_Std", syscall.UTF16ToString(dtzi.StandardName[:])},
+	}
+	if dtzi.DynamicDaylightTimeDisabled == 0 {
+		tests = append(tests, testType{"MUI_Dlt", syscall.UTF16ToString(dtzi.DaylightName[:])})
 	}
 
 	for _, test := range tests {
-		got, err := test.key.GetMUIStringValue(test.name)
+		got, err := timezoneK.GetMUIStringValue(test.name)
 		if err != nil {
 			t.Error("GetMUIStringValue:", err)
 		}

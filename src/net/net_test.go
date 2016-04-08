@@ -6,9 +6,11 @@ package net
 
 import (
 	"io"
+	"net/internal/socktest"
 	"os"
 	"runtime"
 	"testing"
+	"time"
 )
 
 func TestCloseRead(t *testing.T) {
@@ -209,6 +211,7 @@ func TestListenerClose(t *testing.T) {
 			defer os.Remove(ln.Addr().String())
 		}
 
+		dst := ln.Addr().String()
 		if err := ln.Close(); err != nil {
 			if perr := parseCloseError(err); perr != nil {
 				t.Error(perr)
@@ -222,9 +225,24 @@ func TestListenerClose(t *testing.T) {
 		}
 
 		if network == "tcp" {
-			cc, err := Dial("tcp", ln.Addr().String())
+			// We will have two TCP FSMs inside the
+			// kernel here. There's no guarantee that a
+			// signal comes from the far end FSM will be
+			// delivered immediately to the near end FSM,
+			// especially on the platforms that allow
+			// multiple consumer threads to pull pending
+			// established connections at the same time by
+			// enabling SO_REUSEPORT option such as Linux,
+			// DragonFly BSD. So we need to give some time
+			// quantum to the kernel.
+			//
+			// Note that net.inet.tcp.reuseport_ext=1 by
+			// default on DragonFly BSD.
+			time.Sleep(time.Millisecond)
+
+			cc, err := Dial("tcp", dst)
 			if err == nil {
-				t.Error("Dial to closed TCP listener succeeeded.")
+				t.Error("Dial to closed TCP listener succeeded.")
 				cc.Close()
 			}
 		}
@@ -272,6 +290,9 @@ func TestListenCloseListen(t *testing.T) {
 		}
 		addr := ln.Addr().String()
 		if err := ln.Close(); err != nil {
+			if perr := parseCloseError(err); perr != nil {
+				t.Error(perr)
+			}
 			t.Fatal(err)
 		}
 		ln, err = Listen("tcp", addr)
@@ -283,4 +304,59 @@ func TestListenCloseListen(t *testing.T) {
 		t.Errorf("failed on try %d/%d: %v", tries+1, maxTries, err)
 	}
 	t.Fatalf("failed to listen/close/listen on same address after %d tries", maxTries)
+}
+
+// See golang.org/issue/6163, golang.org/issue/6987.
+func TestAcceptIgnoreAbortedConnRequest(t *testing.T) {
+	switch runtime.GOOS {
+	case "plan9":
+		t.Skipf("%s does not have full support of socktest", runtime.GOOS)
+	}
+
+	syserr := make(chan error)
+	go func() {
+		defer close(syserr)
+		for _, err := range abortedConnRequestErrors {
+			syserr <- err
+		}
+	}()
+	sw.Set(socktest.FilterAccept, func(so *socktest.Status) (socktest.AfterFilter, error) {
+		if err, ok := <-syserr; ok {
+			return nil, err
+		}
+		return nil, nil
+	})
+	defer sw.Set(socktest.FilterAccept, nil)
+
+	operr := make(chan error, 1)
+	handler := func(ls *localServer, ln Listener) {
+		defer close(operr)
+		c, err := ln.Accept()
+		if err != nil {
+			if perr := parseAcceptError(err); perr != nil {
+				operr <- perr
+			}
+			operr <- err
+			return
+		}
+		c.Close()
+	}
+	ls, err := newLocalServer("tcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ls.teardown()
+	if err := ls.buildup(handler); err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := Dial(ls.Listener.Addr().Network(), ls.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+
+	for err := range operr {
+		t.Error(err)
+	}
 }

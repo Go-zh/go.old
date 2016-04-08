@@ -45,7 +45,7 @@ func newFD(sysfd, family, sotype int, net string) (*netFD, error) {
 }
 
 func (fd *netFD) init() error {
-	if err := fd.pd.Init(fd); err != nil {
+	if err := fd.pd.init(fd); err != nil {
 		return err
 	}
 	return nil
@@ -68,7 +68,7 @@ func (fd *netFD) name() string {
 	return fd.net + ":" + ls + "->" + rs
 }
 
-func (fd *netFD) connect(la, ra syscall.Sockaddr, deadline time.Time) error {
+func (fd *netFD) connect(la, ra syscall.Sockaddr, deadline time.Time, cancel <-chan struct{}) error {
 	// Do not need to call fd.writeLock here,
 	// because fd is not yet accessible to user,
 	// so no concurrent operations are possible.
@@ -102,6 +102,23 @@ func (fd *netFD) connect(la, ra syscall.Sockaddr, deadline time.Time) error {
 		fd.setWriteDeadline(deadline)
 		defer fd.setWriteDeadline(noDeadline)
 	}
+	if cancel != nil {
+		done := make(chan bool)
+		defer func() {
+			// This is unbuffered; wait for the goroutine before returning.
+			done <- true
+		}()
+		go func() {
+			select {
+			case <-cancel:
+				// Force the runtime's poller to immediately give
+				// up waiting for writability.
+				fd.setWriteDeadline(aLongTimeAgo)
+				<-done
+			case <-done:
+			}
+		}()
+	}
 	for {
 		// Performing multiple connect system calls on a
 		// non-blocking socket under Unix variants does not
@@ -111,7 +128,12 @@ func (fd *netFD) connect(la, ra syscall.Sockaddr, deadline time.Time) error {
 		// SO_ERROR socket option to see if the connection
 		// succeeded or failed. See issue 7474 for further
 		// details.
-		if err := fd.pd.WaitWrite(); err != nil {
+		if err := fd.pd.waitWrite(); err != nil {
+			select {
+			case <-cancel:
+				return errCanceled
+			default:
+			}
 			return err
 		}
 		nerr, err := getsockoptIntFunc(fd.sysfd, syscall.SOL_SOCKET, syscall.SO_ERROR)
@@ -121,7 +143,16 @@ func (fd *netFD) connect(la, ra syscall.Sockaddr, deadline time.Time) error {
 		switch err := syscall.Errno(nerr); err {
 		case syscall.EINPROGRESS, syscall.EALREADY, syscall.EINTR:
 		case syscall.Errno(0), syscall.EISCONN:
-			return nil
+			if runtime.GOOS != "darwin" {
+				return nil
+			}
+			// See golang.org/issue/14548.
+			// On Darwin, multiple connect system calls on
+			// a non-blocking socket never harm SO_ERROR.
+			switch err := connectFunc(fd.sysfd, ra); err {
+			case nil, syscall.EISCONN:
+				return nil
+			}
 		default:
 			return os.NewSyscallError("getsockopt", err)
 		}
@@ -131,71 +162,22 @@ func (fd *netFD) connect(la, ra syscall.Sockaddr, deadline time.Time) error {
 func (fd *netFD) destroy() {
 	// Poller may want to unregister fd in readiness notification mechanism,
 	// so this must be executed before closeFunc.
-	fd.pd.Close()
+	fd.pd.close()
 	closeFunc(fd.sysfd)
 	fd.sysfd = -1
 	runtime.SetFinalizer(fd, nil)
 }
 
-// Add a reference to this fd.
-// Returns an error if the fd cannot be used.
-func (fd *netFD) incref() error {
-	if !fd.fdmu.Incref() {
-		return errClosing
-	}
-	return nil
-}
-
-// Remove a reference to this FD and close if we've been asked to do so
-// (and there are no references left).
-func (fd *netFD) decref() {
-	if fd.fdmu.Decref() {
-		fd.destroy()
-	}
-}
-
-// Add a reference to this fd and lock for reading.
-// Returns an error if the fd cannot be used.
-func (fd *netFD) readLock() error {
-	if !fd.fdmu.RWLock(true) {
-		return errClosing
-	}
-	return nil
-}
-
-// Unlock for reading and remove a reference to this FD.
-func (fd *netFD) readUnlock() {
-	if fd.fdmu.RWUnlock(true) {
-		fd.destroy()
-	}
-}
-
-// Add a reference to this fd and lock for writing.
-// Returns an error if the fd cannot be used.
-func (fd *netFD) writeLock() error {
-	if !fd.fdmu.RWLock(false) {
-		return errClosing
-	}
-	return nil
-}
-
-// Unlock for writing and remove a reference to this FD.
-func (fd *netFD) writeUnlock() {
-	if fd.fdmu.RWUnlock(false) {
-		fd.destroy()
-	}
-}
-
 func (fd *netFD) Close() error {
-	if !fd.fdmu.IncrefAndClose() {
+	if !fd.fdmu.increfAndClose() {
 		return errClosing
 	}
 	// Unblock any I/O.  Once it all unblocks and returns,
 	// so that it cannot be referring to fd.sysfd anymore,
-	// the final decref will close fd.sysfd.  This should happen
+	// the final decref will close fd.sysfd. This should happen
 	// fairly quickly, since all the I/O is non-blocking, and any
 	// attempts to block in the pollDesc will return errClosing.
-	fd.pd.Evict()
+	fd.pd.evict()
 	fd.decref()
 	return nil
 }
@@ -221,7 +203,7 @@ func (fd *netFD) Read(p []byte) (n int, err error) {
 		return 0, err
 	}
 	defer fd.readUnlock()
-	if err := fd.pd.PrepareRead(); err != nil {
+	if err := fd.pd.prepareRead(); err != nil {
 		return 0, err
 	}
 	for {
@@ -229,7 +211,7 @@ func (fd *netFD) Read(p []byte) (n int, err error) {
 		if err != nil {
 			n = 0
 			if err == syscall.EAGAIN {
-				if err = fd.pd.WaitRead(); err == nil {
+				if err = fd.pd.waitRead(); err == nil {
 					continue
 				}
 			}
@@ -248,7 +230,7 @@ func (fd *netFD) readFrom(p []byte) (n int, sa syscall.Sockaddr, err error) {
 		return 0, nil, err
 	}
 	defer fd.readUnlock()
-	if err := fd.pd.PrepareRead(); err != nil {
+	if err := fd.pd.prepareRead(); err != nil {
 		return 0, nil, err
 	}
 	for {
@@ -256,7 +238,7 @@ func (fd *netFD) readFrom(p []byte) (n int, sa syscall.Sockaddr, err error) {
 		if err != nil {
 			n = 0
 			if err == syscall.EAGAIN {
-				if err = fd.pd.WaitRead(); err == nil {
+				if err = fd.pd.waitRead(); err == nil {
 					continue
 				}
 			}
@@ -275,7 +257,7 @@ func (fd *netFD) readMsg(p []byte, oob []byte) (n, oobn, flags int, sa syscall.S
 		return 0, 0, 0, nil, err
 	}
 	defer fd.readUnlock()
-	if err := fd.pd.PrepareRead(); err != nil {
+	if err := fd.pd.prepareRead(); err != nil {
 		return 0, 0, 0, nil, err
 	}
 	for {
@@ -283,7 +265,7 @@ func (fd *netFD) readMsg(p []byte, oob []byte) (n, oobn, flags int, sa syscall.S
 		if err != nil {
 			// TODO(dfc) should n and oobn be set to 0
 			if err == syscall.EAGAIN {
-				if err = fd.pd.WaitRead(); err == nil {
+				if err = fd.pd.waitRead(); err == nil {
 					continue
 				}
 			}
@@ -302,7 +284,7 @@ func (fd *netFD) Write(p []byte) (nn int, err error) {
 		return 0, err
 	}
 	defer fd.writeUnlock()
-	if err := fd.pd.PrepareWrite(); err != nil {
+	if err := fd.pd.prepareWrite(); err != nil {
 		return 0, err
 	}
 	for {
@@ -315,7 +297,7 @@ func (fd *netFD) Write(p []byte) (nn int, err error) {
 			break
 		}
 		if err == syscall.EAGAIN {
-			if err = fd.pd.WaitWrite(); err == nil {
+			if err = fd.pd.waitWrite(); err == nil {
 				continue
 			}
 		}
@@ -338,13 +320,13 @@ func (fd *netFD) writeTo(p []byte, sa syscall.Sockaddr) (n int, err error) {
 		return 0, err
 	}
 	defer fd.writeUnlock()
-	if err := fd.pd.PrepareWrite(); err != nil {
+	if err := fd.pd.prepareWrite(); err != nil {
 		return 0, err
 	}
 	for {
 		err = syscall.Sendto(fd.sysfd, p, 0, sa)
 		if err == syscall.EAGAIN {
-			if err = fd.pd.WaitWrite(); err == nil {
+			if err = fd.pd.waitWrite(); err == nil {
 				continue
 			}
 		}
@@ -364,13 +346,13 @@ func (fd *netFD) writeMsg(p []byte, oob []byte, sa syscall.Sockaddr) (n int, oob
 		return 0, 0, err
 	}
 	defer fd.writeUnlock()
-	if err := fd.pd.PrepareWrite(); err != nil {
+	if err := fd.pd.prepareWrite(); err != nil {
 		return 0, 0, err
 	}
 	for {
 		n, err = syscall.SendmsgN(fd.sysfd, p, oob, sa, 0)
 		if err == syscall.EAGAIN {
-			if err = fd.pd.WaitWrite(); err == nil {
+			if err = fd.pd.waitWrite(); err == nil {
 				continue
 			}
 		}
@@ -393,7 +375,7 @@ func (fd *netFD) accept() (netfd *netFD, err error) {
 
 	var s int
 	var rsa syscall.Sockaddr
-	if err = fd.pd.PrepareRead(); err != nil {
+	if err = fd.pd.prepareRead(); err != nil {
 		return nil, err
 	}
 	for {
@@ -405,7 +387,7 @@ func (fd *netFD) accept() (netfd *netFD, err error) {
 			}
 			switch nerr.Err {
 			case syscall.EAGAIN:
-				if err = fd.pd.WaitRead(); err == nil {
+				if err = fd.pd.waitRead(); err == nil {
 					continue
 				}
 			case syscall.ECONNABORTED:
@@ -446,7 +428,7 @@ func dupCloseOnExec(fd int) (newfd int, err error) {
 			// and fcntl there falls back (undocumented)
 			// to doing an ioctl instead, returning EBADF
 			// in this case because fd is not of the
-			// expected device fd type.  Treat it as
+			// expected device fd type. Treat it as
 			// EINVAL instead, so we fall back to the
 			// normal dup path.
 			// TODO: only do this on 10.6 if we can detect 10.6

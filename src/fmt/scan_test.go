@@ -78,12 +78,6 @@ var (
 	renamedComplex128Val renamedComplex128
 )
 
-type FloatTest struct {
-	text string
-	in   float64
-	out  float64
-}
-
 // Xs accepts any non-empty run of the verb character
 
 // Xs 接受任何非空的一系列占位符
@@ -543,7 +537,7 @@ func testScanfMulti(name string, t *testing.T) {
 		if err != nil {
 			if test.err == "" {
 				t.Errorf("got error scanning (%q, %q): %q", test.format, test.text, err)
-			} else if strings.Index(err.Error(), test.err) < 0 {
+			} else if !strings.Contains(err.Error(), test.err) {
 				t.Errorf("got wrong error scanning (%q, %q): %q; expected %q", test.format, test.text, err, test.err)
 			}
 			continue
@@ -641,7 +635,7 @@ func TestScanNotPointer(t *testing.T) {
 	_, err := Fscan(r, a)
 	if err == nil {
 		t.Error("expected error scanning non-pointer")
-	} else if strings.Index(err.Error(), "pointer") < 0 {
+	} else if !strings.Contains(err.Error(), "pointer") {
 		t.Errorf("expected pointer error scanning non-pointer, got: %s", err)
 	}
 }
@@ -651,7 +645,7 @@ func TestScanlnNoNewline(t *testing.T) {
 	_, err := Sscanln("1 x\n", &a)
 	if err == nil {
 		t.Error("expected error scanning string missing newline")
-	} else if strings.Index(err.Error(), "newline") < 0 {
+	} else if !strings.Contains(err.Error(), "newline") {
 		t.Errorf("expected newline error scanning string missing newline, got: %s", err)
 	}
 }
@@ -662,7 +656,7 @@ func TestScanlnWithMiddleNewline(t *testing.T) {
 	_, err := Fscanln(r, &a, &b)
 	if err == nil {
 		t.Error("expected error scanning string with extra newline")
-	} else if strings.Index(err.Error(), "newline") < 0 {
+	} else if !strings.Contains(err.Error(), "newline") {
 		t.Errorf("expected newline error scanning string with extra newline, got: %s", err)
 	}
 }
@@ -804,7 +798,7 @@ func TestUnreadRuneWithBufio(t *testing.T) {
 
 type TwoLines string
 
-// Scan attempts to read two lines into the object.  Scanln should prevent this
+// Scan attempts to read two lines into the object. Scanln should prevent this
 // because it stops at newline; Scan and Scanf should be fine.
 
 // 尝试将两行读取到对象中。Scanln 应当会阻止它，因为她会在换行符处停止；
@@ -1056,6 +1050,18 @@ func BenchmarkScanRecursiveInt(b *testing.B) {
 	}
 }
 
+func BenchmarkScanRecursiveIntReaderWrapper(b *testing.B) {
+	b.ResetTimer()
+	ints := makeInts(intCount)
+	var r RecursiveInt
+	for i := b.N - 1; i >= 0; i-- {
+		buf := newReader(string(ints))
+		b.StartTimer()
+		Fscan(buf, &r)
+		b.StopTimer()
+	}
+}
+
 // Issue 9124.
 // %x on bytes couldn't handle non-space bytes terminating the scan.
 func TestHexBytes(t *testing.T) {
@@ -1169,22 +1175,14 @@ func TestScanfNewlineMatchFormat(t *testing.T) {
 		count  int
 		ok     bool
 	}{
-		{"newline in both", "1\n2", "%d\n%d", 2, true},
+		{"newline in both", "1\n2", "%d\n%d\n", 2, true},
 		{"newline in input", "1\n2", "%d %d", 1, false},
-		{"extra newline in format", "1\n2", "%d\n%d\n", 2, false},
-		{"newline-newline in both", "1\n\n2", "%d\n\n%d", 2, true},
-		{"newline-newline in format", "1\n2", "%d\n\n%d", 1, false},
-		{"newline-newline in input", "1\n\n2", "%d\n%d", 1, false},
 		{"space-newline in input", "1 \n2", "%d %d", 1, false},
 		{"newline in format", "1 2", "%d\n%d", 1, false},
 		{"space-newline in format", "1 2", "%d \n%d", 1, false},
 		{"space-newline in both", "1 \n2", "%d \n%d", 2, true},
 		{"extra space in format", "1\n2", "%d\n %d", 2, true},
 		{"two extra spaces in format", "1\n2", "%d \n %d", 2, true},
-		{"newline start in both", "\n1 2", "\n%d %d", 2, true},
-		{"newline start in format", "1 2", "\n%d %d", 0, false},
-		{"newline start in input", "\n1 2", "%d %d", 0, false},
-		{"space-newline start in input", " \n1 2", "\n%d %d", 2, true},
 	}
 	for _, test := range tests {
 		n, err := Sscanf(test.text, test.format, &a, &b)

@@ -26,8 +26,35 @@ TEXT runtime·rt0_go(SB),NOSPLIT,$0
 	MOVL	SP, (g_stack+stack_hi)(BP)
 	
 	// find out information about the processor we're on
+#ifdef GOOS_nacl // NaCl doesn't like PUSHFL/POPFL
+	JMP 	has_cpuid
+#else
+	// first see if CPUID instruction is supported.
+	PUSHFL
+	PUSHFL
+	XORL	$(1<<21), 0(SP) // flip ID bit
+	POPFL
+	PUSHFL
+	POPL	AX
+	XORL	0(SP), AX
+	POPFL	// restore EFLAGS
+	TESTL	$(1<<21), AX
+	JNE 	has_cpuid
+#endif
+
+bad_proc: // show that the program requires MMX.
+	MOVL	$2, 0(SP)
+	MOVL	$bad_proc_msg<>(SB), 4(SP)
+	MOVL	$0x3d, 8(SP)
+	CALL	runtime·write(SB)
+	MOVL	$1, 0(SP)
+	CALL	runtime·exit(SB)
+	INT	$3
+
+has_cpuid:
 	MOVL	$0, AX
 	CPUID
+	MOVL	AX, SI
 	CMPL	AX, $0
 	JE	nocpuinfo
 
@@ -43,11 +70,25 @@ TEXT runtime·rt0_go(SB),NOSPLIT,$0
 	MOVB	$1, runtime·lfenceBeforeRdtsc(SB)
 notintel:
 
+	// Load EAX=1 cpuid flags
 	MOVL	$1, AX
 	CPUID
 	MOVL	CX, AX // Move to global variable clobbers CX when generating PIC
 	MOVL	AX, runtime·cpuid_ecx(SB)
 	MOVL	DX, runtime·cpuid_edx(SB)
+
+	// Check for MMX support
+	TESTL	$(1<<23), DX	// MMX
+	JZ 	bad_proc
+
+	// Load EAX=7/ECX=0 cpuid flags
+	CMPL	SI, $7
+	JLT	nocpuinfo
+	MOVL	$7, AX
+	MOVL	$0, CX
+	CPUID
+	MOVL	BX, runtime·cpuid_ebx7(SB)
+
 nocpuinfo:	
 
 	// if there is an _cgo_init, call it to let it
@@ -129,6 +170,17 @@ ok:
 	INT $3
 	RET
 
+DATA	bad_proc_msg<>+0x00(SB)/8, $"This pro"
+DATA	bad_proc_msg<>+0x08(SB)/8, $"gram can"
+DATA	bad_proc_msg<>+0x10(SB)/8, $" only be"
+DATA	bad_proc_msg<>+0x18(SB)/8, $" run on "
+DATA	bad_proc_msg<>+0x20(SB)/8, $"processe"
+DATA	bad_proc_msg<>+0x28(SB)/8, $"rs with "
+DATA	bad_proc_msg<>+0x30(SB)/8, $"MMX supp"
+DATA	bad_proc_msg<>+0x38(SB)/4, $"ort."
+DATA	bad_proc_msg<>+0x3c(SB)/1, $0xa
+GLOBL	bad_proc_msg<>(SB), RODATA, $0x3d
+
 DATA	runtime·mainPC+0(SB)/4,$runtime·main(SB)
 GLOBL	runtime·mainPC(SB),RODATA,$4
 
@@ -184,7 +236,7 @@ TEXT runtime·gogo(SB), NOSPLIT, $0-4
 
 // func mcall(fn func(*g))
 // Switch to m->g0's stack, call fn(g).
-// Fn must never return.  It should gogo(&g->sched)
+// Fn must never return. It should gogo(&g->sched)
 // to keep running g.
 TEXT runtime·mcall(SB), NOSPLIT, $0-4
 	MOVL	fn+0(FP), DI
@@ -217,7 +269,7 @@ TEXT runtime·mcall(SB), NOSPLIT, $0-4
 	RET
 
 // systemstack_switch is a dummy routine that systemstack leaves at the bottom
-// of the G stack.  We need to distinguish the routine that
+// of the G stack. We need to distinguish the routine that
 // lives at the bottom of the G stack from the one that lives
 // at the top of the system stack because the one at the top of
 // the system stack terminates the stack walk (see topofstack()).
@@ -249,7 +301,7 @@ TEXT runtime·systemstack(SB), NOSPLIT, $0-4
 	CALL	AX
 
 switch:
-	// save our state in g->sched.  Pretend to
+	// save our state in g->sched. Pretend to
 	// be systemstack_switch if the G stack is scanned.
 	MOVL	$runtime·systemstack_switch(SB), (g_sched+gobuf_pc)(AX)
 	MOVL	SP, (g_sched+gobuf_sp)(AX)
@@ -858,7 +910,7 @@ final1:
 	RET
 
 endofpage:
-	// address ends in 1111xxxx.  Might be up against
+	// address ends in 1111xxxx. Might be up against
 	// a page boundary, so load ending at last byte.
 	// Then shift bytes down using pshufb.
 	MOVOU	-32(AX)(BX*1), X1
@@ -1103,7 +1155,7 @@ DATA masks<>+0xfc(SB)/4, $0x00ffffff
 
 GLOBL masks<>(SB),RODATA,$256
 
-// these are arguments to pshufb.  They move data down from
+// these are arguments to pshufb. They move data down from
 // the high bytes of the register to the low bytes of the register.
 // index is how many bytes to move.
 DATA shifts<>+0x00(SB)/4, $0x00000000
@@ -1197,12 +1249,18 @@ TEXT ·checkASM(SB),NOSPLIT,$0-1
 	SETEQ	ret+0(FP)
 	RET
 
-TEXT runtime·memeq(SB),NOSPLIT,$0-13
+// memequal(p, q unsafe.Pointer, size uintptr) bool
+TEXT runtime·memequal(SB),NOSPLIT,$0-13
 	MOVL	a+0(FP), SI
 	MOVL	b+4(FP), DI
+	CMPL	SI, DI
+	JEQ	eq
 	MOVL	size+8(FP), BX
 	LEAL	ret+12(FP), AX
 	JMP	runtime·memeqbody(SB)
+eq:
+	MOVB    $1, ret+12(FP)
+	RET
 
 // memequal_varlen(a, b unsafe.Pointer) bool
 TEXT runtime·memequal_varlen(SB),NOSPLIT,$0-9
@@ -1322,7 +1380,7 @@ small:
 	MOVL	(SI), SI
 	JMP	si_finish
 si_high:
-	// address ends in 111111xx.  Load up to bytes we want, move to correct position.
+	// address ends in 111111xx. Load up to bytes we want, move to correct position.
 	MOVL	-4(SI)(BX*1), SI
 	SHRL	CX, SI
 si_finish:
@@ -1397,7 +1455,8 @@ TEXT strings·IndexByte(SB),NOSPLIT,$0-16
 TEXT runtime·cmpbody(SB),NOSPLIT,$0-0
 	MOVL	DX, BP
 	SUBL	BX, DX // DX = blen-alen
-	CMOVLGT	BX, BP // BP = min(alen, blen)
+	JLE	2(PC)
+	MOVL	BX, BP // BP = min(alen, blen)
 	CMPL	SI, DI
 	JEQ	allsame
 	CMPL	BP, $4
@@ -1516,7 +1575,8 @@ TEXT runtime·fastrand1(SB), NOSPLIT, $0-4
 	ADDL	DX, DX
 	MOVL	DX, BX
 	XORL	$0x88888eef, DX
-	CMOVLMI	BX, DX
+	JPL	2(PC)
+	MOVL	BX, DX
 	MOVL	DX, m_fastrand(AX)
 	MOVL	DX, ret+0(FP)
 	RET
@@ -1556,7 +1616,7 @@ TEXT runtime·prefetcht2(SB),NOSPLIT,$0-4
 TEXT runtime·prefetchnta(SB),NOSPLIT,$0-4
 	RET
 
-// Add a module's moduledata to the linked list of moduledata objects.  This
+// Add a module's moduledata to the linked list of moduledata objects. This
 // is called from .init_array by a function generated in the linker and so
 // follows the platform ABI wrt register preservation -- it only touches AX,
 // CX (implicitly) and DX, but it does not follow the ABI wrt arguments:

@@ -30,10 +30,20 @@ func testUnixAddr() string {
 
 func newLocalListener(network string) (Listener, error) {
 	switch network {
-	case "tcp", "tcp4", "tcp6":
+	case "tcp":
+		if supportsIPv4 {
+			if ln, err := Listen("tcp4", "127.0.0.1:0"); err == nil {
+				return ln, nil
+			}
+		}
+		if supportsIPv6 {
+			return Listen("tcp6", "[::1]:0")
+		}
+	case "tcp4":
 		if supportsIPv4 {
 			return Listen("tcp4", "127.0.0.1:0")
 		}
+	case "tcp6":
 		if supportsIPv6 {
 			return Listen("tcp6", "[::1]:0")
 		}
@@ -139,13 +149,6 @@ func (dss *dualStackServer) buildup(handler func(*dualStackServer, Listener)) er
 			close(dss.lns[i].done)
 		}(i)
 	}
-	return nil
-}
-
-func (dss *dualStackServer) putConn(c Conn) error {
-	dss.cmu.Lock()
-	dss.cs = append(dss.cs, c)
-	dss.cmu.Unlock()
 	return nil
 }
 

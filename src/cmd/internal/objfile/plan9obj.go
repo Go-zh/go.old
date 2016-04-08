@@ -1,4 +1,4 @@
-// Copyright 2014 The Go Authors.  All rights reserved.
+// Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -7,7 +7,9 @@
 package objfile
 
 import (
+	"debug/dwarf"
 	"debug/plan9obj"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -143,4 +145,8 @@ func (f *plan9File) goarch() string {
 		return "arm"
 	}
 	return ""
+}
+
+func (f *plan9File) dwarf() (*dwarf.Data, error) {
+	return nil, errors.New("no DWARF data in Plan 9 file")
 }

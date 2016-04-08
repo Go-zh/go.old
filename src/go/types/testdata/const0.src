@@ -239,7 +239,7 @@ const (
 
 type A [iota /* ERROR "cannot use iota" */ ]int
 
-// constant expressions with operands accross different
+// constant expressions with operands across different
 // constant declarations must use the right iota values
 const (
 	_c0 = iota
@@ -279,4 +279,17 @@ func _() {
 	const x = iota /* ERROR "is not constant" */
 	var y = iota
 	_ = y
+}
+
+// constant arithmetic precision and rounding must lead to expected (integer) results
+var _ = []int64{
+	0.0005 * 1e9,
+	0.001 * 1e9,
+	0.005 * 1e9,
+	0.01 * 1e9,
+	0.05 * 1e9,
+	0.1 * 1e9,
+	0.5 * 1e9,
+	1 * 1e9,
+	5 * 1e9,
 }

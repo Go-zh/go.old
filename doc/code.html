@@ -55,6 +55,44 @@ A similar explanation is available as a
 
 <h2 id="组织">代码的组织</h2>
 
+
+<div class="english">
+<h3 id="Overview">Overview</h3>
+</div>
+
+<h3 id="概览">概览</h3>
+
+<div class="english">
+<ul>
+	<li>Go programmers typically keep all their Go code in a single <i>workspace</i>.</li>
+	<li>A workspace contains many version control <i>repositories</i>
+		(managed by Git, for example).</li>
+	<li>Each repository contains one or more <i>packages</i>.</li>
+	<li>Each package consists of one or more Go source files in a single directory.</li>
+	<li>The path to a package's directory determines its <i>import path</i>.</li>
+</ul>
+</div>
+
+<ul>
+	<li>Go 程序员通常将他们的所有 Go 代码保存在单个<b>工作空间</b>内。</li>
+	<li>一个工作空间包含几个通过版本控制软件（例如 Git）管理的<b>源码库</b>。</li>
+	<li>每个源码库包含一个或多个<b>包</b>。</li>
+	<li>每个包由单个目录中的一个或多个 Go 源码文件组成。</li>
+	<li>包目录的路径决定了它的<b>导入路径</b>。</li>
+</ul>
+
+<div class="english">
+<p>
+Note that this differs from other programming environments in which every
+project has a separate workspace and workspaces are closely tied to version
+control repositories.
+</p>
+</div>
+
+<p>
+注意这种方式与其它编程环境的区别，其它环境中每个项目都有一个独立的工作空间，而工作空间和版本控制仓库紧紧地捆绑在一起。
+</p>
+
 <div class="english">
 <h3 id="Workspaces">Workspaces</h3>
 </div>
@@ -63,31 +101,17 @@ A similar explanation is available as a
 
 <div class="english">
 <p>
-The <code>go</code> tool is designed to work with open source code maintained
-in public repositories. Although you don't need to publish your code, the model
-for how the environment is set up works the same whether you do or not.
-</p>
-</div>
-
-<p>
-<code>go</code> 工具为公共代码仓库中维护的开源代码而设计。
-无论你会不会公布代码，该模型设置工作环境的方法都是相同的。
-</p>
-
-<div class="english">
-<p>
-Go code must be kept inside a <i>workspace</i>.
 A workspace is a directory hierarchy with three directories at its root:
 </p>
 </div>
 
 <p>
-Go代码必须放在<b>工作空间</b>内。它其实就是一个目录，其中包含三个子目录：
+工作空间就是一个目录，其中包含三个子目录：
 </p>
 
 <div class="english">
 <ul>
-<li><code>src</code> contains Go source files organized into packages (one package per directory),
+<li><code>src</code> contains Go source files,
 <li><code>pkg</code> contains package objects, and
 <li><code>bin</code> contains executable commands.
 </ul>
@@ -154,55 +178,72 @@ src/
 	stringutil/
 		reverse.go             # package source
 		reverse_test.go        # test source
+	<a href="https://golang.org/x/image/">golang.org/x/image/</a>
+		.git/                      # Git repository metadata
+	bmp/
+		reader.go              # package source
+		writer.go              # package source
+	... (many more repositories and packages omitted) ...
 </pre>
 </div>
 
 <pre>
 bin/
-	streak                         # 可执行命令
-	todo                           # 可执行命令
+	hello                          # 可执行命令
+	outyet                         # 可执行命令
 pkg/
 	linux_amd64/
-		code.google.com/p/goauth2/
-			oauth.a                # 包对象
-		github.com/nf/todo/
-			task.a                 # 包对象
+		github.com/golang/example/
+			stringutil.a           # 包目标文件
 src/
-	code.google.com/p/goauth2/
-		.hg/                       # mercurial 代码库元数据
-		oauth/
-			oauth.go               # 包源码
-			oauth_test.go          # 测试源码
-	github.com/nf/
-		streak/
-		.git/                      # git 代码库元数据
-			oauth.go               # 命令源码
-			streak.go              # 命令源码
-		todo/
-		.git/                      # git 代码库元数据
-			task/
-				task.go            # 包源码
-			todo.go                # 命令源码
+	<a href="https://github.com/golang/example/">github.com/golang/example/</a>
+		.git/                      # Git 源码库元数据
+	hello/
+		hello.go               # 命令源码
+	outyet/
+		main.go                # 命令源码
+		main_test.go           # 测试源码
+	stringutil/
+		reverse.go             # 包源码
+		reverse_test.go        # 测试源码
+	<a href="https://golang.org/x/image/">golang.org/x/image/</a>
+		.git/                      # Git 源码库源文件
+	bmp/
+		reader.go              # 包源码
+		writer.go              # 包源码
+	...（以及更多源码和包）...
 </pre>
 
 <div class="english">
 <p>
-This workspace contains one repository (<code>example</code>)
-comprising two commands (<code>hello</code> and <code>outyet</code>)
-and one library (<code>stringutil</code>).
+The tree above shows a workspace containing two repositories
+(<code>example</code> and <code>image</code>).
+The <code>example</code> repository contains two commands (<code>hello</code>
+and <code>outyet</code>) and one library (<code>stringutil</code>).
+The <code>image</code> repository contains the <code>bmp</code> package
+and <a href="https://godoc.org/golang.org/x/image">several others</a>.
 </p>
+</div>
 
 <p>
-A typical workspace would contain many source repositories containing many
+上面三个目录展示了一个工作空间，它包含两个源码库（<code>example</code>
+和 <code>image</code>）。<code>example</code> 库包含两个命令（<code>hello</code>
+和 <code>outyet</code>）和一个库（<code>stringutil</code>）。
+<code>image</code> 库包含 <code>bmp</code> 包和
+<a href="https://godoc.org/golang.org/x/image">几个其它的包</a>。
+</p>
+
+<div class="english">
+<p>
+A typical workspace contains many source repositories containing many
 packages and commands. Most Go programmers keep <i>all</i> their Go source code
 and dependencies in a single workspace.
 </p>
 </div>
 
 <p>
-此工作空间包含三个代码库（<code>goauth2</code>、<code>streak</code> 和
-<code>todo</code>），两个命令（<code>streak</code> 和 <code>todo</code>）
-以及两个库（<code>oauth</code> 和 <code>task</code>）。
+一个典型的工作空间包含几个源码库，库中又包含一些包和命令。大部分 Go
+程序员会将他们的<b>所有</b> Go 源码及其依赖保存在一个工作空间内。
 </p>
 
 <div class="english">
@@ -285,8 +326,27 @@ please see
 <h3 id="包路径">包路径</h3>
 
 <div class="english">
+<h3 id="ImportPaths">Import paths</h3>
+</div>
+
+<h3 id="导入路径">导入路径</h3>
+
+<div class="english">
 <p>
-The packages from the standard library are given short paths such as
+An <i>import path</i> is a string that uniquely identifies a package.
+A package's import path corresponds to its location inside a workspace
+or in a remote repository (explained below).
+</p>
+</div>
+
+<p>
+<b>导入路径</b>是用来唯一确定一个包的字符串。
+包的导入路径与它在工作空间或远程代码库内的位置一致（稍后解释）。
+</p>
+
+<div class="english">
+<p>
+The packages from the standard library are given short import paths such as
 <code>"fmt"</code> and <code>"net/http"</code>.
 For your own packages, you must choose a base path that is unlikely to
 collide with future additions to the standard library or other external

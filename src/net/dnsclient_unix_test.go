@@ -67,7 +67,7 @@ var specialDomainNameTests = []struct {
 
 	// Name resolution APIs and libraries should recognize the
 	// followings as special and should not send any queries.
-	// Though, we test those names here for verifying nagative
+	// Though, we test those names here for verifying negative
 	// answers at DNS query-response interaction level.
 	{"localhost.", dnsTypeALL, dnsRcodeNameError},
 	{"invalid.", dnsTypeALL, dnsRcodeNameError},
@@ -80,7 +80,7 @@ func TestSpecialDomainName(t *testing.T) {
 
 	server := "8.8.8.8:53"
 	for _, tt := range specialDomainNameTests {
-		msg, err := exchange(server, tt.name, tt.qtype, 0)
+		msg, err := exchange(server, tt.name, tt.qtype, 3*time.Second)
 		if err != nil {
 			t.Error(err)
 			continue
@@ -91,6 +91,57 @@ func TestSpecialDomainName(t *testing.T) {
 			t.Errorf("got %v from %v; want %v", msg.rcode, server, tt.rcode)
 			continue
 		}
+	}
+}
+
+// Issue 13705: don't try to resolve onion addresses, etc
+func TestAvoidDNSName(t *testing.T) {
+	tests := []struct {
+		name  string
+		avoid bool
+	}{
+		{"foo.com", false},
+		{"foo.com.", false},
+
+		{"foo.onion.", true},
+		{"foo.onion", true},
+		{"foo.ONION", true},
+		{"foo.ONION.", true},
+
+		{"foo.local.", true},
+		{"foo.local", true},
+		{"foo.LOCAL", true},
+		{"foo.LOCAL.", true},
+
+		{"", true}, // will be rejected earlier too
+
+		// Without stuff before onion/local, they're fine to
+		// use DNS. With a search path,
+		// "onion.vegegtables.com" can use DNS. Without a
+		// search path (or with a trailing dot), the queries
+		// are just kinda useless, but don't reveal anything
+		// private.
+		{"local", false},
+		{"onion", false},
+		{"local.", false},
+		{"onion.", false},
+	}
+	for _, tt := range tests {
+		got := avoidDNS(tt.name)
+		if got != tt.avoid {
+			t.Errorf("avoidDNS(%q) = %v; want %v", tt.name, got, tt.avoid)
+		}
+	}
+}
+
+// Issue 13705: don't try to resolve onion addresses, etc
+func TestLookupTorOnion(t *testing.T) {
+	addrs, err := goLookupIP("foo.onion")
+	if len(addrs) > 0 {
+		t.Errorf("unexpected addresses: %v", addrs)
+	}
+	if err != nil {
+		t.Fatalf("lookup = %v; want nil", err)
 	}
 }
 
@@ -124,20 +175,20 @@ func (conf *resolvConfTest) writeAndUpdate(lines []string) error {
 		return err
 	}
 	f.Close()
-	if err := conf.forceUpdate(conf.path); err != nil {
+	if err := conf.forceUpdate(conf.path, time.Now().Add(time.Hour)); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (conf *resolvConfTest) forceUpdate(name string) error {
+func (conf *resolvConfTest) forceUpdate(name string, lastChecked time.Time) error {
 	dnsConf := dnsReadConfig(name)
 	conf.mu.Lock()
 	conf.dnsConfig = dnsConf
 	conf.mu.Unlock()
 	for i := 0; i < 5; i++ {
 		if conf.tryAcquireSema() {
-			conf.lastChecked = time.Time{}
+			conf.lastChecked = lastChecked
 			conf.releaseSema()
 			return nil
 		}
@@ -153,7 +204,7 @@ func (conf *resolvConfTest) servers() []string {
 }
 
 func (conf *resolvConfTest) teardown() error {
-	err := conf.forceUpdate("/etc/resolv.conf")
+	err := conf.forceUpdate("/etc/resolv.conf", time.Time{})
 	os.RemoveAll(conf.dir)
 	return err
 }
@@ -353,10 +404,15 @@ func TestGoLookupIPWithResolverConfig(t *testing.T) {
 			t.Error(err)
 			continue
 		}
-		conf.tryUpdate(conf.path)
 		addrs, err := goLookupIP(tt.name)
 		if err != nil {
-			if err, ok := err.(*DNSError); !ok || (err.Name != tt.error.(*DNSError).Name || err.Server != tt.error.(*DNSError).Server || err.IsTimeout != tt.error.(*DNSError).IsTimeout) {
+			// This test uses external network connectivity.
+			// We need to take care with errors on both
+			// DNS message exchange layer and DNS
+			// transport layer because goLookupIP may fail
+			// when the IP connectivty on node under test
+			// gets lost during its run.
+			if err, ok := err.(*DNSError); !ok || tt.error != nil && (err.Name != tt.error.(*DNSError).Name || err.Server != tt.error.(*DNSError).Server || err.IsTimeout != tt.error.(*DNSError).IsTimeout) {
 				t.Errorf("got %v; want %v", err, tt.error)
 			}
 			continue
@@ -375,6 +431,102 @@ func TestGoLookupIPWithResolverConfig(t *testing.T) {
 				t.Errorf("got %v; must not be IPv6 address", addr)
 			}
 		}
+	}
+}
+
+// Test that goLookupIPOrder falls back to the host file when no DNS servers are available.
+func TestGoLookupIPOrderFallbackToFile(t *testing.T) {
+	if testing.Short() || !*testExternal {
+		t.Skip("avoid external network")
+	}
+
+	// Add a config that simulates no dns servers being available.
+	conf, err := newResolvConfTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conf.writeAndUpdate([]string{}); err != nil {
+		t.Fatal(err)
+	}
+	// Redirect host file lookups.
+	defer func(orig string) { testHookHostsPath = orig }(testHookHostsPath)
+	testHookHostsPath = "testdata/hosts"
+
+	for _, order := range []hostLookupOrder{hostLookupFilesDNS, hostLookupDNSFiles} {
+		name := fmt.Sprintf("order %v", order)
+
+		// First ensure that we get an error when contacting a non-existent host.
+		_, err := goLookupIPOrder("notarealhost", order)
+		if err == nil {
+			t.Errorf("%s: expected error while looking up name not in hosts file", name)
+			continue
+		}
+
+		// Now check that we get an address when the name appears in the hosts file.
+		addrs, err := goLookupIPOrder("thor", order) // entry is in "testdata/hosts"
+		if err != nil {
+			t.Errorf("%s: expected to successfully lookup host entry", name)
+			continue
+		}
+		if len(addrs) != 1 {
+			t.Errorf("%s: expected exactly one result, but got %v", name, addrs)
+			continue
+		}
+		if got, want := addrs[0].String(), "127.1.1.1"; got != want {
+			t.Errorf("%s: address doesn't match expectation. got %v, want %v", name, got, want)
+		}
+	}
+	defer conf.teardown()
+}
+
+// Issue 12712.
+// When using search domains, return the error encountered
+// querying the original name instead of an error encountered
+// querying a generated name.
+func TestErrorForOriginalNameWhenSearching(t *testing.T) {
+	const fqdn = "doesnotexist.domain"
+
+	origTestHookDNSDialer := testHookDNSDialer
+	defer func() { testHookDNSDialer = origTestHookDNSDialer }()
+
+	conf, err := newResolvConfTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conf.teardown()
+
+	if err := conf.writeAndUpdate([]string{"search servfail"}); err != nil {
+		t.Fatal(err)
+	}
+
+	d := &fakeDNSConn{}
+	testHookDNSDialer = func(time.Duration) dnsDialer { return d }
+
+	d.rh = func(q *dnsMsg) (*dnsMsg, error) {
+		r := &dnsMsg{
+			dnsMsgHdr: dnsMsgHdr{
+				id: q.id,
+			},
+		}
+
+		switch q.question[0].Name {
+		case fqdn + ".servfail.":
+			r.rcode = dnsRcodeServerFailure
+		default:
+			r.rcode = dnsRcodeNameError
+		}
+
+		return r, nil
+	}
+
+	_, err = goLookupIP(fqdn)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+
+	want := &DNSError{Name: fqdn, Err: errNoSuchHost.Error()}
+	if err, ok := err.(*DNSError); !ok || err.Name != want.Name || err.Err != want.Err {
+		t.Errorf("got %v; want %v", err, want)
 	}
 }
 
@@ -414,4 +566,38 @@ func BenchmarkGoLookupIPWithBrokenNameServer(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		goLookupIP("www.example.com")
 	}
+}
+
+type fakeDNSConn struct {
+	// last query
+	qmu sync.Mutex // guards q
+	q   *dnsMsg
+	// reply handler
+	rh func(*dnsMsg) (*dnsMsg, error)
+}
+
+func (f *fakeDNSConn) dialDNS(n, s string) (dnsConn, error) {
+	return f, nil
+}
+
+func (f *fakeDNSConn) Close() error {
+	return nil
+}
+
+func (f *fakeDNSConn) SetDeadline(time.Time) error {
+	return nil
+}
+
+func (f *fakeDNSConn) writeDNSQuery(q *dnsMsg) error {
+	f.qmu.Lock()
+	defer f.qmu.Unlock()
+	f.q = q
+	return nil
+}
+
+func (f *fakeDNSConn) readDNSResponse() (*dnsMsg, error) {
+	f.qmu.Lock()
+	q := f.q
+	f.qmu.Unlock()
+	return f.rh(q)
 }

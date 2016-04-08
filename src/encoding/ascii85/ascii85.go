@@ -27,7 +27,7 @@ import (
 //
 // The encoding handles 4-byte chunks, using a special encoding
 // for the last fragment, so Encode is not appropriate for use on
-// individual blocks of a large data stream.  Use NewEncoder() instead.
+// individual blocks of a large data stream. Use NewEncoder() instead.
 //
 // Often, ascii85-encoded data is wrapped in <~ and ~> symbols.
 // Encode does not add these.
@@ -35,8 +35,8 @@ import (
 // Encode 编码源的最多 MaxEncodedLen(len(src)) 字节的到目标，
 // 返回实际的写入字节数。
 //
-// 通过对最后分段使用特殊的编码来操作4字节的数据块，所以 Encode
-// 用在大型数据流的私有块上是不合适的。用 NewEncoder() 替代。
+// Encode 通过对最后分段使用特殊的编码来操作4字节的数据块，
+// 所以将它用在大型数据流的私有块上是不合适的。请用 NewEncoder() 替代。
 //
 // 通常， ascii85 编码的数据用符号 <~ 和 ~> 括起来。
 // Encode 不加这些。
@@ -103,7 +103,7 @@ func Encode(dst, src []byte) int {
 // MaxEncodedLen 返回 n 源字节编码的最大长度.
 func MaxEncodedLen(n int) int { return (n + 3) / 4 * 5 }
 
-// NewEncoder returns a new ascii85 stream encoder.  Data written to
+// NewEncoder returns a new ascii85 stream encoder. Data written to
 // the returned writer will be encoded and then written to w.
 // Ascii85 encodings operate in 32-bit blocks; when finished
 // writing, the caller must Close the returned encoder to flush any
@@ -334,7 +334,8 @@ func (d *decoder) Read(p []byte) (n int, err error) {
 			}
 		}
 
-		// Out of input, out of decoded output.  Check errors.   // 输入的 out ，已解码输出的 out 。检查错误。
+		// Out of input, out of decoded output. Check errors.
+		// 输入的 out ，已解码输出的 out 。检查错误。
 		if d.err != nil {
 			return 0, d.err
 		}

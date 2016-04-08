@@ -1,4 +1,4 @@
-// Copyright 2015 The Go Authors.  All rights reserved.
+// Copyright 2015 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -26,6 +26,8 @@ const maxSendfileSize int = 4 << 20
 //
 // if handled == false, sendFile performed no work.
 func sendFile(c *netFD, r io.Reader) (written int64, err error, handled bool) {
+	return // Solaris sendfile is disabled until Issue 13892 is understood and fixed
+
 	// Solaris uses 0 as the "until EOF" value. If you pass in more bytes than the
 	// file contains, it will loop back to the beginning ad nauseam until it's sent
 	// exactly the number of bytes told to. As such, we need to know exactly how many
@@ -85,7 +87,7 @@ func sendFile(c *netFD, r io.Reader) (written int64, err error, handled bool) {
 			break
 		}
 		if err1 == syscall.EAGAIN {
-			if err1 = c.pd.WaitWrite(); err1 == nil {
+			if err1 = c.pd.waitWrite(); err1 == nil {
 				continue
 			}
 		}

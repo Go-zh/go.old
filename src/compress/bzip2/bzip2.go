@@ -27,9 +27,8 @@ type reader struct {
 	blockCRC     uint32
 	wantBlockCRC uint32
 	setupDone    bool // true if we have parsed the bzip2 header.
-	blockSize    int  // blockSize in bytes, i.e. 900 * 1024.
+	blockSize    int  // blockSize in bytes, i.e. 900 * 1000.
 	eof          bool
-	buf          []byte    // stores Burrows-Wheeler transformed data.
 	c            [256]uint // the `C' array for the inverse BWT.
 	tt           []uint32  // mirrors the `tt' array in the bzip2 source and contains the P array in the upper 24 bits.
 	tPos         uint32    // Index of the next output byte in tt.
@@ -76,7 +75,7 @@ func (bz2 *reader) setup(needMagic bool) error {
 	}
 
 	bz2.fileCRC = 0
-	bz2.blockSize = 100 * 1024 * (int(level) - '0')
+	bz2.blockSize = 100 * 1000 * (int(level) - '0')
 	if bz2.blockSize > len(bz2.tt) {
 		bz2.tt = make([]uint32, bz2.blockSize)
 	}
@@ -319,6 +318,9 @@ func (bz2 *reader) readBlock() (err error) {
 		length := br.ReadBits(5)
 		for j := range lengths {
 			for {
+				if length < 1 || length > 20 {
+					return StructuralError("Huffman length out of range")
+				}
 				if !br.ReadBit() {
 					break
 				}
@@ -327,9 +329,6 @@ func (bz2 *reader) readBlock() (err error) {
 				} else {
 					length++
 				}
-			}
-			if length < 0 || length > 20 {
-				return StructuralError("Huffman length out of range")
 			}
 			lengths[j] = uint8(length)
 		}

@@ -8,6 +8,7 @@ package http_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -20,8 +21,6 @@ import (
 	. "net/http"
 	"net/http/httptest"
 	"net/url"
-	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -83,12 +82,15 @@ func TestClient(t *testing.T) {
 	}
 }
 
-func TestClientHead(t *testing.T) {
-	defer afterTest(t)
-	ts := httptest.NewServer(robotsTxtHandler)
-	defer ts.Close()
+func TestClientHead_h1(t *testing.T) { testClientHead(t, h1Mode) }
+func TestClientHead_h2(t *testing.T) { testClientHead(t, h2Mode) }
 
-	r, err := Head(ts.URL)
+func testClientHead(t *testing.T, h2 bool) {
+	defer afterTest(t)
+	cst := newClientServerTest(t, h2, robotsTxtHandler)
+	defer cst.close()
+
+	r, err := cst.c.Head(cst.ts.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,9 +232,18 @@ func TestClientRedirects(t *testing.T) {
 		t.Errorf("with default client Do, expected error %q, got %q", e, g)
 	}
 
+	// Requests with an empty Method should also redirect (Issue 12705)
+	greq.Method = ""
+	_, err = c.Do(greq)
+	if e, g := "Get /?n=10: stopped after 10 redirects", fmt.Sprintf("%v", err); e != g {
+		t.Errorf("with default client Do and empty Method, expected error %q, got %q", e, g)
+	}
+
 	var checkErr error
 	var lastVia []*Request
-	c = &Client{CheckRedirect: func(_ *Request, via []*Request) error {
+	var lastReq *Request
+	c = &Client{CheckRedirect: func(req *Request, via []*Request) error {
+		lastReq = req
 		lastVia = via
 		return checkErr
 	}}
@@ -252,6 +263,20 @@ func TestClientRedirects(t *testing.T) {
 		t.Errorf("expected lastVia to have contained %d elements; got %d", e, g)
 	}
 
+	// Test that Request.Cancel is propagated between requests (Issue 14053)
+	creq, _ := NewRequest("HEAD", ts.URL, nil)
+	cancel := make(chan struct{})
+	creq.Cancel = cancel
+	if _, err := c.Do(creq); err != nil {
+		t.Fatal(err)
+	}
+	if lastReq == nil {
+		t.Fatal("didn't see redirect")
+	}
+	if lastReq.Cancel != cancel {
+		t.Errorf("expected lastReq to have the cancel channel set on the initial req")
+	}
+
 	checkErr = errors.New("no redirects allowed")
 	res, err = c.Get(ts.URL)
 	if urlError, ok := err.(*url.Error); !ok || urlError.Err != checkErr {
@@ -263,6 +288,33 @@ func TestClientRedirects(t *testing.T) {
 	res.Body.Close()
 	if res.Header.Get("Location") == "" {
 		t.Errorf("no Location header in Response")
+	}
+}
+
+func TestClientRedirectContext(t *testing.T) {
+	defer afterTest(t)
+	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+		Redirect(w, r, "/", StatusFound)
+	}))
+	defer ts.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	c := &Client{CheckRedirect: func(req *Request, via []*Request) error {
+		cancel()
+		if len(via) > 2 {
+			return errors.New("too many redirects")
+		}
+		return nil
+	}}
+	req, _ := NewRequest("GET", ts.URL, nil)
+	req = req.WithContext(ctx)
+	_, err := c.Do(req)
+	ue, ok := err.(*url.Error)
+	if !ok {
+		t.Fatalf("got error %T; want *url.Error")
+	}
+	if ue.Err != ExportErrRequestCanceled && ue.Err != ExportErrRequestCanceledConn {
+		t.Errorf("url.Error.Err = %v; want errRequestCanceled or errRequestCanceledConn", ue.Err)
 	}
 }
 
@@ -486,20 +538,23 @@ func (j *RecordingJar) logf(format string, args ...interface{}) {
 	fmt.Fprintf(&j.log, format, args...)
 }
 
-func TestStreamingGet(t *testing.T) {
+func TestStreamingGet_h1(t *testing.T) { testStreamingGet(t, h1Mode) }
+func TestStreamingGet_h2(t *testing.T) { testStreamingGet(t, h2Mode) }
+
+func testStreamingGet(t *testing.T, h2 bool) {
 	defer afterTest(t)
 	say := make(chan string)
-	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+	cst := newClientServerTest(t, h2, HandlerFunc(func(w ResponseWriter, r *Request) {
 		w.(Flusher).Flush()
 		for str := range say {
 			w.Write([]byte(str))
 			w.(Flusher).Flush()
 		}
 	}))
-	defer ts.Close()
+	defer cst.close()
 
-	c := &Client{}
-	res, err := c.Get(ts.URL)
+	c := cst.c
+	res, err := c.Get(cst.ts.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -758,14 +813,22 @@ func TestHTTPSClientDetectsHTTPServer(t *testing.T) {
 }
 
 // Verify Response.ContentLength is populated. https://golang.org/issue/4126
-func TestClientHeadContentLength(t *testing.T) {
+func TestClientHeadContentLength_h1(t *testing.T) {
+	testClientHeadContentLength(t, h1Mode)
+}
+
+func TestClientHeadContentLength_h2(t *testing.T) {
+	testClientHeadContentLength(t, h2Mode)
+}
+
+func testClientHeadContentLength(t *testing.T, h2 bool) {
 	defer afterTest(t)
-	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+	cst := newClientServerTest(t, h2, HandlerFunc(func(w ResponseWriter, r *Request) {
 		if v := r.FormValue("cl"); v != "" {
 			w.Header().Set("Content-Length", v)
 		}
 	}))
-	defer ts.Close()
+	defer cst.close()
 	tests := []struct {
 		suffix string
 		want   int64
@@ -775,8 +838,8 @@ func TestClientHeadContentLength(t *testing.T) {
 		{"", -1},
 	}
 	for _, tt := range tests {
-		req, _ := NewRequest("HEAD", ts.URL+tt.suffix, nil)
-		res, err := DefaultClient.Do(req)
+		req, _ := NewRequest("HEAD", cst.ts.URL+tt.suffix, nil)
+		res, err := cst.c.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -902,14 +965,17 @@ func TestBasicAuthHeadersPreserved(t *testing.T) {
 
 }
 
-func TestClientTimeout(t *testing.T) {
+func TestClientTimeout_h1(t *testing.T) { testClientTimeout(t, h1Mode) }
+func TestClientTimeout_h2(t *testing.T) { testClientTimeout(t, h2Mode) }
+
+func testClientTimeout(t *testing.T, h2 bool) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
 	}
 	defer afterTest(t)
 	sawRoot := make(chan bool, 1)
 	sawSlow := make(chan bool, 1)
-	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+	cst := newClientServerTest(t, h2, HandlerFunc(func(w ResponseWriter, r *Request) {
 		if r.URL.Path == "/" {
 			sawRoot <- true
 			Redirect(w, r, "/slow", StatusFound)
@@ -923,13 +989,11 @@ func TestClientTimeout(t *testing.T) {
 			return
 		}
 	}))
-	defer ts.Close()
+	defer cst.close()
 	const timeout = 500 * time.Millisecond
-	c := &Client{
-		Timeout: timeout,
-	}
+	cst.c.Timeout = timeout
 
-	res, err := c.Get(ts.URL)
+	res, err := cst.c.Get(cst.ts.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -975,17 +1039,20 @@ func TestClientTimeout(t *testing.T) {
 	}
 }
 
+func TestClientTimeout_Headers_h1(t *testing.T) { testClientTimeout_Headers(t, h1Mode) }
+func TestClientTimeout_Headers_h2(t *testing.T) { testClientTimeout_Headers(t, h2Mode) }
+
 // Client.Timeout firing before getting to the body
-func TestClientTimeout_Headers(t *testing.T) {
+func testClientTimeout_Headers(t *testing.T, h2 bool) {
 	if testing.Short() {
 		t.Skip("skipping in short mode")
 	}
 	defer afterTest(t)
 	donec := make(chan bool)
-	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+	cst := newClientServerTest(t, h2, HandlerFunc(func(w ResponseWriter, r *Request) {
 		<-donec
 	}))
-	defer ts.Close()
+	defer cst.close()
 	// Note that we use a channel send here and not a close.
 	// The race detector doesn't know that we're waiting for a timeout
 	// and thinks that the waitgroup inside httptest.Server is added to concurrently
@@ -995,9 +1062,8 @@ func TestClientTimeout_Headers(t *testing.T) {
 	// doesn't know this, so synchronize explicitly.
 	defer func() { donec <- true }()
 
-	c := &Client{Timeout: 500 * time.Millisecond}
-
-	_, err := c.Get(ts.URL)
+	cst.c.Timeout = 500 * time.Millisecond
+	_, err := cst.c.Get(cst.ts.URL)
 	if err == nil {
 		t.Fatal("got response from Get; expected error")
 	}
@@ -1016,18 +1082,20 @@ func TestClientTimeout_Headers(t *testing.T) {
 	}
 }
 
-func TestClientRedirectEatsBody(t *testing.T) {
+func TestClientRedirectEatsBody_h1(t *testing.T) { testClientRedirectEatsBody(t, h1Mode) }
+func TestClientRedirectEatsBody_h2(t *testing.T) { testClientRedirectEatsBody(t, h2Mode) }
+func testClientRedirectEatsBody(t *testing.T, h2 bool) {
 	defer afterTest(t)
 	saw := make(chan string, 2)
-	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+	cst := newClientServerTest(t, h2, HandlerFunc(func(w ResponseWriter, r *Request) {
 		saw <- r.RemoteAddr
 		if r.URL.Path == "/" {
 			Redirect(w, r, "/foo", StatusFound) // which includes a body
 		}
 	}))
-	defer ts.Close()
+	defer cst.close()
 
-	res, err := Get(ts.URL)
+	res, err := cst.c.Get(cst.ts.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1062,76 +1130,6 @@ type eofReaderFunc func()
 func (f eofReaderFunc) Read(p []byte) (n int, err error) {
 	f()
 	return 0, io.EOF
-}
-
-func TestClientTrailers(t *testing.T) {
-	defer afterTest(t)
-	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
-		w.Header().Set("Connection", "close")
-		w.Header().Set("Trailer", "Server-Trailer-A, Server-Trailer-B")
-		w.Header().Add("Trailer", "Server-Trailer-C")
-
-		var decl []string
-		for k := range r.Trailer {
-			decl = append(decl, k)
-		}
-		sort.Strings(decl)
-
-		slurp, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			t.Errorf("Server reading request body: %v", err)
-		}
-		if string(slurp) != "foo" {
-			t.Errorf("Server read request body %q; want foo", slurp)
-		}
-		if r.Trailer == nil {
-			io.WriteString(w, "nil Trailer")
-		} else {
-			fmt.Fprintf(w, "decl: %v, vals: %s, %s",
-				decl,
-				r.Trailer.Get("Client-Trailer-A"),
-				r.Trailer.Get("Client-Trailer-B"))
-		}
-
-		// How handlers set Trailers: declare it ahead of time
-		// with the Trailer header, and then mutate the
-		// Header() of those values later, after the response
-		// has been written (we wrote to w above).
-		w.Header().Set("Server-Trailer-A", "valuea")
-		w.Header().Set("Server-Trailer-C", "valuec") // skipping B
-	}))
-	defer ts.Close()
-
-	var req *Request
-	req, _ = NewRequest("POST", ts.URL, io.MultiReader(
-		eofReaderFunc(func() {
-			req.Trailer["Client-Trailer-A"] = []string{"valuea"}
-		}),
-		strings.NewReader("foo"),
-		eofReaderFunc(func() {
-			req.Trailer["Client-Trailer-B"] = []string{"valueb"}
-		}),
-	))
-	req.Trailer = Header{
-		"Client-Trailer-A": nil, //  to be set later
-		"Client-Trailer-B": nil, //  to be set later
-	}
-	req.ContentLength = -1
-	res, err := DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := wantBody(res, err, "decl: [Client-Trailer-A Client-Trailer-B], vals: valuea, valueb"); err != nil {
-		t.Error(err)
-	}
-	want := Header{
-		"Server-Trailer-A": []string{"valuea"},
-		"Server-Trailer-B": nil,
-		"Server-Trailer-C": []string{"valuec"},
-	}
-	if !reflect.DeepEqual(res.Trailer, want) {
-		t.Errorf("Response trailers = %#v; want %#v", res.Trailer, want)
-	}
 }
 
 func TestReferer(t *testing.T) {

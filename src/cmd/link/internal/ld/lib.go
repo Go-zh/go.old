@@ -33,7 +33,9 @@ package ld
 import (
 	"bufio"
 	"bytes"
+	"cmd/internal/bio"
 	"cmd/internal/obj"
+	"cmd/internal/sys"
 	"crypto/sha1"
 	"debug/elf"
 	"encoding/binary"
@@ -82,13 +84,9 @@ import (
 // THE SOFTWARE.
 
 type Arch struct {
-	Thechar          int
-	Ptrsize          int
-	Intsize          int
-	Regsize          int
 	Funcalign        int
 	Maxalign         int
-	Minlc            int
+	Minalign         int
 	Dwarfregsp       int
 	Dwarfreglr       int
 	Linuxdynld       string
@@ -107,9 +105,12 @@ type Arch struct {
 	Gentext          func()
 	Machoreloc1      func(*Reloc, int64) int
 	PEreloc1         func(*Reloc, int64) bool
-	Lput             func(uint32)
 	Wput             func(uint16)
+	Lput             func(uint32)
 	Vput             func(uint64)
+	Append16         func(b []byte, v uint16) []byte
+	Append32         func(b []byte, v uint32) []byte
+	Append64         func(b []byte, v uint64) []byte
 }
 
 type Rpath struct {
@@ -182,13 +183,12 @@ func UseRelro() bool {
 	case BuildmodeCShared, BuildmodeShared, BuildmodePIE:
 		return Iself
 	default:
-		return false
+		return Linkshared
 	}
 }
 
 var (
-	Thestring          string
-	Thelinkarch        *LinkArch
+	SysArch            *sys.Arch
 	outfile            string
 	dynexp             []*LSym
 	dynlib             []string
@@ -207,6 +207,7 @@ var (
 	tmpdir             string
 	extld              string
 	extldflags         string
+	extar              string
 	libgccfile         string
 	debug_s            int // backup old value of debug['s']
 	Ctxt               *Link
@@ -219,12 +220,6 @@ var (
 	nerrors            int
 	Linkmode           int
 	liveness           int64
-)
-
-// for dynexport field of LSym
-const (
-	CgoExportDynamic = 1 << 0
-	CgoExportStatic  = 1 << 1
 )
 
 var (
@@ -246,18 +241,30 @@ const (
 var (
 	headstring string
 	// buffered output
-	Bso obj.Biobuf
+	Bso bio.Buf
 )
 
-var coutbuf struct {
-	*bufio.Writer
-	f *os.File
+type outBuf struct {
+	w   *bufio.Writer
+	f   *os.File
+	off int64
 }
 
-const (
-	symname = "__.GOSYMDEF"
-	pkgname = "__.PKGDEF"
-)
+func (w *outBuf) Write(p []byte) (n int, err error) {
+	n, err = w.w.Write(p)
+	w.off += int64(n)
+	return n, err
+}
+
+func (w *outBuf) WriteString(s string) (n int, err error) {
+	n, err = coutbuf.w.WriteString(s)
+	w.off += int64(n)
+	return n, err
+}
+
+var coutbuf outBuf
+
+const pkgname = "__.PKGDEF"
 
 var (
 	// Set if we see an object compiled by the host compiler that is not
@@ -313,6 +320,12 @@ func (mode *BuildMode) Set(s string) error {
 	case "c-archive":
 		switch goos {
 		case "darwin", "linux":
+		case "windows":
+			switch goarch {
+			case "amd64", "386":
+			default:
+				return badmode()
+			}
 		default:
 			return badmode()
 		}
@@ -328,7 +341,7 @@ func (mode *BuildMode) Set(s string) error {
 		switch goos {
 		case "linux":
 			switch goarch {
-			case "386", "amd64", "arm", "arm64", "ppc64le":
+			case "386", "amd64", "arm", "arm64", "ppc64le", "s390x":
 			default:
 				return badmode()
 			}
@@ -390,7 +403,7 @@ func libinit() {
 		suffix = "msan"
 	}
 
-	Lflag(fmt.Sprintf("%s/pkg/%s_%s%s%s", goroot, goos, goarch, suffixsep, suffix))
+	Lflag(filepath.Join(goroot, "pkg", fmt.Sprintf("%s_%s%s%s", goos, goarch, suffixsep, suffix)))
 
 	mayberemoveoutfile()
 	f, err := os.OpenFile(outfile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0775)
@@ -398,7 +411,7 @@ func libinit() {
 		Exitf("cannot create %s: %v", outfile, err)
 	}
 
-	coutbuf.Writer = bufio.NewWriter(f)
+	coutbuf.w = bufio.NewWriter(f)
 	coutbuf.f = f
 
 	if INITENTRY == "" {
@@ -453,7 +466,7 @@ func loadinternal(name string) {
 	found := 0
 	for i := 0; i < len(Ctxt.Libdir); i++ {
 		if Linkshared {
-			shlibname := fmt.Sprintf("%s/%s.shlibname", Ctxt.Libdir[i], name)
+			shlibname := filepath.Join(Ctxt.Libdir[i], name+".shlibname")
 			if Debug['v'] != 0 {
 				fmt.Fprintf(&Bso, "searching for %s.a in %s\n", name, shlibname)
 			}
@@ -463,7 +476,7 @@ func loadinternal(name string) {
 				break
 			}
 		}
-		pname := fmt.Sprintf("%s/%s.a", Ctxt.Libdir[i], name)
+		pname := filepath.Join(Ctxt.Libdir[i], name+".a")
 		if Debug['v'] != 0 {
 			fmt.Fprintf(&Bso, "searching for %s.a in %s\n", name, pname)
 		}
@@ -483,16 +496,16 @@ func loadlib() {
 	switch Buildmode {
 	case BuildmodeCShared:
 		s := Linklookup(Ctxt, "runtime.islibrary", 0)
-		s.Dupok = 1
+		s.Attr |= AttrDuplicateOK
 		Adduint8(Ctxt, s, 1)
 	case BuildmodeCArchive:
 		s := Linklookup(Ctxt, "runtime.isarchive", 0)
-		s.Dupok = 1
+		s.Attr |= AttrDuplicateOK
 		Adduint8(Ctxt, s, 1)
 	}
 
 	loadinternal("runtime")
-	if Thearch.Thechar == '5' {
+	if SysArch.Family == sys.ARM {
 		loadinternal("math")
 	}
 	if flag_race != 0 {
@@ -504,14 +517,21 @@ func loadlib() {
 
 	var i int
 	for i = 0; i < len(Ctxt.Library); i++ {
-		if Debug['v'] > 1 {
-			fmt.Fprintf(&Bso, "%5.2f autolib: %s (from %s)\n", obj.Cputime(), Ctxt.Library[i].File, Ctxt.Library[i].Objref)
-		}
 		iscgo = iscgo || Ctxt.Library[i].Pkg == "runtime/cgo"
-		if Ctxt.Library[i].Shlib != "" {
-			ldshlibsyms(Ctxt.Library[i].Shlib)
-		} else {
+		if Ctxt.Library[i].Shlib == "" {
+			if Debug['v'] > 1 {
+				fmt.Fprintf(&Bso, "%5.2f autolib: %s (from %s)\n", obj.Cputime(), Ctxt.Library[i].File, Ctxt.Library[i].Objref)
+			}
 			objfile(Ctxt.Library[i])
+		}
+	}
+
+	for i = 0; i < len(Ctxt.Library); i++ {
+		if Ctxt.Library[i].Shlib != "" {
+			if Debug['v'] > 1 {
+				fmt.Fprintf(&Bso, "%5.2f autolib: %s (from %s)\n", obj.Cputime(), Ctxt.Library[i].Shlib, Ctxt.Library[i].Objref)
+			}
+			ldshlibsyms(Ctxt.Library[i].Shlib)
 		}
 	}
 
@@ -538,7 +558,7 @@ func loadlib() {
 		// dependency problems when compiling natively (external linking requires
 		// runtime/cgo, runtime/cgo requires cmd/cgo, but cmd/cgo needs to be
 		// compiled using external linking.)
-		if (Thearch.Thechar == '5' || Thearch.Thechar == '7') && HEADTYPE == obj.Hdarwin && iscgo {
+		if SysArch.InFamily(sys.ARM, sys.ARM64) && HEADTYPE == obj.Hdarwin && iscgo {
 			Linkmode = LinkExternal
 		}
 
@@ -557,7 +577,7 @@ func loadlib() {
 	if Linkmode == LinkExternal && !iscgo {
 		// This indicates a user requested -linkmode=external.
 		// The startup code uses an import of runtime/cgo to decide
-		// whether to initialize the TLS.  So give it one.  This could
+		// whether to initialize the TLS.  So give it one. This could
 		// be handled differently but it's an unusual case.
 		loadinternal("runtime/cgo")
 
@@ -576,13 +596,13 @@ func loadlib() {
 	if Linkmode == LinkInternal {
 		// Drop all the cgo_import_static declarations.
 		// Turns out we won't be needing them.
-		for s := Ctxt.Allsym; s != nil; s = s.Allsym {
+		for _, s := range Ctxt.Allsym {
 			if s.Type == obj.SHOSTOBJ {
 				// If a symbol was marked both
 				// cgo_import_static and cgo_import_dynamic,
 				// then we want to make it cgo_import_dynamic
 				// now.
-				if s.Extname != "" && s.Dynimplib != "" && s.Cgoexport == 0 {
+				if s.Extname != "" && s.Dynimplib != "" && !s.Attr.CgoExport() {
 					s.Type = obj.SDYNIMPORT
 				} else {
 					s.Type = 0
@@ -597,11 +617,11 @@ func loadlib() {
 	// a variable to hold g in assembly (currently only intel).
 	if tlsg.Type == 0 {
 		tlsg.Type = obj.STLSBSS
-		tlsg.Size = int64(Thearch.Ptrsize)
+		tlsg.Size = int64(SysArch.PtrSize)
 	} else if tlsg.Type != obj.SDYNIMPORT {
 		Diag("internal error: runtime declared tlsg variable %d", tlsg.Type)
 	}
-	tlsg.Reachable = true
+	tlsg.Attr |= AttrReachable
 	Ctxt.Tlsg = tlsg
 
 	moduledata := Linklookup(Ctxt, "runtime.firstmoduledata", 0)
@@ -615,7 +635,7 @@ func loadlib() {
 
 		// In addition, on ARM, the runtime depends on the linker
 		// recording the value of GOARM.
-		if Thearch.Thechar == '5' {
+		if SysArch.Family == sys.ARM {
 			s := Linklookup(Ctxt, "runtime.goarm", 0)
 
 			s.Type = obj.SRODATA
@@ -626,23 +646,23 @@ func loadlib() {
 		// If OTOH the module does not contain the runtime package,
 		// create a local symbol for the moduledata.
 		moduledata = Linklookup(Ctxt, "local.moduledata", 0)
-		moduledata.Local = true
+		moduledata.Attr |= AttrLocal
 	}
 	// In all cases way we mark the moduledata as noptrdata to hide it from
 	// the GC.
 	moduledata.Type = obj.SNOPTRDATA
-	moduledata.Reachable = true
+	moduledata.Attr |= AttrReachable
 	Ctxt.Moduledata = moduledata
 
 	// Now that we know the link mode, trim the dynexp list.
-	x := CgoExportDynamic
+	x := AttrCgoExportDynamic
 
 	if Linkmode == LinkExternal {
-		x = CgoExportStatic
+		x = AttrCgoExportStatic
 	}
 	w := 0
 	for i := 0; i < len(dynexp); i++ {
-		if int(dynexp[i].Cgoexport)&x != 0 {
+		if dynexp[i].Attr&x != 0 {
 			dynexp[w] = dynexp[i]
 			w++
 		}
@@ -656,7 +676,7 @@ func loadlib() {
 		// If we have any undefined symbols in external
 		// objects, try to read them from the libgcc file.
 		any := false
-		for s := Ctxt.Allsym; s != nil; s = s.Allsym {
+		for _, s := range Ctxt.Allsym {
 			for _, r := range s.R {
 				if r.Sym != nil && r.Sym.Type&obj.SMASK == obj.SXREF && r.Sym.Name != ".got" {
 					any = true
@@ -719,13 +739,13 @@ func loadlib() {
  * look for the next file in an archive.
  * adapted from libmach.
  */
-func nextar(bp *obj.Biobuf, off int64, a *ArHdr) int64 {
+func nextar(bp *bio.Buf, off int64, a *ArHdr) int64 {
 	if off&1 != 0 {
 		off++
 	}
-	obj.Bseek(bp, off, 0)
+	bio.Bseek(bp, off, 0)
 	buf := make([]byte, SAR_HDR)
-	if n := obj.Bread(bp, buf); n < len(buf) {
+	if n := bio.Bread(bp, buf); n < len(buf) {
 		if n >= 0 {
 			return 0
 		}
@@ -754,27 +774,25 @@ func objfile(lib *Library) {
 		fmt.Fprintf(&Bso, "%5.2f ldobj: %s (%s)\n", obj.Cputime(), lib.File, pkg)
 	}
 	Bso.Flush()
-	var err error
-	var f *obj.Biobuf
-	f, err = obj.Bopenr(lib.File)
+	f, err := bio.Open(lib.File)
 	if err != nil {
 		Exitf("cannot open file %s: %v", lib.File, err)
 	}
 
 	magbuf := make([]byte, len(ARMAG))
-	if obj.Bread(f, magbuf) != len(magbuf) || !strings.HasPrefix(string(magbuf), ARMAG) {
+	if bio.Bread(f, magbuf) != len(magbuf) || !strings.HasPrefix(string(magbuf), ARMAG) {
 		/* load it as a regular file */
-		l := obj.Bseek(f, 0, 2)
+		l := bio.Bseek(f, 0, 2)
 
-		obj.Bseek(f, 0, 0)
+		bio.Bseek(f, 0, 0)
 		ldobj(f, pkg, l, lib.File, lib.File, FileObj)
-		obj.Bterm(f)
+		f.Close()
 
 		return
 	}
 
-	/* skip over optional __.GOSYMDEF and process __.PKGDEF */
-	off := obj.Boffset(f)
+	/* process __.PKGDEF */
+	off := bio.Boffset(f)
 
 	var arhdr ArHdr
 	l := nextar(f, off, &arhdr)
@@ -784,34 +802,23 @@ func objfile(lib *Library) {
 		goto out
 	}
 
-	if strings.HasPrefix(arhdr.name, symname) {
-		off += l
-		l = nextar(f, off, &arhdr)
-		if l <= 0 {
-			Diag("%s: short read on archive file symbol header", lib.File)
-			goto out
-		}
-	}
-
 	if !strings.HasPrefix(arhdr.name, pkgname) {
 		Diag("%s: cannot find package header", lib.File)
 		goto out
 	}
 
 	if Buildmode == BuildmodeShared {
-		before := obj.Boffset(f)
+		before := bio.Boffset(f)
 		pkgdefBytes := make([]byte, atolwhex(arhdr.size))
-		obj.Bread(f, pkgdefBytes)
+		bio.Bread(f, pkgdefBytes)
 		hash := sha1.Sum(pkgdefBytes)
 		lib.hash = hash[:]
-		obj.Bseek(f, before, 0)
+		bio.Bseek(f, before, 0)
 	}
 
 	off += l
 
-	if Debug['u'] != 0 {
-		ldpkg(f, pkg, atolwhex(arhdr.size), lib.File, Pkgdef)
-	}
+	ldpkg(f, pkg, atolwhex(arhdr.size), lib.File, Pkgdef)
 
 	/*
 	 * load all the object files from the archive now.
@@ -823,7 +830,7 @@ func objfile(lib *Library) {
 	 * the individual symbols that are unused.
 	 *
 	 * loading every object will also make it possible to
-	 * load foreign objects not referenced by __.GOSYMDEF.
+	 * load foreign objects not referenced by __.PKGDEF.
 	 */
 	for {
 		l = nextar(f, off, &arhdr)
@@ -842,11 +849,11 @@ func objfile(lib *Library) {
 	}
 
 out:
-	obj.Bterm(f)
+	f.Close()
 }
 
 type Hostobj struct {
-	ld     func(*obj.Biobuf, string, int64, string)
+	ld     func(*bio.Buf, string, int64, string)
 	pkg    string
 	pn     string
 	file   string
@@ -867,7 +874,7 @@ var internalpkg = []string{
 	"runtime/msan",
 }
 
-func ldhostobj(ld func(*obj.Biobuf, string, int64, string), f *obj.Biobuf, pkg string, length int64, pn string, file string) *Hostobj {
+func ldhostobj(ld func(*bio.Buf, string, int64, string), f *bio.Buf, pkg string, length int64, pn string, file string) *Hostobj {
 	isinternal := false
 	for i := 0; i < len(internalpkg); i++ {
 		if pkg == internalpkg[i] {
@@ -898,26 +905,26 @@ func ldhostobj(ld func(*obj.Biobuf, string, int64, string), f *obj.Biobuf, pkg s
 	h.pkg = pkg
 	h.pn = pn
 	h.file = file
-	h.off = obj.Boffset(f)
+	h.off = bio.Boffset(f)
 	h.length = length
 	return h
 }
 
 func hostobjs() {
-	var f *obj.Biobuf
+	var f *bio.Buf
 	var h *Hostobj
 
 	for i := 0; i < len(hostobj); i++ {
 		h = &hostobj[i]
 		var err error
-		f, err = obj.Bopenr(h.file)
+		f, err = bio.Open(h.file)
 		if f == nil {
 			Exitf("cannot reopen %s: %v", h.pn, err)
 		}
 
-		obj.Bseek(f, h.off, 0)
+		bio.Bseek(f, h.off, 0)
 		h.ld(f, h.pkg, h.length, h.pn)
-		obj.Bterm(f)
+		f.Close()
 	}
 }
 
@@ -952,14 +959,14 @@ func hostlinksetup() {
 	coutbuf.f.Close()
 	mayberemoveoutfile()
 
-	p := fmt.Sprintf("%s/go.o", tmpdir)
+	p := filepath.Join(tmpdir, "go.o")
 	var err error
 	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0775)
 	if err != nil {
 		Exitf("cannot create %s: %v", p, err)
 	}
 
-	coutbuf.Writer = bufio.NewWriter(f)
+	coutbuf.w = bufio.NewWriter(f)
 	coutbuf.f = f
 }
 
@@ -970,7 +977,7 @@ func hostobjCopy() (paths []string) {
 	sema := make(chan struct{}, runtime.NumCPU()) // limit open file descriptors
 	for i, h := range hostobj {
 		h := h
-		dst := fmt.Sprintf("%s/%06d.o", tmpdir, i)
+		dst := filepath.Join(tmpdir, fmt.Sprintf("%06d.o", i))
 		paths = append(paths, dst)
 
 		wg.Add(1)
@@ -1010,9 +1017,22 @@ func archive() {
 		return
 	}
 
+	if extar == "" {
+		extar = "ar"
+	}
+
 	mayberemoveoutfile()
-	argv := []string{"ar", "-q", "-c", "-s", outfile}
-	argv = append(argv, fmt.Sprintf("%s/go.o", tmpdir))
+
+	// Force the buffer to flush here so that external
+	// tools will see a complete file.
+	Cflush()
+	if err := coutbuf.f.Close(); err != nil {
+		Exitf("close: %v", err)
+	}
+	coutbuf.f = nil
+
+	argv := []string{extar, "-q", "-c", "-s", outfile}
+	argv = append(argv, filepath.Join(tmpdir, "go.o"))
 	argv = append(argv, hostobjCopy()...)
 
 	if Debug['v'] != 0 {
@@ -1070,7 +1090,7 @@ func hostlink() {
 		argv = append(argv, "-pie")
 	case BuildmodeCShared:
 		if HEADTYPE == obj.Hdarwin {
-			argv = append(argv, "-dynamiclib")
+			argv = append(argv, "-dynamiclib", "-Wl,-read_only_relocs,suppress")
 		} else {
 			// ELF.
 			argv = append(argv, "-Wl,-Bsymbolic")
@@ -1101,8 +1121,8 @@ func hostlink() {
 
 	// On Windows, given -o foo, GCC will append ".exe" to produce
 	// "foo.exe".  We have decided that we want to honor the -o
-	// option.  To make this work, we append a '.' so that GCC
-	// will decide that the file already has an extension.  We
+	// option. To make this work, we append a '.' so that GCC
+	// will decide that the file already has an extension. We
 	// only want to do this when producing a Windows output file
 	// on a Windows host.
 	outopt := outfile
@@ -1125,7 +1145,7 @@ func hostlink() {
 		argv = append(argv, "-Qunused-arguments")
 	}
 
-	argv = append(argv, fmt.Sprintf("%s/go.o", tmpdir))
+	argv = append(argv, filepath.Join(tmpdir, "go.o"))
 	argv = append(argv, hostobjCopy()...)
 
 	if Linkshared {
@@ -1168,8 +1188,8 @@ func hostlink() {
 
 		// clang, unlike GCC, passes -rdynamic to the linker
 		// even when linking with -static, causing a linker
-		// error when using GNU ld.  So take out -rdynamic if
-		// we added it.  We do it in this order, rather than
+		// error when using GNU ld. So take out -rdynamic if
+		// we added it. We do it in this order, rather than
 		// only adding -rdynamic later, so that -extldflags
 		// can override -rdynamic without using -static.
 		if Iself && p == "-static" {
@@ -1202,8 +1222,8 @@ func hostlink() {
 
 	if Debug['s'] == 0 && debug_s == 0 && HEADTYPE == obj.Hdarwin {
 		// Skip combining dwarf on arm.
-		if Thearch.Thechar != '5' && Thearch.Thechar != '7' {
-			dsym := fmt.Sprintf("%s/go.dwarf", tmpdir)
+		if !SysArch.InFamily(sys.ARM, sys.ARM64) {
+			dsym := filepath.Join(tmpdir, "go.dwarf")
 			if out, err := exec.Command("dsymutil", "-f", outfile, "-o", dsym).CombinedOutput(); err != nil {
 				Ctxt.Cursym = nil
 				Exitf("%s: running dsymutil failed: %v\n%s", os.Args[0], err, out)
@@ -1230,31 +1250,31 @@ func hostlink() {
 // hostlinkArchArgs returns arguments to pass to the external linker
 // based on the architecture.
 func hostlinkArchArgs() []string {
-	switch Thearch.Thechar {
-	case '8':
+	switch SysArch.Family {
+	case sys.I386:
 		return []string{"-m32"}
-	case '6', '9':
+	case sys.AMD64, sys.PPC64, sys.S390X:
 		return []string{"-m64"}
-	case '5':
+	case sys.ARM:
 		return []string{"-marm"}
-	case '7':
+	case sys.ARM64:
 		// nothing needed
 	}
 	return nil
 }
 
-// ldobj loads an input object.  If it is a host object (an object
-// compiled by a non-Go compiler) it returns the Hostobj pointer.  If
+// ldobj loads an input object. If it is a host object (an object
+// compiled by a non-Go compiler) it returns the Hostobj pointer. If
 // it is a Go object, it returns nil.
-func ldobj(f *obj.Biobuf, pkg string, length int64, pn string, file string, whence int) *Hostobj {
-	eof := obj.Boffset(f) + length
+func ldobj(f *bio.Buf, pkg string, length int64, pn string, file string, whence int) *Hostobj {
+	eof := bio.Boffset(f) + length
 
-	start := obj.Boffset(f)
-	c1 := obj.Bgetc(f)
-	c2 := obj.Bgetc(f)
-	c3 := obj.Bgetc(f)
-	c4 := obj.Bgetc(f)
-	obj.Bseek(f, start, 0)
+	start := bio.Boffset(f)
+	c1 := bio.Bgetc(f)
+	c2 := bio.Bgetc(f)
+	c3 := bio.Bgetc(f)
+	c4 := bio.Bgetc(f)
+	bio.Bseek(f, start, 0)
 
 	magic := uint32(c1)<<24 | uint32(c2)<<16 | uint32(c3)<<8 | uint32(c4)
 	if magic == 0x7f454c46 { // \x7F E L F
@@ -1270,22 +1290,19 @@ func ldobj(f *obj.Biobuf, pkg string, length int64, pn string, file string, when
 	}
 
 	/* check the header */
-	line := obj.Brdline(f, '\n')
+	line := bio.Brdline(f, '\n')
 	if line == "" {
-		if obj.Blinelen(f) > 0 {
-			Diag("%s: not an object file", pn)
-			return nil
-		}
 		Diag("truncated object file: %s", pn)
 		return nil
 	}
 
 	if !strings.HasPrefix(line, "go object ") {
 		if strings.HasSuffix(pn, ".go") {
-			Exitf("%cl: input %s is not .%c file (use %cg to compile .go files)", Thearch.Thechar, pn, Thearch.Thechar, Thearch.Thechar)
+			Exitf("%s: uncompiled .go source file", pn)
+			return nil
 		}
 
-		if line == Thestring {
+		if line == SysArch.Name {
 			// old header format: just $GOOS
 			Diag("%s: stale object file", pn)
 			return nil
@@ -1317,28 +1334,28 @@ func ldobj(f *obj.Biobuf, pkg string, length int64, pn string, file string, when
 	}
 
 	/* skip over exports and other info -- ends with \n!\n */
-	import0 := obj.Boffset(f)
+	import0 := bio.Boffset(f)
 
 	c1 = '\n' // the last line ended in \n
-	c2 = obj.Bgetc(f)
-	c3 = obj.Bgetc(f)
+	c2 = bio.Bgetc(f)
+	c3 = bio.Bgetc(f)
 	for c1 != '\n' || c2 != '!' || c3 != '\n' {
 		c1 = c2
 		c2 = c3
-		c3 = obj.Bgetc(f)
-		if c3 == obj.Beof {
+		c3 = bio.Bgetc(f)
+		if c3 == bio.EOF {
 			Diag("truncated object file: %s", pn)
 			return nil
 		}
 	}
 
-	import1 := obj.Boffset(f)
+	import1 := bio.Boffset(f)
 
-	obj.Bseek(f, import0, 0)
+	bio.Bseek(f, import0, 0)
 	ldpkg(f, pkg, import1-import0-2, pn, whence) // -2 for !\n
-	obj.Bseek(f, import1, 0)
+	bio.Bseek(f, import1, 0)
 
-	ldobjfile(Ctxt, f, pkg, eof-obj.Boffset(f), pn)
+	LoadObjFile(Ctxt, f, pkg, eof-bio.Boffset(f), pn)
 	return nil
 }
 
@@ -1460,18 +1477,11 @@ func ldshlibsyms(shlib string) {
 			continue
 		}
 		lsym := Linklookup(Ctxt, elfsym.Name, 0)
-		if lsym.Type != 0 && lsym.Type != obj.SDYNIMPORT && lsym.Dupok == 0 {
-			if (lsym.Type != obj.SBSS && lsym.Type != obj.SNOPTRBSS) || len(lsym.R) != 0 || len(lsym.P) != 0 || f.Sections[elfsym.Section].Type != elf.SHT_NOBITS {
-				Diag("Found duplicate symbol %s reading from %s, first found in %s", elfsym.Name, shlib, lsym.File)
-			}
-			if lsym.Size > int64(elfsym.Size) {
-				// If the existing symbol is a BSS value that is
-				// larger than the one read from the shared library,
-				// keep references to that.  Conversely, if the
-				// version from the shared libray is larger, we want
-				// to make all references be to that.
-				continue
-			}
+		// Because loadlib above loads all .a files before loading any shared
+		// libraries, any symbols we find that duplicate symbols already
+		// loaded should be ignored (the symbols from the .a files "win").
+		if lsym.Type != 0 {
+			continue
 		}
 		lsym.Type = obj.SDYNIMPORT
 		lsym.ElfType = elf.ST_TYPE(elfsym.Info)
@@ -1483,12 +1493,12 @@ func ldshlibsyms(shlib string) {
 			// the type data.
 			if strings.HasPrefix(lsym.Name, "type.") && !strings.HasPrefix(lsym.Name, "type..") {
 				lsym.P = readelfsymboldata(f, &elfsym)
-				gcdata_locations[elfsym.Value+2*uint64(Thearch.Ptrsize)+8+1*uint64(Thearch.Ptrsize)] = lsym
+				gcdata_locations[elfsym.Value+2*uint64(SysArch.PtrSize)+8+1*uint64(SysArch.PtrSize)] = lsym
 			}
 		}
 	}
 	gcdata_addresses := make(map[*LSym]uint64)
-	if Thearch.Thechar == '7' {
+	if SysArch.Family == sys.ARM64 {
 		for _, sect := range f.Sections {
 			if sect.Type == elf.SHT_RELA {
 				var rela elf.Rela64
@@ -1547,10 +1557,6 @@ func mywhatsys() {
 	goroot = obj.Getgoroot()
 	goos = obj.Getgoos()
 	goarch = obj.Getgoarch()
-
-	if !strings.HasPrefix(goarch, Thestring) {
-		log.Fatalf("cannot use %cc with GOARCH=%s", Thearch.Thechar, goarch)
-	}
 }
 
 // Copied from ../gc/subr.c:/^pathtoprefix; must stay in sync.
@@ -1591,7 +1597,7 @@ func addsection(seg *Segment, name string, rwx int) *Section {
 	sect.Rwx = uint8(rwx)
 	sect.Name = name
 	sect.Seg = seg
-	sect.Align = int32(Thearch.Ptrsize) // everything is at least pointer-aligned
+	sect.Align = int32(SysArch.PtrSize) // everything is at least pointer-aligned
 	*l = sect
 	return sect
 }
@@ -1635,7 +1641,7 @@ func callsize() int {
 	if haslinkregister() {
 		return 0
 	}
-	return Thearch.Regsize
+	return SysArch.RegSize
 }
 
 func dostkcheck() {
@@ -1664,7 +1670,7 @@ func dostkcheck() {
 			continue
 		}
 
-		if s.Nosplit != 0 {
+		if s.Attr.NoSplit() {
 			Ctxt.Cursym = s
 			ch.sym = s
 			stkcheck(&ch, 0)
@@ -1672,7 +1678,7 @@ func dostkcheck() {
 	}
 
 	for s := Ctxt.Textp; s != nil; s = s.Next {
-		if s.Nosplit == 0 {
+		if !s.Attr.NoSplit() {
 			Ctxt.Cursym = s
 			ch.sym = s
 			stkcheck(&ch, 0)
@@ -1688,10 +1694,10 @@ func stkcheck(up *Chain, depth int) int {
 	// function at top of safe zone once.
 	top := limit == obj.StackLimit-callsize()
 	if top {
-		if s.Stkcheck != 0 {
+		if s.Attr.StackCheck() {
 			return 0
 		}
-		s.Stkcheck = 1
+		s.Attr |= AttrStackCheck
 	}
 
 	if depth > 100 {
@@ -1700,7 +1706,7 @@ func stkcheck(up *Chain, depth int) int {
 		return -1
 	}
 
-	if s.External != 0 || s.Pcln == nil {
+	if s.Attr.External() || s.Pcln == nil {
 		// external function.
 		// should never be called directly.
 		// only diagnose the direct caller.
@@ -1726,7 +1732,7 @@ func stkcheck(up *Chain, depth int) int {
 	var ch Chain
 	ch.up = up
 
-	if s.Nosplit == 0 {
+	if !s.Attr.NoSplit() {
 		// Ensure we have enough stack to call morestack.
 		ch.limit = limit - callsize()
 		ch.sym = morestack
@@ -1768,7 +1774,7 @@ func stkcheck(up *Chain, depth int) int {
 					return -1
 				}
 
-			// Indirect call.  Assume it is a call to a splitting function,
+			// Indirect call. Assume it is a call to a splitting function,
 			// so we have to make sure it can call morestack.
 			// Arrange the data structures to report both calls, so that
 			// if there is an error, stkprint shows all the steps involved.
@@ -1799,7 +1805,7 @@ func stkprint(ch *Chain, limit int) {
 
 	if ch.sym != nil {
 		name = ch.sym.Name
-		if ch.sym.Nosplit != 0 {
+		if ch.sym.Attr.NoSplit() {
 			name += " (nosplit)"
 		}
 	} else {
@@ -1808,7 +1814,7 @@ func stkprint(ch *Chain, limit int) {
 
 	if ch.up == nil {
 		// top of chain.  ch->sym != nil.
-		if ch.sym.Nosplit != 0 {
+		if ch.sym.Attr.NoSplit() {
 			fmt.Printf("\t%d\tassumed on entry to %s\n", ch.limit, name)
 		} else {
 			fmt.Printf("\t%d\tguaranteed after split check in %s\n", ch.limit, name)
@@ -1826,24 +1832,28 @@ func stkprint(ch *Chain, limit int) {
 }
 
 func Cflush() {
-	if err := coutbuf.Writer.Flush(); err != nil {
+	if err := coutbuf.w.Flush(); err != nil {
 		Exitf("flushing %s: %v", coutbuf.f.Name(), err)
 	}
 }
 
 func Cpos() int64 {
-	off, err := coutbuf.f.Seek(0, 1)
-	if err != nil {
-		Exitf("seeking in output [0, 1]: %v", err)
-	}
-	return off + int64(coutbuf.Buffered())
+	return coutbuf.off
 }
 
 func Cseek(p int64) {
+	if p == coutbuf.off {
+		return
+	}
 	Cflush()
 	if _, err := coutbuf.f.Seek(p, 0); err != nil {
 		Exitf("seeking in output [0, 1]: %v", err)
 	}
+	coutbuf.off = p
+}
+
+func Cwritestring(s string) {
+	coutbuf.WriteString(s)
 }
 
 func Cwrite(p []byte) {
@@ -1851,7 +1861,8 @@ func Cwrite(p []byte) {
 }
 
 func Cput(c uint8) {
-	coutbuf.WriteByte(c)
+	coutbuf.w.WriteByte(c)
+	coutbuf.off++
 }
 
 func usage() {
@@ -1883,7 +1894,6 @@ func genasmsym(put func(*LSym, string, int, int64, int64, int, *LSym)) {
 	// These symbols won't show up in the first loop below because we
 	// skip STEXT symbols. Normal STEXT symbols are emitted by walking textp.
 	s := Linklookup(Ctxt, "runtime.text", 0)
-
 	if s.Type == obj.STEXT {
 		put(s, s.Name, 'T', s.Value, s.Size, int(s.Version), nil)
 	}
@@ -1892,8 +1902,11 @@ func genasmsym(put func(*LSym, string, int, int64, int64, int, *LSym)) {
 		put(s, s.Name, 'T', s.Value, s.Size, int(s.Version), nil)
 	}
 
-	for s := Ctxt.Allsym; s != nil; s = s.Allsym {
-		if s.Hide != 0 || ((s.Name == "" || s.Name[0] == '.') && s.Version == 0 && s.Name != ".rathole" && s.Name != ".TOC.") {
+	for _, s := range Ctxt.Allsym {
+		if s.Attr.Hidden() {
+			continue
+		}
+		if (s.Name == "" || s.Name[0] == '.') && s.Version == 0 && s.Name != ".rathole" && s.Name != ".TOC." {
 			continue
 		}
 		switch s.Type & obj.SMASK {
@@ -1909,27 +1922,30 @@ func genasmsym(put func(*LSym, string, int, int64, int64, int, *LSym)) {
 			obj.STYPE,
 			obj.SSTRING,
 			obj.SGOSTRING,
+			obj.SGOSTRINGHDR,
 			obj.SGOFUNC,
 			obj.SGCBITS,
 			obj.STYPERELRO,
 			obj.SSTRINGRELRO,
 			obj.SGOSTRINGRELRO,
+			obj.SGOSTRINGHDRRELRO,
 			obj.SGOFUNCRELRO,
 			obj.SGCBITSRELRO,
 			obj.SRODATARELRO,
 			obj.STYPELINK,
+			obj.SITABLINK,
 			obj.SWINDOWS:
-			if !s.Reachable {
+			if !s.Attr.Reachable() {
 				continue
 			}
 			put(s, s.Name, 'D', Symaddr(s), s.Size, int(s.Version), s.Gotype)
 
 		case obj.SBSS, obj.SNOPTRBSS:
-			if !s.Reachable {
+			if !s.Attr.Reachable() {
 				continue
 			}
 			if len(s.P) > 0 {
-				Diag("%s should not be bss (size=%d type=%d special=%d)", s.Name, int(len(s.P)), s.Type, s.Special)
+				Diag("%s should not be bss (size=%d type=%d special=%v)", s.Name, int(len(s.P)), s.Type, s.Attr.Special())
 			}
 			put(s, s.Name, 'B', Symaddr(s), s.Size, int(s.Version), s.Gotype)
 
@@ -1942,7 +1958,7 @@ func genasmsym(put func(*LSym, string, int, int64, int64, int, *LSym)) {
 			}
 
 		case obj.SDYNIMPORT:
-			if !s.Reachable {
+			if !s.Attr.Reachable() {
 				continue
 			}
 			put(s, s.Extname, 'U', 0, 0, int(s.Version), nil)
@@ -1954,15 +1970,14 @@ func genasmsym(put func(*LSym, string, int, int64, int64, int, *LSym)) {
 		}
 	}
 
-	var a *Auto
 	var off int32
 	for s := Ctxt.Textp; s != nil; s = s.Next {
 		put(s, s.Name, 'T', s.Value, s.Size, int(s.Version), s.Gotype)
 
 		// NOTE(ality): acid can't produce a stack trace without .frame symbols
-		put(nil, ".frame", 'm', int64(s.Locals)+int64(Thearch.Ptrsize), 0, 0, nil)
+		put(nil, ".frame", 'm', int64(s.Locals)+int64(SysArch.PtrSize), 0, 0, nil)
 
-		for a = s.Autom; a != nil; a = a.Link {
+		for _, a := range s.Autom {
 			// Emit a or p according to actual offset, even if label is wrong.
 			// This avoids negative offsets, which cannot be encoded.
 			if a.Name != obj.A_AUTO && a.Name != obj.A_PARAM {
@@ -1973,7 +1988,7 @@ func genasmsym(put func(*LSym, string, int, int64, int64, int, *LSym)) {
 			if a.Name == obj.A_PARAM {
 				off = a.Aoffset
 			} else {
-				off = a.Aoffset - int32(Thearch.Ptrsize)
+				off = a.Aoffset - int32(SysArch.PtrSize)
 			}
 
 			// FP
@@ -1983,8 +1998,8 @@ func genasmsym(put func(*LSym, string, int, int64, int64, int, *LSym)) {
 			}
 
 			// SP
-			if off <= int32(-Thearch.Ptrsize) {
-				put(nil, a.Asym.Name, 'a', -(int64(off) + int64(Thearch.Ptrsize)), 0, 0, a.Gotype)
+			if off <= int32(-SysArch.PtrSize) {
+				put(nil, a.Asym.Name, 'a', -(int64(off) + int64(SysArch.PtrSize)), 0, 0, a.Gotype)
 				continue
 			}
 		}
@@ -1999,7 +2014,7 @@ func genasmsym(put func(*LSym, string, int, int64, int64, int, *LSym)) {
 }
 
 func Symaddr(s *LSym) int64 {
-	if !s.Reachable {
+	if !s.Attr.Reachable() {
 		Diag("unreachable symbol in symaddr - %s", s.Name)
 	}
 	return s.Value
@@ -2009,9 +2024,9 @@ func xdefine(p string, t int, v int64) {
 	s := Linklookup(Ctxt, p, 0)
 	s.Type = int16(t)
 	s.Value = v
-	s.Reachable = true
-	s.Special = 1
-	s.Local = true
+	s.Attr |= AttrReachable
+	s.Attr |= AttrSpecial
+	s.Attr |= AttrLocal
 }
 
 func datoff(addr int64) int64 {
@@ -2052,7 +2067,7 @@ func undefsym(s *LSym) {
 		if r.Sym.Type == obj.Sxxx || r.Sym.Type == obj.SXREF {
 			Diag("undefined: %s", r.Sym.Name)
 		}
-		if !r.Sym.Reachable {
+		if !r.Sym.Attr.Reachable() {
 			Diag("use of unreachable symbol: %s", r.Sym.Name)
 		}
 	}
@@ -2104,63 +2119,6 @@ func Diag(format string, args ...interface{}) {
 	}
 	if nerrors > 20 {
 		Exitf("too many errors")
-	}
-}
-
-func checkgo() {
-	if Debug['C'] == 0 {
-		return
-	}
-
-	// TODO(rsc,khr): Eventually we want to get to no Go-called C functions at all,
-	// which would simplify this logic quite a bit.
-
-	// Mark every Go-called C function with cfunc=2, recursively.
-	var changed int
-	var i int
-	var r *Reloc
-	var s *LSym
-	for {
-		changed = 0
-		for s = Ctxt.Textp; s != nil; s = s.Next {
-			if s.Cfunc == 0 || (s.Cfunc == 2 && s.Nosplit != 0) {
-				for i = 0; i < len(s.R); i++ {
-					r = &s.R[i]
-					if r.Sym == nil {
-						continue
-					}
-					if (r.Type == obj.R_CALL || r.Type == obj.R_CALLARM) && r.Sym.Type == obj.STEXT {
-						if r.Sym.Cfunc == 1 {
-							changed = 1
-							r.Sym.Cfunc = 2
-						}
-					}
-				}
-			}
-		}
-		if changed == 0 {
-			break
-		}
-	}
-
-	// Complain about Go-called C functions that can split the stack
-	// (that can be preempted for garbage collection or trigger a stack copy).
-	for s := Ctxt.Textp; s != nil; s = s.Next {
-		if s.Cfunc == 0 || (s.Cfunc == 2 && s.Nosplit != 0) {
-			for i = 0; i < len(s.R); i++ {
-				r = &s.R[i]
-				if r.Sym == nil {
-					continue
-				}
-				if (r.Type == obj.R_CALL || r.Type == obj.R_CALLARM) && r.Sym.Type == obj.STEXT {
-					if s.Cfunc == 0 && r.Sym.Cfunc == 2 && r.Sym.Nosplit == 0 {
-						fmt.Printf("Go %s calls C %s\n", s.Name, r.Sym.Name)
-					} else if s.Cfunc == 2 && s.Nosplit != 0 && r.Sym.Nosplit == 0 {
-						fmt.Printf("Go calls C %s calls %s\n", s.Name, r.Sym.Name)
-					}
-				}
-			}
-		}
 	}
 }
 

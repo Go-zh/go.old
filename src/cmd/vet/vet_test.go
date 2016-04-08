@@ -1,4 +1,4 @@
-// Copyright 2013 The Go Authors.  All rights reserved.
+// Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -65,7 +65,8 @@ func Vet(t *testing.T, files []string) {
 	flags := []string{
 		"./" + binary,
 		"-printfuncs=Warn:1,Warnf:1",
-		"-test", // TODO: Delete once -shadow is part of -all.
+		"-all",
+		"-shadow",
 	}
 	cmd := exec.Command(errchk, append(flags, files...)...)
 	if !run(cmd, t) {

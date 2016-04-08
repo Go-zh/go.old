@@ -90,7 +90,7 @@ func sighandler(sig uint32, info *siginfo, ctxt unsafe.Pointer, gp *g) {
 		c.set_sp(sp)
 		*(*uint64)(unsafe.Pointer(uintptr(sp))) = c.link()
 
-		pc := uintptr(gp.sigpc)
+		pc := gp.sigpc
 
 		// If we don't recognize the PC as code
 		// but we do recognize the link register as code,
@@ -110,6 +110,7 @@ func sighandler(sig uint32, info *siginfo, ctxt unsafe.Pointer, gp *g) {
 		// In case we are panicking from external C code
 		c.set_r0(0)
 		c.set_r30(uint64(uintptr(unsafe.Pointer(gp))))
+		c.set_r12(uint64(funcPC(sigpanic)))
 		c.set_pc(uint64(funcPC(sigpanic)))
 		return
 	}
@@ -120,8 +121,12 @@ func sighandler(sig uint32, info *siginfo, ctxt unsafe.Pointer, gp *g) {
 		}
 	}
 
+	if c.sigcode() == _SI_USER && signal_ignored(sig) {
+		return
+	}
+
 	if flags&_SigKill != 0 {
-		exit(2)
+		dieFromSignal(int32(sig))
 	}
 
 	if flags&_SigThrow == 0 {

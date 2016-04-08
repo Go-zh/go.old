@@ -15,7 +15,7 @@
 //	memstats  runtime.Memstats
 //
 // The package is sometimes only imported for the side effect of
-// registering its HTTP handler and the above variables.  To use it
+// registering its HTTP handler and the above variables. To use it
 // this way, link this package into your program:
 //	import _ "expvar"
 //
@@ -38,6 +38,7 @@ import (
 
 // Var is an abstract type for all exported variables.
 type Var interface {
+	// String returns a valid JSON value for the variable.
 	String() string
 }
 
@@ -218,8 +219,10 @@ type String struct {
 
 func (v *String) String() string {
 	v.mu.RLock()
-	defer v.mu.RUnlock()
-	return strconv.Quote(v.s)
+	s := v.s
+	v.mu.RUnlock()
+	b, _ := json.Marshal(s)
+	return string(b)
 }
 
 func (v *String) Set(value string) {
@@ -258,7 +261,8 @@ func Publish(name string, v Var) {
 	sort.Strings(varKeys)
 }
 
-// Get retrieves a named exported variable.
+// Get retrieves a named exported variable. It returns nil if the name has
+// not been registered.
 func Get(name string) Var {
 	mutex.RLock()
 	defer mutex.RUnlock()

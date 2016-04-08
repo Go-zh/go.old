@@ -1,6 +1,8 @@
-// Copyright 2015 The Go Authors.  All rights reserved.
+// Copyright 2015 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+
+//go:generate ./mkalldocs.sh
 
 package main
 
@@ -39,8 +41,10 @@ The first item in this list matched by the argument is the one whose documentati
 is printed. (See the examples below.) However, if the argument starts with a capital
 letter it is assumed to identify a symbol or method in the current directory.
 
-For packages, the order of scanning is determined lexically, but the GOROOT tree
-is always scanned before GOPATH.
+For packages, the order of scanning is determined lexically in breadth-first order.
+That is, the package presented is the one that matches the search and is nearest
+the root and lexically first at its level of the hierarchy.  The GOROOT tree is
+always scanned in its entirety before GOPATH.
 
 If there is no package specified or matched, the package in the current
 directory is selected, so "go doc Foo" shows the documentation for symbol Foo in

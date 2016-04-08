@@ -192,7 +192,7 @@ func (s *Server) Close() {
 			// previously-flaky tests) in the case of
 			// socket-late-binding races from the http Client
 			// dialing this server and then getting an idle
-			// connection before the dial completed.  There is thus
+			// connection before the dial completed. There is thus
 			// a connected connection in StateNew with no
 			// associated Request. We only close StateIdle and
 			// StateNew because they're not doing anything. It's
@@ -201,7 +201,7 @@ func (s *Server) Close() {
 			// few milliseconds wasn't liked (early versions of
 			// https://golang.org/cl/15151) so now we just
 			// forcefully close StateNew. The docs for Server.Close say
-			// we wait for "oustanding requests", so we don't close things
+			// we wait for "outstanding requests", so we don't close things
 			// in StateActive.
 			if st == http.StateIdle || st == http.StateNew {
 				s.closeConn(c)
@@ -237,9 +237,28 @@ func (s *Server) logCloseHangDebugInfo() {
 // CloseClientConnections closes any open HTTP connections to the test Server.
 func (s *Server) CloseClientConnections() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	nconn := len(s.conns)
+	ch := make(chan struct{}, nconn)
 	for c := range s.conns {
-		s.closeConn(c)
+		s.closeConnChan(c, ch)
+	}
+	s.mu.Unlock()
+
+	// Wait for outstanding closes to finish.
+	//
+	// Out of paranoia for making a late change in Go 1.6, we
+	// bound how long this can wait, since golang.org/issue/14291
+	// isn't fully understood yet. At least this should only be used
+	// in tests.
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+	for i := 0; i < nconn; i++ {
+		select {
+		case <-ch:
+		case <-timer.C:
+			// Too slow. Give up.
+			return
+		}
 	}
 }
 
@@ -301,18 +320,26 @@ func (s *Server) wrap() {
 	}
 }
 
-// closeConn closes c. Except on plan9, which is special. See comment below.
+// closeConn closes c.
 // s.mu must be held.
-func (s *Server) closeConn(c net.Conn) {
+func (s *Server) closeConn(c net.Conn) { s.closeConnChan(c, nil) }
+
+// closeConnChan is like closeConn, but takes an optional channel to receive a value
+// when the goroutine closing c is done.
+func (s *Server) closeConnChan(c net.Conn, done chan<- struct{}) {
 	if runtime.GOOS == "plan9" {
 		// Go's Plan 9 net package isn't great at unblocking reads when
-		// their underlying TCP connections are closed.  Don't trust
+		// their underlying TCP connections are closed. Don't trust
 		// that that the ConnState state machine will get to
 		// StateClosed. Instead, just go there directly. Plan 9 may leak
 		// resources if the syscall doesn't end up returning. Oh well.
 		s.forgetConn(c)
 	}
-	go c.Close()
+
+	c.Close()
+	if done != nil {
+		done <- struct{}{}
+	}
 }
 
 // forgetConn removes c from the set of tracked conns and decrements it from the

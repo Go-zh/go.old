@@ -24,9 +24,18 @@ import (
 	"time"
 )
 
+// A dnsDialer provides dialing suitable for DNS queries.
+type dnsDialer interface {
+	dialDNS(string, string) (dnsConn, error)
+}
+
+var testHookDNSDialer = func(d time.Duration) dnsDialer { return &Dialer{Timeout: d} }
+
 // A dnsConn represents a DNS transport endpoint.
 type dnsConn interface {
-	Conn
+	io.Closer
+
+	SetDeadline(time.Time) error
 
 	// readDNSResponse reads a DNS response message from the DNS
 	// transport endpoint and returns the received DNS response
@@ -121,7 +130,7 @@ func (d *Dialer) dialDNS(network, server string) (dnsConn, error) {
 
 // exchange sends a query on the connection and hopes for a response.
 func exchange(server, name string, qtype uint16, timeout time.Duration) (*dnsMsg, error) {
-	d := Dialer{Timeout: timeout}
+	d := testHookDNSDialer(timeout)
 	out := dnsMsg{
 		dnsMsgHdr: dnsMsgHdr{
 			recursion_desired: true,
@@ -220,7 +229,6 @@ type resolverConfig struct {
 	// time to recheck resolv.conf.
 	ch          chan struct{} // guards lastChecked and modTime
 	lastChecked time.Time     // last time resolv.conf was checked
-	modTime     time.Time     // time of resolv.conf modification
 
 	mu        sync.RWMutex // protects dnsConfig
 	dnsConfig *dnsConfig   // parsed resolv.conf structure used in lookups
@@ -230,15 +238,11 @@ var resolvConf resolverConfig
 
 // init initializes conf and is only called via conf.initOnce.
 func (conf *resolverConfig) init() {
-	// Set dnsConfig, modTime, and lastChecked so we don't parse
+	// Set dnsConfig and lastChecked so we don't parse
 	// resolv.conf twice the first time.
 	conf.dnsConfig = systemConf().resolv
 	if conf.dnsConfig == nil {
 		conf.dnsConfig = dnsReadConfig("/etc/resolv.conf")
-	}
-
-	if fi, err := os.Stat("/etc/resolv.conf"); err == nil {
-		conf.modTime = fi.ModTime()
 	}
 	conf.lastChecked = time.Now()
 
@@ -265,17 +269,12 @@ func (conf *resolverConfig) tryUpdate(name string) {
 	}
 	conf.lastChecked = now
 
+	var mtime time.Time
 	if fi, err := os.Stat(name); err == nil {
-		if fi.ModTime().Equal(conf.modTime) {
-			return
-		}
-		conf.modTime = fi.ModTime()
-	} else {
-		// If modTime wasn't set prior, assume nothing has changed.
-		if conf.modTime.IsZero() {
-			return
-		}
-		conf.modTime = time.Time{}
+		mtime = fi.ModTime()
+	}
+	if mtime.Equal(conf.dnsConfig.mtime) {
+		return
 	}
 
 	dnsConf := dnsReadConfig(name)
@@ -320,8 +319,25 @@ func lookup(name string, qtype uint16) (cname string, rrs []dnsRR, err error) {
 	return
 }
 
+// avoidDNS reports whether this is a hostname for which we should not
+// use DNS. Currently this includes only .onion and .local names,
+// per RFC 7686 and RFC 6762, respectively. See golang.org/issue/13705.
+func avoidDNS(name string) bool {
+	if name == "" {
+		return true
+	}
+	if name[len(name)-1] == '.' {
+		name = name[:len(name)-1]
+	}
+	return stringsHasSuffixFold(name, ".onion") || stringsHasSuffixFold(name, ".local")
+}
+
 // nameList returns a list of names for sequential DNS queries.
 func (conf *dnsConfig) nameList(name string) []string {
+	if avoidDNS(name) {
+		return nil
+	}
+
 	// If name is rooted (trailing dot), try only that name.
 	rooted := len(name) > 0 && name[len(name)-1] == '.'
 	if rooted {
@@ -440,7 +456,8 @@ func goLookupIPOrder(name string, order hostLookupOrder) (addrs []IPAddr, err er
 	conf := resolvConf.dnsConfig
 	resolvConf.mu.RUnlock()
 	type racer struct {
-		rrs []dnsRR
+		fqdn string
+		rrs  []dnsRR
 		error
 	}
 	lane := make(chan racer, 1)
@@ -450,13 +467,16 @@ func goLookupIPOrder(name string, order hostLookupOrder) (addrs []IPAddr, err er
 		for _, qtype := range qtypes {
 			go func(qtype uint16) {
 				_, rrs, err := tryOneName(conf, fqdn, qtype)
-				lane <- racer{rrs, err}
+				lane <- racer{fqdn, rrs, err}
 			}(qtype)
 		}
 		for range qtypes {
 			racer := <-lane
 			if racer.error != nil {
-				lastErr = racer.error
+				// Prefer error for original name.
+				if lastErr == nil || racer.fqdn == name+"." {
+					lastErr = racer.error
+				}
 				continue
 			}
 			addrs = append(addrs, addrRecordList(racer.rrs)...)
@@ -473,11 +493,11 @@ func goLookupIPOrder(name string, order hostLookupOrder) (addrs []IPAddr, err er
 	}
 	sortByRFC6724(addrs)
 	if len(addrs) == 0 {
-		if lastErr != nil {
-			return nil, lastErr
-		}
 		if order == hostLookupDNSFiles {
 			addrs = goLookupIPFiles(name)
+		}
+		if len(addrs) == 0 && lastErr != nil {
+			return nil, lastErr
 		}
 	}
 	return addrs, nil

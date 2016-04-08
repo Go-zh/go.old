@@ -13,7 +13,6 @@ import (
 	"io/ioutil"
 	"mime/multipart"
 	. "net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
 	"reflect"
@@ -100,7 +99,7 @@ type parseContentTypeTest struct {
 
 var parseContentTypeTests = []parseContentTypeTest{
 	{false, stringMap{"Content-Type": {"text/plain"}}},
-	// Empty content type is legal - shoult be treated as
+	// Empty content type is legal - should be treated as
 	// application/octet-stream (RFC 2616, section 7.2.1)
 	{false, stringMap{}},
 	{true, stringMap{"Content-Type": {"text/plain; boundary="}}},
@@ -159,6 +158,68 @@ func TestMultipartReader(t *testing.T) {
 	}
 }
 
+// Issue 9305: ParseMultipartForm should populate PostForm too
+func TestParseMultipartFormPopulatesPostForm(t *testing.T) {
+	postData :=
+		`--xxx
+Content-Disposition: form-data; name="field1"
+
+value1
+--xxx
+Content-Disposition: form-data; name="field2"
+
+value2
+--xxx
+Content-Disposition: form-data; name="file"; filename="file"
+Content-Type: application/octet-stream
+Content-Transfer-Encoding: binary
+
+binary data
+--xxx--
+`
+	req := &Request{
+		Method: "POST",
+		Header: Header{"Content-Type": {`multipart/form-data; boundary=xxx`}},
+		Body:   ioutil.NopCloser(strings.NewReader(postData)),
+	}
+
+	initialFormItems := map[string]string{
+		"language": "Go",
+		"name":     "gopher",
+		"skill":    "go-ing",
+		"field2":   "initial-value2",
+	}
+
+	req.Form = make(url.Values)
+	for k, v := range initialFormItems {
+		req.Form.Add(k, v)
+	}
+
+	err := req.ParseMultipartForm(10000)
+	if err != nil {
+		t.Fatalf("unexpected multipart error %v", err)
+	}
+
+	wantForm := url.Values{
+		"language": []string{"Go"},
+		"name":     []string{"gopher"},
+		"skill":    []string{"go-ing"},
+		"field1":   []string{"value1"},
+		"field2":   []string{"initial-value2", "value2"},
+	}
+	if !reflect.DeepEqual(req.Form, wantForm) {
+		t.Fatalf("req.Form = %v, want %v", req.Form, wantForm)
+	}
+
+	wantPostForm := url.Values{
+		"field1": []string{"value1"},
+		"field2": []string{"value2"},
+	}
+	if !reflect.DeepEqual(req.PostForm, wantPostForm) {
+		t.Fatalf("req.PostForm = %v, want %v", req.PostForm, wantPostForm)
+	}
+}
+
 func TestParseMultipartForm(t *testing.T) {
 	req := &Request{
 		Method: "POST",
@@ -177,9 +238,11 @@ func TestParseMultipartForm(t *testing.T) {
 	}
 }
 
-func TestRedirect(t *testing.T) {
+func TestRedirect_h1(t *testing.T) { testRedirect(t, h1Mode) }
+func TestRedirect_h2(t *testing.T) { testRedirect(t, h2Mode) }
+func testRedirect(t *testing.T, h2 bool) {
 	defer afterTest(t)
-	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
+	cst := newClientServerTest(t, h2, HandlerFunc(func(w ResponseWriter, r *Request) {
 		switch r.URL.Path {
 		case "/":
 			w.Header().Set("Location", "/foo/")
@@ -190,10 +253,10 @@ func TestRedirect(t *testing.T) {
 			w.WriteHeader(StatusBadRequest)
 		}
 	}))
-	defer ts.Close()
+	defer cst.close()
 
 	var end = regexp.MustCompile("/foo/$")
-	r, err := Get(ts.URL)
+	r, err := cst.c.Get(cst.ts.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -369,6 +432,13 @@ func TestRequestInvalidMethod(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "invalid method") {
 		t.Errorf("Transport error = %v; want invalid method", err)
 	}
+
+	req, err = NewRequest("", "http://foo.com/", nil)
+	if err != nil {
+		t.Errorf("NewRequest(empty method) = %v; want nil", err)
+	} else if req.Method != "GET" {
+		t.Errorf("NewRequest(empty method) has method %q; want GET", req.Method)
+	}
 }
 
 func TestNewRequestContentLength(t *testing.T) {
@@ -531,10 +601,12 @@ func TestRequestWriteBufferedWriter(t *testing.T) {
 
 func TestRequestBadHost(t *testing.T) {
 	got := []string{}
-	req, err := NewRequest("GET", "http://foo.com with spaces/after", nil)
+	req, err := NewRequest("GET", "http://foo/after", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	req.Host = "foo.com with spaces"
+	req.URL.Host = "foo.com with spaces"
 	req.Write(logWrites{t, &got})
 	want := []string{
 		"GET /after HTTP/1.1\r\n",

@@ -48,11 +48,11 @@ func gentext() {
 		// an init function
 		return
 	}
-	addmoduledata.Reachable = true
+	addmoduledata.Attr |= ld.AttrReachable
 	initfunc := ld.Linklookup(ld.Ctxt, "go.link.addmoduledata", 0)
 	initfunc.Type = obj.STEXT
-	initfunc.Local = true
-	initfunc.Reachable = true
+	initfunc.Attr |= ld.AttrLocal
+	initfunc.Attr |= ld.AttrReachable
 	o := func(op uint32) {
 		ld.Adduint32(ld.Ctxt, initfunc, op)
 	}
@@ -85,8 +85,8 @@ func gentext() {
 	}
 	ld.Ctxt.Etextp = initfunc
 	initarray_entry := ld.Linklookup(ld.Ctxt, "go.link.addmoduledatainit", 0)
-	initarray_entry.Reachable = true
-	initarray_entry.Local = true
+	initarray_entry.Attr |= ld.AttrReachable
+	initarray_entry.Attr |= ld.AttrLocal
 	initarray_entry.Type = obj.SINITARR
 	ld.Addaddr(ld.Ctxt, initarray_entry, initfunc)
 }
@@ -162,7 +162,7 @@ func machoreloc1(r *ld.Reloc, sectoff int64) int {
 	rs := r.Xsym
 
 	// ld64 has a bug handling MACHO_ARM64_RELOC_UNSIGNED with !extern relocation.
-	// see cmd/internal/ld/data.go for details. The workarond is that don't use !extern
+	// see cmd/internal/ld/data.go for details. The workaround is that don't use !extern
 	// UNSIGNED relocation at all.
 	if rs.Type == obj.SHOSTOBJ || r.Type == obj.R_CALLARM64 || r.Type == obj.R_ADDRARM64 || r.Type == obj.R_ADDR {
 		if rs.Dynid < 0 {
@@ -258,7 +258,7 @@ func archreloc(r *ld.Reloc, s *ld.LSym, val *int64) int {
 			// (https://sourceware.org/bugzilla/show_bug.cgi?id=18270). So
 			// we convert the adrp; ld64 + R_ARM64_GOTPCREL into adrp;
 			// add + R_ADDRARM64.
-			if !(r.Sym.Version != 0 || (r.Sym.Type&obj.SHIDDEN != 0) || r.Sym.Local) && r.Sym.Type == obj.STEXT && ld.DynlinkingGo() {
+			if !(r.Sym.Version != 0 || (r.Sym.Type&obj.SHIDDEN != 0) || r.Sym.Attr.Local()) && r.Sym.Type == obj.STEXT && ld.DynlinkingGo() {
 				if o2&0xffc00000 != 0xf9400000 {
 					ld.Ctxt.Diag("R_ARM64_GOTPCREL against unexpected instruction %x", o2)
 				}
@@ -375,7 +375,7 @@ func archreloc(r *ld.Reloc, s *ld.LSym, val *int64) int {
 		}
 		// The TCB is two pointers. This is not documented anywhere, but is
 		// de facto part of the ABI.
-		v := r.Sym.Value + int64(2*ld.Thearch.Ptrsize)
+		v := r.Sym.Value + int64(2*ld.SysArch.PtrSize)
 		if v < 0 || v >= 32678 {
 			ld.Diag("TLS offset out of range %d", v)
 		}
@@ -435,19 +435,11 @@ func asmb() {
 	ld.Cseek(int64(ld.Segdata.Fileoff))
 	ld.Datblk(int64(ld.Segdata.Vaddr), int64(ld.Segdata.Filelen))
 
+	ld.Cseek(int64(ld.Segdwarf.Fileoff))
+	ld.Dwarfblk(int64(ld.Segdwarf.Vaddr), int64(ld.Segdwarf.Filelen))
+
 	machlink := uint32(0)
 	if ld.HEADTYPE == obj.Hdarwin {
-		if ld.Debug['v'] != 0 {
-			fmt.Fprintf(&ld.Bso, "%5.2f dwarf\n", obj.Cputime())
-		}
-
-		dwarfoff := uint32(ld.Rnd(int64(uint64(ld.HEADR)+ld.Segtext.Length), int64(ld.INITRND)) + ld.Rnd(int64(ld.Segdata.Filelen), int64(ld.INITRND)))
-		ld.Cseek(int64(dwarfoff))
-
-		ld.Segdwarf.Fileoff = uint64(ld.Cpos())
-		ld.Dwarfemitdebugsections()
-		ld.Segdwarf.Filelen = uint64(ld.Cpos()) - ld.Segdwarf.Fileoff
-
 		machlink = uint32(ld.Domacholink())
 	}
 
@@ -465,7 +457,7 @@ func asmb() {
 		switch ld.HEADTYPE {
 		default:
 			if ld.Iself {
-				symo = uint32(ld.Segdata.Fileoff + ld.Segdata.Filelen)
+				symo = uint32(ld.Segdwarf.Fileoff + ld.Segdwarf.Filelen)
 				symo = uint32(ld.Rnd(int64(symo), int64(ld.INITRND)))
 			}
 
@@ -486,11 +478,6 @@ func asmb() {
 				ld.Asmelfsym()
 				ld.Cflush()
 				ld.Cwrite(ld.Elfstrdat)
-
-				if ld.Debug['v'] != 0 {
-					fmt.Fprintf(&ld.Bso, "%5.2f dwarf\n", obj.Cputime())
-				}
-				ld.Dwarfemitdebugsections()
 
 				if ld.Linkmode == ld.LinkExternal {
 					ld.Elfemitreloc()

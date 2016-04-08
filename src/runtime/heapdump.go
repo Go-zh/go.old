@@ -2,12 +2,12 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Implementation of runtime/debug.WriteHeapDump.  Writes all
+// Implementation of runtime/debug.WriteHeapDump. Writes all
 // objects in the heap plus additional info (roots, threads,
 // finalizers, etc.) to a file.
 
 // The format of the dumped file is described at
-// https://golang.org/s/go14heapdump.
+// https://golang.org/s/go15heapdump.
 
 package runtime
 
@@ -97,7 +97,7 @@ func flush() {
 // Inside a bucket, we keep a list of types that
 // have been serialized so far, most recently used first.
 // Note: when a bucket overflows we may end up
-// serializing a type more than once.  That's ok.
+// serializing a type more than once. That's ok.
 const (
 	typeCacheBuckets = 256
 	typeCacheAssoc   = 4
@@ -172,7 +172,7 @@ func dumptype(t *_type) {
 		}
 	}
 
-	// Might not have been dumped yet.  Dump it and
+	// Might not have been dumped yet. Dump it and
 	// remember we did so.
 	for j := typeCacheAssoc - 1; j > 0; j-- {
 		b.t[j] = b.t[j-1]
@@ -183,11 +183,12 @@ func dumptype(t *_type) {
 	dumpint(tagType)
 	dumpint(uint64(uintptr(unsafe.Pointer(t))))
 	dumpint(uint64(t.size))
-	if t.x == nil || t.x.pkgpath == nil || t.x.name == nil {
-		dumpstr(*t._string)
+	if x := t.uncommon(); x == nil || x.pkgpath == nil {
+		dumpstr(t._string)
 	} else {
-		pkgpath := stringStructOf(t.x.pkgpath)
-		name := stringStructOf(t.x.name)
+		pkgpath := stringStructOf(x.pkgpath)
+		namestr := t.name()
+		name := stringStructOf(&namestr)
 		dumpint(uint64(uintptr(pkgpath.len) + 1 + uintptr(name.len)))
 		dwrite(pkgpath.str, uintptr(pkgpath.len))
 		dwritebyte('.')
@@ -233,7 +234,7 @@ type childInfo struct {
 // dump kinds & offsets of interesting fields in bv
 func dumpbv(cbv *bitvector, offset uintptr) {
 	bv := gobv(*cbv)
-	for i := uintptr(0); i < uintptr(bv.n); i++ {
+	for i := uintptr(0); i < bv.n; i++ {
 		if bv.bytedata[i/8]>>(i%8)&1 == 1 {
 			dumpint(fieldKindPtr)
 			dumpint(uint64(offset + i*sys.PtrSize))
@@ -253,7 +254,7 @@ func dumpframe(s *stkframe, arg unsafe.Pointer) bool {
 	pcdata := pcdatavalue(f, _PCDATA_StackMapIndex, pc, nil)
 	if pcdata == -1 {
 		// We do not have a valid pcdata value but there might be a
-		// stackmap for this function.  It is likely that we are looking
+		// stackmap for this function. It is likely that we are looking
 		// at the function prologue, assume so and hope for the best.
 		pcdata = 0
 	}
@@ -502,28 +503,10 @@ func dumpparams() {
 
 func itab_callback(tab *itab) {
 	t := tab._type
-	// Dump a map from itab* to the type of its data field.
-	// We want this map so we can deduce types of interface referents.
-	if t.kind&kindDirectIface == 0 {
-		// indirect - data slot is a pointer to t.
-		dumptype(t.ptrto)
-		dumpint(tagItab)
-		dumpint(uint64(uintptr(unsafe.Pointer(tab))))
-		dumpint(uint64(uintptr(unsafe.Pointer(t.ptrto))))
-	} else if t.kind&kindNoPointers == 0 {
-		// t is pointer-like - data slot is a t.
-		dumptype(t)
-		dumpint(tagItab)
-		dumpint(uint64(uintptr(unsafe.Pointer(tab))))
-		dumpint(uint64(uintptr(unsafe.Pointer(t))))
-	} else {
-		// Data slot is a scalar.  Dump type just for fun.
-		// With pointer-only interfaces, this shouldn't happen.
-		dumptype(t)
-		dumpint(tagItab)
-		dumpint(uint64(uintptr(unsafe.Pointer(tab))))
-		dumpint(uint64(uintptr(unsafe.Pointer(t))))
-	}
+	dumptype(t)
+	dumpint(tagItab)
+	dumpint(uint64(uintptr(unsafe.Pointer(tab))))
+	dumpint(uint64(uintptr(unsafe.Pointer(t))))
 }
 
 func dumpitabs() {
@@ -639,7 +622,7 @@ func dumpmemprof() {
 	}
 }
 
-var dumphdr = []byte("go1.5 heap dump\n")
+var dumphdr = []byte("go1.7 heap dump\n")
 
 func mdump() {
 	// make sure we're done sweeping
@@ -696,8 +679,8 @@ func dumpfields(bv bitvector) {
 }
 
 // The heap dump reader needs to be able to disambiguate
-// Eface entries.  So it needs to know every type that might
-// appear in such an entry.  The following routine accomplishes that.
+// Eface entries. So it needs to know every type that might
+// appear in such an entry. The following routine accomplishes that.
 // TODO(rsc, khr): Delete - no longer possible.
 
 // Dump all the types that appear in the type field of

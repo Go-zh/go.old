@@ -16,6 +16,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 )
 
 type clientHandshakeState struct {
@@ -49,20 +50,13 @@ func (c *Conn) clientHandshake() error {
 		return errors.New("tls: NextProtos values too large")
 	}
 
-	sni := c.config.ServerName
-	// IP address literals are not permitted as SNI values. See
-	// https://tools.ietf.org/html/rfc6066#section-3.
-	if net.ParseIP(sni) != nil {
-		sni = ""
-	}
-
 	hello := &clientHelloMsg{
 		vers:                c.config.maxVersion(),
 		compressionMethods:  []uint8{compressionNone},
 		random:              make([]byte, 32),
 		ocspStapling:        true,
 		scts:                true,
-		serverName:          sni,
+		serverName:          hostnameInSNI(c.config.ServerName),
 		supportedCurves:     c.config.curvePreferences(),
 		supportedPoints:     []uint8{pointFormatUncompressed},
 		nextProtoNeg:        len(c.config.NextProtos) > 0,
@@ -144,7 +138,9 @@ NextCipherSuite:
 		}
 	}
 
-	c.writeRecord(recordTypeHandshake, hello.marshal())
+	if _, err := c.writeRecord(recordTypeHandshake, hello.marshal()); err != nil {
+		return err
+	}
 
 	msg, err := c.readHandshake()
 	if err != nil {
@@ -165,10 +161,10 @@ NextCipherSuite:
 	c.vers = vers
 	c.haveVers = true
 
-	suite := mutualCipherSuite(c.config.cipherSuites(), serverHello.cipherSuite)
+	suite := mutualCipherSuite(hello.cipherSuites, serverHello.cipherSuite)
 	if suite == nil {
 		c.sendAlert(alertHandshakeFailure)
-		return fmt.Errorf("tls: server selected an unsupported cipher suite")
+		return errors.New("tls: server chose an unconfigured cipher suite")
 	}
 
 	hs := &clientHandshakeState{
@@ -425,7 +421,9 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 			certMsg.certificates = chainToSend.Certificate
 		}
 		hs.finishedHash.Write(certMsg.marshal())
-		c.writeRecord(recordTypeHandshake, certMsg.marshal())
+		if _, err := c.writeRecord(recordTypeHandshake, certMsg.marshal()); err != nil {
+			return err
+		}
 	}
 
 	preMasterSecret, ckx, err := keyAgreement.generateClientKeyExchange(c.config, hs.hello, certs[0])
@@ -435,7 +433,9 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 	}
 	if ckx != nil {
 		hs.finishedHash.Write(ckx.marshal())
-		c.writeRecord(recordTypeHandshake, ckx.marshal())
+		if _, err := c.writeRecord(recordTypeHandshake, ckx.marshal()); err != nil {
+			return err
+		}
 	}
 
 	if chainToSend != nil {
@@ -477,7 +477,9 @@ func (hs *clientHandshakeState) doFullHandshake() error {
 		}
 
 		hs.finishedHash.Write(certVerify.marshal())
-		c.writeRecord(recordTypeHandshake, certVerify.marshal())
+		if _, err := c.writeRecord(recordTypeHandshake, certVerify.marshal()); err != nil {
+			return err
+		}
 	}
 
 	hs.masterSecret = masterFromPreMasterSecret(c.vers, hs.suite, preMasterSecret, hs.hello.random, hs.serverHello.random)
@@ -550,14 +552,15 @@ func (hs *clientHandshakeState) processServerHello() (bool, error) {
 	}
 	c.scts = hs.serverHello.scts
 
-	if hs.serverResumedSession() {
-		// Restore masterSecret and peerCerts from previous state
-		hs.masterSecret = hs.session.masterSecret
-		c.peerCertificates = hs.session.serverCertificates
-		c.verifiedChains = hs.session.verifiedChains
-		return true, nil
+	if !hs.serverResumedSession() {
+		return false, nil
 	}
-	return false, nil
+
+	// Restore masterSecret and peerCerts from previous state
+	hs.masterSecret = hs.session.masterSecret
+	c.peerCertificates = hs.session.serverCertificates
+	c.verifiedChains = hs.session.verifiedChains
+	return true, nil
 }
 
 func (hs *clientHandshakeState) readFinished(out []byte) error {
@@ -621,7 +624,9 @@ func (hs *clientHandshakeState) readSessionTicket() error {
 func (hs *clientHandshakeState) sendFinished(out []byte) error {
 	c := hs.c
 
-	c.writeRecord(recordTypeChangeCipherSpec, []byte{1})
+	if _, err := c.writeRecord(recordTypeChangeCipherSpec, []byte{1}); err != nil {
+		return err
+	}
 	if hs.serverHello.nextProtoNeg {
 		nextProto := new(nextProtoMsg)
 		proto, fallback := mutualProtocol(c.config.NextProtos, hs.serverHello.nextProtos)
@@ -630,13 +635,17 @@ func (hs *clientHandshakeState) sendFinished(out []byte) error {
 		c.clientProtocolFallback = fallback
 
 		hs.finishedHash.Write(nextProto.marshal())
-		c.writeRecord(recordTypeHandshake, nextProto.marshal())
+		if _, err := c.writeRecord(recordTypeHandshake, nextProto.marshal()); err != nil {
+			return err
+		}
 	}
 
 	finished := new(finishedMsg)
 	finished.verifyData = hs.finishedHash.clientSum(hs.masterSecret)
 	hs.finishedHash.Write(finished.marshal())
-	c.writeRecord(recordTypeHandshake, finished.marshal())
+	if _, err := c.writeRecord(recordTypeHandshake, finished.marshal()); err != nil {
+		return err
+	}
 	copy(out, finished.verifyData)
 	return nil
 }
@@ -664,4 +673,24 @@ func mutualProtocol(protos, preferenceProtos []string) (string, bool) {
 	}
 
 	return protos[0], true
+}
+
+// hostnameInSNI converts name into an approriate hostname for SNI.
+// Literal IP addresses and absolute FQDNs are not permitted as SNI values.
+// See https://tools.ietf.org/html/rfc6066#section-3.
+func hostnameInSNI(name string) string {
+	host := name
+	if len(host) > 0 && host[0] == '[' && host[len(host)-1] == ']' {
+		host = host[1 : len(host)-1]
+	}
+	if i := strings.LastIndex(host, "%"); i > 0 {
+		host = host[:i]
+	}
+	if net.ParseIP(host) != nil {
+		return ""
+	}
+	if len(name) > 0 && name[len(name)-1] == '.' {
+		name = name[:len(name)-1]
+	}
+	return name
 }

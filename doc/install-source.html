@@ -177,10 +177,35 @@ The full set of supported combinations is listed in the discussion of
 </div>
 
 <p>
-该编译器可将DragonFly BSD、FreeBSD、Linux、NetBSD、OpenBSD、OS X (Darwin)、Plan 9、
-Solaris以及Windows作为目标。它所支持组合的完整集将在下文的<a href="#环境">环境变量</a>讨论中列出。
+该编译器可将 DragonFly BSD、FreeBSD、Linux、NetBSD、OpenBSD、OS X (Darwin)、Plan
+9、Solaris 以及 Windows 作为目标。它所支持组合的完整集合将在下文的<a href="#环境">环境变量</a>讨论中列出。
+</p>
+
+<div class="english">
+<p>
+See the main installation page for the <a href="/doc/install#requirements">overall system requirements</a>.
+The following additional constraints apply to systems that can be built only from source:
 </p>
 </div>
+
+<p>
+<a href="/doc/install#requirements">所有的系统要求</a>参见主安装页面。
+以下附加限制用于只能从源码构建的系统：
+</p>
+
+<div class="english">
+<ul>
+<li>For Linux on PowerPC 64-bit, the minimum supported kernel version is 2.6.37, meaning that
+Go does not support CentOS 6 on these systems.
+</li>
+</ul>
+</div>
+
+<ul>
+<li>对于 PowerPC 64 位的 Linux，Go 支持的最低内核为 2.6.37，这也就意味着 Go 不支持
+CentOS 6 系统。
+</li>
+</ul>
 
 <div class="english">
 <h2 id="go14">Install Go compiler binaries</h2>
@@ -275,13 +300,13 @@ and used as <code>GOROOT_BOOTSTRAP</code> to bootstrap a local build.
 
 <div class="english">
 <p>
-To use gccgo, you need to arrange for <code>$GOROOT_BOOSTRAP/bin/go</code> to be
+To use gccgo, you need to arrange for <code>$GOROOT_BOOTSTRAP/bin/go</code> to be
 the go tool that comes as part of gccgo 5. For example on Ubuntu Vivid:
 </p>
 </div>
 
 <p>
-要使用 gccgo，你需要将 <code>$GOROOT_BOOSTRAP/bin/go</code> 设置为 gccgo 5 的 go
+要使用 gccgo，你需要将 <code>$GOROOT_BOOTSTRAP/bin/go</code> 设置为 gccgo 5 的 go
 工具。以 Ubuntu Vivid 为例：
 </p>
 
@@ -322,6 +347,21 @@ follow the instructions on the
 <a href="http://git-scm.com/downloads">Git 下载页面</a> 的说明进行操作。
 </p>
 
+<h2 id="ccompiler">(Optional) Install a C compiler</h2>
+
+<p>
+To build a Go installation
+with <code><a href="/cmd/cgo">cgo</a></code> support, which permits Go
+programs to import C libraries, a C compiler such as <code>gcc</code>
+or <code>clang</code> must be installed first. Do this using whatever
+installation method is standard on the system.
+</p>
+
+<p>
+To build without <code>cgo</code>, set the environment variable
+<code>CGO_ENABLED=0</code> before running <code>all.bash</code> or
+<code>make.bash</code>.
+</p>
 
 <div class="english">
 <h2 id="fetch">Fetch the repository</h2>
@@ -345,7 +385,7 @@ Go 将安装到名为 <code>go</code> 的目录。
 <pre>
 $ git clone https://go.googlesource.com/go
 $ cd go
-$ git checkout go1.5.1
+$ git checkout go1.6
 </pre>
 
 <div class="english">
@@ -689,7 +729,7 @@ New releases are announced on the
 <a href="//groups.google.com/group/golang-announce">golang-announce</a>
 mailing list.
 Each announcement mentions the latest release tag, for instance,
-<code>go1.5.1</code>.
+<code>go1.6</code>.
 </p>
 </div>
 
@@ -818,6 +858,9 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 <table cellpadding="0">
 <tr>
 <th width="50"></th><th align="left" width="100"><code>$GOOS</code></th> <th align="left" width="100"><code>$GOARCH</code></th>
+</tr>
+<tr>
+<td></td><td><code>android</code></td> <td><code>arm</code></td>
 </tr>
 <tr>
 <td></td><td><code>darwin</code></td> <td><code>386</code></td>

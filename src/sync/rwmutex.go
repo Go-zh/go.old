@@ -5,6 +5,7 @@
 package sync
 
 import (
+	"internal/race"
 	"sync/atomic"
 	"unsafe"
 )
@@ -33,18 +34,18 @@ const rwmutexMaxReaders = 1 << 30
 
 // RLock 为 rw 的读取将其锁定。
 func (rw *RWMutex) RLock() {
-	if raceenabled {
+	if race.Enabled {
 		_ = rw.w.state
-		raceDisable()
+		race.Disable()
 	}
 	if atomic.AddInt32(&rw.readerCount, 1) < 0 {
 		// A writer is pending, wait for it.
 		// 读取器正在等待它
 		runtime_Semacquire(&rw.readerSem)
 	}
-	if raceenabled {
-		raceEnable()
-		raceAcquire(unsafe.Pointer(&rw.readerSem))
+	if race.Enabled {
+		race.Enable()
+		race.Acquire(unsafe.Pointer(&rw.readerSem))
 	}
 }
 
@@ -56,14 +57,14 @@ func (rw *RWMutex) RLock() {
 // RUnlock 撤销单次 RLock 调用，它对于其它同时存在的读取器则没有效果。
 // 若 rw 并没有为读取而锁定，调用 RUnlock 就会引发一个运行时错误。
 func (rw *RWMutex) RUnlock() {
-	if raceenabled {
+	if race.Enabled {
 		_ = rw.w.state
-		raceReleaseMerge(unsafe.Pointer(&rw.writerSem))
-		raceDisable()
+		race.ReleaseMerge(unsafe.Pointer(&rw.writerSem))
+		race.Disable()
 	}
 	if r := atomic.AddInt32(&rw.readerCount, -1); r < 0 {
 		if r+1 == 0 || r+1 == -rwmutexMaxReaders {
-			raceEnable()
+			race.Enable()
 			panic("sync: RUnlock of unlocked RWMutex")
 		}
 		// A writer is pending.
@@ -74,8 +75,8 @@ func (rw *RWMutex) RUnlock() {
 			runtime_Semrelease(&rw.writerSem)
 		}
 	}
-	if raceenabled {
-		raceEnable()
+	if race.Enabled {
+		race.Enable()
 	}
 }
 
@@ -90,9 +91,9 @@ func (rw *RWMutex) RUnlock() {
 // 若该锁已经为读取或写入而锁定，Lock 就会阻塞直到该锁可用。
 // 为确保该锁最终可用，已阻塞的 Lock 调用会从获得的锁中排除新的读取器。
 func (rw *RWMutex) Lock() {
-	if raceenabled {
+	if race.Enabled {
 		_ = rw.w.state
-		raceDisable()
+		race.Disable()
 	}
 	// First, resolve competition with other writers.
 	// 首先，解决与其它写入器的竞争。
@@ -105,18 +106,18 @@ func (rw *RWMutex) Lock() {
 	if r != 0 && atomic.AddInt32(&rw.readerWait, r) != 0 {
 		runtime_Semacquire(&rw.writerSem)
 	}
-	if raceenabled {
-		raceEnable()
-		raceAcquire(unsafe.Pointer(&rw.readerSem))
-		raceAcquire(unsafe.Pointer(&rw.writerSem))
+	if race.Enabled {
+		race.Enable()
+		race.Acquire(unsafe.Pointer(&rw.readerSem))
+		race.Acquire(unsafe.Pointer(&rw.writerSem))
 	}
 }
 
-// Unlock unlocks rw for writing.  It is a run-time error if rw is
+// Unlock unlocks rw for writing. It is a run-time error if rw is
 // not locked for writing on entry to Unlock.
 //
 // As with Mutexes, a locked RWMutex is not associated with a particular
-// goroutine.  One goroutine may RLock (Lock) an RWMutex and then
+// goroutine. One goroutine may RLock (Lock) an RWMutex and then
 // arrange for another goroutine to RUnlock (Unlock) it.
 
 // Unlock 为 rw 的写入将其解锁。
@@ -128,18 +129,18 @@ func (rw *RWMutex) Lock() {
 // 正如 Mutex 一样，已锁定的 RWMutex 并不与特定的Go程相关联。一个Go程可
 // RLock（Lock）一个 RWMutex，然后安排其它Go程来 RUnlock（Unlock）它。
 func (rw *RWMutex) Unlock() {
-	if raceenabled {
+	if race.Enabled {
 		_ = rw.w.state
-		raceRelease(unsafe.Pointer(&rw.readerSem))
-		raceRelease(unsafe.Pointer(&rw.writerSem))
-		raceDisable()
+		race.Release(unsafe.Pointer(&rw.readerSem))
+		race.Release(unsafe.Pointer(&rw.writerSem))
+		race.Disable()
 	}
 
 	// Announce to readers there is no active writer.
 	// 通知读取器现在没有活动的写入器。
 	r := atomic.AddInt32(&rw.readerCount, rwmutexMaxReaders)
 	if r >= rwmutexMaxReaders {
-		raceEnable()
+		race.Enable()
 		panic("sync: Unlock of unlocked RWMutex")
 	}
 	// Unblock blocked readers, if any.
@@ -150,8 +151,8 @@ func (rw *RWMutex) Unlock() {
 	// Allow other writers to proceed.
 	// 允许其它写入器继续。
 	rw.w.Unlock()
-	if raceenabled {
-		raceEnable()
+	if race.Enabled {
+		race.Enable()
 	}
 }
 

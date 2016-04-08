@@ -32,16 +32,17 @@ package gc
 
 import (
 	"cmd/internal/obj"
+	"cmd/internal/sys"
 	"fmt"
 	"runtime"
 	"strings"
 )
 
-var ddumped int
-
-var dfirst *obj.Prog
-
-var dpc *obj.Prog
+var (
+	ddumped bool
+	dfirst  *obj.Prog
+	dpc     *obj.Prog
+)
 
 // Is this node a memory operand?
 func Ismem(n *Node) bool {
@@ -57,7 +58,7 @@ func Ismem(n *Node) bool {
 		return true
 
 	case OADDR:
-		return Thearch.Thechar == '6' || Thearch.Thechar == '9' // because 6g uses PC-relative addressing; TODO(rsc): not sure why 9g too
+		return Thearch.LinkArch.InFamily(sys.AMD64, sys.PPC64) // because 6g uses PC-relative addressing; TODO(rsc): not sure why 9g too
 	}
 
 	return false
@@ -79,11 +80,11 @@ func Samereg(a *Node, b *Node) bool {
 	return true
 }
 
-func Gbranch(as int, t *Type, likely int) *obj.Prog {
+func Gbranch(as obj.As, t *Type, likely int) *obj.Prog {
 	p := Prog(as)
 	p.To.Type = obj.TYPE_BRANCH
 	p.To.Val = nil
-	if as != obj.AJMP && likely != 0 && Thearch.Thechar != '9' && Thearch.Thechar != '7' && Thearch.Thechar != '0' {
+	if as != obj.AJMP && likely != 0 && Thearch.LinkArch.Family != sys.PPC64 && Thearch.LinkArch.Family != sys.ARM64 && Thearch.LinkArch.Family != sys.MIPS64 {
 		p.From.Type = obj.TYPE_CONST
 		if likely > 0 {
 			p.From.Offset = 1
@@ -97,11 +98,11 @@ func Gbranch(as int, t *Type, likely int) *obj.Prog {
 	return p
 }
 
-func Prog(as int) *obj.Prog {
+func Prog(as obj.As) *obj.Prog {
 	var p *obj.Prog
 
-	if as == obj.ADATA || as == obj.AGLOBL {
-		if ddumped != 0 {
+	if as == obj.AGLOBL {
+		if ddumped {
 			Fatalf("already dumped data")
 		}
 		if dpc == nil {
@@ -119,13 +120,11 @@ func Prog(as int) *obj.Prog {
 		p.Link = Pc
 	}
 
-	if lineno == 0 {
-		if Debug['K'] != 0 {
-			Warn("prog: line 0")
-		}
+	if lineno == 0 && Debug['K'] != 0 {
+		Warn("prog: line 0")
 	}
 
-	p.As = int16(as)
+	p.As = as
 	p.Lineno = lineno
 	return p
 }
@@ -163,7 +162,7 @@ func Clearp(p *obj.Prog) {
 }
 
 func dumpdata() {
-	ddumped = 1
+	ddumped = true
 	if dfirst == nil {
 		return
 	}
@@ -171,6 +170,18 @@ func dumpdata() {
 	*Pc = *dfirst
 	Pc = dpc
 	Clearp(Pc)
+}
+
+func flushdata() {
+	if dfirst == nil {
+		return
+	}
+	newplist()
+	*Pc = *dfirst
+	Pc = dpc
+	Clearp(Pc)
+	dfirst = nil
+	dpc = nil
 }
 
 // Fixup instructions after allocauto (formerly compactframe) has moved all autos around.
@@ -185,7 +196,7 @@ func fixautoused(p *obj.Prog) {
 			continue
 		}
 
-		if (p.As == obj.AVARDEF || p.As == obj.AVARKILL) && p.To.Node != nil && !((p.To.Node).(*Node)).Used {
+		if (p.As == obj.AVARDEF || p.As == obj.AVARKILL || p.As == obj.AVARLIVE) && p.To.Node != nil && !((p.To.Node).(*Node)).Used {
 			// Cannot remove VARDEF instruction, because - unlike TYPE handled above -
 			// VARDEFs are interspersed with other code, and a jump might be using the
 			// VARDEF as a target. Replace with a no-op instead. A later pass will remove
@@ -224,13 +235,17 @@ func ggloblnod(nam *Node) {
 }
 
 func ggloblsym(s *Sym, width int32, flags int16) {
+	ggloblLSym(Linksym(s), width, flags)
+}
+
+func ggloblLSym(s *obj.LSym, width int32, flags int16) {
 	p := Thearch.Gins(obj.AGLOBL, nil, nil)
 	p.From.Type = obj.TYPE_MEM
 	p.From.Name = obj.NAME_EXTERN
-	p.From.Sym = Linksym(s)
+	p.From.Sym = s
 	if flags&obj.LOCAL != 0 {
 		p.From.Sym.Local = true
-		flags &= ^obj.LOCAL
+		flags &^= obj.LOCAL
 	}
 	p.To.Type = obj.TYPE_CONST
 	p.To.Offset = int64(width)
@@ -310,13 +325,13 @@ func Naddr(a *obj.Addr, n *Node) {
 		a := a // copy to let escape into Ctxt.Dconv
 		Debug['h'] = 1
 		Dump("naddr", n)
-		Fatalf("naddr: bad %v %v", Oconv(int(n.Op), 0), Ctxt.Dconv(a))
+		Fatalf("naddr: bad %v %v", Oconv(n.Op, 0), Ctxt.Dconv(a))
 
 	case OREGISTER:
 		a.Type = obj.TYPE_REG
 		a.Reg = n.Reg
 		a.Sym = nil
-		if Thearch.Thechar == '8' { // TODO(rsc): Never clear a->width.
+		if Thearch.LinkArch.Family == sys.I386 { // TODO(rsc): Never clear a->width.
 			a.Width = 0
 		}
 
@@ -328,7 +343,7 @@ func Naddr(a *obj.Addr, n *Node) {
 		if a.Offset != int64(int32(a.Offset)) {
 			Yyerror("offset %d too large for OINDREG", a.Offset)
 		}
-		if Thearch.Thechar == '8' { // TODO(rsc): Never clear a->width.
+		if Thearch.LinkArch.Family == sys.I386 { // TODO(rsc): Never clear a->width.
 			a.Width = 0
 		}
 
@@ -371,14 +386,8 @@ func Naddr(a *obj.Addr, n *Node) {
 		if s == nil {
 			s = Lookup(".noname")
 		}
-		if n.Name.Method {
-			if n.Type != nil {
-				if n.Type.Sym != nil {
-					if n.Type.Sym.Pkg != nil {
-						s = Pkglookup(s.Name, n.Type.Sym.Pkg)
-					}
-				}
-			}
+		if n.Name.Method && n.Type != nil && n.Type.Sym != nil && n.Type.Sym.Pkg != nil {
+			s = Pkglookup(s.Name, n.Type.Sym.Pkg)
 		}
 
 		a.Type = obj.TYPE_MEM
@@ -408,29 +417,29 @@ func Naddr(a *obj.Addr, n *Node) {
 		// A special case to make write barriers more efficient.
 		// Taking the address of the first field of a named struct
 		// is the same as taking the address of the struct.
-		if n.Left.Type.Etype != TSTRUCT || n.Left.Type.Type.Sym != n.Right.Sym {
+		if !n.Left.Type.IsStruct() || n.Left.Type.Field(0).Sym != n.Sym {
 			Debug['h'] = 1
 			Dump("naddr", n)
-			Fatalf("naddr: bad %v %v", Oconv(int(n.Op), 0), Ctxt.Dconv(a))
+			Fatalf("naddr: bad %v %v", Oconv(n.Op, 0), Ctxt.Dconv(a))
 		}
 		Naddr(a, n.Left)
 
 	case OLITERAL:
-		if Thearch.Thechar == '8' {
+		if Thearch.LinkArch.Family == sys.I386 {
 			a.Width = 0
 		}
 		switch n.Val().Ctype() {
 		default:
-			Fatalf("naddr: const %v", Tconv(n.Type, obj.FmtLong))
+			Fatalf("naddr: const %v", Tconv(n.Type, FmtLong))
 
 		case CTFLT:
 			a.Type = obj.TYPE_FCONST
-			a.Val = mpgetflt(n.Val().U.(*Mpflt))
+			a.Val = n.Val().U.(*Mpflt).Float64()
 
 		case CTINT, CTRUNE:
 			a.Sym = nil
 			a.Type = obj.TYPE_CONST
-			a.Offset = Mpgetfix(n.Val().U.(*Mpint))
+			a.Offset = n.Int64()
 
 		case CTSTR:
 			datagostring(n.Val().U.(string), a)
@@ -449,12 +458,12 @@ func Naddr(a *obj.Addr, n *Node) {
 	case OADDR:
 		Naddr(a, n.Left)
 		a.Etype = uint8(Tptr)
-		if Thearch.Thechar != '0' && Thearch.Thechar != '5' && Thearch.Thechar != '7' && Thearch.Thechar != '9' { // TODO(rsc): Do this even for arm, ppc64.
+		if !Thearch.LinkArch.InFamily(sys.MIPS64, sys.ARM, sys.ARM64, sys.PPC64) { // TODO(rsc): Do this even for arm, ppc64.
 			a.Width = int64(Widthptr)
 		}
 		if a.Type != obj.TYPE_MEM {
 			a := a // copy to let escape into Ctxt.Dconv
-			Fatalf("naddr: OADDR %v (from %v)", Ctxt.Dconv(a), Oconv(int(n.Left.Op), 0))
+			Fatalf("naddr: OADDR %v (from %v)", Ctxt.Dconv(a), Oconv(n.Left.Op, 0))
 		}
 		a.Type = obj.TYPE_ADDR
 
@@ -488,7 +497,7 @@ func Naddr(a *obj.Addr, n *Node) {
 		}
 		a.Etype = uint8(Simtype[TUINT])
 		a.Offset += int64(Array_nel)
-		if Thearch.Thechar != '5' { // TODO(rsc): Do this even on arm.
+		if Thearch.LinkArch.Family != sys.ARM { // TODO(rsc): Do this even on arm.
 			a.Width = int64(Widthint)
 		}
 
@@ -501,11 +510,10 @@ func Naddr(a *obj.Addr, n *Node) {
 		}
 		a.Etype = uint8(Simtype[TUINT])
 		a.Offset += int64(Array_cap)
-		if Thearch.Thechar != '5' { // TODO(rsc): Do this even on arm.
+		if Thearch.LinkArch.Family != sys.ARM { // TODO(rsc): Do this even on arm.
 			a.Width = int64(Widthint)
 		}
 	}
-	return
 }
 
 func newplist() *obj.Plist {
@@ -518,56 +526,62 @@ func newplist() *obj.Plist {
 	return pl
 }
 
-func nodarg(t *Type, fp int) *Node {
+// nodarg does something that depends on the value of
+// fp (this was previously completely undocumented).
+//
+// fp=1 corresponds to input args
+// fp=0 corresponds to output args
+// fp=-1 is a special case of output args for a
+// specific call from walk that previously (and
+// incorrectly) passed a 1; the behavior is exactly
+// the same as it is for 1, except that PARAMOUT is
+// generated instead of PARAM.
+func nodarg(t interface{}, fp int) *Node {
 	var n *Node
 
-	// entire argument struct, not just one arg
-	if t.Etype == TSTRUCT && t.Funarg {
+	switch t := t.(type) {
+	case *Type:
+		// entire argument struct, not just one arg
+		if !t.IsFuncArgStruct() {
+			Fatalf("nodarg: bad type %v", t)
+		}
 		n = Nod(ONAME, nil, nil)
 		n.Sym = Lookup(".args")
 		n.Type = t
-		var savet Iter
-		first := Structfirst(&savet, &t)
+		first := t.Field(0)
 		if first == nil {
 			Fatalf("nodarg: bad struct")
 		}
-		if first.Width == BADWIDTH {
+		if first.Offset == BADWIDTH {
 			Fatalf("nodarg: offset not computed for %v", t)
 		}
-		n.Xoffset = first.Width
+		n.Xoffset = first.Offset
 		n.Addable = true
-		goto fp
-	}
-
-	if t.Etype != TFIELD {
-		Fatalf("nodarg: not field %v", t)
-	}
-
-	if fp == 1 {
-		var n *Node
-		for l := Curfn.Func.Dcl; l != nil; l = l.Next {
-			n = l.N
-			if (n.Class == PPARAM || n.Class == PPARAMOUT) && !isblanksym(t.Sym) && n.Sym == t.Sym {
-				return n
+	case *Field:
+		if fp == 1 || fp == -1 {
+			for _, n := range Curfn.Func.Dcl {
+				if (n.Class == PPARAM || n.Class == PPARAMOUT) && !isblanksym(t.Sym) && n.Sym == t.Sym {
+					return n
+				}
 			}
 		}
-	}
 
-	n = Nod(ONAME, nil, nil)
-	n.Type = t.Type
-	n.Sym = t.Sym
-
-	if t.Width == BADWIDTH {
-		Fatalf("nodarg: offset not computed for %v", t)
+		n = Nod(ONAME, nil, nil)
+		n.Type = t.Type
+		n.Sym = t.Sym
+		if t.Offset == BADWIDTH {
+			Fatalf("nodarg: offset not computed for %v", t)
+		}
+		n.Xoffset = t.Offset
+		n.Addable = true
+		n.Orig = t.Nname
+	default:
+		panic("unreachable")
 	}
-	n.Xoffset = t.Width
-	n.Addable = true
-	n.Orig = t.Nname
 
 	// Rewrite argument named _ to __,
 	// or else the assignment to _ will be
 	// discarded during code generation.
-fp:
 	if isblank(n) {
 		n.Sym = Lookup("__")
 	}
@@ -581,6 +595,9 @@ fp:
 
 	case 1: // input arg
 		n.Class = PPARAM
+
+	case -1: // output arg from paramstoheap
+		n.Class = PPARAMOUT
 
 	case 2: // offset output arg
 		Fatalf("shouldn't be used")
@@ -679,7 +696,7 @@ func Regalloc(n *Node, t *Type, o *Node) {
 		Fatalf("regalloc: t nil")
 	}
 	et := Simtype[t.Etype]
-	if Ctxt.Arch.Regsize == 4 && (et == TINT64 || et == TUINT64) {
+	if Ctxt.Arch.RegSize == 4 && (et == TINT64 || et == TUINT64) {
 		Fatalf("regalloc 64bit")
 	}
 

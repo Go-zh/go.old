@@ -26,9 +26,9 @@ const (
 //
 // Marshal handles an array or slice by marshalling each of the elements.
 // Marshal handles a pointer by marshalling the value it points at or, if the
-// pointer is nil, by writing nothing.  Marshal handles an interface value by
+// pointer is nil, by writing nothing. Marshal handles an interface value by
 // marshalling the value it contains or, if the interface value is nil, by
-// writing nothing.  Marshal handles all other data by writing one or more XML
+// writing nothing. Marshal handles all other data by writing one or more XML
 // elements containing the data.
 //
 // The name for the XML elements is taken from, in order of preference:
@@ -48,6 +48,8 @@ const (
 //       field name in the XML element.
 //     - a field with tag ",chardata" is written as character data,
 //       not as an XML element.
+//     - a field with tag ",cdata" is written as character data
+//       wrapped in one or more <![CDATA[ ... ]]> tags, not as an XML element.
 //     - a field with tag ",innerxml" is written verbatim, not subject
 //       to the usual marshalling procedure.
 //     - a field with tag ",comment" is written as an XML comment, not
@@ -61,7 +63,7 @@ const (
 //       value were part of the outer struct.
 //
 // If a field uses a tag "a>b>c", then the element c will be nested inside
-// parent elements a and b.  Fields that appear next to each other that name
+// parent elements a and b. Fields that appear next to each other that name
 // the same parent will be enclosed in one XML element.
 //
 // See MarshalIndent for an example.
@@ -173,10 +175,9 @@ func (enc *Encoder) EncodeElement(v interface{}, start StartElement) error {
 }
 
 var (
-	begComment   = []byte("<!--")
-	endComment   = []byte("-->")
-	endProcInst  = []byte("?>")
-	endDirective = []byte(">")
+	begComment  = []byte("<!--")
+	endComment  = []byte("-->")
+	endProcInst = []byte("?>")
 )
 
 // EncodeToken writes the given XML token to the stream.
@@ -215,7 +216,7 @@ func (enc *Encoder) EncodeToken(t Token) error {
 		return p.cachedWriteError()
 	case ProcInst:
 		// First token to be encoded which is also a ProcInst with target of xml
-		// is the xml declaration.  The only ProcInst where target of xml is allowed.
+		// is the xml declaration. The only ProcInst where target of xml is allowed.
 		if t.Target == "xml" && p.Buffered() != 0 {
 			return fmt.Errorf("xml: EncodeToken of ProcInst xml target only valid for xml declaration, first token encoded")
 		}
@@ -768,7 +769,11 @@ func (p *printer) marshalStruct(tinfo *typeInfo, val reflect.Value) error {
 		}
 
 		switch finfo.flags & fMode {
-		case fCharData:
+		case fCDATA, fCharData:
+			emit := EscapeText
+			if finfo.flags&fMode == fCDATA {
+				emit = emitCDATA
+			}
 			if err := s.trim(finfo.parents); err != nil {
 				return err
 			}
@@ -777,7 +782,9 @@ func (p *printer) marshalStruct(tinfo *typeInfo, val reflect.Value) error {
 				if err != nil {
 					return err
 				}
-				Escape(p, data)
+				if err := emit(p, data); err != nil {
+					return err
+				}
 				continue
 			}
 			if vf.CanAddr() {
@@ -787,27 +794,37 @@ func (p *printer) marshalStruct(tinfo *typeInfo, val reflect.Value) error {
 					if err != nil {
 						return err
 					}
-					Escape(p, data)
+					if err := emit(p, data); err != nil {
+						return err
+					}
 					continue
 				}
 			}
 			var scratch [64]byte
 			switch vf.Kind() {
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				Escape(p, strconv.AppendInt(scratch[:0], vf.Int(), 10))
+				if err := emit(p, strconv.AppendInt(scratch[:0], vf.Int(), 10)); err != nil {
+					return err
+				}
 			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-				Escape(p, strconv.AppendUint(scratch[:0], vf.Uint(), 10))
+				if err := emit(p, strconv.AppendUint(scratch[:0], vf.Uint(), 10)); err != nil {
+					return err
+				}
 			case reflect.Float32, reflect.Float64:
-				Escape(p, strconv.AppendFloat(scratch[:0], vf.Float(), 'g', -1, vf.Type().Bits()))
+				if err := emit(p, strconv.AppendFloat(scratch[:0], vf.Float(), 'g', -1, vf.Type().Bits())); err != nil {
+					return err
+				}
 			case reflect.Bool:
-				Escape(p, strconv.AppendBool(scratch[:0], vf.Bool()))
+				if err := emit(p, strconv.AppendBool(scratch[:0], vf.Bool())); err != nil {
+					return err
+				}
 			case reflect.String:
-				if err := EscapeText(p, []byte(vf.String())); err != nil {
+				if err := emit(p, []byte(vf.String())); err != nil {
 					return err
 				}
 			case reflect.Slice:
 				if elem, ok := vf.Interface().([]byte); ok {
-					if err := EscapeText(p, elem); err != nil {
+					if err := emit(p, elem); err != nil {
 						return err
 					}
 				}
@@ -832,14 +849,14 @@ func (p *printer) marshalStruct(tinfo *typeInfo, val reflect.Value) error {
 			switch k {
 			case reflect.String:
 				s := vf.String()
-				dashDash = strings.Index(s, "--") >= 0
+				dashDash = strings.Contains(s, "--")
 				dashLast = s[len(s)-1] == '-'
 				if !dashDash {
 					p.WriteString(s)
 				}
 			case reflect.Slice:
 				b := vf.Bytes()
-				dashDash = bytes.Index(b, ddBytes) >= 0
+				dashDash = bytes.Contains(b, ddBytes)
 				dashLast = b[len(b)-1] == '-'
 				if !dashDash {
 					p.Write(b)
@@ -931,8 +948,8 @@ type parentStack struct {
 }
 
 // trim updates the XML context to match the longest common prefix of the stack
-// and the given parents.  A closing tag will be written for every parent
-// popped.  Passing a zero slice or nil will close all the elements.
+// and the given parents. A closing tag will be written for every parent
+// popped. Passing a zero slice or nil will close all the elements.
 func (s *parentStack) trim(parents []string) error {
 	split := 0
 	for ; split < len(parents) && split < len(s.stack); split++ {

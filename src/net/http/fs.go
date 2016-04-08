@@ -34,7 +34,7 @@ import (
 type Dir string
 
 func (d Dir) Open(name string) (File, error) {
-	if filepath.Separator != '/' && strings.IndexRune(name, filepath.Separator) >= 0 ||
+	if filepath.Separator != '/' && strings.ContainsRune(name, filepath.Separator) ||
 		strings.Contains(name, "\x00") {
 		return nil, errors.New("http: invalid character in file path")
 	}
@@ -63,8 +63,8 @@ type FileSystem interface {
 type File interface {
 	io.Closer
 	io.Reader
+	io.Seeker
 	Readdir(count int) ([]os.FileInfo, error)
-	Seek(offset int64, whence int) (int64, error)
 	Stat() (os.FileInfo, error)
 }
 
@@ -96,7 +96,7 @@ func dirList(w ResponseWriter, f File) {
 }
 
 // ServeContent replies to the request using the content in the
-// provided ReadSeeker.  The main benefit of ServeContent over io.Copy
+// provided ReadSeeker. The main benefit of ServeContent over io.Copy
 // is that it handles Range requests properly, sets the MIME type, and
 // handles If-Modified-Since requests.
 //
@@ -108,7 +108,7 @@ func dirList(w ResponseWriter, f File) {
 // never sent in the response.
 //
 // If modtime is not the zero time or Unix epoch, ServeContent
-// includes it in a Last-Modified header in the response.  If the
+// includes it in a Last-Modified header in the response. If the
 // request includes an If-Modified-Since header, ServeContent uses
 // modtime to decide whether the content needs to be sent at all.
 //
@@ -196,7 +196,7 @@ func serveContent(w ResponseWriter, r *Request, name string, modtime time.Time, 
 			// The total number of bytes in all the ranges
 			// is larger than the size of the file by
 			// itself, so this is probably an attack, or a
-			// dumb client.  Ignore the range request.
+			// dumb client. Ignore the range request.
 			ranges = nil
 		}
 		switch {
@@ -291,7 +291,7 @@ func checkLastModified(w ResponseWriter, r *Request, modtime time.Time) bool {
 // checkETag implements If-None-Match and If-Range checks.
 //
 // The ETag or modtime must have been previously set in the
-// ResponseWriter's headers.  The modtime is only compared at second
+// ResponseWriter's headers. The modtime is only compared at second
 // granularity and may be the zero value to mean unknown.
 //
 // The return value is the effective request "Range" header to use and
@@ -336,7 +336,7 @@ func checkETag(w ResponseWriter, r *Request, modtime time.Time) (rangeReq string
 		}
 
 		// TODO(bradfitz): deal with comma-separated or multiple-valued
-		// list of If-None-match values.  For now just handle the common
+		// list of If-None-match values. For now just handle the common
 		// case of a single item.
 		if inm == etag || inm == "*" {
 			h := w.Header()
@@ -390,6 +390,15 @@ func serveFile(w ResponseWriter, r *Request, fs FileSystem, name string, redirec
 				localRedirect(w, r, "../"+path.Base(url))
 				return
 			}
+		}
+	}
+
+	// redirect if the directory name doesn't end in a slash
+	if d.IsDir() {
+		url := r.URL.Path
+		if url[len(url)-1] != '/' {
+			localRedirect(w, r, path.Base(url)+"/")
+			return
 		}
 	}
 
@@ -451,14 +460,43 @@ func localRedirect(w ResponseWriter, r *Request, newPath string) {
 // ServeFile replies to the request with the contents of the named
 // file or directory.
 //
+// If the provided file or directory name is a relative path, it is
+// interpreted relative to the current directory and may ascend to parent
+// directories. If the provided name is constructed from user input, it
+// should be sanitized before calling ServeFile. As a precaution, ServeFile
+// will reject requests where r.URL.Path contains a ".." path element.
+//
 // As a special case, ServeFile redirects any request where r.URL.Path
 // ends in "/index.html" to the same path, without the final
 // "index.html". To avoid such redirects either modify the path or
 // use ServeContent.
 func ServeFile(w ResponseWriter, r *Request, name string) {
+	if containsDotDot(r.URL.Path) {
+		// Too many programs use r.URL.Path to construct the argument to
+		// serveFile. Reject the request under the assumption that happened
+		// here and ".." may not be wanted.
+		// Note that name might not contain "..", for example if code (still
+		// incorrectly) used filepath.Join(myDir, r.URL.Path).
+		Error(w, "invalid URL path", StatusBadRequest)
+		return
+	}
 	dir, file := filepath.Split(name)
 	serveFile(w, r, Dir(dir), file, false)
 }
+
+func containsDotDot(v string) bool {
+	if !strings.Contains(v, "..") {
+		return false
+	}
+	for _, ent := range strings.FieldsFunc(v, isSlashRune) {
+		if ent == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+func isSlashRune(r rune) bool { return r == '/' || r == '\\' }
 
 type fileHandler struct {
 	root FileSystem

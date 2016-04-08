@@ -9,10 +9,10 @@ package sort
 
 // Search uses binary search to find and return the smallest index i
 // in [0, n) at which f(i) is true, assuming that on the range [0, n),
-// f(i) == true implies f(i+1) == true.  That is, Search requires that
+// f(i) == true implies f(i+1) == true. That is, Search requires that
 // f is false for some (possibly empty) prefix of the input range [0, n)
 // and then true for the (possibly empty) remainder; Search returns
-// the first true index.  If there is no such index, Search returns n.
+// the first true index. If there is no such index, Search returns n.
 // (Note that the "not found" return value is not -1 as in, for instance,
 // strings.Index.)
 // Search calls f(i) only for i in the range [0, n).
@@ -60,8 +60,7 @@ package sort
 
 // Search 使用二分查找，在区间 [0,n) 中寻找并返回满足 f(i) 为 true 的最小索引 i，
 // 若在区间 [0, n) 内 f(i) == true 成立，则 f(i+1) == true 也成立。就是说，Search
-// 要求
-// f 函数的取值 对于当i在范围 [0, n)中的前某一部分序列（或不存在）取值为false时
+// 要求 f 函数的取值 对于当i在范围 [0, n)中的前某一部分序列（或不存在）取值为false时
 // 对范围剩下的一部分取值为true; Search返回
 // 第一个取值为真的索引. 如果该索引不存在，Search 返回 n
 // (注意，“没找到”返回不是-1，这与strings.Index中的行为
@@ -184,20 +183,26 @@ func SearchInts(a []int, x int) int {
 	return Search(len(a), func(i int) bool { return a[i] >= x })
 }
 
-// SearchFloat64s 在float64s切片中搜索x并返回索引
-// 如Search函数所述. 返回可以插入x值的索引位置，如果x
-// 不存在，返回数组a的长度
-// 切片必须以升序排列
-//
+// SearchFloat64s searches for x in a sorted slice of float64s and returns the index
+// as specified by Search. The return value is the index to insert x if x is not
+// present (it could be len(a)).
+// The slice must be sorted in ascending order.
+
+// SearchFloat64s 在已排序的 float64s 切片中搜索 x 并返回 Search 指定的索引。
+// 如果 x 不存在，返回值即为插入 x 时的下标（它会是 len(a)）。
+// 切片必须以升序排列。
 func SearchFloat64s(a []float64, x float64) int {
 	return Search(len(a), func(i int) bool { return a[i] >= x })
 }
 
-// SearchFloat64s 在strings切片中搜索x并返回索引
-// 如Search函数所述. 返回可以插入x值的索引位置，如果x
-// 不存在，返回数组a的长度
-// 切片必须以升序排列
-//
+// SearchStrings searches for x in a sorted slice of strings and returns the index
+// as specified by Search. The return value is the index to insert x if x is not
+// present (it could be len(a)).
+// The slice must be sorted in ascending order.
+
+// SearchStrings 在已排序的 strings 切片中搜索 x 并返回 Search 指定的索引。
+// 如果 x 不存在，返回值即为插入 x 时的下标（它会是 len(a)）。
+// 切片必须以升序排列。
 func SearchStrings(a []string, x string) int {
 	return Search(len(a), func(i int) bool { return a[i] >= x })
 }

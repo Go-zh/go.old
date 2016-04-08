@@ -16,28 +16,78 @@ import (
 const (
 	// G status
 	//
+	// Beyond indicating the general state of a G, the G status
+	// acts like a lock on the goroutine's stack (and hence its
+	// ability to execute user code).
+	//
 	// If you add to this list, add to the list
 	// of "okay during garbage collection" status
 	// in mgcmark.go too.
-	_Gidle            = iota // 0
-	_Grunnable               // 1 runnable and on a run queue
-	_Grunning                // 2
-	_Gsyscall                // 3
-	_Gwaiting                // 4
-	_Gmoribund_unused        // 5 currently unused, but hardcoded in gdb scripts
-	_Gdead                   // 6
-	_Genqueue                // 7 Only the Gscanenqueue is used.
-	_Gcopystack              // 8 in this state when newstack is moving the stack
-	// the following encode that the GC is scanning the stack and what to do when it is done
-	_Gscan = 0x1000 // atomicstatus&~Gscan = the non-scan state,
-	// _Gscanidle =     _Gscan + _Gidle,      // Not used. Gidle only used with newly malloced gs
-	_Gscanrunnable = _Gscan + _Grunnable //  0x1001 When scanning completes make Grunnable (it is already on run queue)
-	_Gscanrunning  = _Gscan + _Grunning  //  0x1002 Used to tell preemption newstack routine to scan preempted stack.
-	_Gscansyscall  = _Gscan + _Gsyscall  //  0x1003 When scanning completes make it Gsyscall
-	_Gscanwaiting  = _Gscan + _Gwaiting  //  0x1004 When scanning completes make it Gwaiting
-	// _Gscanmoribund_unused,               //  not possible
-	// _Gscandead,                          //  not possible
-	_Gscanenqueue = _Gscan + _Genqueue //  When scanning completes make it Grunnable and put on runqueue
+
+	// _Gidle means this goroutine was just allocated and has not
+	// yet been initialized.
+	_Gidle = iota // 0
+
+	// _Grunnable means this goroutine is on a run queue. It is
+	// not currently executing user code. The stack is not owned.
+	_Grunnable // 1
+
+	// _Grunning means this goroutine may execute user code. The
+	// stack is owned by this goroutine. It is not on a run queue.
+	// It is assigned an M and a P.
+	_Grunning // 2
+
+	// _Gsyscall means this goroutine is executing a system call.
+	// It is not executing user code. The stack is owned by this
+	// goroutine. It is not on a run queue. It is assigned an M.
+	_Gsyscall // 3
+
+	// _Gwaiting means this goroutine is blocked in the runtime.
+	// It is not executing user code. It is not on a run queue,
+	// but should be recorded somewhere (e.g., a channel wait
+	// queue) so it can be ready()d when necessary. The stack is
+	// not owned *except* that a channel operation may read or
+	// write parts of the stack under the appropriate channel
+	// lock. Otherwise, it is not safe to access the stack after a
+	// goroutine enters _Gwaiting (e.g., it may get moved).
+	_Gwaiting // 4
+
+	// _Gmoribund_unused is currently unused, but hardcoded in gdb
+	// scripts.
+	_Gmoribund_unused // 5
+
+	// _Gdead means this goroutine is currently unused. It may be
+	// just exited, on a free list, or just being initialized. It
+	// is not executing user code. It may or may not have a stack
+	// allocated. The G and its stack (if any) are owned by the M
+	// that is exiting the G or that obtained the G from the free
+	// list.
+	_Gdead // 6
+
+	// _Genqueue_unused is currently unused.
+	_Genqueue_unused // 7
+
+	// _Gcopystack means this goroutine's stack is being moved. It
+	// is not executing user code and is not on a run queue. The
+	// stack is owned by the goroutine that put it in _Gcopystack.
+	_Gcopystack // 8
+
+	// _Gscan combined with one of the above states other than
+	// _Grunning indicates that GC is scanning the stack. The
+	// goroutine is not executing user code and the stack is owned
+	// by the goroutine that set the _Gscan bit.
+	//
+	// _Gscanrunning is different: it is used to briefly block
+	// state transitions while GC signals the G to scan its own
+	// stack. This is otherwise like _Grunning.
+	//
+	// atomicstatus&~Gscan gives the state the goroutine will
+	// return to when the scan completes.
+	_Gscan         = 0x1000
+	_Gscanrunnable = _Gscan + _Grunnable // 0x1001
+	_Gscanrunning  = _Gscan + _Grunning  // 0x1002
+	_Gscansyscall  = _Gscan + _Gsyscall  // 0x1003
+	_Gscanwaiting  = _Gscan + _Gwaiting  // 0x1004
 )
 
 const (
@@ -160,17 +210,34 @@ type gobuf struct {
 	bp   uintptr // for GOEXPERIMENT=framepointer
 }
 
-// Known to compiler.
-// Changes here must also be made in src/cmd/internal/gc/select.go's selecttype.
+// sudog represents a g in a wait list, such as for sending/receiving
+// on a channel.
+//
+// sudog is necessary because the g ↔ synchronization object relation
+// is many-to-many. A g can be on many wait lists, so there may be
+// many sudogs for one g; and many gs may be waiting on the same
+// synchronization object, so there may be many sudogs for one object.
+//
+// sudogs are allocated from a special pool. Use acquireSudog and
+// releaseSudog to allocate and free them.
 type sudog struct {
-	g           *g
-	selectdone  *uint32
-	next        *sudog
-	prev        *sudog
-	elem        unsafe.Pointer // data element
+	// The following fields are protected by the hchan.lock of the
+	// channel this sudog is blocking on. shrinkstack depends on
+	// this.
+
+	g          *g
+	selectdone *uint32 // CAS to 1 to win select race (may point to stack)
+	next       *sudog
+	prev       *sudog
+	elem       unsafe.Pointer // data element (may point to stack)
+
+	// The following fields are never accessed concurrently.
+	// waitlink is only accessed by g.
+
 	releasetime int64
-	nrelease    int32  // -1 for acquire
+	ticket      uint32
 	waitlink    *sudog // g.waiting list
+	c           *hchan // channel
 }
 
 type gcstats struct {
@@ -233,7 +300,7 @@ type g struct {
 	sched          gobuf
 	syscallsp      uintptr        // if status==Gsyscall, syscallsp = sched.sp to use during gc
 	syscallpc      uintptr        // if status==Gsyscall, syscallpc = sched.pc to use during gc
-	stkbar         []stkbar       // stack barriers, from low to high
+	stkbar         []stkbar       // stack barriers, from low to high (see top of mstkbar.go)
 	stkbarPos      uintptr        // index of lowest stack barrier not hit
 	stktopsp       uintptr        // expected sp at top of stack, to check in traceback
 	param          unsafe.Pointer // passed parameter on wakeup
@@ -262,7 +329,7 @@ type g struct {
 	gopc           uintptr // pc of go statement that created this goroutine
 	startpc        uintptr // pc of goroutine function
 	racectx        uintptr
-	waiting        *sudog // sudog structures this g is waiting on (that have a valid elem ptr)
+	waiting        *sudog // sudog structures this g is waiting on (that have a valid elem ptr); in lock order
 
 	// Per-G gcController state
 
@@ -303,14 +370,16 @@ type m struct {
 	spinning      bool // m is out of work and is actively looking for work
 	blocked       bool // m is blocked on a note
 	inwb          bool // m is executing a write barrier
+	newSigstack   bool // minit on C thread called sigaltstack
 	printlock     int8
 	fastrand      uint32
-	ncgocall      uint64 // number of cgo calls in total
-	ncgo          int32  // number of cgo calls currently in progress
+	ncgocall      uint64      // number of cgo calls in total
+	ncgo          int32       // number of cgo calls currently in progress
+	cgoCallersUse uint32      // if non-zero, cgoCallers in use temporarily
+	cgoCallers    *cgoCallers // cgo traceback if crashing in cgo call
 	park          note
 	alllink       *m // on allm
 	schedlink     muintptr
-	machport      uint32 // return address for mach ipc (os x)
 	mcache        *mcache
 	lockedg       *g
 	createstack   [32]uintptr // stack that created this thread.
@@ -387,7 +456,7 @@ type p struct {
 
 	// Per-P GC state
 	gcAssistTime     int64 // Nanoseconds in assistAlloc
-	gcBgMarkWorker   *g
+	gcBgMarkWorker   guintptr
 	gcMarkWorkerMode gcMarkWorkerMode
 
 	// gcw is this P's GC work buffer cache. The work buffer is
@@ -407,9 +476,11 @@ const (
 )
 
 type schedt struct {
-	lock mutex
+	// accessed atomically. keep at top to ensure alignment on 32-bit systems.
+	goidgen  uint64
+	lastpoll uint64
 
-	goidgen uint64
+	lock mutex
 
 	midle        muintptr // idle m's waiting for work
 	nmidle       int32    // number of idle m's waiting for work
@@ -417,9 +488,11 @@ type schedt struct {
 	mcount       int32    // number of m's that have been created
 	maxmcount    int32    // maximum number of m's allowed (or die)
 
+	ngsys uint32 // number of system goroutines; updated atomically
+
 	pidle      puintptr // idle p's
 	npidle     uint32
-	nmspinning uint32 // limited to [0, 2^31-1]
+	nmspinning uint32 // See "Worker thread parking/unparking" comment in proc.go.
 
 	// Global runnable queue.
 	runqhead guintptr
@@ -444,7 +517,6 @@ type schedt struct {
 	stopnote   note
 	sysmonwait uint32
 	sysmonnote note
-	lastpoll   uint64
 
 	// safepointFn should be called on each P at the next GC
 	// safepoint if p.runSafePointFn is set.
@@ -482,7 +554,6 @@ const (
 	_SigPanic                // if the signal is from the kernel, panic
 	_SigDefault              // if the signal isn't explicitly requested, don't monitor it
 	_SigHandling             // our signal handler is registered
-	_SigIgnored              // the signal was ignored before we registered for it
 	_SigGoExit               // cause all runtime procs to exit (only used on Plan 9).
 	_SigSetStack             // add SA_ONSTACK to libc handler
 	_SigUnblock              // unblocked in minit
@@ -497,7 +568,7 @@ type _func struct {
 	nameoff int32   // function name
 
 	args int32 // in/out args size
-	_    int32 // Previously: legacy frame size. TODO: Remove this.
+	_    int32 // previously legacy frame size; kept for layout compatibility
 
 	pcsp      int32
 	pcfile    int32
@@ -508,6 +579,8 @@ type _func struct {
 
 // layout of Itab known to compilers
 // allocated in non-garbage-collected memory
+// Needs to be in sync with
+// ../cmd/compile/internal/gc/reflect.go:/^func.dumptypestructs.
 type itab struct {
 	inter  *interfacetype
 	_type  *_type
@@ -537,7 +610,7 @@ const (
 	_Structrnd = sys.RegSize
 )
 
-// startup_random_data holds random bytes initialized at startup.  These come from
+// startup_random_data holds random bytes initialized at startup. These come from
 // the ELF AT_RANDOM auxiliary vector (vdso_linux_amd64.go or os_linux_386.go).
 var startupRandomData []byte
 
@@ -630,6 +703,7 @@ var (
 	// Set on startup in asm_{x86,amd64}.s.
 	cpuid_ecx         uint32
 	cpuid_edx         uint32
+	cpuid_ebx7        uint32
 	lfenceBeforeRdtsc bool
 	support_avx       bool
 	support_avx2      bool

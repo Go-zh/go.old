@@ -280,7 +280,7 @@ func TestValueError(t *testing.T) {
 	}
 	t4p := &Type4{3}
 	var t4 Type4 // note: not a pointer.
-	if err := encAndDec(t4p, t4); err == nil || strings.Index(err.Error(), "pointer") < 0 {
+	if err := encAndDec(t4p, t4); err == nil || !strings.Contains(err.Error(), "pointer") {
 		t.Error("expected error about pointer; got", err)
 	}
 }
@@ -388,7 +388,7 @@ func TestSingletons(t *testing.T) {
 			t.Errorf("expected error decoding %v: %s", test.in, test.err)
 			continue
 		case err != nil && test.err != "":
-			if strings.Index(err.Error(), test.err) < 0 {
+			if !strings.Contains(err.Error(), test.err) {
 				t.Errorf("wrong error decoding %v: wanted %s, got %v", test.in, test.err, err)
 			}
 			continue
@@ -414,7 +414,7 @@ func TestStructNonStruct(t *testing.T) {
 	var ns NonStruct
 	if err := encAndDec(s, &ns); err == nil {
 		t.Error("should get error for struct/non-struct")
-	} else if strings.Index(err.Error(), "type") < 0 {
+	} else if !strings.Contains(err.Error(), "type") {
 		t.Error("for struct/non-struct expected type error; got", err)
 	}
 	// Now try the other way
@@ -424,7 +424,7 @@ func TestStructNonStruct(t *testing.T) {
 	}
 	if err := encAndDec(ns, &s); err == nil {
 		t.Error("should get error for non-struct/struct")
-	} else if strings.Index(err.Error(), "type") < 0 {
+	} else if !strings.Contains(err.Error(), "type") {
 		t.Error("for non-struct/struct expected type error; got", err)
 	}
 }
@@ -439,8 +439,8 @@ func (this *interfaceIndirectTestT) F() bool {
 	return true
 }
 
-// A version of a bug reported on golang-nuts.  Also tests top-level
-// slice of interfaces.  The issue was registering *T caused T to be
+// A version of a bug reported on golang-nuts. Also tests top-level
+// slice of interfaces. The issue was registering *T caused T to be
 // stored as the concrete type.
 func TestInterfaceIndirect(t *testing.T) {
 	Register(&interfaceIndirectTestT{})
@@ -463,7 +463,7 @@ func TestInterfaceIndirect(t *testing.T) {
 
 // Also, when the ignored object contains an interface value, it may define
 // types. Make sure that skipping the value still defines the types by using
-// the encoder/decoder pair to send a value afterwards.  If an interface
+// the encoder/decoder pair to send a value afterwards. If an interface
 // is sent, its type in the test is always NewType0, so this checks that the
 // encoder and decoder don't skew with respect to type definitions.
 
@@ -602,10 +602,6 @@ type Bug1Elem struct {
 }
 
 type Bug1StructMap map[string]Bug1Elem
-
-func bug1EncDec(in Bug1StructMap, out *Bug1StructMap) error {
-	return nil
-}
 
 func TestMapBug1(t *testing.T) {
 	in := make(Bug1StructMap)
@@ -913,7 +909,7 @@ func TestMutipleEncodingsOfBadType(t *testing.T) {
 // There was an error check comparing the length of the input with the
 // length of the slice being decoded. It was wrong because the next
 // thing in the input might be a type definition, which would lead to
-// an incorrect length check.  This test reproduces the corner case.
+// an incorrect length check. This test reproduces the corner case.
 
 type Z struct {
 }
@@ -978,7 +974,7 @@ var badDataTests = []badDataTest{
 	{"0f1000fb285d003316020735ff023a65c5", "interface encoding", nil},
 	{"03fffb0616fffc00f902ff02ff03bf005d02885802a311a8120228022c028ee7", "GobDecoder", nil},
 	// Issue 10491.
-	{"10fe010f020102fe01100001fe010e000016fe010d030102fe010e00010101015801fe01100000000bfe011000f85555555555555555", "length exceeds input size", nil},
+	{"10fe010f020102fe01100001fe010e000016fe010d030102fe010e00010101015801fe01100000000bfe011000f85555555555555555", "exceeds input size", nil},
 }
 
 // TestBadData tests that various problems caused by malformed input

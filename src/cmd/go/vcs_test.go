@@ -1,4 +1,4 @@
-// Copyright 2014 The Go Authors.  All rights reserved.
+// Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -18,20 +18,6 @@ func TestRepoRootForImportPath(t *testing.T) {
 		path string
 		want *repoRoot
 	}{
-		{
-			"code.google.com/p/go",
-			&repoRoot{
-				vcs:  vcsHg,
-				repo: "https://code.google.com/p/go",
-			},
-		},
-		/*{
-		        "code.google.com/r/go",
-		        &repoRoot{
-		                vcs:  vcsHg,
-		                repo: "https://code.google.com/r/go",
-		        },
-		},*/
 		{
 			"github.com/golang/groupcache",
 			&repoRoot{

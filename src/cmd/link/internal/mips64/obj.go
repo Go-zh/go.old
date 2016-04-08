@@ -32,6 +32,7 @@ package mips64
 
 import (
 	"cmd/internal/obj"
+	"cmd/internal/sys"
 	"cmd/link/internal/ld"
 	"fmt"
 	"log"
@@ -45,20 +46,15 @@ func Main() {
 }
 
 func linkarchinit() {
-	ld.Thestring = obj.Getgoarch()
-	if ld.Thestring == "mips64le" {
-		ld.Thelinkarch = &ld.Linkmips64le
+	if obj.Getgoarch() == "mips64le" {
+		ld.SysArch = sys.ArchMIPS64LE
 	} else {
-		ld.Thelinkarch = &ld.Linkmips64
+		ld.SysArch = sys.ArchMIPS64
 	}
 
-	ld.Thearch.Thechar = thechar
-	ld.Thearch.Ptrsize = ld.Thelinkarch.Ptrsize
-	ld.Thearch.Intsize = ld.Thelinkarch.Ptrsize
-	ld.Thearch.Regsize = ld.Thelinkarch.Regsize
 	ld.Thearch.Funcalign = FuncAlign
 	ld.Thearch.Maxalign = MaxAlign
-	ld.Thearch.Minlc = MINLC
+	ld.Thearch.Minalign = MinAlign
 	ld.Thearch.Dwarfregsp = DWARFREGSP
 	ld.Thearch.Dwarfreglr = DWARFREGLR
 
@@ -71,14 +67,20 @@ func linkarchinit() {
 	ld.Thearch.Elfsetupplt = elfsetupplt
 	ld.Thearch.Gentext = gentext
 	ld.Thearch.Machoreloc1 = machoreloc1
-	if ld.Thelinkarch == &ld.Linkmips64le {
+	if ld.SysArch == sys.ArchMIPS64LE {
 		ld.Thearch.Lput = ld.Lputl
 		ld.Thearch.Wput = ld.Wputl
 		ld.Thearch.Vput = ld.Vputl
+		ld.Thearch.Append16 = ld.Append16l
+		ld.Thearch.Append32 = ld.Append32l
+		ld.Thearch.Append64 = ld.Append64l
 	} else {
 		ld.Thearch.Lput = ld.Lputb
 		ld.Thearch.Wput = ld.Wputb
 		ld.Thearch.Vput = ld.Vputb
+		ld.Thearch.Append16 = ld.Append16b
+		ld.Thearch.Append32 = ld.Append32b
+		ld.Thearch.Append64 = ld.Append64b
 	}
 
 	ld.Thearch.Linuxdynld = "/lib64/ld64.so.1"

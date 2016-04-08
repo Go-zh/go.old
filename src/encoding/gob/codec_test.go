@@ -88,7 +88,6 @@ func verifyInt(i int64, t *testing.T) {
 	encState := newEncoderState(b)
 	encState.encodeInt(i)
 	decState := newDecodeState(newDecBuffer(b.Bytes()))
-	decState.buf = make([]byte, 8)
 	j := decState.decodeInt()
 	if i != j {
 		t.Errorf("Encode/Decode: sent %#x received %#x", uint64(i), uint64(j))
@@ -127,7 +126,6 @@ var bytesResult = []byte{0x07, 0x05, 'h', 'e', 'l', 'l', 'o'}
 func newDecodeState(buf *decBuffer) *decoderState {
 	d := new(decoderState)
 	d.b = buf
-	d.buf = make([]byte, uint64Size)
 	return d
 }
 
@@ -972,7 +970,7 @@ func TestBadRecursiveType(t *testing.T) {
 	err := NewEncoder(b).Encode(&rec)
 	if err == nil {
 		t.Error("expected error; got none")
-	} else if strings.Index(err.Error(), "recursive") < 0 {
+	} else if !strings.Contains(err.Error(), "recursive") {
 		t.Error("expected recursive type error; got", err)
 	}
 	// Can't test decode easily because we can't encode one, so we can't pass one to a Decoder.

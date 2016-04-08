@@ -1,4 +1,4 @@
-// Copyright 2012 The Go Authors.  All rights reserved.
+// Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -11,6 +11,13 @@ import (
 	"testing"
 	"unsafe"
 )
+
+func init() {
+	// We're testing the runtime, so make tracebacks show things
+	// in the runtime. This only raises the level, so it won't
+	// override GOTRACEBACK=crash from the user.
+	SetTracebackEnv("system")
+}
 
 var errf error
 
@@ -97,7 +104,7 @@ func TestStopCPUProfilingWithProfilerOff(t *testing.T) {
 // of the larger addresses must themselves be invalid addresses.
 // We might get unlucky and the OS might have mapped one of these
 // addresses, but probably not: they're all in the first page, very high
-// adderesses that normally an OS would reserve for itself, or malformed
+// addresses that normally an OS would reserve for itself, or malformed
 // addresses. Even so, we might have to remove one or two on different
 // systems. We will see.
 
@@ -240,8 +247,8 @@ func TestBadOpen(t *testing.T) {
 	if GOOS == "windows" || GOOS == "nacl" {
 		t.Skip("skipping OS that doesn't have open/read/write/close")
 	}
-	// make sure we get the correct error code if open fails.  Same for
-	// read/write/close on the resulting -1 fd.  See issue 10052.
+	// make sure we get the correct error code if open fails. Same for
+	// read/write/close on the resulting -1 fd. See issue 10052.
 	nonfile := []byte("/notreallyafile")
 	fd := Open(&nonfile[0], 0, 0)
 	if fd != -1 {
@@ -298,6 +305,27 @@ func TestAppendSliceGrowth(t *testing.T) {
 		check(want)
 		if i&(i-1) == 0 {
 			want = 2 * i
+		}
+	}
+}
+
+func TestGoroutineProfileTrivial(t *testing.T) {
+	// Calling GoroutineProfile twice in a row should find the same number of goroutines,
+	// but it's possible there are goroutines just about to exit, so we might end up
+	// with fewer in the second call. Try a few times; it should converge once those
+	// zombies are gone.
+	for i := 0; ; i++ {
+		n1, ok := GoroutineProfile(nil) // should fail, there's at least 1 goroutine
+		if n1 < 1 || ok {
+			t.Fatalf("GoroutineProfile(nil) = %d, %v, want >0, false", n1, ok)
+		}
+		n2, ok := GoroutineProfile(make([]StackRecord, n1))
+		if n2 == n1 && ok {
+			break
+		}
+		t.Logf("GoroutineProfile(%d) = %d, %v, want %d, true", n1, n2, ok, n1)
+		if i >= 10 {
+			t.Fatalf("GoroutineProfile not converging")
 		}
 	}
 }

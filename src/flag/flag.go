@@ -340,7 +340,7 @@ const (
 	PanicOnError                         // Call panic with a descriptive error.
 )
 
-// A FlagSet represents a set of defined flags.  The zero value of a FlagSet
+// A FlagSet represents a set of defined flags. The zero value of a FlagSet
 // has no name and has ContinueOnError error handling.
 
 // FlagSet 是已经定义好的标签的集合。FlagSet 的零值没有名字且拥有 ContinueOnError 错误处理。
@@ -418,7 +418,7 @@ func (f *FlagSet) VisitAll(fn func(*Flag)) {
 }
 
 // VisitAll visits the command-line flags in lexicographical order, calling
-// fn for each.  It visits all flags, even those not set.
+// fn for each. It visits all flags, even those not set.
 
 // VisitAll按照字典顺序遍历控制台标签，并且对每个标签调用fn。
 // 这个函数会遍历所有标签，包括那些没有定义的标签。
@@ -438,7 +438,7 @@ func (f *FlagSet) Visit(fn func(*Flag)) {
 }
 
 // Visit visits the command-line flags in lexicographical order, calling fn
-// for each.  It visits only those flags that have been set.
+// for each. It visits only those flags that have been set.
 
 // Visit按照字典顺序遍历命令行标签，并且对每个标签调用fn。
 // 这个函数只遍历定义过的标签。
@@ -663,7 +663,7 @@ func (f *FlagSet) NFlag() int { return len(f.actual) }
 // NFlag返回解析过的命令行标签的数量。
 func NFlag() int { return len(CommandLine.actual) }
 
-// Arg returns the i'th argument.  Arg(0) is the first remaining argument
+// Arg returns the i'th argument. Arg(0) is the first remaining argument
 // after flags have been processed. Arg returns an empty string if the
 // requested element does not exist.
 
@@ -676,7 +676,7 @@ func (f *FlagSet) Arg(i int) string {
 	return f.args[i]
 }
 
-// Arg returns the i'th command-line argument.  Arg(0) is the first remaining argument
+// Arg returns the i'th command-line argument. Arg(0) is the first remaining argument
 // after flags have been processed. Arg returns an empty string if the
 // requested element does not exist.
 
@@ -1169,7 +1169,7 @@ func (f *FlagSet) parseOne() (bool, error) {
 }
 
 // Parse parses flag definitions from the argument list, which should not
-// include the command name.  Must be called after all flags in the FlagSet
+// include the command name. Must be called after all flags in the FlagSet
 // are defined and before flags are accessed by the program.
 // The return value will be ErrHelp if -help or -h were set but not defined.
 

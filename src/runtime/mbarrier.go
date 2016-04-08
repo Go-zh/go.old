@@ -1,4 +1,4 @@
-// Copyright 2015 The Go Authors.  All rights reserved.
+// Copyright 2015 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -100,7 +100,7 @@ func gcmarkwb_m(slot *uintptr, ptr uintptr) {
 // related operations. In particular there are times when the GC assumes
 // that the world is stopped but scheduler related code is still being
 // executed, dealing with syscalls, dealing with putting gs on runnable
-// queues and so forth. This code can not execute write barriers because
+// queues and so forth. This code cannot execute write barriers because
 // the GC might drop them on the floor. Stopping the world involves removing
 // the p associated with an m. We use the fact that m.p == nil to indicate
 // that we are in one these critical section and throw if the write is of
@@ -158,31 +158,6 @@ func writebarrierptr_nostore(dst *uintptr, src uintptr) {
 	}
 	writebarrierptr_nostore1(dst, src)
 }
-
-//go:nosplit
-func writebarrierstring(dst *[2]uintptr, src [2]uintptr) {
-	writebarrierptr(&dst[0], src[0])
-	dst[1] = src[1]
-}
-
-//go:nosplit
-func writebarrierslice(dst *[3]uintptr, src [3]uintptr) {
-	writebarrierptr(&dst[0], src[0])
-	dst[1] = src[1]
-	dst[2] = src[2]
-}
-
-//go:nosplit
-func writebarrieriface(dst *[2]uintptr, src [2]uintptr) {
-	writebarrierptr(&dst[0], src[0])
-	writebarrierptr(&dst[1], src[1])
-}
-
-//go:generate go run wbfat_gen.go -- wbfat.go
-//
-// The above line generates multiword write barriers for
-// all the combinations of ptr+scalar up to four words.
-// The implementations are written to wbfat.go.
 
 // typedmemmove copies a value of type t to dst from src.
 //go:nosplit
@@ -247,8 +222,8 @@ func typedslicecopy(typ *_type, dst, src slice) int {
 	if n == 0 {
 		return 0
 	}
-	dstp := unsafe.Pointer(dst.array)
-	srcp := unsafe.Pointer(src.array)
+	dstp := dst.array
+	srcp := src.array
 
 	if raceenabled {
 		callerpc := getcallerpc(unsafe.Pointer(&typ))
@@ -304,7 +279,7 @@ func typedslicecopy(typ *_type, dst, src slice) int {
 			}
 		}
 	})
-	return int(n)
+	return n
 }
 
 //go:linkname reflect_typedslicecopy reflect.typedslicecopy

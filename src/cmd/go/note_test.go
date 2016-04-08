@@ -1,4 +1,4 @@
-// Copyright 2015 The Go Authors.  All rights reserved.
+// Copyright 2015 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -6,6 +6,7 @@ package main_test
 
 import (
 	main "cmd/go"
+	"go/build"
 	"runtime"
 	"testing"
 )
@@ -28,9 +29,6 @@ func TestNoteReading2K(t *testing.T) {
 }
 
 func testNoteReading(t *testing.T) {
-	if runtime.GOOS == "dragonfly" {
-		t.Skipf("TestNoteReading is broken on dragonfly - golang.org/issue/13364", runtime.GOOS)
-	}
 	tg := testgo(t)
 	defer tg.cleanup()
 	tg.tempFile("hello.go", `package main; func main() { print("hello, world\n") }`)
@@ -45,6 +43,8 @@ func testNoteReading(t *testing.T) {
 	}
 
 	switch {
+	case !build.Default.CgoEnabled:
+		t.Skipf("skipping - no cgo, so assuming external linking not available")
 	case runtime.GOOS == "linux" && (runtime.GOARCH == "ppc64le" || runtime.GOARCH == "ppc64"):
 		t.Skipf("skipping - external linking not supported, golang.org/issue/11184")
 	case runtime.GOOS == "linux" && (runtime.GOARCH == "mips64le" || runtime.GOARCH == "mips64"):

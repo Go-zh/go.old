@@ -34,9 +34,11 @@ package ld
 import (
 	"cmd/internal/gcprog"
 	"cmd/internal/obj"
+	"cmd/internal/sys"
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -63,7 +65,7 @@ func setuintxx(ctxt *Link, s *LSym, off int64, v uint64, wid int64) int64 {
 	if s.Type == 0 {
 		s.Type = obj.SDATA
 	}
-	s.Reachable = true
+	s.Attr |= AttrReachable
 	if s.Size < off+wid {
 		s.Size = off + wid
 		Symgrow(ctxt, s, s.Size)
@@ -81,6 +83,20 @@ func setuintxx(ctxt *Link, s *LSym, off int64, v uint64, wid int64) int64 {
 	}
 
 	return off + wid
+}
+
+func Addbytes(ctxt *Link, s *LSym, bytes []byte) int64 {
+	if s.Type == 0 {
+		s.Type = obj.SDATA
+	}
+	s.Attr |= AttrReachable
+	s.Size += int64(len(bytes))
+	if int64(int(s.Size)) != s.Size {
+		log.Fatalf("Addbytes size %d too long", s.Size)
+	}
+	s.P = append(s.P, bytes...)
+
+	return s.Size
 }
 
 func adduintxx(ctxt *Link, s *LSym, v uint64, wid int) int64 {
@@ -106,7 +122,7 @@ func Adduint64(ctxt *Link, s *LSym, v uint64) int64 {
 }
 
 func adduint(ctxt *Link, s *LSym, v uint64) int64 {
-	return adduintxx(ctxt, s, v, Thearch.Intsize)
+	return adduintxx(ctxt, s, v, SysArch.IntSize)
 }
 
 func setuint8(ctxt *Link, s *LSym, r int64, v uint8) int64 {
@@ -121,14 +137,14 @@ func Addaddrplus(ctxt *Link, s *LSym, t *LSym, add int64) int64 {
 	if s.Type == 0 {
 		s.Type = obj.SDATA
 	}
-	s.Reachable = true
+	s.Attr |= AttrReachable
 	i := s.Size
-	s.Size += int64(ctxt.Arch.Ptrsize)
+	s.Size += int64(ctxt.Arch.PtrSize)
 	Symgrow(ctxt, s, s.Size)
 	r := Addrel(s)
 	r.Sym = t
 	r.Off = int32(i)
-	r.Siz = uint8(ctxt.Arch.Ptrsize)
+	r.Siz = uint8(ctxt.Arch.PtrSize)
 	r.Type = obj.R_ADDR
 	r.Add = add
 	return i + int64(r.Siz)
@@ -138,7 +154,7 @@ func Addpcrelplus(ctxt *Link, s *LSym, t *LSym, add int64) int64 {
 	if s.Type == 0 {
 		s.Type = obj.SDATA
 	}
-	s.Reachable = true
+	s.Attr |= AttrReachable
 	i := s.Size
 	s.Size += 4
 	Symgrow(ctxt, s, s.Size)
@@ -148,6 +164,9 @@ func Addpcrelplus(ctxt *Link, s *LSym, t *LSym, add int64) int64 {
 	r.Add = add
 	r.Type = obj.R_PCREL
 	r.Siz = 4
+	if SysArch.Family == sys.S390X {
+		r.Variant = RV_390_DBL
+	}
 	return i + int64(r.Siz)
 }
 
@@ -159,16 +178,16 @@ func setaddrplus(ctxt *Link, s *LSym, off int64, t *LSym, add int64) int64 {
 	if s.Type == 0 {
 		s.Type = obj.SDATA
 	}
-	s.Reachable = true
-	if off+int64(ctxt.Arch.Ptrsize) > s.Size {
-		s.Size = off + int64(ctxt.Arch.Ptrsize)
+	s.Attr |= AttrReachable
+	if off+int64(ctxt.Arch.PtrSize) > s.Size {
+		s.Size = off + int64(ctxt.Arch.PtrSize)
 		Symgrow(ctxt, s, s.Size)
 	}
 
 	r := Addrel(s)
 	r.Sym = t
 	r.Off = int32(off)
-	r.Siz = uint8(ctxt.Arch.Ptrsize)
+	r.Siz = uint8(ctxt.Arch.PtrSize)
 	r.Type = obj.R_ADDR
 	r.Add = add
 	return off + int64(r.Siz)
@@ -182,14 +201,14 @@ func addsize(ctxt *Link, s *LSym, t *LSym) int64 {
 	if s.Type == 0 {
 		s.Type = obj.SDATA
 	}
-	s.Reachable = true
+	s.Attr |= AttrReachable
 	i := s.Size
-	s.Size += int64(ctxt.Arch.Ptrsize)
+	s.Size += int64(ctxt.Arch.PtrSize)
 	Symgrow(ctxt, s, s.Size)
 	r := Addrel(s)
 	r.Sym = t
 	r.Off = int32(i)
-	r.Siz = uint8(ctxt.Arch.Ptrsize)
+	r.Siz = uint8(ctxt.Arch.PtrSize)
 	r.Type = obj.R_SIZE
 	return i + int64(r.Siz)
 }
@@ -198,7 +217,7 @@ func addaddrplus4(ctxt *Link, s *LSym, t *LSym, add int64) int64 {
 	if s.Type == 0 {
 		s.Type = obj.SDATA
 	}
-	s.Reachable = true
+	s.Attr |= AttrReachable
 	i := s.Size
 	s.Size += 4
 	Symgrow(ctxt, s, s.Size)
@@ -216,24 +235,6 @@ func addaddrplus4(ctxt *Link, s *LSym, t *LSym, add int64) int64 {
  * sort of LSym* structures.
  * Used for the data block.
  */
-func datcmp(s1 *LSym, s2 *LSym) int {
-	if s1.Type != s2.Type {
-		return int(s1.Type) - int(s2.Type)
-	}
-
-	// For ppc64, we want to interleave the .got and .toc sections
-	// from input files.  Both are type SELFGOT, so in that case
-	// fall through to the name comparison (conveniently, .got
-	// sorts before .toc).
-	if s1.Type != obj.SELFGOT && s1.Size != s2.Size {
-		if s1.Size < s2.Size {
-			return -1
-		}
-		return +1
-	}
-
-	return stringsCompare(s1.Name, s2.Name)
-}
 
 func listnextp(s *LSym) **LSym {
 	return &s.Next
@@ -356,12 +357,23 @@ func relocsym(s *LSym) {
 		// We need to be able to reference dynimport symbols when linking against
 		// shared libraries, and Solaris needs it always
 		if HEADTYPE != obj.Hsolaris && r.Sym != nil && r.Sym.Type == obj.SDYNIMPORT && !DynlinkingGo() {
-			if !(Thearch.Thechar == '9' && Linkmode == LinkExternal && r.Sym.Name == ".TOC.") {
+			if !(SysArch.Family == sys.PPC64 && Linkmode == LinkExternal && r.Sym.Name == ".TOC.") {
 				Diag("unhandled relocation for %s (type %d rtype %d)", r.Sym.Name, r.Sym.Type, r.Type)
 			}
 		}
-		if r.Sym != nil && r.Sym.Type != obj.STLSBSS && !r.Sym.Reachable {
+		if r.Sym != nil && r.Sym.Type != obj.STLSBSS && !r.Sym.Attr.Reachable() {
 			Diag("unreachable sym in relocation: %s %s", s.Name, r.Sym.Name)
+		}
+
+		// TODO(mundaym): remove this special case - see issue 14218.
+		if SysArch.Family == sys.S390X {
+			switch r.Type {
+			case obj.R_PCRELDBL:
+				r.Type = obj.R_PCREL
+				r.Variant = RV_390_DBL
+			case obj.R_CALL:
+				r.Variant = RV_390_DBL
+			}
 		}
 
 		switch r.Type {
@@ -383,7 +395,7 @@ func relocsym(s *LSym) {
 			}
 
 		case obj.R_TLS_LE:
-			isAndroidX86 := goos == "android" && (Thearch.Thechar == '6' || Thearch.Thechar == '8')
+			isAndroidX86 := goos == "android" && (SysArch.InFamily(sys.AMD64, sys.I386))
 
 			if Linkmode == LinkExternal && Iself && HEADTYPE != obj.Hopenbsd && !isAndroidX86 {
 				r.Done = 0
@@ -393,13 +405,13 @@ func relocsym(s *LSym) {
 				r.Xsym = r.Sym
 				r.Xadd = r.Add
 				o = 0
-				if Thearch.Thechar != '6' {
+				if SysArch.Family != sys.AMD64 {
 					o = r.Add
 				}
 				break
 			}
 
-			if Iself && Thearch.Thechar == '5' {
+			if Iself && SysArch.Family == sys.ARM {
 				// On ELF ARM, the thread pointer is 8 bytes before
 				// the start of the thread-local data block, so add 8
 				// to the actual TLS offset (r->sym->value).
@@ -417,7 +429,7 @@ func relocsym(s *LSym) {
 			}
 
 		case obj.R_TLS_IE:
-			isAndroidX86 := goos == "android" && (Thearch.Thechar == '6' || Thearch.Thechar == '8')
+			isAndroidX86 := goos == "android" && (SysArch.InFamily(sys.AMD64, sys.I386))
 
 			if Linkmode == LinkExternal && Iself && HEADTYPE != obj.Hopenbsd && !isAndroidX86 {
 				r.Done = 0
@@ -427,7 +439,7 @@ func relocsym(s *LSym) {
 				r.Xsym = r.Sym
 				r.Xadd = r.Add
 				o = 0
-				if Thearch.Thechar != '6' {
+				if SysArch.Family != sys.AMD64 {
 					o = r.Add
 				}
 				break
@@ -454,7 +466,7 @@ func relocsym(s *LSym) {
 
 				o = r.Xadd
 				if Iself {
-					if Thearch.Thechar == '6' {
+					if SysArch.Family == sys.AMD64 {
 						o = 0
 					}
 				} else if HEADTYPE == obj.Hdarwin {
@@ -464,10 +476,10 @@ func relocsym(s *LSym) {
 					// The workaround is that on arm64 don't ever add symaddr to o and always use
 					// extern relocation by requiring rs->dynid >= 0.
 					if rs.Type != obj.SHOSTOBJ {
-						if Thearch.Thechar == '7' && rs.Dynid < 0 {
+						if SysArch.Family == sys.ARM64 && rs.Dynid < 0 {
 							Diag("R_ADDR reloc to %s+%d is not supported on darwin/arm64", rs.Name, o)
 						}
-						if Thearch.Thechar != '7' {
+						if SysArch.Family != sys.ARM64 {
 							o += Symaddr(rs)
 						}
 					}
@@ -487,10 +499,29 @@ func relocsym(s *LSym) {
 			// fail at runtime. See https://golang.org/issue/7980.
 			// Instead of special casing only amd64, we treat this as an error on all
 			// 64-bit architectures so as to be future-proof.
-			if int32(o) < 0 && Thearch.Ptrsize > 4 && siz == 4 {
+			if int32(o) < 0 && SysArch.PtrSize > 4 && siz == 4 {
 				Diag("non-pc-relative relocation address is too big: %#x (%#x + %#x)", uint64(o), Symaddr(r.Sym), r.Add)
 				errorexit()
 			}
+
+		case obj.R_DWARFREF:
+			if r.Sym.Sect == nil {
+				Diag("missing DWARF section: %s from %s", r.Sym.Name, s.Name)
+			}
+			if Linkmode == LinkExternal {
+				r.Done = 0
+				r.Type = obj.R_ADDR
+
+				r.Xsym = Linkrlookup(Ctxt, r.Sym.Sect.Name, 0)
+				r.Xadd = r.Add + Symaddr(r.Sym) - int64(r.Sym.Sect.Vaddr)
+				o = r.Xadd
+				rs = r.Xsym
+				if Iself && SysArch.Family == sys.AMD64 {
+					o = 0
+				}
+				break
+			}
+			o = Symaddr(r.Sym) + r.Add - int64(r.Sym.Sect.Vaddr)
 
 			// r->sym can be null when CALL $(constant) is transformed from absolute PC to relative PC call.
 		case obj.R_CALL, obj.R_GOTPCREL, obj.R_PCREL:
@@ -514,7 +545,7 @@ func relocsym(s *LSym) {
 
 				o = r.Xadd
 				if Iself {
-					if Thearch.Thechar == '6' {
+					if SysArch.Family == sys.AMD64 {
 						o = 0
 					}
 				} else if HEADTYPE == obj.Hdarwin {
@@ -526,7 +557,7 @@ func relocsym(s *LSym) {
 					} else {
 						o += int64(r.Siz)
 					}
-				} else if HEADTYPE == obj.Hwindows && Thearch.Thechar == '6' { // only amd64 needs PCREL
+				} else if HEADTYPE == obj.Hwindows && SysArch.Family == sys.AMD64 { // only amd64 needs PCREL
 					// PE/COFF's PC32 relocation uses the address after the relocated
 					// bytes as the base. Compensate by skewing the addend.
 					o += int64(r.Siz)
@@ -617,6 +648,9 @@ func reloc() {
 	for s := datap; s != nil; s = s.Next {
 		relocsym(s)
 	}
+	for s := dwarfp; s != nil; s = s.Next {
+		relocsym(s)
+	}
 }
 
 func dynrelocsym(s *LSym) {
@@ -633,7 +667,7 @@ func dynrelocsym(s *LSym) {
 			if targ == nil {
 				continue
 			}
-			if !targ.Reachable {
+			if !targ.Attr.Reachable() {
 				Diag("internal inconsistency: dynamic symbol %s is not reachable.", targ.Name)
 			}
 			if r.Sym.Plt == -2 && r.Sym.Got != -2 { // make dynimport JMP table for PE object files.
@@ -642,7 +676,7 @@ func dynrelocsym(s *LSym) {
 				r.Add = int64(targ.Plt)
 
 				// jmp *addr
-				if Thearch.Thechar == '8' {
+				if SysArch.Family == sys.I386 {
 					Adduint8(Ctxt, rel, 0xff)
 					Adduint8(Ctxt, rel, 0x25)
 					Addaddr(Ctxt, rel, targ)
@@ -668,7 +702,7 @@ func dynrelocsym(s *LSym) {
 	for ri := 0; ri < len(s.R); ri++ {
 		r = &s.R[ri]
 		if r.Sym != nil && r.Sym.Type == obj.SDYNIMPORT || r.Type >= 256 {
-			if r.Sym != nil && !r.Sym.Reachable {
+			if r.Sym != nil && !r.Sym.Attr.Reachable() {
 				Diag("internal inconsistency: dynamic symbol %s is not reachable.", r.Sym.Name)
 			}
 			Thearch.Adddynrel(s, r)
@@ -708,7 +742,6 @@ func blk(start *LSym, addr int64, size int64) {
 	}
 
 	eaddr := addr + size
-	var ep []byte
 	var p []byte
 	for ; sym != nil; sym = sym.Next {
 		if sym.Type&obj.SSUB != 0 {
@@ -723,18 +756,16 @@ func blk(start *LSym, addr int64, size int64) {
 			errorexit()
 		}
 
-		for ; addr < sym.Value; addr++ {
-			Cput(0)
+		if addr < sym.Value {
+			strnput("", int(sym.Value-addr))
+			addr = sym.Value
 		}
 		p = sym.P
-		ep = p[len(sym.P):]
-		for -cap(p) < -cap(ep) {
-			Cput(uint8(p[0]))
-			p = p[1:]
-		}
+		Cwrite(p)
 		addr += int64(len(sym.P))
-		for ; addr < sym.Value+sym.Size; addr++ {
-			Cput(0)
+		if addr < sym.Value+sym.Size {
+			strnput("", int(sym.Value+sym.Size-addr))
+			addr = sym.Value + sym.Size
 		}
 		if addr != sym.Value+sym.Size {
 			Diag("phase error: addr=%#x value+size=%#x", int64(addr), int64(sym.Value)+sym.Size)
@@ -746,8 +777,8 @@ func blk(start *LSym, addr int64, size int64) {
 		}
 	}
 
-	for ; addr < eaddr; addr++ {
-		Cput(0)
+	if addr < eaddr {
+		strnput("", int(eaddr-addr))
 	}
 	Cflush()
 }
@@ -766,7 +797,7 @@ func Codeblk(addr int64, size int64) {
 
 	var sym *LSym
 	for sym = Ctxt.Textp; sym != nil; sym = sym.Next {
-		if !sym.Reachable {
+		if !sym.Attr.Reachable() {
 			continue
 		}
 		if sym.Value >= addr {
@@ -777,7 +808,7 @@ func Codeblk(addr int64, size int64) {
 	eaddr := addr + size
 	var q []byte
 	for ; sym != nil; sym = sym.Next {
-		if !sym.Reachable {
+		if !sym.Attr.Reachable() {
 			continue
 		}
 		if sym.Value >= eaddr {
@@ -899,15 +930,34 @@ func Datblk(addr int64, size int64) {
 	fmt.Fprintf(&Bso, "\t%.8x|\n", uint(eaddr))
 }
 
-func strnput(s string, n int) {
-	for ; n > 0 && s != ""; s = s[1:] {
-		Cput(uint8(s[0]))
-		n--
+func Dwarfblk(addr int64, size int64) {
+	if Debug['a'] != 0 {
+		fmt.Fprintf(&Bso, "dwarfblk [%#x,%#x) at offset %#x\n", addr, addr+size, Cpos())
 	}
 
-	for n > 0 {
-		Cput(0)
-		n--
+	blk(dwarfp, addr, size)
+}
+
+var zeros [512]byte
+
+// strnput writes the first n bytes of s.
+// If n is larger then len(s),
+// it is padded with NUL bytes.
+func strnput(s string, n int) {
+	if len(s) >= n {
+		Cwritestring(s[:n])
+	} else {
+		Cwritestring(s)
+		n -= len(s)
+		for n > 0 {
+			if len(zeros) >= n {
+				Cwrite(zeros[:n])
+				return
+			} else {
+				Cwrite(zeros[:])
+				n -= len(zeros)
+			}
+		}
 	}
 }
 
@@ -930,19 +980,19 @@ func addstrdata(name string, value string) {
 
 	s := Linklookup(Ctxt, name, 0)
 	s.Size = 0
-	s.Dupok = 1
-	reachable := s.Reachable
+	s.Attr |= AttrDuplicateOK
+	reachable := s.Attr.Reachable()
 	Addaddr(Ctxt, s, sp)
-	adduintxx(Ctxt, s, uint64(len(value)), Thearch.Ptrsize)
+	adduintxx(Ctxt, s, uint64(len(value)), SysArch.PtrSize)
 
 	// addstring, addaddr, etc., mark the symbols as reachable.
 	// In this case that is not necessarily true, so stick to what
 	// we know before entering this function.
-	s.Reachable = reachable
+	s.Attr.Set(AttrReachable, reachable)
 
 	strdata = append(strdata, s)
 
-	sp.Reachable = reachable
+	sp.Attr.Set(AttrReachable, reachable)
 }
 
 func checkstrdata() {
@@ -959,7 +1009,7 @@ func Addstring(s *LSym, str string) int64 {
 	if s.Type == 0 {
 		s.Type = obj.SNOPTRDATA
 	}
-	s.Reachable = true
+	s.Attr |= AttrReachable
 	r := int32(s.Size)
 	n := len(str) + 1
 	if s.Name == ".shstrtab" {
@@ -979,8 +1029,8 @@ func addgostring(s *LSym, symname, str string) {
 	if sym.Type != obj.Sxxx {
 		Diag("duplicate symname in addgostring: %s", symname)
 	}
-	sym.Reachable = true
-	sym.Local = true
+	sym.Attr |= AttrReachable
+	sym.Attr |= AttrLocal
 	sym.Type = obj.SRODATA
 	sym.Size = int64(len(str))
 	sym.P = []byte(str)
@@ -993,12 +1043,12 @@ func addinitarrdata(s *LSym) {
 	sp := Linklookup(Ctxt, p, 0)
 	sp.Type = obj.SINITARR
 	sp.Size = 0
-	sp.Dupok = 1
+	sp.Attr |= AttrDuplicateOK
 	Addaddr(Ctxt, sp, s)
 }
 
 func dosymtype() {
-	for s := Ctxt.Allsym; s != nil; s = s.Allsym {
+	for _, s := range Ctxt.Allsym {
 		if len(s.P) > 0 {
 			if s.Type == obj.SBSS {
 				s.Type = obj.SDATA
@@ -1018,17 +1068,22 @@ func dosymtype() {
 	}
 }
 
+// symalign returns the required alignment for the given symbol s.
 func symalign(s *LSym) int32 {
-	if s.Align != 0 {
+	min := int32(Thearch.Minalign)
+	if s.Align >= min {
 		return s.Align
+	} else if s.Align != 0 {
+		return min
 	}
-
+	if strings.HasPrefix(s.Name, "go.string.") && !strings.HasPrefix(s.Name, "go.string.hdr.") {
+		// String data is just bytes.
+		// If we align it, we waste a lot of space to padding.
+		return min
+	}
 	align := int32(Thearch.Maxalign)
-	for int64(align) > s.Size && align > 1 {
+	for int64(align) > s.Size && align > min {
 		align >>= 1
-	}
-	if align < s.Align {
-		align = s.Align
 	}
 	return align
 }
@@ -1074,7 +1129,7 @@ func (p *GCProg) writeByte(x byte) {
 }
 
 func (p *GCProg) End(size int64) {
-	p.w.ZeroUntil(size / int64(Thearch.Ptrsize))
+	p.w.ZeroUntil(size / int64(SysArch.PtrSize))
 	p.w.End()
 	if debugGCProg {
 		fmt.Fprintf(os.Stderr, "ld: end GCProg\n")
@@ -1090,7 +1145,7 @@ func (p *GCProg) AddSym(s *LSym) {
 		return
 	}
 
-	ptrsize := int64(Thearch.Ptrsize)
+	ptrsize := int64(SysArch.PtrSize)
 	nptr := decodetype_ptrdata(typ) / ptrsize
 
 	if debugGCProg {
@@ -1114,6 +1169,36 @@ func (p *GCProg) AddSym(s *LSym) {
 	p.w.Append(prog[4:], nptr)
 }
 
+type dataSortKey struct {
+	// keep sort keys inline to improve cache behaviour while sorting
+	Type int16
+	Size int64
+	Name string
+
+	Lsym *LSym
+}
+
+type dataSlice []dataSortKey
+
+func (d dataSlice) Len() int      { return len(d) }
+func (d dataSlice) Swap(i, j int) { d[i], d[j] = d[j], d[i] }
+func (d dataSlice) Less(i, j int) bool {
+	s1, s2 := &d[i], &d[j]
+	if s1.Type != s2.Type {
+		return s1.Type < s2.Type
+	}
+
+	// For ppc64, we want to interleave the .got and .toc sections
+	// from input files. Both are type SELFGOT, so in that case
+	// fall through to the name comparison (conveniently, .got
+	// sorts before .toc).
+	if s1.Type != obj.SELFGOT && s1.Size != s2.Size {
+		return s1.Size < s2.Size
+	}
+
+	return s1.Name < s2.Name
+}
+
 func growdatsize(datsizep *int64, s *LSym) {
 	datsize := *datsizep
 	const cutoff int64 = 2e9 // 2 GB (or so; looks better in errors than 2^31)
@@ -1128,6 +1213,39 @@ func growdatsize(datsizep *int64, s *LSym) {
 	*datsizep = datsize + s.Size
 }
 
+func list2Slice(head *LSym) dataSlice {
+	n := 0
+	for s := datap; s != nil; s = s.Next {
+		n++
+	}
+	slice := make(dataSlice, n)
+	i := 0
+	for s := datap; s != nil; s = s.Next {
+		k := &slice[i]
+		k.Type = s.Type
+		k.Size = s.Size
+		k.Name = s.Name
+		k.Lsym = s
+
+		i++
+	}
+	return slice
+}
+
+func slice2List(d dataSlice) *LSym {
+	for i := 0; i < len(d)-1; i++ {
+		d[i].Lsym.Next = d[i+1].Lsym
+	}
+	d[len(d)-1].Lsym.Next = nil
+	return d[0].Lsym
+}
+
+func dataSort(head *LSym) *LSym {
+	d := list2Slice(head)
+	sort.Sort(d)
+	return slice2List(d)
+}
+
 func dodata() {
 	if Debug['v'] != 0 {
 		fmt.Fprintf(&Bso, "%5.2f dodata\n", obj.Cputime())
@@ -1137,15 +1255,15 @@ func dodata() {
 	var last *LSym
 	datap = nil
 
-	for s := Ctxt.Allsym; s != nil; s = s.Allsym {
-		if !s.Reachable || s.Special != 0 {
+	for _, s := range Ctxt.Allsym {
+		if !s.Attr.Reachable() || s.Attr.Special() {
 			continue
 		}
 		if obj.STEXT < s.Type && s.Type < obj.SXREF {
-			if s.Onlist != 0 {
+			if s.Attr.OnList() {
 				log.Fatalf("symbol %s listed multiple times", s.Name)
 			}
-			s.Onlist = 1
+			s.Attr |= AttrOnList
 			if last == nil {
 				datap = s
 			} else {
@@ -1198,7 +1316,7 @@ func dodata() {
 		// when building a shared library. We do this by boosting objects of
 		// type SXXX with relocations to type SXXXRELRO.
 		for s := datap; s != nil; s = s.Next {
-			if (s.Type >= obj.STYPE && s.Type <= obj.SFUNCTAB && len(s.R) > 0) || s.Type == obj.SGOSTRING {
+			if (s.Type >= obj.STYPE && s.Type <= obj.SFUNCTAB && len(s.R) > 0) || s.Type == obj.STYPE || s.Type == obj.SGOSTRINGHDR {
 				s.Type += (obj.STYPERELRO - obj.STYPE)
 				if s.Outer != nil {
 					s.Outer.Type = s.Type
@@ -1218,7 +1336,7 @@ func dodata() {
 
 	}
 
-	datap = listsort(datap, datcmp, listnextp)
+	datap = dataSort(datap)
 
 	if Iself {
 		// Make .rela and .rela.plt contiguous, the ELF ABI requires this
@@ -1415,7 +1533,7 @@ func dodata() {
 	if s != nil && s.Type == obj.STLSBSS {
 		if Iself && (Linkmode == LinkExternal || Debug['d'] == 0) && HEADTYPE != obj.Hopenbsd {
 			sect = addsection(&Segdata, ".tbss", 06)
-			sect.Align = int32(Thearch.Ptrsize)
+			sect.Align = int32(SysArch.PtrSize)
 			sect.Vaddr = 0
 		} else {
 			sect = nil
@@ -1546,6 +1664,24 @@ func dodata() {
 
 	sect.Length = uint64(datsize) - sect.Vaddr
 
+	/* itablink */
+	sect = addsection(segro, relro_prefix+".itablink", relro_perms)
+
+	sect.Align = maxalign(s, obj.SITABLINK)
+	datsize = Rnd(datsize, int64(sect.Align))
+	sect.Vaddr = uint64(datsize)
+	Linklookup(Ctxt, "runtime.itablink", 0).Sect = sect
+	Linklookup(Ctxt, "runtime.eitablink", 0).Sect = sect
+	for ; s != nil && s.Type == obj.SITABLINK; s = s.Next {
+		datsize = aligndatsize(datsize, s)
+		s.Sect = sect
+		s.Type = obj.SRODATA
+		s.Value = int64(uint64(datsize) - sect.Vaddr)
+		growdatsize(&datsize, s)
+	}
+
+	sect.Length = uint64(datsize) - sect.Vaddr
+
 	/* gosymtab */
 	sect = addsection(segro, relro_prefix+".gosymtab", relro_perms)
 
@@ -1600,6 +1736,40 @@ func dodata() {
 		Diag("read-only data segment too large")
 	}
 
+	dwarfgeneratedebugsyms()
+
+	for s = dwarfp; s != nil && s.Type == obj.SDWARFSECT; s = s.Next {
+		sect = addsection(&Segdwarf, s.Name, 04)
+		sect.Align = 1
+		datsize = Rnd(datsize, int64(sect.Align))
+		sect.Vaddr = uint64(datsize)
+		s.Sect = sect
+		s.Type = obj.SRODATA
+		s.Value = int64(uint64(datsize) - sect.Vaddr)
+		growdatsize(&datsize, s)
+		sect.Length = uint64(datsize) - sect.Vaddr
+	}
+
+	if s != nil {
+		sect = addsection(&Segdwarf, ".debug_info", 04)
+		sect.Align = 1
+		datsize = Rnd(datsize, int64(sect.Align))
+		sect.Vaddr = uint64(datsize)
+		for ; s != nil && s.Type == obj.SDWARFINFO; s = s.Next {
+			s.Sect = sect
+			s.Type = obj.SRODATA
+			s.Value = int64(uint64(datsize) - sect.Vaddr)
+			s.Attr |= AttrLocal
+			growdatsize(&datsize, s)
+		}
+		sect.Length = uint64(datsize) - sect.Vaddr
+	}
+
+	// The compiler uses 4-byte relocation offsets, so the entire segment must fit in 32 bits.
+	if datsize != int64(uint32(datsize)) {
+		Diag("dwarf segment too large")
+	}
+
 	/* number the sections */
 	n := int32(1)
 
@@ -1612,6 +1782,10 @@ func dodata() {
 		n++
 	}
 	for sect := Segdata.Sect; sect != nil; sect = sect.Next {
+		sect.Extnum = int16(n)
+		n++
+	}
+	for sect := Segdwarf.Sect; sect != nil; sect = sect.Next {
 		sect.Extnum = int16(n)
 		n++
 	}
@@ -1628,7 +1802,7 @@ func textbuildid() {
 	}
 
 	sym := Linklookup(Ctxt, "go.buildid", 0)
-	sym.Reachable = true
+	sym.Attr |= AttrReachable
 	// The \xff is invalid UTF-8, meant to make it less likely
 	// to find one of these accidentally.
 	data := "\xff Go build ID: " + strconv.Quote(buildid) + "\n \xff"
@@ -1654,6 +1828,9 @@ func textaddress() {
 	sect.Align = int32(Funcalign)
 	Linklookup(Ctxt, "runtime.text", 0).Sect = sect
 	Linklookup(Ctxt, "runtime.etext", 0).Sect = sect
+	if HEADTYPE == obj.Hwindows {
+		Linklookup(Ctxt, ".text", 0).Sect = sect
+	}
 	va := uint64(INITTEXT)
 	sect.Vaddr = va
 	for sym := Ctxt.Textp; sym != nil; sym = sym.Next {
@@ -1763,6 +1940,29 @@ func address() {
 
 	Segdata.Filelen = bss.Vaddr - Segdata.Vaddr
 
+	va = uint64(Rnd(int64(va), int64(INITRND)))
+	Segdwarf.Rwx = 06
+	Segdwarf.Vaddr = va
+	Segdwarf.Fileoff = Segdata.Fileoff + uint64(Rnd(int64(Segdata.Filelen), int64(INITRND)))
+	Segdwarf.Filelen = 0
+	if HEADTYPE == obj.Hwindows {
+		Segdwarf.Fileoff = Segdata.Fileoff + uint64(Rnd(int64(Segdata.Filelen), int64(PEFILEALIGN)))
+	}
+	for s := Segdwarf.Sect; s != nil; s = s.Next {
+		vlen = int64(s.Length)
+		if s.Next != nil {
+			vlen = int64(s.Next.Vaddr - s.Vaddr)
+		}
+		s.Vaddr = va
+		va += uint64(vlen)
+		if HEADTYPE == obj.Hwindows {
+			va = uint64(Rnd(int64(va), PEFILEALIGN))
+		}
+		Segdwarf.Length = va - Segdwarf.Vaddr
+	}
+
+	Segdwarf.Filelen = va - Segdwarf.Vaddr
+
 	text := Segtext.Sect
 	var rodata *Section
 	if Segrodata.Sect != nil {
@@ -1776,11 +1976,21 @@ func address() {
 		// object on elf systems.
 		typelink = typelink.Next
 	}
-	symtab := typelink.Next
+	itablink := typelink.Next
+	symtab := itablink.Next
 	pclntab := symtab.Next
 
 	var sub *LSym
 	for sym := datap; sym != nil; sym = sym.Next {
+		Ctxt.Cursym = sym
+		if sym.Sect != nil {
+			sym.Value += int64(sym.Sect.Vaddr)
+		}
+		for sub = sym.Sub; sub != nil; sub = sub.Sub {
+			sub.Value += sym.Value
+		}
+	}
+	for sym := dwarfp; sym != nil; sym = sym.Next {
 		Ctxt.Cursym = sym
 		if sym.Sect != nil {
 			sym.Value += int64(sym.Sect.Vaddr)
@@ -1799,18 +2009,23 @@ func address() {
 
 	xdefine("runtime.text", obj.STEXT, int64(text.Vaddr))
 	xdefine("runtime.etext", obj.STEXT, int64(text.Vaddr+text.Length))
+	if HEADTYPE == obj.Hwindows {
+		xdefine(".text", obj.STEXT, int64(text.Vaddr))
+	}
 	xdefine("runtime.rodata", obj.SRODATA, int64(rodata.Vaddr))
 	xdefine("runtime.erodata", obj.SRODATA, int64(rodata.Vaddr+rodata.Length))
 	xdefine("runtime.typelink", obj.SRODATA, int64(typelink.Vaddr))
 	xdefine("runtime.etypelink", obj.SRODATA, int64(typelink.Vaddr+typelink.Length))
+	xdefine("runtime.itablink", obj.SRODATA, int64(itablink.Vaddr))
+	xdefine("runtime.eitablink", obj.SRODATA, int64(itablink.Vaddr+itablink.Length))
 
 	sym := Linklookup(Ctxt, "runtime.gcdata", 0)
-	sym.Local = true
+	sym.Attr |= AttrLocal
 	xdefine("runtime.egcdata", obj.SRODATA, Symaddr(sym)+sym.Size)
 	Linklookup(Ctxt, "runtime.egcdata", 0).Sect = sym.Sect
 
 	sym = Linklookup(Ctxt, "runtime.gcbss", 0)
-	sym.Local = true
+	sym.Attr |= AttrLocal
 	xdefine("runtime.egcbss", obj.SRODATA, Symaddr(sym)+sym.Size)
 	Linklookup(Ctxt, "runtime.egcbss", 0).Sect = sym.Sect
 

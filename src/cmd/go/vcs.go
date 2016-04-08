@@ -1,4 +1,4 @@
-// Copyright 2012 The Go Authors.  All rights reserved.
+// Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -93,7 +93,7 @@ var vcsHg = &vcsCmd{
 	downloadCmd: []string{"pull"},
 
 	// We allow both tag and branch names as 'tags'
-	// for selecting a version.  This lets people have
+	// for selecting a version. This lets people have
 	// a go.release.r60 branch and a go1 branch
 	// and make changes in both, without constantly
 	// editing .hgtags.
@@ -122,7 +122,7 @@ var vcsGit = &vcsCmd{
 	name: "Git",
 	cmd:  "git",
 
-	createCmd:   []string{"clone {repo} {dir}", "--git-dir={dir}/.git submodule update --init --recursive"},
+	createCmd:   []string{"clone {repo} {dir}", "-go-internal-cd {dir} submodule update --init --recursive"},
 	downloadCmd: []string{"pull --ff-only", "submodule update --init --recursive"},
 
 	tagCmd: []tagCmd{
@@ -137,8 +137,9 @@ var vcsGit = &vcsCmd{
 	// both createCmd and downloadCmd update the working dir.
 	// No need to do more here. We used to 'checkout master'
 	// but that doesn't work if the default branch is not named master.
+	// DO NOT add 'checkout master' here.
 	// See golang.org/issue/9032.
-	tagSyncDefault: []string{"checkout master", "submodule update --init --recursive"},
+	tagSyncDefault: []string{"submodule update --init --recursive"},
 
 	scheme:     []string{"git", "https", "http", "git+ssh", "ssh"},
 	pingCmd:    "ls-remote {scheme}://{repo}",
@@ -334,6 +335,15 @@ func (v *vcsCmd) run1(dir string, cmdline string, keyval []string, verbose bool)
 		args[i] = expand(m, arg)
 	}
 
+	if len(args) >= 2 && args[0] == "-go-internal-cd" {
+		if filepath.IsAbs(args[1]) {
+			dir = args[1]
+		} else {
+			dir = filepath.Join(dir, args[1])
+		}
+		args = args[2:]
+	}
+
 	_, err := exec.LookPath(v.cmd)
 	if err != nil {
 		fmt.Fprintf(os.Stderr,
@@ -373,7 +383,7 @@ func (v *vcsCmd) ping(scheme, repo string) error {
 // The parent of dir must exist; dir must not.
 func (v *vcsCmd) create(dir, repo string) error {
 	for _, cmd := range v.createCmd {
-		if !go15VendorExperiment && strings.Contains(cmd, "submodule") {
+		if strings.Contains(cmd, "submodule") {
 			continue
 		}
 		if err := v.run(".", cmd, "dir", dir, "repo", repo); err != nil {
@@ -385,11 +395,8 @@ func (v *vcsCmd) create(dir, repo string) error {
 
 // download downloads any new changes for the repo in dir.
 func (v *vcsCmd) download(dir string) error {
-	if err := v.fixDetachedHead(dir); err != nil {
-		return err
-	}
 	for _, cmd := range v.downloadCmd {
-		if !go15VendorExperiment && strings.Contains(cmd, "submodule") {
+		if strings.Contains(cmd, "submodule") {
 			continue
 		}
 		if err := v.run(dir, cmd); err != nil {
@@ -397,30 +404,6 @@ func (v *vcsCmd) download(dir string) error {
 		}
 	}
 	return nil
-}
-
-// fixDetachedHead switches a Git repository in dir from a detached head to the master branch.
-// Go versions before 1.2 downloaded Git repositories in an unfortunate way
-// that resulted in the working tree state being on a detached head.
-// That meant the repository was not usable for normal Git operations.
-// Go 1.2 fixed that, but we can't pull into a detached head, so if this is
-// a Git repository we check for being on a detached head and switch to the
-// real branch, almost always called "master".
-// TODO(dsymonds): Consider removing this for Go 1.3.
-func (v *vcsCmd) fixDetachedHead(dir string) error {
-	if v != vcsGit {
-		return nil
-	}
-
-	// "git symbolic-ref HEAD" succeeds iff we are not on a detached head.
-	if err := v.runVerboseOnly(dir, "symbolic-ref HEAD"); err == nil {
-		// not on a detached head
-		return nil
-	}
-	if buildV {
-		log.Printf("%s on detached head; repairing", dir)
-	}
-	return v.run(dir, "checkout master")
 }
 
 // tags returns the list of available tags for the repo in dir.
@@ -462,7 +445,7 @@ func (v *vcsCmd) tagSync(dir, tag string) error {
 
 	if tag == "" && v.tagSyncDefault != nil {
 		for _, cmd := range v.tagSyncDefault {
-			if !go15VendorExperiment && strings.Contains(cmd, "submodule") {
+			if strings.Contains(cmd, "submodule") {
 				continue
 			}
 			if err := v.run(dir, cmd); err != nil {
@@ -473,7 +456,7 @@ func (v *vcsCmd) tagSync(dir, tag string) error {
 	}
 
 	for _, cmd := range v.tagSyncCmd {
-		if !go15VendorExperiment && strings.Contains(cmd, "submodule") {
+		if strings.Contains(cmd, "submodule") {
 			continue
 		}
 		if err := v.run(dir, cmd, "tag", tag); err != nil {
@@ -832,20 +815,6 @@ func expand(match map[string]string, s string) string {
 // and import paths referring to a fully-qualified importPath
 // containing a VCS type (foo.com/repo.git/dir)
 var vcsPaths = []*vcsPath{
-	// Google Code - new syntax
-	{
-		prefix: "code.google.com/",
-		re:     `^(?P<root>code\.google\.com/p/(?P<project>[a-z0-9\-]+)(\.(?P<subrepo>[a-z0-9\-]+))?)(/[A-Za-z0-9_.\-]+)*$`,
-		repo:   "https://{root}",
-		check:  googleCodeVCS,
-	},
-
-	// Google Code - old syntax
-	{
-		re:    `^(?P<project>[a-z0-9_\-.]+)\.googlecode\.com/(git|hg|svn)(?P<path>/.*)?$`,
-		check: oldGoogleCode,
-	},
-
 	// Github
 	{
 		prefix: "github.com/",
@@ -883,7 +852,7 @@ var vcsPaths = []*vcsPath{
 	// General syntax for any server.
 	// Must be last.
 	{
-		re:   `^(?P<root>(?P<repo>([a-z0-9.\-]+\.)+[a-z0-9.\-]+(:[0-9]+)?/[A-Za-z0-9_.\-/]*?)\.(?P<vcs>bzr|git|hg|svn))(/[A-Za-z0-9_.\-]+)*$`,
+		re:   `^(?P<root>(?P<repo>([a-z0-9.\-]+\.)+[a-z0-9.\-]+(:[0-9]+)?(/~?[A-Za-z0-9_.\-]+)+?)\.(?P<vcs>bzr|git|hg|svn))(/~?[A-Za-z0-9_.\-]+)*$`,
 		ping: true,
 	},
 }
@@ -926,45 +895,6 @@ func noVCSSuffix(match map[string]string) error {
 		}
 	}
 	return nil
-}
-
-var googleCheckout = regexp.MustCompile(`id="checkoutcmd">(hg|git|svn)`)
-
-// googleCodeVCS determines the version control system for
-// a code.google.com repository, by scraping the project's
-// /source/checkout page.
-func googleCodeVCS(match map[string]string) error {
-	if err := noVCSSuffix(match); err != nil {
-		return err
-	}
-	data, err := httpGET(expand(match, "https://code.google.com/p/{project}/source/checkout?repo={subrepo}"))
-	if err != nil {
-		return err
-	}
-
-	if m := googleCheckout.FindSubmatch(data); m != nil {
-		if vcs := vcsByCmd(string(m[1])); vcs != nil {
-			// Subversion requires the old URLs.
-			// TODO: Test.
-			if vcs == vcsSvn {
-				if match["subrepo"] != "" {
-					return fmt.Errorf("sub-repositories not supported in Google Code Subversion projects")
-				}
-				match["repo"] = expand(match, "https://{project}.googlecode.com/svn")
-			}
-			match["vcs"] = vcs.cmd
-			return nil
-		}
-	}
-
-	return fmt.Errorf("unable to detect version control system for code.google.com/ path")
-}
-
-// oldGoogleCode is invoked for old-style foo.googlecode.com paths.
-// It prints an error giving the equivalent new path.
-func oldGoogleCode(match map[string]string) error {
-	return fmt.Errorf("invalid Google Code import path: use %s instead",
-		expand(match, "code.google.com/p/{project}{path}"))
 }
 
 // bitbucketVCS determines the version control system for a

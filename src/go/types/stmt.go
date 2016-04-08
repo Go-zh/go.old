@@ -346,7 +346,17 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			check.invalidAST(s.TokPos, "unknown inc/dec operation %s", s.Tok)
 			return
 		}
+
 		var x operand
+		check.expr(&x, s.X)
+		if x.mode == invalid {
+			return
+		}
+		if !isNumeric(x.typ) {
+			check.invalidOp(s.X.Pos(), "%s%s (non-numeric type %s)", s.X, s.Tok, x.typ)
+			return
+		}
+
 		Y := &ast.BasicLit{ValuePos: s.X.Pos(), Kind: token.INT, Value: "1"} // use x's position
 		check.binary(&x, nil, s.X, Y, op)
 		if x.mode == invalid {
@@ -457,8 +467,15 @@ func (check *Checker) stmt(ctxt stmtContext, s ast.Stmt) {
 			check.error(s.Cond.Pos(), "non-boolean condition in if statement")
 		}
 		check.stmt(inner, s.Body)
-		if s.Else != nil {
+		// The parser produces a correct AST but if it was modified
+		// elsewhere the else branch may be invalid. Check again.
+		switch s.Else.(type) {
+		case nil, *ast.BadStmt:
+			// valid or error already reported
+		case *ast.IfStmt, *ast.BlockStmt:
 			check.stmt(inner, s.Else)
+		default:
+			check.error(s.Else.Pos(), "invalid else branch in if statement")
 		}
 
 	case *ast.SwitchStmt:

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Software floating point interpretaton of ARM 7500 FP instructions.
+// Software floating point interpretation of ARM 7500 FP instructions.
 // The interpretation is not bit compatible with the 7500.
 // It uses true little-endian doubles, while the 7500 used mixed-endian.
 
@@ -609,7 +609,7 @@ func sfloat2(pc uint32, regs *[15]uint32) uint32 {
 			pc = uint32(funcPC(_sfloatpanic))
 			break
 		}
-		pc += 4 * uint32(skip)
+		pc += 4 * skip
 	}
 	if first {
 		print("sfloat2 ", pc, " ", hex(*(*uint32)(unsafe.Pointer(uintptr(pc)))), "\n")

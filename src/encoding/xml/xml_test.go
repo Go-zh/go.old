@@ -1,4 +1,4 @@
-// Copyright 2009 The Go Authors.  All rights reserved.
+// Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -183,8 +183,6 @@ const nonStrictInput = `
 <tag>&;</tag>
 <tag>&0a;</tag>
 `
-
-var nonStringEntity = map[string]string{"": "oops!", "0a": "oops!"}
 
 var nonStrictTokens = []Token{
 	CharData("\n"),
@@ -652,10 +650,6 @@ func TestDisallowedCharacters(t *testing.T) {
 	}
 }
 
-type procInstEncodingTest struct {
-	expect, got string
-}
-
 var procInstTests = []struct {
 	input  string
 	expect [2]string
@@ -768,6 +762,38 @@ func TestIssue11405(t *testing.T) {
 		}
 		if _, ok := err.(*SyntaxError); !ok {
 			t.Errorf("%s: Token: Got error %v, want SyntaxError", tc, err)
+		}
+	}
+}
+
+func TestIssue12417(t *testing.T) {
+	testCases := []struct {
+		s  string
+		ok bool
+	}{
+		{`<?xml encoding="UtF-8" version="1.0"?><root/>`, true},
+		{`<?xml encoding="UTF-8" version="1.0"?><root/>`, true},
+		{`<?xml encoding="utf-8" version="1.0"?><root/>`, true},
+		{`<?xml encoding="uuu-9" version="1.0"?><root/>`, false},
+	}
+	for _, tc := range testCases {
+		d := NewDecoder(strings.NewReader(tc.s))
+		var err error
+		for {
+			_, err = d.Token()
+			if err != nil {
+				if err == io.EOF {
+					err = nil
+				}
+				break
+			}
+		}
+		if err != nil && tc.ok {
+			t.Errorf("%q: Encoding charset: expected no error, got %s", tc.s, err)
+			continue
+		}
+		if err == nil && !tc.ok {
+			t.Errorf("%q: Encoding charset: expected error, got nil", tc.s)
 		}
 	}
 }

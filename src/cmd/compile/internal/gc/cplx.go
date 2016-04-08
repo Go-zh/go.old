@@ -229,20 +229,20 @@ func nodfconst(n *Node, t *Type, fval *Mpflt) {
 	n.SetVal(Val{fval})
 	n.Type = t
 
-	if !Isfloat[t.Etype] {
+	if !t.IsFloat() {
 		Fatalf("nodfconst: bad type %v", t)
 	}
 }
 
 func Complexop(n *Node, res *Node) bool {
 	if n != nil && n.Type != nil {
-		if Iscomplex[n.Type.Etype] {
+		if n.Type.IsComplex() {
 			goto maybe
 		}
 	}
 
 	if res != nil && res.Type != nil {
-		if Iscomplex[res.Type.Etype] {
+		if res.Type.IsComplex() {
 			goto maybe
 		}
 	}
@@ -398,7 +398,7 @@ func Complexgen(n *Node, res *Node) {
 	switch n.Op {
 	default:
 		Dump("complexgen: unknown op", n)
-		Fatalf("complexgen: unknown op %v", Oconv(int(n.Op), 0))
+		Fatalf("complexgen: unknown op %v", Oconv(n.Op, 0))
 
 	case ODOT,
 		ODOTPTR,
@@ -457,7 +457,7 @@ func Complexgen(n *Node, res *Node) {
 
 	switch n.Op {
 	default:
-		Fatalf("complexgen: unknown op %v", Oconv(int(n.Op), 0))
+		Fatalf("complexgen: unknown op %v", Oconv(n.Op, 0))
 
 	case OCONV:
 		Complexmove(nl, res)

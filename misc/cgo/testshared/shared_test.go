@@ -203,6 +203,26 @@ func TestNoTextrel(t *testing.T) {
 	}
 }
 
+// The shared library does not contain symbols called ".dup"
+func TestNoDupSymbols(t *testing.T) {
+	sopath := filepath.Join(gorootInstallDir, soname)
+	f, err := elf.Open(sopath)
+	if err != nil {
+		t.Fatal("elf.Open failed: ", err)
+	}
+	defer f.Close()
+	syms, err := f.Symbols()
+	if err != nil {
+		t.Errorf("error reading symbols %v", err)
+		return
+	}
+	for _, s := range syms {
+		if s.Name == ".dup" {
+			t.Fatalf("%s contains symbol called .dup", sopath)
+		}
+	}
+}
+
 // The install command should have created a "shlibname" file for the
 // listed packages (and runtime/cgo, and math on arm) indicating the
 // name of the shared library containing it.
@@ -712,7 +732,7 @@ func TestABIChecking(t *testing.T) {
 	// If we make an ABI-breaking change to dep and rebuild libp.so but not exe,
 	// exe will abort with a complaint on startup.
 	// This assumes adding an exported function breaks ABI, which is not true in
-	// some senses but suffices for the narrow definition of ABI compatiblity the
+	// some senses but suffices for the narrow definition of ABI compatibility the
 	// toolchain uses today.
 	resetFileStamps()
 	appendFile("src/dep/dep.go", "func ABIBreak() {}\n")
@@ -748,4 +768,16 @@ func TestABIChecking(t *testing.T) {
 	appendFile("src/dep/dep.go", "func noABIBreak() {}\n")
 	goCmd(t, "install", "-buildmode=shared", "-linkshared", "dep")
 	run(t, "after non-ABI breaking change", "./bin/exe")
+}
+
+// If a package 'explicit' imports a package 'implicit', building
+// 'explicit' into a shared library implicitly includes implicit in
+// the shared library. Building an executable that imports both
+// explicit and implicit builds the code from implicit into the
+// executable rather than fetching it from the shared library. The
+// link still succeeds and the executable still runs though.
+func TestImplicitInclusion(t *testing.T) {
+	goCmd(t, "install", "-buildmode=shared", "-linkshared", "explicit")
+	goCmd(t, "install", "-linkshared", "implicitcmd")
+	run(t, "running executable linked against library that contains same package as it", "./bin/implicitcmd")
 }

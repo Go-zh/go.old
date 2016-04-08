@@ -1,14 +1,14 @@
 // cmd/7l/noop.c, cmd/7l/obj.c, cmd/ld/pass.c from Vita Nuova.
 // https://code.google.com/p/ken-cc/source/browse/
 //
-// 	Copyright © 1994-1999 Lucent Technologies Inc.  All rights reserved.
+// 	Copyright © 1994-1999 Lucent Technologies Inc. All rights reserved.
 // 	Portions Copyright © 1995-1997 C H Forsyth (forsyth@terzarima.net)
 // 	Portions Copyright © 1997-1999 Vita Nuova Limited
 // 	Portions Copyright © 2000-2007 Vita Nuova Holdings Limited (www.vitanuova.com)
 // 	Portions Copyright © 2004,2006 Bruce Ellis
 // 	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 // 	Revisions Copyright © 2000-2007 Lucent Technologies Inc. and others
-// 	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+// 	Portions Copyright © 2009 The Go Authors. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -32,13 +32,13 @@ package arm64
 
 import (
 	"cmd/internal/obj"
-	"encoding/binary"
+	"cmd/internal/sys"
 	"fmt"
 	"log"
 	"math"
 )
 
-var complements = []int16{
+var complements = []obj.As{
 	AADD:  ASUB,
 	AADDW: ASUBW,
 	ASUB:  AADD,
@@ -56,9 +56,9 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, framesize int32) *obj.Prog {
 	p.As = AMOVD
 	p.From.Type = obj.TYPE_MEM
 	p.From.Reg = REGG
-	p.From.Offset = 2 * int64(ctxt.Arch.Ptrsize) // G.stackguard0
-	if ctxt.Cursym.Cfunc != 0 {
-		p.From.Offset = 3 * int64(ctxt.Arch.Ptrsize) // G.stackguard1
+	p.From.Offset = 2 * int64(ctxt.Arch.PtrSize) // G.stackguard0
+	if ctxt.Cursym.Cfunc {
+		p.From.Offset = 3 * int64(ctxt.Arch.PtrSize) // G.stackguard1
 	}
 	p.To.Type = obj.TYPE_REG
 	p.To.Reg = REG_R1
@@ -161,8 +161,12 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, framesize int32) *obj.Prog {
 	for last = ctxt.Cursym.Text; last.Link != nil; last = last.Link {
 	}
 
+	spfix := obj.Appendp(ctxt, last)
+	spfix.As = obj.ANOP
+	spfix.Spadj = -framesize
+
 	// MOV	LR, R3
-	movlr := obj.Appendp(ctxt, last)
+	movlr := obj.Appendp(ctxt, spfix)
 	movlr.As = AMOVD
 	movlr.From.Type = obj.TYPE_REG
 	movlr.From.Reg = REGLINK
@@ -189,7 +193,7 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, framesize int32) *obj.Prog {
 	call.To.Type = obj.TYPE_BRANCH
 	morestack := "runtime.morestack"
 	switch {
-	case ctxt.Cursym.Cfunc != 0:
+	case ctxt.Cursym.Cfunc:
 		morestack = "runtime.morestackc"
 	case ctxt.Cursym.Text.From3.Offset&obj.NEEDCTXT == 0:
 		morestack = "runtime.morestack_noctxt"
@@ -201,6 +205,7 @@ func stacksplit(ctxt *obj.Link, p *obj.Prog, framesize int32) *obj.Prog {
 	jmp.As = AB
 	jmp.To.Type = obj.TYPE_BRANCH
 	jmp.Pcond = ctxt.Cursym.Text.Link
+	jmp.Spadj = +framesize
 
 	// placeholder for bls's jump target
 	// p = obj.Appendp(ctxt, p)
@@ -416,7 +421,7 @@ func follow(ctxt *obj.Link, s *obj.LSym) {
 	s.Text = firstp.Link
 }
 
-func relinv(a int) int {
+func relinv(a obj.As) obj.As {
 	switch a {
 	case ABEQ:
 		return ABNE
@@ -459,14 +464,13 @@ func relinv(a int) int {
 func xfol(ctxt *obj.Link, p *obj.Prog, last **obj.Prog) {
 	var q *obj.Prog
 	var r *obj.Prog
-	var a int
 	var i int
 
 loop:
 	if p == nil {
 		return
 	}
-	a = int(p.As)
+	a := p.As
 	if a == AB {
 		q = p.Pcond
 		if q != nil {
@@ -485,7 +489,7 @@ loop:
 			if q == *last || q == nil {
 				break
 			}
-			a = int(q.As)
+			a = q.As
 			if a == obj.ANOP {
 				i--
 				continue
@@ -506,7 +510,7 @@ loop:
 				r = ctxt.NewProg()
 				*r = *p
 				if !(r.Mark&FOLL != 0) {
-					fmt.Printf("cant happen 1\n")
+					fmt.Printf("can't happen 1\n")
 				}
 				r.Mark |= FOLL
 				if p != q {
@@ -532,7 +536,7 @@ loop:
 					xfol(ctxt, r.Link, last)
 				}
 				if !(r.Pcond.Mark&FOLL != 0) {
-					fmt.Printf("cant happen 2\n")
+					fmt.Printf("can't happen 2\n")
 				}
 				return
 			}
@@ -540,7 +544,7 @@ loop:
 
 		a = AB
 		q = ctxt.NewProg()
-		q.As = int16(a)
+		q.As = a
 		q.Lineno = p.Lineno
 		q.To.Type = obj.TYPE_BRANCH
 		q.To.Offset = p.Pc
@@ -559,7 +563,7 @@ loop:
 			q = obj.Brchain(ctxt, p.Link)
 			if a != obj.ATEXT {
 				if q != nil && (q.Mark&FOLL != 0) {
-					p.As = int16(relinv(a))
+					p.As = relinv(a)
 					p.Link = p.Pcond
 					p.Pcond = q
 				}
@@ -666,11 +670,10 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 		q = p
 	}
 
-	var o int
 	var q2 *obj.Prog
 	var retjmp *obj.LSym
 	for p := cursym.Text; p != nil; p = p.Link {
-		o = int(p.As)
+		o := p.As
 		switch o {
 		case obj.ATEXT:
 			cursym.Text = p
@@ -715,7 +718,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 				aoffset = 0xF0
 			}
 			if cursym.Text.Mark&LEAF != 0 {
-				cursym.Leaf = 1
+				cursym.Leaf = true
 				if ctxt.Autosize == 0 {
 					break
 				}
@@ -775,7 +778,7 @@ func preprocess(ctxt *obj.Link, cursym *obj.LSym) {
 				q.As = AMOVD
 				q.From.Type = obj.TYPE_MEM
 				q.From.Reg = REGG
-				q.From.Offset = 4 * int64(ctxt.Arch.Ptrsize) // G.panic
+				q.From.Offset = 4 * int64(ctxt.Arch.PtrSize) // G.panic
 				q.To.Type = obj.TYPE_REG
 				q.To.Reg = REG_R1
 
@@ -929,7 +932,7 @@ func nocache(p *obj.Prog) {
 	p.To.Class = 0
 }
 
-var unaryDst = map[int]bool{
+var unaryDst = map[obj.As]bool{
 	AWORD:  true,
 	ADWORD: true,
 	ABL:    true,
@@ -938,15 +941,10 @@ var unaryDst = map[int]bool{
 }
 
 var Linkarm64 = obj.LinkArch{
-	ByteOrder:  binary.LittleEndian,
-	Name:       "arm64",
-	Thechar:    '7',
+	Arch:       sys.ArchARM64,
 	Preprocess: preprocess,
 	Assemble:   span7,
 	Follow:     follow,
 	Progedit:   progedit,
 	UnaryDst:   unaryDst,
-	Minlc:      4,
-	Ptrsize:    8,
-	Regsize:    8,
 }

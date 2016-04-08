@@ -32,6 +32,7 @@ package arm64
 
 import (
 	"cmd/internal/obj"
+	"cmd/internal/sys"
 	"cmd/link/internal/ld"
 	"fmt"
 	"log"
@@ -45,16 +46,11 @@ func Main() {
 }
 
 func linkarchinit() {
-	ld.Thestring = obj.Getgoarch()
-	ld.Thelinkarch = &ld.Linkarm64
+	ld.SysArch = sys.ArchARM64
 
-	ld.Thearch.Thechar = thechar
-	ld.Thearch.Ptrsize = ld.Thelinkarch.Ptrsize
-	ld.Thearch.Intsize = ld.Thelinkarch.Ptrsize
-	ld.Thearch.Regsize = ld.Thelinkarch.Regsize
 	ld.Thearch.Funcalign = FuncAlign
 	ld.Thearch.Maxalign = MaxAlign
-	ld.Thearch.Minlc = MINLC
+	ld.Thearch.Minalign = MinAlign
 	ld.Thearch.Dwarfregsp = DWARFREGSP
 	ld.Thearch.Dwarfreglr = DWARFREGLR
 
@@ -70,6 +66,9 @@ func linkarchinit() {
 	ld.Thearch.Lput = ld.Lputl
 	ld.Thearch.Wput = ld.Wputl
 	ld.Thearch.Vput = ld.Vputl
+	ld.Thearch.Append16 = ld.Append16l
+	ld.Thearch.Append32 = ld.Append32l
+	ld.Thearch.Append64 = ld.Append64l
 
 	ld.Thearch.Linuxdynld = "/lib/ld-linux-aarch64.so.1"
 

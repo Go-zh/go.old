@@ -12,23 +12,27 @@ import (
 	"sync"
 )
 
-// A Compressor returns a compressing writer, writing to the
-// provided writer. On Close, any pending data should be flushed.
+// A Compressor returns a new compressing writer, writing to w.
+// The WriteCloser's Close method must be used to flush pending data to w.
+// The Compressor itself must be safe to invoke from multiple goroutines
+// simultaneously, but each returned writer will be used only by
+// one goroutine at a time.
 
-// Compressor函数类型会返回一个io.WriteCloser，该接口会将数据压缩后写入提供的接口。
-// 关闭时，应将缓冲中的数据刷新到下层接口中。
-type Compressor func(io.Writer) (io.WriteCloser, error)
+// Compressor 返回一个新的压缩写入器，写入到 w 中。WriteCloser 的 Close
+// 方法必须必须被用于将等待的数据刷新到 w 中。Compressor 在多个Go程被同步调用时，
+// 其自身必须保证安全，但每个返回的写入器一次只会被一个Go程使用。
+type Compressor func(w io.Writer) (io.WriteCloser, error)
 
-// Decompressor is a function that wraps a Reader with a decompressing Reader.
-// The decompressed ReadCloser is returned to callers who open files from
-// within the archive.  These callers are responsible for closing this reader
-// when they're finished reading.
+// A Decompressor returns a new decompressing reader, reading from r.
+// The ReadCloser's Close method must be used to release associated resources.
+// The Decompressor itself must be safe to invoke from multiple goroutines
+// simultaneously, but each returned reader will be used only by
+// one goroutine at a time.
 
-// Decompressor函数类型会把一个io.Reader包装成具有decompressing特性的io.Reader.
-// Decompressor函数类型会返回一个io.ReadCloser，
-// 该接口的Read方法会将读取自提供的接口的数据提前解压缩。
-// 程序员有责任在读取结束时关闭该io.ReadCloser。
-type Decompressor func(io.Reader) io.ReadCloser
+// Decompressor 返回一个新的解压读取器，从 r 中读取。ReadCloser 的 Close
+// 方法必须被用于释放相关的资源。Decompressor 在多个Go程被同步调用时，
+// 其自身必须保证安全，但每个返回的读取器一次只会被一个Go程使用。
+type Decompressor func(r io.Reader) io.ReadCloser
 
 var flateWriterPool sync.Pool
 
@@ -83,16 +87,18 @@ var (
 )
 
 // RegisterDecompressor allows custom decompressors for a specified method ID.
+// The common methods Store and Deflate are built in.
 
 // RegisterDecompressor使用指定的方法ID注册一个Decompressor类型函数。
-func RegisterDecompressor(method uint16, d Decompressor) {
+// 通用方法 Store 和 Deflate 是内建的。
+func RegisterDecompressor(method uint16, dcomp Decompressor) {
 	mu.Lock()
 	defer mu.Unlock()
 
 	if _, ok := decompressors[method]; ok {
 		panic("decompressor already registered")
 	}
-	decompressors[method] = d
+	decompressors[method] = dcomp
 }
 
 // RegisterCompressor registers custom compressors for a specified method ID.

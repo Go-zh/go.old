@@ -67,6 +67,12 @@ Flag: -buildtags
 
 Badly formed or misplaced +build tags.
 
+Invalid uses of cgo
+
+Flag: -cgocall
+
+Detect some violations of the cgo pointer passing rules.
+
 Unkeyed composite literals
 
 Flag: -composites
@@ -79,12 +85,12 @@ Flag: -copylocks
 
 Locks that are erroneously passed by value.
 
-Documentation examples
+Tests, benchmarks and documentation examples
 
-Flag: -example
+Flag: -tests
 
-Mistakes involving example tests, including examples with incorrect names or
-function signatures, or that document identifiers not in the package.
+Mistakes involving tests including functions with incorrect names or signatures
+and example tests that document identifiers not in the package.
 
 Methods
 
@@ -178,21 +184,14 @@ Other flags
 These flags configure the behavior of vet:
 
 	-all (default true)
-		Check everything; disabled if any explicit check is requested.
+		Enable all non-experimental checks.
 	-v
 		Verbose mode
 	-printfuncs
-		A comma-separated list of print-like functions to supplement the
-		standard list.  Each entry is in the form Name:N where N is the
-		zero-based argument position of the first argument involved in the
-		print: either the format or the first print argument for non-formatted
-		prints.  For example, if you have Warn and Warnf functions that
-		take an io.Writer as their first argument, like Fprintf,
-			-printfuncs=Warn:1,Warnf:1
+		A comma-separated list of print-like function names
+		to supplement the standard list.
 		For more information, see the discussion of the -printf flag.
 	-shadowstrict
 		Whether to be strict about shadowing; can be noisy.
-	-test
-		For testing only: sets -all and -shadow.
 */
 package main // import "golang.org/x/tools/cmd/vet"

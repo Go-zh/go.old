@@ -90,7 +90,13 @@ func openFile(name string, flag int, perm FileMode) (file *File, err error) {
 }
 
 func openDir(name string) (file *File, err error) {
-	maskp, e := syscall.UTF16PtrFromString(name + `\*`)
+	var mask string
+	if len(name) == 2 && name[1] == ':' { // it is a drive letter, like C:
+		mask = name + `*`
+	} else {
+		mask = name + `\*`
+	}
+	maskp, e := syscall.UTF16PtrFromString(mask)
 	if e != nil {
 		return nil, e
 	}
@@ -130,8 +136,8 @@ func openDir(name string) (file *File, err error) {
 }
 
 // OpenFile is the generalized open call; most users will use Open
-// or Create instead.  It opens the named file with specified flag
-// (O_RDONLY etc.) and perm, (0666 etc.) if applicable.  If successful,
+// or Create instead. It opens the named file with specified flag
+// (O_RDONLY etc.) and perm, (0666 etc.) if applicable. If successful,
 // methods on the returned File can be used for I/O.
 // If there is an error, it will be of type *PathError.
 func OpenFile(name string, flag int, perm FileMode) (*File, error) {
@@ -257,24 +263,37 @@ func (f *File) readConsole(b []byte) (n int, err error) {
 		return 0, nil
 	}
 	if len(f.readbuf) == 0 {
-		// syscall.ReadConsole seems to fail, if given large buffer.
-		// So limit the buffer to 16000 characters.
 		numBytes := len(b)
-		if numBytes > 16000 {
-			numBytes = 16000
+		// Windows  can't read bytes over max of int16.
+		// Some versions of Windows can read even less.
+		// See golang.org/issue/13697.
+		if numBytes > 10000 {
+			numBytes = 10000
 		}
-		// get more input data from os
-		wchars := make([]uint16, numBytes)
-		var p *uint16
-		if len(b) > 0 {
-			p = &wchars[0]
-		}
-		var nw uint32
-		err := syscall.ReadConsole(f.fd, p, uint32(len(wchars)), &nw, nil)
+		mbytes := make([]byte, numBytes)
+		var nmb uint32
+		err := syscall.ReadFile(f.fd, mbytes, &nmb, nil)
 		if err != nil {
 			return 0, err
 		}
-		f.readbuf = utf16.Decode(wchars[:nw])
+		if nmb > 0 {
+			var pmb *byte
+			if len(b) > 0 {
+				pmb = &mbytes[0]
+			}
+			acp := windows.GetACP()
+			nwc, err := windows.MultiByteToWideChar(acp, 2, pmb, int32(nmb), nil, 0)
+			if err != nil {
+				return 0, err
+			}
+			wchars := make([]uint16, nwc)
+			pwc := &wchars[0]
+			nwc, err = windows.MultiByteToWideChar(acp, 2, pmb, int32(nmb), pwc, int32(nwc))
+			if err != nil {
+				return 0, err
+			}
+			f.readbuf = utf16.Decode(wchars[:nwc])
+		}
 	}
 	for i, r := range f.readbuf {
 		if utf8.RuneLen(r) > len(b) {

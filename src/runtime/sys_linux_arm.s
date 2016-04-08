@@ -313,7 +313,7 @@ nog:
 	MOVW	$16(R13), R13
 	BL	(R0)
 
-	// It shouldn't return.  If it does, exit that thread.
+	// It shouldn't return. If it does, exit that thread.
 	SUB	$16, R13 // restore the stack pointer to avoid memory corruption
 	MOVW	$0, R0
 	MOVW	R0, 4(R13)
@@ -339,7 +339,11 @@ TEXT runtime·sigfwd(SB),NOSPLIT,$0-16
 	MOVW	info+8(FP), R1
 	MOVW	ctx+12(FP), R2
 	MOVW	fn+0(FP), R11
+	MOVW	R13, R4
+	SUB	$24, R13
+	BIC	$0x7, R13 // alignment for ELF ABI
 	BL	(R11)
+	MOVW	R4, R13
 	RET
 
 TEXT runtime·sigtramp(SB),NOSPLIT,$12
@@ -356,6 +360,10 @@ TEXT runtime·sigtramp(SB),NOSPLIT,$12
 	MOVW  	$runtime·sigtrampgo(SB), R11
 	BL	(R11)
 	RET
+
+TEXT runtime·cgoSigtramp(SB),NOSPLIT,$0
+	MOVW  	$runtime·sigtramp(SB), R11
+	B	(R11)
 
 TEXT runtime·rtsigprocmask(SB),NOSPLIT,$0
 	MOVW	sig+0(FP), R0

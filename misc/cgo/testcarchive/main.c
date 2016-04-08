@@ -4,12 +4,21 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "p.h"
 #include "libgo.h"
 
+extern int install_handler();
+extern int check_handler();
+
 int main(void) {
 	int32_t res;
+
+	int r1 = install_handler();
+	if (r1!=0) {
+		return r1;
+	}
 
 	if (!DidInitRun()) {
 		fprintf(stderr, "ERROR: buildmode=c-archive init should run\n");
@@ -19,6 +28,11 @@ int main(void) {
 	if (DidMainRun()) {
 		fprintf(stderr, "ERROR: buildmode=c-archive should not run main\n");
 		return 2;
+	}
+
+	int r2 = check_handler();
+	if (r2!=0) {
+		return r2;
 	}
 
 	res = FromPkg();

@@ -1,4 +1,4 @@
-// Copyright 2010 The Go Authors.  All rights reserved.
+// Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -24,6 +24,12 @@ var canonicalHeaderKeyTests = []canonicalHeaderKeyTest{
 	{"uSER-aGENT", "User-Agent"},
 	{"user-agent", "User-Agent"},
 	{"USER-AGENT", "User-Agent"},
+
+	// Other valid tchar bytes in tokens:
+	{"foo-bar_baz", "Foo-Bar_baz"},
+	{"foo-bar$baz", "Foo-Bar$baz"},
+	{"foo-bar~baz", "Foo-Bar~baz"},
+	{"foo-bar*baz", "Foo-Bar*baz"},
 
 	// Non-ASCII or anything with spaces or non-token chars is unchanged:
 	{"üser-agenT", "üser-agenT"},
@@ -281,6 +287,35 @@ func TestRFC959Lines(t *testing.T) {
 		if msg != tt.wantMsg {
 			t.Errorf("#%d: msg=%q, want %q", i, msg, tt.wantMsg)
 		}
+	}
+}
+
+// Test that multi-line errors are appropriately and fully read. Issue 10230.
+func TestReadMultiLineError(t *testing.T) {
+	r := reader("550-5.1.1 The email account that you tried to reach does not exist. Please try\n" +
+		"550-5.1.1 double-checking the recipient's email address for typos or\n" +
+		"550-5.1.1 unnecessary spaces. Learn more at\n" +
+		"Unexpected but legal text!\n" +
+		"550 5.1.1 https://support.google.com/mail/answer/6596 h20si25154304pfd.166 - gsmtp\n")
+
+	wantMsg := "5.1.1 The email account that you tried to reach does not exist. Please try\n" +
+		"5.1.1 double-checking the recipient's email address for typos or\n" +
+		"5.1.1 unnecessary spaces. Learn more at\n" +
+		"Unexpected but legal text!\n" +
+		"5.1.1 https://support.google.com/mail/answer/6596 h20si25154304pfd.166 - gsmtp"
+
+	code, msg, err := r.ReadResponse(250)
+	if err == nil {
+		t.Errorf("ReadResponse: no error, want error")
+	}
+	if code != 550 {
+		t.Errorf("ReadResponse: code=%d, want %d", code, 550)
+	}
+	if msg != wantMsg {
+		t.Errorf("ReadResponse: msg=%q, want %q", msg, wantMsg)
+	}
+	if err.Error() != "550 "+wantMsg {
+		t.Errorf("ReadResponse: error=%q, want %q", err.Error(), "550 "+wantMsg)
 	}
 }
 

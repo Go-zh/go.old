@@ -12,6 +12,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -19,6 +20,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -447,7 +449,7 @@ func TestClientResumption(t *testing.T) {
 			t.Fatalf("%s resumed: %v, expected: %v", test, hs.DidResume, didResume)
 		}
 		if didResume && (hs.PeerCertificates == nil || hs.VerifiedChains == nil) {
-			t.Fatalf("expected non-nil certificates after resumption. Got peerCertificates: %#v, verifedCertificates: %#v", hs.PeerCertificates, hs.VerifiedChains)
+			t.Fatalf("expected non-nil certificates after resumption. Got peerCertificates: %#v, verifiedCertificates: %#v", hs.PeerCertificates, hs.VerifiedChains)
 		}
 	}
 
@@ -617,14 +619,35 @@ func TestHandshakClientSCTs(t *testing.T) {
 	runClientTestTLS12(t, test)
 }
 
-func TestNoIPAddressesInSNI(t *testing.T) {
-	for _, ipLiteral := range []string{"1.2.3.4", "::1"} {
+var hostnameInSNITests = []struct {
+	in, out string
+}{
+	// Opaque string
+	{"", ""},
+	{"localhost", "localhost"},
+	{"foo, bar, baz and qux", "foo, bar, baz and qux"},
+
+	// DNS hostname
+	{"golang.org", "golang.org"},
+	{"golang.org.", "golang.org"},
+
+	// Literal IPv4 address
+	{"1.2.3.4", ""},
+
+	// Literal IPv6 address
+	{"::1", ""},
+	{"::1%lo0", ""}, // with zone identifier
+	{"[::1]", ""},   // as per RFC 5952 we allow the [] style as IPv6 literal
+	{"[::1%lo0]", ""},
+}
+
+func TestHostnameInSNI(t *testing.T) {
+	for _, tt := range hostnameInSNITests {
 		c, s := net.Pipe()
 
-		go func() {
-			client := Client(c, &Config{ServerName: ipLiteral})
-			client.Handshake()
-		}()
+		go func(host string) {
+			Client(c, &Config{ServerName: host, InsecureSkipVerify: true}).Handshake()
+		}(tt.in)
 
 		var header [5]byte
 		if _, err := io.ReadFull(s, header[:]); err != nil {
@@ -636,10 +659,118 @@ func TestNoIPAddressesInSNI(t *testing.T) {
 		if _, err := io.ReadFull(s, record[:]); err != nil {
 			t.Fatal(err)
 		}
+
+		c.Close()
 		s.Close()
 
-		if bytes.Index(record, []byte(ipLiteral)) != -1 {
-			t.Errorf("IP literal %q found in ClientHello: %x", ipLiteral, record)
+		var m clientHelloMsg
+		if !m.unmarshal(record) {
+			t.Errorf("unmarshaling ClientHello for %q failed", tt.in)
+			continue
 		}
+		if tt.in != tt.out && m.serverName == tt.in {
+			t.Errorf("prohibited %q found in ClientHello: %x", tt.in, record)
+		}
+		if m.serverName != tt.out {
+			t.Errorf("expected %q not found in ClientHello: %x", tt.out, record)
+		}
+	}
+}
+
+func TestServerSelectingUnconfiguredCipherSuite(t *testing.T) {
+	// This checks that the server can't select a cipher suite that the
+	// client didn't offer. See #13174.
+
+	c, s := net.Pipe()
+	errChan := make(chan error, 1)
+
+	go func() {
+		client := Client(c, &Config{
+			ServerName:   "foo",
+			CipherSuites: []uint16{TLS_RSA_WITH_AES_128_GCM_SHA256},
+		})
+		errChan <- client.Handshake()
+	}()
+
+	var header [5]byte
+	if _, err := io.ReadFull(s, header[:]); err != nil {
+		t.Fatal(err)
+	}
+	recordLen := int(header[3])<<8 | int(header[4])
+
+	record := make([]byte, recordLen)
+	if _, err := io.ReadFull(s, record); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ServerHello that selects a different cipher suite than the
+	// sole one that the client offered.
+	serverHello := &serverHelloMsg{
+		vers:        VersionTLS12,
+		random:      make([]byte, 32),
+		cipherSuite: TLS_RSA_WITH_AES_256_GCM_SHA384,
+	}
+	serverHelloBytes := serverHello.marshal()
+
+	s.Write([]byte{
+		byte(recordTypeHandshake),
+		byte(VersionTLS12 >> 8),
+		byte(VersionTLS12 & 0xff),
+		byte(len(serverHelloBytes) >> 8),
+		byte(len(serverHelloBytes)),
+	})
+	s.Write(serverHelloBytes)
+	s.Close()
+
+	if err := <-errChan; !strings.Contains(err.Error(), "unconfigured cipher") {
+		t.Fatalf("Expected error about unconfigured cipher suite but got %q", err)
+	}
+}
+
+// brokenConn wraps a net.Conn and causes all Writes after a certain number to
+// fail with brokenConnErr.
+type brokenConn struct {
+	net.Conn
+
+	// breakAfter is the number of successful writes that will be allowed
+	// before all subsequent writes fail.
+	breakAfter int
+
+	// numWrites is the number of writes that have been done.
+	numWrites int
+}
+
+// brokenConnErr is the error that brokenConn returns once exhausted.
+var brokenConnErr = errors.New("too many writes to brokenConn")
+
+func (b *brokenConn) Write(data []byte) (int, error) {
+	if b.numWrites >= b.breakAfter {
+		return 0, brokenConnErr
+	}
+
+	b.numWrites++
+	return b.Conn.Write(data)
+}
+
+func TestFailedWrite(t *testing.T) {
+	// Test that a write error during the handshake is returned.
+	for _, breakAfter := range []int{0, 1, 2, 3} {
+		c, s := net.Pipe()
+		done := make(chan bool)
+
+		go func() {
+			Server(s, testConfig).Handshake()
+			s.Close()
+			done <- true
+		}()
+
+		brokenC := &brokenConn{Conn: c, breakAfter: breakAfter}
+		err := Client(brokenC, testConfig).Handshake()
+		if err != brokenConnErr {
+			t.Errorf("#%d: expected error from brokenConn but got %q", breakAfter, err)
+		}
+		brokenC.Close()
+
+		<-done
 	}
 }

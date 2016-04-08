@@ -5,6 +5,7 @@
 package http_test
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -23,7 +24,6 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -37,8 +37,6 @@ const (
 type wantRange struct {
 	start, end int64 // range [start,end)
 }
-
-var itoa = strconv.Itoa
 
 var ServeFileRangeTests = []struct {
 	r      string
@@ -173,6 +171,36 @@ Cases:
 			if err != io.EOF {
 				t.Errorf("range=%q; expected final error io.EOF; got %v", rt.r, err)
 			}
+		}
+	}
+}
+
+func TestServeFile_DotDot(t *testing.T) {
+	tests := []struct {
+		req        string
+		wantStatus int
+	}{
+		{"/testdata/file", 200},
+		{"/../file", 400},
+		{"/..", 400},
+		{"/../", 400},
+		{"/../foo", 400},
+		{"/..\\foo", 400},
+		{"/file/a", 200},
+		{"/file/a..", 200},
+		{"/file/a/..", 400},
+		{"/file/a\\..", 400},
+	}
+	for _, tt := range tests {
+		req, err := ReadRequest(bufio.NewReader(strings.NewReader("GET " + tt.req + " HTTP/1.1\r\nHost: foo\r\n\r\n")))
+		if err != nil {
+			t.Errorf("bad request %q: %v", tt.req, err)
+			continue
+		}
+		rec := httptest.NewRecorder()
+		ServeFile(rec, req, "testdata/file")
+		if rec.Code != tt.wantStatus {
+			t.Errorf("for request %q, status = %d; want %d", tt.req, rec.Code, tt.wantStatus)
 		}
 	}
 }
@@ -477,14 +505,45 @@ func TestServeFileFromCWD(t *testing.T) {
 	}
 }
 
-func TestServeFileWithContentEncoding(t *testing.T) {
+// Issue 13996
+func TestServeDirWithoutTrailingSlash(t *testing.T) {
+	e := "/testdata/"
 	defer afterTest(t)
 	ts := httptest.NewServer(HandlerFunc(func(w ResponseWriter, r *Request) {
-		w.Header().Set("Content-Encoding", "foo")
-		ServeFile(w, r, "testdata/file")
+		ServeFile(w, r, ".")
 	}))
 	defer ts.Close()
-	resp, err := Get(ts.URL)
+	r, err := Get(ts.URL + "/testdata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Body.Close()
+	if g := r.Request.URL.Path; g != e {
+		t.Errorf("got %s, want %s", g, e)
+	}
+}
+
+// Tests that ServeFile doesn't add a Content-Length if a Content-Encoding is
+// specified.
+func TestServeFileWithContentEncoding_h1(t *testing.T) { testServeFileWithContentEncoding(t, h1Mode) }
+func TestServeFileWithContentEncoding_h2(t *testing.T) { testServeFileWithContentEncoding(t, h2Mode) }
+func testServeFileWithContentEncoding(t *testing.T, h2 bool) {
+	defer afterTest(t)
+	cst := newClientServerTest(t, h2, HandlerFunc(func(w ResponseWriter, r *Request) {
+		w.Header().Set("Content-Encoding", "foo")
+		ServeFile(w, r, "testdata/file")
+
+		// Because the testdata is so small, it would fit in
+		// both the h1 and h2 Server's write buffers. For h1,
+		// sendfile is used, though, forcing a header flush at
+		// the io.Copy. http2 doesn't do a header flush so
+		// buffers all 11 bytes and then adds its own
+		// Content-Length. To prevent the Server's
+		// Content-Length and test ServeFile only, flush here.
+		w.(Flusher).Flush()
+	}))
+	defer cst.close()
+	resp, err := cst.c.Get(cst.ts.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -946,7 +1005,7 @@ func TestLinuxSendfile(t *testing.T) {
 	res.Body.Close()
 
 	// Force child to exit cleanly.
-	Get(fmt.Sprintf("http://%s/quit", ln.Addr()))
+	Post(fmt.Sprintf("http://%s/quit", ln.Addr()), "", nil)
 	child.Wait()
 
 	rx := regexp.MustCompile(`sendfile(64)?\(\d+,\s*\d+,\s*NULL,\s*\d+\)\s*=\s*\d+\s*\n`)

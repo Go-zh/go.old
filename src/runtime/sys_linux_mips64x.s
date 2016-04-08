@@ -168,6 +168,7 @@ TEXT runtime·mincore(SB),NOSPLIT,$-8-28
 	MOVV	dst+16(FP), R6
 	MOVV	$SYS_mincore, R2
 	SYSCALL
+	SUBVU	R2, R0, R2	// caller expects negative errno
 	MOVW	R2, ret+24(FP)
 	RET
 
@@ -247,6 +248,10 @@ TEXT runtime·sigtramp(SB),NOSPLIT,$64
 	MOVV	$runtime·sigtrampgo(SB), R1
 	JAL	(R1)
 	RET
+
+TEXT runtime·cgoSigtramp(SB),NOSPLIT,$0
+	MOVV	$runtime·sigtramp(SB), R1
+	JMP	(R1)
 
 TEXT runtime·mmap(SB),NOSPLIT,$-8
 	MOVV	addr+0(FP), R4

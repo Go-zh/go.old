@@ -151,7 +151,7 @@ func BenchmarkSearchWrappers(b *testing.B) {
 }
 
 // Abstract exhaustive test: all sizes up to 100,
-// all possible return values.  If there are any small
+// all possible return values. If there are any small
 // corner cases, this test exercises them.
 
 // 抽象的穷竭性测试：所有100以下的大小，所有可能的返回值。

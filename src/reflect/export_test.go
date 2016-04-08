@@ -1,4 +1,4 @@
-// Copyright 2012 The Go Authors.  All rights reserved.
+// Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -48,7 +48,7 @@ func TypeLinks() []string {
 	var r []string
 	for _, m := range typelinks() {
 		for _, t := range m {
-			r = append(r, *t.string)
+			r = append(r, t.string)
 		}
 	}
 	return r
@@ -69,4 +69,33 @@ func CachedBucketOf(m Type) Type {
 	}
 	tt := (*mapType)(unsafe.Pointer(t))
 	return tt.bucket
+}
+
+type EmbedWithUnexpMeth struct{}
+
+func (EmbedWithUnexpMeth) f() {}
+
+type pinUnexpMeth interface {
+	f()
+}
+
+var pinUnexpMethI = pinUnexpMeth(EmbedWithUnexpMeth{})
+
+func FirstMethodNameBytes(t Type) *byte {
+	_ = pinUnexpMethI
+
+	ut := t.uncommon()
+	if ut == nil {
+		panic("type has no methods")
+	}
+	m := ut.methods[0]
+	if *m.name.data(0)&(1<<2) == 0 {
+		panic("method name does not have pkgPath *string")
+	}
+	return m.name.bytes
+}
+
+type OtherPkgFields struct {
+	OtherExported   int
+	otherUnexported int
 }

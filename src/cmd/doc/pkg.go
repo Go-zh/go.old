@@ -29,17 +29,15 @@ const (
 )
 
 type Package struct {
-	writer     io.Writer // Destination for output.
-	name       string    // Package name, json for encoding/json.
-	userPath   string    // String the user used to find this package.
-	unexported bool
-	matchCase  bool
-	pkg        *ast.Package // Parsed package.
-	file       *ast.File    // Merged from all files in the package
-	doc        *doc.Package
-	build      *build.Package
-	fs         *token.FileSet // Needed for printing.
-	buf        bytes.Buffer
+	writer   io.Writer    // Destination for output.
+	name     string       // Package name, json for encoding/json.
+	userPath string       // String the user used to find this package.
+	pkg      *ast.Package // Parsed package.
+	file     *ast.File    // Merged from all files in the package
+	doc      *doc.Package
+	build    *build.Package
+	fs       *token.FileSet // Needed for printing.
+	buf      bytes.Buffer
 }
 
 type PackageError string // type returned by pkg.Fatalf.
@@ -487,9 +485,27 @@ func trimUnexportedFields(fields *ast.FieldList, what string) *ast.FieldList {
 	trimmed := false
 	list := make([]*ast.Field, 0, len(fields.List))
 	for _, field := range fields.List {
+		names := field.Names
+		if len(names) == 0 {
+			// Embedded type. Use the name of the type. It must be of type ident or *ident.
+			// Nothing else is allowed.
+			switch ident := field.Type.(type) {
+			case *ast.Ident:
+				names = []*ast.Ident{ident}
+			case *ast.StarExpr:
+				// Must have the form *identifier.
+				if ident, ok := ident.X.(*ast.Ident); ok {
+					names = []*ast.Ident{ident}
+				}
+			}
+			if names == nil {
+				// Can only happen if AST is incorrect. Safe to continue with a nil list.
+				log.Print("invalid program: unexpected type for embedded field")
+			}
+		}
 		// Trims if any is unexported. Good enough in practice.
 		ok := true
-		for _, name := range field.Names {
+		for _, name := range names {
 			if !isExported(name.Name) {
 				trimmed = true
 				ok = false

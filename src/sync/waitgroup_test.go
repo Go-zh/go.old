@@ -5,6 +5,7 @@
 package sync_test
 
 import (
+	"internal/race"
 	"runtime"
 	. "sync"
 	"sync/atomic"
@@ -49,7 +50,7 @@ func TestWaitGroup(t *testing.T) {
 }
 
 func knownRacy(t *testing.T) {
-	if RaceEnabled {
+	if race.Enabled {
 		t.Skip("skipping known-racy test under the race detector")
 	}
 }
@@ -128,13 +129,16 @@ func TestWaitGroupMisuse3(t *testing.T) {
 		}
 	}()
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(4))
-	done := make(chan interface{}, 1)
+	done := make(chan interface{}, 2)
 	// The detection is opportunistically, so we want it to panic
 	// at least in one run out of a million.
 	for i := 0; i < 1e6; i++ {
 		var wg WaitGroup
 		wg.Add(1)
 		go func() {
+			defer func() {
+				done <- recover()
+			}()
 			wg.Done()
 		}()
 		go func() {
@@ -150,8 +154,10 @@ func TestWaitGroupMisuse3(t *testing.T) {
 			wg.Wait()
 		}()
 		wg.Wait()
-		if err := <-done; err != nil {
-			panic(err)
+		for j := 0; j < 2; j++ {
+			if err := <-done; err != nil {
+				panic(err)
+			}
 		}
 	}
 	t.Fatal("Should panic")

@@ -22,26 +22,15 @@ func makeslice(t *slicetype, len64, cap64 int64) slice {
 	// but since the cap is only being supplied implicitly, saying len is clearer.
 	// See issue 4085.
 	len := int(len64)
-	if len64 < 0 || int64(len) != len64 || t.elem.size > 0 && uintptr(len) > _MaxMem/uintptr(t.elem.size) {
+	if len64 < 0 || int64(len) != len64 || t.elem.size > 0 && uintptr(len) > _MaxMem/t.elem.size {
 		panic(errorString("makeslice: len out of range"))
 	}
 	cap := int(cap64)
-	if cap < len || int64(cap) != cap64 || t.elem.size > 0 && uintptr(cap) > _MaxMem/uintptr(t.elem.size) {
+	if cap < len || int64(cap) != cap64 || t.elem.size > 0 && uintptr(cap) > _MaxMem/t.elem.size {
 		panic(errorString("makeslice: cap out of range"))
 	}
 	p := newarray(t.elem, uintptr(cap))
 	return slice{p, len, cap}
-}
-
-// growslice_n is a variant of growslice that takes the number of new elements
-// instead of the new minimum capacity.
-// TODO(rsc): This is used by append(slice, slice...).
-// The compiler should change that code to use growslice directly (issue #11419).
-func growslice_n(t *slicetype, old slice, n int) slice {
-	if n < 1 {
-		panic(errorString("growslice: invalid n"))
-	}
-	return growslice(t, old, old.cap+n)
 }
 
 // growslice handles slice growth during append.
@@ -49,10 +38,6 @@ func growslice_n(t *slicetype, old slice, n int) slice {
 // and it returns a new slice with at least that capacity, with the old data
 // copied into it.
 func growslice(t *slicetype, old slice, cap int) slice {
-	if cap < old.cap || t.elem.size > 0 && uintptr(cap) > _MaxMem/uintptr(t.elem.size) {
-		panic(errorString("growslice: cap out of range"))
-	}
-
 	if raceenabled {
 		callerpc := getcallerpc(unsafe.Pointer(&t))
 		racereadrangepc(old.array, uintptr(old.len*int(t.elem.size)), callerpc, funcPC(growslice))
@@ -63,33 +48,52 @@ func growslice(t *slicetype, old slice, cap int) slice {
 
 	et := t.elem
 	if et.size == 0 {
+		if cap < old.cap {
+			panic(errorString("growslice: cap out of range"))
+		}
 		// append should not create a slice with nil pointer but non-zero len.
 		// We assume that append doesn't need to preserve old.array in this case.
 		return slice{unsafe.Pointer(&zerobase), old.len, cap}
 	}
 
 	newcap := old.cap
-	if newcap+newcap < cap {
+	doublecap := newcap + newcap
+	if cap > doublecap {
 		newcap = cap
 	} else {
-		for {
-			if old.len < 1024 {
-				newcap += newcap
-			} else {
+		if old.len < 1024 {
+			newcap = doublecap
+		} else {
+			for newcap < cap {
 				newcap += newcap / 4
-			}
-			if newcap >= cap {
-				break
 			}
 		}
 	}
 
-	if uintptr(newcap) >= _MaxMem/uintptr(et.size) {
+	var lenmem, capmem, maxcap uintptr
+	const ptrSize = unsafe.Sizeof((*byte)(nil))
+	switch et.size {
+	case 1:
+		lenmem = uintptr(old.len)
+		capmem = roundupsize(uintptr(newcap))
+		newcap = int(capmem)
+		maxcap = _MaxMem
+	case ptrSize:
+		lenmem = uintptr(old.len) * ptrSize
+		capmem = roundupsize(uintptr(newcap) * ptrSize)
+		newcap = int(capmem / ptrSize)
+		maxcap = _MaxMem / ptrSize
+	default:
+		lenmem = uintptr(old.len) * et.size
+		capmem = roundupsize(uintptr(newcap) * et.size)
+		newcap = int(capmem / et.size)
+		maxcap = _MaxMem / et.size
+	}
+
+	if cap < old.cap || uintptr(newcap) > maxcap {
 		panic(errorString("growslice: cap out of range"))
 	}
-	lenmem := uintptr(old.len) * uintptr(et.size)
-	capmem := roundupsize(uintptr(newcap) * uintptr(et.size))
-	newcap = int(capmem / uintptr(et.size))
+
 	var p unsafe.Pointer
 	if et.kind&kindNoPointers != 0 {
 		p = rawmem(capmem)
@@ -142,7 +146,7 @@ func slicecopy(to, fm slice, width uintptr) int {
 	} else {
 		memmove(to.array, fm.array, size)
 	}
-	return int(n)
+	return n
 }
 
 func slicestringcopy(to []byte, fm string) int {
@@ -164,6 +168,6 @@ func slicestringcopy(to []byte, fm string) int {
 		msanwrite(unsafe.Pointer(&to[0]), uintptr(n))
 	}
 
-	memmove(unsafe.Pointer(&to[0]), unsafe.Pointer(stringStructOf(&fm).str), uintptr(n))
+	memmove(unsafe.Pointer(&to[0]), stringStructOf(&fm).str, uintptr(n))
 	return n
 }

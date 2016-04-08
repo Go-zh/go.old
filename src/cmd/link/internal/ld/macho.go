@@ -6,6 +6,7 @@ package ld
 
 import (
 	"cmd/internal/obj"
+	"cmd/internal/sys"
 	"sort"
 	"strings"
 )
@@ -123,23 +124,15 @@ var sortsym []*LSym
 var nsortsym int
 
 // Amount of space left for adding load commands
-// that refer to dynamic libraries.  Because these have
+// that refer to dynamic libraries. Because these have
 // to go in the Mach-O header, we can't just pick a
-// "big enough" header size.  The initial header is
+// "big enough" header size. The initial header is
 // one page, the non-dynamic library stuff takes
 // up about 1300 bytes; we overestimate that as 2k.
 var load_budget int = INITIAL_MACHO_HEADR - 2*1024
 
 func Machoinit() {
-	switch Thearch.Thechar {
-	// 64-bit architectures
-	case '6', '7', '9':
-		macho64 = true
-
-		// 32-bit architectures
-	default:
-		break
-	}
+	macho64 = SysArch.RegSize == 8
 }
 
 func getMachoHdr() *MachoHdr {
@@ -308,37 +301,37 @@ func domacho() {
 	s := Linklookup(Ctxt, ".machosymstr", 0)
 
 	s.Type = obj.SMACHOSYMSTR
-	s.Reachable = true
+	s.Attr |= AttrReachable
 	Adduint8(Ctxt, s, ' ')
 	Adduint8(Ctxt, s, '\x00')
 
 	s = Linklookup(Ctxt, ".machosymtab", 0)
 	s.Type = obj.SMACHOSYMTAB
-	s.Reachable = true
+	s.Attr |= AttrReachable
 
 	if Linkmode != LinkExternal {
 		s := Linklookup(Ctxt, ".plt", 0) // will be __symbol_stub
 		s.Type = obj.SMACHOPLT
-		s.Reachable = true
+		s.Attr |= AttrReachable
 
 		s = Linklookup(Ctxt, ".got", 0) // will be __nl_symbol_ptr
 		s.Type = obj.SMACHOGOT
-		s.Reachable = true
+		s.Attr |= AttrReachable
 		s.Align = 4
 
 		s = Linklookup(Ctxt, ".linkedit.plt", 0) // indirect table for .plt
 		s.Type = obj.SMACHOINDIRECTPLT
-		s.Reachable = true
+		s.Attr |= AttrReachable
 
 		s = Linklookup(Ctxt, ".linkedit.got", 0) // indirect table for .got
 		s.Type = obj.SMACHOINDIRECTGOT
-		s.Reachable = true
+		s.Attr |= AttrReachable
 	}
 }
 
 func Machoadddynlib(lib string) {
 	// Will need to store the library name rounded up
-	// and 24 bytes of header metadata.  If not enough
+	// and 24 bytes of header metadata. If not enough
 	// space, grab another page of initial space at the
 	// beginning of the output file.
 	load_budget -= (len(lib)+7)/8*8 + 24
@@ -356,8 +349,9 @@ func machoshbits(mseg *MachoSeg, sect *Section, segname string) {
 	buf := "__" + strings.Replace(sect.Name[1:], ".", "_", -1)
 
 	var msect *MachoSect
-	if sect.Rwx&1 == 0 && (Thearch.Thechar == '7' || (Thearch.Thechar == '6' && Buildmode == BuildmodeCShared)) {
-		// Darwin external linker on arm64 and on amd64 in c-shared buildmode
+	if sect.Rwx&1 == 0 && segname != "__DWARF" && (SysArch.Family == sys.ARM64 ||
+		(SysArch.Family == sys.AMD64 && (Buildmode == BuildmodeCShared || Buildmode == BuildmodeCArchive))) {
+		// Darwin external linker on arm64 and on amd64 in c-shared/c-archive buildmode
 		// complains about absolute relocs in __TEXT, so if the section is not
 		// executable, put it in __DATA segment.
 		msect = newMachoSect(mseg, buf, "__DATA")
@@ -410,6 +404,10 @@ func machoshbits(mseg *MachoSeg, sect *Section, segname string) {
 		msect.name = "__mod_init_func"
 		msect.flag = 9 // S_MOD_INIT_FUNC_POINTERS
 	}
+
+	if segname == "__DWARF" {
+		msect.flag |= 0x02000000
+	}
 }
 
 func Asmbmacho() {
@@ -417,23 +415,23 @@ func Asmbmacho() {
 	va := INITTEXT - int64(HEADR)
 
 	mh := getMachoHdr()
-	switch Thearch.Thechar {
+	switch SysArch.Family {
 	default:
-		Exitf("unknown macho architecture: %v", Thearch.Thechar)
+		Exitf("unknown macho architecture: %v", SysArch.Family)
 
-	case '5':
+	case sys.ARM:
 		mh.cpu = MACHO_CPU_ARM
 		mh.subcpu = MACHO_SUBCPU_ARMV7
 
-	case '6':
+	case sys.AMD64:
 		mh.cpu = MACHO_CPU_AMD64
 		mh.subcpu = MACHO_SUBCPU_X86
 
-	case '7':
+	case sys.ARM64:
 		mh.cpu = MACHO_CPU_ARM64
 		mh.subcpu = MACHO_SUBCPU_ARM64_ALL
 
-	case '8':
+	case sys.I386:
 		mh.cpu = MACHO_CPU_386
 		mh.subcpu = MACHO_SUBCPU_X86
 	}
@@ -444,7 +442,7 @@ func Asmbmacho() {
 		ms = newMachoSeg("", 40)
 
 		ms.fileoffset = Segtext.Fileoff
-		if Thearch.Thechar == '5' || Buildmode == BuildmodeCArchive {
+		if SysArch.Family == sys.ARM || Buildmode == BuildmodeCArchive {
 			ms.filesize = Segdata.Fileoff + Segdata.Filelen - Segtext.Fileoff
 		} else {
 			ms.filesize = Segdwarf.Fileoff + Segdwarf.Filelen - Segtext.Fileoff
@@ -491,32 +489,46 @@ func Asmbmacho() {
 		machoshbits(ms, sect, "__DATA")
 	}
 
-	if Linkmode != LinkExternal {
-		switch Thearch.Thechar {
-		default:
-			Exitf("unknown macho architecture: %v", Thearch.Thechar)
+	/* dwarf */
+	if Debug['w'] == 0 {
+		if Linkmode != LinkExternal {
+			ms = newMachoSeg("__DWARF", 20)
+			ms.vaddr = Segdwarf.Vaddr
+			ms.vsize = 0
+			ms.fileoffset = Segdwarf.Fileoff
+			ms.filesize = Segdwarf.Filelen
+		}
+		for sect := Segdwarf.Sect; sect != nil; sect = sect.Next {
+			machoshbits(ms, sect, "__DWARF")
+		}
+	}
 
-		case '5':
+	if Linkmode != LinkExternal {
+		switch SysArch.Family {
+		default:
+			Exitf("unknown macho architecture: %v", SysArch.Family)
+
+		case sys.ARM:
 			ml := newMachoLoad(5, 17+2)          /* unix thread */
 			ml.data[0] = 1                       /* thread type */
 			ml.data[1] = 17                      /* word count */
 			ml.data[2+15] = uint32(Entryvalue()) /* start pc */
 
-		case '6':
+		case sys.AMD64:
 			ml := newMachoLoad(5, 42+2)          /* unix thread */
 			ml.data[0] = 4                       /* thread type */
 			ml.data[1] = 42                      /* word count */
 			ml.data[2+32] = uint32(Entryvalue()) /* start pc */
 			ml.data[2+32+1] = uint32(Entryvalue() >> 32)
 
-		case '7':
+		case sys.ARM64:
 			ml := newMachoLoad(5, 68+2)          /* unix thread */
 			ml.data[0] = 6                       /* thread type */
 			ml.data[1] = 68                      /* word count */
 			ml.data[2+64] = uint32(Entryvalue()) /* start pc */
 			ml.data[2+64+1] = uint32(Entryvalue() >> 32)
 
-		case '8':
+		case sys.I386:
 			ml := newMachoLoad(5, 16+2)          /* unix thread */
 			ml.data[0] = 1                       /* thread type */
 			ml.data[1] = 16                      /* word count */
@@ -527,7 +539,6 @@ func Asmbmacho() {
 	if Debug['d'] == 0 {
 		// must match domacholink below
 		s1 := Linklookup(Ctxt, ".machosymtab", 0)
-
 		s2 := Linklookup(Ctxt, ".linkedit.plt", 0)
 		s3 := Linklookup(Ctxt, ".linkedit.got", 0)
 		s4 := Linklookup(Ctxt, ".machosymstr", 0)
@@ -566,9 +577,23 @@ func Asmbmacho() {
 		}
 	}
 
-	// TODO: dwarf headers go in ms too
-	if Debug['s'] == 0 {
-		dwarfaddmachoheaders(ms)
+	if Linkmode == LinkInternal {
+		// For lldb, must say LC_VERSION_MIN_MACOSX or else
+		// it won't know that this Mach-O binary is from OS X
+		// (could be iOS or WatchOS instead).
+		// Go on iOS uses linkmode=external, and linkmode=external
+		// adds this itself. So we only need this code for linkmode=internal
+		// and we can assume OS X.
+		//
+		// See golang.org/issues/12941.
+		const (
+			LC_VERSION_MIN_MACOSX   = 0x24
+			LC_VERSION_MIN_IPHONEOS = 0x25
+			LC_VERSION_MIN_WATCHOS  = 0x30
+		)
+		ml := newMachoLoad(LC_VERSION_MIN_MACOSX, 2)
+		ml.data[0] = 10<<16 | 7<<8 | 0<<0 // OS X version 10.7.0
+		ml.data[1] = 10<<16 | 7<<8 | 0<<0 // SDK 10.7.0
 	}
 
 	a := machowrite()
@@ -581,7 +606,7 @@ func symkind(s *LSym) int {
 	if s.Type == obj.SDYNIMPORT {
 		return SymKindUndef
 	}
-	if s.Cgoexport != 0 {
+	if s.Attr.CgoExport() {
 		return SymKindExtdef
 	}
 	return SymKindLocal
@@ -633,9 +658,9 @@ func (x machoscmp) Less(i, j int) bool {
 
 func machogenasmsym(put func(*LSym, string, int, int64, int64, int, *LSym)) {
 	genasmsym(put)
-	for s := Ctxt.Allsym; s != nil; s = s.Allsym {
+	for _, s := range Ctxt.Allsym {
 		if s.Type == obj.SDYNIMPORT || s.Type == obj.SHOSTOBJ {
-			if s.Reachable {
+			if s.Attr.Reachable() {
 				put(s, "", 'D', 0, 0, 0, nil)
 			}
 		}
@@ -647,7 +672,7 @@ func machosymorder() {
 	// So we sort them here and pre-allocate dynid for them
 	// See https://golang.org/issue/4029
 	for i := 0; i < len(dynexp); i++ {
-		dynexp[i].Reachable = true
+		dynexp[i].Attr |= AttrReachable
 	}
 	machogenasmsym(addsym)
 	sortsym = make([]*LSym, nsortsym)
@@ -696,9 +721,9 @@ func machosymtab() {
 			Adduint8(Ctxt, symtab, 0x01)                // type N_EXT, external symbol
 			Adduint8(Ctxt, symtab, 0)                   // no section
 			Adduint16(Ctxt, symtab, 0)                  // desc
-			adduintxx(Ctxt, symtab, 0, Thearch.Ptrsize) // no value
+			adduintxx(Ctxt, symtab, 0, SysArch.PtrSize) // no value
 		} else {
-			if s.Cgoexport != 0 {
+			if s.Attr.CgoExport() {
 				Adduint8(Ctxt, symtab, 0x0f)
 			} else {
 				Adduint8(Ctxt, symtab, 0x0e)
@@ -714,7 +739,7 @@ func machosymtab() {
 				Adduint8(Ctxt, symtab, uint8(o.Sect.Extnum))
 			}
 			Adduint16(Ctxt, symtab, 0) // desc
-			adduintxx(Ctxt, symtab, uint64(Symaddr(s)), Thearch.Ptrsize)
+			adduintxx(Ctxt, symtab, uint64(Symaddr(s)), SysArch.PtrSize)
 		}
 	}
 }
@@ -766,12 +791,12 @@ func Domacholink() int64 {
 	s4 := Linklookup(Ctxt, ".machosymstr", 0)
 
 	// Force the linkedit section to end on a 16-byte
-	// boundary.  This allows pure (non-cgo) Go binaries
+	// boundary. This allows pure (non-cgo) Go binaries
 	// to be code signed correctly.
 	//
 	// Apple's codesign_allocate (a helper utility for
 	// the codesign utility) can do this fine itself if
-	// it is run on a dynamic Mach-O binary.  However,
+	// it is run on a dynamic Mach-O binary. However,
 	// when it is run on a pure (non-cgo) Go binary, where
 	// the linkedit section is mostly empty, it fails to
 	// account for the extra padding that it itself adds
@@ -810,7 +835,7 @@ func machorelocsect(sect *Section, first *LSym) {
 	sect.Reloff = uint64(Cpos())
 	var sym *LSym
 	for sym = first; sym != nil; sym = sym.Next {
-		if !sym.Reachable {
+		if !sym.Attr.Reachable() {
 			continue
 		}
 		if uint64(sym.Value) >= sect.Vaddr {
@@ -822,7 +847,7 @@ func machorelocsect(sect *Section, first *LSym) {
 	var r *Reloc
 	var ri int
 	for ; sym != nil; sym = sym.Next {
-		if !sym.Reachable {
+		if !sym.Attr.Reachable() {
 			continue
 		}
 		if sym.Value >= int64(eaddr) {
@@ -856,5 +881,7 @@ func Machoemitreloc() {
 	for sect := Segdata.Sect; sect != nil; sect = sect.Next {
 		machorelocsect(sect, datap)
 	}
-	dwarfemitreloc()
+	for sect := Segdwarf.Sect; sect != nil; sect = sect.Next {
+		machorelocsect(sect, dwarfp)
+	}
 }

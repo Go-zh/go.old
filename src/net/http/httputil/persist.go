@@ -27,23 +27,18 @@ var (
 // ErrPersistEOF（上文提到的）报告远端的一边连接关闭。
 var errClosed = errors.New("i/o operation on closed connection")
 
-// A ServerConn reads requests and sends responses over an underlying
-// connection, until the HTTP keepalive logic commands an end. ServerConn
-// also allows hijacking the underlying connection by calling Hijack
-// to regain control over the connection. ServerConn supports pipe-lining,
-// i.e. requests can be read out of sync (but in the same order) while the
-// respective responses are sent.
+// ServerConn is an artifact of Go's early HTTP implementation.
+// Is is low-level, old, and unused by Go's current HTTP stack.
+// We should have deleted it before Go 1.
 //
-// ServerConn is low-level and old. Applications should instead use Server
-// in the net/http package.
+// Deprecated: Use the Server in package net/http instead.
 
-// ServerConn 在底层连接之上读取请求，发送回复，直到HTTP keepalive出现了结束命令。
-// ServerConn 允许靠调用Hijack来对底层连接进行劫持，从而得到连接的控制权。
-// ServerConn 支持管道连接，例如，当回复发送的时候，请求可以不需要进行同步（但是是在相同的顺序）。
+// ServerConn 是早期人工编写的 HTTP 实现。
+// 它是低级而老旧的，Go 当前的 HTTP 栈不用它。具体参见 Server。
 //
-// ServerConn 是低级而老旧的，大部分应用都不需要它。具体参见 Server。
+// 反对使用：请使用 net/http 中的 Server 代替。
 type ServerConn struct {
-	lk              sync.Mutex // read-write protects the following fields
+	mu              sync.Mutex // read-write protects the following fields
 	c               net.Conn
 	r               *bufio.Reader
 	re, we          error // read/write errors
@@ -54,15 +49,16 @@ type ServerConn struct {
 	pipe textproto.Pipeline
 }
 
-// NewServerConn returns a new ServerConn reading and writing c. If r is not
-// nil, it is the buffer to use when reading c.
+// NewServerConn is an artifact of Go's early HTTP implementation.
+// Is is low-level, old, and unused by Go's current HTTP stack.
+// We should have deleted it before Go 1.
 //
-// ServerConn is low-level and old. Applications should instead use Server
-// in the net/http package.
+// Deprecated: Use the Server in package net/http instead.
 
-// NewServerConn返回一个新的ServerConn来读取和写c。如果r非空，则使用缓存对c进行读取。
+// NewServerConn 是早期人工编写的 HTTP 实现。
+// 它是低级而老旧的，Go 当前的 HTTP 栈不用它。具体参见 Server。
 //
-// ServerConn 是低级而老旧的，大部分应用都不需要它。具体参见 Server。
+// 反对使用：请使用 net/http 中的 Server 代替。
 func NewServerConn(c net.Conn, r *bufio.Reader) *ServerConn {
 	if r == nil {
 		r = bufio.NewReader(c)
@@ -74,20 +70,17 @@ func NewServerConn(c net.Conn, r *bufio.Reader) *ServerConn {
 // as the read-side bufio which may have some left over data. Hijack may be
 // called before Read has signaled the end of the keep-alive logic. The user
 // should not call Hijack while Read or Write is in progress.
-
-// Hijack将ServerConn单独分离出来，并且返回底层的连接，以及可能有一些未读数据的缓存的读取器。
-// Hijack会在读取获取到keep-alive结束信号之前被调用。在Read或者Write进行中不可以调用Hijack。
-func (sc *ServerConn) Hijack() (c net.Conn, r *bufio.Reader) {
-	sc.lk.Lock()
-	defer sc.lk.Unlock()
-	c = sc.c
-	r = sc.r
+func (sc *ServerConn) Hijack() (net.Conn, *bufio.Reader) {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	c := sc.c
+	r := sc.r
 	sc.c = nil
 	sc.r = nil
-	return
+	return c, r
 }
 
-// Close calls Hijack and then also closes the underlying connection
+// Close calls Hijack and then also closes the underlying connection.
 
 // Close调用Hijack，并且关闭底层的连接。
 func (sc *ServerConn) Close() error {
@@ -105,7 +98,9 @@ func (sc *ServerConn) Close() error {
 
 // Read返回连接上的下个请求。如果确认了没有更多请求之后，将会返回ErrPersistEOF。（例如，在HTTP/1.0
 // 的第一个请求之后，或者在HTTP/1.1的Connection:close之后）
-func (sc *ServerConn) Read() (req *http.Request, err error) {
+func (sc *ServerConn) Read() (*http.Request, error) {
+	var req *http.Request
+	var err error
 
 	// Ensure ordered execution of Reads and Writes
 	id := sc.pipe.Next()
@@ -117,29 +112,29 @@ func (sc *ServerConn) Read() (req *http.Request, err error) {
 			sc.pipe.EndResponse(id)
 		} else {
 			// Remember the pipeline id of this request
-			sc.lk.Lock()
+			sc.mu.Lock()
 			sc.pipereq[req] = id
-			sc.lk.Unlock()
+			sc.mu.Unlock()
 		}
 	}()
 
-	sc.lk.Lock()
+	sc.mu.Lock()
 	if sc.we != nil { // no point receiving if write-side broken or closed
-		defer sc.lk.Unlock()
+		defer sc.mu.Unlock()
 		return nil, sc.we
 	}
 	if sc.re != nil {
-		defer sc.lk.Unlock()
+		defer sc.mu.Unlock()
 		return nil, sc.re
 	}
 	if sc.r == nil { // connection closed by user in the meantime
-		defer sc.lk.Unlock()
+		defer sc.mu.Unlock()
 		return nil, errClosed
 	}
 	r := sc.r
 	lastbody := sc.lastbody
 	sc.lastbody = nil
-	sc.lk.Unlock()
+	sc.mu.Unlock()
 
 	// Make sure body is fully consumed, even if user does not call body.Close
 	if lastbody != nil {
@@ -148,16 +143,16 @@ func (sc *ServerConn) Read() (req *http.Request, err error) {
 		// returned.
 		err = lastbody.Close()
 		if err != nil {
-			sc.lk.Lock()
-			defer sc.lk.Unlock()
+			sc.mu.Lock()
+			defer sc.mu.Unlock()
 			sc.re = err
 			return nil, err
 		}
 	}
 
 	req, err = http.ReadRequest(r)
-	sc.lk.Lock()
-	defer sc.lk.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	if err != nil {
 		if err == io.ErrUnexpectedEOF {
 			// A close from the opposing client is treated as a
@@ -184,8 +179,8 @@ func (sc *ServerConn) Read() (req *http.Request, err error) {
 
 // Pending返回已经连接上但未应答的请求数。
 func (sc *ServerConn) Pending() int {
-	sc.lk.Lock()
-	defer sc.lk.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	return sc.nread - sc.nwritten
 }
 
@@ -198,31 +193,31 @@ func (sc *ServerConn) Pending() int {
 func (sc *ServerConn) Write(req *http.Request, resp *http.Response) error {
 
 	// Retrieve the pipeline ID of this request/response pair
-	sc.lk.Lock()
+	sc.mu.Lock()
 	id, ok := sc.pipereq[req]
 	delete(sc.pipereq, req)
 	if !ok {
-		sc.lk.Unlock()
+		sc.mu.Unlock()
 		return ErrPipeline
 	}
-	sc.lk.Unlock()
+	sc.mu.Unlock()
 
 	// Ensure pipeline order
 	sc.pipe.StartResponse(id)
 	defer sc.pipe.EndResponse(id)
 
-	sc.lk.Lock()
+	sc.mu.Lock()
 	if sc.we != nil {
-		defer sc.lk.Unlock()
+		defer sc.mu.Unlock()
 		return sc.we
 	}
 	if sc.c == nil { // connection closed by user in the meantime
-		defer sc.lk.Unlock()
+		defer sc.mu.Unlock()
 		return ErrClosed
 	}
 	c := sc.c
 	if sc.nread <= sc.nwritten {
-		defer sc.lk.Unlock()
+		defer sc.mu.Unlock()
 		return errors.New("persist server pipe count")
 	}
 	if resp.Close {
@@ -231,11 +226,11 @@ func (sc *ServerConn) Write(req *http.Request, resp *http.Response) error {
 		// before signaling.
 		sc.re = ErrPersistEOF
 	}
-	sc.lk.Unlock()
+	sc.mu.Unlock()
 
 	err := resp.Write(c)
-	sc.lk.Lock()
-	defer sc.lk.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	if err != nil {
 		sc.we = err
 		return err
@@ -245,20 +240,18 @@ func (sc *ServerConn) Write(req *http.Request, resp *http.Response) error {
 	return nil
 }
 
-// A ClientConn sends request and receives headers over an underlying
-// connection, while respecting the HTTP keepalive logic. ClientConn
-// supports hijacking the connection calling Hijack to
-// regain control of the underlying net.Conn and deal with it as desired.
+// ClientConn is an artifact of Go's early HTTP implementation.
+// Is is low-level, old, and unused by Go's current HTTP stack.
+// We should have deleted it before Go 1.
 //
-// ClientConn is low-level and old. Applications should instead use
-// Client or Transport in the net/http package.
+// Deprecated: Use Client or Transport in package net/http instead.
 
-// ClientConn从还保持着HTTP keepalive的底层连接发送请求，并且接收header。
-// ClientConn支持调用Hijack来劫持连接用于获取底层网络连接的控制来处理net.Conn。
+// ClientConn 是早期人工编写的 HTTP 实现。
+// 它是低级而老旧的，Go 当前的 HTTP 栈不用它。我们应该在 Go 1 前删除它。
 //
-// ServerConn 是低级而老旧的，应用应当采用 net/http 中的 Client 或 Transport 来代替。
+// 反对使用：请使用 net/http 中的 Client 或 Transport 代替。
 type ClientConn struct {
-	lk              sync.Mutex // read-write protects the following fields
+	mu              sync.Mutex // read-write protects the following fields
 	c               net.Conn
 	r               *bufio.Reader
 	re, we          error // read/write errors
@@ -270,15 +263,16 @@ type ClientConn struct {
 	writeReq func(*http.Request, io.Writer) error
 }
 
-// NewClientConn returns a new ClientConn reading and writing c.  If r is not
-// nil, it is the buffer to use when reading c.
+// NewClientConn is an artifact of Go's early HTTP implementation.
+// Is is low-level, old, and unused by Go's current HTTP stack.
+// We should have deleted it before Go 1.
 //
-// ClientConn is low-level and old. Applications should use Client or
-// Transport in the net/http package.
+// Deprecated: Use the Client or Transport in package net/http instead.
 
-// NewClientConn返回一个新的ClientConnd对c进行读取和写入。如果r非空，则使用缓存对c进行读取。
+// ClientConn 是早期人工编写的 HTTP 实现。
+// 它是低级而老旧的，Go 当前的 HTTP 栈不用它。我们应该在 Go 1 前删除它。
 //
-// ServerConn 是低级而老旧的，应用应当采用 net/http 中的 Client 或 Transport 来代替。
+// 反对使用：请使用 net/http 中的 Client 或 Transport 代替。
 func NewClientConn(c net.Conn, r *bufio.Reader) *ClientConn {
 	if r == nil {
 		r = bufio.NewReader(c)
@@ -291,15 +285,16 @@ func NewClientConn(c net.Conn, r *bufio.Reader) *ClientConn {
 	}
 }
 
-// NewProxyClientConn works like NewClientConn but writes Requests
-// using Request's WriteProxy method.
+// NewProxyClientConn is an artifact of Go's early HTTP implementation.
+// Is is low-level, old, and unused by Go's current HTTP stack.
+// We should have deleted it before Go 1.
 //
-// New code should not use NewProxyClientConn. See Client or
-// Transport in the net/http package instead.
+// Deprecated: Use the Client or Transport in package net/http instead.
 
-// NewProxyClientConn像NewClientConn一样，不同的是使用Request的WriteProxy方法对请求进行写操作。
+// NewProxyClientConn 是早期人工编写的 HTTP 实现。
+// 它是低级而老旧的，Go 当前的 HTTP 栈不用它。我们应该在 Go 1 前删除它。
 //
-// 新代码不应使用 NewProxyClientConn。见 net/http 中的 Client 或 Transport。
+// 反对使用：请使用 net/http 中的 Client 或 Transport 代替。
 func NewProxyClientConn(c net.Conn, r *bufio.Reader) *ClientConn {
 	cc := NewClientConn(c, r)
 	cc.writeReq = (*http.Request).WriteProxy
@@ -314,8 +309,8 @@ func NewProxyClientConn(c net.Conn, r *bufio.Reader) *ClientConn {
 // Hijack将ClientConn单独分离出来，并且返回底层的连接，以及可能有一些未读数据的缓存的读取器。
 // Hijack会在读取获取到keep-alive结束信号之前被调用。在Read或者Write进行中不可以调用Hijack。
 func (cc *ClientConn) Hijack() (c net.Conn, r *bufio.Reader) {
-	cc.lk.Lock()
-	defer cc.lk.Unlock()
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
 	c = cc.c
 	r = cc.r
 	cc.c = nil
@@ -323,9 +318,9 @@ func (cc *ClientConn) Hijack() (c net.Conn, r *bufio.Reader) {
 	return
 }
 
-// Close calls Hijack and then also closes the underlying connection
+// Close calls Hijack and then also closes the underlying connection.
 
-// Close调用Hijack并且关闭底层的连接
+// Close调用Hijack并且关闭底层的连接。
 func (cc *ClientConn) Close() error {
 	c, _ := cc.Hijack()
 	if c != nil {
@@ -343,7 +338,8 @@ func (cc *ClientConn) Close() error {
 // Write负责写请求。如果HTTP长连接已经被关闭了，ErrPersistEOF错误就会被抛出。如果req.Close设置为true，
 // 在通知请求和对应的服务之后，长连接就会被关闭了。ErrUnexpectedEOF则表示TCP连接被远端关闭。
 // 在考虑到关闭连接的时候必须考虑到这种情况。
-func (cc *ClientConn) Write(req *http.Request) (err error) {
+func (cc *ClientConn) Write(req *http.Request) error {
+	var err error
 
 	// Ensure ordered execution of Writes
 	id := cc.pipe.Next()
@@ -355,23 +351,23 @@ func (cc *ClientConn) Write(req *http.Request) (err error) {
 			cc.pipe.EndResponse(id)
 		} else {
 			// Remember the pipeline id of this request
-			cc.lk.Lock()
+			cc.mu.Lock()
 			cc.pipereq[req] = id
-			cc.lk.Unlock()
+			cc.mu.Unlock()
 		}
 	}()
 
-	cc.lk.Lock()
+	cc.mu.Lock()
 	if cc.re != nil { // no point sending if read-side closed or broken
-		defer cc.lk.Unlock()
+		defer cc.mu.Unlock()
 		return cc.re
 	}
 	if cc.we != nil {
-		defer cc.lk.Unlock()
+		defer cc.mu.Unlock()
 		return cc.we
 	}
 	if cc.c == nil { // connection closed by user in the meantime
-		defer cc.lk.Unlock()
+		defer cc.mu.Unlock()
 		return errClosed
 	}
 	c := cc.c
@@ -380,11 +376,11 @@ func (cc *ClientConn) Write(req *http.Request) (err error) {
 		// still might be some pipelined reads
 		cc.we = ErrPersistEOF
 	}
-	cc.lk.Unlock()
+	cc.mu.Unlock()
 
 	err = cc.writeReq(req, c)
-	cc.lk.Lock()
-	defer cc.lk.Unlock()
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
 	if err != nil {
 		cc.we = err
 		return err
@@ -399,8 +395,8 @@ func (cc *ClientConn) Write(req *http.Request) (err error) {
 
 // Pending返回已经被发送出去但是却没有获取到应答的请求数。
 func (cc *ClientConn) Pending() int {
-	cc.lk.Lock()
-	defer cc.lk.Unlock()
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
 	return cc.nwritten - cc.nread
 }
 
@@ -413,32 +409,32 @@ func (cc *ClientConn) Pending() int {
 // 则代表远端的请求是最后被服务的请求了。Read可以和Write并发调用，但是却不能和其他Read并发调用。
 func (cc *ClientConn) Read(req *http.Request) (resp *http.Response, err error) {
 	// Retrieve the pipeline ID of this request/response pair
-	cc.lk.Lock()
+	cc.mu.Lock()
 	id, ok := cc.pipereq[req]
 	delete(cc.pipereq, req)
 	if !ok {
-		cc.lk.Unlock()
+		cc.mu.Unlock()
 		return nil, ErrPipeline
 	}
-	cc.lk.Unlock()
+	cc.mu.Unlock()
 
 	// Ensure pipeline order
 	cc.pipe.StartResponse(id)
 	defer cc.pipe.EndResponse(id)
 
-	cc.lk.Lock()
+	cc.mu.Lock()
 	if cc.re != nil {
-		defer cc.lk.Unlock()
+		defer cc.mu.Unlock()
 		return nil, cc.re
 	}
 	if cc.r == nil { // connection closed by user in the meantime
-		defer cc.lk.Unlock()
+		defer cc.mu.Unlock()
 		return nil, errClosed
 	}
 	r := cc.r
 	lastbody := cc.lastbody
 	cc.lastbody = nil
-	cc.lk.Unlock()
+	cc.mu.Unlock()
 
 	// Make sure body is fully consumed, even if user does not call body.Close
 	if lastbody != nil {
@@ -447,16 +443,16 @@ func (cc *ClientConn) Read(req *http.Request) (resp *http.Response, err error) {
 		// returned.
 		err = lastbody.Close()
 		if err != nil {
-			cc.lk.Lock()
-			defer cc.lk.Unlock()
+			cc.mu.Lock()
+			defer cc.mu.Unlock()
 			cc.re = err
 			return nil, err
 		}
 	}
 
 	resp, err = http.ReadResponse(r, req)
-	cc.lk.Lock()
-	defer cc.lk.Unlock()
+	cc.mu.Lock()
+	defer cc.mu.Unlock()
 	if err != nil {
 		cc.re = err
 		return resp, err
@@ -475,10 +471,10 @@ func (cc *ClientConn) Read(req *http.Request) (resp *http.Response, err error) {
 // Do is convenience method that writes a request and reads a response.
 
 // Do是一个写请求和读回复很方便的方法。
-func (cc *ClientConn) Do(req *http.Request) (resp *http.Response, err error) {
-	err = cc.Write(req)
+func (cc *ClientConn) Do(req *http.Request) (*http.Response, error) {
+	err := cc.Write(req)
 	if err != nil {
-		return
+		return nil, err
 	}
 	return cc.Read(req)
 }

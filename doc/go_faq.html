@@ -198,7 +198,7 @@ What's the origin of the mascot?</h3>
 <p>
 The mascot and logo were designed by
 <a href="http://reneefrench.blogspot.com">Renée French</a>, who also designed
-<a href="http://plan9.bell-labs.com/plan9/glenda.html">Glenda</a>,
+<a href="https://9p.io/plan9/glenda.html">Glenda</a>,
 the Plan 9 bunny.
 The <a href="https://blog.golang.org/gopher">gopher</a>
 is derived from one she used for an <a href="http://wfmu.org/">WFMU</a>
@@ -1759,7 +1759,7 @@ Go separates the notion of what a
 type does&mdash;its methods&mdash;from the type's implementation.
 If two methods return different types, they are not doing the same thing.
 Programmers who want covariant result types are often trying to
-express a type heirarchy through interfaces.
+express a type hierarchy through interfaces.
 In Go it's more natural to have a clean separation between interface
 and implementation.
 </p>
@@ -3649,15 +3649,16 @@ Why does Go perform badly on benchmark X?</h3>
 <p>
 One of Go's design goals is to approach the performance of C for comparable
 programs, yet on some benchmarks it does quite poorly, including several
-in <a href="/test/bench/shootout/">test/bench/shootout</a>. The slowest depend on libraries
-for which versions of comparable performance are not available in Go.
-For instance, <a href="/test/bench/shootout/pidigits.go">pidigits.go</a>
+in <a href="https://go.googlesource.com/exp/+/master/shootout/">golang.org/x/exp/shootout</a>.
+The slowest depend on libraries for which versions of comparable performance
+are not available in Go.
+For instance, <a href="https://go.googlesource.com/exp/+/master/shootout/pidigits.go">pidigits.go</a>
 depends on a multi-precision math package, and the C
 versions, unlike Go's, use <a href="http://gmplib.org/">GMP</a> (which is
 written in optimized assembler).
 Benchmarks that depend on regular expressions
-(<a href="/test/bench/shootout/regex-dna.go">regex-dna.go</a>, for instance) are
-essentially comparing Go's native <a href="/pkg/regexp">regexp package</a> to
+(<a href="https://go.googlesource.com/exp/+/master/shootout/regex-dna.go">regex-dna.go</a>,
+for instance) are essentially comparing Go's native <a href="/pkg/regexp">regexp package</a> to
 mature, highly optimized regular expression libraries like PCRE.
 </p>
 </div>
@@ -3679,9 +3680,9 @@ Go的设计目标之一就是在可比较的程序上逼近C的性能，然而�
 Benchmark games are won by extensive tuning and the Go versions of most
 of the benchmarks need attention.  If you measure comparable C
 and Go programs
-(<a href="/test/bench/shootout/reverse-complement.go">reverse-complement.go</a> is one example), you'll see the two
-languages are much closer in raw performance than this suite would
-indicate.
+(<a href="https://go.googlesource.com/exp/+/master/shootout/reverse-complement.go">reverse-complement.go</a>
+is one example), you'll see the two languages are much closer in raw performance
+than this suite would indicate.
 </p>
 </div>
 

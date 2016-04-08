@@ -1,7 +1,9 @@
 package ld
 
 import (
+	"cmd/internal/bio"
 	"cmd/internal/obj"
+	"cmd/internal/sys"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -41,7 +43,7 @@ const (
 )
 
 type LdMachoObj struct {
-	f          *obj.Biobuf
+	f          *bio.Buf
 	base       int64 // off in f where Mach-O begins
 	length     int64 // length of Mach-O
 	is64       bool
@@ -297,7 +299,7 @@ func macholoadrel(m *LdMachoObj, sect *LdMachoSect) int {
 	rel := make([]LdMachoRel, sect.nreloc)
 	n := int(sect.nreloc * 8)
 	buf := make([]byte, n)
-	if obj.Bseek(m.f, m.base+int64(sect.reloff), 0) < 0 || obj.Bread(m.f, buf) != n {
+	if bio.Bseek(m.f, m.base+int64(sect.reloff), 0) < 0 || bio.Bread(m.f, buf) != n {
 		return -1
 	}
 	var p []byte
@@ -343,7 +345,7 @@ func macholoaddsym(m *LdMachoObj, d *LdMachoDysymtab) int {
 	n := int(d.nindirectsyms)
 
 	p := make([]byte, n*4)
-	if obj.Bseek(m.f, m.base+int64(d.indirectsymoff), 0) < 0 || obj.Bread(m.f, p) != len(p) {
+	if bio.Bseek(m.f, m.base+int64(d.indirectsymoff), 0) < 0 || bio.Bread(m.f, p) != len(p) {
 		return -1
 	}
 
@@ -360,7 +362,7 @@ func macholoadsym(m *LdMachoObj, symtab *LdMachoSymtab) int {
 	}
 
 	strbuf := make([]byte, symtab.strsize)
-	if obj.Bseek(m.f, m.base+int64(symtab.stroff), 0) < 0 || obj.Bread(m.f, strbuf) != len(strbuf) {
+	if bio.Bseek(m.f, m.base+int64(symtab.stroff), 0) < 0 || bio.Bread(m.f, strbuf) != len(strbuf) {
 		return -1
 	}
 
@@ -370,7 +372,7 @@ func macholoadsym(m *LdMachoObj, symtab *LdMachoSymtab) int {
 	}
 	n := int(symtab.nsym * uint32(symsize))
 	symbuf := make([]byte, n)
-	if obj.Bseek(m.f, m.base+int64(symtab.symoff), 0) < 0 || obj.Bread(m.f, symbuf) != len(symbuf) {
+	if bio.Bseek(m.f, m.base+int64(symtab.symoff), 0) < 0 || bio.Bread(m.f, symbuf) != len(symbuf) {
 		return -1
 	}
 	sym := make([]LdMachoSym, symtab.nsym)
@@ -400,7 +402,7 @@ func macholoadsym(m *LdMachoObj, symtab *LdMachoSymtab) int {
 	return 0
 }
 
-func ldmacho(f *obj.Biobuf, pkg string, length int64, pn string) {
+func ldmacho(f *bio.Buf, pkg string, length int64, pn string) {
 	var err error
 	var j int
 	var is64 bool
@@ -429,9 +431,9 @@ func ldmacho(f *obj.Biobuf, pkg string, length int64, pn string) {
 	var rp *Reloc
 	var name string
 
-	Ctxt.Version++
-	base := obj.Boffset(f)
-	if obj.Bread(f, hdr[:]) != len(hdr) {
+	Ctxt.IncVersion()
+	base := bio.Boffset(f)
+	if bio.Bread(f, hdr[:]) != len(hdr) {
 		goto bad
 	}
 
@@ -454,7 +456,7 @@ func ldmacho(f *obj.Biobuf, pkg string, length int64, pn string) {
 
 	if is64 {
 		var tmp [4]uint8
-		obj.Bread(f, tmp[:4]) // skip reserved word in header
+		bio.Bread(f, tmp[:4]) // skip reserved word in header
 	}
 
 	m = new(LdMachoObj)
@@ -471,18 +473,18 @@ func ldmacho(f *obj.Biobuf, pkg string, length int64, pn string) {
 	m.length = length
 	m.name = pn
 
-	switch Thearch.Thechar {
+	switch SysArch.Family {
 	default:
-		Diag("%s: mach-o %s unimplemented", pn, Thestring)
+		Diag("%s: mach-o %s unimplemented", pn, SysArch.Name)
 		return
 
-	case '6':
+	case sys.AMD64:
 		if e != binary.LittleEndian || m.cputype != LdMachoCpuAmd64 {
 			Diag("%s: mach-o object but not amd64", pn)
 			return
 		}
 
-	case '8':
+	case sys.I386:
 		if e != binary.LittleEndian || m.cputype != LdMachoCpu386 {
 			Diag("%s: mach-o object but not 386", pn)
 			return
@@ -492,7 +494,7 @@ func ldmacho(f *obj.Biobuf, pkg string, length int64, pn string) {
 	m.cmd = make([]LdMachoCmd, ncmd)
 	off = uint32(len(hdr))
 	cmdp = make([]byte, cmdsz)
-	if obj.Bread(f, cmdp) != len(cmdp) {
+	if bio.Bread(f, cmdp) != len(cmdp) {
 		err = fmt.Errorf("reading cmds: %v", err)
 		goto bad
 	}
@@ -555,7 +557,7 @@ func ldmacho(f *obj.Biobuf, pkg string, length int64, pn string) {
 	}
 
 	dat = make([]byte, c.seg.filesz)
-	if obj.Bseek(f, m.base+int64(c.seg.fileoff), 0) < 0 || obj.Bread(f, dat) != len(dat) {
+	if bio.Bseek(f, m.base+int64(c.seg.fileoff), 0) < 0 || bio.Bread(f, dat) != len(dat) {
 		err = fmt.Errorf("cannot load object data: %v", err)
 		goto bad
 	}
@@ -620,7 +622,7 @@ func ldmacho(f *obj.Biobuf, pkg string, length int64, pn string) {
 		}
 		s = Linklookup(Ctxt, name, v)
 		if sym.type_&N_EXT == 0 {
-			s.Dupok = 1
+			s.Attr |= AttrDuplicateOK
 		}
 		sym.sym = s
 		if sym.sectnum == 0 { // undefined
@@ -639,7 +641,7 @@ func ldmacho(f *obj.Biobuf, pkg string, length int64, pn string) {
 		}
 
 		if s.Outer != nil {
-			if s.Dupok != 0 {
+			if s.Attr.DuplicateOK() {
 				continue
 			}
 			Exitf("%s: duplicate symbol reference: %s in both %s and %s", pn, s.Name, s.Outer.Name, sect.sym.Name)
@@ -650,14 +652,14 @@ func ldmacho(f *obj.Biobuf, pkg string, length int64, pn string) {
 		outer.Sub = s
 		s.Outer = outer
 		s.Value = int64(sym.value - sect.addr)
-		if s.Cgoexport&CgoExportDynamic == 0 {
+		if !s.Attr.CgoExportDynamic() {
 			s.Dynimplib = "" // satisfy dynimport
 		}
 		if outer.Type == obj.STEXT {
-			if s.External != 0 && s.Dupok == 0 {
+			if s.Attr.External() && !s.Attr.DuplicateOK() {
 				Diag("%s: duplicate definition of %s", pn, s.Name)
 			}
-			s.External = 1
+			s.Attr |= AttrExternal
 		}
 
 		sym.sym = s
@@ -685,10 +687,10 @@ func ldmacho(f *obj.Biobuf, pkg string, length int64, pn string) {
 		}
 
 		if s.Type == obj.STEXT {
-			if s.Onlist != 0 {
+			if s.Attr.OnList() {
 				log.Fatalf("symbol %s listed multiple times", s.Name)
 			}
-			s.Onlist = 1
+			s.Attr |= AttrOnList
 			if Ctxt.Etextp != nil {
 				Ctxt.Etextp.Next = s
 			} else {
@@ -696,10 +698,10 @@ func ldmacho(f *obj.Biobuf, pkg string, length int64, pn string) {
 			}
 			Ctxt.Etextp = s
 			for s1 = s.Sub; s1 != nil; s1 = s1.Sub {
-				if s1.Onlist != 0 {
+				if s1.Attr.OnList() {
 					log.Fatalf("symbol %s listed multiple times", s1.Name)
 				}
-				s1.Onlist = 1
+				s1.Attr |= AttrOnList
 				Ctxt.Etextp.Next = s1
 				Ctxt.Etextp = s1
 			}
@@ -724,10 +726,9 @@ func ldmacho(f *obj.Biobuf, pkg string, length int64, pn string) {
 			rp = &r[rpi]
 			rel = &sect.rel[j]
 			if rel.scattered != 0 {
-				if Thearch.Thechar != '8' {
+				if SysArch.Family != sys.I386 {
 					// mach-o only uses scattered relocation on 32-bit platforms
 					Diag("unexpected scattered relocation")
-
 					continue
 				}
 
@@ -821,7 +822,7 @@ func ldmacho(f *obj.Biobuf, pkg string, length int64, pn string) {
 			rp.Off = int32(rel.addr)
 
 			// Handle X86_64_RELOC_SIGNED referencing a section (rel->extrn == 0).
-			if Thearch.Thechar == '6' && rel.extrn == 0 && rel.type_ == 1 {
+			if SysArch.Family == sys.AMD64 && rel.extrn == 0 && rel.type_ == 1 {
 				// Calculate the addend as the offset into the section.
 				//
 				// The rip-relative offset stored in the object file is encoded
@@ -845,9 +846,9 @@ func ldmacho(f *obj.Biobuf, pkg string, length int64, pn string) {
 			}
 
 			// For i386 Mach-O PC-relative, the addend is written such that
-			// it *is* the PC being subtracted.  Use that to make
+			// it *is* the PC being subtracted. Use that to make
 			// it match our version of PC-relative.
-			if rel.pcrel != 0 && Thearch.Thechar == '8' {
+			if rel.pcrel != 0 && SysArch.Family == sys.I386 {
 				rp.Add += int64(rp.Off) + int64(rp.Siz)
 			}
 			if rel.extrn == 0 {
@@ -866,7 +867,7 @@ func ldmacho(f *obj.Biobuf, pkg string, length int64, pn string) {
 				// include that information in the addend.
 				// We only care about the delta from the
 				// section base.
-				if Thearch.Thechar == '8' {
+				if SysArch.Family == sys.I386 {
 					rp.Add -= int64(c.seg.sect[rel.symnum-1].addr)
 				}
 			} else {

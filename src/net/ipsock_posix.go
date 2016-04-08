@@ -1,4 +1,4 @@
-// Copyright 2009 The Go Authors.  All rights reserved.
+// Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -35,15 +35,15 @@ func probeIPv4Stack() bool {
 // Should we try to use the IPv4 socket interface if we're
 // only dealing with IPv4 sockets?  As long as the host system
 // understands IPv6, it's okay to pass IPv4 addresses to the IPv6
-// interface.  That simplifies our code and is most general.
+// interface. That simplifies our code and is most general.
 // Unfortunately, we need to run on kernels built without IPv6
-// support too.  So probe the kernel to figure it out.
+// support too. So probe the kernel to figure it out.
 //
 // probeIPv6Stack probes both basic IPv6 capability and IPv6 IPv4-
 // mapping capability which is controlled by IPV6_V6ONLY socket
 // option and/or kernel state "net.inet6.ip6.v6only".
-// It returns two boolean values.  If the first boolean value is
-// true, kernel supports basic IPv6 functionality.  If the second
+// It returns two boolean values. If the first boolean value is
+// true, kernel supports basic IPv6 functionality. If the second
 // boolean value is true, kernel supports IPv6 IPv4-mapping.
 func probeIPv6Stack() (supportsIPv6, supportsIPv4map bool) {
 	var probes = []struct {
@@ -61,7 +61,7 @@ func probeIPv6Stack() (supportsIPv6, supportsIPv4map bool) {
 		// Some released versions of DragonFly BSD pretend to
 		// accept IPV6_V6ONLY=0 successfully, but the state
 		// still stays IPV6_V6ONLY=1. Eventually DragonFly BSD
-		// stops preteding, but the transition period would
+		// stops pretending, but the transition period would
 		// cause unpredictable behavior and we need to avoid
 		// it.
 		//
@@ -93,8 +93,8 @@ func probeIPv6Stack() (supportsIPv6, supportsIPv4map bool) {
 }
 
 // favoriteAddrFamily returns the appropriate address family to
-// the given net, laddr, raddr and mode.  At first it figures
-// address family out from the net.  If mode indicates "listen"
+// the given net, laddr, raddr and mode. At first it figures
+// address family out from the net. If mode indicates "listen"
 // and laddr is a wildcard, it assumes that the user wants to
 // make a passive connection with a wildcard address family, both
 // AF_INET and AF_INET6, and a wildcard address like following:
@@ -156,9 +156,9 @@ func favoriteAddrFamily(net string, laddr, raddr sockaddr, mode string) (family 
 
 // Internet sockets (TCP, UDP, IP)
 
-func internetSocket(net string, laddr, raddr sockaddr, deadline time.Time, sotype, proto int, mode string) (fd *netFD, err error) {
+func internetSocket(net string, laddr, raddr sockaddr, deadline time.Time, sotype, proto int, mode string, cancel <-chan struct{}) (fd *netFD, err error) {
 	family, ipv6only := favoriteAddrFamily(net, laddr, raddr, mode)
-	return socket(net, family, sotype, proto, ipv6only, laddr, raddr, deadline)
+	return socket(net, family, sotype, proto, ipv6only, laddr, raddr, deadline, cancel)
 }
 
 func ipToSockaddr(family int, ip IP, port int, zone string) (syscall.Sockaddr, error) {
@@ -170,11 +170,8 @@ func ipToSockaddr(family int, ip IP, port int, zone string) (syscall.Sockaddr, e
 		if ip = ip.To4(); ip == nil {
 			return nil, &AddrError{Err: "non-IPv4 address", Addr: ip.String()}
 		}
-		sa := new(syscall.SockaddrInet4)
-		for i := 0; i < IPv4len; i++ {
-			sa.Addr[i] = ip[i]
-		}
-		sa.Port = port
+		sa := &syscall.SockaddrInet4{Port: port}
+		copy(sa.Addr[:], ip)
 		return sa, nil
 	case syscall.AF_INET6:
 		if len(ip) == 0 {
@@ -182,19 +179,15 @@ func ipToSockaddr(family int, ip IP, port int, zone string) (syscall.Sockaddr, e
 		}
 		// IPv4 callers use 0.0.0.0 to mean "announce on any available address".
 		// In IPv6 mode, Linux treats that as meaning "announce on 0.0.0.0",
-		// which it refuses to do.  Rewrite to the IPv6 unspecified address.
+		// which it refuses to do. Rewrite to the IPv6 unspecified address.
 		if ip.Equal(IPv4zero) {
 			ip = IPv6zero
 		}
 		if ip = ip.To16(); ip == nil {
 			return nil, &AddrError{Err: "non-IPv6 address", Addr: ip.String()}
 		}
-		sa := new(syscall.SockaddrInet6)
-		for i := 0; i < IPv6len; i++ {
-			sa.Addr[i] = ip[i]
-		}
-		sa.Port = port
-		sa.ZoneId = uint32(zoneToInt(zone))
+		sa := &syscall.SockaddrInet6{Port: port, ZoneId: uint32(zoneToInt(zone))}
+		copy(sa.Addr[:], ip)
 		return sa, nil
 	}
 	return nil, &AddrError{Err: "invalid address family", Addr: ip.String()}

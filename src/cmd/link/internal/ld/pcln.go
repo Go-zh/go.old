@@ -1,4 +1,4 @@
-// Copyright 2013 The Go Authors.  All rights reserved.
+// Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -8,6 +8,8 @@ import (
 	"cmd/internal/obj"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 )
 
 // funcpctab writes to dst a pc-value table mapping the code in func to the values
@@ -91,11 +93,11 @@ func pciterinit(ctxt *Link, it *Pciter, d *Pcdata) {
 	it.value = -1
 	it.start = 1
 	it.done = 0
-	it.pcscale = uint32(ctxt.Arch.Minlc)
+	it.pcscale = uint32(ctxt.Arch.MinLC)
 	pciternext(it)
 }
 
-// Copyright 2013 The Go Authors.  All rights reserved.
+// Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -150,6 +152,7 @@ func renumberfiles(ctxt *Link, files []*LSym, d *Pcdata) {
 			f.Value = int64(ctxt.Nhistfile)
 			f.Type = obj.SFILEPATH
 			f.Next = ctxt.Filesyms
+			f.Name = expandGoroot(f.Name)
 			ctxt.Filesyms = f
 		}
 	}
@@ -215,7 +218,7 @@ func pclntab() {
 	funcdata_bytes := int64(0)
 	ftab := Linklookup(Ctxt, "runtime.pclntab", 0)
 	ftab.Type = obj.SPCLNTAB
-	ftab.Reachable = true
+	ftab.Attr |= AttrReachable
 
 	// See golang.org/s/go12symtab for the format. Briefly:
 	//	8-byte header
@@ -239,12 +242,12 @@ func pclntab() {
 	}
 
 	pclntabNfunc = nfunc
-	Symgrow(Ctxt, ftab, 8+int64(Thearch.Ptrsize)+int64(nfunc)*2*int64(Thearch.Ptrsize)+int64(Thearch.Ptrsize)+4)
+	Symgrow(Ctxt, ftab, 8+int64(SysArch.PtrSize)+int64(nfunc)*2*int64(SysArch.PtrSize)+int64(SysArch.PtrSize)+4)
 	setuint32(Ctxt, ftab, 0, 0xfffffffb)
-	setuint8(Ctxt, ftab, 6, uint8(Thearch.Minlc))
-	setuint8(Ctxt, ftab, 7, uint8(Thearch.Ptrsize))
-	setuintxx(Ctxt, ftab, 8, uint64(nfunc), int64(Thearch.Ptrsize))
-	pclntabPclntabOffset = int32(8 + Thearch.Ptrsize)
+	setuint8(Ctxt, ftab, 6, uint8(SysArch.MinLC))
+	setuint8(Ctxt, ftab, 7, uint8(SysArch.PtrSize))
+	setuintxx(Ctxt, ftab, 8, uint64(nfunc), int64(SysArch.PtrSize))
+	pclntabPclntabOffset = int32(8 + SysArch.PtrSize)
 
 	nfunc = 0
 	var last *LSym
@@ -269,16 +272,16 @@ func pclntab() {
 		}
 
 		funcstart = int32(len(ftab.P))
-		funcstart += int32(-len(ftab.P)) & (int32(Thearch.Ptrsize) - 1)
+		funcstart += int32(-len(ftab.P)) & (int32(SysArch.PtrSize) - 1)
 
-		setaddr(Ctxt, ftab, 8+int64(Thearch.Ptrsize)+int64(nfunc)*2*int64(Thearch.Ptrsize), Ctxt.Cursym)
-		setuintxx(Ctxt, ftab, 8+int64(Thearch.Ptrsize)+int64(nfunc)*2*int64(Thearch.Ptrsize)+int64(Thearch.Ptrsize), uint64(funcstart), int64(Thearch.Ptrsize))
+		setaddr(Ctxt, ftab, 8+int64(SysArch.PtrSize)+int64(nfunc)*2*int64(SysArch.PtrSize), Ctxt.Cursym)
+		setuintxx(Ctxt, ftab, 8+int64(SysArch.PtrSize)+int64(nfunc)*2*int64(SysArch.PtrSize)+int64(SysArch.PtrSize), uint64(funcstart), int64(SysArch.PtrSize))
 
 		// fixed size of struct, checked below
 		off = funcstart
 
-		end = funcstart + int32(Thearch.Ptrsize) + 3*4 + 5*4 + int32(pcln.Npcdata)*4 + int32(pcln.Nfuncdata)*int32(Thearch.Ptrsize)
-		if pcln.Nfuncdata > 0 && (end&int32(Thearch.Ptrsize-1) != 0) {
+		end = funcstart + int32(SysArch.PtrSize) + 3*4 + 5*4 + int32(len(pcln.Pcdata))*4 + int32(len(pcln.Funcdata))*int32(SysArch.PtrSize)
+		if len(pcln.Funcdata) > 0 && (end&int32(SysArch.PtrSize-1) != 0) {
 			end += 4
 		}
 		Symgrow(Ctxt, ftab, int64(end))
@@ -318,34 +321,34 @@ func pclntab() {
 
 		off = addpctab(ftab, off, &pcln.Pcfile)
 		off = addpctab(ftab, off, &pcln.Pcline)
-		off = int32(setuint32(Ctxt, ftab, int64(off), uint32(pcln.Npcdata)))
-		off = int32(setuint32(Ctxt, ftab, int64(off), uint32(pcln.Nfuncdata)))
-		for i = 0; i < int32(pcln.Npcdata); i++ {
+		off = int32(setuint32(Ctxt, ftab, int64(off), uint32(len(pcln.Pcdata))))
+		off = int32(setuint32(Ctxt, ftab, int64(off), uint32(len(pcln.Funcdata))))
+		for i = 0; i < int32(len(pcln.Pcdata)); i++ {
 			off = addpctab(ftab, off, &pcln.Pcdata[i])
 		}
 
 		// funcdata, must be pointer-aligned and we're only int32-aligned.
 		// Missing funcdata will be 0 (nil pointer).
-		if pcln.Nfuncdata > 0 {
-			if off&int32(Thearch.Ptrsize-1) != 0 {
+		if len(pcln.Funcdata) > 0 {
+			if off&int32(SysArch.PtrSize-1) != 0 {
 				off += 4
 			}
-			for i = 0; i < int32(pcln.Nfuncdata); i++ {
+			for i = 0; i < int32(len(pcln.Funcdata)); i++ {
 				if pcln.Funcdata[i] == nil {
-					setuintxx(Ctxt, ftab, int64(off)+int64(Thearch.Ptrsize)*int64(i), uint64(pcln.Funcdataoff[i]), int64(Thearch.Ptrsize))
+					setuintxx(Ctxt, ftab, int64(off)+int64(SysArch.PtrSize)*int64(i), uint64(pcln.Funcdataoff[i]), int64(SysArch.PtrSize))
 				} else {
 					// TODO: Dedup.
 					funcdata_bytes += pcln.Funcdata[i].Size
 
-					setaddrplus(Ctxt, ftab, int64(off)+int64(Thearch.Ptrsize)*int64(i), pcln.Funcdata[i], pcln.Funcdataoff[i])
+					setaddrplus(Ctxt, ftab, int64(off)+int64(SysArch.PtrSize)*int64(i), pcln.Funcdata[i], pcln.Funcdataoff[i])
 				}
 			}
 
-			off += int32(pcln.Nfuncdata) * int32(Thearch.Ptrsize)
+			off += int32(len(pcln.Funcdata)) * int32(SysArch.PtrSize)
 		}
 
 		if off != end {
-			Diag("bad math in functab: funcstart=%d off=%d but end=%d (npcdata=%d nfuncdata=%d ptrsize=%d)", funcstart, off, end, pcln.Npcdata, pcln.Nfuncdata, Thearch.Ptrsize)
+			Diag("bad math in functab: funcstart=%d off=%d but end=%d (npcdata=%d nfuncdata=%d ptrsize=%d)", funcstart, off, end, len(pcln.Pcdata), len(pcln.Funcdata), SysArch.PtrSize)
 			errorexit()
 		}
 
@@ -354,14 +357,14 @@ func pclntab() {
 
 	pclntabLastFunc = last
 	// Final entry of table is just end pc.
-	setaddrplus(Ctxt, ftab, 8+int64(Thearch.Ptrsize)+int64(nfunc)*2*int64(Thearch.Ptrsize), last, last.Size)
+	setaddrplus(Ctxt, ftab, 8+int64(SysArch.PtrSize)+int64(nfunc)*2*int64(SysArch.PtrSize), last, last.Size)
 
 	// Start file table.
 	start := int32(len(ftab.P))
 
-	start += int32(-len(ftab.P)) & (int32(Thearch.Ptrsize) - 1)
+	start += int32(-len(ftab.P)) & (int32(SysArch.PtrSize) - 1)
 	pclntabFiletabOffset = start
-	setuint32(Ctxt, ftab, 8+int64(Thearch.Ptrsize)+int64(nfunc)*2*int64(Thearch.Ptrsize)+int64(Thearch.Ptrsize), uint32(start))
+	setuint32(Ctxt, ftab, 8+int64(SysArch.PtrSize)+int64(nfunc)*2*int64(SysArch.PtrSize)+int64(SysArch.PtrSize), uint32(start))
 
 	Symgrow(Ctxt, ftab, int64(start)+(int64(Ctxt.Nhistfile)+1)*4)
 	setuint32(Ctxt, ftab, int64(start), uint32(Ctxt.Nhistfile))
@@ -376,6 +379,18 @@ func pclntab() {
 	}
 }
 
+func expandGoroot(s string) string {
+	const n = len("$GOROOT")
+	if len(s) >= n+1 && s[:n] == "$GOROOT" && (s[n] == '/' || s[n] == '\\') {
+		root := goroot
+		if final := os.Getenv("GOROOT_FINAL"); final != "" {
+			root = final
+		}
+		return filepath.ToSlash(filepath.Join(root, s[n:]))
+	}
+	return s
+}
+
 const (
 	BUCKETSIZE    = 256 * MINFUNC
 	SUBBUCKETS    = 16
@@ -384,12 +399,12 @@ const (
 )
 
 // findfunctab generates a lookup table to quickly find the containing
-// function for a pc.  See src/runtime/symtab.go:findfunc for details.
+// function for a pc. See src/runtime/symtab.go:findfunc for details.
 func findfunctab() {
 	t := Linklookup(Ctxt, "runtime.findfunctab", 0)
 	t.Type = obj.SRODATA
-	t.Reachable = true
-	t.Local = true
+	t.Attr |= AttrReachable
+	t.Attr |= AttrLocal
 
 	// find min and max address
 	min := Ctxt.Textp.Value

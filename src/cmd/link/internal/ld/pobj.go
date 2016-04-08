@@ -31,7 +31,9 @@
 package ld
 
 import (
+	"cmd/internal/bio"
 	"cmd/internal/obj"
+	"cmd/internal/sys"
 	"flag"
 	"fmt"
 	"os"
@@ -44,13 +46,11 @@ var (
 )
 
 func Ldmain() {
-	Ctxt = linknew(Thelinkarch)
-	Ctxt.Thechar = int32(Thearch.Thechar)
-	Ctxt.Thestring = Thestring
+	Ctxt = linknew(SysArch)
 	Ctxt.Diag = Diag
 	Ctxt.Bso = &Bso
 
-	Bso = *obj.Binitw(os.Stdout)
+	Bso = *bio.BufWriter(os.Stdout)
 	Debug = [128]int{}
 	nerrors = 0
 	outfile = ""
@@ -70,7 +70,7 @@ func Ldmain() {
 		}
 	}
 
-	if Thearch.Thechar == '6' && obj.Getgoos() == "plan9" {
+	if SysArch.Family == sys.AMD64 && obj.Getgoos() == "plan9" {
 		obj.Flagcount("8", "use 64-bit addresses in symbol table", &Debug['8'])
 	}
 	obj.Flagfn1("B", "add an ELF NT_GNU_BUILD_ID `note` when using ELF", addbuildinfo)
@@ -89,6 +89,7 @@ func Ldmain() {
 	flag.Var(&Buildmode, "buildmode", "set build `mode`")
 	obj.Flagcount("c", "dump call graph", &Debug['c'])
 	obj.Flagcount("d", "disable dynamic executable", &Debug['d'])
+	obj.Flagstr("extar", "archive program for buildmode=c-archive", &extar)
 	obj.Flagstr("extld", "use `linker` when linking in external mode", &extld)
 	obj.Flagstr("extldflags", "pass `flags` to external linker", &extldflags)
 	obj.Flagcount("f", "ignore version mismatch", &Debug['f'])
@@ -106,7 +107,7 @@ func Ldmain() {
 	obj.Flagcount("race", "enable race detector", &flag_race)
 	obj.Flagcount("s", "disable symbol table", &Debug['s'])
 	var flagShared int
-	if Thearch.Thechar == '5' || Thearch.Thechar == '6' {
+	if SysArch.InFamily(sys.ARM, sys.AMD64) {
 		obj.Flagcount("shared", "generate shared object (implies -linkmode external)", &flagShared)
 	}
 	obj.Flagstr("tmpdir", "use `directory` for temporary files", &tmpdir)
@@ -117,33 +118,6 @@ func Ldmain() {
 	obj.Flagstr("cpuprofile", "write cpu profile to `file`", &cpuprofile)
 	obj.Flagstr("memprofile", "write memory profile to `file`", &memprofile)
 	obj.Flagint64("memprofilerate", "set runtime.MemProfileRate to `rate`", &memprofilerate)
-
-	// Clumsy hack to preserve old two-argument -X name val syntax for old scripts.
-	// Rewrite that syntax into new syntax -X name=val.
-	// TODO(rsc): Delete this hack in Go 1.6 or later.
-	var args []string
-	for i := 0; i < len(os.Args); i++ {
-		arg := os.Args[i]
-		if (arg == "-X" || arg == "--X") && i+2 < len(os.Args) && !strings.Contains(os.Args[i+1], "=") {
-			fmt.Fprintf(os.Stderr, "link: warning: option %s %s %s may not work in future releases; use %s %s=%s\n",
-				arg, os.Args[i+1], os.Args[i+2],
-				arg, os.Args[i+1], os.Args[i+2])
-			args = append(args, arg)
-			args = append(args, os.Args[i+1]+"="+os.Args[i+2])
-			i += 2
-			continue
-		}
-		if (strings.HasPrefix(arg, "-X=") || strings.HasPrefix(arg, "--X=")) && i+1 < len(os.Args) && strings.Count(arg, "=") == 1 {
-			fmt.Fprintf(os.Stderr, "link: warning: option %s %s may not work in future releases; use %s=%s\n",
-				arg, os.Args[i+1],
-				arg, os.Args[i+1])
-			args = append(args, arg+"="+os.Args[i+1])
-			i++
-			continue
-		}
-		args = append(args, arg)
-	}
-	os.Args = args
 
 	obj.Flagparse(usage)
 
@@ -212,17 +186,9 @@ func Ldmain() {
 	}
 	loadlib()
 
-	if Thearch.Thechar == '5' {
-		// mark some functions that are only referenced after linker code editing
-		if Ctxt.Goarm == 5 {
-			mark(Linkrlookup(Ctxt, "_sfloat", 0))
-		}
-		mark(Linklookup(Ctxt, "runtime.read_tls_fallback", 0))
-	}
-
-	checkgo()
 	checkstrdata()
-	deadcode()
+	deadcode(Ctxt)
+	fieldtrack(Ctxt)
 	callgraph()
 
 	doelf()
@@ -242,7 +208,6 @@ func Ldmain() {
 	symtab()
 	dodata()
 	address()
-	doweak()
 	reloc()
 	Thearch.Asmb()
 	undef()
@@ -250,7 +215,7 @@ func Ldmain() {
 	archive()
 	if Debug['v'] != 0 {
 		fmt.Fprintf(&Bso, "%5.2f cpu time\n", obj.Cputime())
-		fmt.Fprintf(&Bso, "%d symbols\n", Ctxt.Nsymbol)
+		fmt.Fprintf(&Bso, "%d symbols\n", len(Ctxt.Allsym))
 		fmt.Fprintf(&Bso, "%d liveness data\n", liveness)
 	}
 

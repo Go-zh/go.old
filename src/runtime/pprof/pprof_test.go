@@ -1,4 +1,4 @@
-// Copyright 2011 The Go Authors.  All rights reserved.
+// Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -23,14 +23,14 @@ import (
 	"unsafe"
 )
 
-func cpuHogger(f func()) {
+func cpuHogger(f func(), dur time.Duration) {
 	// We only need to get one 100 Hz clock tick, so we've got
-	// a 25x safety buffer.
+	// a large safety buffer.
 	// But do at least 500 iterations (which should take about 100ms),
 	// otherwise TestCPUProfileMultithreaded can fail if only one
-	// thread is scheduled during the 250ms period.
+	// thread is scheduled during the testing period.
 	t0 := time.Now()
-	for i := 0; i < 500 || time.Since(t0) < 250*time.Millisecond; i++ {
+	for i := 0; i < 500 || time.Since(t0) < dur; i++ {
 		f()
 	}
 }
@@ -68,20 +68,20 @@ func cpuHog2() {
 }
 
 func TestCPUProfile(t *testing.T) {
-	testCPUProfile(t, []string{"runtime/pprof_test.cpuHog1"}, func() {
-		cpuHogger(cpuHog1)
+	testCPUProfile(t, []string{"runtime/pprof_test.cpuHog1"}, func(dur time.Duration) {
+		cpuHogger(cpuHog1, dur)
 	})
 }
 
 func TestCPUProfileMultithreaded(t *testing.T) {
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(2))
-	testCPUProfile(t, []string{"runtime/pprof_test.cpuHog1", "runtime/pprof_test.cpuHog2"}, func() {
+	testCPUProfile(t, []string{"runtime/pprof_test.cpuHog1", "runtime/pprof_test.cpuHog2"}, func(dur time.Duration) {
 		c := make(chan int)
 		go func() {
-			cpuHogger(cpuHog1)
+			cpuHogger(cpuHog1, dur)
 			c <- 1
 		}()
-		cpuHogger(cpuHog2)
+		cpuHogger(cpuHog2, dur)
 		<-c
 	})
 }
@@ -92,11 +92,11 @@ func parseProfile(t *testing.T, bytes []byte, f func(uintptr, []uintptr)) {
 	val := *(*[]uintptr)(unsafe.Pointer(&bytes))
 	val = val[:l]
 
-	// 5 for the header, 2 for the per-sample header on at least one sample, 3 for the trailer.
-	if l < 5+2+3 {
+	// 5 for the header, 3 for the trailer.
+	if l < 5+3 {
 		t.Logf("profile too short: %#x", val)
 		if badOS[runtime.GOOS] {
-			t.Skipf("ignoring failure on %s; see golang.org/issue/6047", runtime.GOOS)
+			t.Skipf("ignoring failure on %s; see golang.org/issue/13841", runtime.GOOS)
 			return
 		}
 		t.FailNow()
@@ -120,7 +120,7 @@ func parseProfile(t *testing.T, bytes []byte, f func(uintptr, []uintptr)) {
 	}
 }
 
-func testCPUProfile(t *testing.T, need []string, f func()) {
+func testCPUProfile(t *testing.T, need []string, f func(dur time.Duration)) {
 	switch runtime.GOOS {
 	case "darwin":
 		switch runtime.GOARCH {
@@ -138,12 +138,55 @@ func testCPUProfile(t *testing.T, need []string, f func()) {
 		t.Skip("skipping on plan9")
 	}
 
-	var prof bytes.Buffer
-	if err := StartCPUProfile(&prof); err != nil {
-		t.Fatal(err)
+	const maxDuration = 5 * time.Second
+	// If we're running a long test, start with a long duration
+	// because some of the tests (e.g., TestStackBarrierProfiling)
+	// are trying to make sure something *doesn't* happen.
+	duration := 5 * time.Second
+	if testing.Short() {
+		duration = 200 * time.Millisecond
 	}
-	f()
-	StopCPUProfile()
+
+	// Profiling tests are inherently flaky, especially on a
+	// loaded system, such as when this test is running with
+	// several others under go test std. If a test fails in a way
+	// that could mean it just didn't run long enough, try with a
+	// longer duration.
+	for duration <= maxDuration {
+		var prof bytes.Buffer
+		if err := StartCPUProfile(&prof); err != nil {
+			t.Fatal(err)
+		}
+		f(duration)
+		StopCPUProfile()
+
+		if profileOk(t, need, prof, duration) {
+			return
+		}
+
+		duration *= 2
+		if duration <= maxDuration {
+			t.Logf("retrying with %s duration", duration)
+		}
+	}
+
+	if badOS[runtime.GOOS] {
+		t.Skipf("ignoring failure on %s; see golang.org/issue/13841", runtime.GOOS)
+		return
+	}
+	// Ignore the failure if the tests are running in a QEMU-based emulator,
+	// QEMU is not perfect at emulating everything.
+	// IN_QEMU environmental variable is set by some of the Go builders.
+	// IN_QEMU=1 indicates that the tests are running in QEMU. See issue 9605.
+	if os.Getenv("IN_QEMU") == "1" {
+		t.Skip("ignore the failure in QEMU; see golang.org/issue/9605")
+		return
+	}
+	t.FailNow()
+}
+
+func profileOk(t *testing.T, need []string, prof bytes.Buffer, duration time.Duration) (ok bool) {
+	ok = true
 
 	// Check that profile is well formed and contains need.
 	// 检查分析报告的形式是否符合所需格式。
@@ -173,11 +216,18 @@ func testCPUProfile(t *testing.T, need []string, f func()) {
 		// On some windows machines we end up with
 		// not enough samples due to coarse timer
 		// resolution. Let it go.
-		t.Skip("too few samples on Windows (golang.org/issue/10842)")
+		t.Log("too few samples on Windows (golang.org/issue/10842)")
+		return false
+	}
+
+	// Check that we got a reasonable number of samples.
+	if ideal := uintptr(duration * 100 / time.Second); samples == 0 || samples < ideal/4 {
+		t.Logf("too few samples; got %d, want at least %d, ideally %d", samples, ideal/4, ideal)
+		ok = false
 	}
 
 	if len(need) == 0 {
-		return
+		return ok
 	}
 
 	var total uintptr
@@ -185,9 +235,8 @@ func testCPUProfile(t *testing.T, need []string, f func()) {
 		total += have[i]
 		t.Logf("%s: %d\n", name, have[i])
 	}
-	ok := true
 	if total == 0 {
-		t.Logf("no CPU profile samples collected")
+		t.Logf("no samples in expected functions")
 		ok = false
 	}
 	// We'd like to check a reasonable minimum, like
@@ -201,22 +250,7 @@ func testCPUProfile(t *testing.T, need []string, f func()) {
 			ok = false
 		}
 	}
-
-	if !ok {
-		if badOS[runtime.GOOS] {
-			t.Skipf("ignoring failure on %s; see golang.org/issue/6047", runtime.GOOS)
-			return
-		}
-		// Ignore the failure if the tests are running in a QEMU-based emulator,
-		// QEMU is not perfect at emulating everything.
-		// IN_QEMU environmental variable is set by some of the Go builders.
-		// IN_QEMU=1 indicates that the tests are running in QEMU. See issue 9605.
-		if os.Getenv("IN_QEMU") == "1" {
-			t.Skip("ignore the failure in QEMU; see golang.org/issue/9605")
-			return
-		}
-		t.FailNow()
-	}
+	return ok
 }
 
 // Fork can hang if preempted with signals frequently enough (see issue 5517).
@@ -311,8 +345,8 @@ func TestGoroutineSwitch(t *testing.T) {
 
 // Test that profiling of division operations is okay, especially on ARM. See issue 6681.
 func TestMathBigDivide(t *testing.T) {
-	testCPUProfile(t, nil, func() {
-		t := time.After(5 * time.Second)
+	testCPUProfile(t, nil, func(duration time.Duration) {
+		t := time.After(duration)
 		pi := new(big.Int)
 		for {
 			for i := 0; i < 100; i++ {
@@ -330,6 +364,19 @@ func TestMathBigDivide(t *testing.T) {
 }
 
 func TestStackBarrierProfiling(t *testing.T) {
+	if (runtime.GOOS == "linux" && runtime.GOARCH == "arm") || runtime.GOOS == "openbsd" || runtime.GOOS == "solaris" || runtime.GOOS == "dragonfly" || runtime.GOOS == "freebsd" {
+		// This test currently triggers a large number of
+		// usleep(100)s. These kernels/arches have poor
+		// resolution timers, so this gives up a whole
+		// scheduling quantum. On Linux and the BSDs (and
+		// probably Solaris), profiling signals are only
+		// generated when a process completes a whole
+		// scheduling quantum, so this test often gets zero
+		// profiling signals and fails.
+		t.Skipf("low resolution timers inhibit profiling signals (golang.org/issue/13405)")
+		return
+	}
+
 	if !strings.Contains(os.Getenv("GODEBUG"), "gcstackbarrierall=1") {
 		// Re-execute this test with constant GC and stack
 		// barriers at every frame.
@@ -337,7 +384,11 @@ func TestStackBarrierProfiling(t *testing.T) {
 		if runtime.GOARCH == "ppc64" || runtime.GOARCH == "ppc64le" {
 			t.Skip("gcstackbarrierall doesn't work on ppc64")
 		}
-		cmd := exec.Command(os.Args[0], "-test.run=TestStackBarrierProfiling")
+		args := []string{"-test.run=TestStackBarrierProfiling"}
+		if testing.Short() {
+			args = append(args, "-test.short")
+		}
+		cmd := exec.Command(os.Args[0], args...)
 		cmd.Env = append([]string{"GODEBUG=gcstackbarrierall=1", "GOGC=1"}, os.Environ()...)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("subprocess failed with %v:\n%s", err, out)
@@ -345,13 +396,9 @@ func TestStackBarrierProfiling(t *testing.T) {
 		return
 	}
 
-	testCPUProfile(t, nil, func() {
-		// This is long enough that we're likely to get one or
-		// two samples in stackBarrier.
-		duration := 5 * time.Second
-		if testing.Short() {
-			duration = 1 * time.Second
-		}
+	testCPUProfile(t, nil, func(duration time.Duration) {
+		// In long mode, we're likely to get one or two
+		// samples in stackBarrier.
 		t := time.After(duration)
 		for {
 			deepStack(1000)
@@ -374,11 +421,13 @@ func deepStack(depth int) int {
 	return deepStack(depth-1) + 1
 }
 
-// Operating systems that are expected to fail the tests. See issue 6047.
+// Operating systems that are expected to fail the tests. See issue 13841.
 var badOS = map[string]bool{
-	"darwin": true,
-	"netbsd": true,
-	"plan9":  true,
+	"darwin":    true,
+	"netbsd":    true,
+	"plan9":     true,
+	"dragonfly": true,
+	"solaris":   true,
 }
 
 func TestBlockProfile(t *testing.T) {
@@ -529,4 +578,51 @@ func blockCond() {
 	}()
 	c.Wait()
 	mu.Unlock()
+}
+
+func func1(c chan int) { <-c }
+func func2(c chan int) { <-c }
+func func3(c chan int) { <-c }
+func func4(c chan int) { <-c }
+
+func TestGoroutineCounts(t *testing.T) {
+	if runtime.GOOS == "openbsd" {
+		testenv.SkipFlaky(t, 15156)
+	}
+	c := make(chan int)
+	for i := 0; i < 100; i++ {
+		if i%10 == 0 {
+			go func1(c)
+			continue
+		}
+		if i%2 == 0 {
+			go func2(c)
+			continue
+		}
+		go func3(c)
+	}
+	time.Sleep(10 * time.Millisecond) // let goroutines block on channel
+
+	var w bytes.Buffer
+	Lookup("goroutine").WriteTo(&w, 1)
+	prof := w.String()
+
+	if !containsInOrder(prof, "\n50 @ ", "\n40 @", "\n10 @", "\n1 @") {
+		t.Errorf("expected sorted goroutine counts:\n%s", prof)
+	}
+
+	close(c)
+
+	time.Sleep(10 * time.Millisecond) // let goroutines exit
+}
+
+func containsInOrder(s string, all ...string) bool {
+	for _, t := range all {
+		i := strings.Index(s, t)
+		if i < 0 {
+			return false
+		}
+		s = s[i+len(t):]
+	}
+	return true
 }

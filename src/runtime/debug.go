@@ -10,7 +10,7 @@ import (
 )
 
 // GOMAXPROCS sets the maximum number of CPUs that can be executing
-// simultaneously and returns the previous setting.  If n < 1, it does not
+// simultaneously and returns the previous setting. If n < 1, it does not
 // change the current setting.
 // The number of logical CPUs on the local machine can be queried with NumCPU.
 // This call will go away when the scheduler improves.
@@ -39,8 +39,15 @@ func GOMAXPROCS(n int) int {
 }
 
 // NumCPU returns the number of logical CPUs usable by the current process.
+//
+// The set of available CPUs is checked by querying the operating system
+// at process startup. Changes to operating system CPU allocation after
+// process startup are not reflected.
 
 // NumCPU 返回当前处理器的可用逻辑CPU数。
+//
+// 可用的 CPU 的设置通过在进程启动时通过向操作系统查询来获取。在进程启动后更改操作系统的
+// CPU 分配并不会反映出来。
 func NumCPU() int {
 	return int(ncpu)
 }

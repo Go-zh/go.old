@@ -161,7 +161,7 @@ var h_allspans []*mspan // TODO: make this h.allspans once mheap can be defined 
 
 // h_spans is a lookup table to map virtual address page IDs to *mspan.
 // For allocated spans, their pages map to the span itself.
-// For free spans, only the lowest and highest pages map to the span itself.  Internal
+// For free spans, only the lowest and highest pages map to the span itself. Internal
 // pages map to an arbitrary span.
 // For pages that have never been allocated, h_spans entries are nil.
 var h_spans []*mspan // TODO: make this h.spans once mheap can be defined in Go
@@ -191,7 +191,7 @@ func recordspan(vh unsafe.Pointer, p unsafe.Pointer) {
 			}
 		}
 		h_allspans = new
-		h.allspans = (**mspan)(unsafe.Pointer(sp.array))
+		h.allspans = (**mspan)(sp.array)
 	}
 	h_allspans = append(h_allspans, s)
 	h.nspan = uint32(len(h_allspans))
@@ -275,7 +275,7 @@ func mlookup(v uintptr, base *uintptr, size *uintptr, sp **mspan) int32 {
 
 	n := s.elemsize
 	if base != nil {
-		i := (uintptr(v) - uintptr(p)) / n
+		i := (v - p) / n
 		*base = p + i*n
 	}
 	if size != nil {
@@ -429,8 +429,6 @@ func (h *mheap) alloc_m(npage uintptr, sizeclass int32, large bool) *mspan {
 	}
 
 	// transfer stats from cache to global
-	memstats.heap_live += uint64(_g_.m.mcache.local_cachealloc)
-	_g_.m.mcache.local_cachealloc = 0
 	memstats.heap_scan += uint64(_g_.m.mcache.local_scan)
 	_g_.m.mcache.local_scan = 0
 	memstats.tinyallocs += uint64(_g_.m.mcache.local_tinyallocs)
@@ -464,7 +462,7 @@ func (h *mheap) alloc_m(npage uintptr, sizeclass int32, large bool) *mspan {
 		h.pagesInUse += uint64(npage)
 		if large {
 			memstats.heap_objects++
-			memstats.heap_live += uint64(npage << _PageShift)
+			atomic.Xadd64(&memstats.heap_live, int64(npage<<_PageShift))
 			// Swept spans are at the end of lists.
 			if s.npages < uintptr(len(h.free)) {
 				h.busy[s.npages].insertBack(s)
@@ -673,7 +671,7 @@ func (h *mheap) grow(npage uintptr) bool {
 	}
 	atomic.Store(&s.sweepgen, h.sweepgen)
 	s.state = _MSpanInUse
-	h.pagesInUse += uint64(npage)
+	h.pagesInUse += uint64(s.npages)
 	h.freeSpanLocked(s, false, true, 0)
 	return true
 }
@@ -691,7 +689,7 @@ func (h *mheap) lookup(v unsafe.Pointer) *mspan {
 // Address is *not* guaranteed to be in map
 // and may be anywhere in the span.
 // Map entries for the middle of a span are only
-// valid for allocated spans.  Free spans may have
+// valid for allocated spans. Free spans may have
 // other garbage in their middles, so we have to
 // check for that.
 func (h *mheap) lookupMaybe(v unsafe.Pointer) *mspan {
@@ -713,8 +711,6 @@ func (h *mheap) freeSpan(s *mspan, acct int32) {
 	systemstack(func() {
 		mp := getg().m
 		lock(&h.lock)
-		memstats.heap_live += uint64(mp.mcache.local_cachealloc)
-		mp.mcache.local_cachealloc = 0
 		memstats.heap_scan += uint64(mp.mcache.local_scan)
 		mp.mcache.local_scan = 0
 		memstats.tinyallocs += uint64(mp.mcache.local_tinyallocs)
@@ -723,12 +719,10 @@ func (h *mheap) freeSpan(s *mspan, acct int32) {
 			memstats.heap_objects--
 		}
 		if gcBlackenEnabled != 0 {
+			// heap_scan changed.
 			gcController.revise()
 		}
 		h.freeSpanLocked(s, true, true, 0)
-		if trace.enabled {
-			traceHeapAlloc()
-		}
 		unlock(&h.lock)
 	})
 }
@@ -977,7 +971,7 @@ type special struct {
 }
 
 // Adds the special record s to the list of special records for
-// the object p.  All fields of s should be filled in except for
+// the object p. All fields of s should be filled in except for
 // offset & next, which this routine will fill in.
 // Returns true if the special was successfully added, false otherwise.
 // (The add will fail only if a record with the same p and s->kind
@@ -1075,7 +1069,7 @@ type specialfinalizer struct {
 	ot      *ptrtype
 }
 
-// Adds a finalizer to the object p.  Returns true if it succeeded.
+// Adds a finalizer to the object p. Returns true if it succeeded.
 func addfinalizer(p unsafe.Pointer, f *funcval, nret uintptr, fint *_type, ot *ptrtype) bool {
 	lock(&mheap_.speciallock)
 	s := (*specialfinalizer)(mheap_.specialfinalizeralloc.alloc())
@@ -1144,7 +1138,7 @@ func setprofilebucket(p unsafe.Pointer, b *bucket) {
 	}
 }
 
-// Do whatever cleanup needs to be done to deallocate s.  It has
+// Do whatever cleanup needs to be done to deallocate s. It has
 // already been unlinked from the MSpan specials list.
 func freespecial(s *special, p unsafe.Pointer, size uintptr) {
 	switch s.kind {

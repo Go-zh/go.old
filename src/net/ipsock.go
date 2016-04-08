@@ -1,4 +1,4 @@
-// Copyright 2009 The Go Authors.  All rights reserved.
+// Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -6,10 +6,7 @@
 
 package net
 
-import (
-	"errors"
-	"time"
-)
+import "time"
 
 var (
 	// supportsIPv4 reports whether the platform supports IPv4
@@ -22,7 +19,7 @@ var (
 
 	// supportsIPv4map reports whether the platform supports
 	// mapping an IPv4 address inside an IPv6 address at transport
-	// layer protocols.  See RFC 4291, RFC 4038 and RFC 3493.
+	// layer protocols. See RFC 4291, RFC 4038 and RFC 3493.
 	supportsIPv4map bool
 )
 
@@ -73,8 +70,6 @@ func (addrs addrList) partition(strategy func(Addr) bool) (primaries, fallbacks 
 	return
 }
 
-var errNoSuitableAddress = errors.New("no suitable address found")
-
 // filterAddrList applies a filter to a list of IP addresses,
 // yielding a list of Addr objects. Known filters are nil, ipv4only,
 // and ipv6only. It returns every address when the filter is nil.
@@ -106,73 +101,65 @@ func ipv6only(addr IPAddr) bool {
 
 // SplitHostPort splits a network address of the form "host:port",
 // "[host]:port" or "[ipv6-host%zone]:port" into host or
-// ipv6-host%zone and port.  A literal address or host name for IPv6
+// ipv6-host%zone and port. A literal address or host name for IPv6
 // must be enclosed in square brackets, as in "[::1]:80",
 // "[ipv6-host]:http" or "[ipv6-host%zone]:80".
 func SplitHostPort(hostport string) (host, port string, err error) {
+	const (
+		missingPort   = "missing port in address"
+		tooManyColons = "too many colons in address"
+	)
+	addrErr := func(addr, why string) (host, port string, err error) {
+		return "", "", &AddrError{Err: why, Addr: addr}
+	}
 	j, k := 0, 0
 
 	// The port starts after the last colon.
 	i := last(hostport, ':')
 	if i < 0 {
-		goto missingPort
+		return addrErr(hostport, missingPort)
 	}
 
 	if hostport[0] == '[' {
 		// Expect the first ']' just before the last ':'.
 		end := byteIndex(hostport, ']')
 		if end < 0 {
-			err = &AddrError{Err: "missing ']' in address", Addr: hostport}
-			return
+			return addrErr(hostport, "missing ']' in address")
 		}
 		switch end + 1 {
 		case len(hostport):
 			// There can't be a ':' behind the ']' now.
-			goto missingPort
+			return addrErr(hostport, missingPort)
 		case i:
 			// The expected result.
 		default:
 			// Either ']' isn't followed by a colon, or it is
 			// followed by a colon that is not the last one.
 			if hostport[end+1] == ':' {
-				goto tooManyColons
+				return addrErr(hostport, tooManyColons)
 			}
-			goto missingPort
+			return addrErr(hostport, missingPort)
 		}
 		host = hostport[1:end]
 		j, k = 1, end+1 // there can't be a '[' resp. ']' before these positions
 	} else {
 		host = hostport[:i]
 		if byteIndex(host, ':') >= 0 {
-			goto tooManyColons
+			return addrErr(hostport, tooManyColons)
 		}
 		if byteIndex(host, '%') >= 0 {
-			goto missingBrackets
+			return addrErr(hostport, "missing brackets in address")
 		}
 	}
 	if byteIndex(hostport[j:], '[') >= 0 {
-		err = &AddrError{Err: "unexpected '[' in address", Addr: hostport}
-		return
+		return addrErr(hostport, "unexpected '[' in address")
 	}
 	if byteIndex(hostport[k:], ']') >= 0 {
-		err = &AddrError{Err: "unexpected ']' in address", Addr: hostport}
-		return
+		return addrErr(hostport, "unexpected ']' in address")
 	}
 
 	port = hostport[i+1:]
-	return
-
-missingPort:
-	err = &AddrError{Err: "missing port in address", Addr: hostport}
-	return
-
-tooManyColons:
-	err = &AddrError{Err: "too many colons in address", Addr: hostport}
-	return
-
-missingBrackets:
-	err = &AddrError{Err: "missing brackets in address", Addr: hostport}
-	return
+	return host, port, nil
 }
 
 func splitHostZone(s string) (host, zone string) {

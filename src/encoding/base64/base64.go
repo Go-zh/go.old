@@ -15,7 +15,7 @@ import (
  */
 
 // An Encoding is a radix 64 encoding/decoding scheme, defined by a
-// 64-character alphabet.  The most common encoding is the "base64"
+// 64-character alphabet. The most common encoding is the "base64"
 // encoding defined in RFC 4648 and used in MIME (RFC 2045) and PEM
 // (RFC 1421).  RFC 4648 also defines an alternate encoding, which is
 // the standard encoding with - and _ substituted for + and /.
@@ -89,7 +89,7 @@ var RawURLEncoding = URLEncoding.WithPadding(NoPadding)
 //
 // The encoding pads the output to a multiple of 4 bytes,
 // so Encode is not appropriate for use on individual blocks
-// of a large data stream.  Use NewEncoder() instead.
+// of a large data stream. Use NewEncoder() instead.
 func (enc *Encoding) Encode(dst, src []byte) {
 	if len(src) == 0 {
 		return
@@ -213,7 +213,7 @@ func (e *encoder) Close() error {
 	return e.err
 }
 
-// NewEncoder returns a new base64 stream encoder.  Data written to
+// NewEncoder returns a new base64 stream encoder. Data written to
 // the returned writer will be encoded using enc and then written to w.
 // Base64 encodings operate in 4-byte blocks; when finished
 // writing, the caller must Close the returned encoder to flush any
@@ -328,9 +328,9 @@ func (enc *Encoding) decode(dst, src []byte) (n int, end bool, err error) {
 	return n, end, err
 }
 
-// Decode decodes src using the encoding enc.  It writes at most
+// Decode decodes src using the encoding enc. It writes at most
 // DecodedLen(len(src)) bytes to dst and returns the number of bytes
-// written.  If src contains invalid base64 data, it will return the
+// written. If src contains invalid base64 data, it will return the
 // number of bytes successfully written and CorruptInputError.
 // New line characters (\r and \n) are ignored.
 func (enc *Encoding) Decode(dst, src []byte) (n int, err error) {
@@ -346,21 +346,18 @@ func (enc *Encoding) DecodeString(s string) ([]byte, error) {
 }
 
 type decoder struct {
-	err    error
-	enc    *Encoding
-	r      io.Reader
-	end    bool       // saw end of message
-	buf    [1024]byte // leftover input
-	nbuf   int
-	out    []byte // leftover decoded output
-	outbuf [1024 / 4 * 3]byte
+	err     error
+	readErr error // error from r.Read
+	enc     *Encoding
+	r       io.Reader
+	end     bool       // saw end of message
+	buf     [1024]byte // leftover input
+	nbuf    int
+	out     []byte // leftover decoded output
+	outbuf  [1024 / 4 * 3]byte
 }
 
 func (d *decoder) Read(p []byte) (n int, err error) {
-	if d.err != nil {
-		return 0, d.err
-	}
-
 	// Use leftover decoded output from last read.
 	if len(d.out) > 0 {
 		n = copy(p, d.out)
@@ -368,19 +365,46 @@ func (d *decoder) Read(p []byte) (n int, err error) {
 		return n, nil
 	}
 
+	if d.err != nil {
+		return 0, d.err
+	}
+
 	// This code assumes that d.r strips supported whitespace ('\r' and '\n').
 
-	// Read a chunk.
-	nn := len(p) / 3 * 4
-	if nn < 4 {
-		nn = 4
+	// Refill buffer.
+	for d.nbuf < 4 && d.readErr == nil {
+		nn := len(p) / 3 * 4
+		if nn < 4 {
+			nn = 4
+		}
+		if nn > len(d.buf) {
+			nn = len(d.buf)
+		}
+		nn, d.readErr = d.r.Read(d.buf[d.nbuf:nn])
+		d.nbuf += nn
 	}
-	if nn > len(d.buf) {
-		nn = len(d.buf)
-	}
-	nn, d.err = io.ReadAtLeast(d.r, d.buf[d.nbuf:nn], 4-d.nbuf)
-	d.nbuf += nn
-	if d.err != nil || d.nbuf < 4 {
+
+	if d.nbuf < 4 {
+		if d.enc.padChar == NoPadding && d.nbuf > 0 {
+			// Decode final fragment, without padding.
+			var nw int
+			nw, _, d.err = d.enc.decode(d.outbuf[:], d.buf[:d.nbuf])
+			d.nbuf = 0
+			d.end = true
+			d.out = d.outbuf[:nw]
+			n = copy(p, d.out)
+			d.out = d.out[n:]
+			if n > 0 || len(p) == 0 && len(d.out) > 0 {
+				return n, nil
+			}
+			if d.err != nil {
+				return 0, d.err
+			}
+		}
+		d.err = d.readErr
+		if d.err == io.EOF && d.nbuf > 0 {
+			d.err = io.ErrUnexpectedEOF
+		}
 		return 0, d.err
 	}
 
@@ -396,13 +420,7 @@ func (d *decoder) Read(p []byte) (n int, err error) {
 		n, d.end, d.err = d.enc.decode(p, d.buf[:nr])
 	}
 	d.nbuf -= nr
-	for i := 0; i < d.nbuf; i++ {
-		d.buf[i] = d.buf[i+nr]
-	}
-
-	if d.err == nil {
-		d.err = err
-	}
+	copy(d.buf[:d.nbuf], d.buf[nr:])
 	return n, d.err
 }
 
@@ -441,7 +459,7 @@ func NewDecoder(enc *Encoding, r io.Reader) io.Reader {
 func (enc *Encoding) DecodedLen(n int) int {
 	if enc.padChar == NoPadding {
 		// Unpadded data may end with partial block of 2-3 characters.
-		return (n*6 + 7) / 8
+		return n * 6 / 8
 	}
 	// Padded base64 should always be a multiple of 4 characters in length.
 	return n / 4 * 3

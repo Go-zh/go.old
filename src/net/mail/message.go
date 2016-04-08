@@ -173,7 +173,7 @@ type Address struct {
 
 // 解析一个单独的RFC 5322地址，例如 “Barry Gibbs <bg@example.com>”
 func ParseAddress(address string) (*Address, error) {
-	return (&addrParser{s: address}).parseAddress()
+	return (&addrParser{s: address}).parseSingleAddress()
 }
 
 // ParseAddressList parses the given string as a list of addresses.
@@ -192,7 +192,7 @@ type AddressParser struct {
 // Parse parses a single RFC 5322 address of the
 // form "Gogh Fir <gf@example.com>" or "foo@example.com".
 func (p *AddressParser) Parse(address string) (*Address, error) {
-	return (&addrParser{s: address, dec: p.WordDecoder}).parseAddress()
+	return (&addrParser{s: address, dec: p.WordDecoder}).parseSingleAddress()
 }
 
 // ParseList parses the given string as a list of comma-separated addresses
@@ -208,7 +208,6 @@ func (p *AddressParser) ParseList(list string) ([]*Address, error) {
 // String格式化一个可视的RFC 5322地址。
 // 如果地址名字包含非ASCII字符串，名字就会按照RFC 2047来解析。
 func (a *Address) String() string {
-
 	// Format address local@domain
 	at := strings.LastIndex(a.Address, "@")
 	var local, domain string
@@ -274,6 +273,12 @@ func (a *Address) String() string {
 		return b.String()
 	}
 
+	// Text in an encoded-word in a display-name must not contain certain
+	// characters like quotes or parentheses (see RFC 2047 section 5.3).
+	// When this is the case encode the name using base64 encoding.
+	if strings.ContainsAny(a.Name, "\"#$%&'(),.:;<>@[]^`{|}~") {
+		return mime.BEncoding.Encode("utf-8", a.Name) + " " + s
+	}
 	return mime.QEncoding.Encode("utf-8", a.Name) + " " + s
 }
 
@@ -301,6 +306,18 @@ func (p *addrParser) parseAddressList() ([]*Address, error) {
 		}
 	}
 	return list, nil
+}
+
+func (p *addrParser) parseSingleAddress() (*Address, error) {
+	addr, err := p.parseAddress()
+	if err != nil {
+		return nil, err
+	}
+	p.skipSpace()
+	if !p.empty() {
+		return nil, fmt.Errorf("mail: expected single address, got %q", p.s)
+	}
+	return addr, nil
 }
 
 // parseAddress parses a single RFC 5322 address at the start of p.
@@ -432,10 +449,9 @@ func (p *addrParser) consumePhrase() (phrase string, err error) {
 			// We actually parse dot-atom here to be more permissive
 			// than what RFC 5322 specifies.
 			word, err = p.consumeAtom(true, true)
-		}
-
-		if err == nil {
-			word, err = p.decodeRFC2047Word(word)
+			if err == nil {
+				word, err = p.decodeRFC2047Word(word)
+			}
 		}
 
 		if err != nil {
@@ -490,6 +506,8 @@ Loop:
 	return string(qsb), nil
 }
 
+var errNonASCII = errors.New("mail: unencoded non-ASCII text in address")
+
 // consumeAtom parses an RFC 5322 atom at the start of p.
 // If dot is true, consumeAtom parses an RFC 5322 dot-atom instead.
 // If permissive is true, consumeAtom will not fail on
@@ -500,11 +518,17 @@ Loop:
 // 若 permissive 为 true，consumeAtom 在按照原子解析前导/后续/双点号时就不会失败
 // （见 golang.org/issue/4938）。
 func (p *addrParser) consumeAtom(dot bool, permissive bool) (atom string, err error) {
-	if !isAtext(p.peek(), false) {
+	if c := p.peek(); !isAtext(c, false) {
+		if c > 127 {
+			return "", errNonASCII
+		}
 		return "", errors.New("mail: invalid string")
 	}
 	i := 1
 	for ; i < p.len() && isAtext(p.s[i], dot); i++ {
+	}
+	if i < p.len() && p.s[i] > 127 {
+		return "", errNonASCII
 	}
 	atom, p.s = string(p.s[:i]), p.s[i:]
 	if !permissive {

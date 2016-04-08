@@ -1,4 +1,4 @@
-// Copyright 2012 The Go Authors.  All rights reserved.
+// Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -73,8 +73,8 @@ const (
 var outputLock sync.Mutex
 
 // run runs the command line cmd in dir.
-// If mode has ShowOutput set, run collects cmd's output and returns it as a string;
-// otherwise, run prints cmd's output to standard output after the command finishes.
+// If mode has ShowOutput set and Background unset, run passes cmd's output to
+// stdout/stderr directly. Otherwise, run returns cmd's output as a string.
 // If mode has CheckExit set and the command fails, run calls fatal.
 // If mode has Background set, this command is being run as a
 // Background job. Only bgrun should use the Background mode,
@@ -131,7 +131,6 @@ var maxbg = 4 /* maximum number of jobs to run at once */
 
 var (
 	bgwork = make(chan func(), 1e5)
-	bgdone = make(chan struct{}, 1e5)
 
 	bghelpers sync.WaitGroup
 
@@ -401,9 +400,8 @@ func main() {
 	switch gohostos {
 	case "darwin":
 		// Even on 64-bit platform, darwin uname -m prints i386.
-		if strings.Contains(run("", CheckExit, "sysctl", "machdep.cpu.extfeatures"), "EM64T") {
-			gohostarch = "amd64"
-		}
+		// We don't support any of the OS X versions that run on 32-bit-only hardware anymore.
+		gohostarch = "amd64"
 	case "freebsd":
 		// Since FreeBSD 10 gcc is no longer part of the base system.
 		defaultclang = true
@@ -453,6 +451,8 @@ func main() {
 			} else {
 				gohostarch = "mips64le"
 			}
+		case strings.Contains(out, "s390x"):
+			gohostarch = "s390x"
 		case gohostos == "darwin":
 			if strings.Contains(run("", CheckExit, "uname", "-v"), "RELEASE_ARM_") {
 				gohostarch = "arm"
@@ -462,7 +462,7 @@ func main() {
 		}
 	}
 
-	if gohostarch == "arm" {
+	if gohostarch == "arm" || gohostarch == "mips64" || gohostarch == "mips64le" {
 		maxbg = min(maxbg, runtime.NumCPU())
 	}
 	bginit()

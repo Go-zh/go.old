@@ -12,7 +12,7 @@
 //
 // Note that using CGI means starting a new process to handle each
 // request, which is typically less efficient than using a
-// long-running server.  This package is intended primarily for
+// long-running server. This package is intended primarily for
 // compatibility with existing systems.
 
 // cgi 包实现了RFC3875协议描述的CGI（公共网关接口）.
@@ -71,6 +71,7 @@ type Handler struct {
 	InheritEnv []string    // environment variables to inherit from host, as "key" // 需要继承自宿主的环境变量，形如“key”
 	Logger     *log.Logger // optional log for errors or nil to use log.Print  // 可选。错误的日志处理器，如果是nil的话就默认使用log.Print
 	Args       []string    // optional arguments to pass to child process  // 可选。给子进程传递的附加参数。
+	Stderr     io.Writer   // optional stderr for the child process; nil means os.Stderr
 
 	// PathLocationHandler specifies the root http Handler that
 	// should handle internal redirects when the CGI process
@@ -86,6 +87,13 @@ type Handler struct {
 	//
 	// 如果为空，一个带有本地URI路径的CGI回复会立刻返回给客户端，并且没有进行任何的内部重定向。
 	PathLocationHandler http.Handler
+}
+
+func (h *Handler) stderr() io.Writer {
+	if h.Stderr != nil {
+		return h.Stderr
+	}
+	return os.Stderr
 }
 
 // removeLeadingDuplicates remove leading duplicate in environments.
@@ -229,7 +237,7 @@ func (h *Handler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		Args:   append([]string{h.Path}, h.Args...),
 		Dir:    cwd,
 		Env:    env,
-		Stderr: os.Stderr, // for now
+		Stderr: h.stderr(),
 	}
 	if req.ContentLength != 0 {
 		cmd.Stdin = req.Body

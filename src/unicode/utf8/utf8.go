@@ -386,7 +386,7 @@ func RuneLen(r rune) int {
 // EncodeRune 将该符文的UTF-8编码写入到 p 中（它必须足够大）。
 // 它返回写入的字节数。
 func EncodeRune(p []byte, r rune) int {
-	// Negative values are erroneous.  Making it unsigned addresses the problem.
+	// Negative values are erroneous. Making it unsigned addresses the problem.
 	// 负值是错误的。将它变成无符号数值来解决此问题。
 	switch i := uint32(r); {
 	case i <= rune1Max:
@@ -413,7 +413,7 @@ func EncodeRune(p []byte, r rune) int {
 	}
 }
 
-// RuneCount returns the number of runes in p.  Erroneous and short
+// RuneCount returns the number of runes in p. Erroneous and short
 // encodings are treated as single runes of width 1 byte.
 
 // RuneCount 返回 p 中的符文数。
@@ -492,7 +492,7 @@ func RuneCountInString(s string) (n int) {
 }
 
 // RuneStart reports whether the byte could be the first byte of an encoded,
-// possibly invalid rune.  Second and subsequent bytes always have the top two
+// possibly invalid rune. Second and subsequent bytes always have the top two
 // bits set to 10.
 
 // RuneStart 报告该字节是否为符文编码（可能无效）的第一个字节。

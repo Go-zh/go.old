@@ -19,11 +19,6 @@ import (
 // ErrClosedPipe 错误用于在已关闭的管道上进行读取或写入操作。
 var ErrClosedPipe = errors.New("io: read/write on closed pipe")
 
-type pipeResult struct {
-	n   int
-	err error
-}
-
 // A pipe is the shared pipe structure underlying PipeReader and PipeWriter.
 
 // pipe 是 PipeReader 和 PipeWriter 共享的底层管道结构。

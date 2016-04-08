@@ -1,4 +1,4 @@
-// Copyright 2012 The Go Authors.  All rights reserved.
+// Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -16,12 +16,11 @@ import (
 
 // mkzversion writes zversion.go:
 //
-//	package runtime
+//	package sys
 //	const DefaultGoroot = <goroot>
 //	const TheVersion = <version>
 //	const Goexperiment = <goexperiment>
 //	const StackGuardMultiplier = <multiplier value>
-//	const BuildVersion = <build version>
 //
 func mkzversion(dir, file string) {
 	out := fmt.Sprintf(
@@ -32,8 +31,7 @@ func mkzversion(dir, file string) {
 			"const DefaultGoroot = `%s`\n"+
 			"const TheVersion = `%s`\n"+
 			"const Goexperiment = `%s`\n"+
-			"const StackGuardMultiplier = %d\n\n"+
-			"var BuildVersion = TheVersion\n", goroot_final, findgoversion(), os.Getenv("GOEXPERIMENT"), stackGuardMultiplier())
+			"const StackGuardMultiplier = %d\n\n", goroot_final, findgoversion(), os.Getenv("GOEXPERIMENT"), stackGuardMultiplier())
 
 	writefile(out, file, writeSkipSame)
 }
@@ -84,7 +82,7 @@ func mkzbootstrap(file string) {
 }
 
 // stackGuardMultiplier returns a multiplier to apply to the default
-// stack guard size.  Larger multipliers are used for non-optimized
+// stack guard size. Larger multipliers are used for non-optimized
 // builds that have larger stack frames.
 func stackGuardMultiplier() int {
 	for _, s := range strings.Split(os.Getenv("GO_GCFLAGS"), " ") {

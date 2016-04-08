@@ -22,9 +22,10 @@ var (
 )
 
 type Reader struct {
-	r       io.ReaderAt
-	File    []*File
-	Comment string
+	r             io.ReaderAt
+	File          []*File
+	Comment       string
+	decompressors map[uint16]Decompressor
 }
 
 type ReadCloser struct {
@@ -34,7 +35,7 @@ type ReadCloser struct {
 
 type File struct {
 	FileHeader
-
+	zip          *Reader
 	zipr         io.ReaderAt
 	zipsize      int64
 	headerOffset int64
@@ -100,7 +101,7 @@ func (z *Reader) init(r io.ReaderAt, size int64) error {
 	// a bad one, and then only report a ErrFormat or UnexpectedEOF if
 	// the file count modulo 65536 is incorrect.
 	for {
-		f := &File{zipr: r, zipsize: size}
+		f := &File{zip: z, zipr: r, zipsize: size}
 		err = readDirectoryHeader(f, buf)
 		if err == ErrFormat || err == io.ErrUnexpectedEOF {
 			break
@@ -116,6 +117,24 @@ func (z *Reader) init(r io.ReaderAt, size int64) error {
 		return err
 	}
 	return nil
+}
+
+// RegisterDecompressor registers or overrides a custom decompressor for a
+// specific method ID. If a decompressor for a given method is not found,
+// Reader will default to looking up the decompressor at the package level.
+func (z *Reader) RegisterDecompressor(method uint16, dcomp Decompressor) {
+	if z.decompressors == nil {
+		z.decompressors = make(map[uint16]Decompressor)
+	}
+	z.decompressors[method] = dcomp
+}
+
+func (z *Reader) decompressor(method uint16) Decompressor {
+	dcomp := z.decompressors[method]
+	if dcomp == nil {
+		dcomp = decompressor(method)
+	}
+	return dcomp
 }
 
 // Close closes the Zip file, rendering it unusable for I/O.
@@ -146,19 +165,18 @@ func (f *File) DataOffset() (offset int64, err error) {
 
 // Open方法返回一个io.ReadCloser接口，提供读取文件内容的方法。
 // 可以同时读取多个文件。
-func (f *File) Open() (rc io.ReadCloser, err error) {
+func (f *File) Open() (io.ReadCloser, error) {
 	bodyOffset, err := f.findBodyOffset()
 	if err != nil {
-		return
+		return nil, err
 	}
 	size := int64(f.CompressedSize64)
 	r := io.NewSectionReader(f.zipr, f.headerOffset+bodyOffset, size)
-	dcomp := decompressor(f.Method)
+	dcomp := f.zip.decompressor(f.Method)
 	if dcomp == nil {
-		err = ErrAlgorithm
-		return
+		return nil, ErrAlgorithm
 	}
-	rc = dcomp(r)
+	var rc io.ReadCloser = dcomp(r)
 	var desr io.Reader
 	if f.hasDataDescriptor() {
 		desr = io.NewSectionReader(f.zipr, f.headerOffset+bodyOffset+size, dataDescriptorLen)
@@ -169,7 +187,7 @@ func (f *File) Open() (rc io.ReadCloser, err error) {
 		f:    f,
 		desr: desr,
 	}
-	return
+	return rc, nil
 }
 
 type checksumReader struct {
@@ -274,39 +292,69 @@ func readDirectoryHeader(f *File, r io.Reader) error {
 	f.Extra = d[filenameLen : filenameLen+extraLen]
 	f.Comment = string(d[filenameLen+extraLen:])
 
+	needUSize := f.UncompressedSize == ^uint32(0)
+	needCSize := f.CompressedSize == ^uint32(0)
+	needHeaderOffset := f.headerOffset == int64(^uint32(0))
+
 	if len(f.Extra) > 0 {
+		// Best effort to find what we need.
+		// Other zip authors might not even follow the basic format,
+		// and we'll just ignore the Extra content in that case.
 		b := readBuf(f.Extra)
 		for len(b) >= 4 { // need at least tag and size
 			tag := b.uint16()
 			size := b.uint16()
 			if int(size) > len(b) {
-				return ErrFormat
+				break
 			}
 			if tag == zip64ExtraId {
-				// update directory values from the zip64 extra block
+				// update directory values from the zip64 extra block.
+				// They should only be consulted if the sizes read earlier
+				// are maxed out.
+				// See golang.org/issue/13367.
 				eb := readBuf(b[:size])
-				if len(eb) >= 8 {
+
+				if needUSize {
+					needUSize = false
+					if len(eb) < 8 {
+						return ErrFormat
+					}
 					f.UncompressedSize64 = eb.uint64()
 				}
-				if len(eb) >= 8 {
+				if needCSize {
+					needCSize = false
+					if len(eb) < 8 {
+						return ErrFormat
+					}
 					f.CompressedSize64 = eb.uint64()
 				}
-				if len(eb) >= 8 {
+				if needHeaderOffset {
+					needHeaderOffset = false
+					if len(eb) < 8 {
+						return ErrFormat
+					}
 					f.headerOffset = int64(eb.uint64())
 				}
+				break
 			}
 			b = b[size:]
 		}
-		// Should have consumed the whole header.
-		// But popular zip & JAR creation tools are broken and
-		// may pad extra zeros at the end, so accept those
-		// too. See golang.org/issue/8186.
-		for _, v := range b {
-			if v != 0 {
-				return ErrFormat
-			}
-		}
 	}
+
+	// Assume that uncompressed size 2³²-1 could plausibly happen in
+	// an old zip32 file that was sharding inputs into the largest chunks
+	// possible (or is just malicious; search the web for 42.zip).
+	// If needUSize is true still, it means we didn't see a zip64 extension.
+	// As long as the compressed size is not also 2³²-1 (implausible)
+	// and the header is not also 2³²-1 (equally implausible),
+	// accept the uncompressed size 2³²-1 as valid.
+	// If nothing else, this keeps archive/zip working with 42.zip.
+	_ = needUSize
+
+	if needCSize || needHeaderOffset {
+		return ErrFormat
+	}
+
 	return nil
 }
 

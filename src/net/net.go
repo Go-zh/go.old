@@ -297,7 +297,7 @@ func (c *conn) File() (f *os.File, err error) {
 // Multiple goroutines may invoke methods on a PacketConn simultaneously.
 type PacketConn interface {
 	// ReadFrom reads a packet from the connection,
-	// copying the payload into b.  It returns the number of
+	// copying the payload into b. It returns the number of
 	// bytes copied into b and the return address that
 	// was on the packet.
 	// ReadFrom can be made to time out and return
@@ -364,6 +364,9 @@ type Error interface {
 
 // Various errors contained in OpError.
 var (
+	// For connection setup operations.
+	errNoSuitableAddress = errors.New("no suitable address found")
+
 	// For connection setup and write operations.
 	errMissingAddress = errors.New("missing address")
 
@@ -426,7 +429,16 @@ func (e *OpError) Error() string {
 	return s
 }
 
-var noDeadline = time.Time{}
+var (
+	// aLongTimeAgo is a non-zero time, far in the past, used for
+	// immediate cancelation of dials.
+	aLongTimeAgo = time.Unix(233431200, 0)
+
+	// nonDeadline and noCancel are just zero values for
+	// readability with functions taking too many parameters.
+	noDeadline = time.Time{}
+	noCancel   = (chan struct{})(nil)
+)
 
 type timeout interface {
 	Timeout() bool

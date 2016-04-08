@@ -1,4 +1,4 @@
-// Copyright 2010 The Go Authors.  All rights reserved.
+// Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -23,10 +23,10 @@ import (
 	"text/tabwriter"
 )
 
-// BUG(rsc): Profiles are incomplete and inaccurate on NetBSD and OS X.
-// See https://golang.org/issue/6047 for details.
+// BUG(rsc): Profiles are only as good as the kernel support used to generate them.
+// See https://golang.org/issue/13841 for details about known problems.
 
-// BUG(rsc): OS X Snow Leopard 64位内核有一个bug会妨碍CPU分析为该系统提供准确的结果。
+// BUG(rsc): Profiles 仅在内核支持生成它们时才能很好地工作。
 
 // A Profile is a collection of stack traces showing the call sequences
 // that led to instances of a particular event, such as allocation.
@@ -36,7 +36,7 @@ import (
 //
 // A Profile's methods can be called from multiple goroutines simultaneously.
 //
-// Each Profile has a unique name.  A few profiles are predefined:
+// Each Profile has a unique name. A few profiles are predefined:
 //
 //	goroutine    - stack traces of all current goroutines
 //	heap         - a sampling of all heap allocations
@@ -53,7 +53,7 @@ import (
 // all known allocations. This exception helps mainly in programs running
 // without garbage collection enabled, usually for debugging purposes.
 //
-// The CPU profile is not available as a Profile.  It has a special API,
+// The CPU profile is not available as a Profile. It has a special API,
 // the StartCPUProfile and StopCPUProfile functions, because it streams
 // output to a writer during profiling.
 //
@@ -208,11 +208,11 @@ func (p *Profile) Count() int {
 // Add adds the current execution stack to the profile, associated with value.
 // Add stores value in an internal map, so value must be suitable for use as
 // a map key and will not be garbage collected until the corresponding
-// call to Remove.  Add panics if the profile already contains a stack for value.
+// call to Remove. Add panics if the profile already contains a stack for value.
 //
 // The skip parameter has the same meaning as runtime.Caller's skip
-// and controls where the stack trace begins.  Passing skip=0 begins the
-// trace in the function calling Add.  For example, given this
+// and controls where the stack trace begins. Passing skip=0 begins the
+// trace in the function calling Add. For example, given this
 // execution stack:
 //
 //	Add
@@ -333,7 +333,7 @@ func (x stackProfile) Less(i, j int) bool {
 }
 
 // A countProfile is a set of stack traces to be printed as counts
-// grouped by stack trace.  There are multiple implementations:
+// grouped by stack trace. There are multiple implementations:
 // all that matters is that we can find out how many traces there are
 // and obtain each trace in turn.
 
@@ -369,23 +369,25 @@ func printCountProfile(w io.Writer, debug int, name string, p countProfile) erro
 		}
 		return buf.String()
 	}
-	m := map[string]int{}
+	count := map[string]int{}
+	index := map[string]int{}
+	var keys []string
 	n := p.Len()
 	for i := 0; i < n; i++ {
-		m[key(p.Stack(i))]++
+		k := key(p.Stack(i))
+		if count[k] == 0 {
+			index[k] = i
+			keys = append(keys, k)
+		}
+		count[k]++
 	}
 
-	// Print stacks, listing count on first occurrence of a unique stack.
-	// 打印栈信息，列出一个唯一栈第一次出现的计数。
-	for i := 0; i < n; i++ {
-		stk := p.Stack(i)
-		s := key(stk)
-		if count := m[s]; count != 0 {
-			fmt.Fprintf(w, "%d %s\n", count, s)
-			if debug > 0 {
-				printStackRecord(w, stk, false)
-			}
-			delete(m, s)
+	sort.Sort(&keysByCount{keys, count})
+
+	for _, k := range keys {
+		fmt.Fprintf(w, "%d %s\n", count[k], k)
+		if debug > 0 {
+			printStackRecord(w, p.Stack(index[k]), false)
 		}
 	}
 
@@ -395,41 +397,47 @@ func printCountProfile(w io.Writer, debug int, name string, p countProfile) erro
 	return b.Flush()
 }
 
+// keysByCount sorts keys with higher counts first, breaking ties by key string order.
+type keysByCount struct {
+	keys  []string
+	count map[string]int
+}
+
+func (x *keysByCount) Len() int      { return len(x.keys) }
+func (x *keysByCount) Swap(i, j int) { x.keys[i], x.keys[j] = x.keys[j], x.keys[i] }
+func (x *keysByCount) Less(i, j int) bool {
+	ki, kj := x.keys[i], x.keys[j]
+	ci, cj := x.count[ki], x.count[kj]
+	if ci != cj {
+		return ci > cj
+	}
+	return ki < kj
+}
+
 // printStackRecord prints the function + source line information
 // for a single stack trace.
 
 // printStackRecord 为单个栈跟踪打印出函数+源行的信息。
 func printStackRecord(w io.Writer, stk []uintptr, allFrames bool) {
 	show := allFrames
-	wasPanic := false
-	for i, pc := range stk {
-		f := runtime.FuncForPC(pc)
-		if f == nil {
+	frames := runtime.CallersFrames(stk)
+	for {
+		frame, more := frames.Next()
+		name := frame.Function
+		if name == "" {
 			show = true
-			fmt.Fprintf(w, "#\t%#x\n", pc)
-			wasPanic = false
+			fmt.Fprintf(w, "#\t%#x\n", frame.PC)
 		} else {
-			tracepc := pc
-			// Back up to call instruction.
-			if i > 0 && pc > f.Entry() && !wasPanic {
-				if runtime.GOARCH == "386" || runtime.GOARCH == "amd64" {
-					tracepc--
-				} else {
-					tracepc -= 4 // arm, etc
-				}
-			}
-			file, line := f.FileLine(tracepc)
-			name := f.Name()
 			// Hide runtime.goexit and any runtime functions at the beginning.
 			// This is useful mainly for allocation traces.
-			// 隐藏 runtime.goexit 以及任何在起始处的运行时函数。
-			// 这主要用于分配跟踪。
-			wasPanic = name == "runtime.panic"
 			if name == "runtime.goexit" || !show && strings.HasPrefix(name, "runtime.") {
 				continue
 			}
 			show = true
-			fmt.Fprintf(w, "#\t%#x\t%s+%#x\t%s:%d\n", pc, name, pc-f.Entry(), file, line)
+			fmt.Fprintf(w, "#\t%#x\t%s+%#x\t%s:%d\n", frame.PC, name, frame.PC-frame.Entry, frame.File, frame.Line)
+		}
+		if !more {
+			break
 		}
 	}
 	if !show {
@@ -571,7 +579,6 @@ func writeHeap(w io.Writer, debug int) error {
 	fmt.Fprintf(w, "# NextGC = %d\n", s.NextGC)
 	fmt.Fprintf(w, "# PauseNs = %d\n", s.PauseNs)
 	fmt.Fprintf(w, "# NumGC = %d\n", s.NumGC)
-	fmt.Fprintf(w, "# EnableGC = %v\n", s.EnableGC)
 	fmt.Fprintf(w, "# DebugGC = %v\n", s.DebugGC)
 
 	if tw != nil {
@@ -614,7 +621,7 @@ func writeGoroutine(w io.Writer, debug int) error {
 
 func writeGoroutineStacks(w io.Writer) error {
 	// We don't know how big the buffer needs to be to collect
-	// all the goroutines.  Start with 1 MB and try a few times, doubling each time.
+	// all the goroutines. Start with 1 MB and try a few times, doubling each time.
 	// Give up and use a truncated trace if 64 MB is not enough.
 	// 我们不知道收集所有Go程需要多大的缓存。从1MB开始然后重试几次，每次加倍。
 	// 如果到了64MB还不够的话就放弃，转而使用截断跟踪。
@@ -681,10 +688,24 @@ var cpu struct {
 // StartCPUProfile enables CPU profiling for the current process.
 // While profiling, the profile will be buffered and written to w.
 // StartCPUProfile returns an error if profiling is already enabled.
+//
+// On Unix-like systems, StartCPUProfile does not work by default for
+// Go code built with -buildmode=c-archive or -buildmode=c-shared.
+// StartCPUProfile relies on the SIGPROF signal, but that signal will
+// be delivered to the main program's SIGPROF signal handler (if any)
+// not to the one used by Go. To make it work, call os/signal.Notify
+// for syscall.SIGPROF, but note that doing so may break any profiling
+// being done by the main program.
 
 // StartCPUProfile 为当前进程开启CPU分析。
 // 在分析时，分析报告会缓存并写入到 w 中。若分析已经开启，StartCPUProfile
 // 就会返回错误。
+//
+// 在类 Unix 系统中，StartCPUProfile 默认不会用 -buildmode=c-archive
+// 或 -buildmode=c-shared 来构建 Go 代码。StartCPUProfile 依赖于 SIGPROF 信号，
+// 但是该信号将会被发送到主程序的 SIGPROF 信号处理器（如果存在）而不是 Go 使用的那个。
+// 要让它工作，请为 syscall.SIGPROF 调用 os/signal.Notify，但注意，这样做可能会破坏
+// 任何主程序完成的剖析。
 func StartCPUProfile(w io.Writer) error {
 	// The runtime routines allow a variable profiling rate,
 	// but in practice operating systems cannot trigger signals
@@ -693,7 +714,7 @@ func StartCPUProfile(w io.Writer) error {
 	// 100 Hz is a reasonable choice: it is frequent enough to
 	// produce useful data, rare enough not to bog down the
 	// system, and a nice round number to make it easy to
-	// convert sample counts to seconds.  Instead of requiring
+	// convert sample counts to seconds. Instead of requiring
 	// each client to specify the frequency, we hard code it.
 	// 运行时例程允许可变的分析速率，但在实践中，操作系统并不能以超过500Hz
 	// 的频率触发信号，而我们对信号的处理并不廉价（主要是获得栈跟踪信息）。

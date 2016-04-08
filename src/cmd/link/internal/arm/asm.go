@@ -68,11 +68,11 @@ func gentext() {
 		// an init function
 		return
 	}
-	addmoduledata.Reachable = true
+	addmoduledata.Attr |= ld.AttrReachable
 	initfunc := ld.Linklookup(ld.Ctxt, "go.link.addmoduledata", 0)
 	initfunc.Type = obj.STEXT
-	initfunc.Local = true
-	initfunc.Reachable = true
+	initfunc.Attr |= ld.AttrLocal
+	initfunc.Attr |= ld.AttrReachable
 	o := func(op uint32) {
 		ld.Adduint32(ld.Ctxt, initfunc, op)
 	}
@@ -102,14 +102,14 @@ func gentext() {
 	}
 	ld.Ctxt.Etextp = initfunc
 	initarray_entry := ld.Linklookup(ld.Ctxt, "go.link.addmoduledatainit", 0)
-	initarray_entry.Reachable = true
-	initarray_entry.Local = true
+	initarray_entry.Attr |= ld.AttrReachable
+	initarray_entry.Attr |= ld.AttrLocal
 	initarray_entry.Type = obj.SINITARR
 	ld.Addaddr(ld.Ctxt, initarray_entry, initfunc)
 }
 
 // Preserve highest 8 bits of a, and do addition to lower 24-bit
-// of a and b; used to adjust ARM branch intruction's target
+// of a and b; used to adjust ARM branch instruction's target
 func braddoff(a int32, b int32) int32 {
 	return int32((uint32(a))&0xff000000 | 0x00ffffff&uint32(a+b))
 }
@@ -480,7 +480,7 @@ func addpltreloc(ctxt *ld.Link, plt *ld.LSym, got *ld.LSym, sym *ld.LSym, typ in
 	r.Type = int32(typ)
 	r.Add = int64(sym.Got) - 8
 
-	plt.Reachable = true
+	plt.Attr |= ld.AttrReachable
 	plt.Size += 4
 	ld.Symgrow(ctxt, plt, plt.Size)
 
@@ -597,19 +597,11 @@ func asmb() {
 	ld.Cseek(int64(ld.Segdata.Fileoff))
 	ld.Datblk(int64(ld.Segdata.Vaddr), int64(ld.Segdata.Filelen))
 
+	ld.Cseek(int64(ld.Segdwarf.Fileoff))
+	ld.Dwarfblk(int64(ld.Segdwarf.Vaddr), int64(ld.Segdwarf.Filelen))
+
 	machlink := uint32(0)
 	if ld.HEADTYPE == obj.Hdarwin {
-		if ld.Debug['v'] != 0 {
-			fmt.Fprintf(&ld.Bso, "%5.2f dwarf\n", obj.Cputime())
-		}
-
-		dwarfoff := uint32(ld.Rnd(int64(uint64(ld.HEADR)+ld.Segtext.Length), int64(ld.INITRND)) + ld.Rnd(int64(ld.Segdata.Filelen), int64(ld.INITRND)))
-		ld.Cseek(int64(dwarfoff))
-
-		ld.Segdwarf.Fileoff = uint64(ld.Cpos())
-		ld.Dwarfemitdebugsections()
-		ld.Segdwarf.Filelen = uint64(ld.Cpos()) - ld.Segdwarf.Fileoff
-
 		machlink = uint32(ld.Domacholink())
 	}
 
@@ -627,7 +619,7 @@ func asmb() {
 		switch ld.HEADTYPE {
 		default:
 			if ld.Iself {
-				symo = uint32(ld.Segdata.Fileoff + ld.Segdata.Filelen)
+				symo = uint32(ld.Segdwarf.Fileoff + ld.Segdwarf.Filelen)
 				symo = uint32(ld.Rnd(int64(symo), int64(ld.INITRND)))
 			}
 
@@ -648,11 +640,6 @@ func asmb() {
 				ld.Asmelfsym()
 				ld.Cflush()
 				ld.Cwrite(ld.Elfstrdat)
-
-				if ld.Debug['v'] != 0 {
-					fmt.Fprintf(&ld.Bso, "%5.2f dwarf\n", obj.Cputime())
-				}
-				ld.Dwarfemitdebugsections()
 
 				if ld.Linkmode == ld.LinkExternal {
 					ld.Elfemitreloc()
@@ -689,14 +676,14 @@ func asmb() {
 	switch ld.HEADTYPE {
 	default:
 	case obj.Hplan9: /* plan 9 */
-		ld.Thearch.Lput(0x647)                      /* magic */
-		ld.Thearch.Lput(uint32(ld.Segtext.Filelen)) /* sizes */
-		ld.Thearch.Lput(uint32(ld.Segdata.Filelen))
-		ld.Thearch.Lput(uint32(ld.Segdata.Length - ld.Segdata.Filelen))
-		ld.Thearch.Lput(uint32(ld.Symsize))      /* nsyms */
-		ld.Thearch.Lput(uint32(ld.Entryvalue())) /* va of entry */
-		ld.Thearch.Lput(0)
-		ld.Thearch.Lput(uint32(ld.Lcsize))
+		ld.Lputb(0x647)                      /* magic */
+		ld.Lputb(uint32(ld.Segtext.Filelen)) /* sizes */
+		ld.Lputb(uint32(ld.Segdata.Filelen))
+		ld.Lputb(uint32(ld.Segdata.Length - ld.Segdata.Filelen))
+		ld.Lputb(uint32(ld.Symsize))      /* nsyms */
+		ld.Lputb(uint32(ld.Entryvalue())) /* va of entry */
+		ld.Lputb(0)
+		ld.Lputb(uint32(ld.Lcsize))
 
 	case obj.Hlinux,
 		obj.Hfreebsd,

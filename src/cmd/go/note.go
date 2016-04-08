@@ -1,4 +1,4 @@
-// Copyright 2015 The Go Authors.  All rights reserved.
+// Copyright 2015 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -71,7 +71,7 @@ func readELFNote(filename, name string, typ int32) ([]byte, error) {
 var elfGoNote = []byte("Go\x00\x00")
 
 // The Go build ID is stored in a note described by an ELF PT_NOTE prog
-// header.  The caller has already opened filename, to get f, and read
+// header. The caller has already opened filename, to get f, and read
 // at least 4 kB out, in data.
 func readELFGoBuildID(filename string, f *os.File, data []byte) (buildid string, err error) {
 	// Assume the note content is in the data, already read.
@@ -121,15 +121,26 @@ func readELFGoBuildID(filename string, f *os.File, data []byte) (buildid string,
 				return "", err
 			}
 		}
-		nameSize := ef.ByteOrder.Uint32(note)
-		valSize := ef.ByteOrder.Uint32(note[4:])
-		tag := ef.ByteOrder.Uint32(note[8:])
-		name := note[12:16]
-		if nameSize != 4 || 16+valSize > uint32(len(note)) || tag != elfGoBuildIDTag || !bytes.Equal(name, elfGoNote) {
-			continue
-		}
 
-		return string(note[16 : 16+valSize]), nil
+		filesz := p.Filesz
+		for filesz >= 16 {
+			nameSize := ef.ByteOrder.Uint32(note)
+			valSize := ef.ByteOrder.Uint32(note[4:])
+			tag := ef.ByteOrder.Uint32(note[8:])
+			name := note[12:16]
+			if nameSize == 4 && 16+valSize <= uint32(len(note)) && tag == elfGoBuildIDTag && bytes.Equal(name, elfGoNote) {
+				return string(note[16 : 16+valSize]), nil
+			}
+
+			nameSize = (nameSize + 3) &^ 3
+			valSize = (valSize + 3) &^ 3
+			notesz := uint64(12 + nameSize + valSize)
+			if filesz <= notesz {
+				break
+			}
+			filesz -= notesz
+			note = note[notesz:]
+		}
 	}
 
 	// No note. Treat as successful but build ID empty.

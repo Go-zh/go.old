@@ -1,4 +1,4 @@
-// Copyright 2009 The Go Authors.  All rights reserved.
+// Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -55,7 +55,7 @@ func (p *Package) writeDefs() {
 		fmt.Fprintf(fm, "char* _cgo_topofstack(void) { return (char*)0; }\n")
 	} else {
 		// If we're not importing runtime/cgo, we *are* runtime/cgo,
-		// which provides these functions.  We just need a prototype.
+		// which provides these functions. We just need a prototype.
 		fmt.Fprintf(fm, "void crosscall2(void(*fn)(void*, int), void *a, int c);\n")
 		fmt.Fprintf(fm, "void _cgo_wait_runtime_init_done();\n")
 	}
@@ -103,6 +103,7 @@ func (p *Package) writeDefs() {
 	}
 
 	if *gccgo {
+		fmt.Fprint(fgo2, gccgoGoProlog)
 		fmt.Fprint(fc, p.cPrologGccgo())
 	} else {
 		fmt.Fprint(fgo2, goProlog)
@@ -457,6 +458,7 @@ func (p *Package) writeDefsFunc(fgo2 io.Writer, n *Name) {
 	}
 
 	fmt.Fprint(fgo2, "\n")
+	fmt.Fprint(fgo2, "//go:cgo_unsafe_args\n")
 	conf.Fprint(fgo2, fset, d)
 	fmt.Fprint(fgo2, " {\n")
 
@@ -506,6 +508,7 @@ func (p *Package) writeOutput(f *File, srcfile string) {
 	// Gcc output starts with the preamble.
 	fmt.Fprintf(fgcc, "%s\n", f.Preamble)
 	fmt.Fprintf(fgcc, "%s\n", gccProlog)
+	fmt.Fprintf(fgcc, "%s\n", tsanProlog)
 
 	for _, key := range nameKeys(f.Name) {
 		n := f.Name[key]
@@ -530,6 +533,7 @@ func fixGo(name string) string {
 
 var isBuiltin = map[string]bool{
 	"_Cfunc_CString":   true,
+	"_Cfunc_CBytes":    true,
 	"_Cfunc_GoString":  true,
 	"_Cfunc_GoStringN": true,
 	"_Cfunc_GoBytes":   true,
@@ -572,6 +576,7 @@ func (p *Package) writeOutputFunc(fgcc *os.File, n *Name) {
 		// Save the stack top for use below.
 		fmt.Fprintf(fgcc, "\tchar *stktop = _cgo_topofstack();\n")
 	}
+	fmt.Fprintf(fgcc, "\t_cgo_tsan_acquire();\n")
 	fmt.Fprintf(fgcc, "\t")
 	if t := n.FuncType.Result; t != nil {
 		fmt.Fprintf(fgcc, "__typeof__(a->r) r = ")
@@ -588,7 +593,7 @@ func (p *Package) writeOutputFunc(fgcc *os.File, n *Name) {
 		// the Go equivalents had good type params.
 		// However, our version of the type omits the magic
 		// words const and volatile, which can provoke
-		// C compiler warnings.  Silence them by casting
+		// C compiler warnings. Silence them by casting
 		// all pointers to void*.  (Eventually that will produce
 		// other warnings.)
 		if c := t.C.String(); c[len(c)-1] == '*' {
@@ -597,6 +602,7 @@ func (p *Package) writeOutputFunc(fgcc *os.File, n *Name) {
 		fmt.Fprintf(fgcc, "a->p%d", i)
 	}
 	fmt.Fprintf(fgcc, ");\n")
+	fmt.Fprintf(fgcc, "\t_cgo_tsan_release();\n")
 	if n.FuncType.Result != nil {
 		// The cgo call may have caused a stack copy (via a callback).
 		// Adjust the return value pointer appropriately.
@@ -611,8 +617,8 @@ func (p *Package) writeOutputFunc(fgcc *os.File, n *Name) {
 	fmt.Fprintf(fgcc, "\n")
 }
 
-// Write out a wrapper for a function when using gccgo.  This is a
-// simple wrapper that just calls the real function.  We only need a
+// Write out a wrapper for a function when using gccgo. This is a
+// simple wrapper that just calls the real function. We only need a
 // wrapper to support static functions in the prologue--without a
 // wrapper, we can't refer to the function, since the reference is in
 // a different file.
@@ -635,9 +641,13 @@ func (p *Package) writeGccgoOutputFunc(fgcc *os.File, n *Name) {
 	}
 	fmt.Fprintf(fgcc, ")\n")
 	fmt.Fprintf(fgcc, "{\n")
+	if t := n.FuncType.Result; t != nil {
+		fmt.Fprintf(fgcc, "\t%s r;\n", t.C.String())
+	}
+	fmt.Fprintf(fgcc, "\t_cgo_tsan_acquire();\n")
 	fmt.Fprintf(fgcc, "\t")
 	if t := n.FuncType.Result; t != nil {
-		fmt.Fprintf(fgcc, "return ")
+		fmt.Fprintf(fgcc, "r = ")
 		// Cast to void* to avoid warnings due to omitted qualifiers.
 		if c := t.C.String(); c[len(c)-1] == '*' {
 			fmt.Fprintf(fgcc, "(void*)")
@@ -655,6 +665,16 @@ func (p *Package) writeGccgoOutputFunc(fgcc *os.File, n *Name) {
 		fmt.Fprintf(fgcc, "p%d", i)
 	}
 	fmt.Fprintf(fgcc, ");\n")
+	fmt.Fprintf(fgcc, "\t_cgo_tsan_release();\n")
+	if t := n.FuncType.Result; t != nil {
+		fmt.Fprintf(fgcc, "\treturn ")
+		// Cast to void* to avoid warnings due to omitted qualifiers
+		// and explicit incompatible struct types.
+		if c := t.C.String(); c[len(c)-1] == '*' {
+			fmt.Fprintf(fgcc, "(void*)")
+		}
+		fmt.Fprintf(fgcc, "r;\n")
+	}
 	fmt.Fprintf(fgcc, "}\n")
 	fmt.Fprintf(fgcc, "\n")
 }
@@ -682,12 +702,13 @@ func (p *Package) writeExports(fgo2, fm, fgcc, fgcch io.Writer) {
 
 	fmt.Fprintf(fgcc, "extern void crosscall2(void (*fn)(void *, int), void *, int);\n")
 	fmt.Fprintf(fgcc, "extern void _cgo_wait_runtime_init_done();\n\n")
+	fmt.Fprintf(fgcc, "%s\n", tsanProlog)
 
 	for _, exp := range p.ExpFunc {
 		fn := exp.Func
 
 		// Construct a gcc struct matching the gc argument and
-		// result frame.  The gcc struct will be compiled with
+		// result frame. The gcc struct will be compiled with
 		// __attribute__((packed)) so all padding must be accounted
 		// for explicitly.
 		ctype := "struct {\n"
@@ -797,7 +818,9 @@ func (p *Package) writeExports(fgo2, fm, fgcc, fgcch io.Writer) {
 			func(i int, aname string, atype ast.Expr) {
 				fmt.Fprintf(fgcc, "\ta.p%d = p%d;\n", i, i)
 			})
+		fmt.Fprintf(fgcc, "\t_cgo_tsan_release();\n")
 		fmt.Fprintf(fgcc, "\tcrosscall2(_cgoexp%s_%s, &a, %d);\n", cPrefix, exp.ExpName, off)
+		fmt.Fprintf(fgcc, "\t_cgo_tsan_acquire();\n")
 		if gccResult != "void" {
 			if len(fntype.Results.List) == 1 && len(fntype.Results.List[0].Names) <= 1 {
 				fmt.Fprintf(fgcc, "\treturn a.r0;\n")
@@ -914,6 +937,7 @@ func (p *Package) writeGccgoExports(fgo2, fm, fgcc, fgcch io.Writer) {
 	fmt.Fprintf(fgcc, "#include \"_cgo_export.h\"\n")
 
 	fmt.Fprintf(fgcc, "%s\n", gccgoExportFileProlog)
+	fmt.Fprintf(fgcc, "%s\n", tsanProlog)
 
 	for _, exp := range p.ExpFunc {
 		fn := exp.Func
@@ -984,11 +1008,15 @@ func (p *Package) writeGccgoExports(fgo2, fm, fgcc, fgcch io.Writer) {
 
 		fmt.Fprint(fgcc, "\n")
 		fmt.Fprintf(fgcc, "%s %s %s {\n", cRet, exp.ExpName, cParams)
+		if resultCount > 0 {
+			fmt.Fprintf(fgcc, "\t%s r;\n", cRet)
+		}
 		fmt.Fprintf(fgcc, "\tif(_cgo_wait_runtime_init_done)\n")
 		fmt.Fprintf(fgcc, "\t\t_cgo_wait_runtime_init_done();\n")
+		fmt.Fprintf(fgcc, "\t_cgo_tsan_release();\n")
 		fmt.Fprint(fgcc, "\t")
 		if resultCount > 0 {
-			fmt.Fprint(fgcc, "return ")
+			fmt.Fprint(fgcc, "r = ")
 		}
 		fmt.Fprintf(fgcc, "%s(", goName)
 		if fn.Recv != nil {
@@ -1002,6 +1030,10 @@ func (p *Package) writeGccgoExports(fgo2, fm, fgcc, fgcch io.Writer) {
 				fmt.Fprintf(fgcc, "p%d", i)
 			})
 		fmt.Fprint(fgcc, ");\n")
+		fmt.Fprintf(fgcc, "\t_cgo_tsan_acquire();\n")
+		if resultCount > 0 {
+			fmt.Fprint(fgcc, "\treturn r;\n")
+		}
 		fmt.Fprint(fgcc, "}\n")
 
 		// Dummy declaration for _cgo_main.c
@@ -1256,6 +1288,31 @@ extern char* _cgo_topofstack(void);
 #include <string.h>
 `
 
+// Prologue defining TSAN functions in C.
+const tsanProlog = `
+#define _cgo_tsan_acquire()
+#define _cgo_tsan_release()
+#if defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#undef _cgo_tsan_acquire
+#undef _cgo_tsan_release
+
+long long _cgo_sync __attribute__ ((common));
+
+extern void __tsan_acquire(void*);
+extern void __tsan_release(void*);
+
+static void _cgo_tsan_acquire() {
+	__tsan_acquire(&_cgo_sync);
+}
+
+static void _cgo_tsan_release() {
+	__tsan_release(&_cgo_sync);
+}
+#endif
+#endif
+`
+
 const builtinProlog = `
 #include <stddef.h> /* for ptrdiff_t and size_t below */
 
@@ -1268,6 +1325,7 @@ _GoString_ GoString(char *p);
 _GoString_ GoStringN(char *p, int l);
 _GoBytes_ GoBytes(void *p, int n);
 char *CString(_GoString_);
+void *CBytes(_GoBytes_);
 void *_CMalloc(size_t);
 `
 
@@ -1285,6 +1343,14 @@ func _cgo_runtime_cgocallback(unsafe.Pointer, unsafe.Pointer, uintptr)
 func _cgoCheckPointer(interface{}, ...interface{}) interface{}
 
 //go:linkname _cgoCheckResult runtime.cgoCheckResult
+func _cgoCheckResult(interface{})
+`
+
+const gccgoGoProlog = `
+//extern runtime.cgoCheckPointer
+func _cgoCheckPointer(interface{}, ...interface{}) interface{}
+
+//extern runtime.cgoCheckResult
 func _cgoCheckResult(interface{})
 `
 
@@ -1325,6 +1391,15 @@ func _Cfunc_CString(s string) *_Ctype_char {
 }
 `
 
+const cBytesDef = `
+func _Cfunc_CBytes(b []byte) unsafe.Pointer {
+	p := _cgo_runtime_cmalloc(uintptr(len(b)))
+	pp := (*[1<<30]byte)(p)
+	copy(pp[:], b)
+	return p
+}
+`
+
 const cMallocDef = `
 func _Cfunc__CMalloc(n _Ctype_size_t) unsafe.Pointer {
 	return _cgo_runtime_cmalloc(uintptr(n))
@@ -1336,11 +1411,13 @@ var builtinDefs = map[string]string{
 	"GoStringN": goStringNDef,
 	"GoBytes":   goBytesDef,
 	"CString":   cStringDef,
+	"CBytes":    cBytesDef,
 	"_CMalloc":  cMallocDef,
 }
 
 func (p *Package) cPrologGccgo() string {
-	return strings.Replace(cPrologGccgo, "PREFIX", cPrefix, -1)
+	return strings.Replace(strings.Replace(cPrologGccgo, "PREFIX", cPrefix, -1),
+		"GCCGOSYMBOLPREF", p.gccgoSymbolPrefix(), -1)
 }
 
 const cPrologGccgo = `
@@ -1372,6 +1449,12 @@ const char *_cgoPREFIX_Cfunc_CString(struct __go_string s) {
 	return p;
 }
 
+void *_cgoPREFIX_Cfunc_CBytes(struct __go_open_array b) {
+	char *p = malloc(b.__count);
+	memmove(p, b.__data, b.__count);
+	return p;
+}
+
 struct __go_string _cgoPREFIX_Cfunc_GoString(char *p) {
 	intgo len = (p != NULL) ? strlen(p) : 0;
 	return __go_byte_array_to_string(p, len);
@@ -1394,6 +1477,39 @@ void *_cgoPREFIX_Cfunc__CMalloc(size_t n) {
         if(p == NULL)
                 runtime_throw("runtime: C malloc failed");
         return p;
+}
+
+struct __go_type_descriptor;
+typedef struct __go_empty_interface {
+	const struct __go_type_descriptor *__type_descriptor;
+	void *__object;
+} Eface;
+
+extern Eface runtimeCgoCheckPointer(Eface, Slice)
+	__asm__("runtime.cgoCheckPointer")
+	__attribute__((weak));
+
+extern Eface localCgoCheckPointer(Eface, Slice)
+	__asm__("GCCGOSYMBOLPREF._cgoCheckPointer");
+
+Eface localCgoCheckPointer(Eface ptr, Slice args) {
+	if(runtimeCgoCheckPointer) {
+		return runtimeCgoCheckPointer(ptr, args);
+	}
+	return ptr;
+}
+
+extern void runtimeCgoCheckResult(Eface)
+	__asm__("runtime.cgoCheckResult")
+	__attribute__((weak));
+
+extern void localCgoCheckResult(Eface)
+	__asm__("GCCGOSYMBOLPREF._cgoCheckResult");
+
+void localCgoCheckResult(Eface val) {
+	if(runtimeCgoCheckResult) {
+		runtimeCgoCheckResult(val);
+	}
 }
 `
 
@@ -1420,8 +1536,8 @@ typedef GoUintGOINTBITS GoUint;
 typedef __SIZE_TYPE__ GoUintptr;
 typedef float GoFloat32;
 typedef double GoFloat64;
-typedef __complex float GoComplex64;
-typedef __complex double GoComplex128;
+typedef float _Complex GoComplex64;
+typedef double _Complex GoComplex128;
 
 /*
   static assertion to make sure the file is being used on architecture
@@ -1429,7 +1545,7 @@ typedef __complex double GoComplex128;
 */
 typedef char _check_for_GOINTBITS_bit_pointer_matching_GoInt[sizeof(void*)==GOINTBITS/8 ? 1:-1];
 
-typedef struct { char *p; GoInt n; } GoString;
+typedef struct { const char *p; GoInt n; } GoString;
 typedef void *GoMap;
 typedef void *GoChan;
 typedef struct { void *t; void *v; } GoInterface;

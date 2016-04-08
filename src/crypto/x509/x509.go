@@ -19,6 +19,7 @@ import (
 	"encoding/asn1"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"net"
@@ -35,6 +36,12 @@ type pkixPublicKey struct {
 
 // ParsePKIXPublicKey parses a DER encoded public key. These values are
 // typically found in PEM blocks with "BEGIN PUBLIC KEY".
+//
+// Supported key types include RSA, DSA, and ECDSA. Unknown key
+// types result in an error.
+//
+// On success, pub will be of type *rsa.PublicKey, *dsa.PublicKey,
+// or *ecdsa.PublicKey.
 func ParsePKIXPublicKey(derBytes []byte) (pub interface{}, err error) {
 	var pki publicKeyInfo
 	if rest, err := asn1.Unmarshal(derBytes, &pki); err != nil {
@@ -119,7 +126,7 @@ type certificate struct {
 
 type tbsCertificate struct {
 	Raw                asn1.RawContent
-	Version            int `asn1:"optional,explicit,default:1,tag:0"`
+	Version            int `asn1:"optional,explicit,default:0,tag:0"`
 	SerialNumber       *big.Int
 	SignatureAlgorithm pkix.AlgorithmIdentifier
 	Issuer             asn1.RawValue
@@ -173,6 +180,28 @@ const (
 	ECDSAWithSHA384
 	ECDSAWithSHA512
 )
+
+var algoName = [...]string{
+	MD2WithRSA:      "MD2-RSA",
+	MD5WithRSA:      "MD5-RSA",
+	SHA1WithRSA:     "SHA1-RSA",
+	SHA256WithRSA:   "SHA256-RSA",
+	SHA384WithRSA:   "SHA384-RSA",
+	SHA512WithRSA:   "SHA512-RSA",
+	DSAWithSHA1:     "DSA-SHA1",
+	DSAWithSHA256:   "DSA-SHA256",
+	ECDSAWithSHA1:   "ECDSA-SHA1",
+	ECDSAWithSHA256: "ECDSA-SHA256",
+	ECDSAWithSHA384: "ECDSA-SHA384",
+	ECDSAWithSHA512: "ECDSA-SHA512",
+}
+
+func (algo SignatureAlgorithm) String() string {
+	if 0 < algo && int(algo) < len(algoName) {
+		return algoName[algo]
+	}
+	return strconv.Itoa(int(algo))
+}
 
 type PublicKeyAlgorithm int
 
@@ -241,7 +270,7 @@ var (
 	oidSignatureSHA384WithRSA   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 12}
 	oidSignatureSHA512WithRSA   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 13}
 	oidSignatureDSAWithSHA1     = asn1.ObjectIdentifier{1, 2, 840, 10040, 4, 3}
-	oidSignatureDSAWithSHA256   = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 4, 3, 2}
+	oidSignatureDSAWithSHA256   = asn1.ObjectIdentifier{2, 16, 840, 1, 101, 3, 4, 3, 2}
 	oidSignatureECDSAWithSHA1   = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 1}
 	oidSignatureECDSAWithSHA256 = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 2}
 	oidSignatureECDSAWithSHA384 = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 3}
@@ -541,6 +570,13 @@ type Certificate struct {
 // involves algorithms that are not currently implemented.
 var ErrUnsupportedAlgorithm = errors.New("x509: cannot verify signature: algorithm unimplemented")
 
+// An InsecureAlgorithmError
+type InsecureAlgorithmError SignatureAlgorithm
+
+func (e InsecureAlgorithmError) Error() string {
+	return fmt.Sprintf("x509: cannot verify signature: insecure algorithm %v", SignatureAlgorithm(e))
+}
+
 // ConstraintViolationError results when a requested usage is not permitted by
 // a certificate. For example: checking a signature when the public key isn't a
 // certificate signing key.
@@ -605,7 +641,7 @@ var entrustBrokenSPKI = []byte{
 
 // CheckSignatureFrom verifies that the signature on c is a valid signature
 // from parent.
-func (c *Certificate) CheckSignatureFrom(parent *Certificate) (err error) {
+func (c *Certificate) CheckSignatureFrom(parent *Certificate) error {
 	// RFC 5280, 4.2.1.9:
 	// "If the basic constraints extension is not present in a version 3
 	// certificate, or the extension is present but the cA boolean is not
@@ -633,7 +669,7 @@ func (c *Certificate) CheckSignatureFrom(parent *Certificate) (err error) {
 
 // CheckSignature verifies that signature is a valid signature over signed from
 // c's public key.
-func (c *Certificate) CheckSignature(algo SignatureAlgorithm, signed, signature []byte) (err error) {
+func (c *Certificate) CheckSignature(algo SignatureAlgorithm, signed, signature []byte) error {
 	return checkSignature(algo, signed, signature, c.PublicKey)
 }
 
@@ -651,6 +687,8 @@ func checkSignature(algo SignatureAlgorithm, signed, signature []byte, publicKey
 		hashType = crypto.SHA384
 	case SHA512WithRSA, ECDSAWithSHA512:
 		hashType = crypto.SHA512
+	case MD2WithRSA, MD5WithRSA:
+		return InsecureAlgorithmError(algo)
 	default:
 		return ErrUnsupportedAlgorithm
 	}
@@ -699,7 +737,7 @@ func checkSignature(algo SignatureAlgorithm, signed, signature []byte, publicKey
 }
 
 // CheckCRLSignature checks that the signature in crl is from c.
-func (c *Certificate) CheckCRLSignature(crl *pkix.CertificateList) (err error) {
+func (c *Certificate) CheckCRLSignature(crl *pkix.CertificateList) error {
 	algo := getSignatureAlgorithmFromOID(crl.SignatureAlgorithm.Algorithm)
 	return c.CheckSignature(algo, crl.TBSCertList.Raw, crl.SignatureValue.RightAlign())
 }
@@ -909,10 +947,6 @@ func parseCertificate(in *certificate) (*Certificate, error) {
 		return nil, err
 	}
 
-	if in.TBSCertificate.SerialNumber.Sign() < 0 {
-		return nil, errors.New("x509: negative serial number")
-	}
-
 	out.Version = in.TBSCertificate.Version + 1
 	out.SerialNumber = in.TBSCertificate.SerialNumber
 
@@ -1020,7 +1054,7 @@ func parseCertificate(in *certificate) (*Certificate, error) {
 				}
 
 			case 31:
-				// RFC 5280, 4.2.1.14
+				// RFC 5280, 4.2.1.13
 
 				// CRLDistributionPoints ::= SEQUENCE SIZE (1..MAX) OF DistributionPoint
 				//
@@ -1041,6 +1075,11 @@ func parseCertificate(in *certificate) (*Certificate, error) {
 				}
 
 				for _, dp := range cdp {
+					// Per RFC 5280, 4.2.1.13, one of distributionPoint or cRLIssuer may be empty.
+					if len(dp.DistributionPoint.FullName.Bytes) == 0 {
+						continue
+					}
+
 					var n asn1.RawValue
 					if _, err := asn1.Unmarshal(dp.DistributionPoint.FullName.Bytes, &n); err != nil {
 						return nil, err
@@ -1615,7 +1654,7 @@ var pemType = "X509 CRL"
 // encoded CRLs will appear where they should be DER encoded, so this function
 // will transparently handle PEM encoding as long as there isn't any leading
 // garbage.
-func ParseCRL(crlBytes []byte) (certList *pkix.CertificateList, err error) {
+func ParseCRL(crlBytes []byte) (*pkix.CertificateList, error) {
 	if bytes.HasPrefix(crlBytes, pemCRLPrefix) {
 		block, _ := pem.Decode(crlBytes)
 		if block != nil && block.Type == pemType {
@@ -1626,8 +1665,8 @@ func ParseCRL(crlBytes []byte) (certList *pkix.CertificateList, err error) {
 }
 
 // ParseDERCRL parses a DER encoded CRL from the given bytes.
-func ParseDERCRL(derBytes []byte) (certList *pkix.CertificateList, err error) {
-	certList = new(pkix.CertificateList)
+func ParseDERCRL(derBytes []byte) (*pkix.CertificateList, error) {
+	certList := new(pkix.CertificateList)
 	if rest, err := asn1.Unmarshal(derBytes, certList); err != nil {
 		return nil, err
 	} else if len(rest) != 0 {
@@ -2032,7 +2071,7 @@ func parseCertificateRequest(in *certificateRequest) (*CertificateRequest, error
 	return out, nil
 }
 
-// CheckSignature verifies that the signature on c is a valid signature
-func (c *CertificateRequest) CheckSignature() (err error) {
+// CheckSignature reports whether the signature on c is valid.
+func (c *CertificateRequest) CheckSignature() error {
 	return checkSignature(c.SignatureAlgorithm, c.RawTBSCertificateRequest, c.Signature, c.PublicKey)
 }

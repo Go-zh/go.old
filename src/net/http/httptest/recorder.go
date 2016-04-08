@@ -2,9 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package httptest provides utilities for HTTP testing.
-
-// httptest 包提供HTTP测试的单元工具.
 package httptest
 
 import (
@@ -21,6 +18,9 @@ type ResponseRecorder struct {
 	HeaderMap http.Header   // the HTTP response headers  // HTTP回复的头
 	Body      *bytes.Buffer // if non-nil, the bytes.Buffer to append written data to  // 如果是非空，bytes.Buffer要将数据写到这里面
 	Flushed   bool
+
+	stagingMap http.Header // map that handlers manipulate to set headers
+	trailerMap http.Header // lazily filled when Trailers() is called
 
 	wroteHeader bool
 }
@@ -47,10 +47,10 @@ const DefaultRemoteAddr = "1.2.3.4"
 
 // Header返回回复的header。
 func (rw *ResponseRecorder) Header() http.Header {
-	m := rw.HeaderMap
+	m := rw.stagingMap
 	if m == nil {
 		m = make(http.Header)
-		rw.HeaderMap = m
+		rw.stagingMap = m
 	}
 	return m
 }
@@ -70,13 +70,15 @@ func (rw *ResponseRecorder) writeHeader(b []byte, str string) {
 		str = str[:512]
 	}
 
-	_, hasType := rw.HeaderMap["Content-Type"]
-	hasTE := rw.HeaderMap.Get("Transfer-Encoding") != ""
+	m := rw.Header()
+
+	_, hasType := m["Content-Type"]
+	hasTE := m.Get("Transfer-Encoding") != ""
 	if !hasType && !hasTE {
 		if b == nil {
 			b = []byte(str)
 		}
-		rw.HeaderMap.Set("Content-Type", http.DetectContentType(b))
+		m.Set("Content-Type", http.DetectContentType(b))
 	}
 
 	rw.WriteHeader(200)
@@ -102,13 +104,21 @@ func (rw *ResponseRecorder) WriteString(str string) (int, error) {
 	return len(str), nil
 }
 
-// WriteHeader sets rw.Code.
-
-// WriteHeader设置rw.Code
+// WriteHeader sets rw.Code. After it is called, changing rw.Header
+// will not affect rw.HeaderMap.
 func (rw *ResponseRecorder) WriteHeader(code int) {
-	if !rw.wroteHeader {
-		rw.Code = code
-		rw.wroteHeader = true
+	if rw.wroteHeader {
+		return
+	}
+	rw.Code = code
+	rw.wroteHeader = true
+	if rw.HeaderMap == nil {
+		rw.HeaderMap = make(http.Header)
+	}
+	for k, vv := range rw.stagingMap {
+		vv2 := make([]string, len(vv))
+		copy(vv2, vv)
+		rw.HeaderMap[k] = vv2
 	}
 }
 
@@ -120,4 +130,34 @@ func (rw *ResponseRecorder) Flush() {
 		rw.WriteHeader(200)
 	}
 	rw.Flushed = true
+}
+
+// Trailers returns any trailers set by the handler. It must be called
+// after the handler finished running.
+func (rw *ResponseRecorder) Trailers() http.Header {
+	if rw.trailerMap != nil {
+		return rw.trailerMap
+	}
+	trailers, ok := rw.HeaderMap["Trailer"]
+	if !ok {
+		rw.trailerMap = make(http.Header)
+		return rw.trailerMap
+	}
+	rw.trailerMap = make(http.Header, len(trailers))
+	for _, k := range trailers {
+		switch k {
+		case "Transfer-Encoding", "Content-Length", "Trailer":
+			// Ignore since forbidden by RFC 2616 14.40.
+			continue
+		}
+		k = http.CanonicalHeaderKey(k)
+		vv, ok := rw.stagingMap[k]
+		if !ok {
+			continue
+		}
+		vv2 := make([]string, len(vv))
+		copy(vv2, vv)
+		rw.trailerMap[k] = vv2
+	}
+	return rw.trailerMap
 }

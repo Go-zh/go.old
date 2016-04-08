@@ -77,7 +77,7 @@ type Status struct {
 }
 
 func (so Status) String() string {
-	return fmt.Sprintf("(%s, %s, %s): syscallerr=%v, socketerr=%v", familyString(so.Cookie.Family()), typeString(so.Cookie.Type()), protocolString(so.Cookie.Protocol()), so.Err, so.SocketErr)
+	return fmt.Sprintf("(%s, %s, %s): syscallerr=%v socketerr=%v", familyString(so.Cookie.Family()), typeString(so.Cookie.Type()), protocolString(so.Cookie.Protocol()), so.Err, so.SocketErr)
 }
 
 // A Stat represents a per-cookie socket statistics.
@@ -100,7 +100,7 @@ type Stat struct {
 }
 
 func (st Stat) String() string {
-	return fmt.Sprintf("(%s, %s, %s): opened=%d, connected=%d, listened=%d, accepted=%d, closed=%d, openfailed=%d, connectfailed=%d, listenfailed=%d, acceptfailed=%d, closefailed=%d", familyString(st.Family), typeString(st.Type), protocolString(st.Protocol), st.Opened, st.Connected, st.Listened, st.Accepted, st.Closed, st.OpenFailed, st.ConnectFailed, st.ListenFailed, st.AcceptFailed, st.CloseFailed)
+	return fmt.Sprintf("(%s, %s, %s): opened=%d connected=%d listened=%d accepted=%d closed=%d openfailed=%d connectfailed=%d listenfailed=%d acceptfailed=%d closefailed=%d", familyString(st.Family), typeString(st.Type), protocolString(st.Protocol), st.Opened, st.Connected, st.Listened, st.Accepted, st.Closed, st.OpenFailed, st.ConnectFailed, st.ListenFailed, st.AcceptFailed, st.CloseFailed)
 }
 
 type stats map[Cookie]*Stat
@@ -121,7 +121,7 @@ const (
 	FilterSocket        FilterType = iota // for Socket
 	FilterConnect                         // for Connect or ConnectEx
 	FilterListen                          // for Listen
-	FilterAccept                          // for Accept or Accept4
+	FilterAccept                          // for Accept, Accept4 or AcceptEx
 	FilterGetsockoptInt                   // for GetsockoptInt
 	FilterClose                           // for Close or Closesocket
 )

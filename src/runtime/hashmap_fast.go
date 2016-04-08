@@ -18,9 +18,12 @@ func mapaccess1_fast32(t *maptype, h *hmap, key uint32) unsafe.Pointer {
 	if h == nil || h.count == 0 {
 		return atomic.Loadp(unsafe.Pointer(&zeroptr))
 	}
+	if h.flags&hashWriting != 0 {
+		throw("concurrent map read and map write")
+	}
 	var b *bmap
 	if h.B == 0 {
-		// One-bucket table.  No need to hash.
+		// One-bucket table. No need to hash.
 		b = (*bmap)(h.buckets)
 	} else {
 		hash := t.key.alg.hash(noescape(unsafe.Pointer(&key)), uintptr(h.hash0))
@@ -60,9 +63,12 @@ func mapaccess2_fast32(t *maptype, h *hmap, key uint32) (unsafe.Pointer, bool) {
 	if h == nil || h.count == 0 {
 		return atomic.Loadp(unsafe.Pointer(&zeroptr)), false
 	}
+	if h.flags&hashWriting != 0 {
+		throw("concurrent map read and map write")
+	}
 	var b *bmap
 	if h.B == 0 {
-		// One-bucket table.  No need to hash.
+		// One-bucket table. No need to hash.
 		b = (*bmap)(h.buckets)
 	} else {
 		hash := t.key.alg.hash(noescape(unsafe.Pointer(&key)), uintptr(h.hash0))
@@ -102,9 +108,12 @@ func mapaccess1_fast64(t *maptype, h *hmap, key uint64) unsafe.Pointer {
 	if h == nil || h.count == 0 {
 		return atomic.Loadp(unsafe.Pointer(&zeroptr))
 	}
+	if h.flags&hashWriting != 0 {
+		throw("concurrent map read and map write")
+	}
 	var b *bmap
 	if h.B == 0 {
-		// One-bucket table.  No need to hash.
+		// One-bucket table. No need to hash.
 		b = (*bmap)(h.buckets)
 	} else {
 		hash := t.key.alg.hash(noescape(unsafe.Pointer(&key)), uintptr(h.hash0))
@@ -144,9 +153,12 @@ func mapaccess2_fast64(t *maptype, h *hmap, key uint64) (unsafe.Pointer, bool) {
 	if h == nil || h.count == 0 {
 		return atomic.Loadp(unsafe.Pointer(&zeroptr)), false
 	}
+	if h.flags&hashWriting != 0 {
+		throw("concurrent map read and map write")
+	}
 	var b *bmap
 	if h.B == 0 {
-		// One-bucket table.  No need to hash.
+		// One-bucket table. No need to hash.
 		b = (*bmap)(h.buckets)
 	} else {
 		hash := t.key.alg.hash(noescape(unsafe.Pointer(&key)), uintptr(h.hash0))
@@ -186,6 +198,9 @@ func mapaccess1_faststr(t *maptype, h *hmap, ky string) unsafe.Pointer {
 	if h == nil || h.count == 0 {
 		return atomic.Loadp(unsafe.Pointer(&zeroptr))
 	}
+	if h.flags&hashWriting != 0 {
+		throw("concurrent map read and map write")
+	}
 	key := stringStructOf(&ky)
 	if h.B == 0 {
 		// One-bucket table.
@@ -201,7 +216,7 @@ func mapaccess1_faststr(t *maptype, h *hmap, ky string) unsafe.Pointer {
 				if k.len != key.len {
 					continue
 				}
-				if k.str == key.str || memeq(k.str, key.str, uintptr(key.len)) {
+				if k.str == key.str || memequal(k.str, key.str, uintptr(key.len)) {
 					return add(unsafe.Pointer(b), dataOffset+bucketCnt*2*sys.PtrSize+i*uintptr(t.valuesize))
 				}
 			}
@@ -232,14 +247,14 @@ func mapaccess1_faststr(t *maptype, h *hmap, ky string) unsafe.Pointer {
 				continue
 			}
 			if keymaybe != bucketCnt {
-				// Two keys are potential matches.  Use hash to distinguish them.
+				// Two keys are potential matches. Use hash to distinguish them.
 				goto dohash
 			}
 			keymaybe = i
 		}
 		if keymaybe != bucketCnt {
 			k := (*stringStruct)(add(unsafe.Pointer(b), dataOffset+keymaybe*2*sys.PtrSize))
-			if memeq(k.str, key.str, uintptr(key.len)) {
+			if memequal(k.str, key.str, uintptr(key.len)) {
 				return add(unsafe.Pointer(b), dataOffset+bucketCnt*2*sys.PtrSize+keymaybe*uintptr(t.valuesize))
 			}
 		}
@@ -269,7 +284,7 @@ dohash:
 			if k.len != key.len {
 				continue
 			}
-			if k.str == key.str || memeq(k.str, key.str, uintptr(key.len)) {
+			if k.str == key.str || memequal(k.str, key.str, uintptr(key.len)) {
 				return add(unsafe.Pointer(b), dataOffset+bucketCnt*2*sys.PtrSize+i*uintptr(t.valuesize))
 			}
 		}
@@ -288,6 +303,9 @@ func mapaccess2_faststr(t *maptype, h *hmap, ky string) (unsafe.Pointer, bool) {
 	if h == nil || h.count == 0 {
 		return atomic.Loadp(unsafe.Pointer(&zeroptr)), false
 	}
+	if h.flags&hashWriting != 0 {
+		throw("concurrent map read and map write")
+	}
 	key := stringStructOf(&ky)
 	if h.B == 0 {
 		// One-bucket table.
@@ -303,7 +321,7 @@ func mapaccess2_faststr(t *maptype, h *hmap, ky string) (unsafe.Pointer, bool) {
 				if k.len != key.len {
 					continue
 				}
-				if k.str == key.str || memeq(k.str, key.str, uintptr(key.len)) {
+				if k.str == key.str || memequal(k.str, key.str, uintptr(key.len)) {
 					return add(unsafe.Pointer(b), dataOffset+bucketCnt*2*sys.PtrSize+i*uintptr(t.valuesize)), true
 				}
 			}
@@ -332,14 +350,14 @@ func mapaccess2_faststr(t *maptype, h *hmap, ky string) (unsafe.Pointer, bool) {
 				continue
 			}
 			if keymaybe != bucketCnt {
-				// Two keys are potential matches.  Use hash to distinguish them.
+				// Two keys are potential matches. Use hash to distinguish them.
 				goto dohash
 			}
 			keymaybe = i
 		}
 		if keymaybe != bucketCnt {
 			k := (*stringStruct)(add(unsafe.Pointer(b), dataOffset+keymaybe*2*sys.PtrSize))
-			if memeq(k.str, key.str, uintptr(key.len)) {
+			if memequal(k.str, key.str, uintptr(key.len)) {
 				return add(unsafe.Pointer(b), dataOffset+bucketCnt*2*sys.PtrSize+keymaybe*uintptr(t.valuesize)), true
 			}
 		}
@@ -369,7 +387,7 @@ dohash:
 			if k.len != key.len {
 				continue
 			}
-			if k.str == key.str || memeq(k.str, key.str, uintptr(key.len)) {
+			if k.str == key.str || memequal(k.str, key.str, uintptr(key.len)) {
 				return add(unsafe.Pointer(b), dataOffset+bucketCnt*2*sys.PtrSize+i*uintptr(t.valuesize)), true
 			}
 		}

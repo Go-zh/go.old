@@ -149,7 +149,7 @@ TEXT runtime·gogo(SB), NOSPLIT, $-8-8
 
 // void mcall(fn func(*g))
 // Switch to m->g0's stack, call fn(g).
-// Fn must never return.  It should gogo(&g->sched)
+// Fn must never return. It should gogo(&g->sched)
 // to keep running g.
 TEXT runtime·mcall(SB), NOSPLIT, $-8-8
 	// Save caller state in g->sched
@@ -178,7 +178,7 @@ TEXT runtime·mcall(SB), NOSPLIT, $-8-8
 	B	runtime·badmcall2(SB)
 
 // systemstack_switch is a dummy routine that systemstack leaves at the bottom
-// of the G stack.  We need to distinguish the routine that
+// of the G stack. We need to distinguish the routine that
 // lives at the bottom of the G stack from the one that lives
 // at the top of the system stack because the one at the top of
 // the system stack terminates the stack walk (see topofstack()).
@@ -211,7 +211,7 @@ TEXT runtime·systemstack(SB), NOSPLIT, $0-8
 	BL	(R3)
 
 switch:
-	// save our state in g->sched.  Pretend to
+	// save our state in g->sched. Pretend to
 	// be systemstack_switch if the G stack is scanned.
 	MOVD	$runtime·systemstack_switch(SB), R6
 	ADD	$8, R6	// get past prologue
@@ -542,7 +542,7 @@ g0:
 	BL	(R1)
 	MOVD	R0, R9
 
-	// Restore g, stack pointer.  R0 is errno, so don't touch it
+	// Restore g, stack pointer. R0 is errno, so don't touch it
 	MOVD	0(RSP), g
 	BL	runtime·save_g(SB)
 	MOVD	(g_stack+stack_hi)(g), R5
@@ -586,7 +586,13 @@ nocgo:
 	// lots of space, but the linker doesn't know. Hide the call from
 	// the linker analysis by using an indirect call.
 	CMP	$0, g
-	BNE	havem
+	BEQ	needm
+
+	MOVD	g_m(g), R8
+	MOVD	R8, savedm-8(SP)
+	B	havem
+
+needm:
 	MOVD	g, savedm-8(SP) // g is zero, so is m.
 	MOVD	$runtime·needm(SB), R0
 	BL	(R0)
@@ -608,8 +614,6 @@ nocgo:
 	MOVD	R0, (g_sched+gobuf_sp)(R3)
 
 havem:
-	MOVD	g_m(g), R8
-	MOVD	R8, savedm-8(SP)
 	// Now there's a valid m, and we're running on its m->g0.
 	// Save current m->g0->sched.sp on stack and then set it to SP.
 	// Save current sp in m->g0->sched.sp in preparation for
@@ -761,13 +765,16 @@ TEXT runtime·memhash_varlen(SB),NOSPLIT,$40-24
 	MOVD	R3, ret+16(FP)
 	RET
 
-TEXT runtime·memeq(SB),NOSPLIT,$-8-25
+// memequal(p, q unsafe.Pointer, size uintptr) bool
+TEXT runtime·memequal(SB),NOSPLIT,$-8-25
 	MOVD	a+0(FP), R1
 	MOVD	b+8(FP), R2
 	MOVD	size+16(FP), R3
 	ADD	R1, R3, R6
 	MOVD	$1, R0
 	MOVB	R0, ret+24(FP)
+	CMP	R1, R2
+	BEQ	done
 loop:
 	CMP	R1, R6
 	BEQ	done
@@ -790,7 +797,7 @@ TEXT runtime·memequal_varlen(SB),NOSPLIT,$40-17
 	MOVD	R3, 8(RSP)
 	MOVD	R4, 16(RSP)
 	MOVD	R5, 24(RSP)
-	BL	runtime·memeq(SB)
+	BL	runtime·memequal(SB)
 	MOVBU	32(RSP), R3
 	MOVB	R3, ret+16(FP)
 	RET
@@ -925,7 +932,7 @@ notfound:
 	MOVD	R0, ret+24(FP)
 	RET
 
-// TODO: share code with memeq?
+// TODO: share code with memequal?
 TEXT bytes·Equal(SB),NOSPLIT,$0-49
 	MOVD	a_len+8(FP), R1
 	MOVD	b_len+32(FP), R3

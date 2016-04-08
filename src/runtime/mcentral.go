@@ -32,7 +32,8 @@ func (c *mcentral) init(sizeclass int32) {
 // Allocate a span to use in an MCache.
 func (c *mcentral) cacheSpan() *mspan {
 	// Deduct credit for this span allocation and sweep if necessary.
-	deductSweepCredit(uintptr(class_to_size[c.sizeclass]), 0)
+	spanBytes := uintptr(class_to_allocnpages[c.sizeclass]) * _PageSize
+	deductSweepCredit(spanBytes, 0)
 
 	lock(&c.lock)
 	sg := mheap_.sweepgen
@@ -105,6 +106,15 @@ havespan:
 	if usedBytes > 0 {
 		reimburseSweepCredit(usedBytes)
 	}
+	atomic.Xadd64(&memstats.heap_live, int64(spanBytes)-int64(usedBytes))
+	if trace.enabled {
+		// heap_live changed.
+		traceHeapAlloc()
+	}
+	if gcBlackenEnabled != 0 {
+		// heap_live changed.
+		gcController.revise()
+	}
 	if s.freelist.ptr() == nil {
 		throw("freelist empty")
 	}
@@ -127,13 +137,16 @@ func (c *mcentral) uncacheSpan(s *mspan) {
 	if n > 0 {
 		c.empty.remove(s)
 		c.nonempty.insert(s)
+		// mCentral_CacheSpan conservatively counted
+		// unallocated slots in heap_live. Undo this.
+		atomic.Xadd64(&memstats.heap_live, -int64(n)*int64(s.elemsize))
 	}
 	unlock(&c.lock)
 }
 
 // Free n objects from a span s back into the central free list c.
 // Called during sweep.
-// Returns true if the span was returned to heap.  Sets sweepgen to
+// Returns true if the span was returned to heap. Sets sweepgen to
 // the latest generation.
 // If preserve=true, don't return the span to heap nor relink in MCentral lists;
 // caller takes care of it.
@@ -166,7 +179,7 @@ func (c *mcentral) freeSpan(s *mspan, n int32, start gclinkptr, end gclinkptr, p
 		c.nonempty.insert(s)
 	}
 
-	// delay updating sweepgen until here.  This is the signal that
+	// delay updating sweepgen until here. This is the signal that
 	// the span may be used in an MCache, so it must come after the
 	// linked list operations above (actually, just after the
 	// lock of c above.)
@@ -182,7 +195,6 @@ func (c *mcentral) freeSpan(s *mspan, n int32, start gclinkptr, end gclinkptr, p
 	s.needzero = 1
 	s.freelist = 0
 	unlock(&c.lock)
-	heapBitsForSpan(s.base()).initSpan(s.layout())
 	mheap_.freeSpan(s, 0)
 	return true
 }

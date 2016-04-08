@@ -66,7 +66,7 @@ type stringer interface {
 
 func typestring(x interface{}) string {
 	e := efaceOf(&x)
-	return *e._type._string
+	return e._type._string
 }
 
 // For calling from C.

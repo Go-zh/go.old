@@ -6,7 +6,7 @@ package math
 
 // The original C code and the long comment below are
 // from FreeBSD's /usr/src/lib/msun/src/e_sqrt.c and
-// came with this notice.  The go code is a simplified
+// came with this notice. The go code is a simplified
 // version of the original C.
 //
 // ====================================================
@@ -79,7 +79,7 @@ package math
 //      equal to huge for some floating point number "huge" and "tiny".
 //
 //
-// Notes:  Rounding mode detection omitted.  The constants "mask", "shift",
+// Notes:  Rounding mode detection omitted. The constants "mask", "shift",
 // and "bias" are found in src/math/bits.go
 
 // 原始C代码、详细注释、下面的常量以及此通知来自
@@ -214,8 +214,4 @@ func sqrt(x float64) float64 {
 	// 有效数字 + 偏移指数。
 	ix = q>>1 + uint64(exp-1+bias)<<shift // significand + biased exponent
 	return Float64frombits(ix)
-}
-
-func sqrtC(f float64, r *float64) {
-	*r = sqrt(f)
 }

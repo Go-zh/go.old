@@ -68,6 +68,46 @@ func newTestDB(t testing.TB, name string) *DB {
 	return db
 }
 
+func TestDriverPanic(t *testing.T) {
+	// Test that if driver panics, database/sql does not deadlock.
+	db, err := Open("test", fakeDBName)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	expectPanic := func(name string, f func()) {
+		defer func() {
+			err := recover()
+			if err == nil {
+				t.Fatalf("%s did not panic", name)
+			}
+		}()
+		f()
+	}
+
+	expectPanic("Exec Exec", func() { db.Exec("PANIC|Exec|WIPE") })
+	exec(t, db, "WIPE") // check not deadlocked
+	expectPanic("Exec NumInput", func() { db.Exec("PANIC|NumInput|WIPE") })
+	exec(t, db, "WIPE") // check not deadlocked
+	expectPanic("Exec Close", func() { db.Exec("PANIC|Close|WIPE") })
+	exec(t, db, "WIPE")             // check not deadlocked
+	exec(t, db, "PANIC|Query|WIPE") // should run successfully: Exec does not call Query
+	exec(t, db, "WIPE")             // check not deadlocked
+
+	exec(t, db, "CREATE|people|name=string,age=int32,photo=blob,dead=bool,bdate=datetime")
+
+	expectPanic("Query Query", func() { db.Query("PANIC|Query|SELECT|people|age,name|") })
+	expectPanic("Query NumInput", func() { db.Query("PANIC|NumInput|SELECT|people|age,name|") })
+	expectPanic("Query Close", func() {
+		rows, err := db.Query("PANIC|Close|SELECT|people|age,name|")
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows.Close()
+	})
+	db.Query("PANIC|Exec|SELECT|people|age,name|") // should run successfully: Query does not call Exec
+	exec(t, db, "WIPE")                            // check not deadlocked
+}
+
 func exec(t testing.TB, db *DB, query string, args ...interface{}) {
 	_, err := db.Exec(query, args...)
 	if err != nil {
@@ -140,6 +180,20 @@ func (db *DB) numFreeConns() int {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	return len(db.freeConn)
+}
+
+// clearAllConns closes all connections in db.
+func (db *DB) clearAllConns(t *testing.T) {
+	db.SetMaxIdleConns(0)
+
+	if g, w := db.numFreeConns(), 0; g != w {
+		t.Errorf("free conns = %d; want %d", g, w)
+	}
+
+	if n := db.numDepsPollUntil(0, time.Second); n > 0 {
+		t.Errorf("number of dependencies = %d; expected 0", n)
+		db.dumpDeps(t)
+	}
 }
 
 func (db *DB) dumpDeps(t *testing.T) {
@@ -857,7 +911,7 @@ func nullTestRun(t *testing.T, spec nullTestSpec) {
 	if err == nil {
 		// TODO: this test fails, but it's just because
 		// fakeConn implements the optional Execer interface,
-		// so arguably this is the correct behavior.  But
+		// so arguably this is the correct behavior. But
 		// maybe I should flesh out the fakeConn.Exec
 		// implementation so this properly fails.
 		// t.Errorf("expected error inserting nil name with Exec")
@@ -991,16 +1045,7 @@ func TestMaxOpenConns(t *testing.T) {
 
 	// Force the number of open connections to 0 so we can get an accurate
 	// count for the test
-	db.SetMaxIdleConns(0)
-
-	if g, w := db.numFreeConns(), 0; g != w {
-		t.Errorf("free conns = %d; want %d", g, w)
-	}
-
-	if n := db.numDepsPollUntil(0, time.Second); n > 0 {
-		t.Errorf("number of dependencies = %d; expected 0", n)
-		db.dumpDeps(t)
-	}
+	db.clearAllConns(t)
 
 	driver.mu.Lock()
 	opens0 := driver.openCount
@@ -1096,16 +1141,7 @@ func TestMaxOpenConns(t *testing.T) {
 		db.dumpDeps(t)
 	}
 
-	db.SetMaxIdleConns(0)
-
-	if g, w := db.numFreeConns(), 0; g != w {
-		t.Errorf("free conns = %d; want %d", g, w)
-	}
-
-	if n := db.numDepsPollUntil(0, time.Second); n > 0 {
-		t.Errorf("number of dependencies = %d; expected 0", n)
-		db.dumpDeps(t)
-	}
+	db.clearAllConns(t)
 }
 
 // Issue 9453: tests that SetMaxOpenConns can be lowered at runtime
@@ -1263,6 +1299,90 @@ func TestStats(t *testing.T) {
 	}
 }
 
+func TestConnMaxLifetime(t *testing.T) {
+	t0 := time.Unix(1000000, 0)
+	offset := time.Duration(0)
+
+	nowFunc = func() time.Time { return t0.Add(offset) }
+	defer func() { nowFunc = time.Now }()
+
+	db := newTestDB(t, "magicquery")
+	defer closeDB(t, db)
+
+	driver := db.driver.(*fakeDriver)
+
+	// Force the number of open connections to 0 so we can get an accurate
+	// count for the test
+	db.clearAllConns(t)
+
+	driver.mu.Lock()
+	opens0 := driver.openCount
+	closes0 := driver.closeCount
+	driver.mu.Unlock()
+
+	db.SetMaxIdleConns(10)
+	db.SetMaxOpenConns(10)
+
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	offset = time.Second
+	tx2, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tx.Commit()
+	tx2.Commit()
+
+	driver.mu.Lock()
+	opens := driver.openCount - opens0
+	closes := driver.closeCount - closes0
+	driver.mu.Unlock()
+
+	if opens != 2 {
+		t.Errorf("opens = %d; want 2", opens)
+	}
+	if closes != 0 {
+		t.Errorf("closes = %d; want 0", closes)
+	}
+	if g, w := db.numFreeConns(), 2; g != w {
+		t.Errorf("free conns = %d; want %d", g, w)
+	}
+
+	// Expire first conn
+	offset = time.Second * 11
+	db.SetConnMaxLifetime(time.Second * 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tx, err = db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx2, err = db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx.Commit()
+	tx2.Commit()
+
+	driver.mu.Lock()
+	opens = driver.openCount - opens0
+	closes = driver.closeCount - closes0
+	driver.mu.Unlock()
+
+	if opens != 3 {
+		t.Errorf("opens = %d; want 3", opens)
+	}
+	if closes != 1 {
+		t.Errorf("closes = %d; want 1", closes)
+	}
+}
+
 // golang.org/issue/5323
 func TestStmtCloseDeps(t *testing.T) {
 	if testing.Short() {
@@ -1356,16 +1476,7 @@ func TestStmtCloseDeps(t *testing.T) {
 		db.dumpDeps(t)
 	}
 
-	db.SetMaxIdleConns(0)
-
-	if g, w := db.numFreeConns(), 0; g != w {
-		t.Errorf("free conns = %d; want %d", g, w)
-	}
-
-	if n := db.numDepsPollUntil(0, time.Second); n > 0 {
-		t.Errorf("number of dependencies = %d; expected 0", n)
-		db.dumpDeps(t)
-	}
+	db.clearAllConns(t)
 }
 
 // golang.org/issue/5046
@@ -1480,7 +1591,7 @@ func TestStmtCloseOrder(t *testing.T) {
 
 	_, err := db.Query("SELECT|non_existent|name|")
 	if err == nil {
-		t.Fatal("Quering non-existent table should fail")
+		t.Fatal("Querying non-existent table should fail")
 	}
 }
 

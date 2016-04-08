@@ -143,14 +143,16 @@ func (b *Reader) Peek(n int) ([]byte, error) {
 	if n < 0 {
 		return nil, ErrNegativeCount
 	}
-	if n > len(b.buf) {
-		return nil, ErrBufferFull
-	}
-	// 0 <= n <= len(b.buf)
-	for b.w-b.r < n && b.err == nil {
+
+	for b.w-b.r < n && b.w-b.r < len(b.buf) && b.err == nil {
 		b.fill() // b.w-b.r < len(b.buf) => buffer is not full
 	}
 
+	if n > len(b.buf) {
+		return b.buf[b.r:b.w], ErrBufferFull
+	}
+
+	// 0 <= n <= len(b.buf)
 	var err error
 	if avail := b.w - b.r; avail < n {
 		// not enough data in buffer
@@ -198,7 +200,7 @@ func (b *Reader) Discard(n int) (discarded int, err error) {
 
 // Read reads data into p.
 // It returns the number of bytes read into p.
-// It calls Read at most once on the underlying Reader,
+// The bytes are taken from at most one Read on the underlying Reader,
 // hence n may be less than len(p).
 // At EOF, the count will be zero and err will be io.EOF.
 
@@ -247,7 +249,7 @@ func (b *Reader) Read(p []byte) (n int, err error) {
 
 // ReadByte读取和回复一个单字节。
 // 如果没有字节可以读取，返回一个error。
-func (b *Reader) ReadByte() (c byte, err error) {
+func (b *Reader) ReadByte() (byte, error) {
 	b.lastRuneSize = -1
 	for b.r == b.w {
 		if b.err != nil {
@@ -255,13 +257,13 @@ func (b *Reader) ReadByte() (c byte, err error) {
 		}
 		b.fill() // buffer is empty
 	}
-	c = b.buf[b.r]
+	c := b.buf[b.r]
 	b.r++
 	b.lastByte = int(c)
 	return c, nil
 }
 
-// UnreadByte unreads the last byte.  Only the most recently read byte can be unread.
+// UnreadByte unreads the last byte. Only the most recently read byte can be unread.
 
 // UnreadByte将最后的字节标志为未读。只有最后的字节才可以被标志为未读。
 func (b *Reader) UnreadByte() error {
@@ -305,7 +307,7 @@ func (b *Reader) ReadRune() (r rune, size int, err error) {
 	return r, size, nil
 }
 
-// UnreadRune unreads the last rune.  If the most recent read operation on
+// UnreadRune unreads the last rune. If the most recent read operation on
 // the buffer was not a ReadRune, UnreadRune returns an error.  (In this
 // regard it is stricter than UnreadByte, which will unread the last byte
 // from any read operation.)
@@ -456,12 +458,12 @@ func (b *Reader) ReadLine() (line []byte, isPrefix bool, err error) {
 // 如果ReadBytes在遇到终止符之前就捕获到一个错误，它就会返回遇到错误之前已经读取的数据，和这个捕获
 // 到的错误（经常是 io.EOF）。当返回的数据没有以终止符结束的时候，ReadBytes返回err != nil。
 // 对于简单的使用，或许 Scanner 更方便。
-func (b *Reader) ReadBytes(delim byte) (line []byte, err error) {
+func (b *Reader) ReadBytes(delim byte) ([]byte, error) {
 	// Use ReadSlice to look for array,
 	// accumulating full buffers.
 	var frag []byte
 	var full [][]byte
-
+	var err error
 	for {
 		var e error
 		frag, e = b.ReadSlice(delim)
@@ -508,10 +510,9 @@ func (b *Reader) ReadBytes(delim byte) (line []byte, err error) {
 // 如果ReadString在遇到终止符之前就捕获到一个错误，它就会返回遇到错误之前已经读取的数据，和这个捕获
 // 到的错误（经常是 io.EOF）。当返回的数据没有以终止符结束的时候，ReadString返回err != nil。
 // 对于简单的使用，或许 Scanner 更方便。
-func (b *Reader) ReadString(delim byte) (line string, err error) {
+func (b *Reader) ReadString(delim byte) (string, error) {
 	bytes, err := b.ReadBytes(delim)
-	line = string(bytes)
-	return line, err
+	return string(bytes), err
 }
 
 // WriteTo implements io.WriterTo.
@@ -807,7 +808,7 @@ func (b *Writer) ReadFrom(r io.Reader) (n int64, err error) {
 		}
 	}
 	if err == io.EOF {
-		// If we filled the buffer exactly, flush pre-emptively.
+		// If we filled the buffer exactly, flush preemptively.
 		if b.Available() == 0 {
 			err = b.flush()
 		} else {

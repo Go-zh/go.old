@@ -1,4 +1,4 @@
-// Copyright 2015 The Go Authors.  All rights reserved.
+// Copyright 2015 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -20,16 +20,17 @@ func TestVendorImports(t *testing.T) {
 	tg := testgo(t)
 	defer tg.cleanup()
 	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata"))
-	tg.setenv("GO15VENDOREXPERIMENT", "1")
 	tg.run("list", "-f", "{{.ImportPath}} {{.Imports}}", "vend/...")
 	want := `
 		vend [vend/vendor/p r]
+		vend/dir1 []
 		vend/hello [fmt vend/vendor/strings]
 		vend/subdir [vend/vendor/p r]
 		vend/vendor/p []
 		vend/vendor/q []
 		vend/vendor/strings []
-		vend/x [vend/x/vendor/p vend/vendor/q vend/x/vendor/r]
+		vend/vendor/vend/dir1/dir2 []
+		vend/x [vend/x/vendor/p vend/vendor/q vend/x/vendor/r vend/dir1 vend/vendor/vend/dir1/dir2]
 		vend/x/invalid [vend/x/invalid/vendor/foo]
 		vend/x/vendor/p []
 		vend/x/vendor/p/p [notfound]
@@ -45,11 +46,17 @@ func TestVendorImports(t *testing.T) {
 	}
 }
 
+func TestVendorBuild(t *testing.T) {
+	tg := testgo(t)
+	defer tg.cleanup()
+	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata"))
+	tg.run("build", "vend/x")
+}
+
 func TestVendorRun(t *testing.T) {
 	tg := testgo(t)
 	defer tg.cleanup()
 	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata"))
-	tg.setenv("GO15VENDOREXPERIMENT", "1")
 	tg.cd(filepath.Join(tg.pwd(), "testdata/src/vend/hello"))
 	tg.run("run", "hello.go")
 	tg.grepStdout("hello, world", "missing hello world output")
@@ -64,7 +71,6 @@ func TestVendorGOPATH(t *testing.T) {
 	}
 	gopath := changeVolume(filepath.Join(tg.pwd(), "testdata"), strings.ToLower)
 	tg.setenv("GOPATH", gopath)
-	tg.setenv("GO15VENDOREXPERIMENT", "1")
 	cd := changeVolume(filepath.Join(tg.pwd(), "testdata/src/vend/hello"), strings.ToUpper)
 	tg.cd(cd)
 	tg.run("run", "hello.go")
@@ -75,7 +81,6 @@ func TestVendorTest(t *testing.T) {
 	tg := testgo(t)
 	defer tg.cleanup()
 	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata"))
-	tg.setenv("GO15VENDOREXPERIMENT", "1")
 	tg.cd(filepath.Join(tg.pwd(), "testdata/src/vend/hello"))
 	tg.run("test", "-v")
 	tg.grepStdout("TestMsgInternal", "missing use in internal test")
@@ -86,7 +91,6 @@ func TestVendorInvalid(t *testing.T) {
 	tg := testgo(t)
 	defer tg.cleanup()
 	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata"))
-	tg.setenv("GO15VENDOREXPERIMENT", "1")
 
 	tg.runFail("build", "vend/x/invalid")
 	tg.grepStderr("must be imported as foo", "missing vendor import error")
@@ -96,13 +100,12 @@ func TestVendorImportError(t *testing.T) {
 	tg := testgo(t)
 	defer tg.cleanup()
 	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata"))
-	tg.setenv("GO15VENDOREXPERIMENT", "1")
 
 	tg.runFail("build", "vend/x/vendor/p/p")
 
 	re := regexp.MustCompile(`cannot find package "notfound" in any of:
 	.*[\\/]testdata[\\/]src[\\/]vend[\\/]x[\\/]vendor[\\/]notfound \(vendor tree\)
-	.*[\\/]testdata[\\/]src[\\/]vend[\\/]vendor[\\/]notfound \(vendor tree\)
+	.*[\\/]testdata[\\/]src[\\/]vend[\\/]vendor[\\/]notfound
 	.*[\\/]src[\\/]notfound \(from \$GOROOT\)
 	.*[\\/]testdata[\\/]src[\\/]notfound \(from \$GOPATH\)`)
 
@@ -163,7 +166,6 @@ func TestVendorGet(t *testing.T) {
 		package p
 		const C = 1`)
 	tg.setenv("GOPATH", tg.path("."))
-	tg.setenv("GO15VENDOREXPERIMENT", "1")
 	tg.cd(tg.path("src/v"))
 	tg.run("run", "m.go")
 	tg.run("test")
@@ -182,16 +184,25 @@ func TestVendorGetUpdate(t *testing.T) {
 	defer tg.cleanup()
 	tg.makeTempdir()
 	tg.setenv("GOPATH", tg.path("."))
-	tg.setenv("GO15VENDOREXPERIMENT", "1")
 	tg.run("get", "github.com/rsc/go-get-issue-11864")
 	tg.run("get", "-u", "github.com/rsc/go-get-issue-11864")
+}
+
+func TestGetSubmodules(t *testing.T) {
+	testenv.MustHaveExternalNetwork(t)
+
+	tg := testgo(t)
+	defer tg.cleanup()
+	tg.makeTempdir()
+	tg.setenv("GOPATH", tg.path("."))
+	tg.run("get", "-d", "github.com/rsc/go-get-issue-12612")
+	tg.run("get", "-u", "-d", "github.com/rsc/go-get-issue-12612")
 }
 
 func TestVendorCache(t *testing.T) {
 	tg := testgo(t)
 	defer tg.cleanup()
 	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata/testvendor"))
-	tg.setenv("GO15VENDOREXPERIMENT", "1")
 	tg.runFail("build", "p")
 	tg.grepStderr("must be imported as x", "did not fail to build p")
 }
@@ -203,7 +214,6 @@ func TestVendorTest2(t *testing.T) {
 	defer tg.cleanup()
 	tg.makeTempdir()
 	tg.setenv("GOPATH", tg.path("."))
-	tg.setenv("GO15VENDOREXPERIMENT", "1")
 	tg.run("get", "github.com/rsc/go-get-issue-11864")
 
 	// build -i should work
@@ -229,7 +239,6 @@ func TestVendorList(t *testing.T) {
 	defer tg.cleanup()
 	tg.makeTempdir()
 	tg.setenv("GOPATH", tg.path("."))
-	tg.setenv("GO15VENDOREXPERIMENT", "1")
 	tg.run("get", "github.com/rsc/go-get-issue-11864")
 
 	tg.run("list", "-f", `{{join .TestImports "\n"}}`, "github.com/rsc/go-get-issue-11864/t")
@@ -250,7 +259,6 @@ func TestVendor12156(t *testing.T) {
 	tg := testgo(t)
 	defer tg.cleanup()
 	tg.setenv("GOPATH", filepath.Join(tg.pwd(), "testdata/testvendor2"))
-	tg.setenv("GO15VENDOREXPERIMENT", "1")
 	tg.cd(filepath.Join(tg.pwd(), "testdata/testvendor2/src/p"))
 	tg.runFail("build", "p.go")
 	tg.grepStderrNot("panic", "panicked")

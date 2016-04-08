@@ -39,7 +39,7 @@ import (
 
 // Append 4 bytes to s and create a R_CALL relocation targeting t to fill them in.
 func addcall(ctxt *ld.Link, s *ld.LSym, t *ld.LSym) {
-	s.Reachable = true
+	s.Attr |= ld.AttrReachable
 	i := s.Size
 	s.Size += 4
 	ld.Symgrow(ctxt, s, s.Size)
@@ -57,8 +57,8 @@ func gentext() {
 
 	thunkfunc := ld.Linklookup(ld.Ctxt, "__x86.get_pc_thunk.cx", 0)
 	thunkfunc.Type = obj.STEXT
-	thunkfunc.Local = true
-	thunkfunc.Reachable = true
+	thunkfunc.Attr |= ld.AttrLocal
+	thunkfunc.Attr |= ld.AttrReachable
 	o := func(op ...uint8) {
 		for _, op1 := range op {
 			ld.Adduint8(ld.Ctxt, thunkfunc, op1)
@@ -83,12 +83,12 @@ func gentext() {
 		return
 	}
 
-	addmoduledata.Reachable = true
+	addmoduledata.Attr |= ld.AttrReachable
 
 	initfunc := ld.Linklookup(ld.Ctxt, "go.link.addmoduledata", 0)
 	initfunc.Type = obj.STEXT
-	initfunc.Local = true
-	initfunc.Reachable = true
+	initfunc.Attr |= ld.AttrLocal
+	initfunc.Attr |= ld.AttrReachable
 	o = func(op ...uint8) {
 		for _, op1 := range op {
 			ld.Adduint8(ld.Ctxt, initfunc, op1)
@@ -133,8 +133,8 @@ func gentext() {
 	ld.Ctxt.Etextp.Next = initfunc
 	ld.Ctxt.Etextp = initfunc
 	initarray_entry := ld.Linklookup(ld.Ctxt, "go.link.addmoduledatainit", 0)
-	initarray_entry.Reachable = true
-	initarray_entry.Local = true
+	initarray_entry.Attr |= ld.AttrReachable
+	initarray_entry.Attr |= ld.AttrLocal
 	initarray_entry.Type = obj.SINITARR
 	ld.Addaddr(ld.Ctxt, initarray_entry, initfunc)
 }
@@ -292,14 +292,14 @@ func adddynrel(s *ld.LSym, r *ld.Reloc) {
 			return
 		}
 
-		if ld.HEADTYPE == obj.Hdarwin && s.Size == PtrSize && r.Off == 0 {
+		if ld.HEADTYPE == obj.Hdarwin && s.Size == int64(ld.SysArch.PtrSize) && r.Off == 0 {
 			// Mach-O relocations are a royal pain to lay out.
 			// They use a compact stateful bytecode representation
 			// that is too much bother to deal with.
 			// Instead, interpret the C declaration
 			//	void *_Cvar_stderr = &stderr;
 			// as making _Cvar_stderr the name of a GOT entry
-			// for stderr.  This is separate from the usual GOT entry,
+			// for stderr. This is separate from the usual GOT entry,
 			// just in case the C code assigns to the variable,
 			// and of course it only works for single pointers,
 			// but we only need to support cgo and that's all it needs.
@@ -317,7 +317,7 @@ func adddynrel(s *ld.LSym, r *ld.Reloc) {
 			return
 		}
 
-		if ld.HEADTYPE == obj.Hwindows && s.Size == PtrSize {
+		if ld.HEADTYPE == obj.Hwindows && s.Size == int64(ld.SysArch.PtrSize) {
 			// nothing to do, the relocation will be laid out in pereloc1
 			return
 		}
@@ -643,19 +643,11 @@ func asmb() {
 	ld.Cseek(int64(ld.Segdata.Fileoff))
 	ld.Datblk(int64(ld.Segdata.Vaddr), int64(ld.Segdata.Filelen))
 
+	ld.Cseek(int64(ld.Segdwarf.Fileoff))
+	ld.Dwarfblk(int64(ld.Segdwarf.Vaddr), int64(ld.Segdwarf.Filelen))
+
 	machlink := uint32(0)
 	if ld.HEADTYPE == obj.Hdarwin {
-		if ld.Debug['v'] != 0 {
-			fmt.Fprintf(&ld.Bso, "%5.2f dwarf\n", obj.Cputime())
-		}
-
-		dwarfoff := uint32(ld.Rnd(int64(uint64(ld.HEADR)+ld.Segtext.Length), int64(ld.INITRND)) + ld.Rnd(int64(ld.Segdata.Filelen), int64(ld.INITRND)))
-		ld.Cseek(int64(dwarfoff))
-
-		ld.Segdwarf.Fileoff = uint64(ld.Cpos())
-		ld.Dwarfemitdebugsections()
-		ld.Segdwarf.Filelen = uint64(ld.Cpos()) - ld.Segdwarf.Fileoff
-
 		machlink = uint32(ld.Domacholink())
 	}
 
@@ -672,7 +664,7 @@ func asmb() {
 		switch ld.HEADTYPE {
 		default:
 			if ld.Iself {
-				symo = uint32(ld.Segdata.Fileoff + ld.Segdata.Filelen)
+				symo = uint32(ld.Segdwarf.Fileoff + ld.Segdwarf.Filelen)
 				symo = uint32(ld.Rnd(int64(symo), int64(ld.INITRND)))
 			}
 
@@ -683,7 +675,7 @@ func asmb() {
 			symo = uint32(ld.Segdwarf.Fileoff + uint64(ld.Rnd(int64(ld.Segdwarf.Filelen), int64(ld.INITRND))) + uint64(machlink))
 
 		case obj.Hwindows:
-			symo = uint32(ld.Segdata.Fileoff + ld.Segdata.Filelen)
+			symo = uint32(ld.Segdwarf.Fileoff + ld.Segdwarf.Filelen)
 			symo = uint32(ld.Rnd(int64(symo), ld.PEFILEALIGN))
 		}
 
@@ -697,11 +689,6 @@ func asmb() {
 				ld.Asmelfsym()
 				ld.Cflush()
 				ld.Cwrite(ld.Elfstrdat)
-
-				if ld.Debug['v'] != 0 {
-					fmt.Fprintf(&ld.Bso, "%5.2f dwarf\n", obj.Cputime())
-				}
-				ld.Dwarfemitdebugsections()
 
 				if ld.Linkmode == ld.LinkExternal {
 					ld.Elfemitreloc()
@@ -726,7 +713,6 @@ func asmb() {
 			if ld.Debug['v'] != 0 {
 				fmt.Fprintf(&ld.Bso, "%5.2f dwarf\n", obj.Cputime())
 			}
-			ld.Dwarfemitdebugsections()
 
 		case obj.Hdarwin:
 			if ld.Linkmode == ld.LinkExternal {
