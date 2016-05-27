@@ -25,6 +25,8 @@ import (
 // 每个 Cond 都有一个与其相关联的 Locker L（一般是 *Mutex 或 *RWMutex），
 // 在改变该条件或调用 Wait 方法时，它必须保持不变。
 type Cond struct {
+	noCopy noCopy
+
 	// L is held while observing or changing the condition
 	// L 在观测或更改条件时保持不变
 	L Locker
@@ -114,3 +116,13 @@ func (c *copyChecker) check() {
 		panic("sync.Cond is copied")
 	}
 }
+
+// noCopy may be embedded into structs which must not be copied
+// after the first use.
+//
+// See https://github.com/golang/go/issues/8005#issuecomment-190753527
+// for details.
+type noCopy struct{}
+
+// Lock is a no-op used by -copylocks checker from `go vet`.
+func (*noCopy) Lock() {}

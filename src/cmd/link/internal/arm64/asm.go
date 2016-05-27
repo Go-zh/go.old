@@ -8,7 +8,7 @@
 //	Portions Copyright © 2004,2006 Bruce Ellis
 //	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //	Revisions Copyright © 2000-2007 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//	Portions Copyright © 2009 The Go Authors. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -78,21 +78,12 @@ func gentext() {
 	rel.Sym = ld.Linklookup(ld.Ctxt, "runtime.addmoduledata", 0)
 	rel.Type = obj.R_CALLARM64 // Really should be R_AARCH64_JUMP26 but doesn't seem to make any difference
 
-	if ld.Ctxt.Etextp != nil {
-		ld.Ctxt.Etextp.Next = initfunc
-	} else {
-		ld.Ctxt.Textp = initfunc
-	}
-	ld.Ctxt.Etextp = initfunc
+	ld.Ctxt.Textp = append(ld.Ctxt.Textp, initfunc)
 	initarray_entry := ld.Linklookup(ld.Ctxt, "go.link.addmoduledatainit", 0)
 	initarray_entry.Attr |= ld.AttrReachable
 	initarray_entry.Attr |= ld.AttrLocal
 	initarray_entry.Type = obj.SINITARR
 	ld.Addaddr(ld.Ctxt, initarray_entry, initfunc)
-}
-
-func adddynrela(rel *ld.LSym, s *ld.LSym, r *ld.Reloc) {
-	log.Fatalf("adddynrela not implemented")
 }
 
 func adddynrel(s *ld.LSym, r *ld.Reloc) {
@@ -401,7 +392,7 @@ func archrelocvariant(r *ld.Reloc, s *ld.LSym, t int64) int64 {
 
 func asmb() {
 	if ld.Debug['v'] != 0 {
-		fmt.Fprintf(&ld.Bso, "%5.2f asmb\n", obj.Cputime())
+		fmt.Fprintf(ld.Bso, "%5.2f asmb\n", obj.Cputime())
 	}
 	ld.Bso.Flush()
 
@@ -419,7 +410,7 @@ func asmb() {
 
 	if ld.Segrodata.Filelen > 0 {
 		if ld.Debug['v'] != 0 {
-			fmt.Fprintf(&ld.Bso, "%5.2f rodatblk\n", obj.Cputime())
+			fmt.Fprintf(ld.Bso, "%5.2f rodatblk\n", obj.Cputime())
 		}
 		ld.Bso.Flush()
 
@@ -428,7 +419,7 @@ func asmb() {
 	}
 
 	if ld.Debug['v'] != 0 {
-		fmt.Fprintf(&ld.Bso, "%5.2f datblk\n", obj.Cputime())
+		fmt.Fprintf(ld.Bso, "%5.2f datblk\n", obj.Cputime())
 	}
 	ld.Bso.Flush()
 
@@ -451,7 +442,7 @@ func asmb() {
 	if ld.Debug['s'] == 0 {
 		// TODO: rationalize
 		if ld.Debug['v'] != 0 {
-			fmt.Fprintf(&ld.Bso, "%5.2f sym\n", obj.Cputime())
+			fmt.Fprintf(ld.Bso, "%5.2f sym\n", obj.Cputime())
 		}
 		ld.Bso.Flush()
 		switch ld.HEADTYPE {
@@ -473,7 +464,7 @@ func asmb() {
 		default:
 			if ld.Iself {
 				if ld.Debug['v'] != 0 {
-					fmt.Fprintf(&ld.Bso, "%5.2f elfsym\n", obj.Cputime())
+					fmt.Fprintf(ld.Bso, "%5.2f elfsym\n", obj.Cputime())
 				}
 				ld.Asmelfsym()
 				ld.Cflush()
@@ -492,7 +483,7 @@ func asmb() {
 			if sym != nil {
 				ld.Lcsize = int32(len(sym.P))
 				for i := 0; int32(i) < ld.Lcsize; i++ {
-					ld.Cput(uint8(sym.P[i]))
+					ld.Cput(sym.P[i])
 				}
 
 				ld.Cflush()
@@ -507,7 +498,7 @@ func asmb() {
 
 	ld.Ctxt.Cursym = nil
 	if ld.Debug['v'] != 0 {
-		fmt.Fprintf(&ld.Bso, "%5.2f header\n", obj.Cputime())
+		fmt.Fprintf(ld.Bso, "%5.2f header\n", obj.Cputime())
 	}
 	ld.Bso.Flush()
 	ld.Cseek(0)

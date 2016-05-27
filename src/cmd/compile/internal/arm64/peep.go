@@ -8,7 +8,7 @@
 //	Portions Copyright © 2004,2006 Bruce Ellis
 //	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //	Revisions Copyright © 2000-2007 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//	Portions Copyright © 2009 The Go Authors. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -534,10 +534,13 @@ func copyu(p *obj.Prog, v *obj.Addr, s *obj.Addr) int {
 		return 0
 
 	case arm64.AADD, /* read p->from, read p->reg, write p->to */
+		arm64.AADDS,
 		arm64.ASUB,
+		arm64.AADC,
 		arm64.AAND,
 		arm64.AORR,
 		arm64.AEOR,
+		arm64.AROR,
 		arm64.AMUL,
 		arm64.ASMULL,
 		arm64.AUMULL,

@@ -26,9 +26,6 @@ func applyRewrite(f *Func, rb func(*Block) bool, rv func(*Value, *Config) bool) 
 	for {
 		change := false
 		for _, b := range f.Blocks {
-			if b.Kind == BlockDead {
-				continue
-			}
 			if b.Control != nil && b.Control.Op == OpCopy {
 				for b.Control.Op == OpCopy {
 					b.SetControl(b.Control.Args[0])
@@ -40,8 +37,27 @@ func applyRewrite(f *Func, rb func(*Block) bool, rv func(*Value, *Config) bool) 
 			}
 			curb = nil
 			for _, v := range b.Values {
-				change = copyelimValue(v) || change
 				change = phielimValue(v) || change
+
+				// Eliminate copy inputs.
+				// If any copy input becomes unused, mark it
+				// as invalid and discard its argument. Repeat
+				// recursively on the discarded argument.
+				// This phase helps remove phantom "dead copy" uses
+				// of a value so that a x.Uses==1 rule condition
+				// fires reliably.
+				for i, a := range v.Args {
+					if a.Op != OpCopy {
+						continue
+					}
+					v.SetArg(i, copySource(a))
+					change = true
+					for a.Uses == 0 {
+						b := a.Args[0]
+						a.reset(OpInvalid)
+						a = b
+					}
+				}
 
 				// apply rewrite function
 				curv = v
@@ -52,7 +68,28 @@ func applyRewrite(f *Func, rb func(*Block) bool, rv func(*Value, *Config) bool) 
 			}
 		}
 		if !change {
-			return
+			break
+		}
+	}
+	// remove clobbered values
+	for _, b := range f.Blocks {
+		j := 0
+		for i, v := range b.Values {
+			if v.Op == OpInvalid {
+				f.freeValue(v)
+				continue
+			}
+			if i != j {
+				b.Values[j] = v
+			}
+			j++
+		}
+		if j != len(b.Values) {
+			tail := b.Values[j:]
+			for j := range tail {
+				tail[j] = nil
+			}
+			b.Values = b.Values[:j]
 		}
 	}
 }
@@ -105,7 +142,6 @@ func mergeSym(x, y interface{}) interface{} {
 		return x
 	}
 	panic(fmt.Sprintf("mergeSym with two non-nil syms %s %s", x, y))
-	return nil
 }
 func canMergeSym(x, y interface{}) bool {
 	return x == nil || y == nil
@@ -281,7 +317,7 @@ func mergePoint(b *Block, a ...*Value) *Block {
 			// Don't know which way to go back. Abort.
 			return nil
 		}
-		b = b.Preds[0]
+		b = b.Preds[0].b
 		d--
 	}
 	return nil // too far away
@@ -305,9 +341,19 @@ found:
 		if len(b.Preds) > 1 {
 			return nil
 		}
-		b = b.Preds[0]
+		b = b.Preds[0].b
 		d--
 
 	}
 	return nil // too far away
+}
+
+// clobber invalidates v.  Returns true.
+// clobber is used by rewrite rules to:
+//   A) make sure v is really dead and never used again.
+//   B) decrement use counts of v's args.
+func clobber(v *Value) bool {
+	v.reset(OpInvalid)
+	// Note: leave v.Block intact.  The Block field is used after clobber.
+	return true
 }

@@ -344,6 +344,14 @@ func TestGCFairness(t *testing.T) {
 	}
 }
 
+func TestGCFairness2(t *testing.T) {
+	output := runTestProg(t, "testprog", "GCFairness2")
+	want := "OK\n"
+	if output != want {
+		t.Fatalf("want %s, got %s\n", want, output)
+	}
+}
+
 func TestNumGoroutine(t *testing.T) {
 	output := runTestProg(t, "testprog", "NumGoroutine")
 	want := "1\n"
@@ -551,6 +559,24 @@ func TestSchedLocalQueue(t *testing.T) {
 
 func TestSchedLocalQueueSteal(t *testing.T) {
 	runtime.RunSchedLocalQueueStealTest()
+}
+
+func TestSchedLocalQueueEmpty(t *testing.T) {
+	if runtime.NumCPU() == 1 {
+		// Takes too long and does not trigger the race.
+		t.Skip("skipping on uniprocessor")
+	}
+	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(4))
+
+	// If runtime triggers a forced GC during this test then it will deadlock,
+	// since the goroutines can't be stopped/preempted during spin wait.
+	defer debug.SetGCPercent(debug.SetGCPercent(-1))
+
+	iters := int(1e5)
+	if testing.Short() {
+		iters = 1e2
+	}
+	runtime.RunSchedLocalQueueEmptyTest(iters)
 }
 
 func benchmarkStackGrowth(b *testing.B, rec int) {

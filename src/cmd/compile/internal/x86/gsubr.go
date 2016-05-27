@@ -8,7 +8,7 @@
 //	Portions Copyright © 2004,2006 Bruce Ellis
 //	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //	Revisions Copyright © 2000-2007 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//	Portions Copyright © 2009 The Go Authors. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -91,7 +91,7 @@ func optoas(op gc.Op, t *gc.Type) obj.As {
 	a := obj.AXXX
 	switch uint32(op)<<16 | uint32(gc.Simtype[t.Etype]) {
 	default:
-		gc.Fatalf("optoas: no entry %v-%v", gc.Oconv(op, 0), t)
+		gc.Fatalf("optoas: no entry %v-%v", op, t)
 
 	case OADDR_ | gc.TPTR32:
 		a = x86.ALEAL
@@ -454,7 +454,7 @@ func foptoas(op gc.Op, t *gc.Type, flg int) obj.As {
 	if !gc.Thearch.Use387 {
 		switch uint32(op)<<16 | uint32(et) {
 		default:
-			gc.Fatalf("foptoas-sse: no entry %v-%v", gc.Oconv(op, 0), t)
+			gc.Fatalf("foptoas-sse: no entry %v-%v", op, t)
 
 		case OCMP_ | gc.TFLOAT32:
 			a = x86.AUCOMISS
@@ -587,7 +587,7 @@ func foptoas(op gc.Op, t *gc.Type, flg int) obj.As {
 		return x86.AFCHS
 	}
 
-	gc.Fatalf("foptoas %v %v %#x", gc.Oconv(op, 0), t, flg)
+	gc.Fatalf("foptoas %v %v %#x", op, t, flg)
 	return 0
 }
 

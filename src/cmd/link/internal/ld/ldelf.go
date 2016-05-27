@@ -268,7 +268,7 @@ type ElfSect struct {
 }
 
 type ElfObj struct {
-	f         *bio.Buf
+	f         *bio.Reader
 	base      int64 // offset in f where ELF begins
 	length    int64 // length of ELF
 	is64      int
@@ -405,7 +405,7 @@ func parseArmAttributes(e binary.ByteOrder, data []byte) {
 		ehdr.flags = 0x5000202
 	}
 	if data[0] != 'A' {
-		fmt.Fprintf(&Bso, ".ARM.attributes has unexpected format %c\n", data[0])
+		fmt.Fprintf(Bso, ".ARM.attributes has unexpected format %c\n", data[0])
 		return
 	}
 	data = data[1:]
@@ -416,7 +416,7 @@ func parseArmAttributes(e binary.ByteOrder, data []byte) {
 
 		nulIndex := bytes.IndexByte(sectiondata, 0)
 		if nulIndex < 0 {
-			fmt.Fprintf(&Bso, "corrupt .ARM.attributes (section name not NUL-terminated)\n")
+			fmt.Fprintf(Bso, "corrupt .ARM.attributes (section name not NUL-terminated)\n")
 			return
 		}
 		name := string(sectiondata[:nulIndex])
@@ -440,20 +440,20 @@ func parseArmAttributes(e binary.ByteOrder, data []byte) {
 					}
 				}
 				if attrList.err != nil {
-					fmt.Fprintf(&Bso, "could not parse .ARM.attributes\n")
+					fmt.Fprintf(Bso, "could not parse .ARM.attributes\n")
 				}
 			}
 		}
 	}
 }
 
-func ldelf(f *bio.Buf, pkg string, length int64, pn string) {
+func ldelf(f *bio.Reader, pkg string, length int64, pn string) {
 	if Debug['v'] != 0 {
-		fmt.Fprintf(&Bso, "%5.2f ldelf %s\n", obj.Cputime(), pn)
+		fmt.Fprintf(Bso, "%5.2f ldelf %s\n", obj.Cputime(), pn)
 	}
 
 	Ctxt.IncVersion()
-	base := int32(bio.Boffset(f))
+	base := f.Offset()
 
 	var add uint64
 	var e binary.ByteOrder
@@ -476,7 +476,7 @@ func ldelf(f *bio.Buf, pkg string, length int64, pn string) {
 	var sect *ElfSect
 	var sym ElfSym
 	var symbols []*LSym
-	if bio.Bread(f, hdrbuf[:]) != len(hdrbuf) {
+	if _, err := io.ReadFull(f, hdrbuf[:]); err != nil {
 		goto bad
 	}
 	hdr = new(ElfHdrBytes)
@@ -500,7 +500,7 @@ func ldelf(f *bio.Buf, pkg string, length int64, pn string) {
 
 	elfobj.e = e
 	elfobj.f = f
-	elfobj.base = int64(base)
+	elfobj.base = base
 	elfobj.length = length
 	elfobj.name = pn
 
@@ -601,7 +601,7 @@ func ldelf(f *bio.Buf, pkg string, length int64, pn string) {
 
 	elfobj.nsect = uint(elfobj.shnum)
 	for i := 0; uint(i) < elfobj.nsect; i++ {
-		if bio.Bseek(f, int64(uint64(base)+elfobj.shoff+uint64(int64(i)*int64(elfobj.shentsize))), 0) < 0 {
+		if f.Seek(int64(uint64(base)+elfobj.shoff+uint64(int64(i)*int64(elfobj.shentsize))), 0) < 0 {
 			goto bad
 		}
 		sect = &elfobj.sect[i]
@@ -612,7 +612,7 @@ func ldelf(f *bio.Buf, pkg string, length int64, pn string) {
 				goto bad
 			}
 
-			sect.nameoff = uint32(e.Uint32(b.Name[:]))
+			sect.nameoff = e.Uint32(b.Name[:])
 			sect.type_ = e.Uint32(b.Type[:])
 			sect.flags = e.Uint64(b.Flags[:])
 			sect.addr = e.Uint64(b.Addr[:])
@@ -629,7 +629,7 @@ func ldelf(f *bio.Buf, pkg string, length int64, pn string) {
 				goto bad
 			}
 
-			sect.nameoff = uint32(e.Uint32(b.Name[:]))
+			sect.nameoff = e.Uint32(b.Name[:])
 			sect.type_ = e.Uint32(b.Type[:])
 			sect.flags = uint64(e.Uint32(b.Flags[:]))
 			sect.addr = uint64(e.Uint32(b.Addr[:]))
@@ -774,7 +774,7 @@ func ldelf(f *bio.Buf, pkg string, length int64, pn string) {
 		if sym.sym == nil {
 			continue
 		}
-		sect = &elfobj.sect[sym.shndx:][0]
+		sect = &elfobj.sect[sym.shndx]
 		if sect.sym == nil {
 			if strings.HasPrefix(sym.name, ".Linfo_string") { // clang does this
 				continue
@@ -842,19 +842,13 @@ func ldelf(f *bio.Buf, pkg string, length int64, pn string) {
 				log.Fatalf("symbol %s listed multiple times", s.Name)
 			}
 			s.Attr |= AttrOnList
-			if Ctxt.Etextp != nil {
-				Ctxt.Etextp.Next = s
-			} else {
-				Ctxt.Textp = s
-			}
-			Ctxt.Etextp = s
+			Ctxt.Textp = append(Ctxt.Textp, s)
 			for s = s.Sub; s != nil; s = s.Sub {
 				if s.Attr.OnList() {
 					log.Fatalf("symbol %s listed multiple times", s.Name)
 				}
 				s.Attr |= AttrOnList
-				Ctxt.Etextp.Next = s
-				Ctxt.Etextp = s
+				Ctxt.Textp = append(Ctxt.Textp, s)
 			}
 		}
 	}
@@ -986,9 +980,11 @@ func elfmap(elfobj *ElfObj, sect *ElfSect) (err error) {
 	}
 
 	sect.base = make([]byte, sect.size)
-	err = fmt.Errorf("short read")
-	if bio.Bseek(elfobj.f, int64(uint64(elfobj.base)+sect.off), 0) < 0 || bio.Bread(elfobj.f, sect.base) != len(sect.base) {
-		return err
+	if elfobj.f.Seek(int64(uint64(elfobj.base)+sect.off), 0) < 0 {
+		return fmt.Errorf("short read: seek not successful")
+	}
+	if _, err := io.ReadFull(elfobj.f, sect.base); err != nil {
+		return fmt.Errorf("short read: %v", err)
 	}
 
 	return nil

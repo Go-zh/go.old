@@ -59,6 +59,9 @@ Each listed package causes the execution of a separate test binary.
 Test files that declare a package with the suffix "_test" will be compiled as a
 separate package, and then linked and run with the main test binary.
 
+The go tool will ignore a directory named "testdata", making it available
+to hold ancillary data needed by the tests.
+
 By default, go test needs no arguments.  It compiles and tests the package
 with source in the current directory, including tests, and runs the tests.
 
@@ -125,7 +128,10 @@ control the execution of any test:
 
 const testFlag2 = `
 	-bench regexp
-	    Run benchmarks matching the regular expression.
+	    Run (sub)benchmarks matching a regular expression.
+	    The given regular expression is split into smaller ones by 
+	    top-level '/', where each must match the corresponding part of a
+	    benchmark's identifier.
 	    By default, no benchmarks run. To run all benchmarks,
 	    use '-bench .' or '-bench=.'.
 
@@ -213,8 +219,10 @@ const testFlag2 = `
 	    (see 'go help build').
 
 	-run regexp
-	    Run only those tests and examples matching the regular
-	    expression.
+	    Run only those tests and examples matching the regular expression.
+	    For tests the regular expression is split into smaller ones by
+	    top-level '/', where each must match the corresponding part of a 
+	    test's identifier.
 
 	-short
 	    Tell long-running tests to shorten their run time.
@@ -228,7 +236,6 @@ const testFlag2 = `
 
 	-trace trace.out
 	    Write an execution trace to the specified file before exiting.
-	    Writes test binary as -c would.
 
 	-v
 	    Verbose output: log all tests as they are run. Also print all
@@ -507,7 +514,8 @@ func runTest(cmd *Command, args []string) {
 				continue
 			}
 			p.Stale = true // rebuild
-			p.fake = true  // do not warn about rebuild
+			p.StaleReason = "rebuild for coverage"
+			p.fake = true // do not warn about rebuild
 			p.coverMode = testCoverMode
 			var coverFiles []string
 			coverFiles = append(coverFiles, p.GoFiles...)
@@ -744,6 +752,7 @@ func (b *builder) test(p *Package) (buildAction, runAction, printAction *action,
 		ptest.fake = true
 		ptest.forceLibrary = true
 		ptest.Stale = true
+		ptest.StaleReason = "rebuild for test"
 		ptest.build = new(build.Package)
 		*ptest.build = *p.build
 		m := map[string][]token.Position{}
@@ -1022,6 +1031,7 @@ func recompileForTest(pmain, preal, ptest *Package, testDir string) {
 				p.target = ""
 				p.fake = true
 				p.Stale = true
+				p.StaleReason = "depends on package being tested"
 			}
 		}
 

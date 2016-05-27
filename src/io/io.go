@@ -414,15 +414,6 @@ type RuneScanner interface {
 	UnreadRune() error
 }
 
-// ReadAtSizer is the interface that groups the basic ReadAt and Size
-// methods, representing a sized data source that supports random
-// access by multiple concurrent goroutines.
-type ReadAtSizer interface {
-	ReaderAt
-	// Size reports the length of the data source in bytes.
-	Size() int64
-}
-
 // stringWriter is the interface that wraps the WriteString method.
 
 // stringWriter 接口包装了 WriteString 方法。
@@ -432,9 +423,11 @@ type stringWriter interface {
 
 // WriteString writes the contents of the string s to w, which accepts a slice of bytes.
 // If w implements a WriteString method, it is invoked directly.
+// Otherwise, w.Write is called exactly once.
 
 // WriteString 将字符串 s 的内容写入 w 中，它接受一个字节切片。
 // 若 w 实现了 WriteString 方法，就可以直接调用它。
+// 否则只会调用一次 w.Write。
 func WriteString(w Writer, s string) (n int, err error) {
 	if sw, ok := w.(stringWriter); ok {
 		return sw.WriteString(s)
@@ -665,11 +658,11 @@ func (s *SectionReader) Seek(offset int64, whence int) (int64, error) {
 	switch whence {
 	default:
 		return 0, errWhence
-	case 0:
+	case SeekStart:
 		offset += s.base
-	case 1:
+	case SeekCurrent:
 		offset += s.off
-	case 2:
+	case SeekEnd:
 		offset += s.limit
 	}
 	if offset < s.base {

@@ -8,7 +8,7 @@
 //	Portions Copyright © 2004,2006 Bruce Ellis
 //	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //	Revisions Copyright © 2000-2007 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//	Portions Copyright © 2009 The Go Authors. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -66,7 +66,7 @@ func CanUse1InsnTLS(ctxt *obj.Link) bool {
 		obj.Hwindows:
 		return false
 	case obj.Hlinux:
-		return ctxt.Flag_shared == 0
+		return !ctxt.Flag_shared
 	}
 
 	return true
@@ -314,7 +314,7 @@ func progedit(ctxt *obj.Link, p *obj.Prog) {
 		rewriteToUseGot(ctxt, p)
 	}
 
-	if ctxt.Flag_shared != 0 && p.Mode == 32 {
+	if ctxt.Flag_shared && p.Mode == 32 {
 		rewriteToPcrel(ctxt, p)
 	}
 }

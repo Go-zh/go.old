@@ -140,6 +140,11 @@ func (p *Prog) String() string {
 
 	fmt.Fprintf(&buf, "%.5d (%v)\t%v%s", p.Pc, p.Line(), Aconv(p.As), sc)
 	sep := "\t"
+	quadOpAmd64 := p.RegTo2 == -1
+	if quadOpAmd64 {
+		fmt.Fprintf(&buf, "%s$%d", sep, p.From3.Offset)
+		sep = ", "
+	}
 	if p.From.Type != TYPE_NONE {
 		fmt.Fprintf(&buf, "%s%v", sep, Dconv(p, &p.From))
 		sep = ", "
@@ -153,6 +158,8 @@ func (p *Prog) String() string {
 		if p.From3.Type == TYPE_CONST && (p.As == ATEXT || p.As == AGLOBL) {
 			// Special case - omit $.
 			fmt.Fprintf(&buf, "%s%d", sep, p.From3.Offset)
+		} else if quadOpAmd64 {
+			fmt.Fprintf(&buf, "%s%v", sep, Rconv(int(p.From3.Reg)))
 		} else {
 			fmt.Fprintf(&buf, "%s%v", sep, Dconv(p, p.From3))
 		}
@@ -161,7 +168,7 @@ func (p *Prog) String() string {
 	if p.To.Type != TYPE_NONE {
 		fmt.Fprintf(&buf, "%s%v", sep, Dconv(p, &p.To))
 	}
-	if p.RegTo2 != REG_NONE {
+	if p.RegTo2 != REG_NONE && !quadOpAmd64 {
 		fmt.Fprintf(&buf, "%s%v", sep, Rconv(int(p.RegTo2)))
 	}
 	return buf.String()
@@ -279,7 +286,7 @@ func Dconv(p *Prog, a *Addr) string {
 
 	case TYPE_SHIFT:
 		v := int(a.Offset)
-		op := string("<<>>->@>"[((v>>5)&3)<<1:])
+		op := "<<>>->@>"[((v>>5)&3)<<1:]
 		if v&(1<<4) != 0 {
 			str = fmt.Sprintf("R%d%c%cR%d", v&15, op[0], op[1], (v>>8)&15)
 		} else {

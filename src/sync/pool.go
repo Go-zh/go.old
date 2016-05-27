@@ -40,7 +40,10 @@ import (
 // that scenario. It is more efficient to have such objects implement their own
 // free list.
 //
+// A Pool must not be copied after first use.
 type Pool struct {
+	noCopy noCopy
+
 	local     unsafe.Pointer // local fixed-size per-P pool, actual type is [P]poolLocal
 	localSize uintptr        // size of the local array
 
@@ -179,8 +182,8 @@ func (p *Pool) pinSlow() *poolLocal {
 	// If GOMAXPROCS changes between GCs, we re-allocate the array and lose the old one.
 	size := runtime.GOMAXPROCS(0)
 	local := make([]poolLocal, size)
-	atomic.StorePointer((*unsafe.Pointer)(&p.local), unsafe.Pointer(&local[0])) // store-release
-	atomic.StoreUintptr(&p.localSize, uintptr(size))                            // store-release
+	atomic.StorePointer(&p.local, unsafe.Pointer(&local[0])) // store-release
+	atomic.StoreUintptr(&p.localSize, uintptr(size))         // store-release
 	return &local[pid]
 }
 

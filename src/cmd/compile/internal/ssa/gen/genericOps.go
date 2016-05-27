@@ -237,9 +237,14 @@ var genericOps = []opData{
 	{name: "Geq32F", argLength: 2},
 	{name: "Geq64F", argLength: 2},
 
-	// 1-input ops
-	{name: "Not", argLength: 1}, // !arg0, boolean
+	// boolean ops
+	{name: "AndB", argLength: 2}, // arg0 && arg1 (not shortcircuited)
+	{name: "OrB", argLength: 2},  // arg0 || arg1 (not shortcircuited)
+	{name: "EqB", argLength: 2},  // arg0 == arg1
+	{name: "NeqB", argLength: 2}, // arg0 != arg1
+	{name: "Not", argLength: 1},  // !arg0, boolean
 
+	// 1-input ops
 	{name: "Neg8", argLength: 1}, // -arg0
 	{name: "Neg16", argLength: 1},
 	{name: "Neg32", argLength: 1},
@@ -377,9 +382,9 @@ var genericOps = []opData{
 	{name: "ComplexImag", argLength: 1}, // imag(arg0)
 
 	// Strings
-	{name: "StringMake", argLength: 2}, // arg0=ptr, arg1=len
-	{name: "StringPtr", argLength: 1},  // ptr(arg0)
-	{name: "StringLen", argLength: 1},  // len(arg0)
+	{name: "StringMake", argLength: 2},                // arg0=ptr, arg1=len
+	{name: "StringPtr", argLength: 1, typ: "BytePtr"}, // ptr(arg0)
+	{name: "StringLen", argLength: 1, typ: "Int"},     // len(arg0)
 
 	// Interfaces
 	{name: "IMake", argLength: 2},                // arg0=itab, arg1=data
@@ -402,7 +407,7 @@ var genericOps = []opData{
 	{name: "LoadReg", argLength: 1},
 
 	// Used during ssa construction. Like Copy, but the arg has not been specified yet.
-	{name: "FwdRef"},
+	{name: "FwdRef", aux: "Sym"},
 
 	// Unknown value. Used for Values whose values don't matter because they are dead code.
 	{name: "Unknown"},
@@ -410,6 +415,7 @@ var genericOps = []opData{
 	{name: "VarDef", argLength: 1, aux: "Sym", typ: "Mem"}, // aux is a *gc.Node of a variable that is about to be initialized.  arg0=mem, returns mem
 	{name: "VarKill", argLength: 1, aux: "Sym"},            // aux is a *gc.Node of a variable that is known to be dead.  arg0=mem, returns mem
 	{name: "VarLive", argLength: 1, aux: "Sym"},            // aux is a *gc.Node of a variable that must be kept live.  arg0=mem, returns mem
+	{name: "KeepAlive", argLength: 2, typ: "Mem"},          // arg[0] is a value that must be kept alive until this mark.  arg[1]=mem, returns mem
 }
 
 //     kind           control    successors       implicit exit
@@ -433,9 +439,8 @@ var genericBlocks = []blockData{
 	{name: "RetJmp"}, // no successors, jumps to b.Aux.(*gc.Sym)
 	{name: "Exit"},   // no successors, control value generates a panic
 
-	// transient block states used for dead code removal
+	// transient block state used for dead code removal
 	{name: "First"}, // 2 successors, always takes the first one (second is dead)
-	{name: "Dead"},  // no successors; determined to be dead but not yet removed
 }
 
 func init() {

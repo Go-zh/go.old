@@ -102,6 +102,9 @@ func (p *parser) syntax_error(msg string) {
 			tok = "name"
 		}
 	case LLITERAL:
+		if litbuf == "" {
+			litbuf = "literal " + lexbuf.String()
+		}
 		tok = litbuf
 	case LOPER:
 		tok = goopnames[p.op]
@@ -395,11 +398,8 @@ func (p *parser) import_package() {
 		p.import_error()
 	}
 
-	importsafe := false
+	// read but skip "safe" bit (see issue #15772)
 	if p.tok == LNAME {
-		if p.sym_.Name == "safe" {
-			importsafe = true
-		}
 		p.next()
 	}
 	p.want(';')
@@ -410,7 +410,6 @@ func (p *parser) import_package() {
 	} else if importpkg.Name != name {
 		Yyerror("conflicting names %s and %s for package %q", importpkg.Name, name, importpkg.Path)
 	}
-	importpkg.Safe = importsafe
 
 	typecheckok = true
 	defercheckwidth()
@@ -1408,20 +1407,17 @@ loop:
 				}
 				x = Nod(OINDEX, x, i)
 			case 1:
-				i := index[0]
-				j := index[1]
-				x = Nod(OSLICE, x, Nod(OKEY, i, j))
+				x = Nod(OSLICE, x, nil)
+				x.SetSliceBounds(index[0], index[1], nil)
 			case 2:
-				i := index[0]
-				j := index[1]
-				k := index[2]
-				if j == nil {
+				if index[1] == nil {
 					Yyerror("middle index required in 3-index slice")
 				}
-				if k == nil {
+				if index[2] == nil {
 					Yyerror("final index required in 3-index slice")
 				}
-				x = Nod(OSLICE3, x, Nod(OKEY, i, Nod(OKEY, j, k)))
+				x = Nod(OSLICE3, x, nil)
+				x.SetSliceBounds(index[0], index[1], index[2])
 
 			default:
 				panic("unreachable")
@@ -2906,7 +2902,7 @@ func (p *parser) hidden_import() {
 
 		if Debug['E'] > 0 {
 			fmt.Printf("import [%q] func %v \n", importpkg.Path, s2)
-			if Debug['m'] > 2 && len(s2.Func.Inl.Slice()) != 0 {
+			if Debug['m'] > 2 && s2.Func.Inl.Len() != 0 {
 				fmt.Printf("inl body:%v\n", s2.Func.Inl)
 			}
 		}
@@ -3246,17 +3242,14 @@ func (p *parser) hidden_literal() *Node {
 		if p.tok == LLITERAL {
 			ss := nodlit(p.val)
 			p.next()
-			switch ss.Val().Ctype() {
-			case CTINT, CTRUNE:
-				ss.Val().U.(*Mpint).Neg()
-				break
-			case CTFLT:
-				ss.Val().U.(*Mpflt).Neg()
-				break
-			case CTCPLX:
-				ss.Val().U.(*Mpcplx).Real.Neg()
-				ss.Val().U.(*Mpcplx).Imag.Neg()
-				break
+			switch u := ss.Val().U.(type) {
+			case *Mpint:
+				u.Neg()
+			case *Mpflt:
+				u.Neg()
+			case *Mpcplx:
+				u.Real.Neg()
+				u.Imag.Neg()
 			default:
 				Yyerror("bad negated constant")
 			}

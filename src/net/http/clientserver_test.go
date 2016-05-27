@@ -17,6 +17,7 @@ import (
 	"net"
 	. "net/http"
 	"net/http/httptest"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"reflect"
@@ -41,6 +42,13 @@ type clientServerTest struct {
 func (t *clientServerTest) close() {
 	t.tr.CloseIdleConnections()
 	t.ts.Close()
+}
+
+func (t *clientServerTest) scheme() string {
+	if t.h2 {
+		return "https"
+	}
+	return "http"
 }
 
 const (
@@ -147,10 +155,11 @@ type reqFunc func(c *Client, url string) (*Response, error)
 // h12Compare is a test that compares HTTP/1 and HTTP/2 behavior
 // against each other.
 type h12Compare struct {
-	Handler       func(ResponseWriter, *Request)    // required
-	ReqFunc       reqFunc                           // optional
-	CheckResponse func(proto string, res *Response) // optional
-	Opts          []interface{}
+	Handler            func(ResponseWriter, *Request)    // required
+	ReqFunc            reqFunc                           // optional
+	CheckResponse      func(proto string, res *Response) // optional
+	EarlyCheckResponse func(proto string, res *Response) // optional; pre-normalize
+	Opts               []interface{}
 }
 
 func (tt h12Compare) reqFunc() reqFunc {
@@ -176,6 +185,12 @@ func (tt h12Compare) run(t *testing.T) {
 		t.Errorf("HTTP/2 request: %v", err)
 		return
 	}
+
+	if fn := tt.EarlyCheckResponse; fn != nil {
+		fn("HTTP/1.1", res1)
+		fn("HTTP/2.0", res2)
+	}
+
 	tt.normalizeRes(t, res1, "HTTP/1.1")
 	tt.normalizeRes(t, res2, "HTTP/2.0")
 	res1body, res2body := res1.Body, res2.Body
@@ -220,6 +235,7 @@ func (tt h12Compare) normalizeRes(t *testing.T, res *Response, wantProto string)
 		t.Errorf("got %q response; want %q", res.Proto, wantProto)
 	}
 	slurp, err := ioutil.ReadAll(res.Body)
+
 	res.Body.Close()
 	res.Body = slurpResult{
 		ReadCloser: ioutil.NopCloser(bytes.NewReader(slurp)),
@@ -1120,6 +1136,92 @@ func testBogusStatusWorks(t *testing.T, h2 bool) {
 	}
 	if res.StatusCode != code {
 		t.Errorf("StatusCode = %d; want %d", res.StatusCode, code)
+	}
+}
+
+func TestInterruptWithPanic_h1(t *testing.T) { testInterruptWithPanic(t, h1Mode) }
+func TestInterruptWithPanic_h2(t *testing.T) { testInterruptWithPanic(t, h2Mode) }
+func testInterruptWithPanic(t *testing.T, h2 bool) {
+	log.SetOutput(ioutil.Discard) // is noisy otherwise
+	defer log.SetOutput(os.Stderr)
+
+	const msg = "hello"
+	defer afterTest(t)
+	cst := newClientServerTest(t, h2, HandlerFunc(func(w ResponseWriter, r *Request) {
+		io.WriteString(w, msg)
+		w.(Flusher).Flush()
+		panic("no more")
+	}))
+	defer cst.close()
+	res, err := cst.c.Get(cst.ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	slurp, err := ioutil.ReadAll(res.Body)
+	if string(slurp) != msg {
+		t.Errorf("client read %q; want %q", slurp, msg)
+	}
+	if err == nil {
+		t.Errorf("client read all successfully; want some error")
+	}
+}
+
+// Issue 15366
+func TestH12_AutoGzipWithDumpResponse(t *testing.T) {
+	h12Compare{
+		Handler: func(w ResponseWriter, r *Request) {
+			h := w.Header()
+			h.Set("Content-Encoding", "gzip")
+			h.Set("Content-Length", "23")
+			h.Set("Connection", "keep-alive")
+			io.WriteString(w, "\x1f\x8b\b\x00\x00\x00\x00\x00\x00\x00s\xf3\xf7\a\x00\xab'\xd4\x1a\x03\x00\x00\x00")
+		},
+		EarlyCheckResponse: func(proto string, res *Response) {
+			if !res.Uncompressed {
+				t.Errorf("%s: expected Uncompressed to be set", proto)
+			}
+			dump, err := httputil.DumpResponse(res, true)
+			if err != nil {
+				t.Errorf("%s: DumpResponse: %v", proto, err)
+				return
+			}
+			if strings.Contains(string(dump), "Connection: close") {
+				t.Errorf("%s: should not see \"Connection: close\" in dump; got:\n%s", proto, dump)
+			}
+			if !strings.Contains(string(dump), "FOO") {
+				t.Errorf("%s: should see \"FOO\" in response; got:\n%s", proto, dump)
+			}
+		},
+	}.run(t)
+}
+
+// Issue 14607
+func TestCloseIdleConnections_h1(t *testing.T) { testCloseIdleConnections(t, h1Mode) }
+func TestCloseIdleConnections_h2(t *testing.T) { testCloseIdleConnections(t, h2Mode) }
+func testCloseIdleConnections(t *testing.T, h2 bool) {
+	defer afterTest(t)
+	cst := newClientServerTest(t, h2, HandlerFunc(func(w ResponseWriter, r *Request) {
+		w.Header().Set("X-Addr", r.RemoteAddr)
+	}))
+	defer cst.close()
+	get := func() string {
+		res, err := cst.c.Get(cst.ts.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		v := res.Header.Get("X-Addr")
+		if v == "" {
+			t.Fatal("didn't get X-Addr")
+		}
+		return v
+	}
+	a1 := get()
+	cst.tr.CloseIdleConnections()
+	a2 := get()
+	if a1 == a2 {
+		t.Errorf("didn't close connection")
 	}
 }
 

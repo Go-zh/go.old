@@ -183,10 +183,11 @@ func dumptype(t *_type) {
 	dumpint(tagType)
 	dumpint(uint64(uintptr(unsafe.Pointer(t))))
 	dumpint(uint64(t.size))
-	if x := t.uncommon(); x == nil || x.pkgpath == nil {
-		dumpstr(t._string)
+	if x := t.uncommon(); x == nil || t.nameOff(x.pkgpath).name() == "" {
+		dumpstr(t.string())
 	} else {
-		pkgpath := stringStructOf(x.pkgpath)
+		pkgpathstr := t.nameOff(x.pkgpath).name()
+		pkgpath := stringStructOf(&pkgpathstr)
 		namestr := t.name()
 		name := stringStructOf(&namestr)
 		dumpint(uint64(uintptr(pkgpath.len) + 1 + uintptr(name.len)))
@@ -446,7 +447,7 @@ func dumproots() {
 					continue
 				}
 				spf := (*specialfinalizer)(unsafe.Pointer(sp))
-				p := unsafe.Pointer((uintptr(s.start) << _PageShift) + uintptr(spf.special.offset))
+				p := unsafe.Pointer(s.base() + uintptr(spf.special.offset))
 				dumpfinalizer(p, spf.fn, spf.fint, spf.ot)
 			}
 		}
@@ -466,15 +467,19 @@ func dumpobjs() {
 		if s.state != _MSpanInUse {
 			continue
 		}
-		p := uintptr(s.start << _PageShift)
+		p := s.base()
 		size := s.elemsize
 		n := (s.npages << _PageShift) / size
 		if n > uintptr(len(freemark)) {
 			throw("freemark array doesn't have enough entries")
 		}
-		for l := s.freelist; l.ptr() != nil; l = l.ptr().next {
-			freemark[(uintptr(l)-p)/size] = true
+
+		for freeIndex := s.freeindex; freeIndex < s.nelems; freeIndex++ {
+			if s.isFree(freeIndex) {
+				freemark[freeIndex] = true
+			}
 		}
+
 		for j := uintptr(0); j < n; j, p = j+1, p+size {
 			if freemark[j] {
 				freemark[j] = false
@@ -496,7 +501,7 @@ func dumpparams() {
 	dumpint(sys.PtrSize)
 	dumpint(uint64(mheap_.arena_start))
 	dumpint(uint64(mheap_.arena_used))
-	dumpint(sys.TheChar)
+	dumpstr(sys.GOARCH)
 	dumpstr(sys.Goexperiment)
 	dumpint(uint64(ncpu))
 }
@@ -614,7 +619,7 @@ func dumpmemprof() {
 				continue
 			}
 			spp := (*specialprofile)(unsafe.Pointer(sp))
-			p := uintptr(s.start<<_PageShift) + uintptr(spp.special.offset)
+			p := s.base() + uintptr(spp.special.offset)
 			dumpint(tagAllocSample)
 			dumpint(uint64(p))
 			dumpint(uint64(uintptr(unsafe.Pointer(spp.b))))
@@ -709,7 +714,7 @@ func makeheapobjbv(p uintptr, size uintptr) bitvector {
 	i := uintptr(0)
 	hbits := heapBitsForAddr(p)
 	for ; i < nptr; i++ {
-		if i >= 2 && !hbits.isMarked() {
+		if i != 1 && !hbits.morePointers() {
 			break // end of object
 		}
 		if hbits.isPointer() {

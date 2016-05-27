@@ -9,7 +9,6 @@ package gc
 import (
 	"bufio"
 	"cmd/compile/internal/ssa"
-	"cmd/internal/bio"
 	"cmd/internal/obj"
 	"cmd/internal/sys"
 	"flag"
@@ -91,6 +90,12 @@ func doversion() {
 	os.Exit(0)
 }
 
+// supportsDynlink reports whether or not the code generator for the given
+// architecture supports the -shared and -dynlink flags.
+func supportsDynlink(arch *sys.Arch) bool {
+	return arch.InFamily(sys.AMD64, sys.ARM, sys.ARM64, sys.I386, sys.PPC64, sys.S390X)
+}
+
 func Main() {
 	defer hidePanic()
 
@@ -98,7 +103,7 @@ func Main() {
 
 	Ctxt = obj.Linknew(Thearch.LinkArch)
 	Ctxt.DiagFunc = Yyerror
-	bstdout = bio.BufWriter(os.Stdout)
+	bstdout = bufio.NewWriter(os.Stdout)
 	Ctxt.Bso = bstdout
 
 	localpkg = mkpkg("")
@@ -121,10 +126,6 @@ func Main() {
 	itabpkg.Name = "go.itab"
 	itabpkg.Prefix = "go.itab" // not go%2eitab
 
-	typelinkpkg = mkpkg("go.typelink")
-	typelinkpkg.Name = "go.typelink"
-	typelinkpkg.Prefix = "go.typelink" // not go%2etypelink
-
 	itablinkpkg = mkpkg("go.itablink")
 	itablinkpkg.Name = "go.itablink"
 	itablinkpkg.Prefix = "go.itablink" // not go%2eitablink
@@ -136,24 +137,27 @@ func Main() {
 	typepkg = mkpkg("type")
 	typepkg.Name = "type"
 
+	// pseudo-package used for map zero values
+	mappkg = mkpkg("go.map")
+	mappkg.Name = "go.map"
+	mappkg.Prefix = "go.map"
+
 	goroot = obj.Getgoroot()
 	goos = obj.Getgoos()
 
 	Nacl = goos == "nacl"
 	if Nacl {
-		flag_largemodel = 1
+		flag_largemodel = true
 	}
 
-	outfile = ""
-	obj.Flagcount("+", "compiling runtime", &compiling_runtime)
+	flag.BoolVar(&compiling_runtime, "+", false, "compiling runtime")
 	obj.Flagcount("%", "debug non-static initializers", &Debug['%'])
 	obj.Flagcount("A", "for bootstrapping, allow 'any' type", &Debug['A'])
 	obj.Flagcount("B", "disable bounds checking", &Debug['B'])
-	obj.Flagstr("D", "set relative `path` for local imports", &localimport)
+	flag.StringVar(&localimport, "D", "", "set relative `path` for local imports")
 	obj.Flagcount("E", "debug symbol export", &Debug['E'])
 	obj.Flagfn1("I", "add `directory` to import search path", addidir)
 	obj.Flagcount("K", "debug missing line numbers", &Debug['K'])
-	obj.Flagcount("L", "use full (long) path in error messages", &Debug['L'])
 	obj.Flagcount("M", "debug move generation", &Debug['M'])
 	obj.Flagcount("N", "disable optimizations", &Debug['N'])
 	obj.Flagcount("P", "debug peephole optimizer", &Debug['P'])
@@ -161,59 +165,53 @@ func Main() {
 	obj.Flagcount("S", "print assembly listing", &Debug['S'])
 	obj.Flagfn0("V", "print compiler version", doversion)
 	obj.Flagcount("W", "debug parse tree after type checking", &Debug['W'])
-	obj.Flagstr("asmhdr", "write assembly header to `file`", &asmhdr)
-	obj.Flagstr("buildid", "record `id` as the build id in the export metadata", &buildid)
-	obj.Flagcount("complete", "compiling complete package (no C or assembly)", &pure_go)
-	obj.Flagstr("d", "print debug information about items in `list`", &debugstr)
+	flag.StringVar(&asmhdr, "asmhdr", "", "write assembly header to `file`")
+	flag.StringVar(&buildid, "buildid", "", "record `id` as the build id in the export metadata")
+	flag.BoolVar(&pure_go, "complete", false, "compiling complete package (no C or assembly)")
+	flag.StringVar(&debugstr, "d", "", "print debug information about items in `list`")
 	obj.Flagcount("e", "no limit on number of errors reported", &Debug['e'])
 	obj.Flagcount("f", "debug stack frames", &Debug['f'])
 	obj.Flagcount("g", "debug code generation", &Debug['g'])
 	obj.Flagcount("h", "halt on error", &Debug['h'])
 	obj.Flagcount("i", "debug line number stack", &Debug['i'])
 	obj.Flagfn1("importmap", "add `definition` of the form source=actual to import map", addImportMap)
-	obj.Flagstr("installsuffix", "set pkg directory `suffix`", &flag_installsuffix)
+	flag.StringVar(&flag_installsuffix, "installsuffix", "", "set pkg directory `suffix`")
 	obj.Flagcount("j", "debug runtime-initialized variables", &Debug['j'])
 	obj.Flagcount("l", "disable inlining", &Debug['l'])
+	flag.StringVar(&linkobj, "linkobj", "", "write linker-specific object to `file`")
 	obj.Flagcount("live", "debug liveness analysis", &debuglive)
 	obj.Flagcount("m", "print optimization decisions", &Debug['m'])
-	obj.Flagcount("msan", "build code compatible with C/C++ memory sanitizer", &flag_msan)
-	obj.Flagcount("newexport", "use new export format", &newexport) // TODO(gri) remove eventually (issue 13241)
-	obj.Flagcount("nolocalimports", "reject local (relative) imports", &nolocalimports)
-	obj.Flagstr("o", "write output to `file`", &outfile)
-	obj.Flagstr("p", "set expected package import `path`", &myimportpath)
-	obj.Flagcount("pack", "write package file instead of object file", &writearchive)
+	flag.BoolVar(&flag_msan, "msan", false, "build code compatible with C/C++ memory sanitizer")
+	flag.BoolVar(&newexport, "newexport", true, "use new export format") // TODO(gri) remove eventually (issue 15323)
+	flag.BoolVar(&nolocalimports, "nolocalimports", false, "reject local (relative) imports")
+	flag.StringVar(&outfile, "o", "", "write output to `file`")
+	flag.StringVar(&myimportpath, "p", "", "set expected package import `path`")
+	flag.BoolVar(&writearchive, "pack", false, "write package file instead of object file")
 	obj.Flagcount("r", "debug generated wrappers", &Debug['r'])
-	obj.Flagcount("race", "enable race detector", &flag_race)
+	flag.BoolVar(&flag_race, "race", false, "enable race detector")
 	obj.Flagcount("s", "warn about composite literals that can be simplified", &Debug['s'])
-	obj.Flagstr("trimpath", "remove `prefix` from recorded source file paths", &Ctxt.LineHist.TrimPathPrefix)
-	obj.Flagcount("u", "reject unsafe code", &safemode)
+	flag.StringVar(&Ctxt.LineHist.TrimPathPrefix, "trimpath", "", "remove `prefix` from recorded source file paths")
+	flag.BoolVar(&safemode, "u", false, "reject unsafe code")
 	obj.Flagcount("v", "increase debug verbosity", &Debug['v'])
 	obj.Flagcount("w", "debug type checking", &Debug['w'])
-	use_writebarrier = 1
-	obj.Flagcount("wb", "enable write barrier", &use_writebarrier)
+	flag.BoolVar(&use_writebarrier, "wb", true, "enable write barrier")
 	obj.Flagcount("x", "debug lexer", &Debug['x'])
-	obj.Flagcount("y", "debug declarations in canned imports (with -d)", &Debug['y'])
-	var flag_shared int
+	var flag_shared bool
 	var flag_dynlink bool
-	if Thearch.LinkArch.InFamily(sys.ARM, sys.AMD64, sys.ARM64, sys.I386, sys.PPC64) {
-		obj.Flagcount("shared", "generate code that can be linked into a shared library", &flag_shared)
-	}
-	if Thearch.LinkArch.Family == sys.AMD64 {
-		obj.Flagcount("largemodel", "generate code that assumes a large memory model", &flag_largemodel)
-	}
-	if Thearch.LinkArch.InFamily(sys.ARM, sys.AMD64, sys.ARM64, sys.I386, sys.PPC64) {
+	if supportsDynlink(Thearch.LinkArch.Arch) {
+		flag.BoolVar(&flag_shared, "shared", false, "generate code that can be linked into a shared library")
 		flag.BoolVar(&flag_dynlink, "dynlink", false, "support references to Go symbols defined in other shared libraries")
 	}
-	obj.Flagstr("cpuprofile", "write cpu profile to `file`", &cpuprofile)
-	obj.Flagstr("memprofile", "write memory profile to `file`", &memprofile)
-	obj.Flagint64("memprofilerate", "set runtime.MemProfileRate to `rate`", &memprofilerate)
+	if Thearch.LinkArch.Family == sys.AMD64 {
+		flag.BoolVar(&flag_largemodel, "largemodel", false, "generate code that assumes a large memory model")
+	}
+	flag.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to `file`")
+	flag.StringVar(&memprofile, "memprofile", "", "write memory profile to `file`")
+	flag.Int64Var(&memprofilerate, "memprofilerate", 0, "set runtime.MemProfileRate to `rate`")
 	flag.BoolVar(&ssaEnabled, "ssa", true, "use SSA backend to generate code")
 	obj.Flagparse(usage)
 
-	if flag_dynlink {
-		flag_shared = 1
-	}
-	Ctxt.Flag_shared = int32(flag_shared)
+	Ctxt.Flag_shared = flag_dynlink || flag_shared
 	Ctxt.Flag_dynlink = flag_dynlink
 	Ctxt.Flag_optimize = Debug['N'] == 0
 
@@ -226,17 +224,17 @@ func Main() {
 
 	startProfile()
 
-	if flag_race != 0 {
+	if flag_race {
 		racepkg = mkpkg("runtime/race")
 		racepkg.Name = "race"
 	}
-	if flag_msan != 0 {
+	if flag_msan {
 		msanpkg = mkpkg("runtime/msan")
 		msanpkg.Name = "msan"
 	}
-	if flag_race != 0 && flag_msan != 0 {
+	if flag_race && flag_msan {
 		log.Fatal("cannot use both -race and -msan")
-	} else if flag_race != 0 || flag_msan != 0 {
+	} else if flag_race || flag_msan {
 		instrumenting = true
 	}
 
@@ -415,7 +413,7 @@ func Main() {
 		// Typecheck imported function bodies if debug['l'] > 1,
 		// otherwise lazily when used or re-exported.
 		for _, n := range importlist {
-			if len(n.Func.Inl.Slice()) != 0 {
+			if n.Func.Inl.Len() != 0 {
 				saveerrors()
 				typecheckinl(n)
 			}
@@ -472,7 +470,7 @@ func Main() {
 		fninit(xtop)
 	}
 
-	if compiling_runtime != 0 {
+	if compiling_runtime {
 		checknowritebarrierrec()
 	}
 
@@ -570,7 +568,7 @@ func islocalname(name string) bool {
 
 func findpkg(name string) (file string, ok bool) {
 	if islocalname(name) {
-		if safemode != 0 || nolocalimports != 0 {
+		if safemode || nolocalimports {
 			return "", false
 		}
 
@@ -613,10 +611,10 @@ func findpkg(name string) (file string, ok bool) {
 		if flag_installsuffix != "" {
 			suffixsep = "_"
 			suffix = flag_installsuffix
-		} else if flag_race != 0 {
+		} else if flag_race {
 			suffixsep = "_"
 			suffix = "race"
-		} else if flag_msan != 0 {
+		} else if flag_msan {
 			suffixsep = "_"
 			suffix = "msan"
 		}
@@ -646,11 +644,24 @@ func loadsys() {
 	iota_ = -1000000
 	incannedimport = 1
 
-	importpkg = Runtimepkg
-	parse_import(bufio.NewReader(strings.NewReader(runtimeimport)), nil)
-
-	importpkg = unsafepkg
-	parse_import(bufio.NewReader(strings.NewReader(unsafeimport)), nil)
+	// The first byte in the binary export format is a 'c' or 'd'
+	// specifying the encoding format. We could just check that
+	// byte, but this is a perhaps more robust. Also, it is not
+	// speed-critical.
+	// TODO(gri) simplify once textual export format has gone
+	if strings.HasPrefix(runtimeimport, "package") {
+		// textual export format
+		importpkg = Runtimepkg
+		parse_import(bufio.NewReader(strings.NewReader(runtimeimport)), nil)
+		importpkg = unsafepkg
+		parse_import(bufio.NewReader(strings.NewReader(unsafeimport)), nil)
+	} else {
+		// binary export format
+		importpkg = Runtimepkg
+		Import(bufio.NewReader(strings.NewReader(runtimeimport)))
+		importpkg = unsafepkg
+		Import(bufio.NewReader(strings.NewReader(unsafeimport)))
+	}
 
 	importpkg = nil
 	incannedimport = 0
@@ -695,7 +706,7 @@ func importfile(f *Val, indent []byte) {
 	}
 
 	if path_ == "unsafe" {
-		if safemode != 0 {
+		if safemode {
 			Yyerror("cannot import package unsafe")
 			errorexit()
 		}
@@ -762,7 +773,7 @@ func importfile(f *Val, indent []byte) {
 
 	if p != "empty archive" {
 		if !strings.HasPrefix(p, "go object ") {
-			Yyerror("import %s: not a go object file", file)
+			Yyerror("import %s: not a go object file: %s", file, p)
 			errorexit()
 		}
 
@@ -770,6 +781,21 @@ func importfile(f *Val, indent []byte) {
 		if p[10:] != q {
 			Yyerror("import %s: object is [%s] expected [%s]", file, p[10:], q)
 			errorexit()
+		}
+	}
+
+	// process header lines
+	for {
+		p, err = imp.ReadString('\n')
+		if err != nil {
+			log.Fatalf("reading input: %v", err)
+		}
+		if p == "\n" {
+			break // header ends with blank line
+		}
+		if strings.HasPrefix(p, "safe") {
+			importpkg.Safe = true
+			break // ok to ignore rest
 		}
 	}
 
@@ -819,7 +845,7 @@ func importfile(f *Val, indent []byte) {
 		errorexit()
 	}
 
-	if safemode != 0 && !importpkg.Safe {
+	if safemode && !importpkg.Safe {
 		Yyerror("cannot import unsafe package %q", importpkg.Path)
 	}
 }
@@ -897,7 +923,7 @@ func mkpackage(pkgname string) {
 			p = p[:i]
 		}
 		suffix := ".o"
-		if writearchive > 0 {
+		if writearchive {
 			suffix = ".a"
 		}
 		outfile = p + suffix

@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	newexport    int // if set, use new export format
-	Debug_export int // if set, print debugging information about export data
+	newexport    bool // if set, use new export format
+	Debug_export int  // if set, print debugging information about export data
 	exportsize   int
 )
 
@@ -203,7 +203,7 @@ func reexportdep(n *Node) {
 		t := n.Type
 
 		switch t.Etype {
-		case TARRAY, TCHAN, TPTR32, TPTR64:
+		case TARRAY, TCHAN, TPTR32, TPTR64, TSLICE:
 			if t.Sym == nil {
 				t = t.Elem()
 			}
@@ -234,9 +234,9 @@ func dumpexportconst(s *Sym) {
 	dumpexporttype(t)
 
 	if t != nil && !t.IsUntyped() {
-		exportf("\tconst %v %v = %v\n", Sconv(s, FmtSharp), Tconv(t, FmtSharp), Vconv(n.Val(), FmtSharp))
+		exportf("\tconst %v %v = %v\n", sconv(s, FmtSharp), Tconv(t, FmtSharp), vconv(n.Val(), FmtSharp))
 	} else {
-		exportf("\tconst %v = %v\n", Sconv(s, FmtSharp), Vconv(n.Val(), FmtSharp))
+		exportf("\tconst %v = %v\n", sconv(s, FmtSharp), vconv(n.Val(), FmtSharp))
 	}
 }
 
@@ -252,7 +252,7 @@ func dumpexportvar(s *Sym) {
 	dumpexporttype(t)
 
 	if t.Etype == TFUNC && n.Class == PFUNC {
-		if n.Func != nil && len(n.Func.Inl.Slice()) != 0 {
+		if n.Func != nil && n.Func.Inl.Len() != 0 {
 			// when lazily typechecking inlined bodies, some re-exported ones may not have been typechecked yet.
 			// currently that can leave unresolved ONONAMEs in import-dot-ed packages in the wrong package
 			if Debug['l'] < 2 {
@@ -260,14 +260,14 @@ func dumpexportvar(s *Sym) {
 			}
 
 			// NOTE: The space after %#S here is necessary for ld's export data parser.
-			exportf("\tfunc %v %v { %v }\n", Sconv(s, FmtSharp), Tconv(t, FmtShort|FmtSharp), Hconv(n.Func.Inl, FmtSharp|FmtBody))
+			exportf("\tfunc %v %v { %v }\n", sconv(s, FmtSharp), Tconv(t, FmtShort|FmtSharp), hconv(n.Func.Inl, FmtSharp|FmtBody))
 
 			reexportdeplist(n.Func.Inl)
 		} else {
-			exportf("\tfunc %v %v\n", Sconv(s, FmtSharp), Tconv(t, FmtShort|FmtSharp))
+			exportf("\tfunc %v %v\n", sconv(s, FmtSharp), Tconv(t, FmtShort|FmtSharp))
 		}
 	} else {
-		exportf("\tvar %v %v\n", Sconv(s, FmtSharp), Tconv(t, FmtSharp))
+		exportf("\tvar %v %v\n", sconv(s, FmtSharp), Tconv(t, FmtSharp))
 	}
 }
 
@@ -303,7 +303,7 @@ func dumpexporttype(t *Type) {
 	case TMAP:
 		dumpexporttype(t.Val())
 		dumpexporttype(t.Key())
-	case TARRAY, TCHAN, TPTR32, TPTR64:
+	case TARRAY, TCHAN, TPTR32, TPTR64, TSLICE:
 		dumpexporttype(t.Elem())
 	}
 
@@ -318,22 +318,22 @@ func dumpexporttype(t *Type) {
 	}
 	sort.Sort(methodbyname(m))
 
-	exportf("\ttype %v %v\n", Sconv(t.Sym, FmtSharp), Tconv(t, FmtSharp|FmtLong))
+	exportf("\ttype %v %v\n", sconv(t.Sym, FmtSharp), Tconv(t, FmtSharp|FmtLong))
 	for _, f := range m {
 		if f.Nointerface {
 			exportf("\t//go:nointerface\n")
 		}
-		if f.Type.Nname() != nil && len(f.Type.Nname().Func.Inl.Slice()) != 0 { // nname was set by caninl
+		if f.Type.Nname() != nil && f.Type.Nname().Func.Inl.Len() != 0 { // nname was set by caninl
 
 			// when lazily typechecking inlined bodies, some re-exported ones may not have been typechecked yet.
 			// currently that can leave unresolved ONONAMEs in import-dot-ed packages in the wrong package
 			if Debug['l'] < 2 {
 				typecheckinl(f.Type.Nname())
 			}
-			exportf("\tfunc %v %v %v { %v }\n", Tconv(f.Type.Recvs(), FmtSharp), Sconv(f.Sym, FmtShort|FmtByte|FmtSharp), Tconv(f.Type, FmtShort|FmtSharp), Hconv(f.Type.Nname().Func.Inl, FmtSharp|FmtBody))
+			exportf("\tfunc %v %v %v { %v }\n", Tconv(f.Type.Recvs(), FmtSharp), sconv(f.Sym, FmtShort|FmtByte|FmtSharp), Tconv(f.Type, FmtShort|FmtSharp), hconv(f.Type.Nname().Func.Inl, FmtSharp|FmtBody))
 			reexportdeplist(f.Type.Nname().Func.Inl)
 		} else {
-			exportf("\tfunc %v %v %v\n", Tconv(f.Type.Recvs(), FmtSharp), Sconv(f.Sym, FmtShort|FmtByte|FmtSharp), Tconv(f.Type, FmtShort|FmtSharp))
+			exportf("\tfunc %v %v %v\n", Tconv(f.Type.Recvs(), FmtSharp), sconv(f.Sym, FmtShort|FmtByte|FmtSharp), Tconv(f.Type, FmtShort|FmtSharp))
 		}
 	}
 }
@@ -354,7 +354,7 @@ func dumpsym(s *Sym) {
 
 	switch s.Def.Op {
 	default:
-		Yyerror("unexpected export symbol: %v %v", Oconv(s.Def.Op, 0), s)
+		Yyerror("unexpected export symbol: %v %v", s.Def.Op, s)
 
 	case OLITERAL:
 		dumpexportconst(s)
@@ -377,15 +377,15 @@ func dumpexport() {
 	}
 
 	size := 0 // size of export section without enclosing markers
-	if forceNewExport || newexport != 0 {
+	if newexport {
 		// binary export
 		// The linker also looks for the $$ marker - use char after $$ to distinguish format.
 		exportf("\n$$B\n") // indicate binary format
 		if debugFormat {
 			// save a copy of the export data
 			var copy bytes.Buffer
-			bcopy := bio.BufWriter(&copy)
-			size = Export(bcopy, Debug_export != 0)
+			bcopy := bufio.NewWriter(&copy)
+			size = export(bcopy, Debug_export != 0)
 			bcopy.Flush() // flushing to bytes.Buffer cannot fail
 			if n, err := bout.Write(copy.Bytes()); n != size || err != nil {
 				Fatalf("error writing export data: got %d bytes, want %d bytes, err = %v", n, size, err)
@@ -407,7 +407,7 @@ func dumpexport() {
 			pkgs = savedPkgs
 			pkgMap = savedPkgMap
 		} else {
-			size = Export(bout, Debug_export != 0)
+			size = export(bout.Writer, Debug_export != 0)
 		}
 		exportf("\n$$\n")
 	} else {
@@ -417,7 +417,7 @@ func dumpexport() {
 		exportf("\n$$\n") // indicate textual format
 		exportsize = 0
 		exportf("package %s", localpkg.Name)
-		if safemode != 0 {
+		if safemode {
 			exportf(" safe")
 		}
 		exportf("\n")
@@ -551,6 +551,7 @@ func importvar(s *Sym, t *Type) {
 	}
 }
 
+// importtype and importer.importtype (bimport.go) need to remain in sync.
 func importtype(pt *Type, t *Type) {
 	// override declaration in unsafe.go for Pointer.
 	// there is no way in Go code to define unsafe.Pointer
@@ -588,7 +589,7 @@ func dumpasmhdr() {
 		}
 		switch n.Op {
 		case OLITERAL:
-			fmt.Fprintf(b, "#define const_%s %v\n", n.Sym.Name, Vconv(n.Val(), FmtSharp))
+			fmt.Fprintf(b, "#define const_%s %v\n", n.Sym.Name, vconv(n.Val(), FmtSharp))
 
 		case OTYPE:
 			t := n.Type

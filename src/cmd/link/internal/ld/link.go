@@ -8,7 +8,7 @@
 //	Portions Copyright © 2004,2006 Bruce Ellis
 //	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //	Revisions Copyright © 2000-2007 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//	Portions Copyright © 2009 The Go Authors. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -31,7 +31,7 @@
 package ld
 
 import (
-	"cmd/internal/bio"
+	"bufio"
 	"cmd/internal/sys"
 	"debug/elf"
 	"fmt"
@@ -50,8 +50,6 @@ type LSym struct {
 	Align       int32
 	Elfsym      int32
 	LocalElfsym int32
-	Args        int32
-	Locals      int32
 	Value       int64
 	Size        int64
 	// ElfType is set for symbols read from shared libraries by ldshlibsyms. It
@@ -67,8 +65,7 @@ type LSym struct {
 	Dynimplib   string
 	Dynimpvers  string
 	Sect        *Section
-	Autom       []Auto
-	Pcln        *Pcln
+	FuncInfo    *FuncInfo
 	P           []byte
 	R           []Reloc
 }
@@ -165,7 +162,7 @@ type Link struct {
 	Headtype  int
 	Arch      *sys.Arch
 	Debugvlog int32
-	Bso       *bio.Buf
+	Bso       *bufio.Writer
 	Windows   int32
 	Goroot    string
 
@@ -181,10 +178,8 @@ type Link struct {
 	Diag       func(string, ...interface{})
 	Cursym     *LSym
 	Version    int
-	Textp      *LSym
-	Etextp     *LSym
-	Nhistfile  int32
-	Filesyms   *LSym
+	Textp      []*LSym
+	Filesyms   []*LSym
 	Moduledata *LSym
 	LSymBatch  []LSym
 }
@@ -220,7 +215,10 @@ type Library struct {
 	hash   []byte
 }
 
-type Pcln struct {
+type FuncInfo struct {
+	Args        int32
+	Locals      int32
+	Autom       []Auto
 	Pcsp        Pcdata
 	Pcfile      Pcdata
 	Pcline      Pcdata

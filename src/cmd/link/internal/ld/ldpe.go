@@ -10,6 +10,7 @@ import (
 	"cmd/internal/sys"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
 	"sort"
 	"strconv"
@@ -118,7 +119,7 @@ type PeSect struct {
 }
 
 type PeObj struct {
-	f      *bio.Buf
+	f      *bio.Reader
 	name   string
 	base   uint32
 	sect   []PeSect
@@ -129,14 +130,14 @@ type PeObj struct {
 	snames []byte
 }
 
-func ldpe(f *bio.Buf, pkg string, length int64, pn string) {
+func ldpe(f *bio.Reader, pkg string, length int64, pn string) {
 	if Debug['v'] != 0 {
-		fmt.Fprintf(&Bso, "%5.2f ldpe %s\n", obj.Cputime(), pn)
+		fmt.Fprintf(Bso, "%5.2f ldpe %s\n", obj.Cputime(), pn)
 	}
 
 	var sect *PeSect
 	Ctxt.IncVersion()
-	base := int32(bio.Boffset(f))
+	base := f.Offset()
 
 	peobj := new(PeObj)
 	peobj.f = f
@@ -174,15 +175,15 @@ func ldpe(f *bio.Buf, pkg string, length int64, pn string) {
 	// TODO return error if found .cormeta
 
 	// load string table
-	bio.Bseek(f, int64(base)+int64(peobj.fh.PointerToSymbolTable)+int64(len(symbuf))*int64(peobj.fh.NumberOfSymbols), 0)
+	f.Seek(base+int64(peobj.fh.PointerToSymbolTable)+int64(len(symbuf))*int64(peobj.fh.NumberOfSymbols), 0)
 
-	if bio.Bread(f, symbuf[:4]) != 4 {
+	if _, err := io.ReadFull(f, symbuf[:4]); err != nil {
 		goto bad
 	}
 	l = Le32(symbuf[:])
 	peobj.snames = make([]byte, l)
-	bio.Bseek(f, int64(base)+int64(peobj.fh.PointerToSymbolTable)+int64(len(symbuf))*int64(peobj.fh.NumberOfSymbols), 0)
-	if bio.Bread(f, peobj.snames) != len(peobj.snames) {
+	f.Seek(base+int64(peobj.fh.PointerToSymbolTable)+int64(len(symbuf))*int64(peobj.fh.NumberOfSymbols), 0)
+	if _, err := io.ReadFull(f, peobj.snames); err != nil {
 		goto bad
 	}
 
@@ -202,10 +203,10 @@ func ldpe(f *bio.Buf, pkg string, length int64, pn string) {
 	peobj.pesym = make([]PeSym, peobj.fh.NumberOfSymbols)
 
 	peobj.npesym = uint(peobj.fh.NumberOfSymbols)
-	bio.Bseek(f, int64(base)+int64(peobj.fh.PointerToSymbolTable), 0)
+	f.Seek(base+int64(peobj.fh.PointerToSymbolTable), 0)
 	for i := 0; uint32(i) < peobj.fh.NumberOfSymbols; i += numaux + 1 {
-		bio.Bseek(f, int64(base)+int64(peobj.fh.PointerToSymbolTable)+int64(len(symbuf))*int64(i), 0)
-		if bio.Bread(f, symbuf[:]) != len(symbuf) {
+		f.Seek(base+int64(peobj.fh.PointerToSymbolTable)+int64(len(symbuf))*int64(i), 0)
+		if _, err := io.ReadFull(f, symbuf[:]); err != nil {
 			goto bad
 		}
 
@@ -290,10 +291,10 @@ func ldpe(f *bio.Buf, pkg string, length int64, pn string) {
 		}
 
 		r = make([]Reloc, rsect.sh.NumberOfRelocations)
-		bio.Bseek(f, int64(peobj.base)+int64(rsect.sh.PointerToRelocations), 0)
+		f.Seek(int64(peobj.base)+int64(rsect.sh.PointerToRelocations), 0)
 		for j = 0; j < int(rsect.sh.NumberOfRelocations); j++ {
 			rp = &r[j]
-			if bio.Bread(f, symbuf[:10]) != 10 {
+			if _, err := io.ReadFull(f, symbuf[:10]); err != nil {
 				goto bad
 			}
 			rva := Le32(symbuf[0:])
@@ -434,19 +435,13 @@ func ldpe(f *bio.Buf, pkg string, length int64, pn string) {
 				log.Fatalf("symbol %s listed multiple times", s.Name)
 			}
 			s.Attr |= AttrOnList
-			if Ctxt.Etextp != nil {
-				Ctxt.Etextp.Next = s
-			} else {
-				Ctxt.Textp = s
-			}
-			Ctxt.Etextp = s
+			Ctxt.Textp = append(Ctxt.Textp, s)
 			for s = s.Sub; s != nil; s = s.Sub {
 				if s.Attr.OnList() {
 					log.Fatalf("symbol %s listed multiple times", s.Name)
 				}
 				s.Attr |= AttrOnList
-				Ctxt.Etextp.Next = s
-				Ctxt.Etextp = s
+				Ctxt.Textp = append(Ctxt.Textp, s)
 			}
 		}
 	}
@@ -466,7 +461,10 @@ func pemap(peobj *PeObj, sect *PeSect) int {
 	if sect.sh.PointerToRawData == 0 { // .bss doesn't have data in object file
 		return 0
 	}
-	if bio.Bseek(peobj.f, int64(peobj.base)+int64(sect.sh.PointerToRawData), 0) < 0 || bio.Bread(peobj.f, sect.base) != len(sect.base) {
+	if peobj.f.Seek(int64(peobj.base)+int64(sect.sh.PointerToRawData), 0) < 0 {
+		return -1
+	}
+	if _, err := io.ReadFull(peobj.f, sect.base); err != nil {
 		return -1
 	}
 

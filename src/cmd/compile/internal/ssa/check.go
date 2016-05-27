@@ -18,36 +18,14 @@ func checkFunc(f *Func) {
 			f.Fatalf("%s.Func=%s, want %s", b, b.Func.Name, f.Name)
 		}
 
-		if f.RegAlloc == nil {
-			for i, c := range b.Succs {
-				for j, d := range b.Succs {
-					if i != j && c == d {
-						f.Fatalf("%s.Succs has duplicate block %s", b, c)
-					}
-				}
+		for i, e := range b.Preds {
+			if se := e.b.Succs[e.i]; se.b != b || se.i != i {
+				f.Fatalf("block pred/succ not crosslinked correctly %d:%s %d:%s", i, b, se.i, se.b)
 			}
 		}
-		// Note: duplicate successors are hard in the following case:
-		//      if(...) goto x else goto x
-		//   x: v = phi(a, b)
-		// If the conditional is true, does v get the value of a or b?
-		// We could solve this other ways, but the easiest is just to
-		// require (by possibly adding empty control-flow blocks) that
-		// all successors are distinct. They will need to be distinct
-		// anyway for register allocation (duplicate successors implies
-		// the existence of critical edges).
-		// After regalloc we can allow non-distinct predecessors.
-
-		for _, p := range b.Preds {
-			var found bool
-			for _, c := range p.Succs {
-				if c == b {
-					found = true
-					break
-				}
-			}
-			if !found {
-				f.Fatalf("block %s is not a succ of its pred block %s", b, p)
+		for i, e := range b.Succs {
+			if pe := e.b.Preds[e.i]; pe.b != b || pe.i != i {
+				f.Fatalf("block succ/pred not crosslinked correctly %d:%s %d:%s", i, b, pe.i, pe.b)
 			}
 		}
 
@@ -67,7 +45,7 @@ func checkFunc(f *Func) {
 				f.Fatalf("ret block %s has successors", b)
 			}
 			if b.Control == nil {
-				f.Fatalf("ret block %s has nil control %s", b)
+				f.Fatalf("ret block %s has nil control", b)
 			}
 			if !b.Control.Type.IsMemory() {
 				f.Fatalf("ret block %s has non-memory control value %s", b, b.Control.LongString())
@@ -77,26 +55,13 @@ func checkFunc(f *Func) {
 				f.Fatalf("retjmp block %s len(Succs)==%d, want 0", b, len(b.Succs))
 			}
 			if b.Control == nil {
-				f.Fatalf("retjmp block %s has nil control %s", b)
+				f.Fatalf("retjmp block %s has nil control", b)
 			}
 			if !b.Control.Type.IsMemory() {
 				f.Fatalf("retjmp block %s has non-memory control value %s", b, b.Control.LongString())
 			}
 			if b.Aux == nil {
 				f.Fatalf("retjmp block %s has nil Aux field", b)
-			}
-		case BlockDead:
-			if len(b.Succs) != 0 {
-				f.Fatalf("dead block %s has successors", b)
-			}
-			if len(b.Preds) != 0 {
-				f.Fatalf("dead block %s has predecessors", b)
-			}
-			if len(b.Values) != 0 {
-				f.Fatalf("dead block %s has values", b)
-			}
-			if b.Control != nil {
-				f.Fatalf("dead block %s has a control value", b)
 			}
 		case BlockPlain:
 			if len(b.Succs) != 1 {
@@ -154,7 +119,7 @@ func checkFunc(f *Func) {
 			}
 		}
 		if len(b.Succs) > 2 && b.Likely != BranchUnknown {
-			f.Fatalf("likeliness prediction %d for block %s with %d successors: %s", b.Likely, b, len(b.Succs))
+			f.Fatalf("likeliness prediction %d for block %s with %d successors", b.Likely, b, len(b.Succs))
 		}
 
 		for _, v := range b.Values {
@@ -162,7 +127,7 @@ func checkFunc(f *Func) {
 			// variable length args)
 			nArgs := opcodeTable[v.Op].argLen
 			if nArgs != -1 && int32(len(v.Args)) != nArgs {
-				f.Fatalf("value %v has %d args, expected %d", v.LongString(),
+				f.Fatalf("value %s has %d args, expected %d", v.LongString(),
 					len(v.Args), nArgs)
 			}
 
@@ -193,6 +158,8 @@ func checkFunc(f *Func) {
 				canHaveAuxInt = true
 			case auxInt64, auxFloat64:
 				canHaveAuxInt = true
+			case auxInt128:
+				// AuxInt must be zero, so leave canHaveAuxInt set to false.
 			case auxFloat32:
 				canHaveAuxInt = true
 				if !isExactFloat32(v) {
@@ -203,19 +170,31 @@ func checkFunc(f *Func) {
 			case auxSymOff, auxSymValAndOff:
 				canHaveAuxInt = true
 				canHaveAux = true
+			case auxSymInt32:
+				if v.AuxInt != int64(int32(v.AuxInt)) {
+					f.Fatalf("bad int32 AuxInt value for %v", v)
+				}
+				canHaveAuxInt = true
+				canHaveAux = true
 			default:
 				f.Fatalf("unknown aux type for %s", v.Op)
 			}
 			if !canHaveAux && v.Aux != nil {
-				f.Fatalf("value %v has an Aux value %v but shouldn't", v.LongString(), v.Aux)
+				f.Fatalf("value %s has an Aux value %v but shouldn't", v.LongString(), v.Aux)
 			}
 			if !canHaveAuxInt && v.AuxInt != 0 {
-				f.Fatalf("value %v has an AuxInt value %d but shouldn't", v.LongString(), v.AuxInt)
+				f.Fatalf("value %s has an AuxInt value %d but shouldn't", v.LongString(), v.AuxInt)
 			}
 
-			for _, arg := range v.Args {
+			for i, arg := range v.Args {
 				if arg == nil {
-					f.Fatalf("value %v has nil arg", v.LongString())
+					f.Fatalf("value %s has nil arg", v.LongString())
+				}
+				if v.Op != OpPhi {
+					// For non-Phi ops, memory args must be last, if present
+					if arg.Type.IsMemory() && i != len(v.Args)-1 {
+						f.Fatalf("value %s has non-final memory arg (%d < %d)", v.LongString(), i, len(v.Args)-1)
+					}
 				}
 			}
 
@@ -251,12 +230,12 @@ func checkFunc(f *Func) {
 	}
 	for _, b := range f.Blocks {
 		for _, c := range b.Preds {
-			if !blockMark[c.ID] {
+			if !blockMark[c.b.ID] {
 				f.Fatalf("predecessor block %v for %v is missing", c, b)
 			}
 		}
 		for _, c := range b.Succs {
-			if !blockMark[c.ID] {
+			if !blockMark[c.b.ID] {
 				f.Fatalf("successor block %v for %v is missing", c, b)
 			}
 		}
@@ -271,7 +250,7 @@ func checkFunc(f *Func) {
 		for _, v := range b.Values {
 			for i, a := range v.Args {
 				if !valueMark[a.ID] {
-					f.Fatalf("%v, arg %d of %v, is missing", a, i, v)
+					f.Fatalf("%v, arg %d of %s, is missing", a, i, v.LongString())
 				}
 			}
 		}
@@ -279,7 +258,7 @@ func checkFunc(f *Func) {
 			f.Fatalf("control value for %s is missing: %v", b, b.Control)
 		}
 	}
-	for b := f.freeBlocks; b != nil; b = b.succstorage[0] {
+	for b := f.freeBlocks; b != nil; b = b.succstorage[0].b {
 		if blockMark[b.ID] {
 			f.Fatalf("used block b%d in free list", b.ID)
 		}
@@ -302,7 +281,7 @@ func checkFunc(f *Func) {
 					x := arg.Block
 					y := b
 					if v.Op == OpPhi {
-						y = b.Preds[i]
+						y = b.Preds[i].b
 					}
 					if !domCheck(f, sdom, x, y) {
 						f.Fatalf("arg %d of value %s does not dominate, arg=%s", i, v.LongString(), arg.LongString())
@@ -337,8 +316,8 @@ func checkFunc(f *Func) {
 }
 
 // domCheck reports whether x dominates y (including x==y).
-func domCheck(f *Func, sdom sparseTree, x, y *Block) bool {
-	if !sdom.isAncestorEq(y, f.Entry) {
+func domCheck(f *Func, sdom SparseTree, x, y *Block) bool {
+	if !sdom.isAncestorEq(f.Entry, y) {
 		// unreachable - ignore
 		return true
 	}

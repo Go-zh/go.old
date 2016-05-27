@@ -15,11 +15,17 @@ import (
 // goroutines to wait for. Then each of the goroutines
 // runs and calls Done when finished. At the same time,
 // Wait can be used to block until all goroutines have finished.
+//
+// A WaitGroup must not be copied after first use.
 
 // WaitGroup 等待一组Go程的结束。
 // 主Go程调用 Add 来设置等待的Go程数。然后该组中的每个Go程都会运行，并在结束时调用
 // Done。同时，Wait 可被用于阻塞，直到所有Go程都结束。
+//
+// WaitGroup 在第一次使用后必须不能被复制。
 type WaitGroup struct {
+	noCopy noCopy
+
 	// 64-bit value: high 32 bits are counter, low 32 bits are waiter count.
 	// 64-bit atomic operations require 64-bit alignment, but 32-bit
 	// compilers do not ensure it. So we allocate 12 bytes and then use

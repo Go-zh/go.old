@@ -13,19 +13,6 @@ import (
 
 // Declaration stack & operations
 
-func dflag() bool {
-	if Debug['d'] == 0 {
-		return false
-	}
-	if Debug['y'] != 0 {
-		return true
-	}
-	if incannedimport != 0 {
-		return false
-	}
-	return true
-}
-
 var externdcl []*Node
 
 var blockgen int32 // max block number
@@ -67,9 +54,6 @@ func push() *Sym {
 func pushdcl(s *Sym) *Sym {
 	d := push()
 	dcopy(d, s)
-	if dflag() {
-		fmt.Printf("\t%v push %v %p\n", linestr(lineno), s, s.Def)
-	}
 	return d
 }
 
@@ -82,9 +66,6 @@ func popdcl() {
 		lno := s.Lastlineno
 		dcopy(s, d)
 		d.Lastlineno = lno
-		if dflag() {
-			fmt.Printf("\t%v pop %v %p\n", linestr(lineno), s, s.Def)
-		}
 	}
 
 	if d == nil {
@@ -194,9 +175,6 @@ func declare(n *Node, ctxt Class) {
 	gen := 0
 	if ctxt == PEXTERN {
 		externdcl = append(externdcl, n)
-		if dflag() {
-			fmt.Printf("\t%v global decl %v %p\n", linestr(lineno), s, n)
-		}
 	} else {
 		if Curfn == nil && ctxt == PAUTO {
 			Fatalf("automatic outside function")
@@ -573,7 +551,7 @@ func funchdr(n *Node) {
 
 func funcargs(nt *Node) {
 	if nt.Op != OTFUNC {
-		Fatalf("funcargs %v", Oconv(nt.Op, 0))
+		Fatalf("funcargs %v", nt.Op)
 	}
 
 	// re-start the variable generation number
@@ -587,7 +565,7 @@ func funcargs(nt *Node) {
 	if nt.Left != nil {
 		n := nt.Left
 		if n.Op != ODCLFIELD {
-			Fatalf("funcargs receiver %v", Oconv(n.Op, 0))
+			Fatalf("funcargs receiver %v", n.Op)
 		}
 		if n.Left != nil {
 			n.Left.Op = ONAME
@@ -602,7 +580,7 @@ func funcargs(nt *Node) {
 
 	for _, n := range nt.List.Slice() {
 		if n.Op != ODCLFIELD {
-			Fatalf("funcargs in %v", Oconv(n.Op, 0))
+			Fatalf("funcargs in %v", n.Op)
 		}
 		if n.Left != nil {
 			n.Left.Op = ONAME
@@ -620,7 +598,7 @@ func funcargs(nt *Node) {
 	var i int = 0
 	for _, n := range nt.Rlist.Slice() {
 		if n.Op != ODCLFIELD {
-			Fatalf("funcargs out %v", Oconv(n.Op, 0))
+			Fatalf("funcargs out %v", n.Op)
 		}
 
 		if n.Left == nil {
@@ -741,7 +719,7 @@ func checkembeddedtype(t *Type) {
 		}
 	}
 
-	if t.IsPtr() {
+	if t.IsPtr() || t.IsUnsafePtr() {
 		Yyerror("embedded type cannot be a pointer")
 	} else if t.Etype == TFORW && t.ForwardType().Embedlineno == 0 {
 		t.ForwardType().Embedlineno = lineno
@@ -777,17 +755,13 @@ func structfield(n *Node) *Field {
 		f.Broke = true
 	}
 
-	switch n.Val().Ctype() {
-	case CTSTR:
-		f.Note = new(string)
-		*f.Note = n.Val().U.(string)
-
+	switch u := n.Val().U.(type) {
+	case string:
+		f.Note = u
 	default:
 		Yyerror("field annotation must be string")
-		fallthrough
-
-	case CTxxx:
-		f.Note = nil
+	case nil:
+		// noop
 	}
 
 	if n.Left != nil && n.Left.Op == ONAME {
@@ -1274,7 +1248,7 @@ func addmethod(msym *Sym, t *Type, tpkg *Pkg, local, nointerface bool) {
 
 	// during import unexported method names should be in the type's package
 	if tpkg != nil && f.Sym != nil && !exportname(f.Sym.Name) && f.Sym.Pkg != tpkg {
-		Fatalf("imported method name %v in wrong package %s\n", Sconv(f.Sym, FmtSign), tpkg.Name)
+		Fatalf("imported method name %v in wrong package %s\n", sconv(f.Sym, FmtSign), tpkg.Name)
 	}
 
 	pa.Methods().Append(f)
@@ -1330,7 +1304,7 @@ func makefuncsym(s *Sym) {
 	if isblanksym(s) {
 		return
 	}
-	if compiling_runtime != 0 && s.Name == "getg" {
+	if compiling_runtime && s.Name == "getg" {
 		// runtime.getg() is not a real function and so does
 		// not get a funcsym.
 		return
@@ -1440,7 +1414,7 @@ func (c *nowritebarrierrecChecker) visitcall(n *Node) {
 	if fn == nil || fn.Op != ONAME || fn.Class != PFUNC || fn.Name.Defn == nil {
 		return
 	}
-	if (compiling_runtime != 0 || fn.Sym.Pkg == Runtimepkg) && fn.Sym.Name == "allocm" {
+	if (compiling_runtime || fn.Sym.Pkg == Runtimepkg) && fn.Sym.Name == "allocm" {
 		return
 	}
 	defn := fn.Name.Defn

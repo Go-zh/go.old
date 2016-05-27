@@ -88,9 +88,7 @@ func uleb128put(s *LSym, v int64) {
 
 func sleb128put(s *LSym, v int64) {
 	b := appendSleb128(encbuf[:0], v)
-	for _, x := range b {
-		Adduint8(Ctxt, s, x)
-	}
+	Addbytes(Ctxt, s, b)
 }
 
 /*
@@ -509,6 +507,7 @@ func newdie(parent *DWDie, abbrev int, name string, version int) *DWDie {
 	if name != "" && (abbrev <= DW_ABRV_VARIABLE || abbrev >= DW_ABRV_NULLTYPE) {
 		if abbrev != DW_ABRV_VARIABLE || version == 0 {
 			die.sym = Linklookup(Ctxt, infoprefix+name, version)
+			die.sym.Attr |= AttrHidden
 			die.sym.Type = obj.SDWARFINFO
 		}
 	}
@@ -551,8 +550,15 @@ func findchild(die *DWDie, name string) *DWDie {
 	return nil
 }
 
+// Used to avoid string allocation when looking up dwarf symbols
+var prefixBuf = []byte(infoprefix)
+
 func find(name string) *LSym {
-	return Linkrlookup(Ctxt, infoprefix+name, 0)
+	n := append(prefixBuf, name...)
+	// The string allocation below is optimized away because it is only used in a map lookup.
+	s := Linkrlookup(Ctxt, string(n), 0)
+	prefixBuf = n[:len(infoprefix)]
+	return s
 }
 
 func mustFind(name string) *LSym {
@@ -609,7 +615,7 @@ func putattr(s *LSym, abbrev int, form int, cls int, value int64, data interface
 		Adduint8(Ctxt, s, uint8(value))
 		p := data.([]byte)
 		for i := 0; int64(i) < value; i++ {
-			Adduint8(Ctxt, s, uint8(p[i]))
+			Adduint8(Ctxt, s, p[i])
 		}
 
 	case DW_FORM_block2: // block
@@ -618,7 +624,7 @@ func putattr(s *LSym, abbrev int, form int, cls int, value int64, data interface
 		Adduint16(Ctxt, s, uint16(value))
 		p := data.([]byte)
 		for i := 0; int64(i) < value; i++ {
-			Adduint8(Ctxt, s, uint8(p[i]))
+			Adduint8(Ctxt, s, p[i])
 		}
 
 	case DW_FORM_block4: // block
@@ -627,7 +633,7 @@ func putattr(s *LSym, abbrev int, form int, cls int, value int64, data interface
 		Adduint32(Ctxt, s, uint32(value))
 		p := data.([]byte)
 		for i := 0; int64(i) < value; i++ {
-			Adduint8(Ctxt, s, uint8(p[i]))
+			Adduint8(Ctxt, s, p[i])
 		}
 
 	case DW_FORM_block: // block
@@ -635,7 +641,7 @@ func putattr(s *LSym, abbrev int, form int, cls int, value int64, data interface
 
 		p := data.([]byte)
 		for i := 0; int64(i) < value; i++ {
-			Adduint8(Ctxt, s, uint8(p[i]))
+			Adduint8(Ctxt, s, p[i])
 		}
 
 	case DW_FORM_data1: // constant
@@ -814,6 +820,7 @@ func dotypedef(parent *DWDie, name string, def *DWDie) {
 	}
 
 	def.sym = Linklookup(Ctxt, def.sym.Name+".def", 0)
+	def.sym.Attr |= AttrHidden
 	def.sym.Type = obj.SDWARFINFO
 
 	// The typedef entry must be created after the def,
@@ -1172,7 +1179,7 @@ func synthesizemaptypes(die *DWDie) {
 		// Construct type to represent an array of BucketSize keys
 		keyname := nameFromDIESym(keytype)
 		dwhks := mkinternaltype(DW_ABRV_ARRAYTYPE, "[]key", keyname, "", func(dwhk *DWDie) {
-			newattr(dwhk, DW_AT_byte_size, DW_CLS_CONSTANT, BucketSize*int64(keysize), 0)
+			newattr(dwhk, DW_AT_byte_size, DW_CLS_CONSTANT, BucketSize*keysize, 0)
 			t := keytype
 			if indirect_key {
 				t = defptrto(keytype)
@@ -1186,7 +1193,7 @@ func synthesizemaptypes(die *DWDie) {
 		// Construct type to represent an array of BucketSize values
 		valname := nameFromDIESym(valtype)
 		dwhvs := mkinternaltype(DW_ABRV_ARRAYTYPE, "[]val", valname, "", func(dwhv *DWDie) {
-			newattr(dwhv, DW_AT_byte_size, DW_CLS_CONSTANT, BucketSize*int64(valsize), 0)
+			newattr(dwhv, DW_AT_byte_size, DW_CLS_CONSTANT, BucketSize*valsize, 0)
 			t := valtype
 			if indirect_val {
 				t = defptrto(valtype)
@@ -1218,7 +1225,7 @@ func synthesizemaptypes(die *DWDie) {
 				newmemberoffsetattr(fld, BucketSize+BucketSize*(int32(keysize)+int32(valsize))+int32(SysArch.PtrSize))
 			}
 
-			newattr(dwhb, DW_AT_byte_size, DW_CLS_CONSTANT, BucketSize+BucketSize*int64(keysize)+BucketSize*int64(valsize)+int64(SysArch.RegSize), 0)
+			newattr(dwhb, DW_AT_byte_size, DW_CLS_CONSTANT, BucketSize+BucketSize*keysize+BucketSize*valsize+int64(SysArch.RegSize), 0)
 		})
 
 		// Construct hash<K,V>
@@ -1262,7 +1269,7 @@ func synthesizechantypes(die *DWDie) {
 			} else {
 				elemsize = 0
 			}
-			newattr(dws, DW_AT_byte_size, DW_CLS_CONSTANT, int64(sudogsize)+int64(elemsize), nil)
+			newattr(dws, DW_AT_byte_size, DW_CLS_CONSTANT, int64(sudogsize)+elemsize, nil)
 		})
 
 		// waitq<T>
@@ -1338,8 +1345,8 @@ func finddebugruntimepath(s *LSym) {
 		return
 	}
 
-	for i := range s.Pcln.File {
-		f := s.Pcln.File[i]
+	for i := range s.FuncInfo.File {
+		f := s.FuncInfo.File[i]
 		if i := strings.Index(f.Name, "runtime/runtime.go"); i >= 0 {
 			gdbscript = f.Name[:i] + "runtime/runtime-gdb.py"
 			break
@@ -1425,7 +1432,7 @@ func writelines(prev *LSym) *LSym {
 
 	lang := DW_LANG_Go
 
-	s := Ctxt.Textp
+	s := Ctxt.Textp[0]
 
 	dwinfo = newdie(&dwroot, DW_ABRV_COMPUNIT, "go", 0)
 	newattr(dwinfo, DW_AT_language, DW_CLS_CONSTANT, int64(lang), 0)
@@ -1462,14 +1469,8 @@ func writelines(prev *LSym) *LSym {
 	Adduint8(Ctxt, ls, 1)              // standard_opcode_lengths[9]
 	Adduint8(Ctxt, ls, 0)              // include_directories  (empty)
 
-	files := make([]*LSym, Ctxt.Nhistfile)
-
-	for f := Ctxt.Filesyms; f != nil; f = f.Next {
-		files[f.Value-1] = f
-	}
-
-	for i := 0; int32(i) < Ctxt.Nhistfile; i++ {
-		Addstring(ls, files[i].Name)
+	for _, f := range Ctxt.Filesyms {
+		Addstring(ls, f.Name)
 		Adduint8(Ctxt, ls, 0)
 		Adduint8(Ctxt, ls, 0)
 		Adduint8(Ctxt, ls, 0)
@@ -1495,8 +1496,8 @@ func writelines(prev *LSym) *LSym {
 
 	var pcfile Pciter
 	var pcline Pciter
-	for Ctxt.Cursym = Ctxt.Textp; Ctxt.Cursym != nil; Ctxt.Cursym = Ctxt.Cursym.Next {
-		s = Ctxt.Cursym
+	for _, Ctxt.Cursym = range Ctxt.Textp {
+		s := Ctxt.Cursym
 
 		dwfunc := newdie(dwinfo, DW_ABRV_FUNCTION, s.Name, int(s.Version))
 		newattr(dwfunc, DW_AT_low_pc, DW_CLS_ADDRESS, s.Value, s)
@@ -1507,14 +1508,14 @@ func writelines(prev *LSym) *LSym {
 			newattr(dwfunc, DW_AT_external, DW_CLS_FLAG, 1, 0)
 		}
 
-		if s.Pcln == nil {
+		if s.FuncInfo == nil {
 			continue
 		}
 
 		finddebugruntimepath(s)
 
-		pciterinit(Ctxt, &pcfile, &s.Pcln.Pcfile)
-		pciterinit(Ctxt, &pcline, &s.Pcln.Pcline)
+		pciterinit(Ctxt, &pcfile, &s.FuncInfo.Pcfile)
+		pciterinit(Ctxt, &pcline, &s.FuncInfo.Pcline)
 		epc = pc
 		for pcfile.done == 0 && pcline.done == 0 {
 			if epc-s.Value >= int64(pcfile.nextpc) {
@@ -1549,7 +1550,7 @@ func writelines(prev *LSym) *LSym {
 			dt, da int
 			offs   int64
 		)
-		for _, a := range s.Autom {
+		for _, a := range s.FuncInfo.Autom {
 			switch a.Name {
 			case obj.A_AUTO:
 				dt = DW_ABRV_AUTO
@@ -1618,14 +1619,13 @@ func writelines(prev *LSym) *LSym {
  *  Emit .debug_frame
  */
 const (
-	CIERESERVE          = 16
-	DATAALIGNMENTFACTOR = -4
+	dataAlignmentFactor = -4
 )
 
 // appendPCDeltaCFA appends per-PC CFA deltas to b and returns the final slice.
 func appendPCDeltaCFA(b []byte, deltapc, cfa int64) []byte {
 	b = append(b, DW_CFA_def_cfa_offset_sf)
-	b = appendSleb128(b, cfa/DATAALIGNMENTFACTOR)
+	b = appendSleb128(b, cfa/dataAlignmentFactor)
 
 	switch {
 	case deltapc < 0x40:
@@ -1653,52 +1653,58 @@ func writeframes(prev *LSym) *LSym {
 	prev.Next = fs
 
 	// Emit the CIE, Section 6.4.1
-	Adduint32(Ctxt, fs, CIERESERVE)           // initial length, must be multiple of thearch.ptrsize
+	cieReserve := uint32(16)
+	if haslinkregister() {
+		cieReserve = 32
+	}
+	Adduint32(Ctxt, fs, cieReserve)           // initial length, must be multiple of pointer size
 	Adduint32(Ctxt, fs, 0xffffffff)           // cid.
 	Adduint8(Ctxt, fs, 3)                     // dwarf version (appendix F)
 	Adduint8(Ctxt, fs, 0)                     // augmentation ""
 	uleb128put(fs, 1)                         // code_alignment_factor
-	sleb128put(fs, DATAALIGNMENTFACTOR)       // guess
+	sleb128put(fs, dataAlignmentFactor)       // all CFI offset calculations include multiplication with this factor
 	uleb128put(fs, int64(Thearch.Dwarfreglr)) // return_address_register
 
-	Adduint8(Ctxt, fs, DW_CFA_def_cfa)
-
-	uleb128put(fs, int64(Thearch.Dwarfregsp)) // register SP (**ABI-dependent, defined in l.h)
+	Adduint8(Ctxt, fs, DW_CFA_def_cfa)        // Set the current frame address..
+	uleb128put(fs, int64(Thearch.Dwarfregsp)) // ...to use the value in the platform's SP register (defined in l.go)...
 	if haslinkregister() {
-		uleb128put(fs, int64(0)) // offset
-	} else {
-		uleb128put(fs, int64(SysArch.PtrSize)) // offset
-	}
+		uleb128put(fs, int64(0)) // ...plus a 0 offset.
 
-	Adduint8(Ctxt, fs, DW_CFA_offset_extended)
-	uleb128put(fs, int64(Thearch.Dwarfreglr)) // return address
-	if haslinkregister() {
-		uleb128put(fs, int64(0)/DATAALIGNMENTFACTOR) // at cfa - 0
+		Adduint8(Ctxt, fs, DW_CFA_same_value) // The platform's link register is unchanged during the prologue.
+		uleb128put(fs, int64(Thearch.Dwarfreglr))
+
+		Adduint8(Ctxt, fs, DW_CFA_val_offset)     // The previous value...
+		uleb128put(fs, int64(Thearch.Dwarfregsp)) // ...of the platform's SP register...
+		uleb128put(fs, int64(0))                  // ...is CFA+0.
 	} else {
-		uleb128put(fs, int64(-SysArch.PtrSize)/DATAALIGNMENTFACTOR) // at cfa - x*4
+		uleb128put(fs, int64(SysArch.PtrSize)) // ...plus the word size (because the call instruction implicitly adds one word to the frame).
+
+		Adduint8(Ctxt, fs, DW_CFA_offset_extended)                  // The previous value...
+		uleb128put(fs, int64(Thearch.Dwarfreglr))                   // ...of the return address...
+		uleb128put(fs, int64(-SysArch.PtrSize)/dataAlignmentFactor) // ...is saved at [CFA - (PtrSize/4)].
 	}
 
 	// 4 is to exclude the length field.
-	pad := CIERESERVE + 4 - fs.Size
+	pad := int64(cieReserve) + 4 - fs.Size
 
 	if pad < 0 {
-		Exitf("dwarf: CIERESERVE too small by %d bytes.", -pad)
+		Exitf("dwarf: cieReserve too small by %d bytes.", -pad)
 	}
 
 	Addbytes(Ctxt, fs, zeros[:pad])
 
 	var deltaBuf []byte
 	var pcsp Pciter
-	for Ctxt.Cursym = Ctxt.Textp; Ctxt.Cursym != nil; Ctxt.Cursym = Ctxt.Cursym.Next {
+	for _, Ctxt.Cursym = range Ctxt.Textp {
 		s := Ctxt.Cursym
-		if s.Pcln == nil {
+		if s.FuncInfo == nil {
 			continue
 		}
 
 		// Emit a FDE, Section 6.4.1.
 		// First build the section contents into a byte buffer.
 		deltaBuf = deltaBuf[:0]
-		for pciterinit(Ctxt, &pcsp, &s.Pcln.Pcsp); pcsp.done == 0; pciternext(&pcsp) {
+		for pciterinit(Ctxt, &pcsp, &s.FuncInfo.Pcsp); pcsp.done == 0; pciternext(&pcsp) {
 			nextpc := pcsp.nextpc
 
 			// pciterinit goes up to the end of the function,
@@ -1711,6 +1717,21 @@ func writeframes(prev *LSym) *LSym {
 			}
 
 			if haslinkregister() {
+				// TODO(bryanpkc): This is imprecise. In general, the instruction
+				// that stores the return address to the stack frame is not the
+				// same one that allocates the frame.
+				if pcsp.value > 0 {
+					// The return address is preserved at (CFA-frame_size)
+					// after a stack frame has been allocated.
+					deltaBuf = append(deltaBuf, DW_CFA_offset_extended_sf)
+					deltaBuf = appendUleb128(deltaBuf, uint64(Thearch.Dwarfreglr))
+					deltaBuf = appendSleb128(deltaBuf, -int64(pcsp.value)/dataAlignmentFactor)
+				} else {
+					// The return address is restored into the link register
+					// when a stack frame has been de-allocated.
+					deltaBuf = append(deltaBuf, DW_CFA_same_value)
+					deltaBuf = appendUleb128(deltaBuf, uint64(Thearch.Dwarfreglr))
+				}
 				deltaBuf = appendPCDeltaCFA(deltaBuf, int64(nextpc)-int64(pcsp.pc), int64(pcsp.value))
 			} else {
 				deltaBuf = appendPCDeltaCFA(deltaBuf, int64(nextpc)-int64(pcsp.pc), int64(SysArch.PtrSize)+int64(pcsp.value))
@@ -1780,7 +1801,7 @@ func writeinfo(prev *LSym) *LSym {
 		}
 
 		setuint32(Ctxt, s, 0, uint32(cusize))
-		newattr(compunit, DW_AT_byte_size, DW_CLS_CONSTANT, int64(cusize), 0)
+		newattr(compunit, DW_AT_byte_size, DW_CLS_CONSTANT, cusize, 0)
 	}
 	return prev
 }
@@ -1915,6 +1936,9 @@ func dwarfgeneratedebugsyms() {
 	if Debug['w'] != 0 { // disable dwarf
 		return
 	}
+	if Debug['s'] != 0 && HEADTYPE != obj.Hdarwin {
+		return
+	}
 	if HEADTYPE == obj.Hplan9 {
 		return
 	}
@@ -1926,7 +1950,7 @@ func dwarfgeneratedebugsyms() {
 	}
 
 	if Debug['v'] != 0 {
-		fmt.Fprintf(&Bso, "%5.2f dwarf\n", obj.Cputime())
+		fmt.Fprintf(Bso, "%5.2f dwarf\n", obj.Cputime())
 	}
 
 	// For diagnostic messages.

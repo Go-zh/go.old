@@ -1324,6 +1324,7 @@ func printCasefold() {
 		}
 	}
 
+	printAsciiFold()
 	printCaseOrbit()
 
 	// Tables of category and script folding exceptions: code points
@@ -1442,6 +1443,25 @@ var comment = map[string]string{
 	"FoldScript": "// FoldCategory 将一个书写系统名映射到该书写系统外的码点表上，\n" +
 		"// 这相当于在简单的情况下对该书写系统内的码点进行转换。\n" +
 		"// 若一个书写系统名没有对应的条目，则该码点不存在。\n",
+}
+
+func printAsciiFold() {
+	printf("var asciiFold = [MaxASCII + 1]uint16{\n")
+	for i := rune(0); i <= unicode.MaxASCII; i++ {
+		c := chars[i]
+		f := c.caseOrbit
+		if f == 0 {
+			if c.lowerCase != i && c.lowerCase != 0 {
+				f = c.lowerCase
+			} else if c.upperCase != i && c.upperCase != 0 {
+				f = c.upperCase
+			} else {
+				f = i
+			}
+		}
+		printf("\t0x%04X,\n", f)
+	}
+	printf("}\n\n")
 }
 
 func printCaseOrbit() {

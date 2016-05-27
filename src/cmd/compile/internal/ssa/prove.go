@@ -445,9 +445,6 @@ var (
 // else branch of the first comparison is executed, we already know that i < len(a).
 // The code for the second panic can be removed.
 func prove(f *Func) {
-	idom := dominators(f)
-	sdom := newSparseTree(f, idom)
-
 	// current node state
 	type walkState int
 	const (
@@ -471,8 +468,8 @@ func prove(f *Func) {
 	for len(work) > 0 {
 		node := work[len(work)-1]
 		work = work[:len(work)-1]
-		parent := idom[node.block.ID]
-		branch := getBranch(sdom, parent, node.block)
+		parent := f.idom[node.block.ID]
+		branch := getBranch(f.sdom, parent, node.block)
 
 		switch node.state {
 		case descend:
@@ -491,7 +488,7 @@ func prove(f *Func) {
 				block: node.block,
 				state: simplify,
 			})
-			for s := sdom.Child(node.block); s != nil; s = sdom.Sibling(s) {
+			for s := f.sdom.Child(node.block); s != nil; s = f.sdom.Sibling(s) {
 				work = append(work, bp{
 					block: s,
 					state: descend,
@@ -505,7 +502,7 @@ func prove(f *Func) {
 				b.Kind = BlockFirst
 				b.SetControl(nil)
 				if succ == negative {
-					b.Succs[0], b.Succs[1] = b.Succs[1], b.Succs[0]
+					b.swapSuccessors()
 				}
 			}
 
@@ -518,7 +515,7 @@ func prove(f *Func) {
 
 // getBranch returns the range restrictions added by p
 // when reaching b. p is the immediate dominator of b.
-func getBranch(sdom sparseTree, p *Block, b *Block) branch {
+func getBranch(sdom SparseTree, p *Block, b *Block) branch {
 	if p == nil || p.Kind != BlockIf {
 		return unknown
 	}
@@ -528,10 +525,10 @@ func getBranch(sdom sparseTree, p *Block, b *Block) branch {
 	// has one predecessor then (apart from the degenerate case),
 	// there is no path from entry that can reach b through p.Succs[1].
 	// TODO: how about p->yes->b->yes, i.e. a loop in yes.
-	if sdom.isAncestorEq(p.Succs[0], b) && len(p.Succs[0].Preds) == 1 {
+	if sdom.isAncestorEq(p.Succs[0].b, b) && len(p.Succs[0].b.Preds) == 1 {
 		return positive
 	}
-	if sdom.isAncestorEq(p.Succs[1], b) && len(p.Succs[1].Preds) == 1 {
+	if sdom.isAncestorEq(p.Succs[1].b, b) && len(p.Succs[1].b.Preds) == 1 {
 		return negative
 	}
 	return unknown

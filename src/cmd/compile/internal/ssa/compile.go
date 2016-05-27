@@ -86,14 +86,14 @@ func Compile(f *Func) {
 			// Surround timing information w/ enough context to allow comparisons.
 			time := tEnd.Sub(tStart).Nanoseconds()
 			if p.time {
-				f.logStat("TIME(ns)", time)
+				f.LogStat("TIME(ns)", time)
 			}
 			if p.mem {
 				var mEnd runtime.MemStats
 				runtime.ReadMemStats(&mEnd)
 				nBytes := mEnd.TotalAlloc - mStart.TotalAlloc
 				nAllocs := mEnd.Mallocs - mStart.Mallocs
-				f.logStat("TIME(ns):BYTES:ALLOCS", time, nBytes, nAllocs)
+				f.LogStat("TIME(ns):BYTES:ALLOCS", time, nBytes, nAllocs)
 			}
 		}
 		if checkEnabled {
@@ -123,6 +123,10 @@ var checkEnabled = false
 // Debug output
 var IntrinsicsDebug int
 var IntrinsicsDisable bool
+
+var BuildDebug int
+var BuildTest int
+var BuildStats int
 
 // PhaseOption sets the specified flag in the specified ssa phase,
 // returning empty string if this was successful or a string explaining
@@ -169,6 +173,19 @@ func PhaseOption(phase, flag string, val int) string {
 			IntrinsicsDisable = val != 0
 		case "debug":
 			IntrinsicsDebug = val
+		default:
+			return fmt.Sprintf("Did not find a flag matching %s in -d=ssa/%s debug option", flag, phase)
+		}
+		return ""
+	}
+	if phase == "build" {
+		switch flag {
+		case "debug":
+			BuildDebug = val
+		case "test":
+			BuildTest = val
+		case "stats":
+			BuildStats = val
 		default:
 			return fmt.Sprintf("Did not find a flag matching %s in -d=ssa/%s debug option", flag, phase)
 		}
@@ -230,9 +247,10 @@ var passes = [...]pass{
 	{name: "early deadcode", fn: deadcode}, // remove generated dead code to avoid doing pointless work during opt
 	{name: "short circuit", fn: shortcircuit},
 	{name: "decompose user", fn: decomposeUser, required: true},
-	{name: "opt", fn: opt, required: true},           // TODO: split required rules and optimizing rules
-	{name: "zero arg cse", fn: zcse, required: true}, // required to merge OpSB values
-	{name: "opt deadcode", fn: deadcode},             // remove any blocks orphaned during opt
+	{name: "opt", fn: opt, required: true},               // TODO: split required rules and optimizing rules
+	{name: "zero arg cse", fn: zcse, required: true},     // required to merge OpSB values
+	{name: "opt deadcode", fn: deadcode, required: true}, // remove any blocks orphaned during opt
+	{name: "generic domtree", fn: domTree},
 	{name: "generic cse", fn: cse},
 	{name: "phiopt", fn: phiopt},
 	{name: "nilcheckelim", fn: nilcheckelim},
@@ -288,6 +306,12 @@ var passOrder = [...]constraint{
 	{"opt", "nilcheckelim"},
 	// tighten should happen before lowering to avoid splitting naturally paired instructions such as CMP/SET
 	{"tighten", "lower"},
+	// cse, phiopt, nilcheckelim, prove and loopbce share idom.
+	{"generic domtree", "generic cse"},
+	{"generic domtree", "phiopt"},
+	{"generic domtree", "nilcheckelim"},
+	{"generic domtree", "prove"},
+	{"generic domtree", "loopbce"},
 	// tighten will be most effective when as many values have been removed as possible
 	{"generic deadcode", "tighten"},
 	{"generic cse", "tighten"},

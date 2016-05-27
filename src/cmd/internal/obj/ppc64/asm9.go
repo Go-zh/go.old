@@ -7,7 +7,7 @@
 //	Portions Copyright © 2004,2006 Bruce Ellis
 //	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //	Revisions Copyright © 2000-2008 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//	Portions Copyright © 2009 The Go Authors. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -585,7 +585,7 @@ func aclass(ctxt *obj.Link, a *obj.Addr) int {
 			ctxt.Instoffset = a.Offset
 			if a.Sym != nil { // use relocation
 				if a.Sym.Type == obj.STLSBSS {
-					if ctxt.Flag_shared != 0 {
+					if ctxt.Flag_shared {
 						return C_TLS_IE
 					} else {
 						return C_TLS_LE
@@ -933,6 +933,7 @@ func buildop(ctxt *obj.Link) {
 
 		case AECOWX: /* indexed store: op s,(b+a); op s,(b) */
 			opset(ASTWCCC, r0)
+			opset(ASTBCCC, r0)
 
 			opset(ASTDCCC, r0)
 
@@ -1105,6 +1106,8 @@ func buildop(ctxt *obj.Link) {
 			opset(AFCTIDZCC, r0)
 			opset(AFCFID, r0)
 			opset(AFCFIDCC, r0)
+			opset(AFCFIDU, r0)
+			opset(AFCFIDUCC, r0)
 			opset(AFRES, r0)
 			opset(AFRESCC, r0)
 			opset(AFRSQRTE, r0)
@@ -1200,6 +1203,7 @@ func buildop(ctxt *obj.Link) {
 
 		case ASYNC:
 			opset(AISYNC, r0)
+			opset(ALWSYNC, r0)
 			opset(APTESYNC, r0)
 			opset(ATLBSYNC, r0)
 
@@ -1226,6 +1230,7 @@ func buildop(ctxt *obj.Link) {
 			opset(AFMOVSU, r0)
 
 		case AECIWX:
+			opset(ALBAR, r0)
 			opset(ALWAR, r0)
 			opset(ALDAR, r0)
 
@@ -1384,7 +1389,7 @@ const (
 // which relocation to use with a load or store and only supports the needed
 // instructions.
 func opform(ctxt *obj.Link, insn uint32) int {
-	switch uint32(insn) {
+	switch insn {
 	default:
 		ctxt.Diag("bad insn in loadform: %x", insn)
 	case OPVCC(58, 0, 0, 0), // ld
@@ -1413,7 +1418,7 @@ func opform(ctxt *obj.Link, insn uint32) int {
 func symbolAccess(ctxt *obj.Link, s *obj.LSym, d int64, reg int16, op uint32) (o1, o2 uint32) {
 	var base uint32
 	form := opform(ctxt, op)
-	if ctxt.Flag_shared != 0 {
+	if ctxt.Flag_shared {
 		base = REG_R2
 	} else {
 		base = REG_R0
@@ -1425,7 +1430,7 @@ func symbolAccess(ctxt *obj.Link, s *obj.LSym, d int64, reg int16, op uint32) (o
 	rel.Siz = 8
 	rel.Sym = s
 	rel.Add = d
-	if ctxt.Flag_shared != 0 {
+	if ctxt.Flag_shared {
 		switch form {
 		case D_FORM:
 			rel.Type = obj.R_ADDRPOWER_TOCREL
@@ -1646,7 +1651,7 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 			if v != 0 {
 				ctxt.Diag("illegal indexed instruction\n%v", p)
 			}
-			if ctxt.Flag_shared != 0 && r == REG_R13 {
+			if ctxt.Flag_shared && r == REG_R13 {
 				rel := obj.Addrel(ctxt.Cursym)
 				rel.Off = int32(ctxt.Pc)
 				rel.Siz = 4
@@ -1677,7 +1682,7 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 			if v != 0 {
 				ctxt.Diag("illegal indexed instruction\n%v", p)
 			}
-			if ctxt.Flag_shared != 0 && r == REG_R13 {
+			if ctxt.Flag_shared && r == REG_R13 {
 				rel := obj.Addrel(ctxt.Cursym)
 				rel.Off = int32(ctxt.Pc)
 				rel.Siz = 4
@@ -2198,9 +2203,9 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 		}
 		v := oprrr(ctxt, p.As)
 		t := v & (1<<10 | 1) /* OE|Rc */
-		o1 = AOP_RRR(uint32(v)&^uint32(t), REGTMP, uint32(r), uint32(p.From.Reg))
+		o1 = AOP_RRR(v&^t, REGTMP, uint32(r), uint32(p.From.Reg))
 		o2 = AOP_RRR(OP_MULLW, REGTMP, REGTMP, uint32(p.From.Reg))
-		o3 = AOP_RRR(OP_SUBF|uint32(t), uint32(p.To.Reg), REGTMP, uint32(r))
+		o3 = AOP_RRR(OP_SUBF|t, uint32(p.To.Reg), REGTMP, uint32(r))
 		if p.As == AREMU {
 			o4 = o3
 
@@ -2216,9 +2221,9 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 		}
 		v := oprrr(ctxt, p.As)
 		t := v & (1<<10 | 1) /* OE|Rc */
-		o1 = AOP_RRR(uint32(v)&^uint32(t), REGTMP, uint32(r), uint32(p.From.Reg))
+		o1 = AOP_RRR(v&^t, REGTMP, uint32(r), uint32(p.From.Reg))
 		o2 = AOP_RRR(OP_MULLD, REGTMP, REGTMP, uint32(p.From.Reg))
-		o3 = AOP_RRR(OP_SUBF|uint32(t), uint32(p.To.Reg), REGTMP, uint32(r))
+		o3 = AOP_RRR(OP_SUBF|t, uint32(p.To.Reg), REGTMP, uint32(r))
 
 	case 52: /* mtfsbNx cr(n) */
 		v := regoff(ctxt, &p.From) & 31
@@ -2485,7 +2490,7 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 			ctxt.Diag("invalid offset against tls var %v", p)
 		}
 		o1 = AOP_IRR(OP_ADDIS, uint32(p.To.Reg), REG_R2, 0)
-		o2 = AOP_IRR(uint32(opload(ctxt, AMOVD)), uint32(p.To.Reg), uint32(p.To.Reg), 0)
+		o2 = AOP_IRR(opload(ctxt, AMOVD), uint32(p.To.Reg), uint32(p.To.Reg), 0)
 		rel := obj.Addrel(ctxt.Cursym)
 		rel.Off = int32(ctxt.Pc)
 		rel.Siz = 8
@@ -2499,7 +2504,7 @@ func asmout(ctxt *obj.Link, p *obj.Prog, o *Optab, out []uint32) {
 		}
 
 		o1 = AOP_IRR(OP_ADDIS, uint32(p.To.Reg), REG_R2, 0)
-		o2 = AOP_IRR(uint32(opload(ctxt, AMOVD)), uint32(p.To.Reg), uint32(p.To.Reg), 0)
+		o2 = AOP_IRR(opload(ctxt, AMOVD), uint32(p.To.Reg), uint32(p.To.Reg), 0)
 		rel := obj.Addrel(ctxt.Cursym)
 		rel.Off = int32(ctxt.Pc)
 		rel.Siz = 8
@@ -2716,6 +2721,10 @@ func oprrr(ctxt *obj.Link, a obj.As) uint32 {
 		return OPVCC(63, 846, 0, 0)
 	case AFCFIDCC:
 		return OPVCC(63, 846, 0, 1)
+	case AFCFIDU:
+		return OPVCC(63, 974, 0, 0)
+	case AFCFIDUCC:
+		return OPVCC(63, 974, 0, 1)
 	case AFCTIW:
 		return OPVCC(63, 14, 0, 0)
 	case AFCTIWCC:
@@ -2995,6 +3004,9 @@ func oprrr(ctxt *obj.Link, a obj.As) uint32 {
 
 	case ASYNC:
 		return OPVCC(31, 598, 0, 0)
+	case ALWSYNC:
+		return OPVCC(31, 598, 0, 0) | 1<<21
+
 	case APTESYNC:
 		return OPVCC(31, 598, 0, 0) | 2<<21
 
@@ -3240,6 +3252,8 @@ func oploadx(ctxt *obj.Link, a obj.As) uint32 {
 		return OPVCC(31, 311, 0, 0) /* lhzux */
 	case AECIWX:
 		return OPVCC(31, 310, 0, 0) /* eciwx */
+	case ALBAR:
+		return OPVCC(31, 52, 0, 0) /* lbarx */
 	case ALWAR:
 		return OPVCC(31, 20, 0, 0) /* lwarx */
 	case ALDAR:
@@ -3336,6 +3350,8 @@ func opstorex(ctxt *obj.Link, a obj.As) uint32 {
 		return OPVCC(31, 661, 0, 0) /* stswx */
 	case AMOVWBR:
 		return OPVCC(31, 662, 0, 0) /* stwbrx */
+	case ASTBCCC:
+		return OPVCC(31, 694, 0, 1) /* stbcx. */
 	case ASTWCCC:
 		return OPVCC(31, 150, 0, 1) /* stwcx. */
 	case ASTDCCC:

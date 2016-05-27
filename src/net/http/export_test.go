@@ -9,22 +9,22 @@ package http
 
 import (
 	"net"
+	"sort"
 	"sync"
 	"time"
 )
 
 var (
-	DefaultUserAgent              = defaultUserAgent
-	NewLoggingConn                = newLoggingConn
-	ExportAppendTime              = appendTime
-	ExportRefererForURL           = refererForURL
-	ExportServerNewConn           = (*Server).newConn
-	ExportCloseWriteAndWait       = (*conn).closeWriteAndWait
-	ExportErrRequestCanceled      = errRequestCanceled
-	ExportErrRequestCanceledConn  = errRequestCanceledConn
-	ExportServeFile               = serveFile
-	ExportHttp2ConfigureTransport = http2ConfigureTransport
-	ExportHttp2ConfigureServer    = http2ConfigureServer
+	DefaultUserAgent             = defaultUserAgent
+	NewLoggingConn               = newLoggingConn
+	ExportAppendTime             = appendTime
+	ExportRefererForURL          = refererForURL
+	ExportServerNewConn          = (*Server).newConn
+	ExportCloseWriteAndWait      = (*conn).closeWriteAndWait
+	ExportErrRequestCanceled     = errRequestCanceled
+	ExportErrRequestCanceledConn = errRequestCanceledConn
+	ExportServeFile              = serveFile
+	ExportHttp2ConfigureServer   = http2ConfigureServer
 )
 
 func init() {
@@ -80,21 +80,29 @@ func (t *Transport) IdleConnKeysForTesting() (keys []string) {
 	keys = make([]string, 0)
 	t.idleMu.Lock()
 	defer t.idleMu.Unlock()
-	if t.idleConn == nil {
-		return
-	}
 	for key := range t.idleConn {
 		keys = append(keys, key.String())
 	}
+	sort.Strings(keys)
 	return
+}
+
+func (t *Transport) IdleConnStrsForTesting() []string {
+	var ret []string
+	t.idleMu.Lock()
+	defer t.idleMu.Unlock()
+	for _, conns := range t.idleConn {
+		for _, pc := range conns {
+			ret = append(ret, pc.conn.LocalAddr().String()+"/"+pc.conn.RemoteAddr().String())
+		}
+	}
+	sort.Strings(ret)
+	return ret
 }
 
 func (t *Transport) IdleConnCountForTesting(cacheKey string) int {
 	t.idleMu.Lock()
 	defer t.idleMu.Unlock()
-	if t.idleConn == nil {
-		return 0
-	}
 	for k, conns := range t.idleConn {
 		if k.String() == cacheKey {
 			return len(conns)
@@ -142,4 +150,13 @@ func hookSetter(dst *func()) func(func()) {
 		unnilTestHook(&fn)
 		*dst = fn
 	}
+}
+
+func ExportHttp2ConfigureTransport(t *Transport) error {
+	t2, err := http2configureTransport(t)
+	if err != nil {
+		return err
+	}
+	t.h2transport = t2
+	return nil
 }

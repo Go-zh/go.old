@@ -398,11 +398,13 @@ var newRequestHostTests = []struct {
 
 	{"http://192.168.0.1/", "192.168.0.1"},
 	{"http://192.168.0.1:8080/", "192.168.0.1:8080"},
+	{"http://192.168.0.1:/", "192.168.0.1"},
 
 	{"http://[fe80::1]/", "[fe80::1]"},
 	{"http://[fe80::1]:8080/", "[fe80::1]:8080"},
 	{"http://[fe80::1%25en0]/", "[fe80::1%en0]"},
 	{"http://[fe80::1%25en0]:8080/", "[fe80::1%en0]:8080"},
+	{"http://[fe80::1%25en0]:/", "[fe80::1%en0]"},
 }
 
 func TestNewRequestHost(t *testing.T) {
@@ -674,6 +676,46 @@ func TestIssue10884_MaxBytesEOF(t *testing.T) {
 		5))
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Issue 14981: MaxBytesReader's return error wasn't sticky. It
+// doesn't technically need to be, but people expected it to be.
+func TestMaxBytesReaderStickyError(t *testing.T) {
+	isSticky := func(r io.Reader) error {
+		var log bytes.Buffer
+		buf := make([]byte, 1000)
+		var firstErr error
+		for {
+			n, err := r.Read(buf)
+			fmt.Fprintf(&log, "Read(%d) = %d, %v\n", len(buf), n, err)
+			if err == nil {
+				continue
+			}
+			if firstErr == nil {
+				firstErr = err
+				continue
+			}
+			if !reflect.DeepEqual(err, firstErr) {
+				return fmt.Errorf("non-sticky error. got log:\n%s", log.Bytes())
+			}
+			t.Logf("Got log: %s", log.Bytes())
+			return nil
+		}
+	}
+	tests := [...]struct {
+		readable int
+		limit    int64
+	}{
+		0: {99, 100},
+		1: {100, 100},
+		2: {101, 100},
+	}
+	for i, tt := range tests {
+		rc := MaxBytesReader(nil, ioutil.NopCloser(bytes.NewReader(make([]byte, tt.readable))), tt.limit)
+		if err := isSticky(rc); err != nil {
+			t.Errorf("%d. error: %v", i, err)
+		}
 	}
 }
 

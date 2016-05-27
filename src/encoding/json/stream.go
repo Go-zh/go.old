@@ -10,7 +10,7 @@ import (
 	"io"
 )
 
-// A Decoder reads and decodes JSON objects from an input stream.
+// A Decoder reads and decodes JSON values from an input stream.
 type Decoder struct {
 	r     io.Reader
 	buf   []byte
@@ -164,10 +164,11 @@ func nonSpace(b []byte) bool {
 	return false
 }
 
-// An Encoder writes JSON objects to an output stream.
+// An Encoder writes JSON values to an output stream.
 type Encoder struct {
-	w   io.Writer
-	err error
+	w          io.Writer
+	err        error
+	escapeHTML bool
 
 	indentBuf    *bytes.Buffer
 	indentPrefix string
@@ -176,7 +177,7 @@ type Encoder struct {
 
 // NewEncoder returns a new encoder that writes to w.
 func NewEncoder(w io.Writer) *Encoder {
-	return &Encoder{w: w}
+	return &Encoder{w: w, escapeHTML: true}
 }
 
 // Encode writes the JSON encoding of v to the stream,
@@ -189,7 +190,7 @@ func (enc *Encoder) Encode(v interface{}) error {
 		return enc.err
 	}
 	e := newEncodeState()
-	err := e.marshal(v)
+	err := e.marshal(v, encOpts{escapeHTML: enc.escapeHTML})
 	if err != nil {
 		return err
 	}
@@ -203,7 +204,10 @@ func (enc *Encoder) Encode(v interface{}) error {
 	e.WriteByte('\n')
 
 	b := e.Bytes()
-	if enc.indentBuf != nil {
+	if enc.indentPrefix != "" || enc.indentValue != "" {
+		if enc.indentBuf == nil {
+			enc.indentBuf = new(bytes.Buffer)
+		}
 		enc.indentBuf.Reset()
 		err = Indent(enc.indentBuf, b, enc.indentPrefix, enc.indentValue)
 		if err != nil {
@@ -218,14 +222,26 @@ func (enc *Encoder) Encode(v interface{}) error {
 	return err
 }
 
-// Indent sets the encoder to format each encoded object with Indent.
-func (enc *Encoder) Indent(prefix, indent string) {
-	enc.indentBuf = new(bytes.Buffer)
+// SetIndent instructs the encoder to format each subsequent encoded
+// value as if indented by the package-level function Indent(dst, src, prefix, indent).
+// Calling SetIndent("", "") disables indentation.
+func (enc *Encoder) SetIndent(prefix, indent string) {
 	enc.indentPrefix = prefix
 	enc.indentValue = indent
 }
 
-// RawMessage is a raw encoded JSON object.
+// SetEscapeHTML specifies whether problematic HTML characters
+// should be escaped inside JSON quoted strings.
+// The default behavior is to escape &, <, and > to \u0026, \u003c, and \u003e
+// to avoid certain safety problems that can arise when embedding JSON in HTML.
+//
+// In non-HTML settings where the escaping interferes with the readability
+// of the output, SetEscapeHTML(false) disables this behavior.
+func (enc *Encoder) SetEscapeHTML(on bool) {
+	enc.escapeHTML = on
+}
+
+// RawMessage is a raw encoded JSON value.
 // It implements Marshaler and Unmarshaler and can
 // be used to delay JSON decoding or precompute a JSON encoding.
 type RawMessage []byte

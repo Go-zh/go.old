@@ -194,7 +194,7 @@ func makeclosure(func_ *Node) *Node {
 	xfunc.Nbody.Set(func_.Nbody.Slice())
 	xfunc.Func.Dcl = append(func_.Func.Dcl, xfunc.Func.Dcl...)
 	func_.Func.Dcl = nil
-	if len(xfunc.Nbody.Slice()) == 0 {
+	if xfunc.Nbody.Len() == 0 {
 		Fatalf("empty body - won't generate any code")
 	}
 	xfunc = typecheck(xfunc, Etop)
@@ -419,7 +419,7 @@ func closuredebugruntimecheck(r *Node) {
 			Warnl(r.Lineno, "stack closure, captured vars = %v", r.Func.Cvars)
 		}
 	}
-	if compiling_runtime > 0 && r.Esc == EscHeap {
+	if compiling_runtime && r.Esc == EscHeap {
 		yyerrorl(r.Lineno, "heap-allocated closure, not allowed in runtime.")
 	}
 }
@@ -518,7 +518,7 @@ func makepartialcall(fn *Node, t0 *Type, meth *Sym) *Node {
 	if exportname(meth.Name) {
 		p = fmt.Sprintf("(%v).%s-fm", Tconv(rcvrtype, FmtLeft|FmtShort), meth.Name)
 	} else {
-		p = fmt.Sprintf("(%v).(%v)-fm", Tconv(rcvrtype, FmtLeft|FmtShort), Sconv(meth, FmtLeft))
+		p = fmt.Sprintf("(%v).(%v)-fm", Tconv(rcvrtype, FmtLeft|FmtShort), sconv(meth, FmtLeft))
 	}
 	basetype := rcvrtype
 	if rcvrtype.IsPtr() {

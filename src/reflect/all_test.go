@@ -1476,6 +1476,12 @@ func TestFunc(t *testing.T) {
 	if i != 10 || j != 20 || k != 30 || l != (two{40, 50}) || m != 60 || n != 70 || o != 80 {
 		t.Errorf("Call returned %d, %d, %d, %v, %d, %g, %d; want 10, 20, 30, [40, 50], 60, 70, 80", i, j, k, l, m, n, o)
 	}
+
+	for i, v := range ret {
+		if v.CanAddr() {
+			t.Errorf("result %d is addressable", i)
+		}
+	}
 }
 
 type emptyStruct struct{}
@@ -1883,32 +1889,6 @@ type Tbigp [2]uintptr
 
 func (p *Tbigp) M(x int, b byte) (byte, int) { return b, x + int(p[0]) + int(p[1]) }
 
-// Again, with an unexported method.
-
-type tsmallv byte
-
-func (v tsmallv) m(x int, b byte) (byte, int) { return b, x + int(v) }
-
-type tsmallp byte
-
-func (p *tsmallp) m(x int, b byte) (byte, int) { return b, x + int(*p) }
-
-type twordv uintptr
-
-func (v twordv) m(x int, b byte) (byte, int) { return b, x + int(v) }
-
-type twordp uintptr
-
-func (p *twordp) m(x int, b byte) (byte, int) { return b, x + int(*p) }
-
-type tbigv [2]uintptr
-
-func (v tbigv) m(x int, b byte) (byte, int) { return b, x + int(v[0]) + int(v[1]) }
-
-type tbigp [2]uintptr
-
-func (p *tbigp) m(x int, b byte) (byte, int) { return b, x + int(p[0]) + int(p[1]) }
-
 type tinter interface {
 	m(int, byte) (byte, int)
 }
@@ -1952,7 +1932,6 @@ func TestMethod5(t *testing.T) {
 	}
 
 	var TinterType = TypeOf(new(Tinter)).Elem()
-	var tinterType = TypeOf(new(tinter)).Elem()
 
 	CheckI := func(name string, i interface{}, inc int) {
 		v := ValueOf(i)
@@ -1993,39 +1972,6 @@ func TestMethod5(t *testing.T) {
 	CheckI("&t2", &t2, 40)
 	CheckI("t1", t1, 40)
 	CheckI("&t1", &t1, 40)
-
-	methodShouldPanic := func(name string, i interface{}) {
-		v := ValueOf(i)
-		m := v.Method(0)
-		shouldPanic(func() { m.Call([]Value{ValueOf(1000), ValueOf(byte(99))}) })
-		shouldPanic(func() { m.Interface() })
-
-		v = v.Convert(tinterType)
-		m = v.Method(0)
-		shouldPanic(func() { m.Call([]Value{ValueOf(1000), ValueOf(byte(99))}) })
-		shouldPanic(func() { m.Interface() })
-	}
-
-	_sv := tsmallv(1)
-	methodShouldPanic("_sv", _sv)
-	methodShouldPanic("&_sv", &_sv)
-
-	_sp := tsmallp(2)
-	methodShouldPanic("&_sp", &_sp)
-
-	_wv := twordv(3)
-	methodShouldPanic("_wv", _wv)
-	methodShouldPanic("&_wv", &_wv)
-
-	_wp := twordp(4)
-	methodShouldPanic("&_wp", &_wp)
-
-	_bv := tbigv([2]uintptr{5, 6})
-	methodShouldPanic("_bv", _bv)
-	methodShouldPanic("&_bv", &_bv)
-
-	_bp := tbigp([2]uintptr{7, 8})
-	methodShouldPanic("&_bp", &_bp)
 
 	var tnil Tinter
 	vnil := ValueOf(&tnil).Elem()
@@ -2382,13 +2328,13 @@ type outer struct {
 	inner
 }
 
-func (*inner) m() {}
-func (*outer) m() {}
+func (*inner) M() {}
+func (*outer) M() {}
 
 func TestNestedMethods(t *testing.T) {
 	typ := TypeOf((*outer)(nil))
-	if typ.NumMethod() != 1 || typ.Method(0).Func.Pointer() != ValueOf((*outer).m).Pointer() {
-		t.Errorf("Wrong method table for outer: (m=%p)", (*outer).m)
+	if typ.NumMethod() != 1 || typ.Method(0).Func.Pointer() != ValueOf((*outer).M).Pointer() {
+		t.Errorf("Wrong method table for outer: (M=%p)", (*outer).M)
 		for i := 0; i < typ.NumMethod(); i++ {
 			m := typ.Method(i)
 			t.Errorf("\t%d: %s %#x\n", i, m.Name, m.Func.Pointer())
@@ -2410,17 +2356,8 @@ var unexpi unexpI = new(unexp)
 func TestUnexportedMethods(t *testing.T) {
 	typ := TypeOf(unexpi)
 
-	if typ.Method(0).Type == nil {
-		t.Error("missing type for satisfied method 'f'")
-	}
-	if !typ.Method(0).Func.IsValid() {
-		t.Error("missing func for satisfied method 'f'")
-	}
-	if typ.Method(1).Type != nil {
-		t.Error("found type for unsatisfied method 'g'")
-	}
-	if typ.Method(1).Func.IsValid() {
-		t.Error("found func for unsatisfied method 'g'")
+	if got := typ.NumMethod(); got != 0 {
+		t.Errorf("NumMethod=%d, want 0 satisfied methods", got)
 	}
 }
 
@@ -2912,12 +2849,11 @@ func TestUnexported(t *testing.T) {
 	isValid(v.Elem().Field(1))
 	isValid(v.Elem().FieldByName("x"))
 	isValid(v.Elem().FieldByName("y"))
-	isValid(v.Type().Method(0).Func)
 	shouldPanic(func() { v.Elem().Field(0).Interface() })
 	shouldPanic(func() { v.Elem().Field(1).Interface() })
 	shouldPanic(func() { v.Elem().FieldByName("x").Interface() })
 	shouldPanic(func() { v.Elem().FieldByName("y").Interface() })
-	shouldPanic(func() { v.Type().Method(0).Func.Interface() })
+	shouldPanic(func() { v.Type().Method(0) })
 }
 
 func TestSetPanic(t *testing.T) {
@@ -3896,6 +3832,9 @@ func TestSliceOf(t *testing.T) {
 	// check construction and use of type not in binary
 	type T int
 	st := SliceOf(TypeOf(T(1)))
+	if got, want := st.String(), "[]reflect_test.T"; got != want {
+		t.Errorf("SliceOf(T(1)).String()=%q, want %q", got, want)
+	}
 	v := MakeSlice(st, 10, 10)
 	runtime.GC()
 	for i := 0; i < v.Len(); i++ {
@@ -4169,12 +4108,12 @@ func TestStructOfExportRules(t *testing.T) {
 		},
 		{
 			field:     StructField{Name: "", Type: TypeOf(ΦType{})},
-			mustPanic: true, // TODO(sbinet): creating a struct with UTF-8 fields not supported
+			mustPanic: false,
 			exported:  true,
 		},
 		{
 			field:     StructField{Name: "", Type: TypeOf(φType{})},
-			mustPanic: true, // TODO(sbinet): creating a struct with UTF-8 fields not supported
+			mustPanic: false,
 			exported:  false,
 		},
 		{
@@ -4201,7 +4140,7 @@ func TestStructOfExportRules(t *testing.T) {
 			}
 			exported := isExported(n)
 			if exported != test.exported {
-				t.Errorf("test-%d: got exported=%v want exported=%v", exported, test.exported)
+				t.Errorf("test-%d: got exported=%v want exported=%v", i, exported, test.exported)
 			}
 		})
 	}
@@ -4511,7 +4450,7 @@ func TestStructOfWithInterface(t *testing.T) {
 			if table.impl {
 				t.Errorf("test-%d: type=%v fails to implement Iface.\n", i, table.typ)
 			} else {
-				t.Errorf("test-%d: type=%v should NOT implement Iface\n", table.typ)
+				t.Errorf("test-%d: type=%v should NOT implement Iface\n", i, table.typ)
 			}
 			continue
 		}
@@ -4739,7 +4678,7 @@ func TestFuncOf(t *testing.T) {
 		if len(args) != 1 {
 			t.Errorf("args == %v, want exactly one arg", args)
 		} else if args[0].Type() != TypeOf(K("")) {
-			t.Errorf("args[0] is type %v, want %v", args[0].Type, TypeOf(K("")))
+			t.Errorf("args[0] is type %v, want %v", args[0].Type(), TypeOf(K("")))
 		} else if args[0].String() != "gopher" {
 			t.Errorf("args[0] = %q, want %q", args[0].String(), "gopher")
 		}
@@ -4751,7 +4690,7 @@ func TestFuncOf(t *testing.T) {
 	if len(outs) != 1 {
 		t.Fatalf("v.Call returned %v, want exactly one result", outs)
 	} else if outs[0].Type() != TypeOf(V(0)) {
-		t.Fatalf("c.Call[0] is type %v, want %v", outs[0].Type, TypeOf(V(0)))
+		t.Fatalf("c.Call[0] is type %v, want %v", outs[0].Type(), TypeOf(V(0)))
 	}
 	f := outs[0].Float()
 	if f != 3.14 {
@@ -5178,7 +5117,7 @@ func useStack(n int) {
 
 type Impl struct{}
 
-func (Impl) f() {}
+func (Impl) F() {}
 
 func TestValueString(t *testing.T) {
 	rv := ValueOf(Impl{})
@@ -5210,6 +5149,41 @@ func TestInvalid(t *testing.T) {
 func TestLargeGCProg(t *testing.T) {
 	fv := ValueOf(func([256]*byte) {})
 	fv.Call([]Value{ValueOf([256]*byte{})})
+}
+
+func fieldIndexRecover(t Type, i int) (recovered interface{}) {
+	defer func() {
+		recovered = recover()
+	}()
+
+	t.Field(i)
+	return
+}
+
+// Issue 15046.
+func TestTypeFieldOutOfRangePanic(t *testing.T) {
+	typ := TypeOf(struct{ X int }{10})
+	testIndices := [...]struct {
+		i         int
+		mustPanic bool
+	}{
+		0: {-2, true},
+		1: {0, false},
+		2: {1, true},
+		3: {1 << 10, true},
+	}
+	for i, tt := range testIndices {
+		recoveredErr := fieldIndexRecover(typ, tt.i)
+		if tt.mustPanic {
+			if recoveredErr == nil {
+				t.Errorf("#%d: fieldIndex %d expected to panic", i, tt.i)
+			}
+		} else {
+			if recoveredErr != nil {
+				t.Errorf("#%d: got err=%v, expected no panic", i, recoveredErr)
+			}
+		}
+	}
 }
 
 // Issue 9179.
@@ -5389,6 +5363,9 @@ func verifyGCBitsSlice(t *testing.T, typ Type, cap int, bits []byte) {
 	bits = rep(cap, bits)
 	for len(bits) > 2 && bits[len(bits)-1] == 0 {
 		bits = bits[:len(bits)-1]
+	}
+	if len(bits) == 2 && bits[0] == 0 && bits[1] == 0 {
+		bits = bits[:0]
 	}
 	if !bytes.Equal(heapBits, bits) {
 		t.Errorf("heapBits incorrect for make(%v, 0, %v)\nhave %v\nwant %v", typ, cap, heapBits, bits)
@@ -5645,25 +5622,69 @@ func TestChanAlloc(t *testing.T) {
 	// allocs < 0.5 condition will trigger and this test should be fixed.
 }
 
+type TheNameOfThisTypeIsExactly255BytesLongSoWhenTheCompilerPrependsTheReflectTestPackageNameAndExtraStarTheLinkerRuntimeAndReflectPackagesWillHaveToCorrectlyDecodeTheSecondLengthByte0123456789_0123456789_0123456789_0123456789_0123456789_012345678 int
+
 type nameTest struct {
 	v    interface{}
 	want string
 }
 
 var nameTests = []nameTest{
-	{int32(0), "int32"},
-	{D1{}, "D1"},
-	{[]D1{}, ""},
-	{(chan D1)(nil), ""},
-	{(func() D1)(nil), ""},
-	{(<-chan D1)(nil), ""},
-	{(chan<- D1)(nil), ""},
+	{(*int32)(nil), "int32"},
+	{(*D1)(nil), "D1"},
+	{(*[]D1)(nil), ""},
+	{(*chan D1)(nil), ""},
+	{(*func() D1)(nil), ""},
+	{(*<-chan D1)(nil), ""},
+	{(*chan<- D1)(nil), ""},
+	{(*interface{})(nil), ""},
+	{(*interface {
+		F()
+	})(nil), ""},
+	{(*TheNameOfThisTypeIsExactly255BytesLongSoWhenTheCompilerPrependsTheReflectTestPackageNameAndExtraStarTheLinkerRuntimeAndReflectPackagesWillHaveToCorrectlyDecodeTheSecondLengthByte0123456789_0123456789_0123456789_0123456789_0123456789_012345678)(nil), "TheNameOfThisTypeIsExactly255BytesLongSoWhenTheCompilerPrependsTheReflectTestPackageNameAndExtraStarTheLinkerRuntimeAndReflectPackagesWillHaveToCorrectlyDecodeTheSecondLengthByte0123456789_0123456789_0123456789_0123456789_0123456789_012345678"},
 }
 
 func TestNames(t *testing.T) {
 	for _, test := range nameTests {
-		if got := TypeOf(test.v).Name(); got != test.want {
-			t.Errorf("%T Name()=%q, want %q", test.v, got, test.want)
+		typ := TypeOf(test.v).Elem()
+		if got := typ.Name(); got != test.want {
+			t.Errorf("%v Name()=%q, want %q", typ, got, test.want)
+		}
+	}
+}
+
+func TestExported(t *testing.T) {
+	type ΦExported struct{}
+	type φUnexported struct{}
+	type BigP *big
+	type P int
+	type p *P
+	type P2 p
+	type p3 p
+
+	type exportTest struct {
+		v    interface{}
+		want bool
+	}
+	exportTests := []exportTest{
+		{D1{}, true},
+		{(*D1)(nil), true},
+		{big{}, false},
+		{(*big)(nil), false},
+		{(BigP)(nil), true},
+		{(*BigP)(nil), true},
+		{ΦExported{}, true},
+		{φUnexported{}, false},
+		{P(0), true},
+		{(p)(nil), false},
+		{(P2)(nil), true},
+		{(p3)(nil), false},
+	}
+
+	for i, test := range exportTests {
+		typ := TypeOf(test.v)
+		if got := IsExported(typ); got != test.want {
+			t.Errorf("%d: %s exported=%v, want %v", i, typ.Name(), got, test.want)
 		}
 	}
 }
@@ -5678,5 +5699,26 @@ func TestNameBytesAreAligned(t *testing.T) {
 	v := uintptr(unsafe.Pointer(b))
 	if v%unsafe.Alignof((*byte)(nil)) != 0 {
 		t.Errorf("reflect.name.bytes pointer is not aligned: %x", v)
+	}
+}
+
+func TestTypeStrings(t *testing.T) {
+	type stringTest struct {
+		typ  Type
+		want string
+	}
+	stringTests := []stringTest{
+		{TypeOf(func(int) {}), "func(int)"},
+		{FuncOf([]Type{TypeOf(int(0))}, nil, false), "func(int)"},
+		{TypeOf(XM{}), "reflect_test.XM"},
+		{TypeOf(new(XM)), "*reflect_test.XM"},
+		{TypeOf(new(XM).String), "func() string"},
+		{TypeOf(new(XM)).Method(0).Type, "func(*reflect_test.XM) string"},
+	}
+
+	for i, test := range stringTests {
+		if got, want := test.typ.String(), test.want; got != want {
+			t.Errorf("type %d String()=%q, want %q", i, got, want)
+		}
 	}
 }

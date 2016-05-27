@@ -8,7 +8,7 @@
 //	Portions Copyright © 2004,2006 Bruce Ellis
 //	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //	Revisions Copyright © 2000-2007 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//	Portions Copyright © 2009 The Go Authors. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -31,7 +31,7 @@
 package ld
 
 import (
-	"cmd/internal/bio"
+	"bufio"
 	"cmd/internal/obj"
 	"cmd/internal/sys"
 	"flag"
@@ -46,11 +46,12 @@ var (
 )
 
 func Ldmain() {
+	Bso = bufio.NewWriter(os.Stdout)
+
 	Ctxt = linknew(SysArch)
 	Ctxt.Diag = Diag
-	Ctxt.Bso = &Bso
+	Ctxt.Bso = Bso
 
-	Bso = *bio.BufWriter(os.Stdout)
 	Debug = [128]int{}
 	nerrors = 0
 	outfile = ""
@@ -89,6 +90,7 @@ func Ldmain() {
 	flag.Var(&Buildmode, "buildmode", "set build `mode`")
 	obj.Flagcount("c", "dump call graph", &Debug['c'])
 	obj.Flagcount("d", "disable dynamic executable", &Debug['d'])
+	flag.BoolVar(&flag_dumpdep, "dumpdep", false, "dump symbol dependency graph")
 	obj.Flagstr("extar", "archive program for buildmode=c-archive", &extar)
 	obj.Flagstr("extld", "use `linker` when linking in external mode", &extld)
 	obj.Flagstr("extldflags", "pass `flags` to external linker", &extldflags)
@@ -122,7 +124,7 @@ func Ldmain() {
 	obj.Flagparse(usage)
 
 	startProfile()
-	Ctxt.Bso = &Bso
+	Ctxt.Bso = Bso
 	Ctxt.Debugvlog = int32(Debug['v'])
 	if flagShared != 0 {
 		if Buildmode == BuildmodeUnset {
@@ -163,7 +165,7 @@ func Ldmain() {
 	}
 
 	if Debug['v'] != 0 {
-		fmt.Fprintf(&Bso, "HEADER = -H%d -T0x%x -D0x%x -R0x%x\n", HEADTYPE, uint64(INITTEXT), uint64(INITDAT), uint32(INITRND))
+		fmt.Fprintf(Bso, "HEADER = -H%d -T0x%x -D0x%x -R0x%x\n", HEADTYPE, uint64(INITTEXT), uint64(INITDAT), uint32(INITRND))
 	}
 	Bso.Flush()
 
@@ -214,9 +216,9 @@ func Ldmain() {
 	hostlink()
 	archive()
 	if Debug['v'] != 0 {
-		fmt.Fprintf(&Bso, "%5.2f cpu time\n", obj.Cputime())
-		fmt.Fprintf(&Bso, "%d symbols\n", len(Ctxt.Allsym))
-		fmt.Fprintf(&Bso, "%d liveness data\n", liveness)
+		fmt.Fprintf(Bso, "%5.2f cpu time\n", obj.Cputime())
+		fmt.Fprintf(Bso, "%d symbols\n", len(Ctxt.Allsym))
+		fmt.Fprintf(Bso, "%d liveness data\n", liveness)
 	}
 
 	Bso.Flush()

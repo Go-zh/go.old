@@ -32,13 +32,14 @@
 // The same Context may be passed to functions running in different goroutines;
 // Contexts are safe for simultaneous use by multiple goroutines.
 //
-// See http://blog.golang.org/context for example code for a server that uses
+// See https://blog.golang.org/context for example code for a server that uses
 // Contexts.
 package context
 
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -66,7 +67,7 @@ type Context interface {
 	//
 	//  // Stream generates values with DoSomething and sends them to out
 	//  // until DoSomething returns an error or ctx.Done is closed.
-	//  func Stream(ctx context.Context, out <-chan Value) error {
+	//  func Stream(ctx context.Context, out chan<- Value) error {
 	//  	for {
 	//  		v, err := DoSomething(ctx)
 	//  		if err != nil {
@@ -80,7 +81,7 @@ type Context interface {
 	//  	}
 	//  }
 	//
-	// See http://blog.golang.org/pipelines for more examples of how to use
+	// See https://blog.golang.org/pipelines for more examples of how to use
 	// a Done channel for cancelation.
 	Done() <-chan struct{}
 
@@ -143,7 +144,13 @@ var Canceled = errors.New("context canceled")
 
 // DeadlineExceeded is the error returned by Context.Err when the context's
 // deadline passes.
-var DeadlineExceeded = errors.New("context deadline exceeded")
+var DeadlineExceeded error = deadlineExceededError{}
+
+type deadlineExceededError struct{}
+
+func (deadlineExceededError) Error() string { return "context deadline exceeded" }
+
+func (deadlineExceededError) Timeout() bool { return true }
 
 // An emptyCtx is never canceled, has no values, and has no deadline.  It is not
 // struct{}, since vars of this type must have distinct addresses.
@@ -424,7 +431,15 @@ func WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc) {
 //
 // Use context Values only for request-scoped data that transits processes and
 // APIs, not for passing optional parameters to functions.
-func WithValue(parent Context, key interface{}, val interface{}) Context {
+//
+// The provided key must be comparable.
+func WithValue(parent Context, key, val interface{}) Context {
+	if key == nil {
+		panic("nil key")
+	}
+	if !reflect.TypeOf(key).Comparable() {
+		panic("key is not comparable")
+	}
 	return &valueCtx{parent, key, val}
 }
 

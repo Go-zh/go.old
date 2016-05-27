@@ -10,11 +10,6 @@ import (
 )
 
 const (
-	// %b of an int64, plus a sign.
-	// Hex can add 0x and we handle it specially.
-	// 带符号位 int64 的 %b 形式。十六进制数可添加 0x，我们可专门处理它。
-	nByte = 65
-
 	ldigits = "0123456789abcdefx"
 	udigits = "0123456789ABCDEFX"
 )
@@ -49,12 +44,16 @@ type fmtFlags struct {
 // fmt 是用于 Printf 等函数的原始格式化器。
 // 它将数据打印到缓存中，该缓存必须单独设置。
 type fmt struct {
-	intbuf [nByte]byte
-	buf    *buffer
-	// width, precision // 宽度，精度
-	wid  int
-	prec int
+	buf *buffer
+
 	fmtFlags
+
+	wid  int // width
+	prec int // precision
+
+	// intbuf is large enought to store %b of an int64 with a sign and
+	// avoids padding at the end of the struct on 32 bit architectures.
+	intbuf [68]byte
 }
 
 func (f *fmt) clearflags() {
@@ -143,14 +142,14 @@ func (f *fmt) fmt_unicode(u uint64) {
 	buf := f.intbuf[0:]
 
 	// With default precision set the maximum needed buf length is 18
-	// for formatting -1 with %#U ("U+FFFFFFFFFFFFFFFF")
-	// which fits into the already allocated intbuf with a capacity of 65 bytes.
+	// for formatting -1 with %#U ("U+FFFFFFFFFFFFFFFF") which fits
+	// into the already allocated intbuf with a capacity of 68 bytes.
 	prec := 4
 	if f.precPresent && f.prec > 4 {
 		prec = f.prec
 		// Compute space needed for "U+" , number, " '", character, "'".
 		width := 2 + prec + 2 + utf8.UTFMax + 1
-		if width > cap(buf) {
+		if width > len(buf) {
 			buf = make([]byte, width)
 		}
 	}
@@ -199,41 +198,40 @@ func (f *fmt) fmt_unicode(u uint64) {
 
 // fmt_integer formats signed and unsigned integers.
 func (f *fmt) fmt_integer(u uint64, base int, isSigned bool, digits string) {
-	// Precision of 0 and value of 0 means "print nothing" but padding.
-	if f.precPresent && f.prec == 0 && u == 0 {
-		if f.widPresent {
-			f.writePadding(f.wid)
-		}
-		return
-	}
-
 	negative := isSigned && int64(u) < 0
 	if negative {
 		u = -u
 	}
 
-	var buf []byte = f.intbuf[0:]
-	if f.widPresent || f.precPresent || f.plus || f.space {
-		width := f.wid + f.prec // Only one will be set, both are positive; this provides the maximum.
-		if base == 16 && f.sharp {
-			// Also adds "0x".
-			width += 2
-		}
-		if negative || f.plus || f.space {
-			width++
-		}
-		if width > nByte {
+	buf := f.intbuf[0:]
+	// The already allocated f.intbuf with a capacity of 68 bytes
+	// is large enough for integer formatting when no precision or width is set.
+	if f.widPresent || f.precPresent {
+		// Account 3 extra bytes for possible addition of a sign and "0x".
+		width := 3 + f.wid + f.prec // wid and prec are always positive.
+		if width > len(buf) {
 			// We're going to need a bigger boat.
 			buf = make([]byte, width)
 		}
 	}
 
-	// two ways to ask for extra leading zero digits: %.3d or %03d.
-	// apparently the first cancels the second.
-	// 有两种方式来请求前导的数字 0：%.3d 或 %03d。显然第一种会抵消第二种。
+	// Two ways to ask for extra leading zero digits: %.3d or %03d.
+	// If both are specified the f.zero flag is ignored and
+	// padding with spaces is used instead.
+	//
+	// 有两种方式来请求前导的数字 0：%.3d 或 %03d。若二者均被制定，那么 f.zero 标记将被忽略，
+	// 转而使用空格来填充。
 	prec := 0
 	if f.precPresent {
 		prec = f.prec
+		// Precision of 0 and value of 0 means "print nothing" but padding.
+		if prec == 0 && u == 0 {
+			oldZero := f.zero
+			f.zero = false
+			f.writePadding(f.wid)
+			f.zero = oldZero
+			return
+		}
 	} else if f.zero && f.widPresent {
 		prec = f.wid
 		if negative || f.plus || f.space {
@@ -313,13 +311,11 @@ func (f *fmt) fmt_integer(u uint64, base int, isSigned bool, digits string) {
 	}
 
 	// Left padding with zeros has already been handled like precision earlier
-	// or was overruled by an explicitly set precision.
-	if f.zero {
-		f.buf.Write(buf[i:])
-		return
-	}
-
+	// or the f.zero flag is ignored due to an explicitly set precision.
+	oldZero := f.zero
+	f.zero = false
 	f.pad(buf[i:])
+	f.zero = oldZero
 }
 
 // truncate truncates the string to the specified precision, if present.

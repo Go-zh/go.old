@@ -389,7 +389,7 @@ func TestStackBarrierProfiling(t *testing.T) {
 			args = append(args, "-test.short")
 		}
 		cmd := exec.Command(os.Args[0], args...)
-		cmd.Env = append([]string{"GODEBUG=gcstackbarrierall=1", "GOGC=1"}, os.Environ()...)
+		cmd.Env = append([]string{"GODEBUG=gcstackbarrierall=1", "GOGC=1", "GOTRACEBACK=system"}, os.Environ()...)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("subprocess failed with %v:\n%s", err, out)
 		}
@@ -531,15 +531,20 @@ func blockChanClose() {
 }
 
 func blockSelectRecvAsync() {
+	const numTries = 3
 	c := make(chan bool, 1)
 	c2 := make(chan bool, 1)
 	go func() {
-		time.Sleep(blockDelay)
-		c <- true
+		for i := 0; i < numTries; i++ {
+			time.Sleep(blockDelay)
+			c <- true
+		}
 	}()
-	select {
-	case <-c:
-	case <-c2:
+	for i := 0; i < numTries; i++ {
+		select {
+		case <-c:
+		case <-c2:
+		}
 	}
 }
 

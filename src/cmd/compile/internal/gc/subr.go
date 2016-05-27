@@ -87,8 +87,39 @@ func linestr(line int32) string {
 	return Ctxt.Line(int(line))
 }
 
+// lasterror keeps track of the most recently issued error.
+// It is used to avoid multiple error messages on the same
+// line.
+var lasterror struct {
+	syntax int32  // line of last syntax error
+	other  int32  // line of last non-syntax error
+	msg    string // error message of last non-syntax error
+}
+
 func yyerrorl(line int32, format string, args ...interface{}) {
-	adderr(line, format, args...)
+	msg := fmt.Sprintf(format, args...)
+
+	if strings.HasPrefix(msg, "syntax error") {
+		nsyntaxerrors++
+		// only one syntax error per line, no matter what error
+		if lasterror.syntax == line {
+			return
+		}
+		lasterror.syntax = line
+	} else {
+		// only one of multiple equal non-syntax errors per line
+		// (Flusherrors shows only one of them, so we filter them
+		// here as best as we can (they may not appear in order)
+		// so that we don't count them here and exit early, and
+		// then have nothing to show for.)
+		if lasterror.other == line && lasterror.msg == msg {
+			return
+		}
+		lasterror.other = line
+		lasterror.msg = msg
+	}
+
+	adderr(line, "%s", msg)
 
 	hcrash()
 	nerrors++
@@ -99,32 +130,8 @@ func yyerrorl(line int32, format string, args ...interface{}) {
 	}
 }
 
-var yyerror_lastsyntax int32
-
 func Yyerror(format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	if strings.HasPrefix(msg, "syntax error") {
-		nsyntaxerrors++
-
-		// only one syntax error per line
-		if yyerror_lastsyntax == lineno {
-			return
-		}
-		yyerror_lastsyntax = lineno
-
-		yyerrorl(lineno, "%s", msg)
-		return
-	}
-
-	adderr(lineno, "%s", msg)
-
-	hcrash()
-	nerrors++
-	if nsavederrors+nerrors >= 10 && Debug['e'] == 0 {
-		Flusherrors()
-		fmt.Printf("%v: too many errors\n", linestr(lineno))
-		errorexit()
-	}
+	yyerrorl(lineno, format, args...)
 }
 
 func Warn(fmt_ string, args ...interface{}) {
@@ -372,30 +379,6 @@ func saveorignode(n *Node) {
 	n.Orig = norig
 }
 
-// checkMapKeyType checks that Type key is valid for use as a map key.
-func checkMapKeyType(key *Type) {
-	alg, bad := algtype1(key)
-	if alg != ANOEQ {
-		return
-	}
-	switch bad.Etype {
-	default:
-		Yyerror("invalid map key type %v", key)
-	case TANY:
-		// Will be resolved later.
-	case TFORW:
-		// map[key] used during definition of key.
-		// postpone check until key is fully defined.
-		// if there are multiple uses of map[key]
-		// before key is fully defined, the error
-		// will only be printed for the first one.
-		// good enough.
-		if maplineno[key] == 0 {
-			maplineno[key] = lineno
-		}
-	}
-}
-
 // methcmp sorts by symbol, then by package path for unexported symbols.
 type methcmp []*Field
 
@@ -540,8 +523,15 @@ func treecopy(n *Node, lineno int32) *Node {
 		}
 		return n
 
+	case OPACK:
+		// OPACK nodes are never valid in const value declarations,
+		// but allow them like any other declared symbol to avoid
+		// crashing (golang.org/issue/11361).
+		fallthrough
+
 	case ONAME, OLITERAL, OTYPE:
 		return n
+
 	}
 }
 
@@ -611,6 +601,7 @@ func methtype(t *Type, mustname int) *Type {
 
 		case TSTRUCT,
 			TARRAY,
+			TSLICE,
 			TMAP,
 			TCHAN,
 			TSTRING,
@@ -631,12 +622,8 @@ func cplxsubtype(et EType) EType {
 		return TFLOAT64
 	}
 
-	Fatalf("cplxsubtype: %v\n", Econv(et))
+	Fatalf("cplxsubtype: %v\n", et)
 	return 0
-}
-
-func eqnote(a, b *string) bool {
-	return a == b || a != nil && b != nil && *a == *b
 }
 
 // Eqtype reports whether t1 and t2 are identical, following the spec rules.
@@ -658,7 +645,7 @@ func eqtype1(t1, t2 *Type, assumedEqual map[typePair]struct{}) bool {
 	if t1 == t2 {
 		return true
 	}
-	if t1 == nil || t2 == nil || t1.Etype != t2.Etype {
+	if t1 == nil || t2 == nil || t1.Etype != t2.Etype || t1.Broke || t2.Broke {
 		return false
 	}
 	if t1.Sym != nil || t2.Sym != nil {
@@ -686,7 +673,7 @@ func eqtype1(t1, t2 *Type, assumedEqual map[typePair]struct{}) bool {
 		t1, i1 := IterFields(t1)
 		t2, i2 := IterFields(t2)
 		for ; t1 != nil && t2 != nil; t1, t2 = i1.Next(), i2.Next() {
-			if t1.Sym != t2.Sym || t1.Embedded != t2.Embedded || !eqtype1(t1.Type, t2.Type, assumedEqual) || !eqnote(t1.Note, t2.Note) {
+			if t1.Sym != t2.Sym || t1.Embedded != t2.Embedded || !eqtype1(t1.Type, t2.Type, assumedEqual) || t1.Note != t2.Note {
 				return false
 			}
 		}
@@ -767,7 +754,7 @@ func assignop(src *Type, dst *Type, why *string) Op {
 
 	// TODO(rsc,lvd): This behaves poorly in the presence of inlining.
 	// https://golang.org/issue/2795
-	if safemode != 0 && importpkg == nil && src != nil && src.Etype == TUNSAFEPTR {
+	if safemode && importpkg == nil && src != nil && src.Etype == TUNSAFEPTR {
 		Yyerror("cannot use unsafe.Pointer")
 		errorexit()
 	}
@@ -853,18 +840,13 @@ func assignop(src *Type, dst *Type, why *string) Op {
 	// 5. src is the predeclared identifier nil and dst is a nillable type.
 	if src.Etype == TNIL {
 		switch dst.Etype {
-		case TARRAY:
-			if !dst.IsSlice() {
-				break
-			}
-			fallthrough
-
 		case TPTR32,
 			TPTR64,
 			TFUNC,
 			TMAP,
 			TCHAN,
-			TINTER:
+			TINTER,
+			TSLICE:
 			return OCONVNOP
 		}
 	}
@@ -1045,6 +1027,68 @@ func Is64(t *Type) bool {
 	return false
 }
 
+// SliceBounds returns n's slice bounds: low, high, and max in expr[low:high:max].
+// n must be a slice expression. max is nil if n is a simple slice expression.
+func (n *Node) SliceBounds() (low, high, max *Node) {
+	switch n.Op {
+	case OSLICE, OSLICEARR, OSLICESTR:
+		if n.Right == nil {
+			return nil, nil, nil
+		}
+		if n.Right.Op != OKEY {
+			Fatalf("SliceBounds right %s", opnames[n.Right.Op])
+		}
+		return n.Right.Left, n.Right.Right, nil
+	case OSLICE3, OSLICE3ARR:
+		if n.Right.Op != OKEY || n.Right.Right.Op != OKEY {
+			Fatalf("SliceBounds right %s %s", opnames[n.Right.Op], opnames[n.Right.Right.Op])
+		}
+		return n.Right.Left, n.Right.Right.Left, n.Right.Right.Right
+	}
+	Fatalf("SliceBounds op %s: %v", n.Op, n)
+	return nil, nil, nil
+}
+
+// SetSliceBounds sets n's slice bounds, where n is a slice expression.
+// n must be a slice expression. If max is non-nil, n must be a full slice expression.
+func (n *Node) SetSliceBounds(low, high, max *Node) {
+	switch n.Op {
+	case OSLICE, OSLICEARR, OSLICESTR:
+		if max != nil {
+			Fatalf("SetSliceBounds %s given three bounds", n.Op)
+		}
+		if n.Right == nil {
+			n.Right = Nod(OKEY, low, high)
+			return
+		}
+		n.Right.Left = low
+		n.Right.Right = high
+		return
+	case OSLICE3, OSLICE3ARR:
+		if n.Right == nil {
+			n.Right = Nod(OKEY, low, Nod(OKEY, high, max))
+		}
+		n.Right.Left = low
+		n.Right.Right.Left = high
+		n.Right.Right.Right = max
+		return
+	}
+	Fatalf("SetSliceBounds op %s: %v", n.Op, n)
+}
+
+// IsSlice3 reports whether o is a slice3 op (OSLICE3, OSLICE3ARR).
+// o must be a slicing op.
+func (o Op) IsSlice3() bool {
+	switch o {
+	case OSLICE, OSLICEARR, OSLICESTR:
+		return false
+	case OSLICE3, OSLICE3ARR:
+		return true
+	}
+	Fatalf("IsSlice3 op %v", o)
+	return false
+}
+
 // Is a conversion between t1 and t2 a no-op?
 func Noconv(t1 *Type, t2 *Type) bool {
 	e1 := Simtype[t1.Etype]
@@ -1162,9 +1206,9 @@ func printframenode(n *Node) {
 	}
 	switch n.Op {
 	case ONAME:
-		fmt.Printf("%v %v G%d %v width=%d\n", Oconv(n.Op, 0), n.Sym, n.Name.Vargen, n.Type, w)
+		fmt.Printf("%v %v G%d %v width=%d\n", n.Op, n.Sym, n.Name.Vargen, n.Type, w)
 	case OTYPE:
-		fmt.Printf("%v %v width=%d\n", Oconv(n.Op, 0), n.Type, w)
+		fmt.Printf("%v %v width=%d\n", n.Op, n.Type, w)
 	}
 }
 
@@ -1245,7 +1289,7 @@ func badtype(op Op, tl *Type, tr *Type) {
 	}
 
 	s := fmt_
-	Yyerror("illegal types for operand: %v%s", Oconv(op, 0), s)
+	Yyerror("illegal types for operand: %v%s", op, s)
 }
 
 // Brcom returns !(op).
@@ -1265,7 +1309,7 @@ func Brcom(op Op) Op {
 	case OGE:
 		return OLT
 	}
-	Fatalf("brcom: no com for %v\n", Oconv(op, 0))
+	Fatalf("brcom: no com for %v\n", op)
 	return op
 }
 
@@ -1286,7 +1330,7 @@ func Brrev(op Op) Op {
 	case OGE:
 		return OLE
 	}
-	Fatalf("brrev: no rev for %v\n", Oconv(op, 0))
+	Fatalf("brrev: no rev for %v\n", op)
 	return op
 }
 
@@ -1341,6 +1385,11 @@ func safeexpr(n *Node, init *Nodes) *Node {
 		a.Right = r
 		a = walkexpr(a, init)
 		return a
+
+	case OSTRUCTLIT, OARRAYLIT:
+		if isStaticCompositeLiteral(n) {
+			return n
+		}
 	}
 
 	// make a copy; must not be used as an lvalue

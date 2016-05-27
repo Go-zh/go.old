@@ -5,13 +5,15 @@
 /*
 Package mail implements parsing of mail messages.
 
-For the most part, this package follows the syntax as specified by RFC 5322.
+For the most part, this package follows the syntax as specified by RFC 5322 and
+extended by RFC 6532.
 Notable divergences:
 	* Obsolete address formats are not parsed, including addresses with
 	  embedded route information.
 	* Group addresses are not parsed.
 	* The full range of spacing (the CFWS syntax element) is not supported,
 	  such as breaking addresses across lines.
+	* No unicode normalization is performed.
 */
 
 /*
@@ -36,6 +38,7 @@ import (
 	"net/textproto"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 var debug = debugT(false)
@@ -220,15 +223,12 @@ func (a *Address) String() string {
 	}
 
 	// Add quotes if needed
-	// TODO: rendering quoted local part and rendering printable name
-	//       should be merged in helper function.
 	quoteLocal := false
-	for i := 0; i < len(local); i++ {
-		ch := local[i]
-		if isAtext(ch, false) {
+	for i, r := range local {
+		if isAtext(r, false) {
 			continue
 		}
-		if ch == '.' {
+		if r == '.' {
 			// Dots are okay if they are surrounded by atext.
 			// We only need to check that the previous byte is
 			// not a dot, and this isn't the end of the string.
@@ -252,25 +252,16 @@ func (a *Address) String() string {
 
 	// If every character is printable ASCII, quoting is simple.
 	allPrintable := true
-	for i := 0; i < len(a.Name); i++ {
+	for _, r := range a.Name {
 		// isWSP here should actually be isFWS,
 		// but we don't support folding yet.
-		if !isVchar(a.Name[i]) && !isWSP(a.Name[i]) {
+		if !isVchar(r) && !isWSP(r) || isMultibyte(r) {
 			allPrintable = false
 			break
 		}
 	}
 	if allPrintable {
-		b := bytes.NewBufferString(`"`)
-		for i := 0; i < len(a.Name); i++ {
-			if !isQtext(a.Name[i]) && !isWSP(a.Name[i]) {
-				b.WriteByte('\\')
-			}
-			b.WriteByte(a.Name[i])
-		}
-		b.WriteString(`" `)
-		b.WriteString(s)
-		return b.String()
+		return quoteString(a.Name) + " " + s
 	}
 
 	// Text in an encoded-word in a display-name must not contain certain
@@ -475,29 +466,48 @@ func (p *addrParser) consumePhrase() (phrase string, err error) {
 func (p *addrParser) consumeQuotedString() (qs string, err error) {
 	// Assume first byte is '"'.
 	i := 1
-	qsb := make([]byte, 0, 10)
+	qsb := make([]rune, 0, 10)
+
+	escaped := false
+
 Loop:
 	for {
-		if i >= p.len() {
+		r, size := utf8.DecodeRuneInString(p.s[i:])
+
+		switch {
+		case size == 0:
 			return "", errors.New("mail: unclosed quoted-string")
-		}
-		switch c := p.s[i]; {
-		case c == '"':
-			break Loop
-		case c == '\\':
-			if i+1 == p.len() {
-				return "", errors.New("mail: unclosed quoted-string")
+
+		case size == 1 && r == utf8.RuneError:
+			return "", fmt.Errorf("mail: invalid utf-8 in quoted-string: %q", p.s)
+
+		case escaped:
+			//  quoted-pair = ("\" (VCHAR / WSP))
+
+			if !isVchar(r) && !isWSP(r) {
+				return "", fmt.Errorf("mail: bad character in quoted-string: %q", r)
 			}
-			qsb = append(qsb, p.s[i+1])
-			i += 2
-		case isQtext(c), c == ' ':
+
+			qsb = append(qsb, r)
+			escaped = false
+
+		case isQtext(r) || isWSP(r):
 			// qtext (printable US-ASCII excluding " and \), or
 			// FWS (almost; we're ignoring CRLF)
-			qsb = append(qsb, c)
-			i++
+			qsb = append(qsb, r)
+
+		case r == '"':
+			break Loop
+
+		case r == '\\':
+			escaped = true
+
 		default:
-			return "", fmt.Errorf("mail: bad character in quoted-string: %q", c)
+			return "", fmt.Errorf("mail: bad character in quoted-string: %q", r)
+
 		}
+
+		i += size
 	}
 	p.s = p.s[i+1:]
 	if len(qsb) == 0 {
@@ -505,8 +515,6 @@ Loop:
 	}
 	return string(qsb), nil
 }
-
-var errNonASCII = errors.New("mail: unencoded non-ASCII text in address")
 
 // consumeAtom parses an RFC 5322 atom at the start of p.
 // If dot is true, consumeAtom parses an RFC 5322 dot-atom instead.
@@ -518,19 +526,29 @@ var errNonASCII = errors.New("mail: unencoded non-ASCII text in address")
 // 若 permissive 为 true，consumeAtom 在按照原子解析前导/后续/双点号时就不会失败
 // （见 golang.org/issue/4938）。
 func (p *addrParser) consumeAtom(dot bool, permissive bool) (atom string, err error) {
-	if c := p.peek(); !isAtext(c, false) {
-		if c > 127 {
-			return "", errNonASCII
+	i := 0
+
+Loop:
+	for {
+		r, size := utf8.DecodeRuneInString(p.s[i:])
+
+		switch {
+		case size == 1 && r == utf8.RuneError:
+			return "", fmt.Errorf("mail: invalid utf-8 in address: %q", p.s)
+
+		case size == 0 || !isAtext(r, dot):
+			break Loop
+
+		default:
+			i += size
+
 		}
+	}
+
+	if i == 0 {
 		return "", errors.New("mail: invalid string")
 	}
-	i := 1
-	for ; i < p.len() && isAtext(p.s[i], dot); i++ {
-	}
-	if i < p.len() && p.s[i] > 127 {
-		return "", errNonASCII
-	}
-	atom, p.s = string(p.s[:i]), p.s[i:]
+	atom, p.s = p.s[:i], p.s[i:]
 	if !permissive {
 		if strings.HasPrefix(atom, ".") {
 			return "", errors.New("mail: leading dot in atom")
@@ -602,64 +620,68 @@ func (e charsetError) Error() string {
 	return fmt.Sprintf("charset not supported: %q", string(e))
 }
 
-var atextChars = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
-	"abcdefghijklmnopqrstuvwxyz" +
-	"0123456789" +
-	"!#$%&'*+-/=?^_`{|}~")
-
-// isAtext reports whether c is an RFC 5322 atext character.
+// isAtext reports whether r is an RFC 5322 atext character.
 // If dot is true, period is included.
 
-// isAtext当c是一个RFC 5322定义的atext字符的话返回true。
-// 如果dot设置为true，就会考虑这个值。
-func isAtext(c byte, dot bool) bool {
-	if dot && c == '.' {
-		return true
-	}
-	return bytes.IndexByte(atextChars, c) >= 0
-}
+// isAtext当 r 是一个 RFC 5322 定义的 atext 字符的话返回 true。
+// 如果 dot 设置为 true，就会考虑这个值。
+func isAtext(r rune, dot bool) bool {
+	switch r {
+	case '.':
+		return dot
 
-// isQtext reports whether c is an RFC 5322 qtext character.
-
-// isQtext 判断 c 是否为 RFC 5322 qtext 字符。
-func isQtext(c byte) bool {
-	// Printable US-ASCII, excluding backslash or quote.
-	if c == '\\' || c == '"' {
+	case '(', ')', '<', '>', '[', ']', ':', ';', '@', '\\', ',', '"': // RFC 5322 3.2.3. specials
 		return false
 	}
-	return '!' <= c && c <= '~'
+	return isVchar(r)
 }
 
-// quoteString renders a string as a RFC5322 quoted-string.
+// isQtext reports whether r is an RFC 5322 qtext character.
+
+// isQtext 判断 r 是否为 RFC 5322 qtext 字符。
+func isQtext(r rune) bool {
+	// Printable US-ASCII, excluding backslash or quote.
+	if r == '\\' || r == '"' {
+		return false
+	}
+	return isVchar(r)
+}
+
+// quoteString renders a string as an RFC 5322 quoted-string.
 func quoteString(s string) string {
 	var buf bytes.Buffer
 	buf.WriteByte('"')
-	for _, c := range s {
-		ch := byte(c)
-		if isQtext(ch) || isWSP(ch) {
-			buf.WriteByte(ch)
-		} else if isVchar(ch) {
+	for _, r := range s {
+		if isQtext(r) || isWSP(r) {
+			buf.WriteRune(r)
+		} else if isVchar(r) {
 			buf.WriteByte('\\')
-			buf.WriteByte(ch)
+			buf.WriteRune(r)
 		}
 	}
 	buf.WriteByte('"')
 	return buf.String()
 }
 
-// isVchar reports whether c is an RFC 5322 VCHAR character.
+// isVchar reports whether r is an RFC 5322 VCHAR character.
 
-// isVchar 判断 c 是否为 RFC 5322 VCHAR 字符。
-func isVchar(c byte) bool {
+// isVchar 判断 r 是否为 RFC 5322 VCHAR 字符。
+func isVchar(r rune) bool {
 	// Visible (printing) characters.
-	return '!' <= c && c <= '~'
+	return '!' <= r && r <= '~' || isMultibyte(r)
 }
 
-// isWSP reports whether c is a WSP (white space).
-// WSP is a space or horizontal tab (RFC5234 Appendix B).
+// isMultibyte reports whether r is a multi-byte UTF-8 character
+// as supported by RFC 6532
+func isMultibyte(r rune) bool {
+	return r >= utf8.RuneSelf
+}
 
-// isWSP 判断 c 是否为 WSP（空白字符）。
+// isWSP reports whether r is a WSP (white space).
+// WSP is a space or horizontal tab (RFC 5234 Appendix B).
+
+// isWSP 判断 r 是否为 WSP（空白字符）。
 // WSP 是一个空格符或横向制表符（RFC5234 附录B）。
-func isWSP(c byte) bool {
-	return c == ' ' || c == '\t'
+func isWSP(r rune) bool {
+	return r == ' ' || r == '\t'
 }

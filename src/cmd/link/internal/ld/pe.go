@@ -764,7 +764,7 @@ func addexports() {
 
 // perelocsect relocates symbols from first in section sect, and returns
 // the total number of relocations emitted.
-func perelocsect(sect *Section, first *LSym) int {
+func perelocsect(sect *Section, syms []*LSym) int {
 	// If main section has no bits, nothing to relocate.
 	if sect.Vaddr >= sect.Seg.Vaddr+sect.Seg.Filelen {
 		return 0
@@ -773,20 +773,18 @@ func perelocsect(sect *Section, first *LSym) int {
 	relocs := 0
 
 	sect.Reloff = uint64(Cpos())
-	var sym *LSym
-	for sym = first; sym != nil; sym = sym.Next {
-		if !sym.Attr.Reachable() {
+	for i, s := range syms {
+		if !s.Attr.Reachable() {
 			continue
 		}
-		if uint64(sym.Value) >= sect.Vaddr {
+		if uint64(s.Value) >= sect.Vaddr {
+			syms = syms[i:]
 			break
 		}
 	}
 
 	eaddr := int32(sect.Vaddr + sect.Length)
-	var r *Reloc
-	var ri int
-	for ; sym != nil; sym = sym.Next {
+	for _, sym := range syms {
 		if !sym.Attr.Reachable() {
 			continue
 		}
@@ -795,8 +793,8 @@ func perelocsect(sect *Section, first *LSym) int {
 		}
 		Ctxt.Cursym = sym
 
-		for ri = 0; ri < len(sym.R); ri++ {
-			r = &sym.R[ri]
+		for ri := 0; ri < len(sym.R); ri++ {
+			r := &sym.R[ri]
 			if r.Done != 0 {
 				continue
 			}
@@ -877,7 +875,7 @@ func peemitreloc(text, data, ctors *IMAGE_SECTION_HEADER) {
 	ctors.NumberOfRelocations = 1
 	ctors.PointerToRelocations = uint32(Cpos())
 	sectoff := ctors.VirtualAddress
-	Lputl(uint32(sectoff))
+	Lputl(sectoff)
 	Lputl(uint32(dottext.Dynid))
 	switch obj.Getgoarch() {
 	default:
@@ -1043,7 +1041,7 @@ func addpesymtable() {
 	// write COFF string table
 	Lputl(uint32(len(strtbl)) + 4)
 	for i := 0; i < len(strtbl); i++ {
-		Cput(uint8(strtbl[i]))
+		Cput(strtbl[i])
 	}
 	if Linkmode != LinkExternal {
 		strnput("", int(h.SizeOfRawData-uint32(size)))

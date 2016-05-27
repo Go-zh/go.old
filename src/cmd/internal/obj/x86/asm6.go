@@ -8,7 +8,7 @@
 //	Portions Copyright © 2004,2006 Bruce Ellis
 //	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //	Revisions Copyright © 2000-2007 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//	Portions Copyright © 2009 The Go Authors. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -208,6 +208,9 @@ const (
 	Zvex_rm_v_r
 	Zvex_r_v_rm
 	Zvex_v_rm_r
+	Zvex_i_rm_r
+	Zvex_i_r_v
+	Zvex_i_rm_v_r
 	Zmax
 )
 
@@ -847,6 +850,35 @@ var yvex_xy3 = []ytab{
 	{Yym, Yyr, Yyr, Zvex_rm_v_r, 2},
 }
 
+var yvex_ri3 = []ytab{
+	{Yi8, Ymb, Yrl, Zvex_i_rm_r, 2},
+}
+
+var yvex_xyi3 = []ytab{
+	{Yi8, Yxm, Yxr, Zvex_i_rm_r, 2},
+	{Yi8, Yym, Yyr, Zvex_i_rm_r, 2},
+}
+
+var yvex_yyi4 = []ytab{ //TODO don't hide 4 op, some version have xmm version
+	{Yym, Yyr, Yyr, Zvex_i_rm_v_r, 2},
+}
+
+var yvex_xyi4 = []ytab{
+	{Yxm, Yyr, Yyr, Zvex_i_rm_v_r, 2},
+}
+
+var yvex_shift = []ytab{
+	{Yi8, Yxr, Yxr, Zvex_i_r_v, 3},
+	{Yi8, Yyr, Yyr, Zvex_i_r_v, 3},
+	{Yxm, Yxr, Yxr, Zvex_rm_v_r, 2},
+	{Yxm, Yyr, Yyr, Zvex_rm_v_r, 2},
+}
+
+var yvex_shift_dq = []ytab{
+	{Yi8, Yxr, Yxr, Zvex_i_r_v, 3},
+	{Yi8, Yyr, Yyr, Zvex_i_r_v, 3},
+}
+
 var yvex_r3 = []ytab{
 	{Yml, Yrl, Yrl, Zvex_rm_v_r, 2},
 	{Yml, Yrl, Yrl, Zvex_rm_v_r, 2},
@@ -882,11 +914,6 @@ var yvex_vmovntdq = []ytab{
 var yvex_vpbroadcast = []ytab{
 	{Yxm, Ynone, Yxr, Zvex_rm_v_r, 2},
 	{Yxm, Ynone, Yyr, Zvex_rm_v_r, 2},
-}
-
-var yvex_xxmyxm = []ytab{
-	{Yxr, Ynone, Yxm, Zvex_r_v_rm, 2},
-	{Yyr, Ynone, Yxm, Zvex_r_v_rm, 2},
 }
 
 var ymmxmm0f38 = []ytab{
@@ -1653,6 +1680,7 @@ var optab =
 	{AROUNDSS, yaes2, Pq, [23]uint8{0x3a, 0x0a, 0}},
 	{APSHUFD, yxshuf, Pq, [23]uint8{0x70, 0}},
 	{APCLMULQDQ, yxshuf, Pq, [23]uint8{0x3a, 0x44, 0}},
+	{APCMPESTRI, yxshuf, Pq, [23]uint8{0x3a, 0x61, 0}},
 
 	{AANDNL, yvex_r3, Pvex, [23]uint8{VEX_LZ_0F38_W0, 0xF2}},
 	{AANDNQ, yvex_r3, Pvex, [23]uint8{VEX_LZ_0F38_W1, 0xF2}},
@@ -1683,6 +1711,24 @@ var optab =
 	{AVPAND, yvex_xy3, Pvex, [23]uint8{VEX_128_66_0F_WIG, 0xDB, VEX_256_66_0F_WIG, 0xDB}},
 	{AVPBROADCASTB, yvex_vpbroadcast, Pvex, [23]uint8{VEX_128_66_0F38_W0, 0x78, VEX_256_66_0F38_W0, 0x78}},
 	{AVPTEST, yvex_xy2, Pvex, [23]uint8{VEX_128_66_0F38_WIG, 0x17, VEX_256_66_0F38_WIG, 0x17}},
+	{AVPSHUFB, yvex_xy3, Pvex, [23]uint8{VEX_128_66_0F38_WIG, 0x00, VEX_256_66_0F38_WIG, 0x00}},
+	{AVPSHUFD, yvex_xyi3, Pvex, [23]uint8{VEX_128_66_0F_WIG, 0x70, VEX_256_66_0F_WIG, 0x70}},
+	{AVPOR, yvex_xy3, Pvex, [23]uint8{VEX_128_66_0F_WIG, 0xeb, VEX_256_66_0F_WIG, 0xeb}},
+	{AVPADDQ, yvex_xy3, Pvex, [23]uint8{VEX_128_66_0F_WIG, 0xd4, VEX_256_66_0F_WIG, 0xd4}},
+	{AVPADDD, yvex_xy3, Pvex, [23]uint8{VEX_128_66_0F_WIG, 0xfe, VEX_256_66_0F_WIG, 0xfe}},
+	{AVPSLLD, yvex_shift, Pvex, [23]uint8{VEX_128_66_0F_WIG, 0x72, 0xf0, VEX_256_66_0F_WIG, 0x72, 0xf0, VEX_128_66_0F_WIG, 0xf2, VEX_256_66_0F_WIG, 0xf2}},
+	{AVPSLLQ, yvex_shift, Pvex, [23]uint8{VEX_128_66_0F_WIG, 0x73, 0xf0, VEX_256_66_0F_WIG, 0x73, 0xf0, VEX_128_66_0F_WIG, 0xf3, VEX_256_66_0F_WIG, 0xf3}},
+	{AVPSRLD, yvex_shift, Pvex, [23]uint8{VEX_128_66_0F_WIG, 0x72, 0xd0, VEX_256_66_0F_WIG, 0x72, 0xd0, VEX_128_66_0F_WIG, 0xd2, VEX_256_66_0F_WIG, 0xd2}},
+	{AVPSRLQ, yvex_shift, Pvex, [23]uint8{VEX_128_66_0F_WIG, 0x73, 0xd0, VEX_256_66_0F_WIG, 0x73, 0xd0, VEX_128_66_0F_WIG, 0xd3, VEX_256_66_0F_WIG, 0xd3}},
+	{AVPSRLDQ, yvex_shift_dq, Pvex, [23]uint8{VEX_128_66_0F_WIG, 0x73, 0xd8, VEX_256_66_0F_WIG, 0x73, 0xd8}},
+	{AVPSLLDQ, yvex_shift_dq, Pvex, [23]uint8{VEX_128_66_0F_WIG, 0x73, 0xf8, VEX_256_66_0F_WIG, 0x73, 0xf8}},
+	{AVPERM2F128, yvex_yyi4, Pvex, [23]uint8{VEX_256_66_0F3A_W0, 0x06}},
+	{AVPALIGNR, yvex_yyi4, Pvex, [23]uint8{VEX_256_66_0F3A_WIG, 0x0f}},
+	{AVPBLENDD, yvex_yyi4, Pvex, [23]uint8{VEX_256_66_0F3A_WIG, 0x02}},
+	{AVINSERTI128, yvex_xyi4, Pvex, [23]uint8{VEX_256_66_0F3A_WIG, 0x38}},
+	{AVPERM2I128, yvex_yyi4, Pvex, [23]uint8{VEX_256_66_0F3A_WIG, 0x46}},
+	{ARORXL, yvex_ri3, Pvex, [23]uint8{VEX_LZ_F2_0F3A_W0, 0xf0}},
+	{ARORXQ, yvex_ri3, Pvex, [23]uint8{VEX_LZ_F2_0F3A_W1, 0xf0}},
 
 	{AXACQUIRE, ynone, Px, [23]uint8{0xf2}},
 	{AXRELEASE, ynone, Px, [23]uint8{0xf3}},
@@ -2170,7 +2216,7 @@ func prefixof(ctxt *obj.Link, p *obj.Prog, a *obj.Addr) int {
 					return 0x64 // FS
 				}
 
-				if ctxt.Flag_shared != 0 {
+				if ctxt.Flag_shared {
 					log.Fatalf("unknown TLS base register for linux with -shared")
 				} else {
 					return 0x64 // FS
@@ -2190,7 +2236,7 @@ func prefixof(ctxt *obj.Link, p *obj.Prog, a *obj.Addr) int {
 	}
 
 	if p.Mode == 32 {
-		if a.Index == REG_TLS && ctxt.Flag_shared != 0 {
+		if a.Index == REG_TLS && ctxt.Flag_shared {
 			// When building for inclusion into a shared library, an instruction of the form
 			//     MOVL 0(CX)(TLS*1), AX
 			// becomes
@@ -2219,7 +2265,7 @@ func prefixof(ctxt *obj.Link, p *obj.Prog, a *obj.Addr) int {
 		return 0x26
 
 	case REG_TLS:
-		if ctxt.Flag_shared != 0 {
+		if ctxt.Flag_shared {
 			// When building for inclusion into a shared library, an instruction of the form
 			//     MOV 0(CX)(TLS*1), AX
 			// becomes
@@ -2293,7 +2339,7 @@ func oclass(ctxt *obj.Link, p *obj.Prog, a *obj.Addr) int {
 
 		case obj.NAME_EXTERN,
 			obj.NAME_STATIC:
-			if a.Sym != nil && isextern(a.Sym) || (p.Mode == 32 && ctxt.Flag_shared == 0) {
+			if a.Sym != nil && isextern(a.Sym) || (p.Mode == 32 && !ctxt.Flag_shared) {
 				return Yi32
 			}
 			return Yiauto // use pc-relative addressing
@@ -2712,7 +2758,7 @@ func vaddr(ctxt *obj.Link, p *obj.Prog, a *obj.Addr, r *obj.Reloc) int64 {
 		if a.Name == obj.NAME_GOTREF {
 			r.Siz = 4
 			r.Type = obj.R_GOTPCREL
-		} else if isextern(s) || (p.Mode != 64 && ctxt.Flag_shared == 0) {
+		} else if isextern(s) || (p.Mode != 64 && !ctxt.Flag_shared) {
 			r.Siz = 4
 			r.Type = obj.R_ADDR
 		} else {
@@ -2733,7 +2779,7 @@ func vaddr(ctxt *obj.Link, p *obj.Prog, a *obj.Addr, r *obj.Reloc) int64 {
 			log.Fatalf("reloc")
 		}
 
-		if ctxt.Flag_shared == 0 || isAndroid {
+		if !ctxt.Flag_shared || isAndroid {
 			r.Type = obj.R_TLS_LE
 			r.Siz = 4
 			r.Off = -1 // caller must fill in
@@ -2798,7 +2844,7 @@ func asmandsz(ctxt *obj.Link, p *obj.Prog, a *obj.Addr, r int, rex int, m64 int)
 			if !isextern(a.Sym) && p.Mode == 64 {
 				goto bad
 			}
-			if p.Mode == 32 && ctxt.Flag_shared != 0 {
+			if p.Mode == 32 && ctxt.Flag_shared {
 				base = REG_CX
 			} else {
 				base = REG_NONE
@@ -2843,7 +2889,7 @@ func asmandsz(ctxt *obj.Link, p *obj.Prog, a *obj.Addr, r int, rex int, m64 int)
 		if a.Sym == nil {
 			ctxt.Diag("bad addr: %v", p)
 		}
-		if p.Mode == 32 && ctxt.Flag_shared != 0 {
+		if p.Mode == 32 && ctxt.Flag_shared {
 			base = REG_CX
 		} else {
 			base = REG_NONE
@@ -2897,7 +2943,7 @@ func asmandsz(ctxt *obj.Link, p *obj.Prog, a *obj.Addr, r int, rex int, m64 int)
 	}
 
 	if REG_AX <= base && base <= REG_R15 {
-		if a.Index == REG_TLS && ctxt.Flag_shared == 0 {
+		if a.Index == REG_TLS && !ctxt.Flag_shared {
 			rel = obj.Reloc{}
 			rel.Type = obj.R_TLS_LE
 			rel.Siz = 4
@@ -3193,9 +3239,16 @@ var bpduff2 = []byte{
 // https://en.wikipedia.org/wiki/VEX_prefix#Technical_description
 func asmvex(ctxt *obj.Link, rm, v, r *obj.Addr, vex, opcode uint8) {
 	ctxt.Vexflag = 1
-	rexR := regrex[r.Reg] & Rxr
-	rexB := regrex[rm.Reg] & Rxb
-	rexX := regrex[rm.Index] & Rxx
+	rexR := 0
+	if r != nil {
+		rexR = regrex[r.Reg] & Rxr
+	}
+	rexB := 0
+	rexX := 0
+	if rm != nil {
+		rexB = regrex[rm.Reg] & Rxb
+		rexX = regrex[rm.Index] & Rxx
+	}
 	vexM := (vex >> 3) & 0xF
 	vexWLP := vex & 0x87
 	vexV := byte(0)
@@ -3313,7 +3366,7 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 
 			case Pf2, /* xmm opcode escape */
 				Pf3:
-				ctxt.AsmBuf.Put2(byte(o.prefix), Pm)
+				ctxt.AsmBuf.Put2(o.prefix, Pm)
 
 			case Pef3:
 				ctxt.AsmBuf.Put3(Pe, Pf3, Pm)
@@ -3426,7 +3479,7 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 				asmand(ctxt, p, &p.From, &p.To)
 
 			case Zm2_r:
-				ctxt.AsmBuf.Put2(byte(op), byte(o.op[z+1]))
+				ctxt.AsmBuf.Put2(byte(op), o.op[z+1])
 				asmand(ctxt, p, &p.From, &p.To)
 
 			case Zm_r_xm:
@@ -3480,6 +3533,27 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 			case Zvex_rm_v_r:
 				asmvex(ctxt, &p.From, p.From3, &p.To, o.op[z], o.op[z+1])
 				asmand(ctxt, p, &p.From, &p.To)
+
+			case Zvex_i_r_v:
+				asmvex(ctxt, p.From3, &p.To, nil, o.op[z], o.op[z+1])
+				regnum := byte(0x7)
+				if p.From3.Reg >= REG_X0 && p.From3.Reg <= REG_X15 {
+					regnum &= byte(p.From3.Reg - REG_X0)
+				} else {
+					regnum &= byte(p.From3.Reg - REG_Y0)
+				}
+				ctxt.AsmBuf.Put1(byte(o.op[z+2]) | regnum)
+				ctxt.AsmBuf.Put1(byte(p.From.Offset))
+
+			case Zvex_i_rm_v_r:
+				asmvex(ctxt, &p.From, p.From3, &p.To, o.op[z], o.op[z+1])
+				asmand(ctxt, p, &p.From, &p.To)
+				ctxt.AsmBuf.Put1(byte(p.From3.Offset))
+
+			case Zvex_i_rm_r:
+				asmvex(ctxt, p.From3, nil, &p.To, o.op[z], o.op[z+1])
+				asmand(ctxt, p, p.From3, &p.To)
+				ctxt.AsmBuf.Put1(byte(p.From.Offset))
 
 			case Zvex_v_rm_r:
 				asmvex(ctxt, p.From3, &p.From, &p.To, o.op[z], o.op[z+1])
@@ -3536,7 +3610,7 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 				}
 				ctxt.AsmBuf.Put1(byte(op))
 				if p.As == AXABORT {
-					ctxt.AsmBuf.Put1(byte(o.op[z+1]))
+					ctxt.AsmBuf.Put1(o.op[z+1])
 				}
 				ctxt.AsmBuf.Put1(byte(vaddr(ctxt, p, a, nil)))
 
@@ -3662,7 +3736,7 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 				if yt.zcase == Zcallcon {
 					ctxt.AsmBuf.Put1(byte(op))
 				} else {
-					ctxt.AsmBuf.Put1(byte(o.op[z+1]))
+					ctxt.AsmBuf.Put1(o.op[z+1])
 				}
 				r = obj.Addrel(ctxt.Cursym)
 				r.Off = int32(p.Pc + int64(ctxt.AsmBuf.Len()))
@@ -3672,7 +3746,7 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 				ctxt.AsmBuf.PutInt32(0)
 
 			case Zcallind:
-				ctxt.AsmBuf.Put2(byte(op), byte(o.op[z+1]))
+				ctxt.AsmBuf.Put2(byte(op), o.op[z+1])
 				r = obj.Addrel(ctxt.Cursym)
 				r.Off = int32(p.Pc + int64(ctxt.AsmBuf.Len()))
 				r.Type = obj.R_ADDR
@@ -3727,7 +3801,7 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 						log.Fatalf("bad code")
 					}
 
-					ctxt.AsmBuf.Put1(byte(o.op[z+1]))
+					ctxt.AsmBuf.Put1(o.op[z+1])
 					r = obj.Addrel(ctxt.Cursym)
 					r.Off = int32(p.Pc + int64(ctxt.AsmBuf.Len()))
 					r.Sym = p.To.Sym
@@ -3767,7 +3841,7 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 							v--
 						}
 
-						ctxt.AsmBuf.Put1(byte(o.op[z+1]))
+						ctxt.AsmBuf.Put1(o.op[z+1])
 						ctxt.AsmBuf.PutInt32(int32(v))
 					}
 
@@ -3789,7 +3863,7 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 					if yt.zcase == Zbr {
 						ctxt.AsmBuf.Put1(0x0f)
 					}
-					ctxt.AsmBuf.Put1(byte(o.op[z+1]))
+					ctxt.AsmBuf.Put1(o.op[z+1])
 					ctxt.AsmBuf.PutInt32(0)
 				}
 
@@ -3950,7 +4024,7 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 
 						case obj.Hlinux,
 							obj.Hnacl:
-							if ctxt.Flag_shared != 0 {
+							if ctxt.Flag_shared {
 								// Note that this is not generating the same insns as the other cases.
 								//     MOV TLS, R_to
 								// becomes
@@ -4024,7 +4098,7 @@ func doasm(ctxt *obj.Link, p *obj.Prog) {
 						log.Fatalf("unknown TLS base location for %s", obj.Headstr(ctxt.Headtype))
 
 					case obj.Hlinux:
-						if ctxt.Flag_shared == 0 {
+						if !ctxt.Flag_shared {
 							log.Fatalf("unknown TLS base location for linux without -shared")
 						}
 						// Note that this is not generating the same insn as the other cases.
@@ -4457,9 +4531,8 @@ func asmins(ctxt *obj.Link, p *obj.Prog) {
 	}
 
 	n := ctxt.AsmBuf.Len()
-	var r *obj.Reloc
 	for i := len(ctxt.Cursym.R) - 1; i >= 0; i-- {
-		r = &ctxt.Cursym.R[i:][0]
+		r := &ctxt.Cursym.R[i]
 		if int64(r.Off) < p.Pc {
 			break
 		}

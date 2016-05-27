@@ -283,11 +283,11 @@ func Version() string {
 
 // GOOS 为所运行程序的目标操作系统：
 // darwin、freebsd或linux等等。
-const GOOS string = sys.TheGoos
+const GOOS string = sys.GOOS
 
 // GOARCH is the running program's architecture target:
 // 386, amd64, arm, or s390x.
 
 // GOARCH 为所运行程序的目标架构：
 // 386、amd64、arm 或 s390x。
-const GOARCH string = sys.TheGoarch
+const GOARCH string = sys.GOARCH

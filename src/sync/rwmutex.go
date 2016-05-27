@@ -16,10 +16,14 @@ import (
 // RWMutexes can be created as part of other
 // structures; the zero value for a RWMutex is
 // an unlocked mutex.
+//
+// An RWMutex must not be copied after first use.
 
 // RWMutex 是一个读写互斥锁。
 // 该说可被任意多个读取器或单个写入器所持有。RWMutex 可作为其它结构的一部分来创建；
 // RWMutex 的零值即为已解锁的互斥体。
+//
+// RWMutex 在第一次使用后必须不能被复制。
 type RWMutex struct {
 	w           Mutex  // held if there are pending writers // 若还有正在等待的写入器就保持不变
 	writerSem   uint32 // semaphore for writers to wait for completing readers // 等待读取器完成的写入器的信号

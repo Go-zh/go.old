@@ -8,7 +8,7 @@
 //	Portions Copyright © 2004,2006 Bruce Ellis
 //	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //	Revisions Copyright © 2000-2007 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//	Portions Copyright © 2009 The Go Authors. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -54,15 +54,9 @@ func putelfstr(s string) int {
 		s = strings.Replace(s, "·", ".", -1)
 	}
 
-	n := len(s) + 1
-	for len(Elfstrdat)+n > cap(Elfstrdat) {
-		Elfstrdat = append(Elfstrdat[:cap(Elfstrdat)], 0)[:len(Elfstrdat)]
-	}
-
 	off := len(Elfstrdat)
-	Elfstrdat = Elfstrdat[:off+n]
-	copy(Elfstrdat[off:], s)
-
+	Elfstrdat = append(Elfstrdat, s...)
+	Elfstrdat = append(Elfstrdat, 0)
 	return off
 }
 
@@ -204,7 +198,9 @@ func Asmelfsym() {
 
 	// Some linkers will add a FILE sym if one is not present.
 	// Avoid having the working directory inserted into the symbol table.
-	putelfsyment(0, 0, 0, STB_LOCAL<<4|STT_FILE, SHN_ABS, 0)
+	// It is added with a name to avoid problems with external linking
+	// encountered on some versions of Solaris. See issue #14957.
+	putelfsyment(putelfstr("go.go"), 0, 0, STB_LOCAL<<4|STT_FILE, SHN_ABS, 0)
 	numelfsym++
 
 	elfbind = STB_LOCAL
@@ -240,10 +236,10 @@ func putplan9sym(x *LSym, s string, t int, addr int64, size int64, ver int, go_ 
 
 		var i int
 		if t == 'z' || t == 'Z' {
-			Cput(uint8(s[0]))
+			Cput(s[0])
 			for i = 1; s[i] != 0 || s[i+1] != 0; i += 2 {
-				Cput(uint8(s[i]))
-				Cput(uint8(s[i+1]))
+				Cput(s[i])
+				Cput(s[i+1])
 			}
 
 			Cput(0)
@@ -255,7 +251,7 @@ func putplan9sym(x *LSym, s string, t int, addr int64, size int64, ver int, go_ 
 				s = s[1:]
 			}
 			for i = 0; i < len(s); i++ {
-				Cput(uint8(s[i]))
+				Cput(s[i])
 			}
 			Cput(0)
 		}
@@ -333,6 +329,8 @@ func symtab() {
 	xdefine("runtime.eitablink", obj.SRODATA, 0)
 	xdefine("runtime.rodata", obj.SRODATA, 0)
 	xdefine("runtime.erodata", obj.SRODATA, 0)
+	xdefine("runtime.types", obj.SRODATA, 0)
+	xdefine("runtime.etypes", obj.SRODATA, 0)
 	xdefine("runtime.noptrdata", obj.SNOPTRDATA, 0)
 	xdefine("runtime.enoptrdata", obj.SNOPTRDATA, 0)
 	xdefine("runtime.data", obj.SDATA, 0)
@@ -386,33 +384,19 @@ func symtab() {
 		symtyperel = s
 	}
 
-	s = Linklookup(Ctxt, "go.string.*", 0)
-	s.Type = obj.SGOSTRING
-	s.Attr |= AttrLocal
-	s.Size = 0
-	s.Attr |= AttrReachable
-	symgostring := s
-
-	s = Linklookup(Ctxt, "go.string.hdr.*", 0)
-	s.Type = obj.SGOSTRINGHDR
-	s.Attr |= AttrLocal
-	s.Size = 0
-	s.Attr |= AttrReachable
-	symgostringhdr := s
-
-	s = Linklookup(Ctxt, "go.func.*", 0)
-	s.Type = obj.SGOFUNC
-	s.Attr |= AttrLocal
-	s.Size = 0
-	s.Attr |= AttrReachable
-	symgofunc := s
-
-	s = Linklookup(Ctxt, "runtime.gcbits.*", 0)
-	s.Type = obj.SGCBITS
-	s.Attr |= AttrLocal
-	s.Size = 0
-	s.Attr |= AttrReachable
-	symgcbits := s
+	groupSym := func(name string, t int16) *LSym {
+		s := Linklookup(Ctxt, name, 0)
+		s.Type = t
+		s.Size = 0
+		s.Attr |= AttrLocal | AttrReachable
+		return s
+	}
+	var (
+		symgostring    = groupSym("go.string.*", obj.SGOSTRING)
+		symgostringhdr = groupSym("go.string.hdr.*", obj.SGOSTRINGHDR)
+		symgofunc      = groupSym("go.func.*", obj.SGOFUNC)
+		symgcbits      = groupSym("runtime.gcbits.*", obj.SGCBITS)
+	)
 
 	symtypelink := Linklookup(Ctxt, "runtime.typelink", 0)
 	symtypelink.Type = obj.STYPELINK
@@ -438,34 +422,37 @@ func symtab() {
 			continue
 		}
 
-		if strings.HasPrefix(s.Name, "type.") {
+		switch {
+		case strings.HasPrefix(s.Name, "type."):
 			if !DynlinkingGo() {
 				s.Attr |= AttrHidden
 			}
-			if UseRelro() && len(s.R) > 0 {
+			if UseRelro() {
 				s.Type = obj.STYPERELRO
 				s.Outer = symtyperel
 			} else {
 				s.Type = obj.STYPE
 				s.Outer = symtype
 			}
-		}
 
-		if strings.HasPrefix(s.Name, "go.typelink.") {
+		case strings.HasPrefix(s.Name, "go.importpath.") && UseRelro():
+			// Keep go.importpath symbols in the same section as types and
+			// names, as they can be referred to by a section offset.
+			s.Type = obj.STYPERELRO
+
+		case strings.HasPrefix(s.Name, "go.typelink."):
 			ntypelinks++
 			s.Type = obj.STYPELINK
 			s.Attr |= AttrHidden
 			s.Outer = symtypelink
-		}
 
-		if strings.HasPrefix(s.Name, "go.itablink.") {
+		case strings.HasPrefix(s.Name, "go.itablink."):
 			nitablinks++
 			s.Type = obj.SITABLINK
 			s.Attr |= AttrHidden
 			s.Outer = symitablink
-		}
 
-		if strings.HasPrefix(s.Name, "go.string.") {
+		case strings.HasPrefix(s.Name, "go.string."):
 			s.Type = obj.SGOSTRING
 			s.Attr |= AttrHidden
 			s.Outer = symgostring
@@ -473,21 +460,18 @@ func symtab() {
 				s.Type = obj.SGOSTRINGHDR
 				s.Outer = symgostringhdr
 			}
-		}
 
-		if strings.HasPrefix(s.Name, "runtime.gcbits.") {
+		case strings.HasPrefix(s.Name, "runtime.gcbits."):
 			s.Type = obj.SGCBITS
 			s.Attr |= AttrHidden
 			s.Outer = symgcbits
-		}
 
-		if strings.HasPrefix(s.Name, "go.func.") {
+		case strings.HasPrefix(s.Name, "go.func."):
 			s.Type = obj.SGOFUNC
 			s.Attr |= AttrHidden
 			s.Outer = symgofunc
-		}
 
-		if strings.HasPrefix(s.Name, "gcargs.") || strings.HasPrefix(s.Name, "gclocals.") || strings.HasPrefix(s.Name, "gclocals·") {
+		case strings.HasPrefix(s.Name, "gcargs."), strings.HasPrefix(s.Name, "gclocals."), strings.HasPrefix(s.Name, "gclocals·"):
 			s.Type = obj.SGOFUNC
 			s.Attr |= AttrHidden
 			s.Outer = symgofunc
@@ -520,8 +504,8 @@ func symtab() {
 	adduint(Ctxt, moduledata, uint64(pclntabNfunc+1))
 	// The filetab slice
 	Addaddrplus(Ctxt, moduledata, Linklookup(Ctxt, "runtime.pclntab", 0), int64(pclntabFiletabOffset))
-	adduint(Ctxt, moduledata, uint64(Ctxt.Nhistfile)+1)
-	adduint(Ctxt, moduledata, uint64(Ctxt.Nhistfile)+1)
+	adduint(Ctxt, moduledata, uint64(len(Ctxt.Filesyms))+1)
+	adduint(Ctxt, moduledata, uint64(len(Ctxt.Filesyms))+1)
 	// findfunctab
 	Addaddr(Ctxt, moduledata, Linklookup(Ctxt, "runtime.findfunctab", 0))
 	// minpc, maxpc
@@ -541,6 +525,8 @@ func symtab() {
 	Addaddr(Ctxt, moduledata, Linklookup(Ctxt, "runtime.end", 0))
 	Addaddr(Ctxt, moduledata, Linklookup(Ctxt, "runtime.gcdata", 0))
 	Addaddr(Ctxt, moduledata, Linklookup(Ctxt, "runtime.gcbss", 0))
+	Addaddr(Ctxt, moduledata, Linklookup(Ctxt, "runtime.types", 0))
+	Addaddr(Ctxt, moduledata, Linklookup(Ctxt, "runtime.etypes", 0))
 	// The typelinks slice
 	Addaddr(Ctxt, moduledata, Linklookup(Ctxt, "runtime.typelink", 0))
 	adduint(Ctxt, moduledata, uint64(ntypelinks))

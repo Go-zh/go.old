@@ -13,8 +13,9 @@ var CheckFunc = checkFunc
 var PrintFunc = printFunc
 var Opt = opt
 var Deadcode = deadcode
+var Copyelim = copyelim
 
-func testConfig(t *testing.T) *Config {
+func testConfig(t testing.TB) *Config {
 	testCtxt := &obj.Link{}
 	return NewConfig("amd64", DummyFrontend{t}, testCtxt, true)
 }
@@ -47,6 +48,9 @@ func (d DummyFrontend) SplitComplex(s LocalSlot) (LocalSlot, LocalSlot) {
 		return LocalSlot{s.N, d.TypeFloat64(), s.Off}, LocalSlot{s.N, d.TypeFloat64(), s.Off + 8}
 	}
 	return LocalSlot{s.N, d.TypeFloat32(), s.Off}, LocalSlot{s.N, d.TypeFloat32(), s.Off + 4}
+}
+func (d DummyFrontend) SplitStruct(s LocalSlot, i int) LocalSlot {
+	return LocalSlot{s.N, s.Type.FieldType(i), s.Off + s.Type.FieldOff(i)}
 }
 func (DummyFrontend) Line(line int32) string {
 	return "unknown.go:0"

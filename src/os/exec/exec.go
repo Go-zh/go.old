@@ -13,6 +13,7 @@ package exec
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -102,8 +103,9 @@ type Cmd struct {
 	// available after a call to Wait or Run.
 	ProcessState *os.ProcessState
 
-	lookPathErr     error // LookPath error, if any.
-	finished        bool  // when Wait was called
+	ctx             context.Context // nil means none
+	lookPathErr     error           // LookPath error, if any.
+	finished        bool            // when Wait was called
 	childFiles      []*os.File
 	closeAfterStart []io.Closer
 	closeAfterWait  []io.Closer
@@ -135,6 +137,20 @@ func Command(name string, arg ...string) *Cmd {
 			cmd.Path = lp
 		}
 	}
+	return cmd
+}
+
+// CommandContext is like Command but includes a context.
+//
+// The provided context is used to kill the process (by calling
+// os.Process.Kill) if the context becomes done before the command
+// completes on its own.
+func CommandContext(ctx context.Context, name string, arg ...string) *Cmd {
+	if ctx == nil {
+		panic("nil Context")
+	}
+	cmd := Command(name, arg...)
+	cmd.ctx = ctx
 	return cmd
 }
 
@@ -393,7 +409,22 @@ func (c *Cmd) Wait() error {
 		return errors.New("exec: Wait was already called")
 	}
 	c.finished = true
+
+	var waitDone chan struct{}
+	if c.ctx != nil {
+		waitDone = make(chan struct{})
+		go func() {
+			select {
+			case <-c.ctx.Done():
+				c.Process.Kill()
+			case <-waitDone:
+			}
+		}()
+	}
 	state, err := c.Process.Wait()
+	if waitDone != nil {
+		close(waitDone)
+	}
 	c.ProcessState = state
 
 	var copyError error

@@ -112,7 +112,6 @@ var dialTimeoutMaxDurationTests = []struct {
 }
 
 func TestDialTimeoutMaxDuration(t *testing.T) {
-	t.Parallel()
 	if runtime.GOOS == "openbsd" {
 		testenv.SkipFlaky(t, 15157)
 	}
@@ -125,7 +124,7 @@ func TestDialTimeoutMaxDuration(t *testing.T) {
 
 	for i, tt := range dialTimeoutMaxDurationTests {
 		ch := make(chan error)
-		max := time.NewTimer(100 * time.Millisecond)
+		max := time.NewTimer(250 * time.Millisecond)
 		defer max.Stop()
 		go func() {
 			d := Dialer{Timeout: tt.timeout}
@@ -315,8 +314,6 @@ var readTimeoutTests = []struct {
 }
 
 func TestReadTimeout(t *testing.T) {
-	t.Parallel()
-
 	switch runtime.GOOS {
 	case "plan9":
 		t.Skipf("not supported on %s", runtime.GOOS)

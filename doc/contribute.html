@@ -38,6 +38,16 @@ see <a href="gccgo_contribute.html">Contributing to gccgo</a>.)
 （关于 <code>gccgo</code> 前端的文档见<a href="gccgo_contribute.html">为 gccgo 做贡献</a>。）
 </p>
 
+<p>
+Sensitive security-related issues should be reported to <a href="mailto:security@golang.org">security@golang.org</a>.
+</p>
+
+<div class="english">
+<p>
+安全相关的敏感问题应向 <a href="mailto:security@golang.org">security@golang.org</a> 报告。
+</p>
+</div>
+
 <div class="english">
 <h2 id="Design">Discuss your design</h2>
 </div>
@@ -699,10 +709,13 @@ with a thorough description of your change.
 The first line of the change description is conventionally a one-line
 summary of the change, prefixed by the primary affected package,
 and is used as the subject for code review mail.
-The rest of the
-description elaborates and should provide context for the
+It should complete the sentence "This change modifies Go to _____."
+The rest of the description elaborates and should provide context for the
 change and explain what it does.
+Write in complete sentences with correct punctuation, just like
+for your comments in Go.
 If there is a helpful reference, mention it here.
+If you've fixed an issue, reference it by number with a # before it.
 </p>
 </div>
 
@@ -723,7 +736,7 @@ After editing, the template might now read:
 </p>
 
 <pre>
-math: improved Sin, Cos and Tan precision for very large arguments
+math: improve Sin, Cos and Tan precision for very large arguments
 
 The existing implementation has poor numerical properties for
 large arguments, so use the McGillicutty algorithm to improve

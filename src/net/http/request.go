@@ -18,6 +18,7 @@ import (
 	"io/ioutil"
 	"mime"
 	"mime/multipart"
+	"net/http/httptrace"
 	"net/textproto"
 	"net/url"
 	"strconv"
@@ -254,6 +255,11 @@ type Request struct {
 	// set, it is undefined whether Cancel is respected.
 	Cancel <-chan struct{}
 
+	// Response is the redirect response which caused this request
+	// to be created. This field is only populated during client
+	// redirects.
+	Response *Response
+
 	// ctx is either the client or server context. It should only
 	// be modified via copying the whole Request using WithContext.
 	// It is unexported to prevent people from using Context wrong
@@ -266,9 +272,13 @@ type Request struct {
 //
 // The returned context is always non-nil; it defaults to the
 // background context.
+//
+// For outgoing client requests, the context controls cancelation.
+//
+// For incoming server requests, the context is canceled when either
+// the client's connection closes, or when the ServeHTTP method
+// returns.
 func (r *Request) Context() context.Context {
-	// TODO(bradfitz): document above what Context means for server and client
-	// requests, once implemented.
 	if r.ctx != nil {
 		return r.ctx
 	}
@@ -433,7 +443,16 @@ var errMissingHost = errors.New("http: Request.Write on Request with no Host or 
 
 // extraHeaders may be nil
 // waitForContinue may be nil
-func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, waitForContinue func() bool) error {
+func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, waitForContinue func() bool) (err error) {
+	trace := httptrace.ContextClientTrace(req.Context())
+	if trace != nil && trace.WroteRequest != nil {
+		defer func() {
+			trace.WroteRequest(httptrace.WroteRequestInfo{
+				Err: err,
+			})
+		}()
+	}
+
 	// Find the target host. Prefer the Host: header, but if that
 	// is not given, use the host from the request URL.
 	//
@@ -470,7 +489,7 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 		w = bw
 	}
 
-	_, err := fmt.Fprintf(w, "%s %s HTTP/1.1\r\n", valueOrDefault(req.Method, "GET"), ruri)
+	_, err = fmt.Fprintf(w, "%s %s HTTP/1.1\r\n", valueOrDefault(req.Method, "GET"), ruri)
 	if err != nil {
 		return err
 	}
@@ -521,6 +540,10 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 		return err
 	}
 
+	if trace != nil && trace.WroteHeaders != nil {
+		trace.WroteHeaders()
+	}
+
 	// Flush and wait for 100-continue if expected.
 	if waitForContinue != nil {
 		if bw, ok := w.(*bufio.Writer); ok {
@@ -529,7 +552,9 @@ func (req *Request) write(w io.Writer, usingProxy bool, extraHeaders Header, wai
 				return err
 			}
 		}
-
+		if trace != nil && trace.Wait100Continue != nil {
+			trace.Wait100Continue()
+		}
 		if !waitForContinue() {
 			req.closeBody()
 			return nil
@@ -656,6 +681,8 @@ func NewRequest(method, urlStr string, body io.Reader) (*Request, error) {
 	if !ok && body != nil {
 		rc = ioutil.NopCloser(body)
 	}
+	// The host's colon:port should be normalized. See Issue 14836.
+	u.Host = removeEmptyPort(u.Host)
 	req := &Request{
 		Method:     method,
 		URL:        u,
@@ -813,7 +840,7 @@ func readRequest(b *bufio.Reader, deleteHostHeader bool) (req *Request, err erro
 	}
 	req.Header = Header(mimeHeader)
 
-	// RFC2616: Must treat
+	// RFC 2616: Must treat
 	//	GET /index.html HTTP/1.1
 	//	Host: www.google.com
 	// and
@@ -863,68 +890,56 @@ func MaxBytesReader(w ResponseWriter, r io.ReadCloser, n int64) io.ReadCloser {
 }
 
 type maxBytesReader struct {
-	w       ResponseWriter
-	r       io.ReadCloser // underlying reader
-	n       int64         // max bytes remaining
-	stopped bool
-	sawEOF  bool
+	w   ResponseWriter
+	r   io.ReadCloser // underlying reader
+	n   int64         // max bytes remaining
+	err error         // sticky error
 }
 
 func (l *maxBytesReader) tooLarge() (n int, err error) {
-	if !l.stopped {
-		l.stopped = true
-
-		// The server code and client code both use
-		// maxBytesReader. This "requestTooLarge" check is
-		// only used by the server code. To prevent binaries
-		// which only using the HTTP Client code (such as
-		// cmd/go) from also linking in the HTTP server, don't
-		// use a static type assertion to the server
-		// "*response" type. Check this interface instead:
-		type requestTooLarger interface {
-			requestTooLarge()
-		}
-		if res, ok := l.w.(requestTooLarger); ok {
-			res.requestTooLarge()
-		}
-	}
-	return 0, errors.New("http: request body too large")
+	l.err = errors.New("http: request body too large")
+	return 0, l.err
 }
 
 func (l *maxBytesReader) Read(p []byte) (n int, err error) {
-	toRead := l.n
-	if l.n == 0 {
-		if l.sawEOF {
-			return l.tooLarge()
-		}
-		// The underlying io.Reader may not return (0, io.EOF)
-		// at EOF if the requested size is 0, so read 1 byte
-		// instead. The io.Reader docs are a bit ambiguous
-		// about the return value of Read when 0 bytes are
-		// requested, and {bytes,strings}.Reader gets it wrong
-		// too (it returns (0, nil) even at EOF).
-		toRead = 1
+	if l.err != nil {
+		return 0, l.err
 	}
-	if int64(len(p)) > toRead {
-		p = p[:toRead]
+	if len(p) == 0 {
+		return 0, nil
+	}
+	// If they asked for a 32KB byte read but only 5 bytes are
+	// remaining, no need to read 32KB. 6 bytes will answer the
+	// question of the whether we hit the limit or go past it.
+	if int64(len(p)) > l.n+1 {
+		p = p[:l.n+1]
 	}
 	n, err = l.r.Read(p)
-	if err == io.EOF {
-		l.sawEOF = true
+
+	if int64(n) <= l.n {
+		l.n -= int64(n)
+		l.err = err
+		return n, err
 	}
-	if l.n == 0 {
-		// If we had zero bytes to read remaining (but hadn't seen EOF)
-		// and we get a byte here, that means we went over our limit.
-		if n > 0 {
-			return l.tooLarge()
-		}
-		return 0, err
+
+	n = int(l.n)
+	l.n = 0
+
+	// The server code and client code both use
+	// maxBytesReader. This "requestTooLarge" check is
+	// only used by the server code. To prevent binaries
+	// which only using the HTTP Client code (such as
+	// cmd/go) from also linking in the HTTP server, don't
+	// use a static type assertion to the server
+	// "*response" type. Check this interface instead:
+	type requestTooLarger interface {
+		requestTooLarge()
 	}
-	l.n -= int64(n)
-	if l.n < 0 {
-		l.n = 0
+	if res, ok := l.w.(requestTooLarger); ok {
+		res.requestTooLarge()
 	}
-	return
+	l.err = errors.New("http: request body too large")
+	return n, l.err
 }
 
 func (l *maxBytesReader) Close() error {

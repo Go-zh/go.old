@@ -5,6 +5,7 @@
 package gc
 
 import (
+	"bufio"
 	"cmd/compile/internal/ssa"
 	"cmd/internal/bio"
 	"cmd/internal/obj"
@@ -19,7 +20,7 @@ const (
 type Pkg struct {
 	Name     string // package name, e.g. "sys"
 	Path     string // string literal used in import statement, e.g. "runtime/internal/sys"
-	Pathsym  *Sym
+	Pathsym  *obj.LSym
 	Prefix   string // escaped path for use in symbol table
 	Imported bool   // export data of this package was parsed
 	Exported bool   // import line written in export data
@@ -132,8 +133,9 @@ var pragcgobuf string
 var infile string
 
 var outfile string
+var linkobj string
 
-var bout *bio.Buf
+var bout *bio.Writer
 
 var nerrors int
 
@@ -143,9 +145,9 @@ var nsyntaxerrors int
 
 var decldepth int32
 
-var safemode int
+var safemode bool
 
-var nolocalimports int
+var nolocalimports bool
 
 var Debug [256]int
 
@@ -170,11 +172,12 @@ var msanpkg *Pkg // package runtime/msan
 
 var typepkg *Pkg // fake package for runtime type info (headers)
 
-var typelinkpkg *Pkg // fake package for runtime type info (data)
-
 var unsafepkg *Pkg // package unsafe
 
 var trackpkg *Pkg // fake package for field tracking
+
+var mappkg *Pkg // fake package for map zero value
+var zerosize int64
 
 var Tptr EType // either TPTR32 or TPTR64
 
@@ -262,21 +265,21 @@ var Funcdepth int32
 
 var typecheckok bool
 
-var compiling_runtime int
+var compiling_runtime bool
 
 var compiling_wrappers int
 
-var use_writebarrier int
+var use_writebarrier bool
 
-var pure_go int
+var pure_go bool
 
 var flag_installsuffix string
 
-var flag_race int
+var flag_race bool
 
-var flag_msan int
+var flag_msan bool
 
-var flag_largemodel int
+var flag_largemodel bool
 
 // Whether we are adding any sort of code instrumentation, such as
 // when the race detector is enabled.
@@ -286,9 +289,9 @@ var debuglive int
 
 var Ctxt *obj.Link
 
-var writearchive int
+var writearchive bool
 
-var bstdout *bio.Buf
+var bstdout *bufio.Writer
 
 var Nacl bool
 
@@ -376,23 +379,25 @@ type Arch struct {
 	MAXWIDTH     int64
 	ReservedRegs []int
 
-	AddIndex     func(*Node, int64, *Node) bool // optional
-	Betypeinit   func()
-	Bgen_float   func(*Node, bool, int, *obj.Prog) // optional
-	Cgen64       func(*Node, *Node)                // only on 32-bit systems
-	Cgenindex    func(*Node, *Node, bool) *obj.Prog
-	Cgen_bmul    func(Op, *Node, *Node, *Node) bool
-	Cgen_float   func(*Node, *Node) // optional
-	Cgen_hmul    func(*Node, *Node, *Node)
-	Cgen_shift   func(Op, bool, *Node, *Node, *Node)
-	Clearfat     func(*Node)
-	Cmp64        func(*Node, *Node, Op, int, *obj.Prog) // only on 32-bit systems
-	Defframe     func(*obj.Prog)
-	Dodiv        func(Op, *Node, *Node, *Node)
-	Excise       func(*Flow)
-	Expandchecks func(*obj.Prog)
-	Getg         func(*Node)
-	Gins         func(obj.As, *Node, *Node) *obj.Prog
+	AddIndex            func(*Node, int64, *Node) bool // optional
+	Betypeinit          func()
+	Bgen_float          func(*Node, bool, int, *obj.Prog) // optional
+	Cgen64              func(*Node, *Node)                // only on 32-bit systems
+	Cgenindex           func(*Node, *Node, bool) *obj.Prog
+	Cgen_bmul           func(Op, *Node, *Node, *Node) bool
+	Cgen_float          func(*Node, *Node) // optional
+	Cgen_hmul           func(*Node, *Node, *Node)
+	RightShiftWithCarry func(*Node, uint, *Node)  // only on systems without RROTC instruction
+	AddSetCarry         func(*Node, *Node, *Node) // only on systems when ADD does not update carry flag
+	Cgen_shift          func(Op, bool, *Node, *Node, *Node)
+	Clearfat            func(*Node)
+	Cmp64               func(*Node, *Node, Op, int, *obj.Prog) // only on 32-bit systems
+	Defframe            func(*obj.Prog)
+	Dodiv               func(Op, *Node, *Node, *Node)
+	Excise              func(*Flow)
+	Expandchecks        func(*obj.Prog)
+	Getg                func(*Node)
+	Gins                func(obj.As, *Node, *Node) *obj.Prog
 
 	// Ginscmp generates code comparing n1 to n2 and jumping away if op is satisfied.
 	// The returned prog should be Patch'ed with the jump target.

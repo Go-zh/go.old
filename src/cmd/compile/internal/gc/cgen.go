@@ -247,7 +247,7 @@ func cgen_wb(n, res *Node, wb bool) {
 		return
 	}
 
-	if Ctxt.Arch.InFamily(sys.AMD64, sys.I386) && n.Addable {
+	if Ctxt.Arch.InFamily(sys.AMD64, sys.I386, sys.S390X) && n.Addable {
 		Thearch.Gmove(n, res)
 		return
 	}
@@ -946,7 +946,7 @@ func Cgenr(n *Node, a *Node, res *Node) {
 		OCALLINTER:
 		var n1 Node
 		Igen(n, &n1, res)
-		Regalloc(a, Types[Tptr], &n1)
+		Regalloc(a, n.Type, &n1)
 		Thearch.Gmove(&n1, a)
 		Regfree(&n1)
 
@@ -978,7 +978,11 @@ func Agenr(n *Node, a *Node, res *Node) {
 
 	case OIND:
 		Cgenr(n.Left, a, res)
-		Cgen_checknil(a)
+		if !n.Left.NonNil {
+			Cgen_checknil(a)
+		} else if Debug_checknil != 0 && n.Lineno > 1 {
+			Warnl(n.Lineno, "removed nil check")
+		}
 
 	case OINDEX:
 		if Ctxt.Arch.Family == sys.ARM {
@@ -1587,7 +1591,11 @@ func Agen(n *Node, res *Node) {
 
 	case OIND:
 		Cgen(nl, res)
-		Cgen_checknil(res)
+		if !nl.NonNil {
+			Cgen_checknil(res)
+		} else if Debug_checknil != 0 && n.Lineno > 1 {
+			Warnl(n.Lineno, "removed nil check")
+		}
 
 	case ODOT:
 		Agen(nl, res)
@@ -1597,7 +1605,11 @@ func Agen(n *Node, res *Node) {
 
 	case ODOTPTR:
 		Cgen(nl, res)
-		Cgen_checknil(res)
+		if !nl.NonNil {
+			Cgen_checknil(res)
+		} else if Debug_checknil != 0 && n.Lineno > 1 {
+			Warnl(n.Lineno, "removed nil check")
+		}
 		if n.Xoffset != 0 {
 			addOffset(res, n.Xoffset)
 		}
@@ -1658,7 +1670,11 @@ func Igen(n *Node, a *Node, res *Node) {
 
 	case ODOTPTR:
 		Cgenr(n.Left, a, res)
-		Cgen_checknil(a)
+		if !n.Left.NonNil {
+			Cgen_checknil(a)
+		} else if Debug_checknil != 0 && n.Lineno > 1 {
+			Warnl(n.Lineno, "removed nil check")
+		}
 		a.Op = OINDREG
 		a.Xoffset += n.Xoffset
 		a.Type = n.Type
@@ -1791,7 +1807,7 @@ func bgenx(n, res *Node, wantTrue bool, likely int, to *obj.Prog) {
 	}
 
 	if !n.Type.IsBoolean() {
-		Fatalf("bgen: bad type %v for %v", n.Type, Oconv(n.Op, 0))
+		Fatalf("bgen: bad type %v for %v", n.Type, n.Op)
 	}
 
 	for n.Op == OCONVNOP {
@@ -1829,7 +1845,7 @@ func bgenx(n, res *Node, wantTrue bool, likely int, to *obj.Prog) {
 		// Some architectures might need a temporary or other help here,
 		// but they don't support direct generation of a bool value yet.
 		// We can fix that as we go.
-		mayNeedTemp := Ctxt.Arch.InFamily(sys.ARM, sys.ARM64, sys.MIPS64, sys.PPC64)
+		mayNeedTemp := Ctxt.Arch.InFamily(sys.ARM, sys.ARM64, sys.MIPS64, sys.PPC64, sys.S390X)
 
 		if genval {
 			if mayNeedTemp {
@@ -2363,7 +2379,7 @@ func Ginscall(f *Node, proc int) {
 					// If the MOVD is not needed, insert a hardware NOP
 					// so that the same number of instructions are used
 					// on ppc64 in both shared and non-shared modes.
-					if Ctxt.Flag_shared != 0 {
+					if Ctxt.Flag_shared {
 						p := Thearch.Gins(ppc64.AMOVD, nil, nil)
 						p.From.Type = obj.TYPE_MEM
 						p.From.Offset = 24
@@ -2438,7 +2454,7 @@ func Ginscall(f *Node, proc int) {
 func cgen_callinter(n *Node, res *Node, proc int) {
 	i := n.Left
 	if i.Op != ODOTINTER {
-		Fatalf("cgen_callinter: not ODOTINTER %v", Oconv(i.Op, 0))
+		Fatalf("cgen_callinter: not ODOTINTER %v", i.Op)
 	}
 
 	i = i.Left // interface
@@ -2622,24 +2638,70 @@ func cgen_ret(n *Node) {
 	}
 }
 
+// hasHMUL64 reports whether the architecture supports 64-bit
+// signed and unsigned high multiplication (OHMUL).
+func hasHMUL64() bool {
+	switch Ctxt.Arch.Family {
+	case sys.AMD64, sys.S390X, sys.ARM64:
+		return true
+	case sys.ARM, sys.I386, sys.MIPS64, sys.PPC64:
+		return false
+	}
+	Fatalf("unknown architecture")
+	return false
+}
+
+// hasRROTC64 reports whether the architecture supports 64-bit
+// rotate through carry instructions (ORROTC).
+func hasRROTC64() bool {
+	switch Ctxt.Arch.Family {
+	case sys.AMD64:
+		return true
+	case sys.ARM, sys.ARM64, sys.I386, sys.MIPS64, sys.PPC64, sys.S390X:
+		return false
+	}
+	Fatalf("unknown architecture")
+	return false
+}
+
+func hasRightShiftWithCarry() bool {
+	switch Ctxt.Arch.Family {
+	case sys.ARM64:
+		return true
+	case sys.AMD64, sys.ARM, sys.I386, sys.MIPS64, sys.PPC64, sys.S390X:
+		return false
+	}
+	Fatalf("unknown architecture")
+	return false
+}
+
+func hasAddSetCarry() bool {
+	switch Ctxt.Arch.Family {
+	case sys.ARM64:
+		return true
+	case sys.AMD64, sys.ARM, sys.I386, sys.MIPS64, sys.PPC64, sys.S390X:
+		return false
+	}
+	Fatalf("unknown architecture")
+	return false
+}
+
 // generate division according to op, one of:
 //	res = nl / nr
 //	res = nl % nr
 func cgen_div(op Op, nl *Node, nr *Node, res *Node) {
 	var w int
 
-	// TODO(rsc): arm64 needs to support the relevant instructions
-	// in peep and optoas in order to enable this.
-	// TODO(rsc): ppc64 needs to support the relevant instructions
-	// in peep and optoas in order to enable this.
-	if nr.Op != OLITERAL || Ctxt.Arch.Family == sys.MIPS64 || Ctxt.Arch.Family == sys.ARM64 || Ctxt.Arch.Family == sys.PPC64 {
+	// Architectures need to support 64-bit high multiplications
+	// (OHMUL) in order to perform divide by constant optimizations.
+	if nr.Op != OLITERAL || !hasHMUL64() {
 		goto longdiv
 	}
 	w = int(nl.Type.Width * 8)
 
 	// Front end handled 32-bit division. We only need to handle 64-bit.
-	// try to do division by multiply by (2^w)/d
-	// see hacker's delight chapter 10
+	// Try to do division using multiplication: (2^w)/d.
+	// See Hacker's Delight, chapter 10.
 	switch Simtype[nl.Type.Etype] {
 	default:
 		goto longdiv
@@ -2651,6 +2713,18 @@ func cgen_div(op Op, nl *Node, nr *Node, res *Node) {
 		Umagic(&m)
 		if m.Bad != 0 {
 			break
+		}
+
+		// In order to add the numerator we need to be able to
+		// avoid overflow. This is done by shifting the result of the
+		// addition right by 1 and inserting the carry bit into
+		// the MSB. For now this needs the RROTC instruction.
+		// TODO(mundaym): Hacker's Delight 2nd ed. chapter 10 proposes
+		// an alternative sequence of instructions for architectures
+		// (TODO: MIPS64, PPC64, S390X) that do not have a shift
+		// right with carry instruction.
+		if m.Ua != 0 && !hasRROTC64() && !hasRightShiftWithCarry() {
+			goto longdiv
 		}
 		if op == OMOD {
 			goto longmod
@@ -2665,13 +2739,21 @@ func cgen_div(op Op, nl *Node, nr *Node, res *Node) {
 		Thearch.Cgen_hmul(&n1, &n2, &n3)
 
 		if m.Ua != 0 {
-			// need to add numerator accounting for overflow
-			Thearch.Gins(Thearch.Optoas(OADD, nl.Type), &n1, &n3)
+			// Need to add numerator accounting for overflow.
+			if hasAddSetCarry() {
+				Thearch.AddSetCarry(&n1, &n3, &n3)
+			} else {
+				Thearch.Gins(Thearch.Optoas(OADD, nl.Type), &n1, &n3)
+			}
 
-			Nodconst(&n2, nl.Type, 1)
-			Thearch.Gins(Thearch.Optoas(ORROTC, nl.Type), &n2, &n3)
-			Nodconst(&n2, nl.Type, int64(m.S)-1)
-			Thearch.Gins(Thearch.Optoas(ORSH, nl.Type), &n2, &n3)
+			if !hasRROTC64() {
+				Thearch.RightShiftWithCarry(&n3, uint(m.S), &n3)
+			} else {
+				Nodconst(&n2, nl.Type, 1)
+				Thearch.Gins(Thearch.Optoas(ORROTC, nl.Type), &n2, &n3)
+				Nodconst(&n2, nl.Type, int64(m.S)-1)
+				Thearch.Gins(Thearch.Optoas(ORSH, nl.Type), &n2, &n3)
+			}
 		} else {
 			Nodconst(&n2, nl.Type, int64(m.S))
 			Thearch.Gins(Thearch.Optoas(ORSH, nl.Type), &n2, &n3) // shift dx
@@ -2703,7 +2785,7 @@ func cgen_div(op Op, nl *Node, nr *Node, res *Node) {
 		Thearch.Cgen_hmul(&n1, &n2, &n3)
 
 		if m.Sm < 0 {
-			// need to add numerator
+			// Need to add numerator (cannot overflow).
 			Thearch.Gins(Thearch.Optoas(OADD, nl.Type), &n1, &n3)
 		}
 
@@ -2716,8 +2798,8 @@ func cgen_div(op Op, nl *Node, nr *Node, res *Node) {
 		Thearch.Gins(Thearch.Optoas(OSUB, nl.Type), &n1, &n3) // added
 
 		if m.Sd < 0 {
-			// this could probably be removed
-			// by factoring it into the multiplier
+			// This could probably be removed by factoring it into
+			// the multiplier.
 			Thearch.Gins(Thearch.Optoas(OMINUS, nl.Type), nil, &n3)
 		}
 
@@ -2729,14 +2811,14 @@ func cgen_div(op Op, nl *Node, nr *Node, res *Node) {
 
 	goto longdiv
 
-	// division and mod using (slow) hardware instruction
+	// Division and mod using (slow) hardware instruction.
 longdiv:
 	Thearch.Dodiv(op, nl, nr, res)
 
 	return
 
-	// mod using formula A%B = A-(A/B*B) but
-	// we know that there is a fast algorithm for A/B
+	// Mod using formula A%B = A-(A/B*B) but
+	// we know that there is a fast algorithm for A/B.
 longmod:
 	var n1 Node
 	Regalloc(&n1, nl.Type, res)
@@ -2746,11 +2828,6 @@ longmod:
 	Regalloc(&n2, nl.Type, nil)
 	cgen_div(ODIV, &n1, nr, &n2)
 	a := Thearch.Optoas(OMUL, nl.Type)
-	if w == 8 {
-		// use 2-operand 16-bit multiply
-		// because there is no 2-operand 8-bit multiply
-		a = Thearch.Optoas(OMUL, Types[TINT16]) // XXX was IMULW
-	}
 
 	if !Smallintconst(nr) {
 		var n3 Node
@@ -2846,7 +2923,7 @@ func cgen_append(n, res *Node) {
 	arg.Addable = true
 	arg.Xoffset = Ctxt.FixedFrameSize()
 	arg.Type = Ptrto(Types[TUINT8])
-	Cgen(typename(res.Type), &arg)
+	Cgen(typename(res.Type.Elem()), &arg)
 	arg.Xoffset += int64(Widthptr)
 
 	arg.Type = Types[Tptr]
@@ -3060,15 +3137,7 @@ func cgen_slice(n, res *Node, wb bool) {
 		x.Xoffset -= 2 * int64(Widthptr)
 	}
 
-	var x1, x2, x3 *Node // unevaluated index arguments
-	x1 = n.Right.Left
-	switch n.Op {
-	default:
-		x2 = n.Right.Right
-	case OSLICE3, OSLICE3ARR:
-		x2 = n.Right.Right.Left
-		x3 = n.Right.Right.Right
-	}
+	x1, x2, x3 := n.SliceBounds() // unevaluated index arguments
 
 	// load computes src into targ, but if src refers to the len or cap of n.Left,
 	// load copies those from xlen, xcap, loading xlen if needed.

@@ -15,7 +15,7 @@
  *
  * Copyright (c) 1996-1998 John D. Polstra.  All rights reserved.
  * Copyright (c) 2001 David E. O'Brien
- * Portions Copyright 2009 The Go Authors.  All rights reserved.
+ * Portions Copyright 2009 The Go Authors. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -2060,8 +2060,8 @@ type Rela32 struct {
 	Addend int32  /* Addend. */
 }
 
-func R_SYM32(info uint32) uint32      { return uint32(info >> 8) }
-func R_TYPE32(info uint32) uint32     { return uint32(info & 0xff) }
+func R_SYM32(info uint32) uint32      { return info >> 8 }
+func R_TYPE32(info uint32) uint32     { return info & 0xff }
 func R_INFO32(sym, typ uint32) uint32 { return sym<<8 | typ }
 
 // ELF32 Symbol.

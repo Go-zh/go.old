@@ -34,7 +34,10 @@ type Func struct {
 	Names []LocalSlot
 
 	freeValues *Value // free Values linked by argstorage[0].  All other fields except ID are 0/nil.
-	freeBlocks *Block // free Blocks linked by succstorage[0].  All other fields except ID are 0/nil.
+	freeBlocks *Block // free Blocks linked by succstorage[0].b.  All other fields except ID are 0/nil.
+
+	idom []*Block   // precomputed immediate dominators
+	sdom SparseTree // precomputed dominator tree
 
 	constants map[int64][]*Value // constants cache, keyed by constant value; users must check value's Op and Type
 }
@@ -101,12 +104,16 @@ func (f *Func) newValue(op Op, t Type, b *Block, line int32) *Value {
 // context to allow item-by-item comparisons across runs.
 // For example:
 // awk 'BEGIN {FS="\t"} $3~/TIME/{sum+=$4} END{print "t(ns)=",sum}' t.log
-func (f *Func) logStat(key string, args ...interface{}) {
+func (f *Func) LogStat(key string, args ...interface{}) {
 	value := ""
 	for _, a := range args {
 		value += fmt.Sprintf("\t%v", a)
 	}
-	f.Config.Warnl(f.Entry.Line, "\t%s\t%s%s\t%s", f.pass.name, key, value, f.Name)
+	n := "missing_pass"
+	if f.pass != nil {
+		n = f.pass.name
+	}
+	f.Config.Warnl(f.Entry.Line, "\t%s\t%s%s\t%s", n, key, value, f.Name)
 }
 
 // freeValue frees a value. It must no longer be referenced.
@@ -143,8 +150,8 @@ func (f *Func) NewBlock(kind BlockKind) *Block {
 	var b *Block
 	if f.freeBlocks != nil {
 		b = f.freeBlocks
-		f.freeBlocks = b.succstorage[0]
-		b.succstorage[0] = nil
+		f.freeBlocks = b.succstorage[0].b
+		b.succstorage[0].b = nil
 	} else {
 		ID := f.bid.get()
 		if int(ID) < len(f.Config.blocks) {
@@ -170,7 +177,7 @@ func (f *Func) freeBlock(b *Block) {
 	id := b.ID
 	*b = Block{}
 	b.ID = id
-	b.succstorage[0] = f.freeBlocks
+	b.succstorage[0].b = f.freeBlocks
 	f.freeBlocks = b
 }
 
@@ -284,7 +291,10 @@ func (b *Block) NewValue2I(line int32, op Op, t Type, auxint int64, arg0, arg1 *
 func (b *Block) NewValue3(line int32, op Op, t Type, arg0, arg1, arg2 *Value) *Value {
 	v := b.Func.newValue(op, t, b, line)
 	v.AuxInt = 0
-	v.Args = []*Value{arg0, arg1, arg2}
+	v.Args = v.argstorage[:3]
+	v.argstorage[0] = arg0
+	v.argstorage[1] = arg1
+	v.argstorage[2] = arg2
 	arg0.Uses++
 	arg1.Uses++
 	arg2.Uses++
@@ -295,7 +305,10 @@ func (b *Block) NewValue3(line int32, op Op, t Type, arg0, arg1, arg2 *Value) *V
 func (b *Block) NewValue3I(line int32, op Op, t Type, auxint int64, arg0, arg1, arg2 *Value) *Value {
 	v := b.Func.newValue(op, t, b, line)
 	v.AuxInt = auxint
-	v.Args = []*Value{arg0, arg1, arg2}
+	v.Args = v.argstorage[:3]
+	v.argstorage[0] = arg0
+	v.argstorage[1] = arg1
+	v.argstorage[2] = arg2
 	arg0.Uses++
 	arg1.Uses++
 	arg2.Uses++
@@ -309,7 +322,7 @@ func (f *Func) constVal(line int32, op Op, t Type, c int64, setAux bool) *Value 
 	}
 	vv := f.constants[c]
 	for _, v := range vv {
-		if v.Op == op && v.Type.Equal(t) {
+		if v.Op == op && v.Type.Compare(t) == CMPeq {
 			if setAux && v.AuxInt != c {
 				panic(fmt.Sprintf("cached const %s should have AuxInt of %d", v.LongString(), c))
 			}

@@ -14,7 +14,7 @@ the same interfaces and similar Dial and Listen functions.
 
 The Dial function connects to a server:
 
-	conn, err := net.Dial("tcp", "google.com:80")
+	conn, err := net.Dial("tcp", "golang.org:80")
 	if err != nil {
 		// handle error
 	}
@@ -79,6 +79,7 @@ On Windows, the resolver always uses C library functions, such as GetAddrInfo an
 package net
 
 import (
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -376,6 +377,22 @@ var (
 	errClosing                = errors.New("use of closed network connection")
 	ErrWriteToConnected       = errors.New("use of WriteTo with pre-connected connection")
 )
+
+// mapErr maps from the context errors to the historical internal net
+// error values.
+//
+// TODO(bradfitz): get rid of this after adjusting tests and making
+// context.DeadlineExceeded implement net.Error?
+func mapErr(err error) error {
+	switch err {
+	case context.Canceled:
+		return errCanceled
+	case context.DeadlineExceeded:
+		return errTimeout
+	default:
+		return err
+	}
+}
 
 // OpError is the error type usually returned by functions in the net
 // package. It describes the operation, network type, and address of

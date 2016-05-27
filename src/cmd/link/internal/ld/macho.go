@@ -79,6 +79,8 @@ const (
 	MACHO_X86_64_RELOC_SIGNED_2   = 7
 	MACHO_X86_64_RELOC_SIGNED_4   = 8
 	MACHO_ARM_RELOC_VANILLA       = 0
+	MACHO_ARM_RELOC_PAIR          = 1
+	MACHO_ARM_RELOC_SECTDIFF      = 2
 	MACHO_ARM_RELOC_BR24          = 5
 	MACHO_ARM64_RELOC_UNSIGNED    = 0
 	MACHO_ARM64_RELOC_BRANCH26    = 2
@@ -350,8 +352,9 @@ func machoshbits(mseg *MachoSeg, sect *Section, segname string) {
 
 	var msect *MachoSect
 	if sect.Rwx&1 == 0 && segname != "__DWARF" && (SysArch.Family == sys.ARM64 ||
-		(SysArch.Family == sys.AMD64 && (Buildmode == BuildmodeCShared || Buildmode == BuildmodeCArchive))) {
-		// Darwin external linker on arm64 and on amd64 in c-shared/c-archive buildmode
+		(SysArch.Family == sys.AMD64 && (Buildmode == BuildmodeCShared || Buildmode == BuildmodeCArchive)) ||
+		(SysArch.Family == sys.ARM && (Buildmode == BuildmodeCShared || Buildmode == BuildmodeCArchive))) {
+		// Darwin external linker on arm64 and on amd64 and arm in c-shared/c-archive buildmode
 		// complains about absolute relocs in __TEXT, so if the section is not
 		// executable, put it in __DATA segment.
 		msect = newMachoSect(mseg, buf, "__DATA")
@@ -586,11 +589,8 @@ func Asmbmacho() {
 		// and we can assume OS X.
 		//
 		// See golang.org/issues/12941.
-		const (
-			LC_VERSION_MIN_MACOSX   = 0x24
-			LC_VERSION_MIN_IPHONEOS = 0x25
-			LC_VERSION_MIN_WATCHOS  = 0x30
-		)
+		const LC_VERSION_MIN_MACOSX = 0x24
+
 		ml := newMachoLoad(LC_VERSION_MIN_MACOSX, 2)
 		ml.data[0] = 10<<16 | 7<<8 | 0<<0 // OS X version 10.7.0
 		ml.data[1] = 10<<16 | 7<<8 | 0<<0 // SDK 10.7.0
@@ -685,15 +685,11 @@ func machosymorder() {
 }
 
 func machosymtab() {
-	var s *LSym
-	var o *LSym
-	var p string
-
 	symtab := Linklookup(Ctxt, ".machosymtab", 0)
 	symstr := Linklookup(Ctxt, ".machosymstr", 0)
 
 	for i := 0; i < nsortsym; i++ {
-		s = sortsym[i]
+		s := sortsym[i]
 		Adduint32(Ctxt, symtab, uint32(symstr.Size))
 
 		// Only add _ to C symbols. Go symbols have dot in the name.
@@ -702,20 +698,7 @@ func machosymtab() {
 		}
 
 		// replace "·" as ".", because DTrace cannot handle it.
-		if !strings.Contains(s.Extname, "·") {
-			Addstring(symstr, s.Extname)
-		} else {
-			for p = s.Extname; p != ""; p = p[1:] {
-				if uint8(p[0]) == 0xc2 && uint8((p[1:])[0]) == 0xb7 {
-					Adduint8(Ctxt, symstr, '.')
-					p = p[1:]
-				} else {
-					Adduint8(Ctxt, symstr, uint8(p[0]))
-				}
-			}
-
-			Adduint8(Ctxt, symstr, '\x00')
-		}
+		Addstring(symstr, strings.Replace(s.Extname, "·", ".", -1))
 
 		if s.Type == obj.SDYNIMPORT || s.Type == obj.SHOSTOBJ {
 			Adduint8(Ctxt, symtab, 0x01)                // type N_EXT, external symbol
@@ -728,7 +711,7 @@ func machosymtab() {
 			} else {
 				Adduint8(Ctxt, symtab, 0x0e)
 			}
-			o = s
+			o := s
 			for o.Outer != nil {
 				o = o.Outer
 			}
@@ -826,27 +809,25 @@ func Domacholink() int64 {
 	return Rnd(int64(size), int64(INITRND))
 }
 
-func machorelocsect(sect *Section, first *LSym) {
+func machorelocsect(sect *Section, syms []*LSym) {
 	// If main section has no bits, nothing to relocate.
 	if sect.Vaddr >= sect.Seg.Vaddr+sect.Seg.Filelen {
 		return
 	}
 
 	sect.Reloff = uint64(Cpos())
-	var sym *LSym
-	for sym = first; sym != nil; sym = sym.Next {
-		if !sym.Attr.Reachable() {
+	for i, s := range syms {
+		if !s.Attr.Reachable() {
 			continue
 		}
-		if uint64(sym.Value) >= sect.Vaddr {
+		if uint64(s.Value) >= sect.Vaddr {
+			syms = syms[i:]
 			break
 		}
 	}
 
 	eaddr := int32(sect.Vaddr + sect.Length)
-	var r *Reloc
-	var ri int
-	for ; sym != nil; sym = sym.Next {
+	for _, sym := range syms {
 		if !sym.Attr.Reachable() {
 			continue
 		}
@@ -855,8 +836,8 @@ func machorelocsect(sect *Section, first *LSym) {
 		}
 		Ctxt.Cursym = sym
 
-		for ri = 0; ri < len(sym.R); ri++ {
-			r = &sym.R[ri]
+		for ri := 0; ri < len(sym.R); ri++ {
+			r := &sym.R[ri]
 			if r.Done != 0 {
 				continue
 			}
@@ -882,6 +863,6 @@ func Machoemitreloc() {
 		machorelocsect(sect, datap)
 	}
 	for sect := Segdwarf.Sect; sect != nil; sect = sect.Next {
-		machorelocsect(sect, dwarfp)
+		machorelocsect(sect, list2slice(dwarfp))
 	}
 }

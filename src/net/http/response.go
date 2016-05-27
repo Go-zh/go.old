@@ -73,6 +73,15 @@ type Response struct {
 	// ReadResponse nor Response.Write ever closes a connection.
 	Close bool
 
+	// Uncompressed reports whether the response was sent compressed but
+	// was decompressed by the http package. When true, reading from
+	// Body yields the uncompressed content instead of the compressed
+	// content actually set from the server, ContentLength is set to -1,
+	// and the "Content-Length" and "Content-Encoding" fields are deleted
+	// from the responseHeader. To get the original response from
+	// the server, set Transport.DisableCompression to true.
+	Uncompressed bool
+
 	// Trailer maps trailer keys to values in the same
 	// format as Header.
 	//
@@ -87,7 +96,7 @@ type Response struct {
 	// any trailer values sent by the server.
 	Trailer Header
 
-	// The Request that was sent to obtain this Response.
+	// Request is the request that was sent to obtain this Response.
 	// Request's Body is nil (having already been consumed).
 	// This is only populated for Client requests.
 	Request *Request
@@ -185,7 +194,7 @@ func ReadResponse(r *bufio.Reader, req *Request) (*Response, error) {
 	return resp, nil
 }
 
-// RFC2616: Should treat
+// RFC 2616: Should treat
 //	Pragma: no-cache
 // like
 //	Cache-Control: no-cache
@@ -268,7 +277,7 @@ func (r *Response) Write(w io.Writer) error {
 	// content-length, the only way to do that is the old HTTP/1.0
 	// way, by noting the EOF with a connection close, so we need
 	// to set Close.
-	if r1.ContentLength == -1 && !r1.Close && r1.ProtoAtLeast(1, 1) && !chunked(r1.TransferEncoding) {
+	if r1.ContentLength == -1 && !r1.Close && r1.ProtoAtLeast(1, 1) && !chunked(r1.TransferEncoding) && !r1.Uncompressed {
 		r1.Close = true
 	}
 

@@ -44,6 +44,9 @@ func TestEncoder(t *testing.T) {
 	for i := 0; i <= len(streamTest); i++ {
 		var buf bytes.Buffer
 		enc := NewEncoder(&buf)
+		// Check that enc.SetIndent("", "") turns off indentation.
+		enc.SetIndent(">", ".")
+		enc.SetIndent("", "")
 		for j, v := range streamTest[0:i] {
 			if err := enc.Encode(v); err != nil {
 				t.Fatalf("encode #%d: %v", j, err)
@@ -77,13 +80,46 @@ false
 func TestEncoderIndent(t *testing.T) {
 	var buf bytes.Buffer
 	enc := NewEncoder(&buf)
-	enc.Indent(">", ".")
+	enc.SetIndent(">", ".")
 	for _, v := range streamTest {
 		enc.Encode(v)
 	}
 	if have, want := buf.String(), streamEncodedIndent; have != want {
 		t.Error("indented encoding mismatch")
 		diff(t, []byte(have), []byte(want))
+	}
+}
+
+func TestEncoderSetEscapeHTML(t *testing.T) {
+	var c C
+	var ct CText
+	for _, tt := range []struct {
+		name       string
+		v          interface{}
+		wantEscape string
+		want       string
+	}{
+		{"c", c, `"\u003c\u0026\u003e"`, `"<&>"`},
+		{"ct", ct, `"\"\u003c\u0026\u003e\""`, `"\"<&>\""`},
+		{`"<&>"`, "<&>", `"\u003c\u0026\u003e"`, `"<&>"`},
+	} {
+		var buf bytes.Buffer
+		enc := NewEncoder(&buf)
+		if err := enc.Encode(tt.v); err != nil {
+			t.Fatalf("Encode(%s): %s", tt.name, err)
+		}
+		if got := strings.TrimSpace(buf.String()); got != tt.wantEscape {
+			t.Errorf("Encode(%s) = %#q, want %#q", tt.name, got, tt.wantEscape)
+		}
+		buf.Reset()
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(tt.v); err != nil {
+			t.Fatalf("SetEscapeHTML(false) Encode(%s): %s", tt.name, err)
+		}
+		if got := strings.TrimSpace(buf.String()); got != tt.want {
+			t.Errorf("SetEscapeHTML(false) Encode(%s) = %#q, want %#q",
+				tt.name, got, tt.want)
+		}
 	}
 }
 

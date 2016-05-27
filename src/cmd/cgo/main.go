@@ -156,7 +156,7 @@ var intSizeMap = map[string]int64{
 	"ppc64":    8,
 	"ppc64le":  8,
 	"s390":     4,
-	"s390x":    4,
+	"s390x":    8,
 }
 
 var cPrefix string
@@ -226,6 +226,12 @@ func main() {
 	}
 
 	goFiles := args[i:]
+
+	for _, arg := range args[:i] {
+		if arg == "-fsanitize=thread" {
+			tsanProlog = yesTsanProlog
+		}
+	}
 
 	p := newPackage(args[:i])
 

@@ -267,7 +267,7 @@ func to(_case int, r rune, caseRange []CaseRange) rune {
 		m := lo + (hi-lo)/2
 		cr := caseRange[m]
 		if rune(cr.Lo) <= r && r <= rune(cr.Hi) {
-			delta := rune(cr.Delta[_case])
+			delta := cr.Delta[_case]
 			if delta > MaxRune {
 				// In an Upper-Lower sequence, which always starts with
 				// an UpperCase letter, the real deltas always look like:
@@ -425,6 +425,10 @@ type foldPair struct {
 //	SimpleFold('1') = '1'
 //
 func SimpleFold(r rune) rune {
+	if int(r) < len(asciiFold) {
+		return rune(asciiFold[r])
+	}
+
 	// Consult caseOrbit table for special cases.
 	// 为特殊的写法查询 caseOrbit 表。
 	lo := 0

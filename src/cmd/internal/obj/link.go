@@ -8,7 +8,7 @@
 //	Portions Copyright © 2004,2006 Bruce Ellis
 //	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //	Revisions Copyright © 2000-2007 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//	Portions Copyright © 2009 The Go Authors. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -31,7 +31,7 @@
 package obj
 
 import (
-	"cmd/internal/bio"
+	"bufio"
 	"cmd/internal/sys"
 )
 
@@ -454,9 +454,12 @@ const (
 	// R_ADDRARM64 relocates an adrp, add pair to compute the address of the
 	// referenced symbol.
 	R_ADDRARM64
-	// R_ADDRMIPS (only used on mips64) resolves to a 32-bit external address,
-	// by loading the address into a register with two instructions (lui, ori).
+	// R_ADDRMIPS (only used on mips64) resolves to the low 16 bits of an external
+	// address, by encoding it into the instruction.
 	R_ADDRMIPS
+	// R_ADDROFF resolves to a 32-bit offset from the beginning of the section
+	// holding the data being relocated to the referenced symbol.
+	R_ADDROFF
 	R_SIZE
 	R_CALL
 	R_CALLARM
@@ -489,11 +492,12 @@ const (
 	// should be linked into the final binary, even if there are no other
 	// direct references. (This is used for types reachable by reflection.)
 	R_USETYPE
-	// R_METHOD resolves to an *rtype for a method.
-	// It is used when linking from the uncommonType of another *rtype, and
-	// may be set to zero by the linker if it determines the method text is
-	// unreachable by the linked program.
-	R_METHOD
+	// R_METHODOFF resolves to a 32-bit offset from the beginning of the section
+	// holding the data being relocated to the referenced symbol.
+	// It is a variant of R_ADDROFF used when linking from the uncommonType of a
+	// *rtype, and may be set to zero by the linker if it determines the method
+	// text is unreachable by the linked program.
+	R_METHODOFF
 	R_POWER_TOC
 	R_GOTPCREL
 	// R_JMPMIPS (only used on mips64) resolves to non-PC-relative target address
@@ -577,6 +581,13 @@ const (
 	// R_PCRELDBL relocates s390x 2-byte aligned PC-relative addresses.
 	// TODO(mundaym): remove once variants can be serialized - see issue 14218.
 	R_PCRELDBL
+
+	// R_ADDRMIPSU (only used on mips64) resolves to the sign-adjusted "upper" 16
+	// bits (bit 16-31) of an external address, by encoding it into the instruction.
+	R_ADDRMIPSU
+	// R_ADDRMIPSTLS (only used on mips64) resolves to the low 16 bits of a TLS
+	// address (offset from thread pointer), by encoding it into the instruction.
+	R_ADDRMIPSTLS
 )
 
 type Auto struct {
@@ -597,19 +608,6 @@ type Pcdata struct {
 	P []byte
 }
 
-// Pcdata iterator.
-//      for(pciterinit(ctxt, &it, &pcd); !it.done; pciternext(&it)) { it.value holds in [it.pc, it.nextpc) }
-type Pciter struct {
-	d       Pcdata
-	p       []byte
-	pc      uint32
-	nextpc  uint32
-	pcscale uint32
-	value   int32
-	start   int
-	done    int
-}
-
 // symbol version, incremented each time a file is loaded.
 // version==1 is reserved for savehist.
 const (
@@ -626,10 +624,10 @@ type Link struct {
 	Debugvlog     int32
 	Debugdivmod   int32
 	Debugpcln     int32
-	Flag_shared   int32
+	Flag_shared   bool
 	Flag_dynlink  bool
 	Flag_optimize bool
-	Bso           *bio.Buf
+	Bso           *bufio.Writer
 	Pathname      string
 	Goroot        string
 	Goroot_final  string
@@ -726,27 +724,6 @@ const (
 	Hsolaris
 	Hwindows
 )
-
-type Plist struct {
-	Name    *LSym
-	Firstpc *Prog
-	Recur   int
-	Link    *Plist
-}
-
-/*
- * start a new Prog list.
- */
-func Linknewplist(ctxt *Link) *Plist {
-	pl := new(Plist)
-	if ctxt.Plist == nil {
-		ctxt.Plist = pl
-	} else {
-		ctxt.Plast.Link = pl
-	}
-	ctxt.Plast = pl
-	return pl
-}
 
 // AsmBuf is a simple buffer to assemble variable-length x86 instructions into.
 type AsmBuf struct {

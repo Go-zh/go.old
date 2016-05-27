@@ -10,6 +10,7 @@ package exec_test
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"internal/testenv"
 	"io"
@@ -28,14 +29,22 @@ import (
 	"time"
 )
 
-func helperCommand(t *testing.T, s ...string) *exec.Cmd {
+func helperCommandContext(t *testing.T, ctx context.Context, s ...string) (cmd *exec.Cmd) {
 	testenv.MustHaveExec(t)
 
 	cs := []string{"-test.run=TestHelperProcess", "--"}
 	cs = append(cs, s...)
-	cmd := exec.Command(os.Args[0], cs...)
+	if ctx != nil {
+		cmd = exec.CommandContext(ctx, os.Args[0], cs...)
+	} else {
+		cmd = exec.Command(os.Args[0], cs...)
+	}
 	cmd.Env = []string{"GO_WANT_HELPER_PROCESS=1"}
 	return cmd
+}
+
+func helperCommand(t *testing.T, s ...string) *exec.Cmd {
+	return helperCommandContext(t, nil, s...)
 }
 
 func TestEcho(t *testing.T) {
@@ -479,7 +488,7 @@ func TestExtraFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Write: %v", err)
 	}
-	_, err = tf.Seek(0, os.SEEK_SET)
+	_, err = tf.Seek(0, io.SeekStart)
 	if err != nil {
 		t.Fatalf("Seek: %v", err)
 	}
@@ -659,10 +668,6 @@ func TestHelperProcess(*testing.T) {
 			// the cloned file descriptors that result from opening
 			// /dev/urandom.
 			// https://golang.org/issue/3955
-		case "plan9":
-			// TODO(0intro): Determine why Plan 9 is leaking
-			// file descriptors.
-			// https://golang.org/issue/7118
 		case "solaris":
 			// TODO(aram): This fails on Solaris because libc opens
 			// its own files, as it sees fit. Darwin does the same,
@@ -833,5 +838,43 @@ func TestOutputStderrCapture(t *testing.T) {
 	want := "some stderr text\n"
 	if got != want {
 		t.Errorf("ExitError.Stderr = %q; want %q", got, want)
+	}
+}
+
+func TestContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	c := helperCommandContext(t, ctx, "pipetest")
+	stdin, err := c.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := c.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := stdin.Write([]byte("O:hi\n")); err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, 5)
+	n, err := io.ReadFull(stdout, buf)
+	if n != len(buf) || err != nil || string(buf) != "O:hi\n" {
+		t.Fatalf("ReadFull = %d, %v, %q", n, err, buf[:n])
+	}
+	waitErr := make(chan error, 1)
+	go func() {
+		waitErr <- c.Wait()
+	}()
+	cancel()
+	select {
+	case err := <-waitErr:
+		if err == nil {
+			t.Fatal("expected Wait failure")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timeout waiting for child process death")
 	}
 }

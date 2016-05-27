@@ -35,6 +35,7 @@ type serverHandshakeState struct {
 }
 
 // serverHandshake performs a TLS handshake as a server.
+// c.out.Mutex <= L; c.handshakeMutex <= L.
 func (c *Conn) serverHandshake() error {
 	config := c.config
 
@@ -67,9 +68,10 @@ func (c *Conn) serverHandshake() error {
 				return err
 			}
 		}
-		if err := hs.sendFinished(c.firstFinished[:]); err != nil {
+		if err := hs.sendFinished(c.serverFinished[:]); err != nil {
 			return err
 		}
+		c.clientFinishedIsFirst = false
 		if err := hs.readFinished(nil); err != nil {
 			return err
 		}
@@ -83,9 +85,10 @@ func (c *Conn) serverHandshake() error {
 		if err := hs.establishKeys(); err != nil {
 			return err
 		}
-		if err := hs.readFinished(c.firstFinished[:]); err != nil {
+		if err := hs.readFinished(c.clientFinished[:]); err != nil {
 			return err
 		}
+		c.clientFinishedIsFirst = true
 		if err := hs.sendSessionTicket(); err != nil {
 			return err
 		}
@@ -165,7 +168,13 @@ Curves:
 		c.sendAlert(alertInternalError)
 		return false, err
 	}
-	hs.hello.secureRenegotiation = hs.clientHello.secureRenegotiation
+
+	if len(hs.clientHello.secureRenegotiation) != 0 {
+		c.sendAlert(alertHandshakeFailure)
+		return false, errors.New("tls: initial handshake had non-empty renegotiation extension")
+	}
+
+	hs.hello.secureRenegotiationSupported = hs.clientHello.secureRenegotiationSupported
 	hs.hello.compressionMethod = compressionNone
 	if len(hs.clientHello.serverName) > 0 {
 		c.serverName = hs.clientHello.serverName
@@ -209,7 +218,7 @@ Curves:
 			hs.rsaSignOk = true
 		default:
 			c.sendAlert(alertInternalError)
-			return false, fmt.Errorf("crypto/tls: unsupported signing key type (%T)", priv.Public())
+			return false, fmt.Errorf("tls: unsupported signing key type (%T)", priv.Public())
 		}
 	}
 	if priv, ok := hs.cert.PrivateKey.(crypto.Decrypter); ok {
@@ -218,7 +227,7 @@ Curves:
 			hs.rsaDecryptOk = true
 		default:
 			c.sendAlert(alertInternalError)
-			return false, fmt.Errorf("crypto/tls: unsupported decryption key type (%T)", priv.Public())
+			return false, fmt.Errorf("tls: unsupported decryption key type (%T)", priv.Public())
 		}
 	}
 
@@ -275,10 +284,8 @@ func (hs *serverHandshakeState) checkForResumption() bool {
 		return false
 	}
 
-	if hs.sessionState.vers > hs.clientHello.vers {
-		return false
-	}
-	if vers, ok := c.config.mutualVersion(hs.sessionState.vers); !ok || vers != hs.sessionState.vers {
+	// Never resume a session for a different TLS version.
+	if c.vers != hs.sessionState.vers {
 		return false
 	}
 
@@ -514,7 +521,7 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 		switch key := pub.(type) {
 		case *ecdsa.PublicKey:
 			if signatureAndHash.signature != signatureECDSA {
-				err = errors.New("bad signature type for client's ECDSA certificate")
+				err = errors.New("tls: bad signature type for client's ECDSA certificate")
 				break
 			}
 			ecdsaSig := new(ecdsaSignature)
@@ -522,7 +529,7 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 				break
 			}
 			if ecdsaSig.R.Sign() <= 0 || ecdsaSig.S.Sign() <= 0 {
-				err = errors.New("ECDSA signature contained zero or negative values")
+				err = errors.New("tls: ECDSA signature contained zero or negative values")
 				break
 			}
 			var digest []byte
@@ -530,11 +537,11 @@ func (hs *serverHandshakeState) doFullHandshake() error {
 				break
 			}
 			if !ecdsa.Verify(key, digest, ecdsaSig.R, ecdsaSig.S) {
-				err = errors.New("ECDSA verification failure")
+				err = errors.New("tls: ECDSA verification failure")
 			}
 		case *rsa.PublicKey:
 			if signatureAndHash.signature != signatureRSA {
-				err = errors.New("bad signature type for client's RSA certificate")
+				err = errors.New("tls: bad signature type for client's RSA certificate")
 				break
 			}
 			var digest []byte
@@ -586,8 +593,8 @@ func (hs *serverHandshakeState) readFinished(out []byte) error {
 	c := hs.c
 
 	c.readRecord(recordTypeChangeCipherSpec)
-	if err := c.in.error(); err != nil {
-		return err
+	if c.in.err != nil {
+		return c.in.err
 	}
 
 	if hs.hello.nextProtoNeg {

@@ -9,7 +9,7 @@
 //	Portions Copyright © 2004,2006 Bruce Ellis
 //	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //	Revisions Copyright © 2000-2007 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//	Portions Copyright © 2009 The Go Authors. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -75,7 +75,11 @@ func (s *LSym) prepwrite(ctxt *Link, off int64, siz int) {
 	if s.Type == SBSS || s.Type == STLSBSS {
 		ctxt.Diag("cannot supply data for BSS var")
 	}
-	s.Grow(off + int64(siz))
+	l := off + int64(siz)
+	s.Grow(l)
+	if l > s.Size {
+		s.Size = l
+	}
 }
 
 // WriteFloat32 writes f into s at offset off.
@@ -111,14 +115,33 @@ func (s *LSym) WriteInt(ctxt *Link, off int64, siz int, i int64) {
 // rsym and roff specify the relocation for the address.
 func (s *LSym) WriteAddr(ctxt *Link, off int64, siz int, rsym *LSym, roff int64) {
 	if siz != ctxt.Arch.PtrSize {
-		ctxt.Diag("WriteAddr: bad address size: %d", siz)
+		ctxt.Diag("WriteAddr: bad address size %d in %s", siz, s.Name)
 	}
 	s.prepwrite(ctxt, off, siz)
 	r := Addrel(s)
 	r.Off = int32(off)
+	if int64(r.Off) != off {
+		ctxt.Diag("WriteAddr: off overflow %d in %s", off, s.Name)
+	}
 	r.Siz = uint8(siz)
 	r.Sym = rsym
 	r.Type = R_ADDR
+	r.Add = roff
+}
+
+// WriteOff writes a 4 byte offset to rsym+roff into s at offset off.
+// After linking the 4 bytes stored at s+off will be
+// rsym+roff-(start of section that s is in).
+func (s *LSym) WriteOff(ctxt *Link, off int64, rsym *LSym, roff int64) {
+	s.prepwrite(ctxt, off, 4)
+	r := Addrel(s)
+	r.Off = int32(off)
+	if int64(r.Off) != off {
+		ctxt.Diag("WriteOff: off overflow %d in %s", off, s.Name)
+	}
+	r.Siz = 4
+	r.Sym = rsym
+	r.Type = R_ADDROFF
 	r.Add = roff
 }
 
@@ -129,6 +152,13 @@ func (s *LSym) WriteString(ctxt *Link, off int64, siz int, str string) {
 	}
 	s.prepwrite(ctxt, off, siz)
 	copy(s.P[off:off+int64(siz)], str)
+}
+
+// WriteBytes writes a slice of bytes into s at offset off.
+func (s *LSym) WriteBytes(ctxt *Link, off int64, b []byte) int64 {
+	s.prepwrite(ctxt, off, len(b))
+	copy(s.P[off:], b)
+	return off + int64(len(b))
 }
 
 func Addrel(s *LSym) *Reloc {
@@ -153,7 +183,7 @@ func Setuintxx(ctxt *Link, s *LSym, off int64, v uint64, wid int64) int64 {
 	case 4:
 		ctxt.Arch.ByteOrder.PutUint32(s.P[off:], uint32(v))
 	case 8:
-		ctxt.Arch.ByteOrder.PutUint64(s.P[off:], uint64(v))
+		ctxt.Arch.ByteOrder.PutUint64(s.P[off:], v)
 	}
 
 	return off + wid

@@ -8,7 +8,7 @@
 //	Portions Copyright © 2004,2006 Bruce Ellis
 //	Portions Copyright © 2005-2007 C H Forsyth (forsyth@terzarima.net)
 //	Revisions Copyright © 2000-2007 Lucent Technologies Inc. and others
-//	Portions Copyright © 2009 The Go Authors.  All rights reserved.
+//	Portions Copyright © 2009 The Go Authors. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -41,6 +41,7 @@ import (
 var resvd = []int{
 	mips.REGZERO,
 	mips.REGSP,   // reserved for SP
+	mips.REGSB,   // reserved for SB
 	mips.REGLINK, // reserved for link
 	mips.REGG,
 	mips.REGTMP,
@@ -148,7 +149,7 @@ func ginscmp(op gc.Op, t *gc.Type, n1, n2 *gc.Node, likely int) *obj.Prog {
 	case gc.TFLOAT32:
 		switch op {
 		default:
-			gc.Fatalf("ginscmp: no entry for op=%v type=%v", gc.Oconv(op, 0), t)
+			gc.Fatalf("ginscmp: no entry for op=%s type=%v", op, t)
 
 		case gc.OEQ,
 			gc.ONE:
@@ -165,7 +166,7 @@ func ginscmp(op gc.Op, t *gc.Type, n1, n2 *gc.Node, likely int) *obj.Prog {
 	case gc.TFLOAT64:
 		switch op {
 		default:
-			gc.Fatalf("ginscmp: no entry for op=%v type=%v", gc.Oconv(op, 0), t)
+			gc.Fatalf("ginscmp: no entry for op=%s type=%v", op, t)
 
 		case gc.OEQ,
 			gc.ONE:
@@ -465,7 +466,7 @@ func gmove(f *gc.Node, t *gc.Node) {
 	//return;
 	// algorithm is:
 	//	if small enough, use native int64 -> float64 conversion.
-	//	otherwise, halve (rounding to odd?), convert, and double.
+	//	otherwise, halve (x -> (x>>1)|(x&1)), convert, and double.
 	/*
 	 * integer to float
 	 */
@@ -495,9 +496,16 @@ func gmove(f *gc.Node, t *gc.Node) {
 			gmove(&bigi, &rtmp)
 			gins(mips.AAND, &r1, &rtmp)
 			p1 := ginsbranch(mips.ABEQ, nil, &rtmp, nil, 0)
-			p2 := gins(mips.ASRLV, nil, &r1)
+			var r3 gc.Node
+			gc.Regalloc(&r3, gc.Types[gc.TUINT64], nil)
+			p2 := gins3(mips.AAND, nil, &r1, &r3)
 			p2.From.Type = obj.TYPE_CONST
 			p2.From.Offset = 1
+			p3 := gins(mips.ASRLV, nil, &r1)
+			p3.From.Type = obj.TYPE_CONST
+			p3.From.Offset = 1
+			gins(mips.AOR, &r3, &r1)
+			gc.Regfree(&r3)
 			gc.Patch(p1, gc.Pc)
 		}
 
@@ -715,7 +723,7 @@ func optoas(op gc.Op, t *gc.Type) obj.As {
 	a := obj.AXXX
 	switch uint32(op)<<16 | uint32(gc.Simtype[t.Etype]) {
 	default:
-		gc.Fatalf("optoas: no entry for op=%v type=%v", gc.Oconv(op, 0), t)
+		gc.Fatalf("optoas: no entry for op=%s type=%v", op, t)
 
 	case OEQ_ | gc.TBOOL,
 		OEQ_ | gc.TINT8,

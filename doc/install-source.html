@@ -66,14 +66,14 @@ compiler using the GCC back end, see
 
 <div class="english">
 <p>
-The Go compilers support five instruction sets.
+The Go compilers support six instruction sets.
 There are important differences in the quality of the compilers for the different
 architectures.
 </p>
 </div>
 
 <p>
-Go编译器支持五种指令集，以下为在不同的架构上，编译器特性中重要的不同之处。
+Go编译器支持六种指令集，以下为在不同的架构上，编译器特性中重要的不同之处。
 </p>
 
 <div class="english">
@@ -102,13 +102,19 @@ Go编译器支持五种指令集，以下为在不同的架构上，编译器特
 	<code>arm64</code> (<code>AArch64</code>)
 </dt>
 <dd>
-	Supports Linux and Darwin binaries. New in 1.5 and not as well excercised as other ports.
+	Supports Linux and Darwin binaries. New in 1.5 and not as well exercised as other ports.
 </dd>
 <dt>
 	<code>ppc64, ppc64le</code> (64-bit PowerPC big- and little-endian)
 </dt>
 <dd>
-	Supports Linux binaries. New in 1.5 and not as well exercised as other ports.
+Supports Linux binaries. New in 1.5 and not as well exercised as other ports.
+</dd>
+<dt>
+	<code>mips64, mips64le</code> (64-bit MIPS big- and little-endian)
+</dt>
+<dd>
+	Supports Linux binaries. New in 1.6 and not as well exercised as other ports.
 </dd>
 </dl>
 </div>
@@ -146,11 +152,12 @@ Go编译器支持五种指令集，以下为在不同的架构上，编译器特
 	支持 Linux 二进制。1.5 新加入的移植，不如其它移植稳定。
 </dd>
 <dt>
-	<code>mips64, mips64le</code> (64-bit MIPS big- and little-endian)
+	<code>mips64, mips64le</code>（大、小端序的 64 位 MIPS）
 </dt>
 <dd>
-	Supports Linux binaries. New in 1.6 and not as well excercised as other ports.
+	支持 Linux 二进制。1.6 新加入的移植，不如其它移植稳定。
 </dd>
+</dl>
 </dl>
 
 <div class="english">
@@ -373,20 +380,29 @@ To build without <code>cgo</code>, set the environment variable
 <p>Go will install to a directory named <code>go</code>.
 Change to the directory that will be its parent
 and make sure the <code>go</code> directory does not exist.
-Then clone the repository and check out the latest release tag:</p>
+Then clone the repository and check out the latest release tag
+(<code class="versionTag">go1.6</code>, for example):</p>
 </div>
 
 <p>
 Go 将安装到名为 <code>go</code> 的目录。
 切换到你想要安装 Go 的目录并确认该目录下没有 <code>go</code> 目录。
-然后 clone 代码库并检出最新的发行版标签：
+然后 clone 代码库并检出最新的发行版标签（以 <code class="versionTag">go1.6</code> 为例）：
 </p>
 
 <pre>
 $ git clone https://go.googlesource.com/go
 $ cd go
-$ git checkout go1.6
+$ git checkout <span class="versionTag"><i>&lt;tag&gt;</i></span>
 </pre>
+
+<p class="whereTag">
+Where <code>&lt;tag&gt;</code> is the version string of the release.
+</p>
+
+<p class="whereTag">
+其中 <code>&lt;tag&gt;</code> 为该发行版的版本字符串。
+</p>
 
 <div class="english">
 <h2 id="head">(Optional) Switch to the master branch</h2>
@@ -729,7 +745,7 @@ New releases are announced on the
 <a href="//groups.google.com/group/golang-announce">golang-announce</a>
 mailing list.
 Each announcement mentions the latest release tag, for instance,
-<code>go1.6</code>.
+<code class="versionTag">go1.6</code>.
 </p>
 </div>
 
@@ -752,11 +768,13 @@ To update an existing tree to the latest release, you can run:
 <pre>
 $ cd go/src
 $ git fetch
-$ git checkout <i>&lt;tag&gt;</i>
+$ git checkout <span class="versionTag"><i>&lt;tag&gt;</i></psan>
 $ ./all.bash
 </pre>
 
+<p class="whereTag">
 Where <code>&lt;tag&gt;</code> is the version string of the release.
+</p>
 
 
 <div class="english">
