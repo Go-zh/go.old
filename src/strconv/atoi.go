@@ -7,12 +7,18 @@ package strconv
 import "errors"
 
 // ErrRange indicates that a value is out of range for the target type.
+
+// ErrRange 表示值超过了目标类型的范围。
 var ErrRange = errors.New("value out of range")
 
 // ErrSyntax indicates that a value does not have the right syntax for the target type.
+
+// ErrSyntax 表示值不符合目标类型的正确格式。
 var ErrSyntax = errors.New("invalid syntax")
 
 // A NumError records a failed conversion.
+
+// NumError 用来记录失败的转换。
 type NumError struct {
 	Func string // the failing function (ParseBool, ParseInt, ParseUint, ParseFloat)
 	Num  string // the input
@@ -34,11 +40,15 @@ func rangeError(fn, str string) *NumError {
 const intSize = 32 << (^uint(0) >> 63)
 
 // IntSize is the size in bits of an int or uint value.
+
+// IntSize 是 int 或是 uint 值的位数。
 const IntSize = intSize
 
 const maxUint64 = (1<<64 - 1)
 
 // ParseUint is like ParseInt but for unsigned numbers.
+
+// ParseUint 类似于 ParseInt, 只不过结果是无符号数。
 func ParseUint(s string, base int, bitSize int) (uint64, error) {
 	var n uint64
 	var err error
@@ -153,6 +163,15 @@ Error:
 // signed integer of the given size, err.Err = ErrRange and the
 // returned value is the maximum magnitude integer of the
 // appropriate bitSize and sign.
+
+// ParseInt 返回 s 表示的以 base (2~36)为基数的值 i 。
+// 如果 base == 0, 那么使用字符串的前缀来指定基数, 0x 打头代表基数 16, 0 打头代表基数 8, 其他则基数为 10。
+//
+// 参数 bitSize 指定转换结果的类型, 0, 8, 16, 32, 64 分别代表 int, int8, int16, int32 和 int 64。
+//
+// ParseInt 的错误是 *NumError 类型, 其中 err.Num = s。
+// 如果 s 为空或是包含非法的数字, 那么 err.Err = ErrSyntax, 返回值为 0。
+// 如果字符串的值不能用指定整型表示的话, 那么 err.Err = ErrRange, 返回值是与类型和符合匹配的最大值。
 func ParseInt(s string, base int, bitSize int) (i int64, err error) {
 	const fnParseInt = "ParseInt"
 
@@ -198,6 +217,8 @@ func ParseInt(s string, base int, bitSize int) (i int64, err error) {
 }
 
 // Atoi is shorthand for ParseInt(s, 10, 0).
+
+// Atoi 是 ParseInt(s, 10, 0) 的简写。
 func Atoi(s string) (int, error) {
 	i64, err := ParseInt(s, 10, 0)
 	return int(i64), err
