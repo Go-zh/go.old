@@ -54,4 +54,15 @@
 //
 // Unquote and UnquoteChar unquote Go string and rune literals.
 //
+
+// strconv 包实现了 string 与其他基本类型之间的转换。
+//
+// 数值转换
+//
+// 最常用的数值转换就是 string --> int 的 Atoi 和 int --> string 的 Itoa 。
+//
+//	i, err := strconv.Atoi("-42")
+//	s := strconv.Itoa(-42)
+//
+// 这两个函数都假定是十进制的 int 类型。
 package strconv
