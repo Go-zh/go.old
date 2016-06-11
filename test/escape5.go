@@ -1,6 +1,6 @@
 // errorcheck -0 -m -l
 
-// Copyright 2012 The Go Authors.  All rights reserved.
+// Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -133,7 +133,8 @@ func f8(p *T1) (k T2) { // ERROR "leaking param: p to result k" "leaking param: 
 		return
 	}
 
-	global = p // should make p leak always
+	// should make p leak always
+	global = p // ERROR "p escapes to heap"
 	return T2{p}
 }
 
@@ -144,7 +145,7 @@ func f9() {
 
 func f10() {
 	// These don't escape but are too big for the stack
-	var x [1<<30]byte // ERROR "moved to heap: x"
-	var y = make([]byte, 1<<30) // ERROR "does not escape"
+	var x [1 << 30]byte         // ERROR "moved to heap: x"
+	var y = make([]byte, 1<<30) // ERROR "make\(\[\]byte, 1 << 30\) escapes to heap"
 	_ = x[0] + y[0]
 }

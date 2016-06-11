@@ -1,6 +1,6 @@
 // run
 
-// Copyright 2009 The Go Authors.  All rights reserved.
+// Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -30,6 +30,7 @@ func asSlice(Slice)   {}
 func asString(String) {}
 
 func (Map) M() {}
+
 
 // These functions check at run time that the default type
 // (in the absence of any implicit conversion hints)

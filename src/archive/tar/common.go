@@ -33,11 +33,9 @@ import (
 	"time"
 )
 
+// Header type flags.
 const (
-	blockSize = 512
-
 	// Types
-
 	// 类型
 	TypeReg           = '0'    // regular file // 普通文件
 	TypeRegA          = '\x00' // regular file // 普通文件
@@ -77,12 +75,6 @@ type Header struct {
 	ChangeTime time.Time // status change time // 状态改变时间
 	Xattrs     map[string]string
 }
-
-// File name constants from the tar spec.
-const (
-	fileNameSize       = 100 // Maximum number of bytes in a standard tar name.
-	fileNamePrefixSize = 155 // Maximum number of ustar extension bytes.
-)
 
 // FileInfo returns an os.FileInfo for the Header.
 
@@ -158,8 +150,8 @@ func (fi headerFileInfo) Mode() (mode os.FileMode) {
 	}
 
 	switch fi.h.Typeflag {
-	case TypeLink, TypeSymlink:
-		// hard link, symbolic link
+	case TypeSymlink:
+		// symbolic link
 		mode |= os.ModeSymlink
 	case TypeChar:
 		// character device node
@@ -274,37 +266,34 @@ func FileInfoHeader(fi os.FileInfo, link string) (*Header, error) {
 	if fm&os.ModeSticky != 0 {
 		h.Mode |= c_ISVTX
 	}
+	// If possible, populate additional fields from OS-specific
+	// FileInfo fields.
+	if sys, ok := fi.Sys().(*Header); ok {
+		// This FileInfo came from a Header (not the OS). Use the
+		// original Header to populate all remaining fields.
+		h.Uid = sys.Uid
+		h.Gid = sys.Gid
+		h.Uname = sys.Uname
+		h.Gname = sys.Gname
+		h.AccessTime = sys.AccessTime
+		h.ChangeTime = sys.ChangeTime
+		if sys.Xattrs != nil {
+			h.Xattrs = make(map[string]string)
+			for k, v := range sys.Xattrs {
+				h.Xattrs[k] = v
+			}
+		}
+		if sys.Typeflag == TypeLink {
+			// hard link
+			h.Typeflag = TypeLink
+			h.Size = 0
+			h.Linkname = sys.Linkname
+		}
+	}
 	if sysStat != nil {
 		return h, sysStat(fi, h)
 	}
 	return h, nil
-}
-
-var zeroBlock = make([]byte, blockSize)
-
-// POSIX specifies a sum of the unsigned byte values, but the Sun tar uses signed byte values.
-// We compute and return both.
-func checksum(header []byte) (unsigned int64, signed int64) {
-	for i := 0; i < len(header); i++ {
-		if i == 148 {
-			// The chksum field (header[148:156]) is special: it should be treated as space bytes.
-			unsigned += ' ' * 8
-			signed += ' ' * 8
-			i += 7
-			continue
-		}
-		unsigned += int64(header[i])
-		signed += int64(int8(header[i]))
-	}
-	return
-}
-
-type slicer []byte
-
-func (sp *slicer) next(n int) (b []byte) {
-	s := *sp
-	b, *sp = s[0:n], s[n:]
-	return
 }
 
 func isASCII(s string) bool {
@@ -327,4 +316,15 @@ func toASCII(s string) string {
 		}
 	}
 	return buf.String()
+}
+
+// isHeaderOnlyType checks if the given type flag is of the type that has no
+// data section even if a size is specified.
+func isHeaderOnlyType(flag byte) bool {
+	switch flag {
+	case TypeLink, TypeSymlink, TypeChar, TypeBlock, TypeDir, TypeFifo:
+		return true
+	default:
+		return false
+	}
 }

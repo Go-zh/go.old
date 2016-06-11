@@ -13,16 +13,14 @@ visit https://golang.org/ or load doc/install-source.html
 in your web browser.
 
 Our canonical Git repository is located at https://go.googlesource.com/go.
-(There is a mirror of the repository at https://github.com/golang/go.)
-
-Please report issues here: https://golang.org/issue/new
+There is a mirror of the repository at https://github.com/golang/go.
 
 Go is the work of hundreds of contributors. We appreciate your help!
 
 To contribute, please read the contribution guidelines:
 	https://golang.org/doc/contribute.html
 
-##### Please note that we do not use pull requests.
+##### Note that we do not accept pull requests and that we use the issue tracker for bug reports and proposals only. Please ask questions on https://forum.golangbridge.org or https://groups.google.com/forum/#!forum/golang-nuts.
 
 Unless otherwise noted, the Go source files are distributed
 under the BSD-style license found in the LICENSE file.
@@ -44,6 +42,8 @@ Go 是数百名贡献者努力工作的结晶。我们感谢你们的帮助！
 
 要做出贡献，请先阅读贡献指南：
 	https://golang.org/doc/contribute.html
+
+##### 注意：我们不接受拉取请求，问题跟踪器只用来记录 Bug 报告和提议。请在 https://forum.golangbridge.org 或 https://groups.google.com/forum/#!forum/golang-nuts 上提问。
 
 除特别注明外，Go 源码文件采用BSD风格授权协议分发。协议内容见 `LICENSE` 文件。
 

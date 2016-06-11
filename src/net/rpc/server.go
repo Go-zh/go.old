@@ -13,6 +13,7 @@
 	Only methods that satisfy these criteria will be made available for remote access;
 	other methods will be ignored:
 
+		- the method's type is exported.
 		- the method is exported.
 		- the method has two arguments, both exported (or builtin) types.
 		- the method's second argument is a pointer.
@@ -246,10 +247,11 @@ const (
 	DefaultDebugPath = "/debug/rpc"
 )
 
-// Precompute the reflect type for error.  Can't use error directly
-// because Typeof takes an empty interface value.  This is annoying.
+// Precompute the reflect type for error. Can't use error directly
+// because Typeof takes an empty interface value. This is annoying.
 
-// 预先计算error的类型。不能直接使用error的原因是Typeof使用的是一个空的接口值。这个是非常不爽的。
+// 预先计算error的类型。不能直接使用error的原因是Typeof使用的是一个空的接口值。
+// 这个是非常不爽的。
 var typeOfError = reflect.TypeOf((*error)(nil)).Elem()
 
 type methodType struct {
@@ -267,7 +269,7 @@ type service struct {
 	method map[string]*methodType // registered methods  //注册方法
 }
 
-// Request is a header written before every RPC call.  It is used internally
+// Request is a header written before every RPC call. It is used internally
 // but documented here as an aid to debugging, such as when analyzing
 // network traffic.
 
@@ -278,7 +280,7 @@ type Request struct {
 	next          *Request // for free list in Server // 给服务端的request list使用
 }
 
-// Response is a header written before every RPC return.  It is used internally
+// Response is a header written before every RPC return. It is used internally
 // but documented here as an aid to debugging, such as when analyzing
 // network traffic.
 
@@ -336,7 +338,7 @@ func isExportedOrBuiltinType(t reflect.Type) bool {
 
 // Register publishes in the server the set of methods of the
 // receiver value that satisfy the following conditions:
-//	- exported method
+//	- exported method of exported type
 //	- two arguments, both of exported type
 //	- the second argument is a pointer
 //	- one return value, of type error
@@ -576,7 +578,7 @@ func (c *gobServerCodec) Close() error {
 // ServeConn blocks, serving the connection until the client hangs up.
 // The caller typically invokes ServeConn in a go statement.
 // ServeConn uses the gob wire format (see package gob) on the
-// connection.  To use an alternate codec, use ServeCodec.
+// connection. To use an alternate codec, use ServeCodec.
 
 // ServeConn在单个连接上跑server。
 // ServeConn阻塞，知道客户端关闭之后才继续服务其他连接。
@@ -727,7 +729,7 @@ func (server *Server) readRequestHeader(codec ServerCodec) (service *service, mt
 		return
 	}
 
-	// We read the header successfully.  If we see an error now,
+	// We read the header successfully. If we see an error now,
 	// we can still recover and move on to the next request.
 	keepReading = true
 
@@ -755,15 +757,17 @@ func (server *Server) readRequestHeader(codec ServerCodec) (service *service, mt
 }
 
 // Accept accepts connections on the listener and serves requests
-// for each incoming connection.  Accept blocks; the caller typically
-// invokes it in a go statement.
+// for each incoming connection. Accept blocks until the listener
+// returns a non-nil error. The caller typically invokes Accept in a
+// go statement.
 
 // Accept接收连接，为每个连接监听和服务请求。Accept是阻塞的，调用者一般在go语句中使用它。
 func (server *Server) Accept(lis net.Listener) {
 	for {
 		conn, err := lis.Accept()
 		if err != nil {
-			log.Fatal("rpc.Serve: accept:", err.Error()) // TODO(r): exit?
+			log.Print("rpc.Serve: accept:", err.Error())
+			return
 		}
 		go server.ServeConn(conn)
 	}
@@ -786,7 +790,7 @@ func RegisterName(name string, rcvr interface{}) error {
 // RPC responses for the server side of an RPC session.
 // The server calls ReadRequestHeader and ReadRequestBody in pairs
 // to read requests from the connection, and it calls WriteResponse to
-// write a response back.  The server calls Close when finished with the
+// write a response back. The server calls Close when finished with the
 // connection. ReadRequestBody may be called with a nil
 // argument to force the body of the request to be read and discarded.
 
@@ -807,7 +811,7 @@ type ServerCodec interface {
 // ServeConn blocks, serving the connection until the client hangs up.
 // The caller typically invokes ServeConn in a go statement.
 // ServeConn uses the gob wire format (see package gob) on the
-// connection.  To use an alternate codec, use ServeCodec.
+// connection. To use an alternate codec, use ServeCodec.
 
 // ServeConn在单个连接上调用DefaultServer。
 // ServeConn阻塞，服务连接，直到客户端关闭。

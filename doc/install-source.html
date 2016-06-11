@@ -1,34 +1,17 @@
 <!--{
-	"Title": "从源码安装Go",
-	"Path": "/doc/install/source"
-}-->
-
-<!--{
 	"Title": "Installing Go from source",
 	"Path": "/doc/install/source"
 }-->
 
-<div class="english">
 <h2 id="introduction">Introduction</h2>
-</div>
 
-<h2 id="引言">引言</h2>
-
-<div class="english">
 <p>
 Go is an open source project, distributed under a
 <a href="/LICENSE">BSD-style license</a>.
 This document explains how to check out the sources,
 build them on your own machine, and run them.
 </p>
-</div>
 
-<p>
-Go是一个开源项目，在<a href="/LICENSE">BSD风格授权</a>下发行。
-本文档说明了如何检出源码，在你的机器上构建并运行它们。
-</p>
-
-<div class="english">
 <p>
 Most users don't need to do this, and will instead install
 from precompiled binary packages as described in
@@ -37,49 +20,27 @@ a much simpler process.
 If you want to help develop what goes into those precompiled
 packages, though, read on.
 </p>
-</div>
-
-<p>
-大多数用户无需这些，而是按照<a href="/doc/install">起步</a>
-中描述更简单的步骤通过预编译二进制包来安装。
-若你想进入那些预编译包以帮助开发，那么，往下看。
-</p>
 
 <div class="detail">
 
-<div class="english">
 <p>
 There are two official Go compiler tool chains.
 This document focuses on the <code>gc</code> Go
-compiler and tools (<code>6g</code>, <code>8g</code> etc.).
+compiler and tools.
 For information on how to work on <code>gccgo</code>, a more traditional
 compiler using the GCC back end, see
 <a href="/doc/install/gccgo">Setting up and using gccgo</a>.
 </p>
-</div>
 
 <p>
-官方有两个Go编译器工具链。本文档着重于 <code>gc</code> Go编译器及其工具
-（<code>6g</code>、<code>8g</code> 等）。<code>gccgo</code> 是一个更传统的的编译器，
-它使用GCC作为后端。关于如何使用它工作的信息，请访问<a href="/doc/install/gccgo">设置并使用gccgo</a>。
-</p>
-
-<div class="english">
-<p>
-The Go compilers support three instruction sets.
+The Go compilers support six instruction sets.
 There are important differences in the quality of the compilers for the different
 architectures.
 </p>
-</div>
 
-<p>
-Go编译器支持三种指令集，以下为在不同的架构上，编译器特性中重要的不同之处。
-</p>
-
-<div class="english">
 <dl>
 <dt>
-	<code>amd64</code> (a.k.a. <code>x86-64</code>); <code>6g,6l,6c,6a</code>
+	<code>amd64</code> (also known as <code>x86-64</code>)
 </dt>
 <dd>
 	A mature implementation. The compiler has an effective
@@ -87,205 +48,164 @@ Go编译器支持三种指令集，以下为在不同的架构上，编译器特
 	<code>gccgo</code> can do noticeably better sometimes).
 </dd>
 <dt>
-	<code>386</code> (a.k.a. <code>x86</code> or <code>x86-32</code>); <code>8g,8l,8c,8a</code>
+	<code>386</code> (<code>x86</code> or <code>x86-32</code>)
 </dt>
 <dd>
 	Comparable to the <code>amd64</code> port.
 </dd>
 <dt>
-	<code>arm</code> (a.k.a. <code>ARM</code>); <code>5g,5l,5c,5a</code>
+	<code>arm</code> (<code>ARM</code>)
 </dt>
 <dd>
-	Supports Linux, FreeBSD and NetBSD binaries. Less widely used than the other ports.
-</dd>
-</dl>
-</div>
-
-<dl>
-<dt>
-	<code>amd64</code>（即 <code>x86-64</code>）：<code>6g,6l,6c,6a</code>
-</dt>
-<dd>
-	一个成熟的实现。此编译器拥有高效的优化器（寄存优化器）并能生成高质量的代码
-	（当然，在某些事情上gccgo做得更好）。
+	Supports Linux, FreeBSD, NetBSD and Darwin binaries. Less widely used than the other ports.
 </dd>
 <dt>
-	<code>386</code>（即 <code>x86</code> 或 <code>x86-32</code>）：<code>8g,8l,8c,8a</code>
+	<code>arm64</code> (<code>AArch64</code>)
 </dt>
 <dd>
-	与 <code>amd64</code> 端口有可比之处。
+	Supports Linux and Darwin binaries. New in 1.5 and not as well exercised as other ports.
 </dd>
 <dt>
-	<code>arm</code>（即 <code>ARM</code>）：<code>5g,5l,5c,5a</code>
+	<code>ppc64, ppc64le</code> (64-bit PowerPC big- and little-endian)
 </dt>
 <dd>
-	只支持Linux二进制。与其他接口相比较少使用，因此并没有经过充分的测试。
+	Supports Linux binaries. New in 1.5 and not as well exercised as other ports.
+</dd>
+<dt>
+	<code>mips64, mips64le</code> (64-bit MIPS big- and little-endian)
+</dt>
+<dd>
+	Supports Linux binaries. New in 1.6 and not as well exercised as other ports.
 </dd>
 </dl>
 
-<div class="english">
 <p>
 Except for things like low-level operating system interface code, the run-time
 support is the same in all ports and includes a mark-and-sweep garbage
 collector, efficient array and string slicing, and support for efficient
 goroutines, such as stacks that grow and shrink on demand.
 </p>
-</div>
 
-<p>
-除了像低级操作系统接口代码这类东西外，其运行时支持在所有接口中都相同，还包括
-标记-清除 垃圾回收器，高效的数组与字符串切片，并支持高效的Go程，例如按需求扩展或收缩栈。
-</p>
-
-<div class="english">
 <p>
 The compilers can target the DragonFly BSD, FreeBSD, Linux, NetBSD, OpenBSD,
 OS X (Darwin), Plan 9, Solaris and Windows operating systems.
 The full set of supported combinations is listed in the discussion of
 <a href="#environment">environment variables</a> below.
 </p>
-</div>
 
 <p>
-该编译器可将DragonFly BSD、FreeBSD、Linux、NetBSD、OpenBSD、OS X (Darwin)、Plan 9、
-Solaris以及Windows作为目标。它所支持组合的完整集将在下文的<a href="#环境">环境变量</a>讨论中列出。
+See the main installation page for the <a href="/doc/install#requirements">overall system requirements</a>.
+The following additional constraints apply to systems that can be built only from source:
 </p>
+
+<ul>
+<li>For Linux on PowerPC 64-bit, the minimum supported kernel version is 2.6.37, meaning that
+Go does not support CentOS 6 on these systems.
+</li>
+</ul>
+
 </div>
 
-<div class="english">
-<h2 id="ctools">Install C tools, if needed</h2>
-</div>
-
-<h2 id="c工具">若需要，则安装C工具</h2>
-
-<div class="english">
-<p>
-<<<<<<< HEAD
-The Go tool chain is written in C. To build it, you need a C compiler installed.
-Please refer to the <a href="//golang.org/wiki/InstallFromSource#Install_C_tools">InstallFromSource</a>
-=======
-The Go tool chain is written in C. To build it, you need a C compiler installed.
-Please refer to the <a href="//golang.org/wiki/InstallFromSource#install-c-tools">InstallFromSource</a>
->>>>>>> upstream/master
-page on the Go community Wiki for operating system specific instructions.
-</p>
-</div>
+<h2 id="go14">Install Go compiler binaries</h2>
 
 <p>
-Go工具链用C写成。要想构建它，你需要一个已安装的C编译器。请参阅Go社区维基上的
-<a href="//golang.org/wiki/InstallFromSource#Install_C_tools">InstallFromSource</a>
-页面来获得具体操作系统的说明。
+The Go tool chain is written in Go. To build it, you need a Go compiler installed.
+The scripts that do the initial build of the tools look for an existing Go tool
+chain in <code>$HOME/go1.4</code>.
+(This path may be overridden by setting the <code>GOROOT_BOOTSTRAP</code>
+environment variable.)
 </p>
 
-<<<<<<< HEAD
-<div class="english">
-<h2 id="mercurial">Install Mercurial, if needed</h2>
-</div>
-=======
+<p>
+Build the tools with Go version 1.4 or a point release (1.4.1, 1.4.2 etc.).
+Go 1.4 binaries can be found at <a href="/dl/">the downloads page</a>.
+</p>
+
+<p>
+Download the zip or tarball of Go 1.4 for your platform and extract it to
+<code>$HOME/go1.4</code> (or your nominated <code>GOROOT_BOOTSTRAP</code>
+location).
+</p>
+
+<p>
+If you want to install Go 1.5 on a system that is not supported by Go 1.4 (such
+as <code>linux/ppc64</code> and <code>linux/mips64le</code>) you can either use
+<a href="/src/bootstrap.bash">bootstrap.bash</a> on a system that can bootstrap Go
+1.5 normally, or bootstrap with gccgo 5.
+</p>
+
+<p>
+When run as (for example)
+</p>
+
+<pre>
+$ GOOS=linux GOARCH=ppc64 ./bootstrap.bash
+</pre>
+
+<p>
+<code>bootstrap.bash</code> cross-compiles a toolchain for that <code>GOOS/GOARCH</code>
+combination, leaving the resulting tree in <code>../../go-${GOOS}-${GOARCH}-bootstrap</code>.
+That tree can be copied to a machine of the given target type
+and used as <code>GOROOT_BOOTSTRAP</code> to bootstrap a local build.
+</p>
+
+<p>
+To use gccgo, you need to arrange for <code>$GOROOT_BOOTSTRAP/bin/go</code> to be
+the go tool that comes as part of gccgo 5. For example on Ubuntu Vivid:
+</p>
+
+<pre>
+$ sudo apt-get install gccgo-5
+$ sudo update-alternatives --set go /usr/bin/go-5
+$ GOROOT_BOOTSTRAP=/usr ./make.bash
+</pre>
+
 <h2 id="git">Install Git, if needed</h2>
->>>>>>> upstream/master
 
-<h2 id="hg">若需要，则安装Mercurial</h2>
-
-<div class="english">
 <p>
 To perform the next step you must have Git installed. (Check that you
 have a <code>git</code> command before proceeding.)
 </p>
-</div>
 
-<p>
-要完成下一步，你必须安装Mercurial。（检查以下你是否有 <code>hg</code> 命令。）
-</p>
-
-<div class="english">
 <p>
 If you do not have a working Git installation,
 follow the instructions on the
-<<<<<<< HEAD
-<a href="http://mercurial.selenic.com/downloads">Mercurial downloads</a> page.
-</p>
-</div>
-
-<p>
-若你没有可工作的Mercurial安装，请跟随
-<a href="http://mercurial.selenic.com/downloads/">Mercurial下载</a>页面的说明进行操作。
-</p>
-
-<div class="english">
-<p>
-Mercurial versions 1.7.x and up require the configuration of
-<a href="http://mercurial.selenic.com/wiki/CACertificates">Certification Authorities</a>
-(CAs). Error messages of the form:
-</p>
-</div>
-
-<p>
-Mercurial版本1.7.x或更高需要
-<a href="http://mercurial.selenic.com/wiki/CACertificates">认证权限</a>（CA）的配置。
-其错误信息的形式为：
-</p>
-
-<div class="english">
-<pre>
-warning: code.google.com certificate with fingerprint b1:af: ... bc not verified (check hostfingerprints or web.cacerts config setting)
-</pre>
-</div>
-
-<pre>
-warning: code.google.com certificate with fingerprint b1:af: ... bc not verified (check hostfingerprints or web.cacerts config setting)
-或
-警告：code.google.com 的 b1:af: ... bc 指纹证书未经认证（请检查本地指纹或web证书配置设置）
-</pre>
-
-<div class="english">
-<p>
-when using Mercurial indicate that the CAs are missing.
-Check your Mercurial version (<code>hg --version</code>) and
-<a href="http://mercurial.selenic.com/wiki/CACertificates#Configuration_of_HTTPS_certificate_authorities">configure the CAs</a>
-if necessary.
-=======
 <a href="http://git-scm.com/downloads">Git downloads</a> page.
->>>>>>> upstream/master
 </p>
-</div>
+
+<h2 id="ccompiler">(Optional) Install a C compiler</h2>
 
 <p>
-当使用Mercurial时，该信息表明缺少CA证书。如果需要，检查你的Mercurial版本
-（<code>hg --version</code>）并<a href="http://mercurial.selenic.com/wiki/CACertificates#Configuration_of_HTTPS_certificate_authorities">配置CA证书</a>。
+To build a Go installation
+with <code><a href="/cmd/cgo">cgo</a></code> support, which permits Go
+programs to import C libraries, a C compiler such as <code>gcc</code>
+or <code>clang</code> must be installed first. Do this using whatever
+installation method is standard on the system.
 </p>
 
+<p>
+To build without <code>cgo</code>, set the environment variable
+<code>CGO_ENABLED=0</code> before running <code>all.bash</code> or
+<code>make.bash</code>.
+</p>
 
-<div class="english">
 <h2 id="fetch">Fetch the repository</h2>
-</div>
 
-<h2 id="获取">获取代码仓库</h2>
-
-<div class="english">
 <p>Go will install to a directory named <code>go</code>.
 Change to the directory that will be its parent
 and make sure the <code>go</code> directory does not exist.
-<<<<<<< HEAD
-Then check out the repository:</p>
-</div>
-
-<p>
-Go将安装到名为 <code>go</code> 的目录。
-切换到将成为其父目录的目录并确认 <code>go</code> 目录未被创建。
-然后检出该仓库：
-</p>
-
-<pre>
-$ hg clone -u release https://code.google.com/p/go
-=======
-Then clone the repository and check out the latest release tag:</p>
+Then clone the repository and check out the latest release tag
+(<code class="versionTag">go1.6</code>, for example):</p>
 
 <pre>
 $ git clone https://go.googlesource.com/go
 $ cd go
-$ git checkout go1.4
+$ git checkout <span class="versionTag"><i>&lt;tag&gt;</i></span>
 </pre>
+
+<p class="whereTag">
+Where <code>&lt;tag&gt;</code> is the version string of the release.
+</p>
 
 <h2 id="head">(Optional) Switch to the master branch</h2>
 
@@ -297,48 +217,25 @@ Otherwise, skip this step.</p>
 
 <pre>
 $ git checkout master
->>>>>>> upstream/master
 </pre>
 
-<div class="english">
 <h2 id="install">Install Go</h2>
-</div>
 
-<h2 id="安装">安装Go</h2>
-
-<div class="english">
 <p>
 To build the Go distribution, run
 </p>
-</div>
-
-<p>
-要构建Go发行版，请运行
-</p>
 
 <pre>
-$ cd go/src
+$ cd src
 $ ./all.bash
 </pre>
 
-<div class="english">
 <p>
 (To build under Windows use <code>all.bat</code>.)
 </p>
-</div>
 
-<p>
-（要在Windows下构建请使用 <code>all.bat</code>。）
-</p>
-
-<div class="english">
 <p>
 If all goes well, it will finish by printing output like:
-</p>
-</div>
-
-<p>
-若一切顺利，它将结束于打印输出，类似与：
 </p>
 
 <pre>
@@ -350,21 +247,12 @@ Installed commands in /home/you/go/bin.
 *** You need to add /home/you/go/bin to your $PATH. ***
 </pre>
 
-<div class="english">
 <p>
 where the details on the last few lines reflect the operating system,
 architecture, and root directory used during the install.
-</p>
-</div>
-
-<p>
-where the details on the last few lines reflect the operating system,
-architecture, and root directory used during the install.
-其中最后几行信息反映了操作系统、架构以及在安装中使用的根目录。
 </p>
 
 <div class="detail">
-<div class="english">
 <p>
 For more information about ways to control the build, see the discussion of
 <a href="#environment">environment variables</a> below.
@@ -375,39 +263,15 @@ instead.
 </p>
 </div>
 
-<p>
-更多有关控制构建方式的信息，见下文关于<a href="#环境">环境变量</a>的讨论。
-<code>all.bash</code>（或 <code>all.bat</code>）会为Go运行重要的测试，
-它比简单地构建Go要花更多的时间。若你不想运行测试套件，请使用
-<code>make.bash</code>（或 <code>make.bat</code>）代替。
-</p>
-</div>
 
-
-<div class="english">
 <h2 id="testing">Testing your installation</h2>
-</div>
 
-<h2 id="测试">测试你的安装</h2>
-
-<div class="english">
 <p>
 Check that Go is installed correctly by building a simple program.
 </p>
-</div>
 
-<p>
-通过构建一个简单的程序来检查Go的安装是否正确。
-</p>
-
-<div class="english">
 <p>
 Create a file named <code>hello.go</code> and put the following program in it:
-</p>
-</div>
-
-<p>
-创建一个名为 <code>hello.go</code> 的文件，并将以下代码保存在其中：
 </p>
 
 <pre>
@@ -420,14 +284,8 @@ func main() {
 }
 </pre>
 
-<div class="english">
 <p>
 Then run it with the <code>go</code> tool:
-</p>
-</div>
-
-<p>
-接着通过 <code>go</code> 工具运行它：
 </p>
 
 <pre>
@@ -435,129 +293,60 @@ $ go run hello.go
 hello, world
 </pre>
 
-<div class="english">
 <p>
 If you see the "hello, world" message then Go is installed correctly.
 </p>
-</div>
 
-<p>
-若你看到了“hello, world”信息，那么你的Go已被正确安装。
-</p>
-
-
-<div class="english">
 <h2 id="gopath">Set up your work environment</h2>
-</div>
 
-<h2 id="Go路径">设置你的工作环境变量</h2>
-
-<div class="english">
 <p>
 You're almost done.
 You just need to do a little more setup.
 </p>
-</div>
 
-<p>
-差不多了，你只要再设置一下就好。
-</p>
-
-<div class="english">
 <p>
 <a href="/doc/code.html" class="download" id="start">
 <span class="big">How to Write Go Code</span>
 <span class="desc">Learn how to set up and use the Go tools</span>
 </a>
 </p>
-</div>
 
 <p>
-<a href="/doc/code.html" class="download" id="start">
-<span class="big">如何使用Go编程</span>
-<span class="desc">学习如何设置并使用Go工具</span>
-</a>
-</p>
-
-<div class="english">
-<p>
-The <a href="/doc/code.html">How to Write Go Code</a> document
+The <a href="/doc/code.html">How to Write Go Code</a> document 
 provides <b>essential setup instructions</b> for using the Go tools.
 </p>
-</div>
 
-<p>
-<a href="/doc/code.html">如何使用Go编程</a>提供了使用Go工具的<b>基本设置说明</b>。
-</p>
 
-<div class="english">
 <h2 id="tools">Install additional tools</h2>
-</div>
 
-<h2 id="工具">安装附加工具</h2>
-
-<div class="english">
 <p>
 The source code for several Go tools (including <a href="/cmd/godoc/">godoc</a>)
 is kept in <a href="https://golang.org/x/tools">the go.tools repository</a>.
 To install all of them, run the <code>go</code> <code>get</code> command:
-</p>
-</div>
-
-<p>
-某些 Go 工具（包括 <a href="/cmd/godoc/">godoc</a>）保存在
-<a href="https://code.google.com/p/go.tools">go.tools 源码库中</a>。
-要安装所有的这些工具，请运行 <code>go</code> <code>get</code> 命令：
 </p>
 
 <pre>
 $ go get golang.org/x/tools/cmd/...
 </pre>
 
-<div class="english">
 <p>
 Or if you just want to install a specific command (<code>godoc</code> in this case):
-</p>
-</div>
-
-<p>
-若你想安装具体的命令（此处例为 <code>godoc</code>），请执行：
 </p>
 
 <pre>
 $ go get golang.org/x/tools/cmd/godoc
 </pre>
 
-<div class="english">
 <p>
-<<<<<<< HEAD
-To install these tools, the <code>go</code> <code>get</code> command requires
-that <a href="#mercurial">Mercurial</a> be installed locally.
-=======
-To install these tools, the <code>go</code> <code>get</code> command requires
+To install these tools, the <code>go</code> <code>get</code> command requires 
 that <a href="#git">Git</a> be installed locally.
->>>>>>> upstream/master
-</p>
-</div>
-
-<p>
-要安装这些工具，<code>go</code> <code>get</code> 要求本地安装了
-<a href="#mercurial">Mercurial</a>。
 </p>
 
-<div class="english">
 <p>
 You must also have a workspace (<code>GOPATH</code>) set up;
 see <a href="/doc/code.html">How to Write Go Code</a> for the details.
 </p>
-</div>
 
-<p>
-你必须还设置了工作空间（<code>GOPATH</code>）；详情见
-<a href="/doc/code.html">如何使用Go编程</a>。
-</p>
-
-<div class="english">
 <p>
 <b>Note</b>: The <code>go</code> command will install the <code>godoc</code>
 binary to <code>$GOROOT/bin</code> (or <code>$GOBIN</code>) and the
@@ -567,23 +356,9 @@ You can access the latter commands with
 "<code>go</code> <code>tool</code> <code>cover</code>" and
 "<code>go</code> <code>tool</code> <code>vet</code>".
 </p>
-</div>
 
-<p>
-<b>注</b>：<code>go</code> 命令会将 <code>godoc</code> 程序安装到
-<code>$GOROOT/bin</code>（或 <code>$GOBIN</code>）中，而 <code>cover</code>
-和 <code>vet</code> 则会被安装到 <code>$GOROOT/pkg/tool/$GOOS_$GOARCH</code> 中。
-你可以通过 “<code>go</code> <code>tool</code> <code>cover</code>” 和
-“<code>go</code> <code>tool</code> <code>vet</code>” 来访问它们。
-</p>
-
-<div class="english">
 <h2 id="community">Community resources</h2>
-</div>
 
-<h2 id="社区">社区资源</h2>
-
-<div class="english">
 <p>
 The usual community resources such as
 <code>#go-nuts</code> on the <a href="http://freenode.net/">Freenode</a> IRC server
@@ -595,101 +370,46 @@ For those who wish to keep up to date,
 there is another mailing list, <a href="//groups.google.com/group/golang-checkins">golang-checkins</a>,
 that receives a message summarizing each checkin to the Go repository.
 </p>
-</div>
 
-<p>
-一般的社区资源例如<a href="http://freenode.net/">Freenode</a> IRC服务器上的
-<code>#go-nuts</code> 频道以及<a href="http://groups.google.com/group/golang-nuts">Go Nuts</a>
-邮件列表有一些活跃的开发者可以帮助你的安装或开发工作问题。对于那些希望保持最新的人，有另一个邮件列表
-<a href="http://groups.google.com/group/golang-checkins">golang-checkins</a>，它接收每一次对Go仓库的签入信息摘要。
-</p>
-
-<div class="english">
 <p>
 Bugs can be reported using the <a href="//golang.org/issue/new">Go issue tracker</a>.
 </p>
-</div>
+
+
+<h2 id="releases">Keeping up with releases</h2>
 
 <p>
-Bug应当使用<a href="//code.google.com/p/go/issues/list">Go问题跟踪系统</a>报告。
-</p>
-
-
-<div class="english">
-<h2 id="发行">保持最新的发行版</h2>
-</div>
-
-<div class="english">
-<p>
-<<<<<<< HEAD
-The Go project maintains a stable tags in its Mercurial repository:
-<code>release</code>.
-</p>
-</div>
-
-<p>
-Go项目在其Mercurial仓库中维护一个稳定的标签：<code>release</code>。
-</p>
-
-<div class="english">
-<p>
-The <code>release</code> tag refers to the current stable release of Go.
-Most Go users should use this version. New releases are announced on the
-=======
 New releases are announced on the
->>>>>>> upstream/master
 <a href="//groups.google.com/group/golang-announce">golang-announce</a>
 mailing list.
 Each announcement mentions the latest release tag, for instance,
-<code>go1.4</code>.
-</p>
-</div>
-
-<p>
-<code>release</code> 标签指当前Go的稳定发行版。大部分Go用户应当使用此版本。
-新的发行版将在<a href="http://groups.google.com/group/golang-announce">golang-announce</a>
-邮件列表中宣布。
+<code class="versionTag">go1.6</code>.
 </p>
 
-<div class="english">
 <p>
 To update an existing tree to the latest release, you can run:
-</p>
-</div>
-
-<p>
-要将现有源码树更新到最新发行版，你可以运行：
 </p>
 
 <pre>
 $ cd go/src
 $ git fetch
-$ git checkout <i>&lt;tag&gt;</i>
+$ git checkout <span class="versionTag"><i>&lt;tag&gt;</i></psan>
 $ ./all.bash
 </pre>
 
+<p class="whereTag">
 Where <code>&lt;tag&gt;</code> is the version string of the release.
+</p>
 
 
-<div class="english">
 <h2 id="environment">Optional environment variables</h2>
-</div>
 
-<h2 id="环境">可选环境变量</h2>
-
-<div class="english">
 <p>
 The Go compilation environment can be customized by environment variables.
 <i>None is required by the build</i>, but you may wish to set some
 to override the defaults.
 </p>
-</div>
 
-<p>
-Go编译环境可通过环境变量定制。<b>构建无需它们</b>，但你或许希望设置一些来覆盖默认的值。
-</p>
-
-<div class="english">
 <ul>
 <li><code>$GOROOT</code>
 <p>
@@ -699,76 +419,40 @@ defaults to the parent of the directory where <code>all.bash</code> was run.
 There is no need to set this unless you want to switch between multiple
 local copies of the repository.
 </p>
-</div>
 
-<li><code>$GOROOT</code>
-<p>
-Go树的根，一般为 <code>$HOME/go</code>。其值在编译时构建成树，默认为
-<code>all.bash</code> 所运行的目录的父目录。它一般无需设置，
-除非你想在代码库的多个本地副本之间选择。
-</p>
-
-<div class="english">
 <li><code>$GOROOT_FINAL</code>
 <p>
 The value assumed by installed binaries and scripts when
 <code>$GOROOT</code> is not set explicitly.
 It defaults to the value of <code>$GOROOT</code>.
 If you want to build the Go tree in one location
-but move it elsewhere after the build, set
+but move it elsewhere after the build, set 
 <code>$GOROOT_FINAL</code> to the eventual location.
 </p>
-</div>
 
-<li><code>$GOROOT_FINAL</code>
-<p>
-在 <code>$GOROOT</code> 未显式地设置时，其值由已安装二进制文件及脚本假定。
-它默认为 <code>$GOROOT</code> 的值。若你想在某个位置构建Go树而不在构建后移动它，
-那么就将 <code>$GOROOT_FINAL</code> 设置为最后的位置。
-</p>
-
-<div class="english">
 <li><code>$GOOS</code> and <code>$GOARCH</code>
 <p>
 The name of the target operating system and compilation architecture.
 These default to the values of <code>$GOHOSTOS</code> and
 <code>$GOHOSTARCH</code> respectively (described below).
-</p>
-</div>
 
-<li><code>$GOOS</code> 与 <code>$GOARCH</code>
-<p>
-目标操作系统与编译架构的名字。它们分别默认为 <code>$GOHOSTOS</code> 和
-<code>$GOHOSTARCH</code> 的值（将在下文描述）。
-</p>
-
-<div class="english">
 <p>
 Choices for <code>$GOOS</code> are
-<code>darwin</code> (Mac OS X 10.6 and above), <code>dragonfly</code>, <code>freebsd</code>,
+<code>darwin</code> (Mac OS X 10.7 and above and iOS), <code>dragonfly</code>, <code>freebsd</code>,
 <code>linux</code>, <code>netbsd</code>, <code>openbsd</code>,
 <code>plan9</code>, <code>solaris</code> and <code>windows</code>.
 Choices for <code>$GOARCH</code> are
 <code>amd64</code> (64-bit x86, the most mature port),
-<code>386</code> (32-bit x86), and <code>arm</code> (32-bit ARM).
+<code>386</code> (32-bit x86), <code>arm</code> (32-bit ARM), <code>arm64</code> (64-bit ARM),
+<code>ppc64le</code> (PowerPC 64-bit, little-endian), <code>ppc64</code> (PowerPC 64-bit, big-endian),
+<code>mips64le</code> (MIPS 64-bit, little-endian), and <code>mips64</code> (MIPS 64-bit, big-endian).
 The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
-</p>
-</div>
-
-<p>
-<code>$GOOS</code> 的选项为
-<code>darwin</code>（Mac OS X 10.6及以上）、<code>dragonfly</code>、<code>freebsd</code>、
-<code>linux</code>、<code>netbsd</code>、<code>openbsd</code>、
-<code>plan9</code>、<code>solaris</code> 以及 <code>windows</code>。
-<code>$GOARCH</code> 的选项为
-<code>amd64</code>（64位x86，最成熟的端口）、
-<code>386</code>（32位x86）以及 <code>arm</code>（32位ARM）。
-<code>$GOOS</code> 与 <code>$GOARCH</code> 的有效组合为：
-</p>
-
 <table cellpadding="0">
 <tr>
 <th width="50"></th><th align="left" width="100"><code>$GOOS</code></th> <th align="left" width="100"><code>$GOARCH</code></th>
+</tr>
+<tr>
+<td></td><td><code>android</code></td> <td><code>arm</code></td>
 </tr>
 <tr>
 <td></td><td><code>darwin</code></td> <td><code>386</code></td>
@@ -777,7 +461,10 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 <td></td><td><code>darwin</code></td> <td><code>amd64</code></td>
 </tr>
 <tr>
-<td></td><td><code>dragonfly</code></td> <td><code>386</code></td>
+<td></td><td><code>darwin</code></td> <td><code>arm</code></td>
+</tr>
+<tr>
+<td></td><td><code>darwin</code></td> <td><code>arm64</code></td>
 </tr>
 <tr>
 <td></td><td><code>dragonfly</code></td> <td><code>amd64</code></td>
@@ -801,6 +488,21 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 <td></td><td><code>linux</code></td> <td><code>arm</code></td>
 </tr>
 <tr>
+<td></td><td><code>linux</code></td> <td><code>arm64</code></td>
+</tr>
+<tr>
+<td></td><td><code>linux</code></td> <td><code>ppc64</code></td>
+</tr>
+<tr>
+<td></td><td><code>linux</code></td> <td><code>ppc64le</code></td>
+</tr>
+<tr>
+<td></td><td><code>linux</code></td> <td><code>mips64</code></td>
+</tr>
+<tr>
+<td></td><td><code>linux</code></td> <td><code>mips64le</code></td>
+</tr>
+<tr>
 <td></td><td><code>netbsd</code></td> <td><code>386</code></td>
 </tr>
 <tr>
@@ -814,6 +516,9 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 </tr>
 <tr>
 <td></td><td><code>openbsd</code></td> <td><code>amd64</code></td>
+</tr>
+<tr>
+<td></td><td><code>openbsd</code></td> <td><code>arm</code></td>
 </tr>
 <tr>
 <td></td><td><code>plan9</code></td> <td><code>386</code></td>
@@ -831,38 +536,23 @@ The valid combinations of <code>$GOOS</code> and <code>$GOARCH</code> are:
 <td></td><td><code>windows</code></td> <td><code>amd64</code></td>
 </tr>
 </table>
+<br>
 
-<div class="english">
 <li><code>$GOHOSTOS</code> and <code>$GOHOSTARCH</code>
 <p>
 The name of the host operating system and compilation architecture.
 These default to the local system's operating system and
 architecture.
 </p>
-</div>
 
-<li><code>$GOHOSTOS</code> and <code>$GOHOSTARCH</code>
-<p>
-宿主操作系统与编译架构的名字。它们默认为本地系统的操作系统与架构。
-</p>
-
-<div class="english">
 <p>
 Valid choices are the same as for <code>$GOOS</code> and
 <code>$GOARCH</code>, listed above.
 The specified values must be compatible with the local system.
-For example, you should not set <code>$GOHOSTARCH</code> to
+For example, you should not set <code>$GOHOSTARCH</code> to 
 <code>arm</code> on an x86 system.
 </p>
-</div>
 
-<p>
-其有效选项与 <code>$GOOS</code> 以及 <code>$GOARCH</code> 相同，已在上文列出。
-其指定的值必须与本地系统兼容。例如在x86系统上，你不能将 <code>$GOHOSTARCH</code>
-设置为 <code>arm</code>。
-</p>
-
-<div class="english">
 <li><code>$GOBIN</code>
 <p>
 The location where Go binaries will be installed.
@@ -872,22 +562,11 @@ directory to your <code>$PATH</code>, so you can use the tools.
 If <code>$GOBIN</code> is set, the <a href="/cmd/go">go command</a>
 installs all commands there.
 </p>
-</div>
 
-</p>
-<li><code>$GOBIN</code>
-<p>
-Go二进制文件将安装的位置。它默认为 <code>$GOROOT/bin</code> 。
-在安装之后，你会想要为整理而将此目录添加到你的 <code>$PATH</code> 中，
-此时你可以使用此工具。若 <code>$GOBIN</code> 已经设置，
-那么<a href="/cmd/go">go命令</a>会把所有命名都安装到这儿。
-</p>
-
-<div class="english">
 <li><code>$GO386</code> (for <code>386</code> only, default is auto-detected
 if built on either <code>386</code> or <code>amd64</code>, <code>387</code> otherwise)
 <p>
-This controls the code generated by 8g to use either the 387 floating-point unit
+This controls the code generated by gc to use either the 387 floating-point unit
 (set to <code>387</code>) or SSE2 instructions (set to <code>sse2</code>) for
 floating point computations.
 </p>
@@ -895,21 +574,7 @@ floating point computations.
 	<li><code>GO386=387</code>: use x87 for floating point operations; should support all x86 chips (Pentium MMX or later).
 	<li><code>GO386=sse2</code>: use SSE2 for floating point operations; has better performance than 387, but only available on Pentium 4/Opteron/Athlon 64 or later.
 </ul>
-</div>
 
-<li><code>$GO386</code>（仅用于 <code>386</code>，若为原生构建，则默认自动决定，否则为
-<code>387</code>）
-<p>
-它用于控制 8g 的代码生成，具体为387浮点运算单元（设置为 <code>387</code>），
-或用于浮点数计算的 SSE2 指令（设置为 <code>sse2</code>）。
-</p>
-<ul>
-	<li><code>GO386=387</code>：用x87来进行浮点运算；应该支持所有的x86芯片（奔腾MMX或更新）。
-	<li><code>GO386=sse2</code>: 用SSE2来进行浮点运算；性能比387更高，但只能在
-	Pentium 4/Opteron/Athlon 64或更新的芯片上运行。
-</ul>
-
-<div class="english">
 <li><code>$GOARM</code> (for <code>arm</code> only; default is auto-detected if building
 on the target processor, 6 if not)
 <p>
@@ -928,28 +593,9 @@ The <a href="//golang.org/wiki/GoArm">GoARM</a> page
 on the <a href="//golang.org/wiki">Go community wiki</a>
 contains further details regarding Go's ARM support.
 </p>
-</div>
-
-<li><code>$GOARM</code>（仅用于 <code>arm</code>；若为原生构建，则默认自动决定，否则为
-<code>6</code>)
-<p>
-它设置了运行时目标的ARM浮点协助处理器架构的版本。若你在目标系统上编译，它将自动决定。
-</p>
-<ul>
-	<li><code>GOARM=5</code>：使用软浮点数；用于没有VFP协处理器的CPU
-	<li><code>GOARM=6</code>：仅使用VFPv1；交叉编译时的默认值；通常用于ARM11或更好的核心（也支持VFPv2或更好的核心）
-	<li><code>GOARM=7</code>：使用VFPv3；通常用于Cortex-A核心
-</ul>
-<p>
-若你不能确定，请保持此变量为未设置状态。当你第一次运行Go的可执行程序时，若有需要，它会自动调整。
-<a href="http://code.google.com/p/go-wiki/w/list">Go社区维基</a> 的
-<a href="http://code.google.com/p/go-wiki/wiki/GoArm">GoARM</a> 页面包含有关Go
-ARM支持更详细的信息。
-</p>
 
 </ul>
 
-<div class="english">
 <p>
 Note that <code>$GOARCH</code> and <code>$GOOS</code> identify the
 <em>target</em> environment, not the environment you are running on.
@@ -960,26 +606,12 @@ an x86-64 system running a 32-bit-only operating system
 must set <code>GOARCH</code> to <code>386</code>,
 not <code>amd64</code>.
 </p>
-</div>
 
-<p>
-注意 <code>$GOARCH</code> 与 <code>$GOOS</code> 标识了<em>目标</em>环境，
-而不是你正在运行的环境。实际上，你总是跨平台编译。通过此架构，
-我们想要目标环境可以运行的二进制种类：x86-64系统运行32位的操作系统必须将
-<code>GOARCH</code> 设置为 <code>386</code> 而非 <code>amd64</code>。
-</p>
-
-<div class="english">
 <p>
 If you choose to override the defaults,
 set these variables in your shell profile (<code>$HOME/.bashrc</code>,
-<code>$HOME/.profile</code>, or equivalent). The settings might look
+<code>$HOME/.profile</code>, or equivalent). The settings might look 
 something like this:
-</p>
-</div>
-
-<p>
-若你选择覆盖默认值，需要在你的shell配置（<code>$HOME/.bashrc</code>、<code>$HOME/.profile</code>、或等价文件）中设置这些变量。该设置看起来可能像这样：
 </p>
 
 <pre>
@@ -988,13 +620,7 @@ export GOARCH=amd64
 export GOOS=linux
 </pre>
 
-<div class="english">
 <p>
 although, to reiterate, none of these variables needs to be set to build,
 install, and develop the Go tree.
-</p>
-</div>
-
-<p>
-再次重申一遍，构建、安装并开发Go树无需设置这些变量。
 </p>

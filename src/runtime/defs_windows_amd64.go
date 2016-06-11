@@ -15,7 +15,6 @@ const (
 	_DUPLICATE_SAME_ACCESS   = 0x2
 	_THREAD_PRIORITY_HIGHEST = 0x2
 
-	_SIGPROF          = 0 // dummy value for badsignal
 	_SIGINT           = 0x2
 	_CTRL_C_EVENT     = 0x0
 	_CTRL_BREAK_EVENT = 0x1
@@ -115,6 +114,35 @@ type context struct {
 	lastbranchfromrip    uint64
 	lastexceptiontorip   uint64
 	lastexceptionfromrip uint64
+}
+
+func (c *context) ip() uintptr { return uintptr(c.rip) }
+func (c *context) sp() uintptr { return uintptr(c.rsp) }
+
+func (c *context) setip(x uintptr) { c.rip = uint64(x) }
+func (c *context) setsp(x uintptr) { c.rsp = uint64(x) }
+
+func dumpregs(r *context) {
+	print("rax     ", hex(r.rax), "\n")
+	print("rbx     ", hex(r.rbx), "\n")
+	print("rcx     ", hex(r.rcx), "\n")
+	print("rdi     ", hex(r.rdi), "\n")
+	print("rsi     ", hex(r.rsi), "\n")
+	print("rbp     ", hex(r.rbp), "\n")
+	print("rsp     ", hex(r.rsp), "\n")
+	print("r8      ", hex(r.r8), "\n")
+	print("r9      ", hex(r.r9), "\n")
+	print("r10     ", hex(r.r10), "\n")
+	print("r11     ", hex(r.r11), "\n")
+	print("r12     ", hex(r.r12), "\n")
+	print("r13     ", hex(r.r13), "\n")
+	print("r14     ", hex(r.r14), "\n")
+	print("r15     ", hex(r.r15), "\n")
+	print("rip     ", hex(r.rip), "\n")
+	print("rflags  ", hex(r.eflags), "\n")
+	print("cs      ", hex(r.segcs), "\n")
+	print("fs      ", hex(r.segfs), "\n")
+	print("gs      ", hex(r.seggs), "\n")
 }
 
 type overlapped struct {

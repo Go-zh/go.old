@@ -1,12 +1,12 @@
 // run
 
-// Copyright 2010 The Go Authors.  All rights reserved.
+// Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
 // Test for issue 778: Map key values that are assignment
 // compatible with the map key type must be accepted according
-// to the spec: http://golang.org/doc/go_spec.html#Indexes .
+// to the spec: https://golang.org/doc/go_spec.html#Indexes .
 
 package main
 
@@ -66,7 +66,7 @@ func main() {
 	m0[z] = 42 // this should work: z is assignment-compatible with interface{}
 	m0[new(struct {
 		x int
-	})] = 42 // this should work: *struct{x int} is assignment-compatible with interface{}
+	})] = 42       // this should work: *struct{x int} is assignment-compatible with interface{}
 	m0[p] = 42     // this should work: p is assignment-compatible with interface{}
 	m0[false] = 42 // this should work: false is assignment-compatible with interface{}
 	m0[17] = 42    // this should work: 17 is assignment-compatible with interface{}
@@ -76,7 +76,7 @@ func main() {
 	m1[i1] = 42
 	m1[new(struct {
 		x int
-	})] = 42 // this should work: *struct{x int} is assignment-compatible with I1
+	})] = 42       // this should work: *struct{x int} is assignment-compatible with I1
 	m1[false] = 42 // this should work: false is assignment-compatible with I1
 	m1[17] = 42    // this should work: 17 is assignment-compatible with I1
 	m1["foo"] = 42 // this should work: "foo" is assignment-compatible with I1

@@ -1,6 +1,6 @@
 // run
 
-// Copyright 2012 The Go Authors.  All rights reserved.
+// Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -20,7 +20,7 @@ func main() {
 	m := map[T]int{}
 	m[T{X: 1, Y: 2}] = 1
 	m[T{X: 2, Y: 3}] = 2
-	m[T{X: 1, Y: 2}] = 3 // overwrites first entry
+	m[T{X: 1, Y: 2}] = 3  // overwrites first entry
 	if len(m) != 2 {
 		println("BUG")
 	}

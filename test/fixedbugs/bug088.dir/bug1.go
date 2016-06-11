@@ -1,4 +1,4 @@
-// Copyright 2009 The Go Authors.  All rights reserved.
+// Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -7,10 +7,10 @@ package main
 import P "./bug0"
 
 func main() {
-	a0 := P.V0()     // works
-	a1 := P.V1()     // works
-	a2, b2 := P.V2() // doesn't work
-	_, _, _, _ = a0, a1, a2, b2
+	a0 := P.V0();  // works
+	a1 := P.V1();  // works
+	a2, b2 := P.V2();  // doesn't work
+	_, _, _, _ = a0, a1, a2, b2;
 }
 
 /*

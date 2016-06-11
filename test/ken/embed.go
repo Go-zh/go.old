@@ -8,6 +8,7 @@
 
 package main
 
+
 type I interface {
 	test1() int
 	test2() int
@@ -252,7 +253,7 @@ func main() {
 		panic("fail")
 	}
 
-	// run it thru an interface
+	// run it through an interface
 	i = s
 	s = i.(*S)
 

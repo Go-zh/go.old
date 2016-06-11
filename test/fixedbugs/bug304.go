@@ -1,6 +1,6 @@
 // compile
 
-// Copyright 2010 The Go Authors.  All rights reserved.
+// Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -9,12 +9,10 @@
 // bug304.go:15:2: internal compiler error: in copy_tree_r, at tree-inline.c:4114
 
 package p
-
 type S struct {
 	v interface{}
 }
-
-func g(e interface{}) {}
+func g(e interface{}) { }
 func f(s S) {
 	g(s.v.(*int))
 }

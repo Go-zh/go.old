@@ -1,4 +1,4 @@
-// Copyright 2010 The Go Authors.  All rights reserved.
+// Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -44,8 +44,8 @@ func nextSuffix() string {
 // If dir is the empty string, TempFile uses the default directory
 // for temporary files (see os.TempDir).
 // Multiple programs calling TempFile simultaneously
-// will not choose the same file.  The caller can use f.Name()
-// to find the pathname of the file.  It is the caller's responsibility
+// will not choose the same file. The caller can use f.Name()
+// to find the pathname of the file. It is the caller's responsibility
 // to remove the file when no longer needed.
 
 // TempFile 在目录 dir 中创建一个名字以 prefix 开头的新的临时文件，打开该文件以用于读写，
@@ -63,7 +63,9 @@ func TempFile(dir, prefix string) (f *os.File, err error) {
 		f, err = os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 		if os.IsExist(err) {
 			if nconflict++; nconflict > 10 {
+				randmu.Lock()
 				rand = reseed()
+				randmu.Unlock()
 			}
 			continue
 		}
@@ -74,10 +76,10 @@ func TempFile(dir, prefix string) (f *os.File, err error) {
 
 // TempDir creates a new temporary directory in the directory dir
 // with a name beginning with prefix and returns the path of the
-// new directory.  If dir is the empty string, TempDir uses the
+// new directory. If dir is the empty string, TempDir uses the
 // default directory for temporary files (see os.TempDir).
 // Multiple programs calling TempDir simultaneously
-// will not choose the same directory.  It is the caller's responsibility
+// will not choose the same directory. It is the caller's responsibility
 // to remove the directory when no longer needed.
 
 // TempDir 在目录 dir 中创建一个名字以 prefix 开头的新的临时目录并返回该新目录的路径。
@@ -95,7 +97,9 @@ func TempDir(dir, prefix string) (name string, err error) {
 		err = os.Mkdir(try, 0700)
 		if os.IsExist(err) {
 			if nconflict++; nconflict > 10 {
+				randmu.Lock()
 				rand = reseed()
+				randmu.Unlock()
 			}
 			continue
 		}

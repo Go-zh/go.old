@@ -1,15 +1,15 @@
 // run
 
-// Copyright 2010 The Go Authors.  All rights reserved.
+// Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// http://code.google.com/p/go/issues/detail?id=846
+// https://golang.org/issue/846
 
 package main
 
 func x() (a int, b bool) {
-	defer func() {
+	defer func(){
 		a++
 	}()
 	a, b = y()
@@ -17,7 +17,7 @@ func x() (a int, b bool) {
 }
 
 func x2() (a int, b bool) {
-	defer func() {
+	defer func(){
 		a++
 	}()
 	return y()

@@ -46,7 +46,7 @@ func main() {
 var dataURL = flag.String("data", "", "full URL for UnicodeData.txt; defaults to --url/UnicodeData.txt")
 var casefoldingURL = flag.String("casefolding", "", "full URL for CaseFolding.txt; defaults to --url/CaseFolding.txt")
 var url = flag.String("url",
-	"http://www.unicode.org/Public/7.0.0/ucd/",
+	"http://www.unicode.org/Public/8.0.0/ucd/",
 	"URL of Unicode database directory")
 var tablelist = flag.String("tables",
 	"all",
@@ -282,9 +282,6 @@ func parseCategory(line string) (state State) {
 		logger.Fatalf("%.5s...: %s", line, err)
 	}
 	lastChar = rune(point)
-	if point == 0 {
-		return // not interesting and we use 0 as unset // 没什么意思，我们用 0 表示未设置
-	}
 	if point > MaxChar {
 		return
 	}
@@ -531,7 +528,7 @@ func printCategories() {
 			logger.Fatal("unknown category", name)
 		}
 		// We generate an UpperCase name to serve as concise documentation and an _UnderScored
-		// name to store the data.  This stops godoc dumping all the tables but keeps them
+		// name to store the data. This stops godoc dumping all the tables but keeps them
 		// available to clients.
 		// Cases deserving special comments
 		//
@@ -1099,8 +1096,8 @@ func getCaseState(i rune) (c *caseState) {
 		c._case = CaseTitle
 	}
 	// Some things such as roman numeral U+2161 don't describe themselves
-	// as upper case, but have a lower case.  Second-guess them.
-	// 像罗马数字 U+2161 这样的并不称作大写形式，但它们有小写形式。它们都事后诸葛亮。
+	// as upper case, but have a lower case. Second-guess them.
+	// 像罗马数字 U+2161 这样的并不称作大写形式，但它们有小写形式。第二次猜测它们。
 	if c._case == CaseNone && ch.lowerCase != 0 {
 		c._case = CaseUpper
 	}
@@ -1303,9 +1300,12 @@ func printCasefold() {
 	}
 
 	// Delete the groups for which assuming [lower, upper] is right.
-	// 为假定 [lower, upper] 是正确的删除组。
+	// 为假定 [lower, upper] 或 [upper, lower] 是正确的删除组。
 	for i, orb := range caseOrbit {
 		if len(orb) == 2 && chars[orb[0]].upperCase == orb[1] && chars[orb[1]].lowerCase == orb[0] {
+			caseOrbit[i] = nil
+		}
+		if len(orb) == 2 && chars[orb[1]].upperCase == orb[0] && chars[orb[0]].lowerCase == orb[1] {
 			caseOrbit[i] = nil
 		}
 	}
@@ -1324,6 +1324,7 @@ func printCasefold() {
 		}
 	}
 
+	printAsciiFold()
 	printCaseOrbit()
 
 	// Tables of category and script folding exceptions: code points
@@ -1442,6 +1443,25 @@ var comment = map[string]string{
 	"FoldScript": "// FoldCategory 将一个书写系统名映射到该书写系统外的码点表上，\n" +
 		"// 这相当于在简单的情况下对该书写系统内的码点进行转换。\n" +
 		"// 若一个书写系统名没有对应的条目，则该码点不存在。\n",
+}
+
+func printAsciiFold() {
+	printf("var asciiFold = [MaxASCII + 1]uint16{\n")
+	for i := rune(0); i <= unicode.MaxASCII; i++ {
+		c := chars[i]
+		f := c.caseOrbit
+		if f == 0 {
+			if c.lowerCase != i && c.lowerCase != 0 {
+				f = c.lowerCase
+			} else if c.upperCase != i && c.upperCase != 0 {
+				f = c.upperCase
+			} else {
+				f = i
+			}
+		}
+		printf("\t0x%04X,\n", f)
+	}
+	printf("}\n\n")
 }
 
 func printCaseOrbit() {

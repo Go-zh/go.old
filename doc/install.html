@@ -8,6 +8,8 @@
 	"Path":  "/doc/install"
 }-->
 
+<div class="hideFromDownload">
+
 <div class="english">
 <h2 id="download">Download the Go distribution</h2>
 </div>
@@ -16,7 +18,7 @@
 
 <div class="english">
 <p>
-<a href="https://golang.org/dl/" id="start" class="download" target="_blank">
+<a href="https://golang.org/dl/" id="start" class="download">
 <span class="big">Download Go</span>
 <span class="desc">Click here to visit the downloads page</span>
 </a>
@@ -26,9 +28,10 @@
 <div class="english">
 <p>
 <a href="https://golang.org/dl/" target="_blank">Official binary
-distributions</a> are available for the FreeBSD (release 8 and above), Linux, Mac OS X (Snow Leopard
-and above), and Windows operating systems and the 32-bit (<code>386</code>) and
-64-bit (<code>amd64</code>) x86 processor architectures.
+distributions</a> are available for the FreeBSD (release 8-STABLE and above),
+Linux, Mac OS X (10.7 and above), and Windows operating systems and
+the 32-bit (<code>386</code>) and 64-bit (<code>amd64</code>) x86 processor
+architectures.
 </p>
 </div>
 
@@ -62,11 +65,11 @@ system and architecture, try
 
 <div class="english">
 <p>
-The <code>gc</code> compiler supports the following operating systems and
-architectures. Please ensure your system meets these requirements before
-proceeding. If your OS or architecture is not on the list, it's possible that
-<code>gccgo</code> might support your setup; see
-<a href="/doc/install/gccgo">Setting up and using gccgo</a> for details.
+Go binary distributions are available for these supported operating systems and architectures.
+Please ensure your system meets these requirements before proceeding.
+If your OS or architecture is not on the list, you may be able to
+<a href="/doc/install/source">install from source</a> or
+<a href="/doc/install/gccgo">use gccgo instead</a>.
 </p>
 </div>
 
@@ -84,9 +87,9 @@ proceeding. If your OS or architecture is not on the list, it's possible that
 <th align="center">Notes</th>
 </tr>
 <tr><td colspan="3"><hr></td></tr>
-<tr><td>FreeBSD 8 or later</td> <td>amd64, 386, arm</td> <td>Debian GNU/kFreeBSD not supported; FreeBSD/ARM needs FreeBSD 10 or later</td></tr>
-<tr><td>Linux 2.6.23 or later with glibc</td> <td>amd64, 386, arm</td> <td>CentOS/RHEL 5.x not supported; no binary distribution for ARM yet</td></tr>
-<tr><td>Mac OS X 10.6 or later</td> <td>amd64, 386</td> <td>use the gcc<sup>&#8224;</sup> that comes with Xcode<sup>&#8225;</sup></td></tr>
+<tr><td>FreeBSD 8-STABLE or later</td> <td>amd64</td> <td>Debian GNU/kFreeBSD not supported</td></tr>
+<tr><td>Linux 2.6.23 or later with glibc</td> <td>amd64, 386, arm</td> <td>CentOS/RHEL 5.x not supported</td></tr>
+<tr><td>Mac OS X 10.7 or later</td> <td>amd64</td> <td>use the clang or gcc<sup>&#8224;</sup> that comes with Xcode<sup>&#8225;</sup></td></tr>
 <tr><td>Windows XP or later</td> <td>amd64, 386</td> <td>use MinGW gcc<sup>&#8224;</sup>. No need for cygwin or msys.</td></tr>
 </table>
 
@@ -120,6 +123,8 @@ Downloads preferences panel.
 若你已经安装了Xcode 4.3+，只需从下载配置面板的组件标签内安装它即可。
 </p>
 
+</div><!-- hideFromDownload -->
+
 <div class="english">
 <h2 id="install">Install the Go tools</h2>
 </div>
@@ -136,6 +141,8 @@ first <a href="#uninstall">remove the existing version</a>.
 <p>
 若你要从旧版本的Go升级，那么首先必须<a href="#uninstall">卸载已存在的版本</a>。
 </p>
+
+<div id="tarballInstructions">
 
 <div class="english">
 <h3 id="tarball">Linux, Mac OS X, and FreeBSD tarballs</h3>
@@ -157,8 +164,10 @@ and extract it into <code>/usr/local</code>, creating a Go tree in
 </p>
 
 <pre>
-tar -C /usr/local -xzf go$VERSION.$OS-$ARCH.tar.gz
+tar -C /usr/local -xzf <span class="downloadFilename">go$VERSION.$OS-$ARCH.tar.gz</span>
 </pre>
+
+<p class="hideFromDownload">
 
 <div class="english">
 <p>
@@ -248,6 +257,10 @@ location.
 <b>注</b>：<code>GOROOT</code> 仅在安装到指定位置时才需要设置。
 </p>
 
+</div><!-- tarballInstructions -->
+
+<div id="darwinPackageInstructions">
+
 <div class="english">
 <h3 id="osx">Mac OS X package installer</h3>
 </div>
@@ -280,7 +293,13 @@ Terminal sessions for the change to take effect.
 要使此更改生效，你需要重启所有打开的终端回话。
 </p>
 
+</div><!-- darwinPackageInstructions -->
+
+<div id="windowsInstructions">
+
 <h3 id="windows">Windows</h3>
+
+<p class="hideFromDownload">
 
 <div class="english">
 <p>
@@ -295,6 +314,8 @@ MSI installer that configures your installation automatically.
 对于Windows用户，Go项目提供两种安装选项（<a href="/doc/install/source">从源码安装</a>除外）：
 zip压缩包需要你设置一些环境变量，而实验性MSI安装程序则会自动配置你的安装。
 </p>
+
+<div id="windowsInstallerInstructions">
 
 <div class="english">
 <h4 id="windows_msi">MSI installer</h4>
@@ -327,6 +348,8 @@ command prompts for the change to take effect.
 此安装程序应该会将 <code>c:\Go\bin</code> 目录放到你的 <code>PATH</code> 环境变量中。
 要使此更改生效，你需要重启所有打开的命令行。
 </p>
+
+<div id="windowsZipInstructions">
 
 <div class="english">
 <h4 id="windows_zip">Zip archive</h4>
@@ -367,6 +390,8 @@ Add the <code>bin</code> subdirectory of your Go root (for example, <code>c:\Go\
 <code>PATH</code> 环境变量中。
 </p>
 
+</div><!-- windowsZipInstructions -->
+
 <div class="english">
 <h4 id="windows_env">Setting environment variables under Windows</h4>
 </div>
@@ -387,6 +412,8 @@ Settings" option inside the "System" control panel.
 Windows的一些版本通过系统“控制面板”中的“高级系统设置”选项提供此控制板。
 </p>
 
+</div><!-- windowsInstructions -->
+
 <div class="english">
 <h2 id="testing">Test your installation</h2>
 </div>
@@ -395,7 +422,16 @@ Windows的一些版本通过系统“控制面板”中的“高级系统设置�
 
 <div class="english">
 <p>
-Check that Go is installed correctly by building a simple program, as follows.
+Check that Go is installed correctly by setting up a workspace
+and building a simple program, as follows.
+</p>
+
+<p>
+Create a directory to contain your <a href="code.html#Workspaces">workspace</a>,
+<code class="testUnix">$HOME/work</code>
+<code class="testWindows" style="display: none">C:\work</code>
+for example, and set the <code>GOPATH</code> environment
+variable to point to that location.
 </p>
 </div>
 
@@ -403,9 +439,31 @@ Check that Go is installed correctly by building a simple program, as follows.
 通过构建一个简单的程序来检查Go的安装是否正确，具体操作如下：
 </p>
 
+<pre class="testUnix">
+$ <b>export GOPATH=$HOME/work</b>
+</pre>
+
+<pre class="testWindows" style="display: none">
+C:\&gt; <b>set GOPATH=C:\work</b>
+</pre>
+
 <div class="english">
 <p>
-Create a file named <code>hello.go</code> and put the following program in it:
+<span class="testUnix">
+You should put the above command in your shell startup script
+(<code>$HOME/.profile</code> for example).
+</span>
+<span class="testWindows">
+On Windows, follow the <a href="#windows_env">instructions above</a> to set the
+<code>GOPATH</code> environment variable on your system.
+</span>
+</p>
+
+<p>
+Next, make the directories <code>src/github.com/user/hello</code> inside your
+workspace (if you use GitHub, substitute your user name for <code>user</code>),
+and inside the <code>hello</code> directory create a file named <code>hello.go</code>
+with the following contents:
 </p>
 </div>
 
@@ -425,7 +483,7 @@ func main() {
 
 <div class="english">
 <p>
-Then run it with the <code>go</code> tool:
+Then compile it with the <code>go</code> tool:
 </p>
 </div>
 
@@ -433,8 +491,29 @@ Then run it with the <code>go</code> tool:
 接着通过 <code>go</code> 工具运行它：
 </p>
 
-<pre>
-$ go run hello.go
+<pre class="testUnix">
+$ <b>go install github.com/user/hello</b>
+</pre>
+
+<pre class="testWindows" style="display: none">
+C:\&gt; <b>go install github.com/user/hello</b>
+</pre>
+
+<div class="english">
+<p>
+The command above will put an executable command named <code>hello</code> 
+(or <code>hello.exe</code>) inside the <code>bin</code> directory of your workspace.
+Execute the command to see the greeting:
+</p>
+</div>
+
+<pre class="testUnix">
+$ <b>$GOPATH/bin/hello</b>
+hello, world
+</pre>
+
+<pre class="testWindows" style="display: none">
+C:\&gt; <b>%GOPATH%\bin\hello</b>
 hello, world
 </pre>
 
@@ -456,20 +535,9 @@ If you see the "hello, world" message then your Go installation is working.
 
 <div class="english">
 <p>
-You're almost done.
-You just need to set up your environment.
-</p>
-</div>
-
-<p>
-差不多了，你只要再设置一下就好。
-</p>
-
-
-<div class="english">
-<p>
-Read the <a href="/doc/code.html">How to Write Go Code</a> document,
-which provides <b>essential setup instructions</b> for using the Go tools.
+Before rushing off to write Go code please read the
+<a href="/doc/code.html">How to Write Go Code</a> document,
+which describes some essential concepts about using the Go tools.
 </p>
 </div>
 

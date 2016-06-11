@@ -1,6 +1,6 @@
 // run
 
-// Copyright 2010 The Go Authors.  All rights reserved.
+// Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -25,7 +25,7 @@ func main() {
 		} else {
 			println("BUG 2")
 		}
-
+		
 		if math.Pow(2, 3) != 8 {
 			println("BUG 3")
 		}

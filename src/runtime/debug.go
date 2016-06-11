@@ -4,15 +4,18 @@
 
 package runtime
 
-import "unsafe"
+import (
+	"runtime/internal/atomic"
+	"unsafe"
+)
 
 // GOMAXPROCS sets the maximum number of CPUs that can be executing
-// simultaneously and returns the previous setting.  If n < 1, it does not
+// simultaneously and returns the previous setting. If n < 1, it does not
 // change the current setting.
 // The number of logical CPUs on the local machine can be queried with NumCPU.
 // This call will go away when the scheduler improves.
 
-// GOMAXPROCS 设置可同时使用执行的最大CPU数，并返回先前的设置。
+// GOMAXPROCS 设置可同时执行的最大CPU数并返回先前的设置。
 // 若 n < 1，它就不会更改当前设置。本地机器的逻辑CPU数可通过 NumCPU 查询。
 // 当调度器改进后，此调用将会消失。
 func GOMAXPROCS(n int) int {
@@ -26,23 +29,25 @@ func GOMAXPROCS(n int) int {
 		return ret
 	}
 
-	semacquire(&worldsema, false)
-	gp := getg()
-	gp.m.gcing = 1
-	systemstack(stoptheworld)
+	stopTheWorld("GOMAXPROCS")
 
-	// newprocs will be processed by starttheworld
+	// newprocs will be processed by startTheWorld
 	newprocs = int32(n)
 
-	gp.m.gcing = 0
-	semrelease(&worldsema)
-	systemstack(starttheworld)
+	startTheWorld()
 	return ret
 }
 
-// NumCPU returns the number of logical CPUs on the local machine.
+// NumCPU returns the number of logical CPUs usable by the current process.
+//
+// The set of available CPUs is checked by querying the operating system
+// at process startup. Changes to operating system CPU allocation after
+// process startup are not reflected.
 
-// NumCPU 返回本地机器的逻辑CPU数。
+// NumCPU 返回当前进程可用的逻辑CPU数。
+//
+// 可用CPU的设置会在进程启动时通过查询操作系统获得。进程启动后更改操作系统的CPU
+// 分配并不会反映出来。
 func NumCPU() int {
 	return int(ncpu)
 }
@@ -52,7 +57,7 @@ func NumCPU() int {
 // NumCgoCall 返回由当前进程创建的cgo调用数。
 func NumCgoCall() int64 {
 	var n int64
-	for mp := (*m)(atomicloadp(unsafe.Pointer(&allm))); mp != nil; mp = mp.alllink {
+	for mp := (*m)(atomic.Loadp(unsafe.Pointer(&allm))); mp != nil; mp = mp.alllink {
 		n += int64(mp.ncgocall)
 	}
 	return n

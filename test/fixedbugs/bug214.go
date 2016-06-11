@@ -5,11 +5,11 @@
 // license that can be found in the LICENSE file.
 
 // Used to crash the compiler.
-// http://code.google.com/p/go/issues/detail?id=88
+// https://golang.org/issue/88
 
 package main
 
 func main() {
-	x := make(map[int]int, 10)
-	x[0], x[1] = 2, 6
+	x := make(map[int]int, 10);
+	x[0], x[1] = 2, 6;
 }

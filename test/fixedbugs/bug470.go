@@ -1,6 +1,6 @@
 // run
 
-// Copyright 2012 The Go Authors.  All rights reserved.
+// Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -11,8 +11,8 @@ package main
 import "fmt"
 
 const (
-	F32 = 0.00999999977648258209228515625
-	F64 = 0.01000000000000000020816681711721685132943093776702880859375
+    F32 = 0.00999999977648258209228515625
+    F64 = 0.01000000000000000020816681711721685132943093776702880859375
 )
 
 var F = float64(float32(0.01))

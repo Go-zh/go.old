@@ -1,6 +1,6 @@
 // run
 
-// Copyright 2012 The Go Authors.  All rights reserved.
+// Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -34,7 +34,7 @@ func expectError(expectLine int) {
 	if recover() == nil {
 		panic("did not crash")
 	}
-	for i := 1; ; i++ {
+	for i := 1;; i++ {
 		_, file, line, ok := runtime.Caller(i)
 		if !ok {
 			panic("cannot find issue4562.go on stack")

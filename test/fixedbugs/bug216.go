@@ -5,11 +5,11 @@
 // license that can be found in the LICENSE file.
 
 // Used to be rejected
-// http://code.google.com/p/go/issues/detail?id=188
+// https://golang.org/issue/188
 
 package main
 
-func complexSqrt(i int) (int, int) { return 0, 1 }
+func complexSqrt(i int) (int, int)	{ return 0, 1 }
 
 var re, im = complexSqrt(-1)
 

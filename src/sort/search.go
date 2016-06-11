@@ -9,12 +9,12 @@ package sort
 
 // Search uses binary search to find and return the smallest index i
 // in [0, n) at which f(i) is true, assuming that on the range [0, n),
-// f(i) == true implies f(i+1) == true.  That is, Search requires that
+// f(i) == true implies f(i+1) == true. That is, Search requires that
 // f is false for some (possibly empty) prefix of the input range [0, n)
 // and then true for the (possibly empty) remainder; Search returns
-// the first true index.  If there is no such index, Search returns n.
+// the first true index. If there is no such index, Search returns n.
 // (Note that the "not found" return value is not -1 as in, for instance,
-// strings.Index).
+// strings.Index.)
 // Search calls f(i) only for i in the range [0, n).
 //
 // A common use of Search is to find the index i for a value x in
@@ -173,6 +173,7 @@ func Search(n int, f func(int) bool) int {
 // not present (it could be len(a)).
 // The slice must be sorted in ascending order.
 //
+
 // 常见案例的便捷调用封装
 
 // SearchInts 在ints切片中搜索x并返回索引
@@ -184,20 +185,30 @@ func SearchInts(a []int, x int) int {
 	return Search(len(a), func(i int) bool { return a[i] >= x })
 }
 
+// SearchFloat64s searches for x in a sorted slice of float64s and returns the index
+// as specified by Search. The return value is the index to insert x if x is not
+// present (it could be len(a)).
+// The slice must be sorted in ascending order.
+//
+
 // SearchFloat64s 在float64s切片中搜索x并返回索引
 // 如Search函数所述. 返回可以插入x值的索引位置，如果x
 // 不存在，返回数组a的长度
 // 切片必须以升序排列
-//
 func SearchFloat64s(a []float64, x float64) int {
 	return Search(len(a), func(i int) bool { return a[i] >= x })
 }
+
+// SearchStrings searches for x in a sorted slice of strings and returns the index
+// as specified by Search. The return value is the index to insert x if x is not
+// present (it could be len(a)).
+// The slice must be sorted in ascending order.
+//
 
 // SearchFloat64s 在strings切片中搜索x并返回索引
 // 如Search函数所述. 返回可以插入x值的索引位置，如果x
 // 不存在，返回数组a的长度
 // 切片必须以升序排列
-//
 func SearchStrings(a []string, x string) int {
 	return Search(len(a), func(i int) bool { return a[i] >= x })
 }

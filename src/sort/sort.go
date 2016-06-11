@@ -9,7 +9,7 @@
 package sort
 
 // A type, typically a collection, that satisfies sort.Interface can be
-// sorted by the routines in this package.  The methods require that the
+// sorted by the routines in this package. The methods require that the
 // elements of the collection be enumerated by an integer index.
 
 // 任何实现了 sort.Interface 的类型（一般为集合），均可使用该包中的方法进行排序。
@@ -26,13 +26,6 @@ type Interface interface {
 	// Swap swaps the elements with indexes i and j.
 	// Swap 交换索引为 i 和 j 的元素
 	Swap(i, j int)
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // Insertion sort
@@ -88,28 +81,26 @@ func heapSort(data Interface, a, b int) {
 	}
 }
 
-// Quicksort, following Bentley and McIlroy,
+// Quicksort, loosely following Bentley and McIlroy,
 // ``Engineering a Sort Function,'' SP&E November 1993.
 // 快速排序，实现参考 Bentley and McIlroy,
 // ``Engineering a Sort Function,'' SP&E November 1993.
 
-// medianOfThree moves the median of the three values data[a], data[b], data[c] into data[a].
+// medianOfThree moves the median of the three values data[m0], data[m1], data[m2] into data[m1].
 
-// medianOfThree 将 data[a]、data[b] 和 data[c] 三个值的中值交换到 data[a]。
-func medianOfThree(data Interface, a, b, c int) {
-	m0 := b
-	m1 := a
-	m2 := c
-	// bubble sort on 3 elements
-	// 对3个元素进行冒泡排序
+// medianOfThree 将 data[m0]、data[m1]、data[m2] 三个值的中值交换到 data[m1]。
+func medianOfThree(data Interface, m1, m0, m2 int) {
+	// sort 3 elements
 	if data.Less(m1, m0) {
 		data.Swap(m1, m0)
 	}
+	// data[m0] <= data[m1]
 	if data.Less(m2, m1) {
 		data.Swap(m2, m1)
-	}
-	if data.Less(m1, m0) {
-		data.Swap(m1, m0)
+		// data[m0] <= data[m2] && data[m1] < data[m2]
+		if data.Less(m1, m0) {
+			data.Swap(m1, m0)
+		}
 	}
 	// now data[m0] <= data[m1] <= data[m2]
 	// 现在 data[m0] <= data[m1] <= data[m2]
@@ -135,69 +126,90 @@ func doPivot(data Interface, lo, hi int) (midlo, midhi int) {
 
 	// Invariants are:
 	//	data[lo] = pivot (set up by ChoosePivot)
-	//	data[lo <= i < a] = pivot
-	//	data[a <= i < b] < pivot
-	//	data[b <= i < c] is unexamined
-	//	data[c <= i < d] > pivot
-	//	data[d <= i < hi] = pivot
-	//
-	// Once b meets c, can swap the "= pivot" sections
-	// into the middle of the slice.
+	//	data[lo < i < a] < pivot
+	//	data[a <= i < b] <= pivot
+	//	data[b <= i < c] unexamined
+	//	data[c <= i < hi-1] > pivot
+	//	data[hi-1] >= pivot
 
 	// 算法不变式为：
 	//	data[lo] = pivot (由 ChoosePivot 决定)
-	//	data[lo <= i < a] = pivot
-	//	data[a <= i < b] < pivot
+	//	data[lo < i < a] < pivot
+	//	data[a <= i < b] <= pivot
 	//	data[b <= i < c] 未经检查
-	//	data[c <= i < d] > pivot
-	//	data[d <= i < hi] = pivot
-	//
-	// 一旦 b 与 c 相遇，就将“= pivot”的这部分交换到切片中间。
+	//	data[c <= i < hi-1] > pivot
+	//	data[hi-1] >= pivot
 	pivot := lo
-	a, b, c, d := lo+1, lo+1, hi, hi
+	a, c := lo+1, hi-1
+
+	for ; a < c && data.Less(a, pivot); a++ {
+	}
+	b := a
 	for {
-		for b < c {
-			if data.Less(b, pivot) { // data[b] < pivot
-				b++
-			} else if !data.Less(pivot, b) { // data[b] = pivot
-				data.Swap(a, b)
-				a++
-				b++
-			} else {
-				break
-			}
+		for ; b < c && !data.Less(pivot, b); b++ { // data[b] <= pivot
 		}
-		for b < c {
-			if data.Less(pivot, c-1) { // data[c-1] > pivot
-				c--
-			} else if !data.Less(c-1, pivot) { // data[c-1] = pivot
-				data.Swap(c-1, d-1)
-				c--
-				d--
-			} else {
-				break
-			}
+		for ; b < c && data.Less(pivot, c-1); c-- { // data[c-1] > pivot
 		}
 		if b >= c {
 			break
 		}
-		// data[b] > pivot; data[c-1] < pivot
+		// data[b] > pivot; data[c-1] <= pivot
 		data.Swap(b, c-1)
 		b++
 		c--
 	}
-
-	n := min(b-a, a-lo)
-	swapRange(data, lo, b-n, n)
-
-	n = min(hi-d, d-c)
-	swapRange(data, c, hi-n, n)
-
-	return lo + b - a, hi - (d - c)
+	// If hi-c<3 then there are duplicates (by property of median of nine).
+	// Let be a bit more conservative, and set border to 5.
+	protect := hi-c < 5
+	if !protect && hi-c < (hi-lo)/4 {
+		// Lets test some points for equality to pivot
+		dups := 0
+		if !data.Less(pivot, hi-1) { // data[hi-1] = pivot
+			data.Swap(c, hi-1)
+			c++
+			dups++
+		}
+		if !data.Less(b-1, pivot) { // data[b-1] = pivot
+			b--
+			dups++
+		}
+		// m-lo = (hi-lo)/2 > 6
+		// b-lo > (hi-lo)*3/4-1 > 8
+		// ==> m < b ==> data[m] <= pivot
+		if !data.Less(m, pivot) { // data[m] = pivot
+			data.Swap(m, b-1)
+			b--
+			dups++
+		}
+		// if at least 2 points are equal to pivot, assume skewed distribution
+		protect = dups > 1
+	}
+	if protect {
+		// Protect against a lot of duplicates
+		// Add invariant:
+		//	data[a <= i < b] unexamined
+		//	data[b <= i < c] = pivot
+		for {
+			for ; a < b && !data.Less(b-1, pivot); b-- { // data[b] == pivot
+			}
+			for ; a < b && data.Less(a, pivot); a++ { // data[a] < pivot
+			}
+			if a >= b {
+				break
+			}
+			// data[a] == pivot; data[b-1] < pivot
+			data.Swap(a, b-1)
+			a++
+			b--
+		}
+	}
+	// Swap pivot into middle
+	data.Swap(pivot, b-1)
+	return b - 1, c
 }
 
 func quickSort(data Interface, a, b, maxDepth int) {
-	for b-a > 7 {
+	for b-a > 12 { // Use ShellSort for slices <= 12 elements
 		if maxDepth == 0 {
 			heapSort(data, a, b)
 			return
@@ -216,6 +228,13 @@ func quickSort(data Interface, a, b, maxDepth int) {
 		}
 	}
 	if b-a > 1 {
+		// Do ShellSort pass with gap 6
+		// It could be written in this simplified form cause b-a <= 12
+		for i := a + 6; i < b; i++ {
+			if data.Less(i, i-6) {
+				data.Swap(i, i-6)
+			}
+		}
 		insertionSort(data, a, b)
 	}
 }
@@ -295,6 +314,8 @@ func (p Float64Slice) Less(i, j int) bool { return p[i] < p[j] || isNaN(p[i]) &&
 func (p Float64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 // isNaN is a copy of math.IsNaN to avoid a dependency on the math package.
+
+// isNaN 是 math.IsNaN 的副本，避免了对 math 包的依赖。
 func isNaN(f float64) bool {
 	return f != f
 }
@@ -323,7 +344,7 @@ func (p StringSlice) Sort() { Sort(p) }
 
 // Ints sorts a slice of ints in increasing order.
 
-//Ints 以升序排列 int 切片。
+// Ints 以升序排列 int 切片。
 func Ints(a []int) { Sort(IntSlice(a)) }
 
 // Float64s sorts a slice of float64s in increasing order.
@@ -351,9 +372,11 @@ func Float64sAreSorted(a []float64) bool { return IsSorted(Float64Slice(a)) }
 // StringsAreSorted 判断 string 切片是否已经按升序排列。
 func StringsAreSorted(a []string) bool { return IsSorted(StringSlice(a)) }
 
+// TODO(osc): 以下文档需更新
+
 // Notes on stable sorting:
 // The used algorithms are simple and provable correct on all input and use
-// only logarithmic additional stack space.  They perform well if compared
+// only logarithmic additional stack space. They perform well if compared
 // experimentally to other stable in-place sorting algorithms.
 //
 // Remarks on other algorithms evaluated:
@@ -364,16 +387,16 @@ func StringsAreSorted(a []string) bool { return IsSorted(StringSlice(a)) }
 //    and Jukka Teuhola; Nordic Journal of Computing 3,1 (1996), 27-40:
 //    The given algorithms are in-place, number of Swap and Assignments
 //    grow as n log n but the algorithm is not stable.
-//  - "Fast Stable In-Plcae Sorting with O(n) Data Moves" J.I. Munro and
+//  - "Fast Stable In-Place Sorting with O(n) Data Moves" J.I. Munro and
 //    V. Raman in Algorithmica (1996) 16, 115-160:
 //    This algorithm either needs additional 2n bits or works only if there
 //    are enough different elements available to encode some permutations
-//    which have to be undone later (so not stable an any input).
+//    which have to be undone later (so not stable on any input).
 //  - All the optimal in-place sorting/merging algorithms I found are either
 //    unstable or rely on enough different elements in each step to encode the
 //    performed block rearrangements. See also "In-Place Merging Algorithms",
 //    Denham Coates-Evely, Department of Computer Science, Kings College,
-//    January 2004 and the reverences in there.
+//    January 2004 and the references in there.
 //  - Often "optimal" algorithms are optimal in the number of assignments
 //    but Interface has only Swap as operation.
 

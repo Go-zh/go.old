@@ -1,6 +1,6 @@
 // run
 
-// Copyright 2012 The Go Authors.  All rights reserved.
+// Copyright 2012 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -22,10 +22,7 @@ func main() {
 }
 
 func makec(px *int) chan bool {
-	if false {
-		for {
-		}
-	}
+	if false { for {} }
 	*px = 42
 	return make(chan bool, 0)
 }

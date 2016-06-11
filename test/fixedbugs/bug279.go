@@ -1,10 +1,10 @@
 // run
 
-// Copyright 2010 The Go Authors.  All rights reserved.
+// Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// http://code.google.com/p/go/issues/detail?id=799
+// https://golang.org/issue/799
 
 package main
 
@@ -21,7 +21,7 @@ func main() {
 		println("BUG alignof 0", n)
 		return
 	}
-
+	
 	n = unsafe.Sizeof("")
 	if n != 8 && n != 16 {
 		println("BUG sizeof \"\"", n)
@@ -33,3 +33,4 @@ func main() {
 		return
 	}
 }
+

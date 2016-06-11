@@ -4,15 +4,15 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// http://code.google.com/p/go/issues/detail?id=3351
+// https://golang.org/issue/3351
 
 package main
 
 // struct with four fields of basic type
-type S struct{ a, b, c, d int }
+type S struct {a, b, c, d int}
 
 // struct with five fields of basic type
-type T struct{ a, b, c, d, e int }
+type T struct {a, b, c, d, e int}
 
 // array with four elements
 type A [4]int

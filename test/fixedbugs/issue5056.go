@@ -1,6 +1,6 @@
 // run
 
-// Copyright 2013 The Go Authors.  All rights reserved.
+// Copyright 2013 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -10,7 +10,7 @@ package main
 
 type Foo int16
 
-func (f Foo) Esc() *int {
+func (f Foo) Esc() *int{
 	x := int(f)
 	return &x
 }
@@ -24,7 +24,7 @@ var bar, foobar *int
 func main() {
 	var quux iface
 	var x Foo
-
+	
 	quux = x
 	bar = quux.Esc()
 	foobar = quux.Esc()

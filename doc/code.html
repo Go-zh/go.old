@@ -55,6 +55,25 @@ A similar explanation is available as a
 
 <h2 id="组织">代码的组织</h2>
 
+<h3 id="Overview">Overview</h3>
+
+<ul>
+	<li>Go programmers typically keep all their Go code in a single <i>workspace</i>.</li>
+	<li>A workspace contains many version control <i>repositories</i>
+	    (managed by Git, for example).</li>
+	<li>Each repository contains one or more <i>packages</i>.</li>
+	<li>Each package consists of one or more Go source files in a single directory.</li>
+	<li>The path to a package's directory determines its <i>import path</i>.</li>
+</ul>
+
+<div class="english">
+<p>
+Note that this differs from other programming environments in which every
+project has a separate workspace and workspaces are closely tied to version
+control repositories.
+</p>
+</div>
+
 <div class="english">
 <h3 id="Workspaces">Workspaces</h3>
 </div>
@@ -63,31 +82,17 @@ A similar explanation is available as a
 
 <div class="english">
 <p>
-The <code>go</code> tool is designed to work with open source code maintained
-in public repositories. Although you don't need to publish your code, the model
-for how the environment is set up works the same whether you do or not.
-</p>
-</div>
-
-<p>
-<code>go</code> 工具为公共代码仓库中维护的开源代码而设计。
-无论你会不会公布代码，该模型设置工作环境的方法都是相同的。
-</p>
-
-<div class="english">
-<p>
-Go code must be kept inside a <i>workspace</i>.
 A workspace is a directory hierarchy with three directories at its root:
 </p>
 </div>
 
 <p>
-Go代码必须放在<b>工作空间</b>内。它其实就是一个目录，其中包含三个子目录：
+<b>工作空间</b>其实就是一个目录，其中包含三个子目录：
 </p>
 
 <div class="english">
 <ul>
-<li><code>src</code> contains Go source files organized into packages (one package per directory),
+<li><code>src</code> contains Go source files,
 <li><code>pkg</code> contains package objects, and
 <li><code>bin</code> contains executable commands.
 </ul>
@@ -152,48 +157,56 @@ src/
 		main.go                # command source
 		main_test.go           # test source
 	stringutil/
-		reverse.go             # package source
-		reverse_test.go        # test source
+	    reverse.go             # package source
+	    reverse_test.go        # test source
+    <a href="https://golang.org/x/image/">golang.org/x/image/</a>
+        .git/                      # Git repository metadata
+	bmp/
+	    reader.go              # package source
+	    writer.go              # package source
+    ... (many more repositories and packages omitted) ...
 </pre>
 </div>
 
 <pre>
 bin/
-	streak                         # 可执行命令
-	todo                           # 可执行命令
+	hello                          # command executable
+	outyet                         # command executable
 pkg/
 	linux_amd64/
-		code.google.com/p/goauth2/
-			oauth.a                # 包对象
-		github.com/nf/todo/
-			task.a                 # 包对象
+		github.com/golang/example/
+			stringutil.a           # package object
 src/
-	code.google.com/p/goauth2/
-		.hg/                       # mercurial 代码库元数据
-		oauth/
-			oauth.go               # 包源码
-			oauth_test.go          # 测试源码
-	github.com/nf/
-		streak/
-		.git/                      # git 代码库元数据
-			oauth.go               # 命令源码
-			streak.go              # 命令源码
-		todo/
-		.git/                      # git 代码库元数据
-			task/
-				task.go            # 包源码
-			todo.go                # 命令源码
+	<a href="https://github.com/golang/example/">github.com/golang/example/</a>
+		.git/                      # Git repository metadata
+	hello/
+		hello.go               # command source
+	outyet/
+		main.go                # command source
+		main_test.go           # test source
+	stringutil/
+	    reverse.go             # package source
+	    reverse_test.go        # test source
+    <a href="https://golang.org/x/image/">golang.org/x/image/</a>
+        .git/                      # Git repository metadata
+	bmp/
+	    reader.go              # package source
+	    writer.go              # package source
+    ... (many more repositories and packages omitted) ...
 </pre>
 
 <div class="english">
 <p>
-This workspace contains one repository (<code>example</code>)
-comprising two commands (<code>hello</code> and <code>outyet</code>)
-and one library (<code>stringutil</code>).
+The tree above shows a workspace containing two repositories
+(<code>example</code> and <code>image</code>).
+The <code>example</code> repository contains two commands (<code>hello</code>
+and <code>outyet</code>) and one library (<code>stringutil</code>).
+The <code>image</code> repository contains the <code>bmp</code> package
+and <a href="https://godoc.org/golang.org/x/image">several others</a>.
 </p>
 
 <p>
-A typical workspace would contain many source repositories containing many
+A typical workspace contains many source repositories containing many
 packages and commands. Most Go programmers keep <i>all</i> their Go source code
 and dependencies in a single workspace.
 </p>
@@ -278,15 +291,17 @@ please see
 <a href="/cmd/go/#hdr-GOPATH_environment_variable"><code>go help gopath</code></a>
 </p>
 
-<div class="english">
-<h3 id="PackagePaths">Package paths</h3>
-</div>
+<h3 id="ImportPaths">Import paths</h3>
 
-<h3 id="包路径">包路径</h3>
+<p>
+An <i>import path</i> is a string that uniquely identifies a package.
+A package's import path corresponds to its location inside a workspace
+or in a remote repository (explained below).
+</p>
 
 <div class="english">
 <p>
-The packages from the standard library are given short paths such as
+The packages from the standard library are given short import paths such as
 <code>"fmt"</code> and <code>"net/http"</code>.
 For your own packages, you must choose a base path that is unlikely to
 collide with future additions to the standard library or other external

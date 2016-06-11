@@ -15,7 +15,6 @@ const (
 	_DUPLICATE_SAME_ACCESS   = 0x2
 	_THREAD_PRIORITY_HIGHEST = 0x2
 
-	_SIGPROF          = 0 // dummy value for badsignal
 	_SIGINT           = 0x2
 	_CTRL_C_EVENT     = 0x0
 	_CTRL_BREAK_EVENT = 0x1
@@ -100,6 +99,28 @@ type context struct {
 	esp               uint32
 	segss             uint32
 	extendedregisters [512]uint8
+}
+
+func (c *context) ip() uintptr { return uintptr(c.eip) }
+func (c *context) sp() uintptr { return uintptr(c.esp) }
+
+func (c *context) setip(x uintptr) { c.eip = uint32(x) }
+func (c *context) setsp(x uintptr) { c.esp = uint32(x) }
+
+func dumpregs(r *context) {
+	print("eax     ", hex(r.eax), "\n")
+	print("ebx     ", hex(r.ebx), "\n")
+	print("ecx     ", hex(r.ecx), "\n")
+	print("edx     ", hex(r.edx), "\n")
+	print("edi     ", hex(r.edi), "\n")
+	print("esi     ", hex(r.esi), "\n")
+	print("ebp     ", hex(r.ebp), "\n")
+	print("esp     ", hex(r.esp), "\n")
+	print("eip     ", hex(r.eip), "\n")
+	print("eflags  ", hex(r.eflags), "\n")
+	print("cs      ", hex(r.segcs), "\n")
+	print("fs      ", hex(r.segfs), "\n")
+	print("gs      ", hex(r.seggs), "\n")
 }
 
 type overlapped struct {

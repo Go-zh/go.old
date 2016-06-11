@@ -9,117 +9,29 @@
 package debug
 
 import (
-	"bytes"
-	"fmt"
-	"io/ioutil"
 	"os"
 	"runtime"
 )
 
-var (
-	dunno     = []byte("???")
-	centerDot = []byte("·")
-	dot       = []byte(".")
-	slash     = []byte("/")
-)
+// PrintStack prints to standard error the stack trace returned by runtime.Stack.
 
-// PrintStack prints to standard error the stack trace returned by Stack.
-
-// PrintStack 将 Stack 返回的栈跟踪信息打印到标准错误输出。
+// PrintStack 将 runtime.Stack 返回的栈跟踪信息打印到标准错误输出。
 func PrintStack() {
-	os.Stderr.Write(stack())
+	os.Stderr.Write(Stack())
 }
 
 // Stack returns a formatted stack trace of the goroutine that calls it.
-// For each routine, it includes the source line information and PC value,
-// then attempts to discover, for Go functions, the calling function or
-// method and the text of the line containing the invocation.
-//
-// This function is deprecated. Use package runtime's Stack instead.
+// It calls runtime.Stack with a large enough buffer to capture the entire trace.
 
-// Stack 返回格式化的Go程调用的栈跟踪信息。
-// 对于每一个例程，它包括来源行的信息和 PC 值，然后尝试获取，对于Go函数，
-// 则是调用的函数或方法及其包含请求的行的文本。
-//
-// 此函数并不赞成使用。请使用 runtime 包中的 Stack 代替。
+// Stack 返回一个格式化的调用的Go程的栈跟踪信息。
+// 它用一个足够大的缓冲区调用 runtime.Stack 来捕获完整的跟踪信息。
 func Stack() []byte {
-	return stack()
-}
-
-// stack implements Stack, skipping 2 frames
-
-// stack 实现了 Stack，跳过2帧
-func stack() []byte {
-	buf := new(bytes.Buffer) // the returned data // 返回的数据
-	// As we loop, we open files and read them. These variables record the currently
-	// loaded file.
-	// 我们的循环打开文件并读取它们。这些变量记录了当前已加载的文件。
-	var lines [][]byte
-	var lastFile string
-	// 我们关心 Caller 的调用者，因此跳过2帧
-	for i := 2; ; i++ { // Caller we care about is the user, 2 frames up
-		pc, file, line, ok := runtime.Caller(i)
-		if !ok {
-			break
+	buf := make([]byte, 1024)
+	for {
+		n := runtime.Stack(buf, false)
+		if n < len(buf) {
+			return buf[:n]
 		}
-		// Print this much at least.  If we can't find the source, it won't show.
-		// 至少要打印这么多信息。如果我们找不到来源，它就不会被显示。
-		fmt.Fprintf(buf, "%s:%d (0x%x)\n", file, line, pc)
-		if file != lastFile {
-			data, err := ioutil.ReadFile(file)
-			if err != nil {
-				continue
-			}
-			lines = bytes.Split(data, []byte{'\n'})
-			lastFile = file
-		}
-		// 在栈跟踪中，行号从1开始，单我们的数组下标却是从0开始
-		line-- // in stack trace, lines are 1-indexed but our array is 0-indexed
-		fmt.Fprintf(buf, "\t%s: %s\n", function(pc), source(lines, line))
+		buf = make([]byte, 2*len(buf))
 	}
-	return buf.Bytes()
-}
-
-// source returns a space-trimmed slice of the n'th line.
-
-// source 以整洁的形式返回第 n 行的切片。
-func source(lines [][]byte, n int) []byte {
-	if n < 0 || n >= len(lines) {
-		return dunno
-	}
-	return bytes.Trim(lines[n], " \t")
-}
-
-// function returns, if possible, the name of the function containing the PC.
-
-// function 在可能的情况下会返回包含在 PC 中的函数名。
-func function(pc uintptr) []byte {
-	fn := runtime.FuncForPC(pc)
-	if fn == nil {
-		return dunno
-	}
-	name := []byte(fn.Name())
-	// The name includes the path name to the package, which is unnecessary
-	// since the file name is already included.  Plus, it has center dots.
-	// That is, we see
-	//	runtime/debug.*T·ptrmethod
-	// and want
-	//	*T.ptrmethod
-	// Since the package path might contains dots (e.g. code.google.com/...),
-	// we first remove the path prefix if there is one.
-	//
-	// name 包括该包的路径名，若已经包含了文件名，它就不是必要的了。
-	// 另外，它有中间点，也就是说，我们看到
-	//	runtime/debug.*T·ptrmethod
-	// 而想要
-	//	*T.ptrmethod
-	// 由于包路径可能包含点（例如 code.google.com/...），因此首先要移除路径前缀。
-	if lastslash := bytes.LastIndex(name, slash); lastslash >= 0 {
-		name = name[lastslash+1:]
-	}
-	if period := bytes.Index(name, dot); period >= 0 {
-		name = name[period+1:]
-	}
-	name = bytes.Replace(name, centerDot, dot, -1)
-	return name
 }

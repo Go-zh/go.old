@@ -4,8 +4,6 @@
 
 package runtime
 
-import "unsafe"
-
 // The Error interface identifies a run time error.
 
 // Error 接口用于标识运行时错误。
@@ -13,9 +11,9 @@ type Error interface {
 	error
 
 	// RuntimeError is a no-op function but
-	// serves to distinguish types that are runtime
+	// serves to distinguish types that are run time
 	// errors from ordinary errors: a type is a
-	// runtime error if it has a RuntimeError method.
+	// run time error if it has a RuntimeError method.
 	//
 	// RuntimeError 是一个无操作函数，它只用于区分是运行时错误还是一般错误：
 	// 若一个类型拥有 RuntimeError 方法，它就是运行时错误。
@@ -51,27 +49,6 @@ func (e *TypeAssertionError) Error() string {
 		": missing method " + e.missingMethod
 }
 
-// For calling from C.
-
-// 用于C的调用。
-func newTypeAssertionError(ps1, ps2, ps3 *string, pmeth *string, ret *interface{}) {
-	var s1, s2, s3, meth string
-
-	if ps1 != nil {
-		s1 = *ps1
-	}
-	if ps2 != nil {
-		s2 = *ps2
-	}
-	if ps3 != nil {
-		s3 = *ps3
-	}
-	if pmeth != nil {
-		meth = *pmeth
-	}
-	*ret = &TypeAssertionError{s1, s2, s3, meth}
-}
-
 // An errorString represents a runtime error described by a single string.
 
 // errorString 表示由单一字符串描述的运行时错误。
@@ -83,13 +60,24 @@ func (e errorString) Error() string {
 	return "runtime error: " + string(e)
 }
 
+// plainError represents a runtime error described a string without
+// the prefix "runtime error: " after invoking errorString.Error().
+// See Issue #14965.
+type plainError string
+
+func (e plainError) RuntimeError() {}
+
+func (e plainError) Error() string {
+	return string(e)
+}
+
 type stringer interface {
 	String() string
 }
 
 func typestring(x interface{}) string {
-	e := (*eface)(unsafe.Pointer(&x))
-	return *e._type._string
+	e := efaceOf(&x)
+	return e._type.string()
 }
 
 // For calling from C.
@@ -121,5 +109,5 @@ func printany(i interface{}) {
 
 // 由生成的代码调用。
 func panicwrap(pkg, typ, meth string) {
-	panic("value method " + pkg + "." + typ + "." + meth + " called using nil *" + typ + " pointer")
+	panic(plainError("value method " + pkg + "." + typ + "." + meth + " called using nil *" + typ + " pointer"))
 }

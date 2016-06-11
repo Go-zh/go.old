@@ -3,36 +3,36 @@
 // license that can be found in the LICENSE file.
 
 // 生成自
-//	maketables --tables=all --data=http://www.unicode.org/Public/7.0.0/ucd/UnicodeData.txt --casefolding=http://www.unicode.org/Public/7.0.0/ucd/CaseFolding.txt
+//	maketables --tables=all --data=http://www.unicode.org/Public/8.0.0/ucd/UnicodeData.txt --casefolding=http://www.unicode.org/Public/8.0.0/ucd/CaseFolding.txt
 // 请勿编辑！
 
 package unicode
 
 // Version 为得到此表所用的 Unicode 版本。
-const Version = "7.0.0"
+const Version = "8.0.0"
 
 // Categories 为 Unicode 类别表的集合。
-var Categories = map[string]*RangeTable{
-	"C":  C,
+var Categories = map[string] *RangeTable {
+	"C": C,
 	"Cc": Cc,
 	"Cf": Cf,
 	"Co": Co,
 	"Cs": Cs,
-	"L":  L,
+	"L": L,
 	"Ll": Ll,
 	"Lm": Lm,
 	"Lo": Lo,
 	"Lt": Lt,
 	"Lu": Lu,
-	"M":  M,
+	"M": M,
 	"Mc": Mc,
 	"Me": Me,
 	"Mn": Mn,
-	"N":  N,
+	"N": N,
 	"Nd": Nd,
 	"Nl": Nl,
 	"No": No,
-	"P":  P,
+	"P": P,
 	"Pc": Pc,
 	"Pd": Pd,
 	"Pe": Pe,
@@ -40,12 +40,12 @@ var Categories = map[string]*RangeTable{
 	"Pi": Pi,
 	"Po": Po,
 	"Ps": Ps,
-	"S":  S,
+	"S": S,
 	"Sc": Sc,
 	"Sk": Sk,
 	"Sm": Sm,
 	"So": So,
-	"Z":  Z,
+	"Z": Z,
 	"Zl": Zl,
 	"Zp": Zp,
 	"Zs": Zs,
@@ -53,7 +53,7 @@ var Categories = map[string]*RangeTable{
 
 var _C = &RangeTable{
 	R16: []Range16{
-		{0x0001, 0x001f, 1},
+		{0x0000, 0x001f, 1},
 		{0x007f, 0x009f, 1},
 		{0x00ad, 0x0600, 1363},
 		{0x0601, 0x0605, 1},
@@ -81,7 +81,7 @@ var _C = &RangeTable{
 
 var _Cc = &RangeTable{
 	R16: []Range16{
-		{0x0001, 0x001f, 1},
+		{0x0000, 0x001f, 1},
 		{0x007f, 0x009f, 1},
 	},
 	LatinOffset: 2,
@@ -170,7 +170,7 @@ var _L = &RangeTable{
 		{0x081a, 0x0824, 10},
 		{0x0828, 0x0840, 24},
 		{0x0841, 0x0858, 1},
-		{0x08a0, 0x08b2, 1},
+		{0x08a0, 0x08b4, 1},
 		{0x0904, 0x0939, 1},
 		{0x093d, 0x0950, 19},
 		{0x0958, 0x0961, 1},
@@ -203,7 +203,8 @@ var _L = &RangeTable{
 		{0x0ab5, 0x0ab9, 1},
 		{0x0abd, 0x0ad0, 19},
 		{0x0ae0, 0x0ae1, 1},
-		{0x0b05, 0x0b0c, 1},
+		{0x0af9, 0x0b05, 12},
+		{0x0b06, 0x0b0c, 1},
 		{0x0b0f, 0x0b10, 1},
 		{0x0b13, 0x0b28, 1},
 		{0x0b2a, 0x0b30, 1},
@@ -228,9 +229,9 @@ var _L = &RangeTable{
 		{0x0c12, 0x0c28, 1},
 		{0x0c2a, 0x0c39, 1},
 		{0x0c3d, 0x0c58, 27},
-		{0x0c59, 0x0c60, 7},
-		{0x0c61, 0x0c85, 36},
-		{0x0c86, 0x0c8c, 1},
+		{0x0c59, 0x0c5a, 1},
+		{0x0c60, 0x0c61, 1},
+		{0x0c85, 0x0c8c, 1},
 		{0x0c8e, 0x0c90, 1},
 		{0x0c92, 0x0ca8, 1},
 		{0x0caa, 0x0cb3, 1},
@@ -241,7 +242,7 @@ var _L = &RangeTable{
 		{0x0d05, 0x0d0c, 1},
 		{0x0d0e, 0x0d10, 1},
 		{0x0d12, 0x0d3a, 1},
-		{0x0d3d, 0x0d4e, 17},
+		{0x0d3d, 0x0d5f, 17},
 		{0x0d60, 0x0d61, 1},
 		{0x0d7a, 0x0d7f, 1},
 		{0x0d85, 0x0d96, 1},
@@ -300,7 +301,8 @@ var _L = &RangeTable{
 		{0x1312, 0x1315, 1},
 		{0x1318, 0x135a, 1},
 		{0x1380, 0x138f, 1},
-		{0x13a0, 0x13f4, 1},
+		{0x13a0, 0x13f5, 1},
+		{0x13f8, 0x13fd, 1},
 		{0x1401, 0x166c, 1},
 		{0x166f, 0x167f, 1},
 		{0x1681, 0x169a, 1},
@@ -322,7 +324,7 @@ var _L = &RangeTable{
 		{0x1950, 0x196d, 1},
 		{0x1970, 0x1974, 1},
 		{0x1980, 0x19ab, 1},
-		{0x19c1, 0x19c7, 1},
+		{0x19b0, 0x19c9, 1},
 		{0x1a00, 0x1a16, 1},
 		{0x1a20, 0x1a54, 1},
 		{0x1aa7, 0x1b05, 94},
@@ -399,7 +401,7 @@ var _L = &RangeTable{
 		{0x31a0, 0x31ba, 1},
 		{0x31f0, 0x31ff, 1},
 		{0x3400, 0x4db5, 1},
-		{0x4e00, 0x9fcc, 1},
+		{0x4e00, 0x9fd5, 1},
 		{0xa000, 0xa48c, 1},
 		{0xa4d0, 0xa4fd, 1},
 		{0xa500, 0xa60c, 1},
@@ -410,9 +412,8 @@ var _L = &RangeTable{
 		{0xa6a0, 0xa6e5, 1},
 		{0xa717, 0xa71f, 1},
 		{0xa722, 0xa788, 1},
-		{0xa78b, 0xa78e, 1},
-		{0xa790, 0xa7ad, 1},
-		{0xa7b0, 0xa7b1, 1},
+		{0xa78b, 0xa7ad, 1},
+		{0xa7b0, 0xa7b7, 1},
 		{0xa7f7, 0xa801, 1},
 		{0xa803, 0xa805, 1},
 		{0xa807, 0xa80a, 1},
@@ -420,8 +421,8 @@ var _L = &RangeTable{
 		{0xa840, 0xa873, 1},
 		{0xa882, 0xa8b3, 1},
 		{0xa8f2, 0xa8f7, 1},
-		{0xa8fb, 0xa90a, 15},
-		{0xa90b, 0xa925, 1},
+		{0xa8fb, 0xa8fd, 2},
+		{0xa90a, 0xa925, 1},
 		{0xa930, 0xa946, 1},
 		{0xa960, 0xa97c, 1},
 		{0xa984, 0xa9b2, 1},
@@ -448,9 +449,8 @@ var _L = &RangeTable{
 		{0xab20, 0xab26, 1},
 		{0xab28, 0xab2e, 1},
 		{0xab30, 0xab5a, 1},
-		{0xab5c, 0xab5f, 1},
-		{0xab64, 0xab65, 1},
-		{0xabc0, 0xabe2, 1},
+		{0xab5c, 0xab65, 1},
+		{0xab70, 0xabe2, 1},
 		{0xac00, 0xd7a3, 1},
 		{0xd7b0, 0xd7c6, 1},
 		{0xd7cb, 0xd7fb, 1},
@@ -511,6 +511,8 @@ var _L = &RangeTable{
 		{0x10840, 0x10855, 1},
 		{0x10860, 0x10876, 1},
 		{0x10880, 0x1089e, 1},
+		{0x108e0, 0x108f2, 1},
+		{0x108f4, 0x108f5, 1},
 		{0x10900, 0x10915, 1},
 		{0x10920, 0x10939, 1},
 		{0x10980, 0x109b7, 1},
@@ -528,6 +530,8 @@ var _L = &RangeTable{
 		{0x10b60, 0x10b72, 1},
 		{0x10b80, 0x10b91, 1},
 		{0x10c00, 0x10c48, 1},
+		{0x10c80, 0x10cb2, 1},
+		{0x10cc0, 0x10cf2, 1},
 		{0x11003, 0x11037, 1},
 		{0x11083, 0x110af, 1},
 		{0x110d0, 0x110e8, 1},
@@ -536,9 +540,14 @@ var _L = &RangeTable{
 		{0x11176, 0x11183, 13},
 		{0x11184, 0x111b2, 1},
 		{0x111c1, 0x111c4, 1},
-		{0x111da, 0x11200, 38},
-		{0x11201, 0x11211, 1},
+		{0x111da, 0x111dc, 2},
+		{0x11200, 0x11211, 1},
 		{0x11213, 0x1122b, 1},
+		{0x11280, 0x11286, 1},
+		{0x11288, 0x1128a, 2},
+		{0x1128b, 0x1128d, 1},
+		{0x1128f, 0x1129d, 1},
+		{0x1129f, 0x112a8, 1},
 		{0x112b0, 0x112de, 1},
 		{0x11305, 0x1130c, 1},
 		{0x1130f, 0x11310, 1},
@@ -546,20 +555,24 @@ var _L = &RangeTable{
 		{0x1132a, 0x11330, 1},
 		{0x11332, 0x11333, 1},
 		{0x11335, 0x11339, 1},
-		{0x1133d, 0x1135d, 32},
-		{0x1135e, 0x11361, 1},
+		{0x1133d, 0x11350, 19},
+		{0x1135d, 0x11361, 1},
 		{0x11480, 0x114af, 1},
 		{0x114c4, 0x114c5, 1},
 		{0x114c7, 0x11580, 185},
 		{0x11581, 0x115ae, 1},
+		{0x115d8, 0x115db, 1},
 		{0x11600, 0x1162f, 1},
 		{0x11644, 0x11680, 60},
 		{0x11681, 0x116aa, 1},
+		{0x11700, 0x11719, 1},
 		{0x118a0, 0x118df, 1},
 		{0x118ff, 0x11ac0, 449},
 		{0x11ac1, 0x11af8, 1},
-		{0x12000, 0x12398, 1},
+		{0x12000, 0x12399, 1},
+		{0x12480, 0x12543, 1},
 		{0x13000, 0x1342e, 1},
+		{0x14400, 0x14646, 1},
 		{0x16800, 0x16a38, 1},
 		{0x16a40, 0x16a5e, 1},
 		{0x16ad0, 0x16aed, 1},
@@ -633,6 +646,7 @@ var _L = &RangeTable{
 		{0x20000, 0x2a6d6, 1},
 		{0x2a700, 0x2b734, 1},
 		{0x2b740, 0x2b81d, 1},
+		{0x2b820, 0x2cea1, 1},
 		{0x2f800, 0x2fa1d, 1},
 	},
 	LatinOffset: 6,
@@ -691,6 +705,7 @@ var _Ll = &RangeTable{
 		{0x04c2, 0x04ce, 2},
 		{0x04cf, 0x052f, 2},
 		{0x0561, 0x0587, 1},
+		{0x13f8, 0x13fd, 1},
 		{0x1d00, 0x1d2b, 1},
 		{0x1d6b, 0x1d77, 1},
 		{0x1d79, 0x1d9a, 1},
@@ -747,15 +762,18 @@ var _Ll = &RangeTable{
 		{0xa791, 0xa793, 2},
 		{0xa794, 0xa795, 1},
 		{0xa797, 0xa7a9, 2},
+		{0xa7b5, 0xa7b7, 2},
 		{0xa7fa, 0xab30, 822},
 		{0xab31, 0xab5a, 1},
-		{0xab64, 0xab65, 1},
+		{0xab60, 0xab65, 1},
+		{0xab70, 0xabbf, 1},
 		{0xfb00, 0xfb06, 1},
 		{0xfb13, 0xfb17, 1},
 		{0xff41, 0xff5a, 1},
 	},
 	R32: []Range32{
 		{0x10428, 0x1044f, 1},
+		{0x10cc0, 0x10cf2, 1},
 		{0x118c0, 0x118df, 1},
 		{0x1d41a, 0x1d433, 1},
 		{0x1d44e, 0x1d454, 1},
@@ -861,7 +879,7 @@ var _Lo = &RangeTable{
 		{0x07cb, 0x07ea, 1},
 		{0x0800, 0x0815, 1},
 		{0x0840, 0x0858, 1},
-		{0x08a0, 0x08b2, 1},
+		{0x08a0, 0x08b4, 1},
 		{0x0904, 0x0939, 1},
 		{0x093d, 0x0950, 19},
 		{0x0958, 0x0961, 1},
@@ -894,7 +912,8 @@ var _Lo = &RangeTable{
 		{0x0ab5, 0x0ab9, 1},
 		{0x0abd, 0x0ad0, 19},
 		{0x0ae0, 0x0ae1, 1},
-		{0x0b05, 0x0b0c, 1},
+		{0x0af9, 0x0b05, 12},
+		{0x0b06, 0x0b0c, 1},
 		{0x0b0f, 0x0b10, 1},
 		{0x0b13, 0x0b28, 1},
 		{0x0b2a, 0x0b30, 1},
@@ -919,9 +938,9 @@ var _Lo = &RangeTable{
 		{0x0c12, 0x0c28, 1},
 		{0x0c2a, 0x0c39, 1},
 		{0x0c3d, 0x0c58, 27},
-		{0x0c59, 0x0c60, 7},
-		{0x0c61, 0x0c85, 36},
-		{0x0c86, 0x0c8c, 1},
+		{0x0c59, 0x0c5a, 1},
+		{0x0c60, 0x0c61, 1},
+		{0x0c85, 0x0c8c, 1},
 		{0x0c8e, 0x0c90, 1},
 		{0x0c92, 0x0ca8, 1},
 		{0x0caa, 0x0cb3, 1},
@@ -932,7 +951,7 @@ var _Lo = &RangeTable{
 		{0x0d05, 0x0d0c, 1},
 		{0x0d0e, 0x0d10, 1},
 		{0x0d12, 0x0d3a, 1},
-		{0x0d3d, 0x0d4e, 17},
+		{0x0d3d, 0x0d5f, 17},
 		{0x0d60, 0x0d61, 1},
 		{0x0d7a, 0x0d7f, 1},
 		{0x0d85, 0x0d96, 1},
@@ -988,7 +1007,6 @@ var _Lo = &RangeTable{
 		{0x1312, 0x1315, 1},
 		{0x1318, 0x135a, 1},
 		{0x1380, 0x138f, 1},
-		{0x13a0, 0x13f4, 1},
 		{0x1401, 0x166c, 1},
 		{0x166f, 0x167f, 1},
 		{0x1681, 0x169a, 1},
@@ -1011,7 +1029,7 @@ var _Lo = &RangeTable{
 		{0x1950, 0x196d, 1},
 		{0x1970, 0x1974, 1},
 		{0x1980, 0x19ab, 1},
-		{0x19c1, 0x19c7, 1},
+		{0x19b0, 0x19c9, 1},
 		{0x1a00, 0x1a16, 1},
 		{0x1a20, 0x1a54, 1},
 		{0x1b05, 0x1b33, 1},
@@ -1046,7 +1064,7 @@ var _Lo = &RangeTable{
 		{0x31a0, 0x31ba, 1},
 		{0x31f0, 0x31ff, 1},
 		{0x3400, 0x4db5, 1},
-		{0x4e00, 0x9fcc, 1},
+		{0x4e00, 0x9fd5, 1},
 		{0xa000, 0xa014, 1},
 		{0xa016, 0xa48c, 1},
 		{0xa4d0, 0xa4f7, 1},
@@ -1055,16 +1073,16 @@ var _Lo = &RangeTable{
 		{0xa62a, 0xa62b, 1},
 		{0xa66e, 0xa6a0, 50},
 		{0xa6a1, 0xa6e5, 1},
-		{0xa7f7, 0xa7fb, 4},
-		{0xa7fc, 0xa801, 1},
+		{0xa78f, 0xa7f7, 104},
+		{0xa7fb, 0xa801, 1},
 		{0xa803, 0xa805, 1},
 		{0xa807, 0xa80a, 1},
 		{0xa80c, 0xa822, 1},
 		{0xa840, 0xa873, 1},
 		{0xa882, 0xa8b3, 1},
 		{0xa8f2, 0xa8f7, 1},
-		{0xa8fb, 0xa90a, 15},
-		{0xa90b, 0xa925, 1},
+		{0xa8fb, 0xa8fd, 2},
+		{0xa90a, 0xa925, 1},
 		{0xa930, 0xa946, 1},
 		{0xa960, 0xa97c, 1},
 		{0xa984, 0xa9b2, 1},
@@ -1149,6 +1167,8 @@ var _Lo = &RangeTable{
 		{0x10840, 0x10855, 1},
 		{0x10860, 0x10876, 1},
 		{0x10880, 0x1089e, 1},
+		{0x108e0, 0x108f2, 1},
+		{0x108f4, 0x108f5, 1},
 		{0x10900, 0x10915, 1},
 		{0x10920, 0x10939, 1},
 		{0x10980, 0x109b7, 1},
@@ -1174,9 +1194,14 @@ var _Lo = &RangeTable{
 		{0x11176, 0x11183, 13},
 		{0x11184, 0x111b2, 1},
 		{0x111c1, 0x111c4, 1},
-		{0x111da, 0x11200, 38},
-		{0x11201, 0x11211, 1},
+		{0x111da, 0x111dc, 2},
+		{0x11200, 0x11211, 1},
 		{0x11213, 0x1122b, 1},
+		{0x11280, 0x11286, 1},
+		{0x11288, 0x1128a, 2},
+		{0x1128b, 0x1128d, 1},
+		{0x1128f, 0x1129d, 1},
+		{0x1129f, 0x112a8, 1},
 		{0x112b0, 0x112de, 1},
 		{0x11305, 0x1130c, 1},
 		{0x1130f, 0x11310, 1},
@@ -1184,19 +1209,23 @@ var _Lo = &RangeTable{
 		{0x1132a, 0x11330, 1},
 		{0x11332, 0x11333, 1},
 		{0x11335, 0x11339, 1},
-		{0x1133d, 0x1135d, 32},
-		{0x1135e, 0x11361, 1},
+		{0x1133d, 0x11350, 19},
+		{0x1135d, 0x11361, 1},
 		{0x11480, 0x114af, 1},
 		{0x114c4, 0x114c5, 1},
 		{0x114c7, 0x11580, 185},
 		{0x11581, 0x115ae, 1},
+		{0x115d8, 0x115db, 1},
 		{0x11600, 0x1162f, 1},
 		{0x11644, 0x11680, 60},
 		{0x11681, 0x116aa, 1},
+		{0x11700, 0x11719, 1},
 		{0x118ff, 0x11ac0, 449},
 		{0x11ac1, 0x11af8, 1},
-		{0x12000, 0x12398, 1},
+		{0x12000, 0x12399, 1},
+		{0x12480, 0x12543, 1},
 		{0x13000, 0x1342e, 1},
+		{0x14400, 0x14646, 1},
 		{0x16800, 0x16a38, 1},
 		{0x16a40, 0x16a5e, 1},
 		{0x16ad0, 0x16aed, 1},
@@ -1238,6 +1267,7 @@ var _Lo = &RangeTable{
 		{0x20000, 0x2a6d6, 1},
 		{0x2a700, 0x2b734, 1},
 		{0x2b740, 0x2b81d, 1},
+		{0x2b820, 0x2cea1, 1},
 		{0x2f800, 0x2fa1d, 1},
 	},
 	LatinOffset: 1,
@@ -1312,6 +1342,7 @@ var _Lu = &RangeTable{
 		{0x0531, 0x0556, 1},
 		{0x10a0, 0x10c5, 1},
 		{0x10c7, 0x10cd, 6},
+		{0x13a0, 0x13f5, 1},
 		{0x1e00, 0x1e94, 2},
 		{0x1e9e, 0x1efe, 2},
 		{0x1f08, 0x1f0f, 1},
@@ -1356,11 +1387,13 @@ var _Lu = &RangeTable{
 		{0xa790, 0xa792, 2},
 		{0xa796, 0xa7aa, 2},
 		{0xa7ab, 0xa7ad, 1},
-		{0xa7b0, 0xa7b1, 1},
-		{0xff21, 0xff3a, 1},
+		{0xa7b0, 0xa7b4, 1},
+		{0xa7b6, 0xff21, 22379},
+		{0xff22, 0xff3a, 1},
 	},
 	R32: []Range32{
 		{0x10400, 0x10427, 1},
+		{0x10c80, 0x10cb2, 1},
 		{0x118a0, 0x118bf, 1},
 		{0x1d400, 0x1d419, 1},
 		{0x1d434, 0x1d44d, 1},
@@ -1420,7 +1453,7 @@ var _M = &RangeTable{
 		{0x0825, 0x0827, 1},
 		{0x0829, 0x082d, 1},
 		{0x0859, 0x085b, 1},
-		{0x08e4, 0x0903, 1},
+		{0x08e3, 0x0903, 1},
 		{0x093a, 0x093c, 1},
 		{0x093e, 0x094f, 1},
 		{0x0951, 0x0957, 1},
@@ -1516,8 +1549,6 @@ var _M = &RangeTable{
 		{0x18a9, 0x1920, 119},
 		{0x1921, 0x192b, 1},
 		{0x1930, 0x193b, 1},
-		{0x19b0, 0x19c0, 1},
-		{0x19c8, 0x19c9, 1},
 		{0x1a17, 0x1a1b, 1},
 		{0x1a55, 0x1a5e, 1},
 		{0x1a60, 0x1a7c, 1},
@@ -1545,10 +1576,11 @@ var _M = &RangeTable{
 		{0x3099, 0x309a, 1},
 		{0xa66f, 0xa672, 1},
 		{0xa674, 0xa67d, 1},
-		{0xa69f, 0xa6f0, 81},
-		{0xa6f1, 0xa802, 273},
-		{0xa806, 0xa80b, 5},
-		{0xa823, 0xa827, 1},
+		{0xa69e, 0xa69f, 1},
+		{0xa6f0, 0xa6f1, 1},
+		{0xa802, 0xa806, 4},
+		{0xa80b, 0xa823, 24},
+		{0xa824, 0xa827, 1},
 		{0xa880, 0xa881, 1},
 		{0xa8b4, 0xa8c4, 1},
 		{0xa8e0, 0xa8f1, 1},
@@ -1572,7 +1604,7 @@ var _M = &RangeTable{
 		{0xabec, 0xabed, 1},
 		{0xfb1e, 0xfe00, 738},
 		{0xfe01, 0xfe0f, 1},
-		{0xfe20, 0xfe2d, 1},
+		{0xfe20, 0xfe2f, 1},
 	},
 	R32: []Range32{
 		{0x101fd, 0x102e0, 227},
@@ -1592,9 +1624,10 @@ var _M = &RangeTable{
 		{0x11173, 0x11180, 13},
 		{0x11181, 0x11182, 1},
 		{0x111b3, 0x111c0, 1},
+		{0x111ca, 0x111cc, 1},
 		{0x1122c, 0x11237, 1},
 		{0x112df, 0x112ea, 1},
-		{0x11301, 0x11303, 1},
+		{0x11300, 0x11303, 1},
 		{0x1133c, 0x1133e, 2},
 		{0x1133f, 0x11344, 1},
 		{0x11347, 0x11348, 1},
@@ -1606,8 +1639,10 @@ var _M = &RangeTable{
 		{0x114b0, 0x114c3, 1},
 		{0x115af, 0x115b5, 1},
 		{0x115b8, 0x115c0, 1},
+		{0x115dc, 0x115dd, 1},
 		{0x11630, 0x11640, 1},
 		{0x116ab, 0x116b7, 1},
+		{0x1171d, 0x1172b, 1},
 		{0x16af0, 0x16af4, 1},
 		{0x16b30, 0x16b36, 1},
 		{0x16f51, 0x16f7e, 1},
@@ -1619,6 +1654,11 @@ var _M = &RangeTable{
 		{0x1d185, 0x1d18b, 1},
 		{0x1d1aa, 0x1d1ad, 1},
 		{0x1d242, 0x1d244, 1},
+		{0x1da00, 0x1da36, 1},
+		{0x1da3b, 0x1da6c, 1},
+		{0x1da75, 0x1da84, 15},
+		{0x1da9b, 0x1da9f, 1},
+		{0x1daa1, 0x1daaf, 1},
 		{0x1e8d0, 0x1e8d6, 1},
 		{0xe0100, 0xe01ef, 1},
 	},
@@ -1685,8 +1725,6 @@ var _Mc = &RangeTable{
 		{0x1929, 0x192b, 1},
 		{0x1930, 0x1931, 1},
 		{0x1933, 0x1938, 1},
-		{0x19b0, 0x19c0, 1},
-		{0x19c8, 0x19c9, 1},
 		{0x1a19, 0x1a1a, 1},
 		{0x1a55, 0x1a57, 2},
 		{0x1a61, 0x1a63, 2},
@@ -1755,8 +1793,9 @@ var _Mc = &RangeTable{
 		{0x1163b, 0x1163c, 1},
 		{0x1163e, 0x116ac, 110},
 		{0x116ae, 0x116af, 1},
-		{0x116b6, 0x16f51, 22683},
-		{0x16f52, 0x16f7e, 1},
+		{0x116b6, 0x11720, 106},
+		{0x11721, 0x11726, 5},
+		{0x16f51, 0x16f7e, 1},
 		{0x1d165, 0x1d166, 1},
 		{0x1d16d, 0x1d172, 1},
 	},
@@ -1796,7 +1835,7 @@ var _Mn = &RangeTable{
 		{0x0825, 0x0827, 1},
 		{0x0829, 0x082d, 1},
 		{0x0859, 0x085b, 1},
-		{0x08e4, 0x0902, 1},
+		{0x08e3, 0x0902, 1},
 		{0x093a, 0x093c, 2},
 		{0x0941, 0x0948, 1},
 		{0x094d, 0x0951, 4},
@@ -1918,12 +1957,12 @@ var _Mn = &RangeTable{
 		{0x3099, 0x309a, 1},
 		{0xa66f, 0xa674, 5},
 		{0xa675, 0xa67d, 1},
-		{0xa69f, 0xa6f0, 81},
-		{0xa6f1, 0xa802, 273},
-		{0xa806, 0xa80b, 5},
-		{0xa825, 0xa826, 1},
-		{0xa8c4, 0xa8e0, 28},
-		{0xa8e1, 0xa8f1, 1},
+		{0xa69e, 0xa69f, 1},
+		{0xa6f0, 0xa6f1, 1},
+		{0xa802, 0xa806, 4},
+		{0xa80b, 0xa825, 26},
+		{0xa826, 0xa8c4, 158},
+		{0xa8e0, 0xa8f1, 1},
 		{0xa926, 0xa92d, 1},
 		{0xa947, 0xa951, 1},
 		{0xa980, 0xa982, 1},
@@ -1943,7 +1982,7 @@ var _Mn = &RangeTable{
 		{0xabe5, 0xabe8, 3},
 		{0xabed, 0xfb1e, 20273},
 		{0xfe00, 0xfe0f, 1},
-		{0xfe20, 0xfe2d, 1},
+		{0xfe20, 0xfe2f, 1},
 	},
 	R32: []Range32{
 		{0x101fd, 0x102e0, 227},
@@ -1964,13 +2003,14 @@ var _Mn = &RangeTable{
 		{0x11173, 0x11180, 13},
 		{0x11181, 0x111b6, 53},
 		{0x111b7, 0x111be, 1},
+		{0x111ca, 0x111cc, 1},
 		{0x1122f, 0x11231, 1},
 		{0x11234, 0x11236, 2},
 		{0x11237, 0x112df, 168},
 		{0x112e3, 0x112ea, 1},
-		{0x11301, 0x1133c, 59},
-		{0x11340, 0x11366, 38},
-		{0x11367, 0x1136c, 1},
+		{0x11300, 0x11301, 1},
+		{0x1133c, 0x11340, 4},
+		{0x11366, 0x1136c, 1},
 		{0x11370, 0x11374, 1},
 		{0x114b3, 0x114b8, 1},
 		{0x114ba, 0x114bf, 5},
@@ -1979,13 +2019,17 @@ var _Mn = &RangeTable{
 		{0x115b3, 0x115b5, 1},
 		{0x115bc, 0x115bd, 1},
 		{0x115bf, 0x115c0, 1},
+		{0x115dc, 0x115dd, 1},
 		{0x11633, 0x1163a, 1},
 		{0x1163d, 0x1163f, 2},
 		{0x11640, 0x116ab, 107},
 		{0x116ad, 0x116b0, 3},
 		{0x116b1, 0x116b5, 1},
-		{0x116b7, 0x16af0, 21561},
-		{0x16af1, 0x16af4, 1},
+		{0x116b7, 0x1171d, 102},
+		{0x1171e, 0x1171f, 1},
+		{0x11722, 0x11725, 1},
+		{0x11727, 0x1172b, 1},
+		{0x16af0, 0x16af4, 1},
 		{0x16b30, 0x16b36, 1},
 		{0x16f8f, 0x16f92, 1},
 		{0x1bc9d, 0x1bc9e, 1},
@@ -1994,6 +2038,11 @@ var _Mn = &RangeTable{
 		{0x1d185, 0x1d18b, 1},
 		{0x1d1aa, 0x1d1ad, 1},
 		{0x1d242, 0x1d244, 1},
+		{0x1da00, 0x1da36, 1},
+		{0x1da3b, 0x1da6c, 1},
+		{0x1da75, 0x1da84, 15},
+		{0x1da9b, 0x1da9f, 1},
+		{0x1daa1, 0x1daaf, 1},
 		{0x1e8d0, 0x1e8d6, 1},
 		{0xe0100, 0xe01ef, 1},
 	},
@@ -2079,7 +2128,11 @@ var _N = &RangeTable{
 		{0x10858, 0x1085f, 1},
 		{0x10879, 0x1087f, 1},
 		{0x108a7, 0x108af, 1},
+		{0x108fb, 0x108ff, 1},
 		{0x10916, 0x1091b, 1},
+		{0x109bc, 0x109bd, 1},
+		{0x109c0, 0x109cf, 1},
+		{0x109d2, 0x109ff, 1},
 		{0x10a40, 0x10a47, 1},
 		{0x10a7d, 0x10a7e, 1},
 		{0x10a9d, 0x10a9f, 1},
@@ -2087,6 +2140,7 @@ var _N = &RangeTable{
 		{0x10b58, 0x10b5f, 1},
 		{0x10b78, 0x10b7f, 1},
 		{0x10ba9, 0x10baf, 1},
+		{0x10cfa, 0x10cff, 1},
 		{0x10e60, 0x10e7e, 1},
 		{0x11052, 0x1106f, 1},
 		{0x110f0, 0x110f9, 1},
@@ -2097,6 +2151,7 @@ var _N = &RangeTable{
 		{0x114d0, 0x114d9, 1},
 		{0x11650, 0x11659, 1},
 		{0x116c0, 0x116c9, 1},
+		{0x11730, 0x1173b, 1},
 		{0x118e0, 0x118f2, 1},
 		{0x12400, 0x1246e, 1},
 		{0x16a60, 0x16a69, 1},
@@ -2160,6 +2215,7 @@ var _Nd = &RangeTable{
 		{0x114d0, 0x114d9, 1},
 		{0x11650, 0x11659, 1},
 		{0x116c0, 0x116c9, 1},
+		{0x11730, 0x11739, 1},
 		{0x118e0, 0x118e9, 1},
 		{0x16a60, 0x16a69, 1},
 		{0x16b50, 0x16b59, 1},
@@ -2225,7 +2281,11 @@ var _No = &RangeTable{
 		{0x10858, 0x1085f, 1},
 		{0x10879, 0x1087f, 1},
 		{0x108a7, 0x108af, 1},
+		{0x108fb, 0x108ff, 1},
 		{0x10916, 0x1091b, 1},
+		{0x109bc, 0x109bd, 1},
+		{0x109c0, 0x109cf, 1},
+		{0x109d2, 0x109ff, 1},
 		{0x10a40, 0x10a47, 1},
 		{0x10a7d, 0x10a7e, 1},
 		{0x10a9d, 0x10a9f, 1},
@@ -2233,9 +2293,11 @@ var _No = &RangeTable{
 		{0x10b58, 0x10b5f, 1},
 		{0x10b78, 0x10b7f, 1},
 		{0x10ba9, 0x10baf, 1},
+		{0x10cfa, 0x10cff, 1},
 		{0x10e60, 0x10e7e, 1},
 		{0x11052, 0x11065, 1},
 		{0x111e1, 0x111f4, 1},
+		{0x1173a, 0x1173b, 1},
 		{0x118ea, 0x118f2, 1},
 		{0x16b5b, 0x16b61, 1},
 		{0x1d360, 0x1d371, 1},
@@ -2336,9 +2398,9 @@ var _P = &RangeTable{
 		{0xa874, 0xa877, 1},
 		{0xa8ce, 0xa8cf, 1},
 		{0xa8f8, 0xa8fa, 1},
-		{0xa92e, 0xa92f, 1},
-		{0xa95f, 0xa9c1, 98},
-		{0xa9c2, 0xa9cd, 1},
+		{0xa8fc, 0xa92e, 50},
+		{0xa92f, 0xa95f, 48},
+		{0xa9c1, 0xa9cd, 1},
 		{0xa9de, 0xa9df, 1},
 		{0xaa5c, 0xaa5f, 1},
 		{0xaade, 0xaadf, 1},
@@ -2375,17 +2437,20 @@ var _P = &RangeTable{
 		{0x110be, 0x110c1, 1},
 		{0x11140, 0x11143, 1},
 		{0x11174, 0x11175, 1},
-		{0x111c5, 0x111c8, 1},
-		{0x111cd, 0x11238, 107},
-		{0x11239, 0x1123d, 1},
-		{0x114c6, 0x115c1, 251},
-		{0x115c2, 0x115c9, 1},
+		{0x111c5, 0x111c9, 1},
+		{0x111cd, 0x111db, 14},
+		{0x111dd, 0x111df, 1},
+		{0x11238, 0x1123d, 1},
+		{0x112a9, 0x114c6, 541},
+		{0x115c1, 0x115d7, 1},
 		{0x11641, 0x11643, 1},
+		{0x1173c, 0x1173e, 1},
 		{0x12470, 0x12474, 1},
 		{0x16a6e, 0x16a6f, 1},
 		{0x16af5, 0x16b37, 66},
 		{0x16b38, 0x16b3b, 1},
 		{0x16b44, 0x1bc9f, 20827},
+		{0x1da87, 0x1da8b, 1},
 	},
 	LatinOffset: 11,
 }
@@ -2550,9 +2615,9 @@ var _Po = &RangeTable{
 		{0xa874, 0xa877, 1},
 		{0xa8ce, 0xa8cf, 1},
 		{0xa8f8, 0xa8fa, 1},
-		{0xa92e, 0xa92f, 1},
-		{0xa95f, 0xa9c1, 98},
-		{0xa9c2, 0xa9cd, 1},
+		{0xa8fc, 0xa92e, 50},
+		{0xa92f, 0xa95f, 48},
+		{0xa9c1, 0xa9cd, 1},
 		{0xa9de, 0xa9df, 1},
 		{0xaa5c, 0xaa5f, 1},
 		{0xaade, 0xaadf, 1},
@@ -2592,17 +2657,20 @@ var _Po = &RangeTable{
 		{0x110be, 0x110c1, 1},
 		{0x11140, 0x11143, 1},
 		{0x11174, 0x11175, 1},
-		{0x111c5, 0x111c8, 1},
-		{0x111cd, 0x11238, 107},
-		{0x11239, 0x1123d, 1},
-		{0x114c6, 0x115c1, 251},
-		{0x115c2, 0x115c9, 1},
+		{0x111c5, 0x111c9, 1},
+		{0x111cd, 0x111db, 14},
+		{0x111dd, 0x111df, 1},
+		{0x11238, 0x1123d, 1},
+		{0x112a9, 0x114c6, 541},
+		{0x115c1, 0x115d7, 1},
 		{0x11641, 0x11643, 1},
+		{0x1173c, 0x1173e, 1},
 		{0x12470, 0x12474, 1},
 		{0x16a6e, 0x16a6f, 1},
 		{0x16af5, 0x16b37, 66},
 		{0x16b38, 0x16b3b, 1},
 		{0x16b44, 0x1bc9f, 20827},
+		{0x1da87, 0x1da8b, 1},
 	},
 	LatinOffset: 8,
 }
@@ -2694,7 +2762,7 @@ var _S = &RangeTable{
 		{0x2044, 0x2052, 14},
 		{0x207a, 0x207c, 1},
 		{0x208a, 0x208c, 1},
-		{0x20a0, 0x20bd, 1},
+		{0x20a0, 0x20be, 1},
 		{0x2100, 0x2101, 1},
 		{0x2103, 0x2106, 1},
 		{0x2108, 0x2109, 1},
@@ -2706,7 +2774,8 @@ var _S = &RangeTable{
 		{0x213b, 0x2140, 5},
 		{0x2141, 0x2144, 1},
 		{0x214a, 0x214d, 1},
-		{0x214f, 0x2190, 65},
+		{0x214f, 0x218a, 59},
+		{0x218b, 0x2190, 5},
 		{0x2191, 0x2307, 1},
 		{0x230c, 0x2328, 1},
 		{0x232b, 0x23fa, 1},
@@ -2724,6 +2793,7 @@ var _S = &RangeTable{
 		{0x2b98, 0x2bb9, 1},
 		{0x2bbd, 0x2bc8, 1},
 		{0x2bca, 0x2bd1, 1},
+		{0x2bec, 0x2bef, 1},
 		{0x2ce5, 0x2cea, 1},
 		{0x2e80, 0x2e99, 1},
 		{0x2e9b, 0x2ef3, 1},
@@ -2774,8 +2844,8 @@ var _S = &RangeTable{
 		{0x101a0, 0x101d0, 48},
 		{0x101d1, 0x101fc, 1},
 		{0x10877, 0x10878, 1},
-		{0x10ac8, 0x16b3c, 24692},
-		{0x16b3d, 0x16b3f, 1},
+		{0x10ac8, 0x1173f, 3191},
+		{0x16b3c, 0x16b3f, 1},
 		{0x16b45, 0x1bc9c, 20823},
 		{0x1d000, 0x1d0f5, 1},
 		{0x1d100, 0x1d126, 1},
@@ -2783,7 +2853,7 @@ var _S = &RangeTable{
 		{0x1d16a, 0x1d16c, 1},
 		{0x1d183, 0x1d184, 1},
 		{0x1d18c, 0x1d1a9, 1},
-		{0x1d1ae, 0x1d1dd, 1},
+		{0x1d1ae, 0x1d1e8, 1},
 		{0x1d200, 0x1d241, 1},
 		{0x1d245, 0x1d300, 187},
 		{0x1d301, 0x1d356, 1},
@@ -2792,6 +2862,11 @@ var _S = &RangeTable{
 		{0x1d735, 0x1d74f, 26},
 		{0x1d76f, 0x1d789, 26},
 		{0x1d7a9, 0x1d7c3, 26},
+		{0x1d800, 0x1d9ff, 1},
+		{0x1da37, 0x1da3a, 1},
+		{0x1da6d, 0x1da74, 1},
+		{0x1da76, 0x1da83, 1},
+		{0x1da85, 0x1da86, 1},
 		{0x1eef0, 0x1eef1, 1},
 		{0x1f000, 0x1f02b, 1},
 		{0x1f030, 0x1f093, 1},
@@ -2806,16 +2881,9 @@ var _S = &RangeTable{
 		{0x1f210, 0x1f23a, 1},
 		{0x1f240, 0x1f248, 1},
 		{0x1f250, 0x1f251, 1},
-		{0x1f300, 0x1f32c, 1},
-		{0x1f330, 0x1f37d, 1},
-		{0x1f380, 0x1f3ce, 1},
-		{0x1f3d4, 0x1f3f7, 1},
-		{0x1f400, 0x1f4fe, 1},
-		{0x1f500, 0x1f54a, 1},
-		{0x1f550, 0x1f579, 1},
+		{0x1f300, 0x1f579, 1},
 		{0x1f57b, 0x1f5a3, 1},
-		{0x1f5a5, 0x1f642, 1},
-		{0x1f645, 0x1f6cf, 1},
+		{0x1f5a5, 0x1f6d0, 1},
 		{0x1f6e0, 0x1f6ec, 1},
 		{0x1f6f0, 0x1f6f3, 1},
 		{0x1f700, 0x1f773, 1},
@@ -2825,6 +2893,9 @@ var _S = &RangeTable{
 		{0x1f850, 0x1f859, 1},
 		{0x1f860, 0x1f887, 1},
 		{0x1f890, 0x1f8ad, 1},
+		{0x1f910, 0x1f918, 1},
+		{0x1f980, 0x1f984, 1},
+		{0x1f9c0, 0x1f9c0, 1},
 	},
 	LatinOffset: 10,
 }
@@ -2838,7 +2909,7 @@ var _Sc = &RangeTable{
 		{0x09fb, 0x0af1, 246},
 		{0x0bf9, 0x0e3f, 582},
 		{0x17db, 0x20a0, 2245},
-		{0x20a1, 0x20bd, 1},
+		{0x20a1, 0x20be, 1},
 		{0xa838, 0xfdfc, 21956},
 		{0xfe69, 0xff04, 155},
 		{0xffe0, 0xffe1, 1},
@@ -2872,6 +2943,10 @@ var _Sk = &RangeTable{
 		{0xfbb3, 0xfbc1, 1},
 		{0xff3e, 0xff40, 2},
 		{0xffe3, 0xffe3, 1},
+	},
+	R32: []Range32{
+		{0x1f3fb, 0x1f3fb, 1},
+		{0x1f3fc, 0x1f3ff, 1},
 	},
 	LatinOffset: 3,
 }
@@ -2971,7 +3046,8 @@ var _So = &RangeTable{
 		{0x212e, 0x213a, 12},
 		{0x213b, 0x214a, 15},
 		{0x214c, 0x214d, 1},
-		{0x214f, 0x2195, 70},
+		{0x214f, 0x218a, 59},
+		{0x218b, 0x2195, 10},
 		{0x2196, 0x2199, 1},
 		{0x219c, 0x219f, 1},
 		{0x21a1, 0x21a2, 1},
@@ -3005,6 +3081,7 @@ var _So = &RangeTable{
 		{0x2b98, 0x2bb9, 1},
 		{0x2bbd, 0x2bc8, 1},
 		{0x2bca, 0x2bd1, 1},
+		{0x2bec, 0x2bef, 1},
 		{0x2ce5, 0x2cea, 1},
 		{0x2e80, 0x2e99, 1},
 		{0x2e9b, 0x2ef3, 1},
@@ -3044,8 +3121,8 @@ var _So = &RangeTable{
 		{0x101a0, 0x101d0, 48},
 		{0x101d1, 0x101fc, 1},
 		{0x10877, 0x10878, 1},
-		{0x10ac8, 0x16b3c, 24692},
-		{0x16b3d, 0x16b3f, 1},
+		{0x10ac8, 0x1173f, 3191},
+		{0x16b3c, 0x16b3f, 1},
 		{0x16b45, 0x1bc9c, 20823},
 		{0x1d000, 0x1d0f5, 1},
 		{0x1d100, 0x1d126, 1},
@@ -3053,10 +3130,15 @@ var _So = &RangeTable{
 		{0x1d16a, 0x1d16c, 1},
 		{0x1d183, 0x1d184, 1},
 		{0x1d18c, 0x1d1a9, 1},
-		{0x1d1ae, 0x1d1dd, 1},
+		{0x1d1ae, 0x1d1e8, 1},
 		{0x1d200, 0x1d241, 1},
 		{0x1d245, 0x1d300, 187},
 		{0x1d301, 0x1d356, 1},
+		{0x1d800, 0x1d9ff, 1},
+		{0x1da37, 0x1da3a, 1},
+		{0x1da6d, 0x1da74, 1},
+		{0x1da76, 0x1da83, 1},
+		{0x1da85, 0x1da86, 1},
 		{0x1f000, 0x1f02b, 1},
 		{0x1f030, 0x1f093, 1},
 		{0x1f0a0, 0x1f0ae, 1},
@@ -3070,16 +3152,10 @@ var _So = &RangeTable{
 		{0x1f210, 0x1f23a, 1},
 		{0x1f240, 0x1f248, 1},
 		{0x1f250, 0x1f251, 1},
-		{0x1f300, 0x1f32c, 1},
-		{0x1f330, 0x1f37d, 1},
-		{0x1f380, 0x1f3ce, 1},
-		{0x1f3d4, 0x1f3f7, 1},
-		{0x1f400, 0x1f4fe, 1},
-		{0x1f500, 0x1f54a, 1},
-		{0x1f550, 0x1f579, 1},
+		{0x1f300, 0x1f3fa, 1},
+		{0x1f400, 0x1f579, 1},
 		{0x1f57b, 0x1f5a3, 1},
-		{0x1f5a5, 0x1f642, 1},
-		{0x1f645, 0x1f6cf, 1},
+		{0x1f5a5, 0x1f6d0, 1},
 		{0x1f6e0, 0x1f6ec, 1},
 		{0x1f6f0, 0x1f6f3, 1},
 		{0x1f700, 0x1f773, 1},
@@ -3089,6 +3165,9 @@ var _So = &RangeTable{
 		{0x1f850, 0x1f859, 1},
 		{0x1f860, 0x1f887, 1},
 		{0x1f890, 0x1f8ad, 1},
+		{0x1f910, 0x1f918, 1},
+		{0x1f980, 0x1f984, 1},
+		{0x1f9c0, 0x1f9c0, 1},
 	},
 	LatinOffset: 2,
 }
@@ -3128,191 +3207,216 @@ var _Zs = &RangeTable{
 	LatinOffset: 1,
 }
 
+// These variables have type *RangeTable.
 // 这些变量的类型为 *RangeTable。
 var (
-	Cc     = _Cc // Cc 为类别 Cc 中的 Unicode 字符集合。
-	Cf     = _Cf // Cf 为类别 Cf 中的 Unicode 字符集合。
-	Co     = _Co // Co 为类别 Co 中的 Unicode 字符集合。
-	Cs     = _Cs // Cs 为类别 Cs 中的 Unicode 字符集合。
-	Digit  = _Nd // Digit 为带属性“十进制数字”的 Unicode 字符集合。
-	Nd     = _Nd // Nd 为类别 Nd 中的 Unicode 字符集合。
-	Letter = _L  // Letter/L 为类别 L 中的 Unicode 字母字符集合。
-	L      = _L
-	Lm     = _Lm // Lm 为类别 Lm 中的 Unicode 字符集合。
-	Lo     = _Lo // Lo 为类别 Lo 中的 Unicode 字符集合。
-	Lower  = _Ll // Lower 为 Unicode 小写字母集合。
-	Ll     = _Ll // Ll 为类别 Ll 中的 Unicode 字符集合。
-	Mark   = _M  // Mark/M 为类别 M 中的 Unicode 标记字符集合。
-	M      = _M
-	Mc     = _Mc // Mc 为类别 Mc 中的 Unicode 字符集合。
-	Me     = _Me // Me 为类别 Me 中的 Unicode 字符集合。
-	Mn     = _Mn // Mn 为类别 Mn 中的 Unicode 字符集合。
-	Nl     = _Nl // Nl 为类别 Nl 中的 Unicode 字符集合。
-	No     = _No // No 为类别 No 中的 Unicode 字符集合。
-	Number = _N  // Number/N 为类别 N 中的 Unicode 数字字符集合。
-	N      = _N
-	Other  = _C // Other/C 为类别 C 中的 Unicode 控制和特殊字符集合。
-	C      = _C
-	Pc     = _Pc // Pc 为类别 Pc 中的 Unicode 字符集合。
-	Pd     = _Pd // Pd 为类别 Pd 中的 Unicode 字符集合。
-	Pe     = _Pe // Pe 为类别 Pe 中的 Unicode 字符集合。
-	Pf     = _Pf // Pf 为类别 Pf 中的 Unicode 字符集合。
-	Pi     = _Pi // Pi 为类别 Pi 中的 Unicode 字符集合。
-	Po     = _Po // Po 为类别 Po 中的 Unicode 字符集合。
-	Ps     = _Ps // Ps 为类别 Ps 中的 Unicode 字符集合。
-	Punct  = _P  // Punct/P 为类别 P 中的 Unicode 标点字符集合。
-	P      = _P
-	Sc     = _Sc // Sc 为类别 Sc 中的 Unicode 字符集合。
-	Sk     = _Sk // Sk 为类别 Sk 中的 Unicode 字符集合。
-	Sm     = _Sm // Sm 为类别 Sm 中的 Unicode 字符集合。
-	So     = _So // So 为类别 So 中的 Unicode 字符集合。
-	Space  = _Z  // Space/Z 为类别 Z 中的 Unicode 空白字符集合。
-	Z      = _Z
-	Symbol = _S // Symbol/S 为类别 S 中的 Unicode 符号字符集合。
-	S      = _S
-	Title  = _Lt // Title 为 Unicode 标题字母集合。
-	Lt     = _Lt // Lt 为类别 Lt 中的 Unicode 字符集合。
-	Upper  = _Lu // Upper 为 Unicode 大写字母集合。
-	Lu     = _Lu // Lu 为类别 Lu 中的 Unicode 字符集合。
-	Zl     = _Zl // Zl 为类别 Zl 中的 Unicode 字符集合。
-	Zp     = _Zp // Zp 为类别 Zp 中的 Unicode 字符集合。
-	Zs     = _Zs // Zs 为类别 Zs 中的 Unicode 字符集合。
+	Cc = _Cc;	// Cc 为类别 Cc 中的 Unicode 字符集合。
+	Cf = _Cf;	// Cf 为类别 Cf 中的 Unicode 字符集合。
+	Co = _Co;	// Co 为类别 Co 中的 Unicode 字符集合。
+	Cs = _Cs;	// Cs 为类别 Cs 中的 Unicode 字符集合。
+	Digit = _Nd;	// Digit 为带属性“十进制数字”的 Unicode 字符集合。
+	Nd = _Nd;	// Nd 为类别 Nd 中的 Unicode 字符集合。
+	Letter = _L;	// Letter/L 为类别 L 中的 Unicode 字母字符集合。
+	L = _L
+	Lm = _Lm;	// Lm 为类别 Lm 中的 Unicode 字符集合。
+	Lo = _Lo;	// Lo 为类别 Lo 中的 Unicode 字符集合。
+	Lower = _Ll;	// Lower 为 Unicode 小写字母集合。
+	Ll = _Ll;	// Ll 为类别 Ll 中的 Unicode 字符集合。
+	Mark = _M;	// Mark/M 为类别 M 中的 Unicode 标记字符集合。
+	M = _M
+	Mc = _Mc;	// Mc 为类别 Mc 中的 Unicode 字符集合。
+	Me = _Me;	// Me 为类别 Me 中的 Unicode 字符集合。
+	Mn = _Mn;	// Mn 为类别 Mn 中的 Unicode 字符集合。
+	Nl = _Nl;	// Nl 为类别 Nl 中的 Unicode 字符集合。
+	No = _No;	// No 为类别 No 中的 Unicode 字符集合。
+	Number = _N;	// Number/N 为类别 N 中的 Unicode 数字字符集合。
+	N = _N
+	Other = _C;	// Other/C 为类别 C 中的 Unicode 控制和特殊字符集合。
+	C = _C
+	Pc = _Pc;	// Pc 为类别 Pc 中的 Unicode 字符集合。
+	Pd = _Pd;	// Pd 为类别 Pd 中的 Unicode 字符集合。
+	Pe = _Pe;	// Pe 为类别 Pe 中的 Unicode 字符集合。
+	Pf = _Pf;	// Pf 为类别 Pf 中的 Unicode 字符集合。
+	Pi = _Pi;	// Pi 为类别 Pi 中的 Unicode 字符集合。
+	Po = _Po;	// Po 为类别 Po 中的 Unicode 字符集合。
+	Ps = _Ps;	// Ps 为类别 Ps 中的 Unicode 字符集合。
+	Punct = _P;	// Punct/P 为类别 P 中的 Unicode 标点字符集合。
+	P = _P
+	Sc = _Sc;	// Sc 为类别 Sc 中的 Unicode 字符集合。
+	Sk = _Sk;	// Sk 为类别 Sk 中的 Unicode 字符集合。
+	Sm = _Sm;	// Sm 为类别 Sm 中的 Unicode 字符集合。
+	So = _So;	// So 为类别 So 中的 Unicode 字符集合。
+	Space = _Z;	// Space/Z 为类别 Z 中的 Unicode 空白字符集合。
+	Z = _Z
+	Symbol = _S;	// Symbol/S 为类别 S 中的 Unicode 符号字符集合。
+	S = _S
+	Title = _Lt;	// Title 为 Unicode 标题字母集合。
+	Lt = _Lt;	// Lt 为类别 Lt 中的 Unicode 字符集合。
+	Upper = _Lu;	// Upper 为 Unicode 大写字母集合。
+	Lu = _Lu;	// Lu 为类别 Lu 中的 Unicode 字符集合。
+	Zl = _Zl;	// Zl 为类别 Zl 中的 Unicode 字符集合。
+	Zp = _Zp;	// Zp 为类别 Zp 中的 Unicode 字符集合。
+	Zs = _Zs;	// Zs 为类别 Zs 中的 Unicode 字符集合。
 )
 
 // 生成自
-//	maketables --scripts=all --url=http://www.unicode.org/Public/7.0.0/ucd/
+//	maketables --scripts=all --url=http://www.unicode.org/Public/8.0.0/ucd/
 // 请勿编辑！
 
 // Scripts 为 Unicode 书写表的集合。
-var Scripts = map[string]*RangeTable{
-	"Arabic":                 Arabic,
-	"Armenian":               Armenian,
-	"Avestan":                Avestan,
-	"Balinese":               Balinese,
-	"Bamum":                  Bamum,
-	"Bassa_Vah":              Bassa_Vah,
-	"Batak":                  Batak,
-	"Bengali":                Bengali,
-	"Bopomofo":               Bopomofo,
-	"Brahmi":                 Brahmi,
-	"Braille":                Braille,
-	"Buginese":               Buginese,
-	"Buhid":                  Buhid,
-	"Canadian_Aboriginal":    Canadian_Aboriginal,
-	"Carian":                 Carian,
-	"Caucasian_Albanian":     Caucasian_Albanian,
-	"Chakma":                 Chakma,
-	"Cham":                   Cham,
-	"Cherokee":               Cherokee,
-	"Common":                 Common,
-	"Coptic":                 Coptic,
-	"Cuneiform":              Cuneiform,
-	"Cypriot":                Cypriot,
-	"Cyrillic":               Cyrillic,
-	"Deseret":                Deseret,
-	"Devanagari":             Devanagari,
-	"Duployan":               Duployan,
-	"Egyptian_Hieroglyphs":   Egyptian_Hieroglyphs,
-	"Elbasan":                Elbasan,
-	"Ethiopic":               Ethiopic,
-	"Georgian":               Georgian,
-	"Glagolitic":             Glagolitic,
-	"Gothic":                 Gothic,
-	"Grantha":                Grantha,
-	"Greek":                  Greek,
-	"Gujarati":               Gujarati,
-	"Gurmukhi":               Gurmukhi,
-	"Han":                    Han,
-	"Hangul":                 Hangul,
-	"Hanunoo":                Hanunoo,
-	"Hebrew":                 Hebrew,
-	"Hiragana":               Hiragana,
-	"Imperial_Aramaic":       Imperial_Aramaic,
-	"Inherited":              Inherited,
-	"Inscriptional_Pahlavi":  Inscriptional_Pahlavi,
+var Scripts = map[string] *RangeTable{
+	"Ahom": Ahom,
+	"Anatolian_Hieroglyphs": Anatolian_Hieroglyphs,
+	"Arabic": Arabic,
+	"Armenian": Armenian,
+	"Avestan": Avestan,
+	"Balinese": Balinese,
+	"Bamum": Bamum,
+	"Bassa_Vah": Bassa_Vah,
+	"Batak": Batak,
+	"Bengali": Bengali,
+	"Bopomofo": Bopomofo,
+	"Brahmi": Brahmi,
+	"Braille": Braille,
+	"Buginese": Buginese,
+	"Buhid": Buhid,
+	"Canadian_Aboriginal": Canadian_Aboriginal,
+	"Carian": Carian,
+	"Caucasian_Albanian": Caucasian_Albanian,
+	"Chakma": Chakma,
+	"Cham": Cham,
+	"Cherokee": Cherokee,
+	"Common": Common,
+	"Coptic": Coptic,
+	"Cuneiform": Cuneiform,
+	"Cypriot": Cypriot,
+	"Cyrillic": Cyrillic,
+	"Deseret": Deseret,
+	"Devanagari": Devanagari,
+	"Duployan": Duployan,
+	"Egyptian_Hieroglyphs": Egyptian_Hieroglyphs,
+	"Elbasan": Elbasan,
+	"Ethiopic": Ethiopic,
+	"Georgian": Georgian,
+	"Glagolitic": Glagolitic,
+	"Gothic": Gothic,
+	"Grantha": Grantha,
+	"Greek": Greek,
+	"Gujarati": Gujarati,
+	"Gurmukhi": Gurmukhi,
+	"Han": Han,
+	"Hangul": Hangul,
+	"Hanunoo": Hanunoo,
+	"Hatran": Hatran,
+	"Hebrew": Hebrew,
+	"Hiragana": Hiragana,
+	"Imperial_Aramaic": Imperial_Aramaic,
+	"Inherited": Inherited,
+	"Inscriptional_Pahlavi": Inscriptional_Pahlavi,
 	"Inscriptional_Parthian": Inscriptional_Parthian,
-	"Javanese":               Javanese,
-	"Kaithi":                 Kaithi,
-	"Kannada":                Kannada,
-	"Katakana":               Katakana,
-	"Kayah_Li":               Kayah_Li,
-	"Kharoshthi":             Kharoshthi,
-	"Khmer":                  Khmer,
-	"Khojki":                 Khojki,
-	"Khudawadi":              Khudawadi,
-	"Lao":                    Lao,
-	"Latin":                  Latin,
-	"Lepcha":                 Lepcha,
-	"Limbu":                  Limbu,
-	"Linear_A":               Linear_A,
-	"Linear_B":               Linear_B,
-	"Lisu":                   Lisu,
-	"Lycian":                 Lycian,
-	"Lydian":                 Lydian,
-	"Mahajani":               Mahajani,
-	"Malayalam":              Malayalam,
-	"Mandaic":                Mandaic,
-	"Manichaean":             Manichaean,
-	"Meetei_Mayek":           Meetei_Mayek,
-	"Mende_Kikakui":          Mende_Kikakui,
-	"Meroitic_Cursive":       Meroitic_Cursive,
-	"Meroitic_Hieroglyphs":   Meroitic_Hieroglyphs,
-	"Miao":                   Miao,
-	"Modi":                   Modi,
-	"Mongolian":              Mongolian,
-	"Mro":                    Mro,
-	"Myanmar":                Myanmar,
-	"Nabataean":              Nabataean,
-	"New_Tai_Lue":            New_Tai_Lue,
-	"Nko":                    Nko,
-	"Ogham":                  Ogham,
-	"Ol_Chiki":               Ol_Chiki,
-	"Old_Italic":             Old_Italic,
-	"Old_North_Arabian":      Old_North_Arabian,
-	"Old_Permic":             Old_Permic,
-	"Old_Persian":            Old_Persian,
-	"Old_South_Arabian":      Old_South_Arabian,
-	"Old_Turkic":             Old_Turkic,
-	"Oriya":                  Oriya,
-	"Osmanya":                Osmanya,
-	"Pahawh_Hmong":           Pahawh_Hmong,
-	"Palmyrene":              Palmyrene,
-	"Pau_Cin_Hau":            Pau_Cin_Hau,
-	"Phags_Pa":               Phags_Pa,
-	"Phoenician":             Phoenician,
-	"Psalter_Pahlavi":        Psalter_Pahlavi,
-	"Rejang":                 Rejang,
-	"Runic":                  Runic,
-	"Samaritan":              Samaritan,
-	"Saurashtra":             Saurashtra,
-	"Sharada":                Sharada,
-	"Shavian":                Shavian,
-	"Siddham":                Siddham,
-	"Sinhala":                Sinhala,
-	"Sora_Sompeng":           Sora_Sompeng,
-	"Sundanese":              Sundanese,
-	"Syloti_Nagri":           Syloti_Nagri,
-	"Syriac":                 Syriac,
-	"Tagalog":                Tagalog,
-	"Tagbanwa":               Tagbanwa,
-	"Tai_Le":                 Tai_Le,
-	"Tai_Tham":               Tai_Tham,
-	"Tai_Viet":               Tai_Viet,
-	"Takri":                  Takri,
-	"Tamil":                  Tamil,
-	"Telugu":                 Telugu,
-	"Thaana":                 Thaana,
-	"Thai":                   Thai,
-	"Tibetan":                Tibetan,
-	"Tifinagh":               Tifinagh,
-	"Tirhuta":                Tirhuta,
-	"Ugaritic":               Ugaritic,
-	"Vai":                    Vai,
-	"Warang_Citi":            Warang_Citi,
-	"Yi":                     Yi,
+	"Javanese": Javanese,
+	"Kaithi": Kaithi,
+	"Kannada": Kannada,
+	"Katakana": Katakana,
+	"Kayah_Li": Kayah_Li,
+	"Kharoshthi": Kharoshthi,
+	"Khmer": Khmer,
+	"Khojki": Khojki,
+	"Khudawadi": Khudawadi,
+	"Lao": Lao,
+	"Latin": Latin,
+	"Lepcha": Lepcha,
+	"Limbu": Limbu,
+	"Linear_A": Linear_A,
+	"Linear_B": Linear_B,
+	"Lisu": Lisu,
+	"Lycian": Lycian,
+	"Lydian": Lydian,
+	"Mahajani": Mahajani,
+	"Malayalam": Malayalam,
+	"Mandaic": Mandaic,
+	"Manichaean": Manichaean,
+	"Meetei_Mayek": Meetei_Mayek,
+	"Mende_Kikakui": Mende_Kikakui,
+	"Meroitic_Cursive": Meroitic_Cursive,
+	"Meroitic_Hieroglyphs": Meroitic_Hieroglyphs,
+	"Miao": Miao,
+	"Modi": Modi,
+	"Mongolian": Mongolian,
+	"Mro": Mro,
+	"Multani": Multani,
+	"Myanmar": Myanmar,
+	"Nabataean": Nabataean,
+	"New_Tai_Lue": New_Tai_Lue,
+	"Nko": Nko,
+	"Ogham": Ogham,
+	"Ol_Chiki": Ol_Chiki,
+	"Old_Hungarian": Old_Hungarian,
+	"Old_Italic": Old_Italic,
+	"Old_North_Arabian": Old_North_Arabian,
+	"Old_Permic": Old_Permic,
+	"Old_Persian": Old_Persian,
+	"Old_South_Arabian": Old_South_Arabian,
+	"Old_Turkic": Old_Turkic,
+	"Oriya": Oriya,
+	"Osmanya": Osmanya,
+	"Pahawh_Hmong": Pahawh_Hmong,
+	"Palmyrene": Palmyrene,
+	"Pau_Cin_Hau": Pau_Cin_Hau,
+	"Phags_Pa": Phags_Pa,
+	"Phoenician": Phoenician,
+	"Psalter_Pahlavi": Psalter_Pahlavi,
+	"Rejang": Rejang,
+	"Runic": Runic,
+	"Samaritan": Samaritan,
+	"Saurashtra": Saurashtra,
+	"Sharada": Sharada,
+	"Shavian": Shavian,
+	"Siddham": Siddham,
+	"SignWriting": SignWriting,
+	"Sinhala": Sinhala,
+	"Sora_Sompeng": Sora_Sompeng,
+	"Sundanese": Sundanese,
+	"Syloti_Nagri": Syloti_Nagri,
+	"Syriac": Syriac,
+	"Tagalog": Tagalog,
+	"Tagbanwa": Tagbanwa,
+	"Tai_Le": Tai_Le,
+	"Tai_Tham": Tai_Tham,
+	"Tai_Viet": Tai_Viet,
+	"Takri": Takri,
+	"Tamil": Tamil,
+	"Telugu": Telugu,
+	"Thaana": Thaana,
+	"Thai": Thai,
+	"Tibetan": Tibetan,
+	"Tifinagh": Tifinagh,
+	"Tirhuta": Tirhuta,
+	"Ugaritic": Ugaritic,
+	"Vai": Vai,
+	"Warang_Citi": Warang_Citi,
+	"Yi": Yi,
 }
 
-var _Arabic = &RangeTable{
+var _Ahom = &RangeTable {
+	R16: []Range16{
+	},
+	R32: []Range32{
+		{0x11700, 0x11719, 1},
+		{0x1171d, 0x1172b, 1},
+		{0x11730, 0x1173f, 1},
+	},
+}
+
+var _Anatolian_Hieroglyphs = &RangeTable {
+	R16: []Range16{
+	},
+	R32: []Range32{
+		{0x14400, 0x14646, 1},
+	},
+}
+
+var _Arabic = &RangeTable {
 	R16: []Range16{
 		{0x0600, 0x0604, 1},
 		{0x0606, 0x060b, 1},
@@ -3320,13 +3424,12 @@ var _Arabic = &RangeTable{
 		{0x061e, 0x061e, 1},
 		{0x0620, 0x063f, 1},
 		{0x0641, 0x064a, 1},
-		{0x0656, 0x065f, 1},
-		{0x066a, 0x066f, 1},
+		{0x0656, 0x066f, 1},
 		{0x0671, 0x06dc, 1},
 		{0x06de, 0x06ff, 1},
 		{0x0750, 0x077f, 1},
-		{0x08a0, 0x08b2, 1},
-		{0x08e4, 0x08ff, 1},
+		{0x08a0, 0x08b4, 1},
+		{0x08e3, 0x08ff, 1},
 		{0xfb50, 0xfbc1, 1},
 		{0xfbd3, 0xfd3d, 1},
 		{0xfd50, 0xfd8f, 1},
@@ -3374,7 +3477,7 @@ var _Arabic = &RangeTable{
 	},
 }
 
-var _Armenian = &RangeTable{
+var _Armenian = &RangeTable {
 	R16: []Range16{
 		{0x0531, 0x0556, 1},
 		{0x0559, 0x055f, 1},
@@ -3385,22 +3488,23 @@ var _Armenian = &RangeTable{
 	},
 }
 
-var _Avestan = &RangeTable{
-	R16: []Range16{},
+var _Avestan = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10b00, 0x10b35, 1},
 		{0x10b39, 0x10b3f, 1},
 	},
 }
 
-var _Balinese = &RangeTable{
+var _Balinese = &RangeTable {
 	R16: []Range16{
 		{0x1b00, 0x1b4b, 1},
 		{0x1b50, 0x1b7c, 1},
 	},
 }
 
-var _Bamum = &RangeTable{
+var _Bamum = &RangeTable {
 	R16: []Range16{
 		{0xa6a0, 0xa6f7, 1},
 	},
@@ -3409,22 +3513,23 @@ var _Bamum = &RangeTable{
 	},
 }
 
-var _Bassa_Vah = &RangeTable{
-	R16: []Range16{},
+var _Bassa_Vah = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x16ad0, 0x16aed, 1},
 		{0x16af0, 0x16af5, 1},
 	},
 }
 
-var _Batak = &RangeTable{
+var _Batak = &RangeTable {
 	R16: []Range16{
 		{0x1bc0, 0x1bf3, 1},
 		{0x1bfc, 0x1bff, 1},
 	},
 }
 
-var _Bengali = &RangeTable{
+var _Bengali = &RangeTable {
 	R16: []Range16{
 		{0x0980, 0x0983, 1},
 		{0x0985, 0x098c, 1},
@@ -3443,7 +3548,7 @@ var _Bengali = &RangeTable{
 	},
 }
 
-var _Bopomofo = &RangeTable{
+var _Bopomofo = &RangeTable {
 	R16: []Range16{
 		{0x02ea, 0x02eb, 1},
 		{0x3105, 0x312d, 1},
@@ -3451,8 +3556,9 @@ var _Bopomofo = &RangeTable{
 	},
 }
 
-var _Brahmi = &RangeTable{
-	R16: []Range16{},
+var _Brahmi = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x11000, 0x1104d, 1},
 		{0x11052, 0x1106f, 1},
@@ -3460,56 +3566,59 @@ var _Brahmi = &RangeTable{
 	},
 }
 
-var _Braille = &RangeTable{
+var _Braille = &RangeTable {
 	R16: []Range16{
 		{0x2800, 0x28ff, 1},
 	},
 }
 
-var _Buginese = &RangeTable{
+var _Buginese = &RangeTable {
 	R16: []Range16{
 		{0x1a00, 0x1a1b, 1},
 		{0x1a1e, 0x1a1f, 1},
 	},
 }
 
-var _Buhid = &RangeTable{
+var _Buhid = &RangeTable {
 	R16: []Range16{
 		{0x1740, 0x1753, 1},
 	},
 }
 
-var _Canadian_Aboriginal = &RangeTable{
+var _Canadian_Aboriginal = &RangeTable {
 	R16: []Range16{
 		{0x1400, 0x167f, 1},
 		{0x18b0, 0x18f5, 1},
 	},
 }
 
-var _Carian = &RangeTable{
-	R16: []Range16{},
+var _Carian = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x102a0, 0x102d0, 1},
 	},
 }
 
-var _Caucasian_Albanian = &RangeTable{
-	R16: []Range16{},
+var _Caucasian_Albanian = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10530, 0x10563, 1},
 		{0x1056f, 0x1056f, 1},
 	},
 }
 
-var _Chakma = &RangeTable{
-	R16: []Range16{},
+var _Chakma = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x11100, 0x11134, 1},
 		{0x11136, 0x11143, 1},
 	},
 }
 
-var _Cham = &RangeTable{
+var _Cham = &RangeTable {
 	R16: []Range16{
 		{0xaa00, 0xaa36, 1},
 		{0xaa40, 0xaa4d, 1},
@@ -3518,13 +3627,15 @@ var _Cham = &RangeTable{
 	},
 }
 
-var _Cherokee = &RangeTable{
+var _Cherokee = &RangeTable {
 	R16: []Range16{
-		{0x13a0, 0x13f4, 1},
+		{0x13a0, 0x13f5, 1},
+		{0x13f8, 0x13fd, 1},
+		{0xab70, 0xabbf, 1},
 	},
 }
 
-var _Common = &RangeTable{
+var _Common = &RangeTable {
 	R16: []Range16{
 		{0x0000, 0x0040, 1},
 		{0x005b, 0x0060, 1},
@@ -3546,7 +3657,6 @@ var _Common = &RangeTable{
 		{0x061b, 0x061c, 1},
 		{0x061f, 0x061f, 1},
 		{0x0640, 0x0640, 1},
-		{0x0660, 0x0669, 1},
 		{0x06dd, 0x06dd, 1},
 		{0x0964, 0x0965, 1},
 		{0x0e3f, 0x0e3f, 1},
@@ -3566,13 +3676,13 @@ var _Common = &RangeTable{
 		{0x2066, 0x2070, 1},
 		{0x2074, 0x207e, 1},
 		{0x2080, 0x208e, 1},
-		{0x20a0, 0x20bd, 1},
+		{0x20a0, 0x20be, 1},
 		{0x2100, 0x2125, 1},
 		{0x2127, 0x2129, 1},
 		{0x212c, 0x2131, 1},
 		{0x2133, 0x214d, 1},
 		{0x214f, 0x215f, 1},
-		{0x2189, 0x2189, 1},
+		{0x2189, 0x218b, 1},
 		{0x2190, 0x23fa, 1},
 		{0x2400, 0x2426, 1},
 		{0x2440, 0x244a, 1},
@@ -3582,6 +3692,7 @@ var _Common = &RangeTable{
 		{0x2b98, 0x2bb9, 1},
 		{0x2bbd, 0x2bc8, 1},
 		{0x2bca, 0x2bd1, 1},
+		{0x2bec, 0x2bef, 1},
 		{0x2e00, 0x2e42, 1},
 		{0x2ff0, 0x2ffb, 1},
 		{0x3000, 0x3004, 1},
@@ -3633,7 +3744,7 @@ var _Common = &RangeTable{
 		{0x1d16a, 0x1d17a, 1},
 		{0x1d183, 0x1d184, 1},
 		{0x1d18c, 0x1d1a9, 1},
-		{0x1d1ae, 0x1d1dd, 1},
+		{0x1d1ae, 0x1d1e8, 1},
 		{0x1d300, 0x1d356, 1},
 		{0x1d360, 0x1d371, 1},
 		{0x1d400, 0x1d454, 1},
@@ -3672,16 +3783,9 @@ var _Common = &RangeTable{
 		{0x1f210, 0x1f23a, 1},
 		{0x1f240, 0x1f248, 1},
 		{0x1f250, 0x1f251, 1},
-		{0x1f300, 0x1f32c, 1},
-		{0x1f330, 0x1f37d, 1},
-		{0x1f380, 0x1f3ce, 1},
-		{0x1f3d4, 0x1f3f7, 1},
-		{0x1f400, 0x1f4fe, 1},
-		{0x1f500, 0x1f54a, 1},
-		{0x1f550, 0x1f579, 1},
+		{0x1f300, 0x1f579, 1},
 		{0x1f57b, 0x1f5a3, 1},
-		{0x1f5a5, 0x1f642, 1},
-		{0x1f645, 0x1f6cf, 1},
+		{0x1f5a5, 0x1f6d0, 1},
 		{0x1f6e0, 0x1f6ec, 1},
 		{0x1f6f0, 0x1f6f3, 1},
 		{0x1f700, 0x1f773, 1},
@@ -3691,13 +3795,16 @@ var _Common = &RangeTable{
 		{0x1f850, 0x1f859, 1},
 		{0x1f860, 0x1f887, 1},
 		{0x1f890, 0x1f8ad, 1},
+		{0x1f910, 0x1f918, 1},
+		{0x1f980, 0x1f984, 1},
+		{0x1f9c0, 0x1f9c0, 1},
 		{0xe0001, 0xe0001, 1},
 		{0xe0020, 0xe007f, 1},
 	},
 	LatinOffset: 7,
 }
 
-var _Coptic = &RangeTable{
+var _Coptic = &RangeTable {
 	R16: []Range16{
 		{0x03e2, 0x03ef, 1},
 		{0x2c80, 0x2cf3, 1},
@@ -3705,17 +3812,20 @@ var _Coptic = &RangeTable{
 	},
 }
 
-var _Cuneiform = &RangeTable{
-	R16: []Range16{},
+var _Cuneiform = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
-		{0x12000, 0x12398, 1},
+		{0x12000, 0x12399, 1},
 		{0x12400, 0x1246e, 1},
 		{0x12470, 0x12474, 1},
+		{0x12480, 0x12543, 1},
 	},
 }
 
-var _Cypriot = &RangeTable{
-	R16: []Range16{},
+var _Cypriot = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10800, 0x10805, 1},
 		{0x10808, 0x10808, 1},
@@ -3726,36 +3836,38 @@ var _Cypriot = &RangeTable{
 	},
 }
 
-var _Cyrillic = &RangeTable{
+var _Cyrillic = &RangeTable {
 	R16: []Range16{
 		{0x0400, 0x0484, 1},
 		{0x0487, 0x052f, 1},
 		{0x1d2b, 0x1d2b, 1},
 		{0x1d78, 0x1d78, 1},
 		{0x2de0, 0x2dff, 1},
-		{0xa640, 0xa69d, 1},
-		{0xa69f, 0xa69f, 1},
+		{0xa640, 0xa69f, 1},
+		{0xfe2e, 0xfe2f, 1},
 	},
 }
 
-var _Deseret = &RangeTable{
-	R16: []Range16{},
+var _Deseret = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10400, 0x1044f, 1},
 	},
 }
 
-var _Devanagari = &RangeTable{
+var _Devanagari = &RangeTable {
 	R16: []Range16{
 		{0x0900, 0x0950, 1},
 		{0x0953, 0x0963, 1},
 		{0x0966, 0x097f, 1},
-		{0xa8e0, 0xa8fb, 1},
+		{0xa8e0, 0xa8fd, 1},
 	},
 }
 
-var _Duployan = &RangeTable{
-	R16: []Range16{},
+var _Duployan = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x1bc00, 0x1bc6a, 1},
 		{0x1bc70, 0x1bc7c, 1},
@@ -3765,21 +3877,23 @@ var _Duployan = &RangeTable{
 	},
 }
 
-var _Egyptian_Hieroglyphs = &RangeTable{
-	R16: []Range16{},
+var _Egyptian_Hieroglyphs = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x13000, 0x1342e, 1},
 	},
 }
 
-var _Elbasan = &RangeTable{
-	R16: []Range16{},
+var _Elbasan = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10500, 0x10527, 1},
 	},
 }
 
-var _Ethiopic = &RangeTable{
+var _Ethiopic = &RangeTable {
 	R16: []Range16{
 		{0x1200, 0x1248, 1},
 		{0x124a, 0x124d, 1},
@@ -3816,7 +3930,7 @@ var _Ethiopic = &RangeTable{
 	},
 }
 
-var _Georgian = &RangeTable{
+var _Georgian = &RangeTable {
 	R16: []Range16{
 		{0x10a0, 0x10c5, 1},
 		{0x10c7, 0x10c7, 1},
@@ -3829,24 +3943,26 @@ var _Georgian = &RangeTable{
 	},
 }
 
-var _Glagolitic = &RangeTable{
+var _Glagolitic = &RangeTable {
 	R16: []Range16{
 		{0x2c00, 0x2c2e, 1},
 		{0x2c30, 0x2c5e, 1},
 	},
 }
 
-var _Gothic = &RangeTable{
-	R16: []Range16{},
+var _Gothic = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10330, 0x1034a, 1},
 	},
 }
 
-var _Grantha = &RangeTable{
-	R16: []Range16{},
+var _Grantha = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
-		{0x11301, 0x11303, 1},
+		{0x11300, 0x11303, 1},
 		{0x11305, 0x1130c, 1},
 		{0x1130f, 0x11310, 1},
 		{0x11313, 0x11328, 1},
@@ -3856,6 +3972,7 @@ var _Grantha = &RangeTable{
 		{0x1133c, 0x11344, 1},
 		{0x11347, 0x11348, 1},
 		{0x1134b, 0x1134d, 1},
+		{0x11350, 0x11350, 1},
 		{0x11357, 0x11357, 1},
 		{0x1135d, 0x11363, 1},
 		{0x11366, 0x1136c, 1},
@@ -3863,7 +3980,7 @@ var _Grantha = &RangeTable{
 	},
 }
 
-var _Greek = &RangeTable{
+var _Greek = &RangeTable {
 	R16: []Range16{
 		{0x0370, 0x0373, 1},
 		{0x0375, 0x0377, 1},
@@ -3906,7 +4023,7 @@ var _Greek = &RangeTable{
 	},
 }
 
-var _Gujarati = &RangeTable{
+var _Gujarati = &RangeTable {
 	R16: []Range16{
 		{0x0a81, 0x0a83, 1},
 		{0x0a85, 0x0a8d, 1},
@@ -3921,10 +4038,11 @@ var _Gujarati = &RangeTable{
 		{0x0ad0, 0x0ad0, 1},
 		{0x0ae0, 0x0ae3, 1},
 		{0x0ae6, 0x0af1, 1},
+		{0x0af9, 0x0af9, 1},
 	},
 }
 
-var _Gurmukhi = &RangeTable{
+var _Gurmukhi = &RangeTable {
 	R16: []Range16{
 		{0x0a01, 0x0a03, 1},
 		{0x0a05, 0x0a0a, 1},
@@ -3945,7 +4063,7 @@ var _Gurmukhi = &RangeTable{
 	},
 }
 
-var _Han = &RangeTable{
+var _Han = &RangeTable {
 	R16: []Range16{
 		{0x2e80, 0x2e99, 1},
 		{0x2e9b, 0x2ef3, 1},
@@ -3955,7 +4073,7 @@ var _Han = &RangeTable{
 		{0x3021, 0x3029, 1},
 		{0x3038, 0x303b, 1},
 		{0x3400, 0x4db5, 1},
-		{0x4e00, 0x9fcc, 1},
+		{0x4e00, 0x9fd5, 1},
 		{0xf900, 0xfa6d, 1},
 		{0xfa70, 0xfad9, 1},
 	},
@@ -3963,11 +4081,12 @@ var _Han = &RangeTable{
 		{0x20000, 0x2a6d6, 1},
 		{0x2a700, 0x2b734, 1},
 		{0x2b740, 0x2b81d, 1},
+		{0x2b820, 0x2cea1, 1},
 		{0x2f800, 0x2fa1d, 1},
 	},
 }
 
-var _Hangul = &RangeTable{
+var _Hangul = &RangeTable {
 	R16: []Range16{
 		{0x1100, 0x11ff, 1},
 		{0x302e, 0x302f, 1},
@@ -3986,13 +4105,23 @@ var _Hangul = &RangeTable{
 	},
 }
 
-var _Hanunoo = &RangeTable{
+var _Hanunoo = &RangeTable {
 	R16: []Range16{
 		{0x1720, 0x1734, 1},
 	},
 }
 
-var _Hebrew = &RangeTable{
+var _Hatran = &RangeTable {
+	R16: []Range16{
+	},
+	R32: []Range32{
+		{0x108e0, 0x108f2, 1},
+		{0x108f4, 0x108f5, 1},
+		{0x108fb, 0x108ff, 1},
+	},
+}
+
+var _Hebrew = &RangeTable {
 	R16: []Range16{
 		{0x0591, 0x05c7, 1},
 		{0x05d0, 0x05ea, 1},
@@ -4006,7 +4135,7 @@ var _Hebrew = &RangeTable{
 	},
 }
 
-var _Hiragana = &RangeTable{
+var _Hiragana = &RangeTable {
 	R16: []Range16{
 		{0x3041, 0x3096, 1},
 		{0x309d, 0x309f, 1},
@@ -4017,15 +4146,16 @@ var _Hiragana = &RangeTable{
 	},
 }
 
-var _Imperial_Aramaic = &RangeTable{
-	R16: []Range16{},
+var _Imperial_Aramaic = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10840, 0x10855, 1},
 		{0x10857, 0x1085f, 1},
 	},
 }
 
-var _Inherited = &RangeTable{
+var _Inherited = &RangeTable {
 	R16: []Range16{
 		{0x0300, 0x036f, 1},
 		{0x0485, 0x0486, 1},
@@ -4059,23 +4189,25 @@ var _Inherited = &RangeTable{
 	},
 }
 
-var _Inscriptional_Pahlavi = &RangeTable{
-	R16: []Range16{},
+var _Inscriptional_Pahlavi = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10b60, 0x10b72, 1},
 		{0x10b78, 0x10b7f, 1},
 	},
 }
 
-var _Inscriptional_Parthian = &RangeTable{
-	R16: []Range16{},
+var _Inscriptional_Parthian = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10b40, 0x10b55, 1},
 		{0x10b58, 0x10b5f, 1},
 	},
 }
 
-var _Javanese = &RangeTable{
+var _Javanese = &RangeTable {
 	R16: []Range16{
 		{0xa980, 0xa9cd, 1},
 		{0xa9d0, 0xa9d9, 1},
@@ -4083,14 +4215,15 @@ var _Javanese = &RangeTable{
 	},
 }
 
-var _Kaithi = &RangeTable{
-	R16: []Range16{},
+var _Kaithi = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x11080, 0x110c1, 1},
 	},
 }
 
-var _Kannada = &RangeTable{
+var _Kannada = &RangeTable {
 	R16: []Range16{
 		{0x0c81, 0x0c83, 1},
 		{0x0c85, 0x0c8c, 1},
@@ -4109,7 +4242,7 @@ var _Kannada = &RangeTable{
 	},
 }
 
-var _Katakana = &RangeTable{
+var _Katakana = &RangeTable {
 	R16: []Range16{
 		{0x30a1, 0x30fa, 1},
 		{0x30fd, 0x30ff, 1},
@@ -4124,15 +4257,16 @@ var _Katakana = &RangeTable{
 	},
 }
 
-var _Kayah_Li = &RangeTable{
+var _Kayah_Li = &RangeTable {
 	R16: []Range16{
 		{0xa900, 0xa92d, 1},
 		{0xa92f, 0xa92f, 1},
 	},
 }
 
-var _Kharoshthi = &RangeTable{
-	R16: []Range16{},
+var _Kharoshthi = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10a00, 0x10a03, 1},
 		{0x10a05, 0x10a06, 1},
@@ -4145,7 +4279,7 @@ var _Kharoshthi = &RangeTable{
 	},
 }
 
-var _Khmer = &RangeTable{
+var _Khmer = &RangeTable {
 	R16: []Range16{
 		{0x1780, 0x17dd, 1},
 		{0x17e0, 0x17e9, 1},
@@ -4154,23 +4288,25 @@ var _Khmer = &RangeTable{
 	},
 }
 
-var _Khojki = &RangeTable{
-	R16: []Range16{},
+var _Khojki = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x11200, 0x11211, 1},
 		{0x11213, 0x1123d, 1},
 	},
 }
 
-var _Khudawadi = &RangeTable{
-	R16: []Range16{},
+var _Khudawadi = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x112b0, 0x112ea, 1},
 		{0x112f0, 0x112f9, 1},
 	},
 }
 
-var _Lao = &RangeTable{
+var _Lao = &RangeTable {
 	R16: []Range16{
 		{0x0e81, 0x0e82, 1},
 		{0x0e84, 0x0e84, 1},
@@ -4193,7 +4329,7 @@ var _Lao = &RangeTable{
 	},
 }
 
-var _Latin = &RangeTable{
+var _Latin = &RangeTable {
 	R16: []Range16{
 		{0x0041, 0x005a, 1},
 		{0x0061, 0x007a, 1},
@@ -4218,13 +4354,11 @@ var _Latin = &RangeTable{
 		{0x2160, 0x2188, 1},
 		{0x2c60, 0x2c7f, 1},
 		{0xa722, 0xa787, 1},
-		{0xa78b, 0xa78e, 1},
-		{0xa790, 0xa7ad, 1},
-		{0xa7b0, 0xa7b1, 1},
+		{0xa78b, 0xa7ad, 1},
+		{0xa7b0, 0xa7b7, 1},
 		{0xa7f7, 0xa7ff, 1},
 		{0xab30, 0xab5a, 1},
-		{0xab5c, 0xab5f, 1},
-		{0xab64, 0xab64, 1},
+		{0xab5c, 0xab64, 1},
 		{0xfb00, 0xfb06, 1},
 		{0xff21, 0xff3a, 1},
 		{0xff41, 0xff5a, 1},
@@ -4232,7 +4366,7 @@ var _Latin = &RangeTable{
 	LatinOffset: 6,
 }
 
-var _Lepcha = &RangeTable{
+var _Lepcha = &RangeTable {
 	R16: []Range16{
 		{0x1c00, 0x1c37, 1},
 		{0x1c3b, 0x1c49, 1},
@@ -4240,7 +4374,7 @@ var _Lepcha = &RangeTable{
 	},
 }
 
-var _Limbu = &RangeTable{
+var _Limbu = &RangeTable {
 	R16: []Range16{
 		{0x1900, 0x191e, 1},
 		{0x1920, 0x192b, 1},
@@ -4250,8 +4384,9 @@ var _Limbu = &RangeTable{
 	},
 }
 
-var _Linear_A = &RangeTable{
-	R16: []Range16{},
+var _Linear_A = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10600, 0x10736, 1},
 		{0x10740, 0x10755, 1},
@@ -4259,8 +4394,9 @@ var _Linear_A = &RangeTable{
 	},
 }
 
-var _Linear_B = &RangeTable{
-	R16: []Range16{},
+var _Linear_B = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10000, 0x1000b, 1},
 		{0x1000d, 0x10026, 1},
@@ -4272,35 +4408,38 @@ var _Linear_B = &RangeTable{
 	},
 }
 
-var _Lisu = &RangeTable{
+var _Lisu = &RangeTable {
 	R16: []Range16{
 		{0xa4d0, 0xa4ff, 1},
 	},
 }
 
-var _Lycian = &RangeTable{
-	R16: []Range16{},
+var _Lycian = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10280, 0x1029c, 1},
 	},
 }
 
-var _Lydian = &RangeTable{
-	R16: []Range16{},
+var _Lydian = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10920, 0x10939, 1},
 		{0x1093f, 0x1093f, 1},
 	},
 }
 
-var _Mahajani = &RangeTable{
-	R16: []Range16{},
+var _Mahajani = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x11150, 0x11176, 1},
 	},
 }
 
-var _Malayalam = &RangeTable{
+var _Malayalam = &RangeTable {
 	R16: []Range16{
 		{0x0d01, 0x0d03, 1},
 		{0x0d05, 0x0d0c, 1},
@@ -4310,28 +4449,29 @@ var _Malayalam = &RangeTable{
 		{0x0d46, 0x0d48, 1},
 		{0x0d4a, 0x0d4e, 1},
 		{0x0d57, 0x0d57, 1},
-		{0x0d60, 0x0d63, 1},
+		{0x0d5f, 0x0d63, 1},
 		{0x0d66, 0x0d75, 1},
 		{0x0d79, 0x0d7f, 1},
 	},
 }
 
-var _Mandaic = &RangeTable{
+var _Mandaic = &RangeTable {
 	R16: []Range16{
 		{0x0840, 0x085b, 1},
 		{0x085e, 0x085e, 1},
 	},
 }
 
-var _Manichaean = &RangeTable{
-	R16: []Range16{},
+var _Manichaean = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10ac0, 0x10ae6, 1},
 		{0x10aeb, 0x10af6, 1},
 	},
 }
 
-var _Meetei_Mayek = &RangeTable{
+var _Meetei_Mayek = &RangeTable {
 	R16: []Range16{
 		{0xaae0, 0xaaf6, 1},
 		{0xabc0, 0xabed, 1},
@@ -4339,31 +4479,36 @@ var _Meetei_Mayek = &RangeTable{
 	},
 }
 
-var _Mende_Kikakui = &RangeTable{
-	R16: []Range16{},
+var _Mende_Kikakui = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x1e800, 0x1e8c4, 1},
 		{0x1e8c7, 0x1e8d6, 1},
 	},
 }
 
-var _Meroitic_Cursive = &RangeTable{
-	R16: []Range16{},
+var _Meroitic_Cursive = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x109a0, 0x109b7, 1},
-		{0x109be, 0x109bf, 1},
+		{0x109bc, 0x109cf, 1},
+		{0x109d2, 0x109ff, 1},
 	},
 }
 
-var _Meroitic_Hieroglyphs = &RangeTable{
-	R16: []Range16{},
+var _Meroitic_Hieroglyphs = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10980, 0x1099f, 1},
 	},
 }
 
-var _Miao = &RangeTable{
-	R16: []Range16{},
+var _Miao = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x16f00, 0x16f44, 1},
 		{0x16f50, 0x16f7e, 1},
@@ -4371,15 +4516,16 @@ var _Miao = &RangeTable{
 	},
 }
 
-var _Modi = &RangeTable{
-	R16: []Range16{},
+var _Modi = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x11600, 0x11644, 1},
 		{0x11650, 0x11659, 1},
 	},
 }
 
-var _Mongolian = &RangeTable{
+var _Mongolian = &RangeTable {
 	R16: []Range16{
 		{0x1800, 0x1801, 1},
 		{0x1804, 0x1804, 1},
@@ -4390,8 +4536,9 @@ var _Mongolian = &RangeTable{
 	},
 }
 
-var _Mro = &RangeTable{
-	R16: []Range16{},
+var _Mro = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x16a40, 0x16a5e, 1},
 		{0x16a60, 0x16a69, 1},
@@ -4399,7 +4546,19 @@ var _Mro = &RangeTable{
 	},
 }
 
-var _Myanmar = &RangeTable{
+var _Multani = &RangeTable {
+	R16: []Range16{
+	},
+	R32: []Range32{
+		{0x11280, 0x11286, 1},
+		{0x11288, 0x11288, 1},
+		{0x1128a, 0x1128d, 1},
+		{0x1128f, 0x1129d, 1},
+		{0x1129f, 0x112a9, 1},
+	},
+}
+
+var _Myanmar = &RangeTable {
 	R16: []Range16{
 		{0x1000, 0x109f, 1},
 		{0xa9e0, 0xa9fe, 1},
@@ -4407,15 +4566,16 @@ var _Myanmar = &RangeTable{
 	},
 }
 
-var _Nabataean = &RangeTable{
-	R16: []Range16{},
+var _Nabataean = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10880, 0x1089e, 1},
 		{0x108a7, 0x108af, 1},
 	},
 }
 
-var _New_Tai_Lue = &RangeTable{
+var _New_Tai_Lue = &RangeTable {
 	R16: []Range16{
 		{0x1980, 0x19ab, 1},
 		{0x19b0, 0x19c9, 1},
@@ -4424,68 +4584,84 @@ var _New_Tai_Lue = &RangeTable{
 	},
 }
 
-var _Nko = &RangeTable{
+var _Nko = &RangeTable {
 	R16: []Range16{
 		{0x07c0, 0x07fa, 1},
 	},
 }
 
-var _Ogham = &RangeTable{
+var _Ogham = &RangeTable {
 	R16: []Range16{
 		{0x1680, 0x169c, 1},
 	},
 }
 
-var _Ol_Chiki = &RangeTable{
+var _Ol_Chiki = &RangeTable {
 	R16: []Range16{
 		{0x1c50, 0x1c7f, 1},
 	},
 }
 
-var _Old_Italic = &RangeTable{
-	R16: []Range16{},
+var _Old_Hungarian = &RangeTable {
+	R16: []Range16{
+	},
+	R32: []Range32{
+		{0x10c80, 0x10cb2, 1},
+		{0x10cc0, 0x10cf2, 1},
+		{0x10cfa, 0x10cff, 1},
+	},
+}
+
+var _Old_Italic = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10300, 0x10323, 1},
 	},
 }
 
-var _Old_North_Arabian = &RangeTable{
-	R16: []Range16{},
+var _Old_North_Arabian = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10a80, 0x10a9f, 1},
 	},
 }
 
-var _Old_Permic = &RangeTable{
-	R16: []Range16{},
+var _Old_Permic = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10350, 0x1037a, 1},
 	},
 }
 
-var _Old_Persian = &RangeTable{
-	R16: []Range16{},
+var _Old_Persian = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x103a0, 0x103c3, 1},
 		{0x103c8, 0x103d5, 1},
 	},
 }
 
-var _Old_South_Arabian = &RangeTable{
-	R16: []Range16{},
+var _Old_South_Arabian = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10a60, 0x10a7f, 1},
 	},
 }
 
-var _Old_Turkic = &RangeTable{
-	R16: []Range16{},
+var _Old_Turkic = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10c00, 0x10c48, 1},
 	},
 }
 
-var _Oriya = &RangeTable{
+var _Oriya = &RangeTable {
 	R16: []Range16{
 		{0x0b01, 0x0b03, 1},
 		{0x0b05, 0x0b0c, 1},
@@ -4504,16 +4680,18 @@ var _Oriya = &RangeTable{
 	},
 }
 
-var _Osmanya = &RangeTable{
-	R16: []Range16{},
+var _Osmanya = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10480, 0x1049d, 1},
 		{0x104a0, 0x104a9, 1},
 	},
 }
 
-var _Pahawh_Hmong = &RangeTable{
-	R16: []Range16{},
+var _Pahawh_Hmong = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x16b00, 0x16b45, 1},
 		{0x16b50, 0x16b59, 1},
@@ -4523,36 +4701,40 @@ var _Pahawh_Hmong = &RangeTable{
 	},
 }
 
-var _Palmyrene = &RangeTable{
-	R16: []Range16{},
+var _Palmyrene = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10860, 0x1087f, 1},
 	},
 }
 
-var _Pau_Cin_Hau = &RangeTable{
-	R16: []Range16{},
+var _Pau_Cin_Hau = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x11ac0, 0x11af8, 1},
 	},
 }
 
-var _Phags_Pa = &RangeTable{
+var _Phags_Pa = &RangeTable {
 	R16: []Range16{
 		{0xa840, 0xa877, 1},
 	},
 }
 
-var _Phoenician = &RangeTable{
-	R16: []Range16{},
+var _Phoenician = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10900, 0x1091b, 1},
 		{0x1091f, 0x1091f, 1},
 	},
 }
 
-var _Psalter_Pahlavi = &RangeTable{
-	R16: []Range16{},
+var _Psalter_Pahlavi = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10b80, 0x10b91, 1},
 		{0x10b99, 0x10b9c, 1},
@@ -4560,59 +4742,71 @@ var _Psalter_Pahlavi = &RangeTable{
 	},
 }
 
-var _Rejang = &RangeTable{
+var _Rejang = &RangeTable {
 	R16: []Range16{
 		{0xa930, 0xa953, 1},
 		{0xa95f, 0xa95f, 1},
 	},
 }
 
-var _Runic = &RangeTable{
+var _Runic = &RangeTable {
 	R16: []Range16{
 		{0x16a0, 0x16ea, 1},
 		{0x16ee, 0x16f8, 1},
 	},
 }
 
-var _Samaritan = &RangeTable{
+var _Samaritan = &RangeTable {
 	R16: []Range16{
 		{0x0800, 0x082d, 1},
 		{0x0830, 0x083e, 1},
 	},
 }
 
-var _Saurashtra = &RangeTable{
+var _Saurashtra = &RangeTable {
 	R16: []Range16{
 		{0xa880, 0xa8c4, 1},
 		{0xa8ce, 0xa8d9, 1},
 	},
 }
 
-var _Sharada = &RangeTable{
-	R16: []Range16{},
+var _Sharada = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
-		{0x11180, 0x111c8, 1},
-		{0x111cd, 0x111cd, 1},
-		{0x111d0, 0x111da, 1},
+		{0x11180, 0x111cd, 1},
+		{0x111d0, 0x111df, 1},
 	},
 }
 
-var _Shavian = &RangeTable{
-	R16: []Range16{},
+var _Shavian = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10450, 0x1047f, 1},
 	},
 }
 
-var _Siddham = &RangeTable{
-	R16: []Range16{},
+var _Siddham = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x11580, 0x115b5, 1},
-		{0x115b8, 0x115c9, 1},
+		{0x115b8, 0x115dd, 1},
 	},
 }
 
-var _Sinhala = &RangeTable{
+var _SignWriting = &RangeTable {
+	R16: []Range16{
+	},
+	R32: []Range32{
+		{0x1d800, 0x1da8b, 1},
+		{0x1da9b, 0x1da9f, 1},
+		{0x1daa1, 0x1daaf, 1},
+	},
+}
+
+var _Sinhala = &RangeTable {
 	R16: []Range16{
 		{0x0d82, 0x0d83, 1},
 		{0x0d85, 0x0d96, 1},
@@ -4632,28 +4826,29 @@ var _Sinhala = &RangeTable{
 	},
 }
 
-var _Sora_Sompeng = &RangeTable{
-	R16: []Range16{},
+var _Sora_Sompeng = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x110d0, 0x110e8, 1},
 		{0x110f0, 0x110f9, 1},
 	},
 }
 
-var _Sundanese = &RangeTable{
+var _Sundanese = &RangeTable {
 	R16: []Range16{
 		{0x1b80, 0x1bbf, 1},
 		{0x1cc0, 0x1cc7, 1},
 	},
 }
 
-var _Syloti_Nagri = &RangeTable{
+var _Syloti_Nagri = &RangeTable {
 	R16: []Range16{
 		{0xa800, 0xa82b, 1},
 	},
 }
 
-var _Syriac = &RangeTable{
+var _Syriac = &RangeTable {
 	R16: []Range16{
 		{0x0700, 0x070d, 1},
 		{0x070f, 0x074a, 1},
@@ -4661,14 +4856,14 @@ var _Syriac = &RangeTable{
 	},
 }
 
-var _Tagalog = &RangeTable{
+var _Tagalog = &RangeTable {
 	R16: []Range16{
 		{0x1700, 0x170c, 1},
 		{0x170e, 0x1714, 1},
 	},
 }
 
-var _Tagbanwa = &RangeTable{
+var _Tagbanwa = &RangeTable {
 	R16: []Range16{
 		{0x1760, 0x176c, 1},
 		{0x176e, 0x1770, 1},
@@ -4676,14 +4871,14 @@ var _Tagbanwa = &RangeTable{
 	},
 }
 
-var _Tai_Le = &RangeTable{
+var _Tai_Le = &RangeTable {
 	R16: []Range16{
 		{0x1950, 0x196d, 1},
 		{0x1970, 0x1974, 1},
 	},
 }
 
-var _Tai_Tham = &RangeTable{
+var _Tai_Tham = &RangeTable {
 	R16: []Range16{
 		{0x1a20, 0x1a5e, 1},
 		{0x1a60, 0x1a7c, 1},
@@ -4693,22 +4888,23 @@ var _Tai_Tham = &RangeTable{
 	},
 }
 
-var _Tai_Viet = &RangeTable{
+var _Tai_Viet = &RangeTable {
 	R16: []Range16{
 		{0xaa80, 0xaac2, 1},
 		{0xaadb, 0xaadf, 1},
 	},
 }
 
-var _Takri = &RangeTable{
-	R16: []Range16{},
+var _Takri = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x11680, 0x116b7, 1},
 		{0x116c0, 0x116c9, 1},
 	},
 }
 
-var _Tamil = &RangeTable{
+var _Tamil = &RangeTable {
 	R16: []Range16{
 		{0x0b82, 0x0b83, 1},
 		{0x0b85, 0x0b8a, 1},
@@ -4729,7 +4925,7 @@ var _Tamil = &RangeTable{
 	},
 }
 
-var _Telugu = &RangeTable{
+var _Telugu = &RangeTable {
 	R16: []Range16{
 		{0x0c00, 0x0c03, 1},
 		{0x0c05, 0x0c0c, 1},
@@ -4740,27 +4936,27 @@ var _Telugu = &RangeTable{
 		{0x0c46, 0x0c48, 1},
 		{0x0c4a, 0x0c4d, 1},
 		{0x0c55, 0x0c56, 1},
-		{0x0c58, 0x0c59, 1},
+		{0x0c58, 0x0c5a, 1},
 		{0x0c60, 0x0c63, 1},
 		{0x0c66, 0x0c6f, 1},
 		{0x0c78, 0x0c7f, 1},
 	},
 }
 
-var _Thaana = &RangeTable{
+var _Thaana = &RangeTable {
 	R16: []Range16{
 		{0x0780, 0x07b1, 1},
 	},
 }
 
-var _Thai = &RangeTable{
+var _Thai = &RangeTable {
 	R16: []Range16{
 		{0x0e01, 0x0e3a, 1},
 		{0x0e40, 0x0e5b, 1},
 	},
 }
 
-var _Tibetan = &RangeTable{
+var _Tibetan = &RangeTable {
 	R16: []Range16{
 		{0x0f00, 0x0f47, 1},
 		{0x0f49, 0x0f6c, 1},
@@ -4772,7 +4968,7 @@ var _Tibetan = &RangeTable{
 	},
 }
 
-var _Tifinagh = &RangeTable{
+var _Tifinagh = &RangeTable {
 	R16: []Range16{
 		{0x2d30, 0x2d67, 1},
 		{0x2d6f, 0x2d70, 1},
@@ -4780,37 +4976,40 @@ var _Tifinagh = &RangeTable{
 	},
 }
 
-var _Tirhuta = &RangeTable{
-	R16: []Range16{},
+var _Tirhuta = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x11480, 0x114c7, 1},
 		{0x114d0, 0x114d9, 1},
 	},
 }
 
-var _Ugaritic = &RangeTable{
-	R16: []Range16{},
+var _Ugaritic = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x10380, 0x1039d, 1},
 		{0x1039f, 0x1039f, 1},
 	},
 }
 
-var _Vai = &RangeTable{
+var _Vai = &RangeTable {
 	R16: []Range16{
 		{0xa500, 0xa62b, 1},
 	},
 }
 
-var _Warang_Citi = &RangeTable{
-	R16: []Range16{},
+var _Warang_Citi = &RangeTable {
+	R16: []Range16{
+	},
 	R32: []Range32{
 		{0x118a0, 0x118f2, 1},
 		{0x118ff, 0x118ff, 1},
 	},
 }
 
-var _Yi = &RangeTable{
+var _Yi = &RangeTable {
 	R16: []Range16{
 		{0xa000, 0xa48c, 1},
 		{0xa490, 0xa4c6, 1},
@@ -4819,174 +5018,180 @@ var _Yi = &RangeTable{
 
 // 这些变量的类型为 *RangeTable。
 var (
-	Arabic                 = _Arabic                 // Arabic 为书写系统 Arabic 中的 Unicode 字符集合。
-	Armenian               = _Armenian               // Armenian 为书写系统 Armenian 中的 Unicode 字符集合。
-	Avestan                = _Avestan                // Avestan 为书写系统 Avestan 中的 Unicode 字符集合。
-	Balinese               = _Balinese               // Balinese 为书写系统 Balinese 中的 Unicode 字符集合。
-	Bamum                  = _Bamum                  // Bamum 为书写系统 Bamum 中的 Unicode 字符集合。
-	Bassa_Vah              = _Bassa_Vah              // Bassa_Vah 为书写系统 Bassa_Vah 中的 Unicode 字符集合。
-	Batak                  = _Batak                  // Batak 为书写系统 Batak 中的 Unicode 字符集合。
-	Bengali                = _Bengali                // Bengali 为书写系统 Bengali 中的 Unicode 字符集合。
-	Bopomofo               = _Bopomofo               // Bopomofo 为书写系统 Bopomofo 中的 Unicode 字符集合。
-	Brahmi                 = _Brahmi                 // Brahmi 为书写系统 Brahmi 中的 Unicode 字符集合。
-	Braille                = _Braille                // Braille 为书写系统 Braille 中的 Unicode 字符集合。
-	Buginese               = _Buginese               // Buginese 为书写系统 Buginese 中的 Unicode 字符集合。
-	Buhid                  = _Buhid                  // Buhid 为书写系统 Buhid 中的 Unicode 字符集合。
-	Canadian_Aboriginal    = _Canadian_Aboriginal    // Canadian_Aboriginal 为书写系统 Canadian_Aboriginal 中的 Unicode 字符集合。
-	Carian                 = _Carian                 // Carian 为书写系统 Carian 中的 Unicode 字符集合。
-	Caucasian_Albanian     = _Caucasian_Albanian     // Caucasian_Albanian 为书写系统 Caucasian_Albanian 中的 Unicode 字符集合。
-	Chakma                 = _Chakma                 // Chakma 为书写系统 Chakma 中的 Unicode 字符集合。
-	Cham                   = _Cham                   // Cham 为书写系统 Cham 中的 Unicode 字符集合。
-	Cherokee               = _Cherokee               // Cherokee 为书写系统 Cherokee 中的 Unicode 字符集合。
-	Common                 = _Common                 // Common 为书写系统 Common 中的 Unicode 字符集合。
-	Coptic                 = _Coptic                 // Coptic 为书写系统 Coptic 中的 Unicode 字符集合。
-	Cuneiform              = _Cuneiform              // Cuneiform 为书写系统 Cuneiform 中的 Unicode 字符集合。
-	Cypriot                = _Cypriot                // Cypriot 为书写系统 Cypriot 中的 Unicode 字符集合。
-	Cyrillic               = _Cyrillic               // Cyrillic 为书写系统 Cyrillic 中的 Unicode 字符集合。
-	Deseret                = _Deseret                // Deseret 为书写系统 Deseret 中的 Unicode 字符集合。
-	Devanagari             = _Devanagari             // Devanagari 为书写系统 Devanagari 中的 Unicode 字符集合。
-	Duployan               = _Duployan               // Duployan 为书写系统 Duployan 中的 Unicode 字符集合。
-	Egyptian_Hieroglyphs   = _Egyptian_Hieroglyphs   // Egyptian_Hieroglyphs 为书写系统 Egyptian_Hieroglyphs 中的 Unicode 字符集合。
-	Elbasan                = _Elbasan                // Elbasan 为书写系统 Elbasan 中的 Unicode 字符集合。
-	Ethiopic               = _Ethiopic               // Ethiopic 为书写系统 Ethiopic 中的 Unicode 字符集合。
-	Georgian               = _Georgian               // Georgian 为书写系统 Georgian 中的 Unicode 字符集合。
-	Glagolitic             = _Glagolitic             // Glagolitic 为书写系统 Glagolitic 中的 Unicode 字符集合。
-	Gothic                 = _Gothic                 // Gothic 为书写系统 Gothic 中的 Unicode 字符集合。
-	Grantha                = _Grantha                // Grantha 为书写系统 Grantha 中的 Unicode 字符集合。
-	Greek                  = _Greek                  // Greek 为书写系统 Greek 中的 Unicode 字符集合。
-	Gujarati               = _Gujarati               // Gujarati 为书写系统 Gujarati 中的 Unicode 字符集合。
-	Gurmukhi               = _Gurmukhi               // Gurmukhi 为书写系统 Gurmukhi 中的 Unicode 字符集合。
-	Han                    = _Han                    // Han 为书写系统 Han 中的 Unicode 字符集合。
-	Hangul                 = _Hangul                 // Hangul 为书写系统 Hangul 中的 Unicode 字符集合。
-	Hanunoo                = _Hanunoo                // Hanunoo 为书写系统 Hanunoo 中的 Unicode 字符集合。
-	Hebrew                 = _Hebrew                 // Hebrew 为书写系统 Hebrew 中的 Unicode 字符集合。
-	Hiragana               = _Hiragana               // Hiragana 为书写系统 Hiragana 中的 Unicode 字符集合。
-	Imperial_Aramaic       = _Imperial_Aramaic       // Imperial_Aramaic 为书写系统 Imperial_Aramaic 中的 Unicode 字符集合。
-	Inherited              = _Inherited              // Inherited 为书写系统 Inherited 中的 Unicode 字符集合。
-	Inscriptional_Pahlavi  = _Inscriptional_Pahlavi  // Inscriptional_Pahlavi 为书写系统 Inscriptional_Pahlavi 中的 Unicode 字符集合。
-	Inscriptional_Parthian = _Inscriptional_Parthian // Inscriptional_Parthian 为书写系统 Inscriptional_Parthian 中的 Unicode 字符集合。
-	Javanese               = _Javanese               // Javanese 为书写系统 Javanese 中的 Unicode 字符集合。
-	Kaithi                 = _Kaithi                 // Kaithi 为书写系统 Kaithi 中的 Unicode 字符集合。
-	Kannada                = _Kannada                // Kannada 为书写系统 Kannada 中的 Unicode 字符集合。
-	Katakana               = _Katakana               // Katakana 为书写系统 Katakana 中的 Unicode 字符集合。
-	Kayah_Li               = _Kayah_Li               // Kayah_Li 为书写系统 Kayah_Li 中的 Unicode 字符集合。
-	Kharoshthi             = _Kharoshthi             // Kharoshthi 为书写系统 Kharoshthi 中的 Unicode 字符集合。
-	Khmer                  = _Khmer                  // Khmer 为书写系统 Khmer 中的 Unicode 字符集合。
-	Khojki                 = _Khojki                 // Khojki 为书写系统 Khojki 中的 Unicode 字符集合。
-	Khudawadi              = _Khudawadi              // Khudawadi 为书写系统 Khudawadi 中的 Unicode 字符集合。
-	Lao                    = _Lao                    // Lao 为书写系统 Lao 中的 Unicode 字符集合。
-	Latin                  = _Latin                  // Latin 为书写系统 Latin 中的 Unicode 字符集合。
-	Lepcha                 = _Lepcha                 // Lepcha 为书写系统 Lepcha 中的 Unicode 字符集合。
-	Limbu                  = _Limbu                  // Limbu 为书写系统 Limbu 中的 Unicode 字符集合。
-	Linear_A               = _Linear_A               // Linear_A 为书写系统 Linear_A 中的 Unicode 字符集合。
-	Linear_B               = _Linear_B               // Linear_B 为书写系统 Linear_B 中的 Unicode 字符集合。
-	Lisu                   = _Lisu                   // Lisu 为书写系统 Lisu 中的 Unicode 字符集合。
-	Lycian                 = _Lycian                 // Lycian 为书写系统 Lycian 中的 Unicode 字符集合。
-	Lydian                 = _Lydian                 // Lydian 为书写系统 Lydian 中的 Unicode 字符集合。
-	Mahajani               = _Mahajani               // Mahajani 为书写系统 Mahajani 中的 Unicode 字符集合。
-	Malayalam              = _Malayalam              // Malayalam 为书写系统 Malayalam 中的 Unicode 字符集合。
-	Mandaic                = _Mandaic                // Mandaic 为书写系统 Mandaic 中的 Unicode 字符集合。
-	Manichaean             = _Manichaean             // Manichaean 为书写系统 Manichaean 中的 Unicode 字符集合。
-	Meetei_Mayek           = _Meetei_Mayek           // Meetei_Mayek 为书写系统 Meetei_Mayek 中的 Unicode 字符集合。
-	Mende_Kikakui          = _Mende_Kikakui          // Mende_Kikakui 为书写系统 Mende_Kikakui 中的 Unicode 字符集合。
-	Meroitic_Cursive       = _Meroitic_Cursive       // Meroitic_Cursive 为书写系统 Meroitic_Cursive 中的 Unicode 字符集合。
-	Meroitic_Hieroglyphs   = _Meroitic_Hieroglyphs   // Meroitic_Hieroglyphs 为书写系统 Meroitic_Hieroglyphs 中的 Unicode 字符集合。
-	Miao                   = _Miao                   // Miao 为书写系统 Miao 中的 Unicode 字符集合。
-	Modi                   = _Modi                   // Modi 为书写系统 Modi 中的 Unicode 字符集合。
-	Mongolian              = _Mongolian              // Mongolian 为书写系统 Mongolian 中的 Unicode 字符集合。
-	Mro                    = _Mro                    // Mro 为书写系统 Mro 中的 Unicode 字符集合。
-	Myanmar                = _Myanmar                // Myanmar 为书写系统 Myanmar 中的 Unicode 字符集合。
-	Nabataean              = _Nabataean              // Nabataean 为书写系统 Nabataean 中的 Unicode 字符集合。
-	New_Tai_Lue            = _New_Tai_Lue            // New_Tai_Lue 为书写系统 New_Tai_Lue 中的 Unicode 字符集合。
-	Nko                    = _Nko                    // Nko 为书写系统 Nko 中的 Unicode 字符集合。
-	Ogham                  = _Ogham                  // Ogham 为书写系统 Ogham 中的 Unicode 字符集合。
-	Ol_Chiki               = _Ol_Chiki               // Ol_Chiki 为书写系统 Ol_Chiki 中的 Unicode 字符集合。
-	Old_Italic             = _Old_Italic             // Old_Italic 为书写系统 Old_Italic 中的 Unicode 字符集合。
-	Old_North_Arabian      = _Old_North_Arabian      // Old_North_Arabian 为书写系统 Old_North_Arabian 中的 Unicode 字符集合。
-	Old_Permic             = _Old_Permic             // Old_Permic 为书写系统 Old_Permic 中的 Unicode 字符集合。
-	Old_Persian            = _Old_Persian            // Old_Persian 为书写系统 Old_Persian 中的 Unicode 字符集合。
-	Old_South_Arabian      = _Old_South_Arabian      // Old_South_Arabian 为书写系统 Old_South_Arabian 中的 Unicode 字符集合。
-	Old_Turkic             = _Old_Turkic             // Old_Turkic 为书写系统 Old_Turkic 中的 Unicode 字符集合。
-	Oriya                  = _Oriya                  // Oriya 为书写系统 Oriya 中的 Unicode 字符集合。
-	Osmanya                = _Osmanya                // Osmanya 为书写系统 Osmanya 中的 Unicode 字符集合。
-	Pahawh_Hmong           = _Pahawh_Hmong           // Pahawh_Hmong 为书写系统 Pahawh_Hmong 中的 Unicode 字符集合。
-	Palmyrene              = _Palmyrene              // Palmyrene 为书写系统 Palmyrene 中的 Unicode 字符集合。
-	Pau_Cin_Hau            = _Pau_Cin_Hau            // Pau_Cin_Hau 为书写系统 Pau_Cin_Hau 中的 Unicode 字符集合。
-	Phags_Pa               = _Phags_Pa               // Phags_Pa 为书写系统 Phags_Pa 中的 Unicode 字符集合。
-	Phoenician             = _Phoenician             // Phoenician 为书写系统 Phoenician 中的 Unicode 字符集合。
-	Psalter_Pahlavi        = _Psalter_Pahlavi        // Psalter_Pahlavi 为书写系统 Psalter_Pahlavi 中的 Unicode 字符集合。
-	Rejang                 = _Rejang                 // Rejang 为书写系统 Rejang 中的 Unicode 字符集合。
-	Runic                  = _Runic                  // Runic 为书写系统 Runic 中的 Unicode 字符集合。
-	Samaritan              = _Samaritan              // Samaritan 为书写系统 Samaritan 中的 Unicode 字符集合。
-	Saurashtra             = _Saurashtra             // Saurashtra 为书写系统 Saurashtra 中的 Unicode 字符集合。
-	Sharada                = _Sharada                // Sharada 为书写系统 Sharada 中的 Unicode 字符集合。
-	Shavian                = _Shavian                // Shavian 为书写系统 Shavian 中的 Unicode 字符集合。
-	Siddham                = _Siddham                // Siddham 为书写系统 Siddham 中的 Unicode 字符集合。
-	Sinhala                = _Sinhala                // Sinhala 为书写系统 Sinhala 中的 Unicode 字符集合。
-	Sora_Sompeng           = _Sora_Sompeng           // Sora_Sompeng 为书写系统 Sora_Sompeng 中的 Unicode 字符集合。
-	Sundanese              = _Sundanese              // Sundanese 为书写系统 Sundanese 中的 Unicode 字符集合。
-	Syloti_Nagri           = _Syloti_Nagri           // Syloti_Nagri 为书写系统 Syloti_Nagri 中的 Unicode 字符集合。
-	Syriac                 = _Syriac                 // Syriac 为书写系统 Syriac 中的 Unicode 字符集合。
-	Tagalog                = _Tagalog                // Tagalog 为书写系统 Tagalog 中的 Unicode 字符集合。
-	Tagbanwa               = _Tagbanwa               // Tagbanwa 为书写系统 Tagbanwa 中的 Unicode 字符集合。
-	Tai_Le                 = _Tai_Le                 // Tai_Le 为书写系统 Tai_Le 中的 Unicode 字符集合。
-	Tai_Tham               = _Tai_Tham               // Tai_Tham 为书写系统 Tai_Tham 中的 Unicode 字符集合。
-	Tai_Viet               = _Tai_Viet               // Tai_Viet 为书写系统 Tai_Viet 中的 Unicode 字符集合。
-	Takri                  = _Takri                  // Takri 为书写系统 Takri 中的 Unicode 字符集合。
-	Tamil                  = _Tamil                  // Tamil 为书写系统 Tamil 中的 Unicode 字符集合。
-	Telugu                 = _Telugu                 // Telugu 为书写系统 Telugu 中的 Unicode 字符集合。
-	Thaana                 = _Thaana                 // Thaana 为书写系统 Thaana 中的 Unicode 字符集合。
-	Thai                   = _Thai                   // Thai 为书写系统 Thai 中的 Unicode 字符集合。
-	Tibetan                = _Tibetan                // Tibetan 为书写系统 Tibetan 中的 Unicode 字符集合。
-	Tifinagh               = _Tifinagh               // Tifinagh 为书写系统 Tifinagh 中的 Unicode 字符集合。
-	Tirhuta                = _Tirhuta                // Tirhuta 为书写系统 Tirhuta 中的 Unicode 字符集合。
-	Ugaritic               = _Ugaritic               // Ugaritic 为书写系统 Ugaritic 中的 Unicode 字符集合。
-	Vai                    = _Vai                    // Vai 为书写系统 Vai 中的 Unicode 字符集合。
-	Warang_Citi            = _Warang_Citi            // Warang_Citi 为书写系统 Warang_Citi 中的 Unicode 字符集合。
-	Yi                     = _Yi                     // Yi 为书写系统 Yi 中的 Unicode 字符集合。
+	Ahom = _Ahom;	// Ahom 为书写系统 Ahom 中的 Unicode 字符集合。
+	Anatolian_Hieroglyphs = _Anatolian_Hieroglyphs;	// Anatolian_Hieroglyphs 为书写系统 Anatolian_Hieroglyphs 中的 Unicode 字符集合。
+	Arabic = _Arabic;	// Arabic 为书写系统 Arabic 中的 Unicode 字符集合。
+	Armenian = _Armenian;	// Armenian 为书写系统 Armenian 中的 Unicode 字符集合。
+	Avestan = _Avestan;	// Avestan 为书写系统 Avestan 中的 Unicode 字符集合。
+	Balinese = _Balinese;	// Balinese 为书写系统 Balinese 中的 Unicode 字符集合。
+	Bamum = _Bamum;	// Bamum 为书写系统 Bamum 中的 Unicode 字符集合。
+	Bassa_Vah = _Bassa_Vah;	// Bassa_Vah 为书写系统 Bassa_Vah 中的 Unicode 字符集合。
+	Batak = _Batak;	// Batak 为书写系统 Batak 中的 Unicode 字符集合。
+	Bengali = _Bengali;	// Bengali 为书写系统 Bengali 中的 Unicode 字符集合。
+	Bopomofo = _Bopomofo;	// Bopomofo 为书写系统 Bopomofo 中的 Unicode 字符集合。
+	Brahmi = _Brahmi;	// Brahmi 为书写系统 Brahmi 中的 Unicode 字符集合。
+	Braille = _Braille;	// Braille 为书写系统 Braille 中的 Unicode 字符集合。
+	Buginese = _Buginese;	// Buginese 为书写系统 Buginese 中的 Unicode 字符集合。
+	Buhid = _Buhid;	// Buhid 为书写系统 Buhid 中的 Unicode 字符集合。
+	Canadian_Aboriginal = _Canadian_Aboriginal;	// Canadian_Aboriginal 为书写系统 Canadian_Aboriginal 中的 Unicode 字符集合。
+	Carian = _Carian;	// Carian 为书写系统 Carian 中的 Unicode 字符集合。
+	Caucasian_Albanian = _Caucasian_Albanian;	// Caucasian_Albanian 为书写系统 Caucasian_Albanian 中的 Unicode 字符集合。
+	Chakma = _Chakma;	// Chakma 为书写系统 Chakma 中的 Unicode 字符集合。
+	Cham = _Cham;	// Cham 为书写系统 Cham 中的 Unicode 字符集合。
+	Cherokee = _Cherokee;	// Cherokee 为书写系统 Cherokee 中的 Unicode 字符集合。
+	Common = _Common;	// Common 为书写系统 Common 中的 Unicode 字符集合。
+	Coptic = _Coptic;	// Coptic 为书写系统 Coptic 中的 Unicode 字符集合。
+	Cuneiform = _Cuneiform;	// Cuneiform 为书写系统 Cuneiform 中的 Unicode 字符集合。
+	Cypriot = _Cypriot;	// Cypriot 为书写系统 Cypriot 中的 Unicode 字符集合。
+	Cyrillic = _Cyrillic;	// Cyrillic 为书写系统 Cyrillic 中的 Unicode 字符集合。
+	Deseret = _Deseret;	// Deseret 为书写系统 Deseret 中的 Unicode 字符集合。
+	Devanagari = _Devanagari;	// Devanagari 为书写系统 Devanagari 中的 Unicode 字符集合。
+	Duployan = _Duployan;	// Duployan 为书写系统 Duployan 中的 Unicode 字符集合。
+	Egyptian_Hieroglyphs = _Egyptian_Hieroglyphs;	// Egyptian_Hieroglyphs 为书写系统 Egyptian_Hieroglyphs 中的 Unicode 字符集合。
+	Elbasan = _Elbasan;	// Elbasan 为书写系统 Elbasan 中的 Unicode 字符集合。
+	Ethiopic = _Ethiopic;	// Ethiopic 为书写系统 Ethiopic 中的 Unicode 字符集合。
+	Georgian = _Georgian;	// Georgian 为书写系统 Georgian 中的 Unicode 字符集合。
+	Glagolitic = _Glagolitic;	// Glagolitic 为书写系统 Glagolitic 中的 Unicode 字符集合。
+	Gothic = _Gothic;	// Gothic 为书写系统 Gothic 中的 Unicode 字符集合。
+	Grantha = _Grantha;	// Grantha 为书写系统 Grantha 中的 Unicode 字符集合。
+	Greek = _Greek;	// Greek 为书写系统 Greek 中的 Unicode 字符集合。
+	Gujarati = _Gujarati;	// Gujarati 为书写系统 Gujarati 中的 Unicode 字符集合。
+	Gurmukhi = _Gurmukhi;	// Gurmukhi 为书写系统 Gurmukhi 中的 Unicode 字符集合。
+	Han = _Han;	// Han 为书写系统 Han 中的 Unicode 字符集合。
+	Hangul = _Hangul;	// Hangul 为书写系统 Hangul 中的 Unicode 字符集合。
+	Hanunoo = _Hanunoo;	// Hanunoo 为书写系统 Hanunoo 中的 Unicode 字符集合。
+	Hatran = _Hatran;	// Hatran 为书写系统 Hatran 中的 Unicode 字符集合。
+	Hebrew = _Hebrew;	// Hebrew 为书写系统 Hebrew 中的 Unicode 字符集合。
+	Hiragana = _Hiragana;	// Hiragana 为书写系统 Hiragana 中的 Unicode 字符集合。
+	Imperial_Aramaic = _Imperial_Aramaic;	// Imperial_Aramaic 为书写系统 Imperial_Aramaic 中的 Unicode 字符集合。
+	Inherited = _Inherited;	// Inherited 为书写系统 Inherited 中的 Unicode 字符集合。
+	Inscriptional_Pahlavi = _Inscriptional_Pahlavi;	// Inscriptional_Pahlavi 为书写系统 Inscriptional_Pahlavi 中的 Unicode 字符集合。
+	Inscriptional_Parthian = _Inscriptional_Parthian;	// Inscriptional_Parthian 为书写系统 Inscriptional_Parthian 中的 Unicode 字符集合。
+	Javanese = _Javanese;	// Javanese 为书写系统 Javanese 中的 Unicode 字符集合。
+	Kaithi = _Kaithi;	// Kaithi 为书写系统 Kaithi 中的 Unicode 字符集合。
+	Kannada = _Kannada;	// Kannada 为书写系统 Kannada 中的 Unicode 字符集合。
+	Katakana = _Katakana;	// Katakana 为书写系统 Katakana 中的 Unicode 字符集合。
+	Kayah_Li = _Kayah_Li;	// Kayah_Li 为书写系统 Kayah_Li 中的 Unicode 字符集合。
+	Kharoshthi = _Kharoshthi;	// Kharoshthi 为书写系统 Kharoshthi 中的 Unicode 字符集合。
+	Khmer = _Khmer;	// Khmer 为书写系统 Khmer 中的 Unicode 字符集合。
+	Khojki = _Khojki;	// Khojki 为书写系统 Khojki 中的 Unicode 字符集合。
+	Khudawadi = _Khudawadi;	// Khudawadi 为书写系统 Khudawadi 中的 Unicode 字符集合。
+	Lao = _Lao;	// Lao 为书写系统 Lao 中的 Unicode 字符集合。
+	Latin = _Latin;	// Latin 为书写系统 Latin 中的 Unicode 字符集合。
+	Lepcha = _Lepcha;	// Lepcha 为书写系统 Lepcha 中的 Unicode 字符集合。
+	Limbu = _Limbu;	// Limbu 为书写系统 Limbu 中的 Unicode 字符集合。
+	Linear_A = _Linear_A;	// Linear_A 为书写系统 Linear_A 中的 Unicode 字符集合。
+	Linear_B = _Linear_B;	// Linear_B 为书写系统 Linear_B 中的 Unicode 字符集合。
+	Lisu = _Lisu;	// Lisu 为书写系统 Lisu 中的 Unicode 字符集合。
+	Lycian = _Lycian;	// Lycian 为书写系统 Lycian 中的 Unicode 字符集合。
+	Lydian = _Lydian;	// Lydian 为书写系统 Lydian 中的 Unicode 字符集合。
+	Mahajani = _Mahajani;	// Mahajani 为书写系统 Mahajani 中的 Unicode 字符集合。
+	Malayalam = _Malayalam;	// Malayalam 为书写系统 Malayalam 中的 Unicode 字符集合。
+	Mandaic = _Mandaic;	// Mandaic 为书写系统 Mandaic 中的 Unicode 字符集合。
+	Manichaean = _Manichaean;	// Manichaean 为书写系统 Manichaean 中的 Unicode 字符集合。
+	Meetei_Mayek = _Meetei_Mayek;	// Meetei_Mayek 为书写系统 Meetei_Mayek 中的 Unicode 字符集合。
+	Mende_Kikakui = _Mende_Kikakui;	// Mende_Kikakui 为书写系统 Mende_Kikakui 中的 Unicode 字符集合。
+	Meroitic_Cursive = _Meroitic_Cursive;	// Meroitic_Cursive 为书写系统 Meroitic_Cursive 中的 Unicode 字符集合。
+	Meroitic_Hieroglyphs = _Meroitic_Hieroglyphs;	// Meroitic_Hieroglyphs 为书写系统 Meroitic_Hieroglyphs 中的 Unicode 字符集合。
+	Miao = _Miao;	// Miao 为书写系统 Miao 中的 Unicode 字符集合。
+	Modi = _Modi;	// Modi 为书写系统 Modi 中的 Unicode 字符集合。
+	Mongolian = _Mongolian;	// Mongolian 为书写系统 Mongolian 中的 Unicode 字符集合。
+	Mro = _Mro;	// Mro 为书写系统 Mro 中的 Unicode 字符集合。
+	Multani = _Multani;	// Multani 为书写系统 Multani 中的 Unicode 字符集合。
+	Myanmar = _Myanmar;	// Myanmar 为书写系统 Myanmar 中的 Unicode 字符集合。
+	Nabataean = _Nabataean;	// Nabataean 为书写系统 Nabataean 中的 Unicode 字符集合。
+	New_Tai_Lue = _New_Tai_Lue;	// New_Tai_Lue 为书写系统 New_Tai_Lue 中的 Unicode 字符集合。
+	Nko = _Nko;	// Nko 为书写系统 Nko 中的 Unicode 字符集合。
+	Ogham = _Ogham;	// Ogham 为书写系统 Ogham 中的 Unicode 字符集合。
+	Ol_Chiki = _Ol_Chiki;	// Ol_Chiki 为书写系统 Ol_Chiki 中的 Unicode 字符集合。
+	Old_Hungarian = _Old_Hungarian;	// Old_Hungarian 为书写系统 Old_Hungarian 中的 Unicode 字符集合。
+	Old_Italic = _Old_Italic;	// Old_Italic 为书写系统 Old_Italic 中的 Unicode 字符集合。
+	Old_North_Arabian = _Old_North_Arabian;	// Old_North_Arabian 为书写系统 Old_North_Arabian 中的 Unicode 字符集合。
+	Old_Permic = _Old_Permic;	// Old_Permic 为书写系统 Old_Permic 中的 Unicode 字符集合。
+	Old_Persian = _Old_Persian;	// Old_Persian 为书写系统 Old_Persian 中的 Unicode 字符集合。
+	Old_South_Arabian = _Old_South_Arabian;	// Old_South_Arabian 为书写系统 Old_South_Arabian 中的 Unicode 字符集合。
+	Old_Turkic = _Old_Turkic;	// Old_Turkic 为书写系统 Old_Turkic 中的 Unicode 字符集合。
+	Oriya = _Oriya;	// Oriya 为书写系统 Oriya 中的 Unicode 字符集合。
+	Osmanya = _Osmanya;	// Osmanya 为书写系统 Osmanya 中的 Unicode 字符集合。
+	Pahawh_Hmong = _Pahawh_Hmong;	// Pahawh_Hmong 为书写系统 Pahawh_Hmong 中的 Unicode 字符集合。
+	Palmyrene = _Palmyrene;	// Palmyrene 为书写系统 Palmyrene 中的 Unicode 字符集合。
+	Pau_Cin_Hau = _Pau_Cin_Hau;	// Pau_Cin_Hau 为书写系统 Pau_Cin_Hau 中的 Unicode 字符集合。
+	Phags_Pa = _Phags_Pa;	// Phags_Pa 为书写系统 Phags_Pa 中的 Unicode 字符集合。
+	Phoenician = _Phoenician;	// Phoenician 为书写系统 Phoenician 中的 Unicode 字符集合。
+	Psalter_Pahlavi = _Psalter_Pahlavi;	// Psalter_Pahlavi 为书写系统 Psalter_Pahlavi 中的 Unicode 字符集合。
+	Rejang = _Rejang;	// Rejang 为书写系统 Rejang 中的 Unicode 字符集合。
+	Runic = _Runic;	// Runic 为书写系统 Runic 中的 Unicode 字符集合。
+	Samaritan = _Samaritan;	// Samaritan 为书写系统 Samaritan 中的 Unicode 字符集合。
+	Saurashtra = _Saurashtra;	// Saurashtra 为书写系统 Saurashtra 中的 Unicode 字符集合。
+	Sharada = _Sharada;	// Sharada 为书写系统 Sharada 中的 Unicode 字符集合。
+	Shavian = _Shavian;	// Shavian 为书写系统 Shavian 中的 Unicode 字符集合。
+	Siddham = _Siddham;	// Siddham 为书写系统 Siddham 中的 Unicode 字符集合。
+	SignWriting = _SignWriting;	// SignWriting 为书写系统 SignWriting 中的 Unicode 字符集合。
+	Sinhala = _Sinhala;	// Sinhala 为书写系统 Sinhala 中的 Unicode 字符集合。
+	Sora_Sompeng = _Sora_Sompeng;	// Sora_Sompeng 为书写系统 Sora_Sompeng 中的 Unicode 字符集合。
+	Sundanese = _Sundanese;	// Sundanese 为书写系统 Sundanese 中的 Unicode 字符集合。
+	Syloti_Nagri = _Syloti_Nagri;	// Syloti_Nagri 为书写系统 Syloti_Nagri 中的 Unicode 字符集合。
+	Syriac = _Syriac;	// Syriac 为书写系统 Syriac 中的 Unicode 字符集合。
+	Tagalog = _Tagalog;	// Tagalog 为书写系统 Tagalog 中的 Unicode 字符集合。
+	Tagbanwa = _Tagbanwa;	// Tagbanwa 为书写系统 Tagbanwa 中的 Unicode 字符集合。
+	Tai_Le = _Tai_Le;	// Tai_Le 为书写系统 Tai_Le 中的 Unicode 字符集合。
+	Tai_Tham = _Tai_Tham;	// Tai_Tham 为书写系统 Tai_Tham 中的 Unicode 字符集合。
+	Tai_Viet = _Tai_Viet;	// Tai_Viet 为书写系统 Tai_Viet 中的 Unicode 字符集合。
+	Takri = _Takri;	// Takri 为书写系统 Takri 中的 Unicode 字符集合。
+	Tamil = _Tamil;	// Tamil 为书写系统 Tamil 中的 Unicode 字符集合。
+	Telugu = _Telugu;	// Telugu 为书写系统 Telugu 中的 Unicode 字符集合。
+	Thaana = _Thaana;	// Thaana 为书写系统 Thaana 中的 Unicode 字符集合。
+	Thai = _Thai;	// Thai 为书写系统 Thai 中的 Unicode 字符集合。
+	Tibetan = _Tibetan;	// Tibetan 为书写系统 Tibetan 中的 Unicode 字符集合。
+	Tifinagh = _Tifinagh;	// Tifinagh 为书写系统 Tifinagh 中的 Unicode 字符集合。
+	Tirhuta = _Tirhuta;	// Tirhuta 为书写系统 Tirhuta 中的 Unicode 字符集合。
+	Ugaritic = _Ugaritic;	// Ugaritic 为书写系统 Ugaritic 中的 Unicode 字符集合。
+	Vai = _Vai;	// Vai 为书写系统 Vai 中的 Unicode 字符集合。
+	Warang_Citi = _Warang_Citi;	// Warang_Citi 为书写系统 Warang_Citi 中的 Unicode 字符集合。
+	Yi = _Yi;	// Yi 为书写系统 Yi 中的 Unicode 字符集合。
 )
 
 // 生成自
-//	maketables --props=all --url=http://www.unicode.org/Public/7.0.0/ucd/
+//	maketables --props=all --url=http://www.unicode.org/Public/8.0.0/ucd/
 // 请勿编辑！
 
 // Properties 为 Unicode 属性表的集合。
-var Properties = map[string]*RangeTable{
-	"ASCII_Hex_Digit":                    ASCII_Hex_Digit,
-	"Bidi_Control":                       Bidi_Control,
-	"Dash":                               Dash,
-	"Deprecated":                         Deprecated,
-	"Diacritic":                          Diacritic,
-	"Extender":                           Extender,
-	"Hex_Digit":                          Hex_Digit,
-	"Hyphen":                             Hyphen,
-	"IDS_Binary_Operator":                IDS_Binary_Operator,
-	"IDS_Trinary_Operator":               IDS_Trinary_Operator,
-	"Ideographic":                        Ideographic,
-	"Join_Control":                       Join_Control,
-	"Logical_Order_Exception":            Logical_Order_Exception,
-	"Noncharacter_Code_Point":            Noncharacter_Code_Point,
-	"Other_Alphabetic":                   Other_Alphabetic,
+var Properties = map[string] *RangeTable{
+	"ASCII_Hex_Digit": ASCII_Hex_Digit,
+	"Bidi_Control": Bidi_Control,
+	"Dash": Dash,
+	"Deprecated": Deprecated,
+	"Diacritic": Diacritic,
+	"Extender": Extender,
+	"Hex_Digit": Hex_Digit,
+	"Hyphen": Hyphen,
+	"IDS_Binary_Operator": IDS_Binary_Operator,
+	"IDS_Trinary_Operator": IDS_Trinary_Operator,
+	"Ideographic": Ideographic,
+	"Join_Control": Join_Control,
+	"Logical_Order_Exception": Logical_Order_Exception,
+	"Noncharacter_Code_Point": Noncharacter_Code_Point,
+	"Other_Alphabetic": Other_Alphabetic,
 	"Other_Default_Ignorable_Code_Point": Other_Default_Ignorable_Code_Point,
-	"Other_Grapheme_Extend":              Other_Grapheme_Extend,
-	"Other_ID_Continue":                  Other_ID_Continue,
-	"Other_ID_Start":                     Other_ID_Start,
-	"Other_Lowercase":                    Other_Lowercase,
-	"Other_Math":                         Other_Math,
-	"Other_Uppercase":                    Other_Uppercase,
-	"Pattern_Syntax":                     Pattern_Syntax,
-	"Pattern_White_Space":                Pattern_White_Space,
-	"Quotation_Mark":                     Quotation_Mark,
-	"Radical":                            Radical,
-	"STerm":                              STerm,
-	"Soft_Dotted":                        Soft_Dotted,
-	"Terminal_Punctuation":               Terminal_Punctuation,
-	"Unified_Ideograph":                  Unified_Ideograph,
-	"Variation_Selector":                 Variation_Selector,
-	"White_Space":                        White_Space,
+	"Other_Grapheme_Extend": Other_Grapheme_Extend,
+	"Other_ID_Continue": Other_ID_Continue,
+	"Other_ID_Start": Other_ID_Start,
+	"Other_Lowercase": Other_Lowercase,
+	"Other_Math": Other_Math,
+	"Other_Uppercase": Other_Uppercase,
+	"Pattern_Syntax": Pattern_Syntax,
+	"Pattern_White_Space": Pattern_White_Space,
+	"Quotation_Mark": Quotation_Mark,
+	"Radical": Radical,
+	"STerm": STerm,
+	"Soft_Dotted": Soft_Dotted,
+	"Terminal_Punctuation": Terminal_Punctuation,
+	"Unified_Ideograph": Unified_Ideograph,
+	"Variation_Selector": Variation_Selector,
+	"White_Space": White_Space,
 }
 
-var _ASCII_Hex_Digit = &RangeTable{
+var _ASCII_Hex_Digit = &RangeTable {
 	R16: []Range16{
 		{0x0030, 0x0039, 1},
 		{0x0041, 0x0046, 1},
@@ -4995,7 +5200,7 @@ var _ASCII_Hex_Digit = &RangeTable{
 	LatinOffset: 3,
 }
 
-var _Bidi_Control = &RangeTable{
+var _Bidi_Control = &RangeTable {
 	R16: []Range16{
 		{0x061c, 0x061c, 1},
 		{0x200e, 0x200f, 1},
@@ -5004,7 +5209,7 @@ var _Bidi_Control = &RangeTable{
 	},
 }
 
-var _Dash = &RangeTable{
+var _Dash = &RangeTable {
 	R16: []Range16{
 		{0x002d, 0x002d, 1},
 		{0x058a, 0x058a, 1},
@@ -5031,7 +5236,7 @@ var _Dash = &RangeTable{
 	LatinOffset: 1,
 }
 
-var _Deprecated = &RangeTable{
+var _Deprecated = &RangeTable {
 	R16: []Range16{
 		{0x0149, 0x0149, 1},
 		{0x0673, 0x0673, 1},
@@ -5043,11 +5248,11 @@ var _Deprecated = &RangeTable{
 	},
 	R32: []Range32{
 		{0xe0001, 0xe0001, 1},
-		{0xe0020, 0xe007f, 1},
+		{0xe007f, 0xe007f, 1},
 	},
 }
 
-var _Diacritic = &RangeTable{
+var _Diacritic = &RangeTable {
 	R16: []Range16{
 		{0x005e, 0x005e, 1},
 		{0x0060, 0x0060, 1},
@@ -5077,7 +5282,7 @@ var _Diacritic = &RangeTable{
 		{0x07a6, 0x07b0, 1},
 		{0x07eb, 0x07f5, 1},
 		{0x0818, 0x0819, 1},
-		{0x08e4, 0x08fe, 1},
+		{0x08e3, 0x08fe, 1},
 		{0x093c, 0x093c, 1},
 		{0x094d, 0x094d, 1},
 		{0x0951, 0x0954, 1},
@@ -5164,7 +5369,7 @@ var _Diacritic = &RangeTable{
 		{0xab5b, 0xab5f, 1},
 		{0xabec, 0xabed, 1},
 		{0xfb1e, 0xfb1e, 1},
-		{0xfe20, 0xfe2d, 1},
+		{0xfe20, 0xfe2f, 1},
 		{0xff3e, 0xff3e, 1},
 		{0xff40, 0xff40, 1},
 		{0xff70, 0xff70, 1},
@@ -5178,6 +5383,7 @@ var _Diacritic = &RangeTable{
 		{0x11133, 0x11134, 1},
 		{0x11173, 0x11173, 1},
 		{0x111c0, 0x111c0, 1},
+		{0x111ca, 0x111cc, 1},
 		{0x11235, 0x11236, 1},
 		{0x112e9, 0x112ea, 1},
 		{0x1133c, 0x1133c, 1},
@@ -5188,6 +5394,7 @@ var _Diacritic = &RangeTable{
 		{0x115bf, 0x115c0, 1},
 		{0x1163f, 0x1163f, 1},
 		{0x116b6, 0x116b7, 1},
+		{0x1172b, 0x1172b, 1},
 		{0x16af0, 0x16af4, 1},
 		{0x16f8f, 0x16f9f, 1},
 		{0x1d167, 0x1d169, 1},
@@ -5200,7 +5407,7 @@ var _Diacritic = &RangeTable{
 	LatinOffset: 6,
 }
 
-var _Extender = &RangeTable{
+var _Extender = &RangeTable {
 	R16: []Range16{
 		{0x00b7, 0x00b7, 1},
 		{0x02d0, 0x02d1, 1},
@@ -5234,7 +5441,7 @@ var _Extender = &RangeTable{
 	LatinOffset: 1,
 }
 
-var _Hex_Digit = &RangeTable{
+var _Hex_Digit = &RangeTable {
 	R16: []Range16{
 		{0x0030, 0x0039, 1},
 		{0x0041, 0x0046, 1},
@@ -5246,7 +5453,7 @@ var _Hex_Digit = &RangeTable{
 	LatinOffset: 3,
 }
 
-var _Hyphen = &RangeTable{
+var _Hyphen = &RangeTable {
 	R16: []Range16{
 		{0x002d, 0x002d, 1},
 		{0x00ad, 0x00ad, 1},
@@ -5262,26 +5469,26 @@ var _Hyphen = &RangeTable{
 	LatinOffset: 2,
 }
 
-var _IDS_Binary_Operator = &RangeTable{
+var _IDS_Binary_Operator = &RangeTable {
 	R16: []Range16{
 		{0x2ff0, 0x2ff1, 1},
 		{0x2ff4, 0x2ffb, 1},
 	},
 }
 
-var _IDS_Trinary_Operator = &RangeTable{
+var _IDS_Trinary_Operator = &RangeTable {
 	R16: []Range16{
 		{0x2ff2, 0x2ff3, 1},
 	},
 }
 
-var _Ideographic = &RangeTable{
+var _Ideographic = &RangeTable {
 	R16: []Range16{
 		{0x3006, 0x3007, 1},
 		{0x3021, 0x3029, 1},
 		{0x3038, 0x303a, 1},
 		{0x3400, 0x4db5, 1},
-		{0x4e00, 0x9fcc, 1},
+		{0x4e00, 0x9fd5, 1},
 		{0xf900, 0xfa6d, 1},
 		{0xfa70, 0xfad9, 1},
 	},
@@ -5289,27 +5496,30 @@ var _Ideographic = &RangeTable{
 		{0x20000, 0x2a6d6, 1},
 		{0x2a700, 0x2b734, 1},
 		{0x2b740, 0x2b81d, 1},
+		{0x2b820, 0x2cea1, 1},
 		{0x2f800, 0x2fa1d, 1},
 	},
 }
 
-var _Join_Control = &RangeTable{
+var _Join_Control = &RangeTable {
 	R16: []Range16{
 		{0x200c, 0x200d, 1},
 	},
 }
 
-var _Logical_Order_Exception = &RangeTable{
+var _Logical_Order_Exception = &RangeTable {
 	R16: []Range16{
 		{0x0e40, 0x0e44, 1},
 		{0x0ec0, 0x0ec4, 1},
+		{0x19b5, 0x19b7, 1},
+		{0x19ba, 0x19ba, 1},
 		{0xaab5, 0xaab6, 1},
 		{0xaab9, 0xaab9, 1},
 		{0xaabb, 0xaabc, 1},
 	},
 }
 
-var _Noncharacter_Code_Point = &RangeTable{
+var _Noncharacter_Code_Point = &RangeTable {
 	R16: []Range16{
 		{0xfdd0, 0xfdef, 1},
 		{0xfffe, 0xffff, 1},
@@ -5334,7 +5544,7 @@ var _Noncharacter_Code_Point = &RangeTable{
 	},
 }
 
-var _Other_Alphabetic = &RangeTable{
+var _Other_Alphabetic = &RangeTable {
 	R16: []Range16{
 		{0x0345, 0x0345, 1},
 		{0x05b0, 0x05bd, 1},
@@ -5357,7 +5567,7 @@ var _Other_Alphabetic = &RangeTable{
 		{0x081b, 0x0823, 1},
 		{0x0825, 0x0827, 1},
 		{0x0829, 0x082c, 1},
-		{0x08e4, 0x08e9, 1},
+		{0x08e3, 0x08e9, 1},
 		{0x08f0, 0x0903, 1},
 		{0x093a, 0x093b, 1},
 		{0x093e, 0x094c, 1},
@@ -5445,8 +5655,6 @@ var _Other_Alphabetic = &RangeTable{
 		{0x18a9, 0x18a9, 1},
 		{0x1920, 0x192b, 1},
 		{0x1930, 0x1938, 1},
-		{0x19b0, 0x19c0, 1},
-		{0x19c8, 0x19c9, 1},
 		{0x1a17, 0x1a1b, 1},
 		{0x1a55, 0x1a5e, 1},
 		{0x1a61, 0x1a74, 1},
@@ -5462,7 +5670,7 @@ var _Other_Alphabetic = &RangeTable{
 		{0x24b6, 0x24e9, 1},
 		{0x2de0, 0x2dff, 1},
 		{0xa674, 0xa67b, 1},
-		{0xa69f, 0xa69f, 1},
+		{0xa69e, 0xa69f, 1},
 		{0xa823, 0xa827, 1},
 		{0xa880, 0xa881, 1},
 		{0xa8b4, 0xa8c3, 1},
@@ -5498,7 +5706,7 @@ var _Other_Alphabetic = &RangeTable{
 		{0x1122c, 0x11234, 1},
 		{0x11237, 0x11237, 1},
 		{0x112df, 0x112e8, 1},
-		{0x11301, 0x11303, 1},
+		{0x11300, 0x11303, 1},
 		{0x1133e, 0x11344, 1},
 		{0x11347, 0x11348, 1},
 		{0x1134b, 0x1134c, 1},
@@ -5507,9 +5715,11 @@ var _Other_Alphabetic = &RangeTable{
 		{0x114b0, 0x114c1, 1},
 		{0x115af, 0x115b5, 1},
 		{0x115b8, 0x115be, 1},
+		{0x115dc, 0x115dd, 1},
 		{0x11630, 0x1163e, 1},
 		{0x11640, 0x11640, 1},
 		{0x116ab, 0x116b5, 1},
+		{0x1171d, 0x1172a, 1},
 		{0x16b30, 0x16b36, 1},
 		{0x16f51, 0x16f7e, 1},
 		{0x1bc9e, 0x1bc9e, 1},
@@ -5519,7 +5729,7 @@ var _Other_Alphabetic = &RangeTable{
 	},
 }
 
-var _Other_Default_Ignorable_Code_Point = &RangeTable{
+var _Other_Default_Ignorable_Code_Point = &RangeTable {
 	R16: []Range16{
 		{0x034f, 0x034f, 1},
 		{0x115f, 0x1160, 1},
@@ -5537,7 +5747,7 @@ var _Other_Default_Ignorable_Code_Point = &RangeTable{
 	},
 }
 
-var _Other_Grapheme_Extend = &RangeTable{
+var _Other_Grapheme_Extend = &RangeTable {
 	R16: []Range16{
 		{0x09be, 0x09be, 1},
 		{0x09d7, 0x09d7, 1},
@@ -5566,7 +5776,7 @@ var _Other_Grapheme_Extend = &RangeTable{
 	},
 }
 
-var _Other_ID_Continue = &RangeTable{
+var _Other_ID_Continue = &RangeTable {
 	R16: []Range16{
 		{0x00b7, 0x00b7, 1},
 		{0x0387, 0x0387, 1},
@@ -5576,7 +5786,7 @@ var _Other_ID_Continue = &RangeTable{
 	LatinOffset: 1,
 }
 
-var _Other_ID_Start = &RangeTable{
+var _Other_ID_Start = &RangeTable {
 	R16: []Range16{
 		{0x2118, 0x2118, 1},
 		{0x212e, 0x212e, 1},
@@ -5584,7 +5794,7 @@ var _Other_ID_Start = &RangeTable{
 	},
 }
 
-var _Other_Lowercase = &RangeTable{
+var _Other_Lowercase = &RangeTable {
 	R16: []Range16{
 		{0x00aa, 0x00aa, 1},
 		{0x00ba, 0x00ba, 1},
@@ -5610,7 +5820,7 @@ var _Other_Lowercase = &RangeTable{
 	LatinOffset: 2,
 }
 
-var _Other_Math = &RangeTable{
+var _Other_Math = &RangeTable {
 	R16: []Range16{
 		{0x005e, 0x005e, 1},
 		{0x03d0, 0x03d2, 1},
@@ -5752,7 +5962,7 @@ var _Other_Math = &RangeTable{
 	LatinOffset: 1,
 }
 
-var _Other_Uppercase = &RangeTable{
+var _Other_Uppercase = &RangeTable {
 	R16: []Range16{
 		{0x2160, 0x216f, 1},
 		{0x24b6, 0x24cf, 1},
@@ -5764,7 +5974,7 @@ var _Other_Uppercase = &RangeTable{
 	},
 }
 
-var _Pattern_Syntax = &RangeTable{
+var _Pattern_Syntax = &RangeTable {
 	R16: []Range16{
 		{0x0021, 0x002f, 1},
 		{0x003a, 0x0040, 1},
@@ -5798,7 +6008,7 @@ var _Pattern_Syntax = &RangeTable{
 	LatinOffset: 15,
 }
 
-var _Pattern_White_Space = &RangeTable{
+var _Pattern_White_Space = &RangeTable {
 	R16: []Range16{
 		{0x0009, 0x000d, 1},
 		{0x0020, 0x0020, 1},
@@ -5809,7 +6019,7 @@ var _Pattern_White_Space = &RangeTable{
 	LatinOffset: 3,
 }
 
-var _Quotation_Mark = &RangeTable{
+var _Quotation_Mark = &RangeTable {
 	R16: []Range16{
 		{0x0022, 0x0022, 1},
 		{0x0027, 0x0027, 1},
@@ -5828,7 +6038,7 @@ var _Quotation_Mark = &RangeTable{
 	LatinOffset: 4,
 }
 
-var _Radical = &RangeTable{
+var _Radical = &RangeTable {
 	R16: []Range16{
 		{0x2e80, 0x2e99, 1},
 		{0x2e9b, 0x2ef3, 1},
@@ -5836,7 +6046,7 @@ var _Radical = &RangeTable{
 	},
 }
 
-var _STerm = &RangeTable{
+var _STerm = &RangeTable {
 	R16: []Range16{
 		{0x0021, 0x0021, 1},
 		{0x002e, 0x002e, 1},
@@ -5890,21 +6100,25 @@ var _STerm = &RangeTable{
 		{0x11141, 0x11143, 1},
 		{0x111c5, 0x111c6, 1},
 		{0x111cd, 0x111cd, 1},
+		{0x111de, 0x111df, 1},
 		{0x11238, 0x11239, 1},
 		{0x1123b, 0x1123c, 1},
+		{0x112a9, 0x112a9, 1},
 		{0x115c2, 0x115c3, 1},
-		{0x115c9, 0x115c9, 1},
+		{0x115c9, 0x115d7, 1},
 		{0x11641, 0x11642, 1},
+		{0x1173c, 0x1173e, 1},
 		{0x16a6e, 0x16a6f, 1},
 		{0x16af5, 0x16af5, 1},
 		{0x16b37, 0x16b38, 1},
 		{0x16b44, 0x16b44, 1},
 		{0x1bc9f, 0x1bc9f, 1},
+		{0x1da88, 0x1da88, 1},
 	},
 	LatinOffset: 3,
 }
 
-var _Soft_Dotted = &RangeTable{
+var _Soft_Dotted = &RangeTable {
 	R16: []Range16{
 		{0x0069, 0x006a, 1},
 		{0x012f, 0x012f, 1},
@@ -5943,7 +6157,7 @@ var _Soft_Dotted = &RangeTable{
 	LatinOffset: 1,
 }
 
-var _Terminal_Punctuation = &RangeTable{
+var _Terminal_Punctuation = &RangeTable {
 	R16: []Range16{
 		{0x0021, 0x0021, 1},
 		{0x002c, 0x002c, 1},
@@ -6023,24 +6237,28 @@ var _Terminal_Punctuation = &RangeTable{
 		{0x11141, 0x11143, 1},
 		{0x111c5, 0x111c6, 1},
 		{0x111cd, 0x111cd, 1},
+		{0x111de, 0x111df, 1},
 		{0x11238, 0x1123c, 1},
+		{0x112a9, 0x112a9, 1},
 		{0x115c2, 0x115c5, 1},
-		{0x115c9, 0x115c9, 1},
+		{0x115c9, 0x115d7, 1},
 		{0x11641, 0x11642, 1},
+		{0x1173c, 0x1173e, 1},
 		{0x12470, 0x12474, 1},
 		{0x16a6e, 0x16a6f, 1},
 		{0x16af5, 0x16af5, 1},
 		{0x16b37, 0x16b39, 1},
 		{0x16b44, 0x16b44, 1},
 		{0x1bc9f, 0x1bc9f, 1},
+		{0x1da87, 0x1da8a, 1},
 	},
 	LatinOffset: 5,
 }
 
-var _Unified_Ideograph = &RangeTable{
+var _Unified_Ideograph = &RangeTable {
 	R16: []Range16{
 		{0x3400, 0x4db5, 1},
-		{0x4e00, 0x9fcc, 1},
+		{0x4e00, 0x9fd5, 1},
 		{0xfa0e, 0xfa0f, 1},
 		{0xfa11, 0xfa11, 1},
 		{0xfa13, 0xfa14, 1},
@@ -6053,10 +6271,11 @@ var _Unified_Ideograph = &RangeTable{
 		{0x20000, 0x2a6d6, 1},
 		{0x2a700, 0x2b734, 1},
 		{0x2b740, 0x2b81d, 1},
+		{0x2b820, 0x2cea1, 1},
 	},
 }
 
-var _Variation_Selector = &RangeTable{
+var _Variation_Selector = &RangeTable {
 	R16: []Range16{
 		{0x180b, 0x180d, 1},
 		{0xfe00, 0xfe0f, 1},
@@ -6066,7 +6285,7 @@ var _Variation_Selector = &RangeTable{
 	},
 }
 
-var _White_Space = &RangeTable{
+var _White_Space = &RangeTable {
 	R16: []Range16{
 		{0x0009, 0x000d, 1},
 		{0x0020, 0x0020, 1},
@@ -6084,47 +6303,47 @@ var _White_Space = &RangeTable{
 
 // 这些变量的类型为 *RangeTable。
 var (
-	ASCII_Hex_Digit                    = _ASCII_Hex_Digit                    // ASCII_Hex_Digit 为带属性 ASCII_Hex_Digit 的 Unicode 字符集合。
-	Bidi_Control                       = _Bidi_Control                       // Bidi_Control 为带属性 Bidi_Control 的 Unicode 字符集合。
-	Dash                               = _Dash                               // Dash 为带属性 Dash 的 Unicode 字符集合。
-	Deprecated                         = _Deprecated                         // Deprecated 为带属性 Deprecated 的 Unicode 字符集合。
-	Diacritic                          = _Diacritic                          // Diacritic 为带属性 Diacritic 的 Unicode 字符集合。
-	Extender                           = _Extender                           // Extender 为带属性 Extender 的 Unicode 字符集合。
-	Hex_Digit                          = _Hex_Digit                          // Hex_Digit 为带属性 Hex_Digit 的 Unicode 字符集合。
-	Hyphen                             = _Hyphen                             // Hyphen 为带属性 Hyphen 的 Unicode 字符集合。
-	IDS_Binary_Operator                = _IDS_Binary_Operator                // IDS_Binary_Operator 为带属性 IDS_Binary_Operator 的 Unicode 字符集合。
-	IDS_Trinary_Operator               = _IDS_Trinary_Operator               // IDS_Trinary_Operator 为带属性 IDS_Trinary_Operator 的 Unicode 字符集合。
-	Ideographic                        = _Ideographic                        // Ideographic 为带属性 Ideographic 的 Unicode 字符集合。
-	Join_Control                       = _Join_Control                       // Join_Control 为带属性 Join_Control 的 Unicode 字符集合。
-	Logical_Order_Exception            = _Logical_Order_Exception            // Logical_Order_Exception 为带属性 Logical_Order_Exception 的 Unicode 字符集合。
-	Noncharacter_Code_Point            = _Noncharacter_Code_Point            // Noncharacter_Code_Point 为带属性 Noncharacter_Code_Point 的 Unicode 字符集合。
-	Other_Alphabetic                   = _Other_Alphabetic                   // Other_Alphabetic 为带属性 Other_Alphabetic 的 Unicode 字符集合。
-	Other_Default_Ignorable_Code_Point = _Other_Default_Ignorable_Code_Point // Other_Default_Ignorable_Code_Point 为带属性 Other_Default_Ignorable_Code_Point 的 Unicode 字符集合。
-	Other_Grapheme_Extend              = _Other_Grapheme_Extend              // Other_Grapheme_Extend 为带属性 Other_Grapheme_Extend 的 Unicode 字符集合。
-	Other_ID_Continue                  = _Other_ID_Continue                  // Other_ID_Continue 为带属性 Other_ID_Continue 的 Unicode 字符集合。
-	Other_ID_Start                     = _Other_ID_Start                     // Other_ID_Start 为带属性 Other_ID_Start 的 Unicode 字符集合。
-	Other_Lowercase                    = _Other_Lowercase                    // Other_Lowercase 为带属性 Other_Lowercase 的 Unicode 字符集合。
-	Other_Math                         = _Other_Math                         // Other_Math 为带属性 Other_Math 的 Unicode 字符集合。
-	Other_Uppercase                    = _Other_Uppercase                    // Other_Uppercase 为带属性 Other_Uppercase 的 Unicode 字符集合。
-	Pattern_Syntax                     = _Pattern_Syntax                     // Pattern_Syntax 为带属性 Pattern_Syntax 的 Unicode 字符集合。
-	Pattern_White_Space                = _Pattern_White_Space                // Pattern_White_Space 为带属性 Pattern_White_Space 的 Unicode 字符集合。
-	Quotation_Mark                     = _Quotation_Mark                     // Quotation_Mark 为带属性 Quotation_Mark 的 Unicode 字符集合。
-	Radical                            = _Radical                            // Radical 为带属性 Radical 的 Unicode 字符集合。
-	STerm                              = _STerm                              // STerm 为带属性 STerm 的 Unicode 字符集合。
-	Soft_Dotted                        = _Soft_Dotted                        // Soft_Dotted 为带属性 Soft_Dotted 的 Unicode 字符集合。
-	Terminal_Punctuation               = _Terminal_Punctuation               // Terminal_Punctuation 为带属性 Terminal_Punctuation 的 Unicode 字符集合。
-	Unified_Ideograph                  = _Unified_Ideograph                  // Unified_Ideograph 为带属性 Unified_Ideograph 的 Unicode 字符集合。
-	Variation_Selector                 = _Variation_Selector                 // Variation_Selector 为带属性 Variation_Selector 的 Unicode 字符集合。
-	White_Space                        = _White_Space                        // White_Space 为带属性 White_Space 的 Unicode 字符集合。
+	ASCII_Hex_Digit = _ASCII_Hex_Digit;	// ASCII_Hex_Digit 为带属性 ASCII_Hex_Digit 的 Unicode 字符集合。
+	Bidi_Control = _Bidi_Control;	// Bidi_Control 为带属性 Bidi_Control 的 Unicode 字符集合。
+	Dash = _Dash;	// Dash 为带属性 Dash 的 Unicode 字符集合。
+	Deprecated = _Deprecated;	// Deprecated 为带属性 Deprecated 的 Unicode 字符集合。
+	Diacritic = _Diacritic;	// Diacritic 为带属性 Diacritic 的 Unicode 字符集合。
+	Extender = _Extender;	// Extender 为带属性 Extender 的 Unicode 字符集合。
+	Hex_Digit = _Hex_Digit;	// Hex_Digit 为带属性 Hex_Digit 的 Unicode 字符集合。
+	Hyphen = _Hyphen;	// Hyphen 为带属性 Hyphen 的 Unicode 字符集合。
+	IDS_Binary_Operator = _IDS_Binary_Operator;	// IDS_Binary_Operator 为带属性 IDS_Binary_Operator 的 Unicode 字符集合。
+	IDS_Trinary_Operator = _IDS_Trinary_Operator;	// IDS_Trinary_Operator 为带属性 IDS_Trinary_Operator 的 Unicode 字符集合。
+	Ideographic = _Ideographic;	// Ideographic 为带属性 Ideographic 的 Unicode 字符集合。
+	Join_Control = _Join_Control;	// Join_Control 为带属性 Join_Control 的 Unicode 字符集合。
+	Logical_Order_Exception = _Logical_Order_Exception;	// Logical_Order_Exception 为带属性 Logical_Order_Exception 的 Unicode 字符集合。
+	Noncharacter_Code_Point = _Noncharacter_Code_Point;	// Noncharacter_Code_Point 为带属性 Noncharacter_Code_Point 的 Unicode 字符集合。
+	Other_Alphabetic = _Other_Alphabetic;	// Other_Alphabetic 为带属性 Other_Alphabetic 的 Unicode 字符集合。
+	Other_Default_Ignorable_Code_Point = _Other_Default_Ignorable_Code_Point;	// Other_Default_Ignorable_Code_Point 为带属性 Other_Default_Ignorable_Code_Point 的 Unicode 字符集合。
+	Other_Grapheme_Extend = _Other_Grapheme_Extend;	// Other_Grapheme_Extend 为带属性 Other_Grapheme_Extend 的 Unicode 字符集合。
+	Other_ID_Continue = _Other_ID_Continue;	// Other_ID_Continue 为带属性 Other_ID_Continue 的 Unicode 字符集合。
+	Other_ID_Start = _Other_ID_Start;	// Other_ID_Start 为带属性 Other_ID_Start 的 Unicode 字符集合。
+	Other_Lowercase = _Other_Lowercase;	// Other_Lowercase 为带属性 Other_Lowercase 的 Unicode 字符集合。
+	Other_Math = _Other_Math;	// Other_Math 为带属性 Other_Math 的 Unicode 字符集合。
+	Other_Uppercase = _Other_Uppercase;	// Other_Uppercase 为带属性 Other_Uppercase 的 Unicode 字符集合。
+	Pattern_Syntax = _Pattern_Syntax;	// Pattern_Syntax 为带属性 Pattern_Syntax 的 Unicode 字符集合。
+	Pattern_White_Space = _Pattern_White_Space;	// Pattern_White_Space 为带属性 Pattern_White_Space 的 Unicode 字符集合。
+	Quotation_Mark = _Quotation_Mark;	// Quotation_Mark 为带属性 Quotation_Mark 的 Unicode 字符集合。
+	Radical = _Radical;	// Radical 为带属性 Radical 的 Unicode 字符集合。
+	STerm = _STerm;	// STerm 为带属性 STerm 的 Unicode 字符集合。
+	Soft_Dotted = _Soft_Dotted;	// Soft_Dotted 为带属性 Soft_Dotted 的 Unicode 字符集合。
+	Terminal_Punctuation = _Terminal_Punctuation;	// Terminal_Punctuation 为带属性 Terminal_Punctuation 的 Unicode 字符集合。
+	Unified_Ideograph = _Unified_Ideograph;	// Unified_Ideograph 为带属性 Unified_Ideograph 的 Unicode 字符集合。
+	Variation_Selector = _Variation_Selector;	// Variation_Selector 为带属性 Variation_Selector 的 Unicode 字符集合。
+	White_Space = _White_Space;	// White_Space 为带属性 White_Space 的 Unicode 字符集合。
 )
 
 // 生成自
-//	maketables --data=http://www.unicode.org/Public/7.0.0/ucd/UnicodeData.txt --casefolding=http://www.unicode.org/Public/7.0.0/ucd/CaseFolding.txt
+//	maketables --data=http://www.unicode.org/Public/8.0.0/ucd/UnicodeData.txt --casefolding=http://www.unicode.org/Public/8.0.0/ucd/CaseFolding.txt
 // 请勿编辑！
 
 // CaseRanges 是描述所有“非自映射字母”的写法映射表。
 var CaseRanges = _CaseRanges
-var _CaseRanges = []CaseRange{
+var _CaseRanges = []CaseRange {
 	{0x0041, 0x005A, d{0, 32, 0}},
 	{0x0061, 0x007A, d{-32, 0, -32}},
 	{0x00B5, 0x00B5, d{743, 0, 743}},
@@ -6239,6 +6458,7 @@ var _CaseRanges = []CaseRange{
 	{0x028A, 0x028B, d{-217, 0, -217}},
 	{0x028C, 0x028C, d{-71, 0, -71}},
 	{0x0292, 0x0292, d{-219, 0, -219}},
+	{0x029D, 0x029D, d{42261, 0, 42261}},
 	{0x029E, 0x029E, d{42258, 0, 42258}},
 	{0x0345, 0x0345, d{84, 0, 84}},
 	{0x0370, 0x0373, d{UpperLower, UpperLower, UpperLower}},
@@ -6290,6 +6510,9 @@ var _CaseRanges = []CaseRange{
 	{0x10A0, 0x10C5, d{0, 7264, 0}},
 	{0x10C7, 0x10C7, d{0, 7264, 0}},
 	{0x10CD, 0x10CD, d{0, 7264, 0}},
+	{0x13A0, 0x13EF, d{0, 38864, 0}},
+	{0x13F0, 0x13F5, d{0, 8, 0}},
+	{0x13F8, 0x13FD, d{-8, 0, -8}},
 	{0x1D79, 0x1D79, d{35332, 0, 35332}},
 	{0x1D7D, 0x1D7D, d{3814, 0, 3814}},
 	{0x1E00, 0x1E95, d{UpperLower, UpperLower, UpperLower}},
@@ -6398,79 +6621,86 @@ var _CaseRanges = []CaseRange{
 	{0xA7AD, 0xA7AD, d{0, -42305, 0}},
 	{0xA7B0, 0xA7B0, d{0, -42258, 0}},
 	{0xA7B1, 0xA7B1, d{0, -42282, 0}},
+	{0xA7B2, 0xA7B2, d{0, -42261, 0}},
+	{0xA7B3, 0xA7B3, d{0, 928, 0}},
+	{0xA7B4, 0xA7B7, d{UpperLower, UpperLower, UpperLower}},
+	{0xAB53, 0xAB53, d{-928, 0, -928}},
+	{0xAB70, 0xABBF, d{-38864, 0, -38864}},
 	{0xFF21, 0xFF3A, d{0, 32, 0}},
 	{0xFF41, 0xFF5A, d{-32, 0, -32}},
 	{0x10400, 0x10427, d{0, 40, 0}},
 	{0x10428, 0x1044F, d{-40, 0, -40}},
+	{0x10C80, 0x10CB2, d{0, 64, 0}},
+	{0x10CC0, 0x10CF2, d{-64, 0, -64}},
 	{0x118A0, 0x118BF, d{0, 32, 0}},
 	{0x118C0, 0x118DF, d{-32, 0, -32}},
 }
-var properties = [MaxLatin1 + 1]uint8{
-	0x00: pC,       // '\x00'
-	0x01: pC,       // '\x01'
-	0x02: pC,       // '\x02'
-	0x03: pC,       // '\x03'
-	0x04: pC,       // '\x04'
-	0x05: pC,       // '\x05'
-	0x06: pC,       // '\x06'
-	0x07: pC,       // '\a'
-	0x08: pC,       // '\b'
-	0x09: pC,       // '\t'
-	0x0A: pC,       // '\n'
-	0x0B: pC,       // '\v'
-	0x0C: pC,       // '\f'
-	0x0D: pC,       // '\r'
-	0x0E: pC,       // '\x0e'
-	0x0F: pC,       // '\x0f'
-	0x10: pC,       // '\x10'
-	0x11: pC,       // '\x11'
-	0x12: pC,       // '\x12'
-	0x13: pC,       // '\x13'
-	0x14: pC,       // '\x14'
-	0x15: pC,       // '\x15'
-	0x16: pC,       // '\x16'
-	0x17: pC,       // '\x17'
-	0x18: pC,       // '\x18'
-	0x19: pC,       // '\x19'
-	0x1A: pC,       // '\x1a'
-	0x1B: pC,       // '\x1b'
-	0x1C: pC,       // '\x1c'
-	0x1D: pC,       // '\x1d'
-	0x1E: pC,       // '\x1e'
-	0x1F: pC,       // '\x1f'
-	0x20: pZ | pp,  // ' '
-	0x21: pP | pp,  // '!'
-	0x22: pP | pp,  // '"'
-	0x23: pP | pp,  // '#'
-	0x24: pS | pp,  // '$'
-	0x25: pP | pp,  // '%'
-	0x26: pP | pp,  // '&'
-	0x27: pP | pp,  // '\''
-	0x28: pP | pp,  // '('
-	0x29: pP | pp,  // ')'
-	0x2A: pP | pp,  // '*'
-	0x2B: pS | pp,  // '+'
-	0x2C: pP | pp,  // ','
-	0x2D: pP | pp,  // '-'
-	0x2E: pP | pp,  // '.'
-	0x2F: pP | pp,  // '/'
-	0x30: pN | pp,  // '0'
-	0x31: pN | pp,  // '1'
-	0x32: pN | pp,  // '2'
-	0x33: pN | pp,  // '3'
-	0x34: pN | pp,  // '4'
-	0x35: pN | pp,  // '5'
-	0x36: pN | pp,  // '6'
-	0x37: pN | pp,  // '7'
-	0x38: pN | pp,  // '8'
-	0x39: pN | pp,  // '9'
-	0x3A: pP | pp,  // ':'
-	0x3B: pP | pp,  // ';'
-	0x3C: pS | pp,  // '<'
-	0x3D: pS | pp,  // '='
-	0x3E: pS | pp,  // '>'
-	0x3F: pP | pp,  // '?'
-	0x40: pP | pp,  // '@'
+var properties = [MaxLatin1+1]uint8{
+	0x00: pC, // '\x00'
+	0x01: pC, // '\x01'
+	0x02: pC, // '\x02'
+	0x03: pC, // '\x03'
+	0x04: pC, // '\x04'
+	0x05: pC, // '\x05'
+	0x06: pC, // '\x06'
+	0x07: pC, // '\a'
+	0x08: pC, // '\b'
+	0x09: pC, // '\t'
+	0x0A: pC, // '\n'
+	0x0B: pC, // '\v'
+	0x0C: pC, // '\f'
+	0x0D: pC, // '\r'
+	0x0E: pC, // '\x0e'
+	0x0F: pC, // '\x0f'
+	0x10: pC, // '\x10'
+	0x11: pC, // '\x11'
+	0x12: pC, // '\x12'
+	0x13: pC, // '\x13'
+	0x14: pC, // '\x14'
+	0x15: pC, // '\x15'
+	0x16: pC, // '\x16'
+	0x17: pC, // '\x17'
+	0x18: pC, // '\x18'
+	0x19: pC, // '\x19'
+	0x1A: pC, // '\x1a'
+	0x1B: pC, // '\x1b'
+	0x1C: pC, // '\x1c'
+	0x1D: pC, // '\x1d'
+	0x1E: pC, // '\x1e'
+	0x1F: pC, // '\x1f'
+	0x20: pZ | pp, // ' '
+	0x21: pP | pp, // '!'
+	0x22: pP | pp, // '"'
+	0x23: pP | pp, // '#'
+	0x24: pS | pp, // '$'
+	0x25: pP | pp, // '%'
+	0x26: pP | pp, // '&'
+	0x27: pP | pp, // '\''
+	0x28: pP | pp, // '('
+	0x29: pP | pp, // ')'
+	0x2A: pP | pp, // '*'
+	0x2B: pS | pp, // '+'
+	0x2C: pP | pp, // ','
+	0x2D: pP | pp, // '-'
+	0x2E: pP | pp, // '.'
+	0x2F: pP | pp, // '/'
+	0x30: pN | pp, // '0'
+	0x31: pN | pp, // '1'
+	0x32: pN | pp, // '2'
+	0x33: pN | pp, // '3'
+	0x34: pN | pp, // '4'
+	0x35: pN | pp, // '5'
+	0x36: pN | pp, // '6'
+	0x37: pN | pp, // '7'
+	0x38: pN | pp, // '8'
+	0x39: pN | pp, // '9'
+	0x3A: pP | pp, // ':'
+	0x3B: pP | pp, // ';'
+	0x3C: pS | pp, // '<'
+	0x3D: pS | pp, // '='
+	0x3E: pS | pp, // '>'
+	0x3F: pP | pp, // '?'
+	0x40: pP | pp, // '@'
 	0x41: pLu | pp, // 'A'
 	0x42: pLu | pp, // 'B'
 	0x43: pLu | pp, // 'C'
@@ -6497,12 +6727,12 @@ var properties = [MaxLatin1 + 1]uint8{
 	0x58: pLu | pp, // 'X'
 	0x59: pLu | pp, // 'Y'
 	0x5A: pLu | pp, // 'Z'
-	0x5B: pP | pp,  // '['
-	0x5C: pP | pp,  // '\\'
-	0x5D: pP | pp,  // ']'
-	0x5E: pS | pp,  // '^'
-	0x5F: pP | pp,  // '_'
-	0x60: pS | pp,  // '`'
+	0x5B: pP | pp, // '['
+	0x5C: pP | pp, // '\\'
+	0x5D: pP | pp, // ']'
+	0x5E: pS | pp, // '^'
+	0x5F: pP | pp, // '_'
+	0x60: pS | pp, // '`'
 	0x61: pLl | pp, // 'a'
 	0x62: pLl | pp, // 'b'
 	0x63: pLl | pp, // 'c'
@@ -6529,75 +6759,75 @@ var properties = [MaxLatin1 + 1]uint8{
 	0x78: pLl | pp, // 'x'
 	0x79: pLl | pp, // 'y'
 	0x7A: pLl | pp, // 'z'
-	0x7B: pP | pp,  // '{'
-	0x7C: pS | pp,  // '|'
-	0x7D: pP | pp,  // '}'
-	0x7E: pS | pp,  // '~'
-	0x7F: pC,       // '\u007f'
-	0x80: pC,       // '\u0080'
-	0x81: pC,       // '\u0081'
-	0x82: pC,       // '\u0082'
-	0x83: pC,       // '\u0083'
-	0x84: pC,       // '\u0084'
-	0x85: pC,       // '\u0085'
-	0x86: pC,       // '\u0086'
-	0x87: pC,       // '\u0087'
-	0x88: pC,       // '\u0088'
-	0x89: pC,       // '\u0089'
-	0x8A: pC,       // '\u008a'
-	0x8B: pC,       // '\u008b'
-	0x8C: pC,       // '\u008c'
-	0x8D: pC,       // '\u008d'
-	0x8E: pC,       // '\u008e'
-	0x8F: pC,       // '\u008f'
-	0x90: pC,       // '\u0090'
-	0x91: pC,       // '\u0091'
-	0x92: pC,       // '\u0092'
-	0x93: pC,       // '\u0093'
-	0x94: pC,       // '\u0094'
-	0x95: pC,       // '\u0095'
-	0x96: pC,       // '\u0096'
-	0x97: pC,       // '\u0097'
-	0x98: pC,       // '\u0098'
-	0x99: pC,       // '\u0099'
-	0x9A: pC,       // '\u009a'
-	0x9B: pC,       // '\u009b'
-	0x9C: pC,       // '\u009c'
-	0x9D: pC,       // '\u009d'
-	0x9E: pC,       // '\u009e'
-	0x9F: pC,       // '\u009f'
-	0xA0: pZ,       // '\u00a0'
-	0xA1: pP | pp,  // '¡'
-	0xA2: pS | pp,  // '¢'
-	0xA3: pS | pp,  // '£'
-	0xA4: pS | pp,  // '¤'
-	0xA5: pS | pp,  // '¥'
-	0xA6: pS | pp,  // '¦'
-	0xA7: pP | pp,  // '§'
-	0xA8: pS | pp,  // '¨'
-	0xA9: pS | pp,  // '©'
+	0x7B: pP | pp, // '{'
+	0x7C: pS | pp, // '|'
+	0x7D: pP | pp, // '}'
+	0x7E: pS | pp, // '~'
+	0x7F: pC, // '\u007f'
+	0x80: pC, // '\u0080'
+	0x81: pC, // '\u0081'
+	0x82: pC, // '\u0082'
+	0x83: pC, // '\u0083'
+	0x84: pC, // '\u0084'
+	0x85: pC, // '\u0085'
+	0x86: pC, // '\u0086'
+	0x87: pC, // '\u0087'
+	0x88: pC, // '\u0088'
+	0x89: pC, // '\u0089'
+	0x8A: pC, // '\u008a'
+	0x8B: pC, // '\u008b'
+	0x8C: pC, // '\u008c'
+	0x8D: pC, // '\u008d'
+	0x8E: pC, // '\u008e'
+	0x8F: pC, // '\u008f'
+	0x90: pC, // '\u0090'
+	0x91: pC, // '\u0091'
+	0x92: pC, // '\u0092'
+	0x93: pC, // '\u0093'
+	0x94: pC, // '\u0094'
+	0x95: pC, // '\u0095'
+	0x96: pC, // '\u0096'
+	0x97: pC, // '\u0097'
+	0x98: pC, // '\u0098'
+	0x99: pC, // '\u0099'
+	0x9A: pC, // '\u009a'
+	0x9B: pC, // '\u009b'
+	0x9C: pC, // '\u009c'
+	0x9D: pC, // '\u009d'
+	0x9E: pC, // '\u009e'
+	0x9F: pC, // '\u009f'
+	0xA0: pZ, // '\u00a0'
+	0xA1: pP | pp, // '¡'
+	0xA2: pS | pp, // '¢'
+	0xA3: pS | pp, // '£'
+	0xA4: pS | pp, // '¤'
+	0xA5: pS | pp, // '¥'
+	0xA6: pS | pp, // '¦'
+	0xA7: pP | pp, // '§'
+	0xA8: pS | pp, // '¨'
+	0xA9: pS | pp, // '©'
 	0xAA: pLo | pp, // 'ª'
-	0xAB: pP | pp,  // '«'
-	0xAC: pS | pp,  // '¬'
-	0xAD: 0,        // '\u00ad'
-	0xAE: pS | pp,  // '®'
-	0xAF: pS | pp,  // '¯'
-	0xB0: pS | pp,  // '°'
-	0xB1: pS | pp,  // '±'
-	0xB2: pN | pp,  // '²'
-	0xB3: pN | pp,  // '³'
-	0xB4: pS | pp,  // '´'
+	0xAB: pP | pp, // '«'
+	0xAC: pS | pp, // '¬'
+	0xAD: 0, // '\u00ad'
+	0xAE: pS | pp, // '®'
+	0xAF: pS | pp, // '¯'
+	0xB0: pS | pp, // '°'
+	0xB1: pS | pp, // '±'
+	0xB2: pN | pp, // '²'
+	0xB3: pN | pp, // '³'
+	0xB4: pS | pp, // '´'
 	0xB5: pLl | pp, // 'µ'
-	0xB6: pP | pp,  // '¶'
-	0xB7: pP | pp,  // '·'
-	0xB8: pS | pp,  // '¸'
-	0xB9: pN | pp,  // '¹'
+	0xB6: pP | pp, // '¶'
+	0xB7: pP | pp, // '·'
+	0xB8: pS | pp, // '¸'
+	0xB9: pN | pp, // '¹'
 	0xBA: pLo | pp, // 'º'
-	0xBB: pP | pp,  // '»'
-	0xBC: pN | pp,  // '¼'
-	0xBD: pN | pp,  // '½'
-	0xBE: pN | pp,  // '¾'
-	0xBF: pP | pp,  // '¿'
+	0xBB: pP | pp, // '»'
+	0xBC: pN | pp, // '¼'
+	0xBD: pN | pp, // '½'
+	0xBE: pN | pp, // '¾'
+	0xBF: pP | pp, // '¿'
 	0xC0: pLu | pp, // 'À'
 	0xC1: pLu | pp, // 'Á'
 	0xC2: pLu | pp, // 'Â'
@@ -6621,7 +6851,7 @@ var properties = [MaxLatin1 + 1]uint8{
 	0xD4: pLu | pp, // 'Ô'
 	0xD5: pLu | pp, // 'Õ'
 	0xD6: pLu | pp, // 'Ö'
-	0xD7: pS | pp,  // '×'
+	0xD7: pS | pp, // '×'
 	0xD8: pLu | pp, // 'Ø'
 	0xD9: pLu | pp, // 'Ù'
 	0xDA: pLu | pp, // 'Ú'
@@ -6653,7 +6883,7 @@ var properties = [MaxLatin1 + 1]uint8{
 	0xF4: pLl | pp, // 'ô'
 	0xF5: pLl | pp, // 'õ'
 	0xF6: pLl | pp, // 'ö'
-	0xF7: pS | pp,  // '÷'
+	0xF7: pS | pp, // '÷'
 	0xF8: pLl | pp, // 'ø'
 	0xF9: pLl | pp, // 'ù'
 	0xFA: pLl | pp, // 'ú'
@@ -6662,6 +6892,137 @@ var properties = [MaxLatin1 + 1]uint8{
 	0xFD: pLl | pp, // 'ý'
 	0xFE: pLl | pp, // 'þ'
 	0xFF: pLl | pp, // 'ÿ'
+}
+
+var asciiFold = [MaxASCII + 1]uint16{
+	0x0000,
+	0x0001,
+	0x0002,
+	0x0003,
+	0x0004,
+	0x0005,
+	0x0006,
+	0x0007,
+	0x0008,
+	0x0009,
+	0x000A,
+	0x000B,
+	0x000C,
+	0x000D,
+	0x000E,
+	0x000F,
+	0x0010,
+	0x0011,
+	0x0012,
+	0x0013,
+	0x0014,
+	0x0015,
+	0x0016,
+	0x0017,
+	0x0018,
+	0x0019,
+	0x001A,
+	0x001B,
+	0x001C,
+	0x001D,
+	0x001E,
+	0x001F,
+	0x0020,
+	0x0021,
+	0x0022,
+	0x0023,
+	0x0024,
+	0x0025,
+	0x0026,
+	0x0027,
+	0x0028,
+	0x0029,
+	0x002A,
+	0x002B,
+	0x002C,
+	0x002D,
+	0x002E,
+	0x002F,
+	0x0030,
+	0x0031,
+	0x0032,
+	0x0033,
+	0x0034,
+	0x0035,
+	0x0036,
+	0x0037,
+	0x0038,
+	0x0039,
+	0x003A,
+	0x003B,
+	0x003C,
+	0x003D,
+	0x003E,
+	0x003F,
+	0x0040,
+	0x0061,
+	0x0062,
+	0x0063,
+	0x0064,
+	0x0065,
+	0x0066,
+	0x0067,
+	0x0068,
+	0x0069,
+	0x006A,
+	0x006B,
+	0x006C,
+	0x006D,
+	0x006E,
+	0x006F,
+	0x0070,
+	0x0071,
+	0x0072,
+	0x0073,
+	0x0074,
+	0x0075,
+	0x0076,
+	0x0077,
+	0x0078,
+	0x0079,
+	0x007A,
+	0x005B,
+	0x005C,
+	0x005D,
+	0x005E,
+	0x005F,
+	0x0060,
+	0x0041,
+	0x0042,
+	0x0043,
+	0x0044,
+	0x0045,
+	0x0046,
+	0x0047,
+	0x0048,
+	0x0049,
+	0x004A,
+	0x212A,
+	0x004C,
+	0x004D,
+	0x004E,
+	0x004F,
+	0x0050,
+	0x0051,
+	0x0052,
+	0x017F,
+	0x0054,
+	0x0055,
+	0x0056,
+	0x0057,
+	0x0058,
+	0x0059,
+	0x005A,
+	0x007B,
+	0x007C,
+	0x007D,
+	0x007E,
+	0x007F,
 }
 
 var caseOrbit = []foldPair{
@@ -6734,15 +7095,15 @@ var caseOrbit = []foldPair{
 // 这相当于在简单的情况下对该类别内的码点进行转换。
 // 若一个类别名没有对应的条目，则该码点不存在。
 var FoldCategory = map[string]*RangeTable{
-	"Common":    foldCommon,
-	"Greek":     foldGreek,
+	"Common": foldCommon,
+	"Greek": foldGreek,
 	"Inherited": foldInherited,
-	"L":         foldL,
-	"Ll":        foldLl,
-	"Lt":        foldLt,
-	"Lu":        foldLu,
-	"M":         foldM,
-	"Mn":        foldMn,
+	"L": foldL,
+	"Ll": foldLl,
+	"Lt": foldLt,
+	"Lu": foldLu,
+	"M": foldM,
+	"Mn": foldMn,
 }
 
 var foldCommon = &RangeTable{
@@ -6830,6 +7191,7 @@ var foldLl = &RangeTable{
 		{0x0531, 0x0556, 1},
 		{0x10a0, 0x10c5, 1},
 		{0x10c7, 0x10cd, 6},
+		{0x13a0, 0x13f5, 1},
 		{0x1e00, 0x1e94, 2},
 		{0x1e9e, 0x1efe, 2},
 		{0x1f08, 0x1f0f, 1},
@@ -6870,11 +7232,13 @@ var foldLl = &RangeTable{
 		{0xa790, 0xa792, 2},
 		{0xa796, 0xa7aa, 2},
 		{0xa7ab, 0xa7ad, 1},
-		{0xa7b0, 0xa7b1, 1},
-		{0xff21, 0xff3a, 1},
+		{0xa7b0, 0xa7b4, 1},
+		{0xa7b6, 0xff21, 22379},
+		{0xff22, 0xff3a, 1},
 	},
 	R32: []Range32{
 		{0x10400, 0x10427, 1},
+		{0x10c80, 0x10cb2, 1},
 		{0x118a0, 0x118bf, 1},
 	},
 	LatinOffset: 3,
@@ -6940,9 +7304,10 @@ var foldLu = &RangeTable{
 		{0x0275, 0x027d, 8},
 		{0x0280, 0x0283, 3},
 		{0x0287, 0x028c, 1},
-		{0x0292, 0x029e, 12},
-		{0x0345, 0x0371, 44},
-		{0x0373, 0x037b, 4},
+		{0x0292, 0x029d, 11},
+		{0x029e, 0x0345, 167},
+		{0x0371, 0x0373, 2},
+		{0x0377, 0x037b, 4},
 		{0x037c, 0x037d, 1},
 		{0x03ac, 0x03af, 1},
 		{0x03b1, 0x03ce, 1},
@@ -6957,6 +7322,7 @@ var foldLu = &RangeTable{
 		{0x04c2, 0x04ce, 2},
 		{0x04cf, 0x052f, 2},
 		{0x0561, 0x0586, 1},
+		{0x13f8, 0x13fd, 1},
 		{0x1d79, 0x1d7d, 4},
 		{0x1e01, 0x1e95, 2},
 		{0x1e9b, 0x1ea1, 6},
@@ -6992,10 +7358,14 @@ var foldLu = &RangeTable{
 		{0xa78c, 0xa791, 5},
 		{0xa793, 0xa797, 4},
 		{0xa799, 0xa7a9, 2},
+		{0xa7b5, 0xa7b7, 2},
+		{0xab53, 0xab70, 29},
+		{0xab71, 0xabbf, 1},
 		{0xff41, 0xff5a, 1},
 	},
 	R32: []Range32{
 		{0x10428, 0x1044f, 1},
+		{0x10cc0, 0x10cf2, 1},
 		{0x118c0, 0x118df, 1},
 	},
 	LatinOffset: 4,
@@ -7018,9 +7388,11 @@ var foldMn = &RangeTable{
 // FoldCategory 将一个书写系统名映射到该书写系统外的码点表上，
 // 这相当于在简单的情况下对该书写系统内的码点进行转换。
 // 若一个书写系统名没有对应的条目，则该码点不存在。
-var FoldScript = map[string]*RangeTable{}
+var FoldScript = map[string]*RangeTable{
+}
 
-// 范围条目数：3532 16-bit，1204 32-bit，总计 4736 个。
-// 范围字节数：21192 16-bit，14448 32-bit，总计 35640 个。
+
+// 范围条目数：3546 16-bit，1306 32-bit，总计 4852 个。
+// 范围字节数：21276 16-bit，15672 32-bit，总计 36948 个。
 
 // 折叠轨道字节数: 63 对，252 字节

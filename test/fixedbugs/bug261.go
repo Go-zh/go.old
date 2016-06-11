@@ -1,6 +1,6 @@
 // run
 
-// Copyright 2010 The Go Authors.  All rights reserved.
+// Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -14,7 +14,7 @@ func f() int {
 }
 
 func main() {
-	x := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	x := []int{0,1,2,3,4,5,6,7,8,9,10}
 	n = 5
 	y := x[f():f()]
 	if len(y) != 1 || y[0] != 6 {

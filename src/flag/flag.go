@@ -31,7 +31,7 @@
 		fmt.Println("ip has value ", *ip)
 		fmt.Println("flagvar has value ", flagvar)
 
-	After parsing, the arguments after the flag are available as the
+	After parsing, the arguments following the flags are available as the
 	slice flag.Args() or individually as flag.Arg(i).
 	The arguments are indexed from 0 through flag.NArg()-1.
 
@@ -117,6 +117,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"sort"
 	"strconv"
 	"time"
@@ -302,12 +303,16 @@ func (d *durationValue) String() string { return (*time.Duration)(d).String() }
 // If a Value has an IsBoolFlag() bool method returning true,
 // the command-line parser makes -name equivalent to -name=true
 // rather than using the next command-line argument.
+//
+// Set is called once, in command line order, for each flag present.
 
 // Value接口是定义了标签对应的具体的参数值。
 // （默认值是string类型）
 //
 // 若 Value 拥有的 IsBoolFlag() bool 方法返回 ture，则命令行解析器会使 -name
 // 等价于 -name=true，而非使用下一个命令行实参。
+// 
+// Set 会按命令行的顺序为每个存在的标记调用一次。
 type Value interface {
 	String() string
 	Set(string) error
@@ -322,18 +327,19 @@ type Getter interface {
 	Get() interface{}
 }
 
-// ErrorHandling defines how to handle flag parsing errors.
+// ErrorHandling defines how FlagSet.Parse behaves if the parse fails.
 
-// ErrorHandling定义了如何处理标签解析的错误
+// ErrorHandling 定义了若解析失败后 FlagSet.Parse 的行为。
 type ErrorHandling int
 
+// These constants cause FlagSet.Parse to behave as described if the parse fails.
 const (
-	ContinueOnError ErrorHandling = iota
-	ExitOnError
-	PanicOnError
+	ContinueOnError ErrorHandling = iota // Return a descriptive error.
+	ExitOnError                          // Call os.Exit(2).
+	PanicOnError                         // Call panic with a descriptive error.
 )
 
-// A FlagSet represents a set of defined flags.  The zero value of a FlagSet
+// A FlagSet represents a set of defined flags. The zero value of a FlagSet
 // has no name and has ContinueOnError error handling.
 
 // FlagSet 是已经定义好的标签的集合。FlagSet 的零值没有名字且拥有 ContinueOnError 错误处理。
@@ -411,7 +417,7 @@ func (f *FlagSet) VisitAll(fn func(*Flag)) {
 }
 
 // VisitAll visits the command-line flags in lexicographical order, calling
-// fn for each.  It visits all flags, even those not set.
+// fn for each. It visits all flags, even those not set.
 
 // VisitAll按照字典顺序遍历控制台标签，并且对每个标签调用fn。
 // 这个函数会遍历所有标签，包括那些没有定义的标签。
@@ -431,7 +437,7 @@ func (f *FlagSet) Visit(fn func(*Flag)) {
 }
 
 // Visit visits the command-line flags in lexicographical order, calling fn
-// for each.  It visits only those flags that have been set.
+// for each. It visits only those flags that have been set.
 
 // Visit按照字典顺序遍历命令行标签，并且对每个标签调用fn。
 // 这个函数只遍历定义过的标签。
@@ -480,25 +486,127 @@ func Set(name, value string) error {
 	return CommandLine.Set(name, value)
 }
 
-// PrintDefaults prints, to standard error unless configured
-// otherwise, the default values of all defined flags in the set.
+// isZeroValue guesses whether the string represents the zero
+// value for a flag. It is not accurate but in practice works OK.
+func isZeroValue(flag *Flag, value string) bool {
+	// Build a zero value of the flag's Value type, and see if the
+	// result of calling its String method equals the value passed in.
+	// This works unless the Value type is itself an interface type.
+	typ := reflect.TypeOf(flag.Value)
+	var z reflect.Value
+	if typ.Kind() == reflect.Ptr {
+		z = reflect.New(typ.Elem())
+	} else {
+		z = reflect.Zero(typ)
+	}
+	if value == z.Interface().(Value).String() {
+		return true
+	}
 
-// 除非有特别配置，否则PrintDefault会将内容输出到标准输出控制台中。
-// PrintDefault会输出集合中所有定义好的标签的默认信息
+	switch value {
+	case "false":
+		return true
+	case "":
+		return true
+	case "0":
+		return true
+	}
+	return false
+}
+
+// UnquoteUsage extracts a back-quoted name from the usage
+// string for a flag and returns it and the un-quoted usage.
+// Given "a `name` to show" it returns ("name", "a name to show").
+// If there are no back quotes, the name is an educated guess of the
+// type of the flag's value, or the empty string if the flag is boolean.
+func UnquoteUsage(flag *Flag) (name string, usage string) {
+	// Look for a back-quoted name, but avoid the strings package.
+	usage = flag.Usage
+	for i := 0; i < len(usage); i++ {
+		if usage[i] == '`' {
+			for j := i + 1; j < len(usage); j++ {
+				if usage[j] == '`' {
+					name = usage[i+1 : j]
+					usage = usage[:i] + name + usage[j+1:]
+					return name, usage
+				}
+			}
+			break // Only one back quote; use type name.
+		}
+	}
+	// No explicit name, so use type if we can find one.
+	name = "value"
+	switch flag.Value.(type) {
+	case boolFlag:
+		name = ""
+	case *durationValue:
+		name = "duration"
+	case *float64Value:
+		name = "float"
+	case *intValue, *int64Value:
+		name = "int"
+	case *stringValue:
+		name = "string"
+	case *uintValue, *uint64Value:
+		name = "uint"
+	}
+	return
+}
+
+// PrintDefaults prints to standard error the default values of all
+// defined command-line flags in the set. See the documentation for
+// the global function PrintDefaults for more information.
+
+// PrintDefaults 将集合中定义的所有命令行标记的默认值打印到标准错误。
+// 更多关于全局函数 PrintDefaults 的信息见文档。
 func (f *FlagSet) PrintDefaults() {
 	f.VisitAll(func(flag *Flag) {
-		format := "  -%s=%s: %s\n"
-		if _, ok := flag.Value.(*stringValue); ok {
-			// put quotes on the value
-			format = "  -%s=%q: %s\n"
+		s := fmt.Sprintf("  -%s", flag.Name) // Two spaces before -; see next two comments.
+		name, usage := UnquoteUsage(flag)
+		if len(name) > 0 {
+			s += " " + name
 		}
-		fmt.Fprintf(f.out(), format, flag.Name, flag.DefValue, flag.Usage)
+		// Boolean flags of one ASCII letter are so common we
+		// treat them specially, putting their usage on the same line.
+		if len(s) <= 4 { // space, space, '-', 'x'.
+			s += "\t"
+		} else {
+			// Four spaces before the tab triggers good alignment
+			// for both 4- and 8-space tab stops.
+			s += "\n    \t"
+		}
+		s += usage
+		if !isZeroValue(flag, flag.DefValue) {
+			if _, ok := flag.Value.(*stringValue); ok {
+				// put quotes on the value
+				s += fmt.Sprintf(" (default %q)", flag.DefValue)
+			} else {
+				s += fmt.Sprintf(" (default %v)", flag.DefValue)
+			}
+		}
+		fmt.Fprint(f.out(), s, "\n")
 	})
 }
 
-// PrintDefaults prints to standard error the default values of all defined command-line flags.
-
-// PrintDefaults打印出标准错误，就是所有命令行中定义好的标签的默认信息。
+// PrintDefaults prints, to standard error unless configured otherwise,
+// a usage message showing the default settings of all defined
+// command-line flags.
+// For an integer valued flag x, the default output has the form
+//	-x int
+//		usage-message-for-x (default 7)
+// The usage message will appear on a separate line for anything but
+// a bool flag with a one-byte name. For bool flags, the type is
+// omitted and if the flag name is one byte the usage message appears
+// on the same line. The parenthetical default is omitted if the
+// default is the zero value for the type. The listed type, here int,
+// can be changed by placing a back-quoted name in the flag's usage
+// string; the first such item in the message is taken to be a parameter
+// name to show in the message and the back quotes are stripped from
+// the message when displayed. For instance, given
+//	flag.String("I", "", "search `directory` for include files")
+// the output will be
+//	-I directory
+//		search directory for include files.
 func PrintDefaults() {
 	CommandLine.PrintDefaults()
 }
@@ -525,6 +633,8 @@ func defaultUsage(f *FlagSet) {
 // Usage prints to standard error a usage message documenting all defined command-line flags.
 // It is called when an error occurs while parsing flags.
 // The function is a variable that may be changed to point to a custom function.
+// By default it prints a simple header and calls PrintDefaults; for details about the
+// format of the output and how to control it, see the documentation for PrintDefaults.
 
 // Usage打印出标准的错误信息，包含所有定义过的命令行标签说明。
 // 这个函数赋值到一个变量上去，当然也可以将这个变量指向到自定义的函数。
@@ -543,10 +653,12 @@ func (f *FlagSet) NFlag() int { return len(f.actual) }
 // NFlag返回解析过的命令行标签的数量。
 func NFlag() int { return len(CommandLine.actual) }
 
-// Arg returns the i'th argument.  Arg(0) is the first remaining argument
-// after flags have been processed.
+// Arg returns the i'th argument. Arg(0) is the first remaining argument
+// after flags have been processed. Arg returns an empty string if the
+// requested element does not exist.
 
 // Arg返回第i个参数。当有标签被解析之后，Arg(0)就成为了保留参数。
+// 若请求的元素不存在，Arg 会返回一个空的字符串。
 func (f *FlagSet) Arg(i int) string {
 	if i < 0 || i >= len(f.args) {
 		return ""
@@ -554,10 +666,12 @@ func (f *FlagSet) Arg(i int) string {
 	return f.args[i]
 }
 
-// Arg returns the i'th command-line argument.  Arg(0) is the first remaining argument
-// after flags have been processed.
+// Arg returns the i'th command-line argument. Arg(0) is the first remaining argument
+// after flags have been processed. Arg returns an empty string if the
+// requested element does not exist.
 
 // Arg返回第i个命令行参数。当有标签被解析之后，Arg(0)就成为了保留参数。
+// 若请求的元素不存在，Arg 会返回一个空的字符串。
 func Arg(i int) string {
 	return CommandLine.Arg(i)
 }
@@ -1045,7 +1159,7 @@ func (f *FlagSet) parseOne() (bool, error) {
 }
 
 // Parse parses flag definitions from the argument list, which should not
-// include the command name.  Must be called after all flags in the FlagSet
+// include the command name. Must be called after all flags in the FlagSet
 // are defined and before flags are accessed by the program.
 // The return value will be ErrHelp if -help or -h were set but not defined.
 
@@ -1092,9 +1206,9 @@ func Parse() {
 	CommandLine.Parse(os.Args[1:])
 }
 
-// Parsed returns true if the command-line flags have been parsed.
+// Parsed reports whether the command-line flags have been parsed.
 
-// Parsed 返回是否命令行标签已经被解析过。
+// Parsed 报告是否命令行标签已经被解析过。
 func Parsed() bool {
 	return CommandLine.Parsed()
 }

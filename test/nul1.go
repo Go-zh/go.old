@@ -53,3 +53,4 @@ var z` + "\xc1\x81" + ` int // ERROR "UTF-8" "invalid identifier character"
 
 `)
 }
+

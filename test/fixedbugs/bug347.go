@@ -1,6 +1,6 @@
 // run
 
-// Copyright 2011 The Go Authors.  All rights reserved.
+// Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -19,7 +19,7 @@ var c chan int
 
 func f() {
 	select {
-	case <-t.c: // THIS IS LINE 22
+	case <-t.c:  // THIS IS LINE 22
 		break
 	case <-c:
 		break
@@ -29,7 +29,7 @@ func f() {
 func main() {
 	defer func() {
 		recover()
-		for i := 0; ; i++ {
+		for i := 0;; i++ {
 			pc, file, line, ok := runtime.Caller(i)
 			if !ok {
 				print("BUG: bug347: cannot find caller\n")

@@ -54,3 +54,4 @@ func main() {
 	AsynchFifo()
 	SynchFifo()
 }
+

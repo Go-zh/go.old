@@ -14,16 +14,16 @@ import (
 )
 
 // TODO(adg): support zip file comments
-// TODO(adg): support specifying deflate level
 
 // Writer implements a zip file writer.
 
 // Writer类型实现了zip文件的写入器。
 type Writer struct {
-	cw     *countWriter
-	dir    []*header
-	last   *fileWriter
-	closed bool
+	cw          *countWriter
+	dir         []*header
+	last        *fileWriter
+	closed      bool
+	compressors map[uint16]Compressor
 }
 
 type header struct {
@@ -38,6 +38,17 @@ func NewWriter(w io.Writer) *Writer {
 	return &Writer{cw: &countWriter{w: bufio.NewWriter(w)}}
 }
 
+// SetOffset sets the offset of the beginning of the zip data within the
+// underlying writer. It should be used when the zip data is appended to an
+// existing file, such as a binary executable.
+// It must be called before any data is written.
+func (w *Writer) SetOffset(n int64) {
+	if w.cw.count != 0 {
+		panic("zip: SetOffset called after data was written")
+	}
+	w.cw.count = n
+}
+
 // Flush flushes any buffered data to the underlying writer.
 // Calling Flush is not normally necessary; calling Close is sufficient.
 func (w *Writer) Flush() error {
@@ -45,7 +56,7 @@ func (w *Writer) Flush() error {
 }
 
 // Close finishes writing the zip file by writing the central directory.
-// It does not (and can not) close the underlying writer.
+// It does not (and cannot) close the underlying writer.
 
 // Close方法通过写入中央目录关闭该*Writer。
 // 本方法不会也没办法关闭下层的io.Writer接口。
@@ -74,7 +85,7 @@ func (w *Writer) Close() error {
 		b.uint16(h.ModifiedTime)
 		b.uint16(h.ModifiedDate)
 		b.uint32(h.CRC32)
-		if h.isZip64() || h.offset > uint32max {
+		if h.isZip64() || h.offset >= uint32max {
 			// the file needs a zip64 header. store maxint in both
 			// 32 bit size fields (and offset later) to signal that the
 			// zip64 extra header should be used.
@@ -129,15 +140,15 @@ func (w *Writer) Close() error {
 
 		// zip64 end of central directory record
 		b.uint32(directory64EndSignature)
-		b.uint64(directory64EndLen)
-		b.uint16(zipVersion45) // version made by
-		b.uint16(zipVersion45) // version needed to extract
-		b.uint32(0)            // number of this disk
-		b.uint32(0)            // number of the disk with the start of the central directory
-		b.uint64(records)      // total number of entries in the central directory on this disk
-		b.uint64(records)      // total number of entries in the central directory
-		b.uint64(size)         // size of the central directory
-		b.uint64(offset)       // offset of start of central directory with respect to the starting disk number
+		b.uint64(directory64EndLen - 12) // length minus signature (uint32) and length fields (uint64)
+		b.uint16(zipVersion45)           // version made by
+		b.uint16(zipVersion45)           // version needed to extract
+		b.uint32(0)                      // number of this disk
+		b.uint32(0)                      // number of the disk with the start of the central directory
+		b.uint64(records)                // total number of entries in the central directory on this disk
+		b.uint64(records)                // total number of entries in the central directory
+		b.uint64(size)                   // size of the central directory
+		b.uint64(offset)                 // offset of start of central directory with respect to the starting disk number
 
 		// zip64 end of central directory locator
 		b.uint32(directory64LocSignature)
@@ -196,17 +207,24 @@ func (w *Writer) Create(name string) (io.Writer, error) {
 // CreateHeader adds a file to the zip file using the provided FileHeader
 // for the file metadata.
 // It returns a Writer to which the file contents should be written.
+//
 // The file's contents must be written to the io.Writer before the next
-// call to Create, CreateHeader, or Close.
+// call to Create, CreateHeader, or Close. The provided FileHeader fh
+// must not be modified after a call to CreateHeader.
 
 // 使用给出的*FileHeader来作为文件的元数据添加一个文件进zip文件。
 // 本方法返回一个io.Writer接口（用于写入新添加文件的内容）。
 // 新增文件的内容必须在下一次调用CreateHeader、Create或Close方法之前全部写入。
+// 所提供的 FileHeader fh 在调用 CreateHeader 后必须不能被修改。
 func (w *Writer) CreateHeader(fh *FileHeader) (io.Writer, error) {
 	if w.last != nil && !w.last.closed {
 		if err := w.last.close(); err != nil {
 			return nil, err
 		}
+	}
+	if len(w.dir) > 0 && w.dir[len(w.dir)-1].FileHeader == fh {
+		// See https://golang.org/issue/11144 confusion.
+		return nil, errors.New("archive/zip: invalid duplicate FileHeader")
 	}
 
 	fh.Flags |= 0x8 // we will write a data descriptor
@@ -219,7 +237,7 @@ func (w *Writer) CreateHeader(fh *FileHeader) (io.Writer, error) {
 		compCount: &countWriter{w: w.cw},
 		crc32:     crc32.NewIEEE(),
 	}
-	comp := compressor(fh.Method)
+	comp := w.compressor(fh.Method)
 	if comp == nil {
 		return nil, ErrAlgorithm
 	}
@@ -267,6 +285,24 @@ func writeHeader(w io.Writer, h *FileHeader) error {
 	}
 	_, err := w.Write(h.Extra)
 	return err
+}
+
+// RegisterCompressor registers or overrides a custom compressor for a specific
+// method ID. If a compressor for a given method is not found, Writer will
+// default to looking up the compressor at the package level.
+func (w *Writer) RegisterCompressor(method uint16, comp Compressor) {
+	if w.compressors == nil {
+		w.compressors = make(map[uint16]Compressor)
+	}
+	w.compressors[method] = comp
+}
+
+func (w *Writer) compressor(method uint16) Compressor {
+	comp := w.compressors[method]
+	if comp == nil {
+		comp = compressor(method)
+	}
+	return comp
 }
 
 type fileWriter struct {
