@@ -1621,6 +1621,7 @@ case *int:
 <code>switch</code> 也可用于判断接口变量的动态类型。如 <b>类型选择</b>
 通过圆括号中的关键字 <code>type</code> 使用类型断言语法。若 <code>switch</code>
 在表达式中声明了一个变量，那么该变量的每个子句中都将有该变量对应的类型。
+在这些 case 中重用一个名字也是符合语义的，实际上是在每个 case 里声明了一个不同类型但同名的新变量。
 </p>
 <pre>
 var t interface{}
