@@ -10,7 +10,7 @@ import (
 	"io"
 )
 
-// A Decoder reads and decodes JSON values from an input stream.
+// Decoder 从指定输入流中读取并解析 JSON 值。
 type Decoder struct {
 	r     io.Reader
 	buf   []byte
@@ -23,23 +23,19 @@ type Decoder struct {
 	tokenStack []int
 }
 
-// NewDecoder returns a new decoder that reads from r.
+// NewDecoder 返回一个从 r 读取数据的新 decoder
 //
-// The decoder introduces its own buffering and may
-// read data from r beyond the JSON values requested.
+// 该 decoder 有它自己的缓冲区，并且会从 r 中读取 JSON 数据。
 func NewDecoder(r io.Reader) *Decoder {
 	return &Decoder{r: r}
 }
 
-// UseNumber causes the Decoder to unmarshal a number into an interface{} as a
-// Number instead of as a float64.
+// UseNumber 会将一个数字作为 Number 而不是 float64 解析入一个 interface{} 。
 func (dec *Decoder) UseNumber() { dec.d.useNumber = true }
 
-// Decode reads the next JSON-encoded value from its
-// input and stores it in the value pointed to by v.
+// Decode 从指定的输入中读取 JSON 字符串并解析入 v 中。
 //
-// See the documentation for Unmarshal for details about
-// the conversion of JSON into a Go value.
+// 更多 JSON 值到 Go 值之间的解析请参阅 Unmarshal 文档。
 func (dec *Decoder) Decode(v interface{}) error {
 	if dec.err != nil {
 		return dec.err
@@ -72,8 +68,8 @@ func (dec *Decoder) Decode(v interface{}) error {
 	return err
 }
 
-// Buffered returns a reader of the data remaining in the Decoder's
-// buffer. The reader is valid until the next call to Decode.
+// Buffered 返回仍存在于 Decoder 的缓冲区中的数据。返回的 reader 在 Decode 的
+// 下一次方法调用之前都是合法的。
 func (dec *Decoder) Buffered() io.Reader {
 	return bytes.NewReader(dec.buf[dec.scanp:])
 }
@@ -164,7 +160,7 @@ func nonSpace(b []byte) bool {
 	return false
 }
 
-// An Encoder writes JSON values to an output stream.
+// Encoder 向指定的输出流中写入 JSON 字符串。
 type Encoder struct {
 	w          io.Writer
 	err        error
@@ -175,16 +171,14 @@ type Encoder struct {
 	indentValue  string
 }
 
-// NewEncoder returns a new encoder that writes to w.
+// NewEncoder 返回向 w 写入数据的新 encoder 。
 func NewEncoder(w io.Writer) *Encoder {
 	return &Encoder{w: w, escapeHTML: true}
 }
 
-// Encode writes the JSON encoding of v to the stream,
-// followed by a newline character.
+// Encode 向指定流中写入 v 的 JSON 字符串表示，以一个换行符结尾。
 //
-// See the documentation for Marshal for details about the
-// conversion of Go values to JSON.
+// 更多  Go 值到 JSON 值之间的转换请参阅 Marshal 文档。
 func (enc *Encoder) Encode(v interface{}) error {
 	if enc.err != nil {
 		return enc.err
@@ -222,36 +216,32 @@ func (enc *Encoder) Encode(v interface{}) error {
 	return err
 }
 
-// SetIndent instructs the encoder to format each subsequent encoded
-// value as if indented by the package-level function Indent(dst, src, prefix, indent).
-// Calling SetIndent("", "") disables indentation.
+// SetIndent 指示 encoder 来格式化每一个解析后的 JSON 序列。如同
+// 同包的函数 Indent(dst, src, prefix, indent) 一样。
+// 调用 SetIndent("", "") 来禁用缩进。
 func (enc *Encoder) SetIndent(prefix, indent string) {
 	enc.indentPrefix = prefix
 	enc.indentValue = indent
 }
 
-// SetEscapeHTML specifies whether problematic HTML characters
-// should be escaped inside JSON quoted strings.
-// The default behavior is to escape &, <, and > to \u0026, \u003c, and \u003e
-// to avoid certain safety problems that can arise when embedding JSON in HTML.
+// SetEscapeHTML 指示是否需要再 JSON 字符串中转义 HTML 字符。默认行为是将 &，< 和 >
+// 转义为 \u0026， \u003c 和 \u003e 来避免一些 HTML 中内嵌 JSON 的安全问题。
 //
-// In non-HTML settings where the escaping interferes with the readability
-// of the output, SetEscapeHTML(false) disables this behavior.
+// 在一些非 HTML 场景下为了提升输出的可读性，可以通过 SetEscapeHTML(false) 来禁止此行为。
 func (enc *Encoder) SetEscapeHTML(on bool) {
 	enc.escapeHTML = on
 }
 
-// RawMessage is a raw encoded JSON value.
-// It implements Marshaler and Unmarshaler and can
-// be used to delay JSON decoding or precompute a JSON encoding.
+// RawMessage 是一个未经处理的 JSON 字符串值。
+// 它实现了 Marshaler 和 Unmarshaler ，可以用于推迟 JSON 解析或预转换 JSON 字符串。
 type RawMessage []byte
 
-// MarshalJSON returns *m as the JSON encoding of m.
+// MarshalJSON 返回 m 的 JSON 字符串表示。
 func (m *RawMessage) MarshalJSON() ([]byte, error) {
 	return *m, nil
 }
 
-// UnmarshalJSON sets *m to a copy of data.
+// UnmarshalJSON 设置 *m 为 data 的拷贝。
 func (m *RawMessage) UnmarshalJSON(data []byte) error {
 	if m == nil {
 		return errors.New("json.RawMessage: UnmarshalJSON on nil pointer")
@@ -263,15 +253,14 @@ func (m *RawMessage) UnmarshalJSON(data []byte) error {
 var _ Marshaler = (*RawMessage)(nil)
 var _ Unmarshaler = (*RawMessage)(nil)
 
-// A Token holds a value of one of these types:
+// Token 保存一个以下类型之一的值：
 //
-//	Delim, for the four JSON delimiters [ ] { }
-//	bool, for JSON booleans
-//	float64, for JSON numbers
-//	Number, for JSON numbers
-//	string, for JSON string literals
-//	nil, for JSON null
-//
+// Delim 表示四个 JSON 分隔符 [ ] { }
+// bool 表示 JSON 布尔值
+// float64 表示 JSON 数字
+// Number 表示 JSON 数字
+// string 表示 JSON 字符串字面量
+// nil 表示 JSON null
 type Token interface{}
 
 const (
@@ -333,24 +322,20 @@ func (dec *Decoder) tokenValueEnd() {
 	}
 }
 
-// A Delim is a JSON array or object delimiter, one of [ ] { or }.
+// Delim 是一个 JSON 数组或对象分隔符，[ ] { 或 } 之一。
 type Delim rune
 
 func (d Delim) String() string {
 	return string(d)
 }
 
-// Token returns the next JSON token in the input stream.
-// At the end of the input stream, Token returns nil, io.EOF.
+// Token 返回 JSON 字符串流中的下一个标记（token）。在流的最后，Token 返回
+// nil， io.EOF 。
 //
-// Token guarantees that the delimiters [ ] { } it returns are
-// properly nested and matched: if Token encounters an unexpected
-// delimiter in the input, it will return an error.
+// Token 保证返回的分隔符 [ ] { } 是一一对应的：如果发现不对应，则会返回错误。
 //
-// The input stream consists of basic JSON values—bool, string,
-// number, and null—along with delimiters [ ] { } of type Delim
-// to mark the start and end of arrays and objects.
-// Commas and colons are elided.
+// 输入流由基础的 JSON 值 - 布尔，字符串，数字 null 以及分隔符 [ ] { } 组成。
+// 逗号和冒号会被省略。
 func (dec *Decoder) Token() (Token, error) {
 	for {
 		c, err := dec.peek()
@@ -472,8 +457,7 @@ func (dec *Decoder) tokenError(c byte) (Token, error) {
 	return nil, &SyntaxError{"invalid character " + quoteChar(c) + " " + context, 0}
 }
 
-// More reports whether there is another element in the
-// current array or object being parsed.
+// More 返回是否在当前被解析的数组和对象中是否还有元素。
 func (dec *Decoder) More() bool {
 	c, err := dec.peek()
 	return err == nil && c != ']' && c != '}'
