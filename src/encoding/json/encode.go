@@ -2,12 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package json implements encoding and decoding of JSON as defined in
-// RFC 4627. The mapping between JSON and Go values is described
-// in the documentation for the Marshal and Unmarshal functions.
+// json 包实现了 RFC 4627 中定义的 JSON 编码与解码。JSON 和 Go 值之间的映射
+// 关系细述于 Marshal 和 Unmarshal 函数的文档中。
 //
-// See "JSON and Go" for an introduction to this package:
-// https://golang.org/doc/articles/json_and_go.html
+// 关于该包的介绍可以参阅文章 "JSON and Go" :
+// https://blog.go-zh.org/json-and-go
 package json
 
 import (
@@ -26,118 +25,86 @@ import (
 	"unicode/utf8"
 )
 
-// Marshal returns the JSON encoding of v.
+// Marshal 返回 v 的 JSON 字符串表示。
 //
-// Marshal traverses the value v recursively.
-// If an encountered value implements the Marshaler interface
-// and is not a nil pointer, Marshal calls its MarshalJSON method
-// to produce JSON. If no MarshalJSON method is present but the
-// value implements encoding.TextMarshaler instead, Marshal calls
-// its MarshalText method.
-// The nil pointer exception is not strictly necessary
-// but mimics a similar, necessary exception in the behavior of
-// UnmarshalJSON.
+// Marshaler 会递归地遍历 v 。
+// 如果在遍历的过程中遇到一个实现了 Marshaler 接口且不是 nil 指针的值，Marshaler 会调用它
+// 的 MarshalJSON 方法来产生 JSON 字符串。若它没有 MarshalJSON 方法但实现了
+// encoding.TextMarshaler 接口，则会使用它的 MarshalText 方法来产生 JSON 字符串。
+// nil 指针异常在该场景上并非必要，它的存在仅用于模仿 UnmarshalJSON 方法中的一些简单的异常// 行为。
 //
-// Otherwise, Marshal uses the following type-dependent default encodings:
+// 若不符合上述情况，那么 Marshal 会遵循以下的类型转换：
 //
-// Boolean values encode as JSON booleans.
+// 布尔值被转换为 JSON 布尔值。
 //
-// Floating point, integer, and Number values encode as JSON numbers.
+// 浮点数，整数和数字值被转换为 JSON 数字。
 //
-// String values encode as JSON strings coerced to valid UTF-8,
-// replacing invalid bytes with the Unicode replacement rune.
-// The angle brackets "<" and ">" are escaped to "\u003c" and "\u003e"
-// to keep some browsers from misinterpreting JSON output as HTML.
-// Ampersand "&" is also escaped to "\u0026" for the same reason.
-// This escaping can be disabled using an Encoder with DisableHTMLEscaping.
+// 字符串值被转换为 JSON 字符串，且被强制转化为符合 UTF-8 标准，不合法的字节会被对应的
+// Unicode rune 替代。尖括号 "<" 和 ">" 会被转义为 "\u003c" 和 "\u003e" ，用以
+// 防止浏览器误将 JSON 输出为 HTML 。同理，"&" 也会被转义为 "\u0026" 。这些转义
+// 可以通过使用一个带有 DisableHTMLEscaping 配置的 Encoder 来关闭。
 //
-// Array and slice values encode as JSON arrays, except that
-// []byte encodes as a base64-encoded string, and a nil slice
-// encodes as the null JSON value.
+// 数组和 slice 值会被转换为 JSON 数组。但是 []byte 会被作为 base64 字符串切片，并且 nil
+// slice 会被映射为 JSON 中的 null 值。
 //
-// Struct values encode as JSON objects. Each exported struct field
-// becomes a member of the object unless
-//   - the field's tag is "-", or
-//   - the field is empty and its tag specifies the "omitempty" option.
-// The empty values are false, 0, any
-// nil pointer or interface value, and any array, slice, map, or string of
-// length zero. The object's default key string is the struct field name
-// but can be specified in the struct field's tag value. The "json" key in
-// the struct field's tag value is the key name, followed by an optional comma
-// and options. Examples:
+// Struct 值会被转换为 JSON 对象。任何被导出的属性都会成为对象的成员，除非：
+//   - 这个属性的标记（tag）为 "-"，或者
+//   - 这个属性值为空且它的标记包含 "omitempty" 。
+// 空值有 false ，0，任何的 nil 指针或接口值，以及长度为 0 的数组，slice ，map 和字符串。
+// 对象的默认属性名就是 struct 中的属性名，但是可以通过 struct 属性的标记来修改。struct
+// 属性标记中的 "json" 键用于修改 JSON 对象中的属性名，可以以逗号分隔追加配置。例子：
 //
-//   // Field is ignored by this package.
+//   // Field 将被该包忽略。
 //   Field int `json:"-"`
 //
-//   // Field appears in JSON as key "myName".
+//   // Field 映射到 JSON 对象中的属性名为 "myName" 。
 //   Field int `json:"myName"`
 //
-//   // Field appears in JSON as key "myName" and
-//   // the field is omitted from the object if its value is empty,
-//   // as defined above.
+//   // Field 映射到 JSON 对象中的属性名为 "myName" ，并且
+//   // 如果该属性值为空，则该属性会被忽略。
 //   Field int `json:"myName,omitempty"`
 //
-//   // Field appears in JSON as key "Field" (the default), but
-//   // the field is skipped if empty.
-//   // Note the leading comma.
+//   // Field 映射到 JSON 对象中的属性名为 "Field" (默认情况)，
+//   // 如果该属性值为空，则该属性会被忽略。
+//   // 请留意开头的逗号。
 //   Field int `json:",omitempty"`
 //
-// The "string" option signals that a field is stored as JSON inside a
-// JSON-encoded string. It applies only to fields of string, floating point,
-// integer, or boolean types. This extra level of encoding is sometimes used
-// when communicating with JavaScript programs:
+// "string" 配置表明该属性需要映射为 JSON 字符串。它仅可以用于字符串，浮点数，整数和布尔
+// 类型的属性上。这个额外的配置常常用于与 JavaScript 程序通信：
 //
 //    Int64String int64 `json:",string"`
 //
-// The key name will be used if it's a non-empty string consisting of
-// only Unicode letters, digits, dollar signs, percent signs, hyphens,
-// underscores and slashes.
+// 若属性名是仅包含 Unicode 字符，数字，美元符号，百分号，连字符，下划线和斜杠的非空字符串，
+// 那么该属性名就会被使用。
 //
-// Anonymous struct fields are usually marshaled as if their inner exported fields
-// were fields in the outer struct, subject to the usual Go visibility rules amended
-// as described in the next paragraph.
-// An anonymous struct field with a name given in its JSON tag is treated as
-// having that name, rather than being anonymous.
-// An anonymous struct field of interface type is treated the same as having
-// that type as its name, rather than being anonymous.
+// 如果存在匿名 struct 属性，若果它们在原 struct 是被导出的，则通常也会被转换，它的具体
+// 可见性会在后文详述。接口类型的匿名 struct 属性会被视为父 struct 的普通属性，而非匿名。
 //
-// The Go visibility rules for struct fields are amended for JSON when
-// deciding which field to marshal or unmarshal. If there are
-// multiple fields at the same level, and that level is the least
-// nested (and would therefore be the nesting level selected by the
-// usual Go rules), the following extra rules apply:
+// Go 的可见性规则在决定哪个属性（同名，属于多个匿名 struct 中）用于转换时会有所改变。如果在
+// 同一层级有多个属性，并且这个层级是嵌套的最高层，会有以下额外的规则：
+// 1) 这个属性中，如果任何一个有 JSON 标记，那么仅会考虑被标记的属性。
+// 2) 如果名字仅匹配一个属性（被标记或没有通过规则一），那么就是它。
+// 3) 否则就判定为重复，这些值都会被忽略，不会产生错误。
 //
-// 1) Of those fields, if any are JSON-tagged, only tagged fields are considered,
-// even if there are multiple untagged fields that would otherwise conflict.
-// 2) If there is exactly one field (tagged or not according to the first rule), that is selected.
-// 3) Otherwise there are multiple fields, and all are ignored; no error occurs.
+// 匿名 struct 属性的处理始于 Go 1.1 。在 Go 1.1 之前，匿名 struct 属性会被忽略。在此后的
+// 版本中，若要强制忽略一个匿名 struct 属性，需要给予该属性一个 "-" JSON 标识。
 //
-// Handling of anonymous struct fields is new in Go 1.1.
-// Prior to Go 1.1, anonymous struct fields were ignored. To force ignoring of
-// an anonymous struct field in both current and earlier versions, give the field
-// a JSON tag of "-".
+// Map 值会被转换为 JSON 对象。Map 的键类型必须是字符串，整数或实现了
+// encoding.TextMarshaler 接口的值。Map 的键会被排序，然后作为 JSON 对象的属性名，
+// 并且按以下顺序进行转换：
+//   - 字符串值会被直接使用
+//   - 使用实现了 encoding.TextMarshalers 的值
+//   - 整数值会被转换为字符串
 //
-// Map values encode as JSON objects. The map's key type must either be a
-// string, an integer type, or implement encoding.TextMarshaler. The map keys
-// are sorted and used as JSON object keys by applying the following rules,
-// subject to the UTF-8 coercion described for string values above:
-//   - string keys are used directly
-//   - encoding.TextMarshalers are marshaled
-//   - integer keys are converted to strings
+// 指针值会按照其指向的具体值来转换。nil 指针会被转换为 JSON 值 null 。
 //
-// Pointer values encode as the value pointed to.
-// A nil pointer encodes as the null JSON value.
+// 接口值会转换实现了该接口的值。nil 接口会被转换为 JSON 值 null 。
 //
-// Interface values encode as the value contained in the interface.
-// A nil interface value encodes as the null JSON value.
+// 信道，复数和函数值都不能被转换为 JSON 。尝试转换这些值都会返回一个 UnsupportedTypeError
+// 错误。
 //
-// Channel, complex, and function values cannot be encoded in JSON.
-// Attempting to encode such a value causes Marshal to return
-// an UnsupportedTypeError.
-//
-// JSON cannot represent cyclic data structures and Marshal does not
-// handle them. Passing cyclic structures to Marshal will result in
-// an infinite recursion.
+// JSON 不能表示循环引用的数据接口，Marshal 也不能处理它们。这些值会导致
+// Marshal 陷入死循环。
 //
 func Marshal(v interface{}) ([]byte, error) {
 	e := &encodeState{}
@@ -148,7 +115,7 @@ func Marshal(v interface{}) ([]byte, error) {
 	return e.Bytes(), nil
 }
 
-// MarshalIndent is like Marshal but applies Indent to format the output.
+// MarshalIndent 与 Marshal 类似，但为输出提供了缩进。
 func MarshalIndent(v interface{}, prefix, indent string) ([]byte, error) {
 	b, err := Marshal(v)
 	if err != nil {
@@ -162,12 +129,10 @@ func MarshalIndent(v interface{}, prefix, indent string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// HTMLEscape appends to dst the JSON-encoded src with <, >, &, U+2028 and U+2029
-// characters inside string literals changed to \u003c, \u003e, \u0026, \u2028, \u2029
-// so that the JSON will be safe to embed inside HTML <script> tags.
-// For historical reasons, web browsers don't honor standard HTML
-// escaping within <script> tags, so an alternative JSON encoding must
-// be used.
+// HTMLEscape 向 dst 追加被 JSON 转换后的 src ，src 可能包含 <，>，&，U+2028 和
+// U+2029 。它们将会被转义为 \u003c， \u003e， \u0026， \u2028 和 \u2029 。所以
+// 这个 JSON 可以安全地嵌于 HTML <script> 标签中。出于历史原因，浏览器在 <script>
+// 标签中并不能很好的支持标准 HTML 转义，所以必须提供一个安全的 JSON 。
 func HTMLEscape(dst *bytes.Buffer, src []byte) {
 	// The characters can only appear in string literals,
 	// so just scan the string one byte at a time.
@@ -197,14 +162,12 @@ func HTMLEscape(dst *bytes.Buffer, src []byte) {
 	}
 }
 
-// Marshaler is the interface implemented by types that
-// can marshal themselves into valid JSON.
+// Marshaler 是一个代表该类型可以将自身转换为合法 JSON 的接口。
 type Marshaler interface {
 	MarshalJSON() ([]byte, error)
 }
 
-// An UnsupportedTypeError is returned by Marshal when attempting
-// to encode an unsupported value type.
+// UnsupportedTypeError 在当试图转换不支持的值类型时，由 Marshal 返回。
 type UnsupportedTypeError struct {
 	Type reflect.Type
 }
@@ -222,12 +185,9 @@ func (e *UnsupportedValueError) Error() string {
 	return "json: unsupported value: " + e.Str
 }
 
-// Before Go 1.2, an InvalidUTF8Error was returned by Marshal when
-// attempting to encode a string value with invalid UTF-8 sequences.
-// As of Go 1.2, Marshal instead coerces the string to valid UTF-8 by
-// replacing invalid bytes with the Unicode replacement rune U+FFFD.
-// This error is no longer generated but is kept for backwards compatibility
-// with programs that might mention it.
+// 在 Go 1.2 之前，在 Marshal 试图转换一个非法的 UTF-8 序列时，会返回 InvalidUTF8Error
+// 错误。在 Go 1.2 之后，Marshal 会强制将字符串转换为合法 UTF-8 ，将非法 Unicode 替换为
+// U+FFFD 。所以这个错误已经不再为产生。出于兼容性考虑所以保留它。
 type InvalidUTF8Error struct {
 	S string // the whole string value that caused the error
 }

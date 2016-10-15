@@ -60,10 +60,10 @@ func nextValue(data []byte, scan *scanner) (value, rest []byte, err error) {
 	return data, nil, nil
 }
 
-// A SyntaxError is a description of a JSON syntax error.
+// SyntaxError 表示了一个 JSON 语法错误。
 type SyntaxError struct {
 	msg    string // description of error
-	Offset int64  // error occurred after reading Offset bytes
+	Offset int64  // 表明在读取了 Offset 字节后发生了错误
 }
 
 func (e *SyntaxError) Error() string { return e.msg }

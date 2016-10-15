@@ -6,8 +6,7 @@ package json
 
 import "bytes"
 
-// Compact appends to dst the JSON-encoded src with
-// insignificant space characters elided.
+// Compact 将省略了无意义空白符的 JSON 字符串 src 追加值 dst 。
 func Compact(dst *bytes.Buffer, src []byte) error {
 	return compact(dst, src, false)
 }
@@ -65,17 +64,11 @@ func newline(dst *bytes.Buffer, prefix, indent string, depth int) {
 	}
 }
 
-// Indent appends to dst an indented form of the JSON-encoded src.
-// Each element in a JSON object or array begins on a new,
-// indented line beginning with prefix followed by one or more
-// copies of indent according to the indentation nesting.
-// The data appended to dst does not begin with the prefix nor
-// any indentation, to make it easier to embed inside other formatted JSON data.
-// Although leading space characters (space, tab, carriage return, newline)
-// at the beginning of src are dropped, trailing space characters
-// at the end of src are preserved and copied to dst.
-// For example, if src has no trailing spaces, neither will dst;
-// if src ends in a trailing newline, so will dst.
+// Indent 向 dst 追加添加缩进后的 JSON 字符串 src 。JSON 对象或数组中的每一个元素
+// 都以一个新的缩进行开头。追加值 dst 的数据并不以任何前缀和缩进开头，这用于方便和其他
+// 格式化好的 JSON 数组相互嵌套。尽管开头的空白符被忽略，结尾的空白符会被保留并且拷贝至
+// dst 。例如，如果 src 没有结尾的空白符，那么 dst 也不会有。若 src 有结尾的空白符，
+// 那么 dst 也会有。
 func Indent(dst *bytes.Buffer, src []byte, prefix, indent string) error {
 	origLen := dst.Len()
 	var scan scanner

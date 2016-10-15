@@ -21,67 +21,50 @@ import (
 	"unicode/utf8"
 )
 
-// Unmarshal parses the JSON-encoded data and stores the result
-// in the value pointed to by v.
+// Unmarshal 解析 JSON 字符串，并将结果存储于 v 中。
 //
-// Unmarshal uses the inverse of the encodings that
-// Marshal uses, allocating maps, slices, and pointers as necessary,
-// with the following additional rules:
+// Unmarshal 与 Marshal 的转换过程相反，它在必要时会按以下规则分配 map ，slice 或
+// 指针：
 //
-// To unmarshal JSON into a pointer, Unmarshal first handles the case of
-// the JSON being the JSON literal null. In that case, Unmarshal sets
-// the pointer to nil. Otherwise, Unmarshal unmarshals the JSON into
-// the value pointed at by the pointer. If the pointer is nil, Unmarshal
-// allocates a new value for it to point to.
+// 若要将 JSON 解析为一个指针，Unmarshal 首先为检查 JSON 是否为 JSON 字面量 null ，
+// 若是，则 Unmarshal 则将指针设为 nil 。否则就将 JSON 解析至指针指向的值。如果指针
+// 本身为 nil ，则 Unmarshal 会创建一个新值并使其指向它。
 //
-// To unmarshal JSON into a struct, Unmarshal matches incoming object
-// keys to the keys used by Marshal (either the struct field name or its tag),
-// preferring an exact match but also accepting a case-insensitive match.
-// Unmarshal will only set exported fields of the struct.
+// 若要将 JSON 解析为一个 struct ，Unmarshal 通过 Marshal 使用的 JSON 键名（属
+// 性名或标识）来进行解析匹配。可以大小写不一致也可匹配。Unmarshal 只会设置 struct 中
+// 的导出属性。
 //
-// To unmarshal JSON into an interface value,
-// Unmarshal stores one of these in the interface value:
+// 若要将 JSON 解析为一个接口值，Unmarshal 在接口值内存储以下之一：
 //
-//	bool, for JSON booleans
-//	float64, for JSON numbers
-//	string, for JSON strings
-//	[]interface{}, for JSON arrays
-//	map[string]interface{}, for JSON objects
-//	nil for JSON null
+//	bool，对应 JSON 布尔值
+//	float64，对应 JSON 数字
+//	string，对应 JSON 字符串
+//	[]interface{}，对应 JSON 数组
+//	map[string]interface{}，对应 JSON 对象
+//	nil ，对应 JSON null
 //
-// To unmarshal a JSON array into a slice, Unmarshal resets the slice length
-// to zero and then appends each element to the slice.
-// As a special case, to unmarshal an empty JSON array into a slice,
-// Unmarshal replaces the slice with a new empty slice.
+// 若要将 JSON 数组解析为 slice ，Unmarshal 会首先将 slice 的长度重置为 0 ，然后
+// 逐一将元素追加至 slice 。若 JSON 数组为空，那么 Unmarshal 会将 slice 重置为
+// 一个新的空 slice 。
 //
-// To unmarshal a JSON array into a Go array, Unmarshal decodes
-// JSON array elements into corresponding Go array elements.
-// If the Go array is smaller than the JSON array,
-// the additional JSON array elements are discarded.
-// If the JSON array is smaller than the Go array,
-// the additional Go array elements are set to zero values.
+// 若要将 JSON 数组解析为 Go 数组，Unmarshal 会将对应位置的 JSON 数组元素解析至
+// 对应位置的 Go 数组元素中，若 Go 数组短于 JSON 数组，那么多余的 JSON 数组元素会被忽略，
+// 若 Go 数组长于 JSON 数组，那么剩下的位置会被置于零值。
 //
-// To unmarshal a JSON object into a map, Unmarshal first establishes a map to
-// use. If the map is nil, Unmarshal allocates a new map. Otherwise Unmarshal
-// reuses the existing map, keeping existing entries. Unmarshal then stores key-
-// value pairs from the JSON object into the map. The map's key type must
-// either be a string, an integer, or implement encoding.TextUnmarshaler.
+// 若要将 JSON 对象解析为 map ，Unmarshal 首先会创建一个供于使用的 map 。若该 map 为
+// nil ，Unmarshal 会创建一个新 map 。否则，Unmarshal 会复用现存的 map ，保持已存在键。
+// 随后 Unmarshal 将对应的 JSON 对象中的属性以及其值存入 map 。该 map 的键必须为字符串，
+// 整数或实现了 encoding.TextUnmarshaler 接口的类型。
 //
-// If a JSON value is not appropriate for a given target type,
-// or if a JSON number overflows the target type, Unmarshal
-// skips that field and completes the unmarshaling as best it can.
-// If no more serious errors are encountered, Unmarshal returns
-// an UnmarshalTypeError describing the earliest such error.
+// 若 JSON 不匹配指定的类型，或 JSON 数字溢出，那么 Unmarshal 会跳过该值并且
+// 尝试继续完成解析工作。若随后没有再遇到其他严重错误，Unmarshal 会返回一个
+// UnmarshalTypeError 。
 //
-// The JSON null value unmarshals into an interface, map, pointer, or slice
-// by setting that Go value to nil. Because null is often used in JSON to mean
-// ``not present,'' unmarshaling a JSON null into any other Go type has no effect
-// on the value and produces no error.
+// JSON null 值会在接口，map，指针或 slice 中被解析为 nil 。因为在 JSON 中 null 通常
+// 被解释为“不存在”。
 //
-// When unmarshaling quoted strings, invalid UTF-8 or
-// invalid UTF-16 surrogate pairs are not treated as an error.
-// Instead, they are replaced by the Unicode replacement
-// character U+FFFD.
+// 在解析字符串时，非法的 UTF-8 或 非法的 UTF-16 字符的存在不会被视为错误。
+// 而是被 Unicode 字符 U+FFFD 替代。
 //
 func Unmarshal(data []byte, v interface{}) error {
 	// Check for well-formedness.
@@ -97,17 +80,14 @@ func Unmarshal(data []byte, v interface{}) error {
 	return d.unmarshal(v)
 }
 
-// Unmarshaler is the interface implemented by types
-// that can unmarshal a JSON description of themselves.
-// The input can be assumed to be a valid encoding of
-// a JSON value. UnmarshalJSON must copy the JSON data
-// if it wishes to retain the data after returning.
+// Unmarshaler 是一个代表该类型可以将合法 JSON 转换为自身属性的接口。
+// 输入被假设为合法的 JSON 值。UnmarshalJSON 必须拷贝 JSON 数据，若它
+// 想要在返回后继续保留它。
 type Unmarshaler interface {
 	UnmarshalJSON([]byte) error
 }
 
-// An UnmarshalTypeError describes a JSON value that was
-// not appropriate for a value of a specific Go type.
+// UnmarshalTypeError 表示一个 JSON 值不匹配对应的 Go 类型。
 type UnmarshalTypeError struct {
 	Value  string       // description of JSON value - "bool", "array", "number -5"
 	Type   reflect.Type // type of Go value it could not be assigned to
@@ -118,9 +98,8 @@ func (e *UnmarshalTypeError) Error() string {
 	return "json: cannot unmarshal " + e.Value + " into Go value of type " + e.Type.String()
 }
 
-// An UnmarshalFieldError describes a JSON object key that
-// led to an unexported (and therefore unwritable) struct field.
-// (No longer used; kept for compatibility.)
+// UnmarshalFieldError 表示一个 JSON 对象的属性匹配了一个未导出的 struct 属性。
+// （不再被使用，仅用于兼容。）
 type UnmarshalFieldError struct {
 	Key   string
 	Type  reflect.Type
@@ -131,8 +110,8 @@ func (e *UnmarshalFieldError) Error() string {
 	return "json: cannot unmarshal object key " + strconv.Quote(e.Key) + " into unexported field " + e.Field.Name + " of type " + e.Type.String()
 }
 
-// An InvalidUnmarshalError describes an invalid argument passed to Unmarshal.
-// (The argument to Unmarshal must be a non-nil pointer.)
+// InvalidUnmarshalError 表示 Unmarshal 被传递了一个非法参数。
+// （传递给 Unmarshal 的参数必须是一个非空指针。）
 type InvalidUnmarshalError struct {
 	Type reflect.Type
 }
@@ -170,18 +149,18 @@ func (d *decodeState) unmarshal(v interface{}) (err error) {
 	return d.savedError
 }
 
-// A Number represents a JSON number literal.
+// Number 代表了一个 JSON 数字字面量。
 type Number string
 
-// String returns the literal text of the number.
+// String 返回该数字的字符串表示。
 func (n Number) String() string { return string(n) }
 
-// Float64 returns the number as a float64.
+// Float64 返回该数字的 float64 表示。
 func (n Number) Float64() (float64, error) {
 	return strconv.ParseFloat(string(n), 64)
 }
 
-// Int64 returns the number as an int64.
+// Int64 返回该数字的 int64 表示。
 func (n Number) Int64() (int64, error) {
 	return strconv.ParseInt(string(n), 10, 64)
 }
