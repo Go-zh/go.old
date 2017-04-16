@@ -6388,7 +6388,7 @@ blog post</a>.
 <h3 id="leaky_buffer">A leaky buffer</h3>
 </div>
 
-<h3 id="泄露缓冲">可能泄露的缓冲区</h3>
+<h3 id="漏桶算法">一种漏桶算法的实现</h3>
 
 <div class="english">
 <p>
@@ -6523,7 +6523,7 @@ the garbage collector for bookkeeping.
 中直到列表已满，此时缓冲区将被丢弃，并被垃圾回收器回收。（<code>select</code>
 语句中的 <code>default</code> 子句在没有条件符合时执行，这也就意味着
 <code>selects</code> 永远不会被阻塞。）依靠带缓冲的信道和垃圾回收器的记录，
-我们仅用短短几行代码就构建了一个可能导致缓冲区槽位泄露的空闲列表。
+我们仅用短短几行代码就实现了漏桶算法。
 </p>
 
 <div class="english">
